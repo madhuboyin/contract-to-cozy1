@@ -1,6 +1,6 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.1
+**Version:** 1.2
 **Date:** September 17, 2026  
 **Status:** Approved product direction; implementation is not claimed  
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
@@ -105,6 +105,8 @@ At any appropriate point, the homeowner may explicitly choose the existing full 
 
 **IW-PRIN-010 — Honest degradation.** Missing data, partial coverage, stale state, lost access, failed refresh, and unknown outcomes are visibly distinct and recoverable where recovery exists.
 
+**IW-PRIN-011 — Familiar conversation, home-specific trust.** Use best-in-class conversational conventions—anchored by ChatGPT as the primary shell reference—while preserving ContractToCozy identity, property safety, evidence, and governed home actions.
+
 ## 6. Users and jobs
 
 ### 6.1 Primary user
@@ -138,6 +140,10 @@ All actions must reflect the current household role and canonical operation poli
 ### 7.1 Included
 
 - A responsive Ask Cozy workspace for page and panel modes.
+- A ChatGPT-referenced conversational shell with persistent desktop conversation history and a mobile history drawer.
+- Searchable, pageable, property-safe session history with title, pin, archive, restore, and per-session deletion controls.
+- URL-addressable conversation restoration and browser back/forward behavior.
+- An optional contextual surface for sources, evidence, assumptions, outputs, and workflow state.
 - Inline entity detail and collection browsing.
 - Typed direct actions and conversational continuations.
 - Inline structured input, validated editing, confirmation, receipts, and recovery.
@@ -374,6 +380,87 @@ The implementation must encode and test at least the following default rules. Th
 
 The first implementation may support fewer modes for a domain, but it cannot claim the domain is adaptively complete until its relevant matrix rows and transformations are covered.
 
+### 11.7 Conversational shell reference and product identity
+
+ChatGPT is the primary interaction reference for Ask Cozy's conversational shell, visual calm, content rhythm, progressive disclosure, session switching, persistent composer, and ability to place purpose-built interactive results directly inside a conversation. It is a reference point, not a requirement to copy branding, proprietary visual details, or domain-neutral behavior that would weaken ContractToCozy's home-specific trust model.
+
+Ask Cozy must retain ContractToCozy's visual identity and differentiate through canonical home records, property context, explainable recommendations, evidence, freshness, governed actions, and continuity across long-running home decisions. Where a ChatGPT-like convention conflicts with authorization, property scoping, consequential-action confirmation, auditability, accessibility, or canonical domain rules, those ContractToCozy requirements take precedence.
+
+**IW-SHELL-001 — Stable shell.** Starting, opening, or continuing a conversation must preserve a recognizable shell rather than presenting each answer as a separate page. The shell contains application navigation, conversation history navigation, the active conversation canvas, a persistent composer, and an optional contextual information surface.
+
+**IW-SHELL-002 — Calm conversational hierarchy.** Homeowner prompts, Cozy responses, structured results, sources, feedback controls, and follow-up actions must have consistent hierarchy and spacing. Decorative containers must not make every message appear equally prominent or turn the transcript into a wall of cards.
+
+**IW-SHELL-003 — ContractToCozy identity.** The shell uses ContractToCozy typography, color, iconography, terminology, motion, and accessibility conventions. It must not imitate ChatGPT branding or imply that ContractToCozy is an OpenAI product.
+
+**IW-SHELL-004 — Conversation canvas.** The center canvas remains the primary reading and interaction area. It hosts conversational text and the adaptive presentation modes defined in §§11.5–11.6 without forcing a route change.
+
+**IW-SHELL-005 — Persistent composer.** The composer remains available at the bottom of the active conversation while the homeowner reads or interacts with non-modal content. It preserves draft text per conversation and property, supports multiline input, exposes clear send/progress/cancel states where applicable, and is not obscured by panels, keyboards, or safe-area insets.
+
+**IW-SHELL-006 — Contextual information surface.** Sources, evidence, assumptions, limitations, related records, output artifacts, and workflow status may open in a right-side contextual panel on sufficiently wide screens and in a sheet or nested view on smaller screens. The surface is optional, claim-linked, dismissible, and must not replace the conversation or become required for understanding the primary answer.
+
+**IW-SHELL-007 — Feedback proximity.** Response-level feedback and correction controls appear near the response they affect and carry exact execution/result identity. They must not be confused with record-level mutation actions.
+
+**IW-SHELL-008 — No duplicated navigation burden.** The shell must not keep two full-width left sidebars open when doing so materially constrains the conversation. It uses responsive collapse, a compact application rail, or an overlay/drawer while keeping both conversation history and traditional product navigation reachable.
+
+### 11.8 Conversation history rail
+
+The full Ask Cozy experience includes a persistent left-side conversation rail on desktop. Recent conversations must not be confined to the empty starting page or disappear after a conversation opens.
+
+The reference desktop composition is:
+
+```text
+COMPACT APPLICATION NAVIGATION
+  + ASK COZY CONVERSATION RAIL
+  + ACTIVE CONVERSATION / ADAPTIVE WORKSPACE
+  + OPTIONAL CONTEXTUAL INFORMATION PANEL
+```
+
+The exact column widths are responsive design decisions, but the active conversation must retain a comfortable readable width. On narrower desktop layouts, either the application rail or conversation rail may collapse. On mobile, conversation history opens as an accessible drawer or nested Ask view rather than remaining permanently visible.
+
+**IW-HIST-001 — New conversation.** A prominent “New conversation” control is available from the history rail and mobile history drawer. Starting a new conversation never deletes or modifies the current conversation and focuses the empty composer.
+
+**IW-HIST-002 — Persistent recents.** The history rail remains reachable while a conversation is active and identifies the active conversation. The target experience must not impose the current baseline's five-session/seven-day display limit; it uses bounded pagination or incremental loading under a documented retention policy.
+
+**IW-HIST-003 — Meaningful grouping.** Recent conversations are ordered by most recent activity and may be grouped into human-readable periods such as Today, Yesterday, Previous 7 days, and Older. Pinned conversations remain in a distinct stable group. Group labels must derive from the homeowner's locale and timezone.
+
+**IW-HIST-004 — Search and filtering.** Homeowners can search conversations by title and indexed user-visible conversation content permitted by the privacy policy. When multiple properties are authorized, the rail provides “This home” and “All homes” scope or an equivalent clear filter. Search results display property scope and must never include inaccessible sessions.
+
+**IW-HIST-005 — Property identity.** Every property-scoped conversation carries an unobtrusive but clear property name/address label when ambiguity is possible. A general, property-unscoped conversation is labeled accordingly. Opening a conversation restores its original property scope; it never silently retargets the conversation to the currently selected property.
+
+**IW-HIST-006 — Access revalidation.** Listing, searching, and opening history revalidates current user/session ownership and property access. Revoked property access removes or redacts the conversation immediately according to policy and never leaks title, snippet, pending status, or cached result content.
+
+**IW-HIST-007 — Addressable sessions.** The active session is represented in the Ask URL using an opaque identifier and supported property context. Opening a conversation, using browser back/forward, refreshing, or following an internal deep link restores the same authorized conversation without relying solely on tab-local storage.
+
+**IW-HIST-008 — Exact restoration.** Reopening a conversation restores supported transcript position, latest authoritative result views, selected entity, filter/sort/page, presentation mode, open workspace level, safe draft, and pending workflow state. Stale data is revalidated as required rather than presented as current merely because it was restored.
+
+**IW-HIST-009 — Titles.** A useful automatic title may be generated from the first substantive topic without exposing hidden data. The homeowner can rename it. An explicit homeowner title is never overwritten by later automatic generation.
+
+**IW-HIST-010 — Pin and unpin.** The homeowner can pin and unpin conversations. Pinning changes navigation order only; it does not alter retention, authorization, result freshness, or domain state.
+
+**IW-HIST-011 — Archive.** The homeowner can archive and restore conversations. Archived conversations leave the normal recent list but remain discoverable through an explicit archived view while retention permits. Archive is not represented as deletion.
+
+**IW-HIST-012 — Delete.** Deletion is a per-conversation destructive action with the target title/property and consequences disclosed before confirmation. It removes the conversation and conversation-scoped feedback according to retention policy but does not undo canonical home records, tasks, documents, decisions, or other artifacts created through Ask. Bulk history deletion, if provided, is a separate privacy control and cannot be confused with clearing the active visual canvas.
+
+**IW-HIST-013 — Pending and running status.** Conversations containing required input, pending confirmation, command recovery, or genuinely running work expose a concise status indicator in the rail. Status is based on authoritative workflow state, not inferred from title or elapsed time, and cannot imply background execution where none exists.
+
+**IW-HIST-014 — Session actions.** Rename, pin/unpin, archive/restore, and delete live in a compact session menu reachable by pointer, keyboard, and touch. Opening that menu must not also open the conversation.
+
+**IW-HIST-015 — Fast switching.** Switching conversations preserves the outgoing safe draft and visible state, immediately marks the requested target, prevents stale in-flight responses from entering the newly active session, and provides a lightweight loading state without blanking the entire application shell.
+
+**IW-HIST-016 — Privacy-safe previews.** Optional history snippets use only authorized user-visible content, avoid sensitive financial/security values by default, and are excluded from analytics payloads. Titles and snippets must not appear in URLs.
+
+**IW-HIST-017 — Empty, unavailable, and offline states.** The rail distinguishes no conversations, no search matches, service unavailable, access removed, and connectivity failure. Existing visible history is not silently erased because a refresh failed.
+
+**IW-HIST-018 — Keyboard and assistive navigation.** The rail provides an accessible name, current-item semantics, predictable focus order, visible focus, non-color status communication, and keyboard access to search, conversation selection, pagination/loading, and session actions. Closing a mobile drawer returns focus to its trigger.
+
+### 11.9 Traditional navigation and the Ask shell
+
+Traditional ContractToCozy navigation remains fully supported within the redesigned shell. The history rail supplements application navigation; it does not replace or remove it.
+
+On wide desktop layouts, the product may combine a compact application rail with an expanded Ask conversation rail. On constrained layouts, an explicit “All features,” application-menu, or equivalent control exposes the full traditional navigation. The system may remember separate non-sensitive collapse preferences for the application rail and conversation rail, but it must not trap the homeowner in Ask Cozy or require starting a conversation to reach traditional pages.
+
+The application must preserve recognizable destinations, direct routes, bookmarks, and browser behavior. Future removal or material hiding of traditional navigation still requires the separate evidence-backed decision defined in §18.
+
 ## 12. Desktop experience
 
 **IW-DESK-001:** The full Ask page supports a conversation column and an expandable contextual workspace when structured work benefits from additional width.
@@ -385,6 +472,14 @@ The first implementation may support fewer modes for a domain, but it cannot cla
 **IW-DESK-004:** The floating panel may promote the user to the full Ask workspace when space is insufficient. That promotion is within Ask Cozy, carries the current session/workspace state, and is not a domain-page handoff.
 
 **IW-DESK-005:** The composer remains reachable while inspecting non-modal content. Focus order follows conversation, current workspace, and composer semantics rather than visual column position alone.
+
+**IW-DESK-006:** On sufficiently wide screens, the Ask conversation rail remains visible while the active conversation is open. The active item, New conversation, search, and recent/pinned groups are reachable without returning to the landing surface.
+
+**IW-DESK-007:** When both application and conversation navigation are present, the shell preserves useful conversation width through compact/collapsible rails. It does not solve width pressure by navigating structured results to traditional domain pages.
+
+**IW-DESK-008:** The optional contextual information panel opens alongside the conversation only when enough width remains; otherwise it overlays or replaces the workspace level with a clear in-Ask back action.
+
+**IW-DESK-009:** Rail collapse state, active conversation, and optional context-panel state survive ordinary navigation and refresh where safe without overriding an explicit user preference.
 
 ## 13. Mobile experience
 
@@ -401,6 +496,12 @@ The first implementation may support fewer modes for a domain, but it cannot cla
 **IW-MOB-006:** Primary controls meet existing touch-target conventions. Repeated row controls include the target in their accessible name.
 
 **IW-MOB-007:** Functional parity is required. A workflow cannot be desktop-only merely because its desktop layout uses a side workspace.
+
+**IW-MOB-008:** Recent conversations are available from an Ask header control that opens a full-height drawer or nested view with New conversation, search, active-state indication, property labels, and session actions.
+
+**IW-MOB-009:** Selecting a conversation closes the history drawer, restores that conversation, and moves focus to the conversation heading or restored position. Closing without selection returns focus to the history trigger.
+
+**IW-MOB-010:** Application navigation, conversation history, contextual information, and the active workflow must not create stacked sheets with ambiguous back behavior. Every mobile layer has one clear title, close/back action, and restoration destination.
 
 ## 14. Result identity, state, and continuity
 
@@ -644,6 +745,18 @@ A functionally correct journey fails quality review when it introduces unnecessa
 | IW-A26 | A comparison strip overflows horizontally | Visible controls, keyboard access, item position/count, and a non-carousel path make every option reachable |
 | IW-A27 | Preferred presentation type is unavailable or incompatible | A safe registered fallback renders meaningful content and still-valid actions without exposing raw payloads |
 | IW-A28 | A “Recommended,” “Lowest cost,” or similar badge appears | The label follows declared comparison policy, has an explainable basis, and is not conveyed by color or placement alone |
+| IW-A29 | Open an existing conversation on desktop | Conversation rail remains available, active conversation is identified, and the composer/result state restores without returning to the landing page |
+| IW-A30 | Search conversation history across authorized homes | Results match permitted indexed content, show property identity, and reveal nothing from inaccessible properties |
+| IW-A31 | Open a conversation belonging to another authorized property | Original property context is clearly restored; the conversation is not retargeted to the previously selected property |
+| IW-A32 | Refresh, deep-link to, or use browser back/forward between Ask sessions | The URL-addressed authorized session and supported state restore consistently without relying only on session storage |
+| IW-A33 | Start a new conversation from the rail | Prior conversation remains intact, a new session opens, and focus moves to an empty composer |
+| IW-A34 | Rename a conversation and later receive another response | User title remains unchanged and is reflected in the rail/search results |
+| IW-A35 | Pin, unpin, archive, and restore a conversation | Navigation grouping changes correctly without changing canonical home data, authorization, or result freshness |
+| IW-A36 | Delete a conversation | Target and consequences are confirmed; the conversation is removed while canonical artifacts created through it remain intact |
+| IW-A37 | Open a pending conversation from its rail indicator | Exact pending workflow and required next input restore; no new mutation or duplicate execution occurs |
+| IW-A38 | Switch conversations while the prior request is in flight | Late response cannot enter the newly active conversation; outgoing draft/state are preserved according to policy |
+| IW-A39 | Open conversation history on mobile | Accessible drawer/nested view exposes equivalent history actions and returns focus/context correctly on select or close |
+| IW-A40 | Open sources/evidence on narrow and wide viewports | Wide view uses the contextual panel when space permits; narrow view uses an in-Ask sheet/view; claim mapping and conversation context remain intact |
 
 ## 27. Delivery phases
 
@@ -662,10 +775,12 @@ A functionally correct journey fails quality review when it introduces unnecessa
 - Build the workspace stack and state restoration contract.
 - Refactor presentation rendering toward a component registry.
 - Implement the deterministic adaptive-presentation resolver and §11.6 selection matrix with view-preserving transformations.
+- Build the §11.7–11.9 conversational shell, desktop history rail, mobile history drawer, addressable session navigation, and contextual information panel.
+- Extend recent-session contracts from the current property-scoped five-session/seven-day baseline to authorized pagination, search, grouping, title, pin, archive, and per-session deletion semantics.
 - Build shared entity, collection, form, comparison, timeline, document, receipt, and error primitives.
 - Preserve existing confirmation and canonical write paths.
 
-**Exit:** a synthetic reference flow demonstrates inline open, edit, confirm, reconcile, responsive layout, optional traditional transition, and state restoration.
+**Exit:** a synthetic reference flow demonstrates inline open, edit, confirm, reconcile, adaptive presentation, persistent history navigation, URL restoration, responsive layout, optional traditional transition, and state restoration.
 
 ### Phase 2 — Maintenance flagship
 
@@ -728,6 +843,8 @@ A domain phase cannot be marked complete until all applicable gates pass:
 | Traditional round trip | Context-preserving optional transition and safe return |
 | Responsive parity | Desktop and mobile reach the same supported outcome |
 | Presentation fitness | The chosen card/table/list/comparison/detail mode fits the task and preserves semantics through view changes |
+| Conversation navigation | Active/recent/pinned/archived sessions, search, URL restoration, property scope, and pending states behave correctly |
+| Shell continuity | Conversation canvas, composer, rails, contextual information, browser navigation, and responsive layers preserve state and focus |
 | Accessibility | Keyboard, names, focus, announcements, and responsive semantics |
 | Privacy | Access loss redacts; URLs/analytics exclude sensitive content |
 | Next action | Relevant bounded action or intentionally none |
@@ -740,6 +857,11 @@ A domain phase cannot be marked complete until all applicable gates pass:
 | Ask becomes a second domain application | Reuse canonical services, schemas, and policies; no duplicated business logic |
 | Renderer becomes unmaintainable | Component/action registry with exhaustiveness and contract tests |
 | Adaptive presentation becomes unpredictable | Deterministic registered resolver, bounded server hints, selection matrix, safe fallback, and view-mode tests |
+| ChatGPT reference becomes visual imitation | Treat it as an interaction benchmark; retain ContractToCozy identity, terminology, trust, and domain governance |
+| Two persistent left rails reduce usable space | Compact application rail, collapsible conversation rail, viewport-aware exclusivity, and minimum canvas width |
+| Cross-property history leaks context | Current-access revalidation, explicit property labels/scope filters, privacy-safe indexing, and redaction |
+| Session switching corrupts state | URL-addressed identity, request tokens, per-session drafts/views, and stale-response rejection |
+| History management deletes domain data | Separate conversation lifecycle from canonical artifacts and disclose consequences before deletion |
 | Inline UI overwhelms conversation | Progressive disclosure and contextual workspace layer |
 | Mobile experience becomes a compressed desktop layout | Mobile-native nested views with functional parity |
 | “Zero friction” weakens safety | Preserve required confirmation, clarification, consent, and revalidation |
@@ -758,6 +880,8 @@ The program is complete when:
 - no ordinary record click or primary action implicitly navigates away from Ask;
 - every rendered control has a tested typed dispatch outcome;
 - presentation selection and responsive transformations satisfy IW-PRES-001–012 without losing semantics or actions;
+- the conversational shell and history experience satisfy IW-SHELL-001–008, IW-HIST-001–018, and applicable desktop/mobile requirements;
+- recent conversations remain reachable during an active chat with search, property-safe restoration, URL identity, lifecycle controls, and responsive parity;
 - desktop and mobile provide equivalent supported outcomes;
 - canonical authorization, validation, confirmation, idempotency, and reconciliation remain intact;
 - optional traditional navigation remains available and context-preserving;
@@ -780,6 +904,7 @@ Completion does not authorize progressive removal of traditional pages or naviga
 | --- | --- | --- |
 | Stable results | §§11, 14 | RES-001–005 |
 | Adaptive presentation | §§11.3–11.6, 12–13 | New governing requirements |
+| Conversational shell and history | §§11.7–11.9, 12–14 | New governing requirements |
 | Freshness | §15 | FRESH-001–004 |
 | Typed actions | §10 | ACT-001–006, ROLL-001–002 |
 | Confirmation | §§16–17 | CONF-001–006 |
