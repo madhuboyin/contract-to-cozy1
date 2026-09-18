@@ -24,7 +24,7 @@ export default async function AskPage({ searchParams }: { searchParams: Promise<
     source === 'notification' ? '/dashboard/notifications' : '',
   );
   return (
-    <div className="mx-auto max-w-[90rem]">
+    <div className="h-full min-h-0">
       <AskWorkspace
         mode="page"
         initialSessionId={value(params.sessionId)}

@@ -1501,13 +1501,15 @@ function recentSessionGroup(lastActiveAt: string): string {
   return 'Previous 7 days';
 }
 
-function ConversationHistoryNav({ items, activeSessionId, loading, openingId, onOpen, onNew }: {
+function ConversationHistoryNav({ items, activeSessionId, loading, openingId, onOpen, onNew, backHref, backLabel }: {
   items: AskRecentSessionSummary[];
   activeSessionId: string;
   loading: boolean;
   openingId: string | null;
   onOpen: (session: AskRecentSessionSummary) => void;
   onNew: () => void;
+  backHref?: string;
+  backLabel?: string;
 }) {
   const [query, setQuery] = useState('');
   const normalizedQuery = query.trim().toLowerCase();
@@ -1521,7 +1523,11 @@ function ConversationHistoryNav({ items, activeSessionId, loading, openingId, on
   }, []);
   return (
     <nav className="flex min-h-0 flex-1 flex-col" aria-label="Ask Cozy conversations">
-      <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
+      <div className="mb-4 flex items-center gap-2 px-1">
+        <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-700 text-white"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
+        <div><p className="text-sm font-semibold text-slate-950">Ask Cozy</p><p className="text-[11px] text-slate-500">Your home assistant</p></div>
+      </div>
+      <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-white hover:shadow-sm">
         <Plus className="h-4 w-4" aria-hidden="true" />New conversation
       </button>
       <label className="relative mt-4 block">
@@ -1558,7 +1564,10 @@ function ConversationHistoryNav({ items, activeSessionId, loading, openingId, on
           </section>
         ))}
       </div>
-      <p className="border-t border-slate-200 pt-3 text-[11px] leading-4 text-slate-400">Recent conversations for the selected home. Traditional navigation remains available in the application menu.</p>
+      <div className="border-t border-slate-200 pt-3">
+        {backHref && <Link href={backHref} className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"><ArrowLeft className="h-4 w-4" />{backLabel || 'Back to Home'}</Link>}
+        <p className="mt-2 px-3 text-[11px] leading-4 text-slate-400">Recent conversations for the selected home. ContractToCozy navigation remains available above.</p>
+      </div>
     </nav>
   );
 }
@@ -2368,20 +2377,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   );
 
   return (
-    <div className={cn('flex min-h-0 flex-col', mode === 'page' ? 'min-h-[calc(100dvh-9rem)] bg-transparent' : 'h-full bg-slate-50')}>
-      {mode === 'page' && safeBackTo && (
-        <Link href={safeBackTo} className="mb-2 inline-flex w-fit min-h-10 items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
-          <ArrowLeft className="h-4 w-4" />{initialBackLabel}
-        </Link>
-      )}
+    <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50')}>
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
           flush against the device's actual top edge/notch); env() resolves
           to 0 on the desktop floating panel and the dashboard-embedded page
           view, so it's harmless to apply unconditionally rather than
           threading a separate "is this the mobile sheet" signal through. */}
-      <header className={cn('flex items-center justify-between', mode === 'page' ? 'px-1 pb-5 pt-1 sm:pb-7 sm:pt-3' : 'border-b border-slate-200 bg-white px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
-        <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? 'h-11 w-11 rounded-2xl' : 'h-9 w-9 rounded-xl')}><Sparkles className={mode === 'page' ? 'h-5 w-5' : 'h-4 w-4'} /></span><div>{mode === 'page' ? <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}<p className={cn('truncate text-slate-500', mode === 'page' ? 'mt-1 text-sm' : 'text-xs')}>{scopeLabel}</p></div></div></div>
+      <header className={cn('flex items-center justify-between border-b border-slate-200 bg-white', mode === 'page' ? 'min-h-16 px-4 sm:px-6' : 'px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
+        <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? 'h-9 w-9 rounded-xl lg:hidden' : 'h-9 w-9 rounded-xl')}><Sparkles className="h-4 w-4" /></span><div>{mode === 'page' ? <h1 className="text-lg font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}<p className="truncate text-xs text-slate-500">{scopeLabel}</p></div></div></div>
         <div className="flex items-center gap-1">
           {selectedPropertyId && <IntelligenceRefreshStatus propertyId={selectedPropertyId} />}
           {mode === 'page' && !askUnavailable && <button type="button" aria-label="Open conversation history" onClick={() => setHistoryDrawerOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 lg:hidden"><History className="h-4 w-4" /><span className="hidden sm:inline">Conversations</span></button>}
@@ -2399,7 +2403,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               <SheetDescription>Start something new or continue a recent conversation for this home.</SheetDescription>
             </SheetHeader>
             <div className="mt-5 min-h-0 flex-1">
-              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} />
+              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} backHref={safeBackTo} backLabel={initialBackLabel} />
             </div>
           </SheetContent>
         </Sheet>
@@ -2420,12 +2424,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{askUnavailable ? 'Ask Cozy is temporarily unavailable. Your saved data is unchanged.' : loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
-          <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-slate-50/80 px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
-            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} />
+          <aside className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
+            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} backHref={safeBackTo} backLabel={initialBackLabel} />
           </aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
-      <main className={cn('min-h-0 flex-1 overflow-y-auto', mode === 'page' ? 'px-1 pb-8 lg:px-6' : 'px-4 py-5 sm:px-5')}>
+      <main className={cn('min-h-0 flex-1 overflow-y-auto', mode === 'page' ? 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12' : 'px-4 py-5 sm:px-5')}>
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : askUnavailable ? (
           <section className="mx-auto mt-6 max-w-2xl rounded-3xl border border-amber-200 bg-amber-50/80 px-5 py-8 text-center sm:px-8" role="status" aria-labelledby="ask-paused-title">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-amber-700 shadow-sm"><AlertTriangle className="h-5 w-5" /></span>

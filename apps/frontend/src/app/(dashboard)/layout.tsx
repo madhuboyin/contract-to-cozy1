@@ -725,7 +725,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       <PropertyProvider>
         <AppShell
           leftNav={
-            <aside className={cn(
+            isAskWorkspace ? null : <aside className={cn(
               "hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl lg:fixed lg:top-[72px] lg:bottom-0 lg:z-40 lg:flex lg:flex-col transition-all duration-300",
               isCollapsed ? "lg:w-[64px]" : "lg:w-[246px]"
             )}>
@@ -787,17 +787,24 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             ) : null
           }
         >
-          <main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8">
-            <PullToRefresh onRefresh={handleRefresh} disabled={!enablePullToRefresh}>
+          <main className={cn(
+            'min-w-0 flex-1',
+            isAskWorkspace
+              ? 'min-h-0 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:h-[calc(100dvh-72px)] lg:pb-0'
+              : 'pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8',
+          )}>
+            <PullToRefresh onRefresh={handleRefresh} disabled={!enablePullToRefresh} fill={isAskWorkspace}>
               <div
                 className={cn(
-                  'mx-auto w-full px-4 py-5 md:px-8 md:py-8',
-                  isPropertyRecordOverview ? 'max-w-[1520px]' : 'max-w-[1180px]',
+                  'w-full',
+                  isAskWorkspace
+                    ? 'h-full min-h-0'
+                    : cn('mx-auto px-4 py-5 md:px-8 md:py-8', isPropertyRecordOverview ? 'max-w-[1520px]' : 'max-w-[1180px]'),
                 )}
                 key={refreshKey}
               >
-                <DashboardBreadcrumbs />
-                <ActivationHandoffBanner />
+                {!isAskWorkspace && <DashboardBreadcrumbs />}
+                {!isAskWorkspace && <ActivationHandoffBanner />}
                 <ToolLaunchContextBoundary>{children}</ToolLaunchContextBoundary>
               </div>
             </PullToRefresh>

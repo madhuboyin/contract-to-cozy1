@@ -13,7 +13,7 @@
 import React from 'react';
 
 type AppShellProps = {
-  leftNav: React.ReactNode;
+  leftNav?: React.ReactNode;
   mobileHeader?: React.ReactNode;
   topBar?: React.ReactNode;
   banner?: React.ReactNode;
@@ -34,7 +34,10 @@ export function AppShell({ leftNav, mobileHeader, topBar, banner, children, side
         {/* Left sidebar - positioned below top bar, fixed */}
         {leftNav}
 
-        <div className={`flex min-w-0 flex-1 flex-col transition-all duration-300 ${sidebarCollapsed ? 'lg:pl-[64px]' : 'lg:pl-[246px]'}`}>
+        <div
+          data-testid="app-shell-content"
+          className={`flex min-w-0 flex-1 flex-col transition-all duration-300 ${leftNav ? (sidebarCollapsed ? 'lg:pl-[64px]' : 'lg:pl-[246px]') : ''}`}
+        >
           {banner}
 
           <div className="flex min-w-0 flex-1">

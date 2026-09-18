@@ -10,13 +10,15 @@ interface PullToRefreshProps {
   onRefresh: () => Promise<void>;
   threshold?: number;
   disabled?: boolean;
+  fill?: boolean;
 }
 
 export function PullToRefresh({ 
   children, 
   onRefresh, 
   threshold = 80,
-  disabled = false 
+  disabled = false,
+  fill = false,
 }: PullToRefreshProps) {
   const [isPulling, setIsPulling] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -81,7 +83,7 @@ export function PullToRefresh({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="relative overflow-hidden"
+      className={`relative overflow-hidden${fill ? ' h-full' : ''}`}
     >
       {/* Pull indicator */}
       <div
@@ -112,7 +114,7 @@ export function PullToRefresh({
 
       {/* Content */}
       <div
-        className="transition-transform duration-200"
+        className={`transition-transform duration-200${fill ? ' h-full' : ''}`}
         style={pullDistance > 0 ? { transform: `translateY(${pullDistance}px)` } : undefined}
       >
         {children}

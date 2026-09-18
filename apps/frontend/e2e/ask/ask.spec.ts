@@ -6,6 +6,7 @@ test.beforeEach(async ({ context }) => installAskContext(context));
 test('starting surface teaches capability breadth without competing CTAs', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await expect(page.locator('[data-ask-layout="full-window"]')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'What can I help with?' })).toHaveCount(0);
@@ -47,6 +48,8 @@ test('new conversation returns to a fresh surface and recent sessions can be res
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
   await expect(conversationNav).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Conversation history' })).toHaveCount(1);
+  await expect(conversationNav.getByText('Your home assistant')).toBeVisible();
   await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
   await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
 
