@@ -4386,6 +4386,16 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     tone: selectedItem && inventoryMissingFacts(selectedItem).length ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'PRIMARY' }],
   }, {
+    // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: block id 'inventory-results' is
+    // matched by GroupedListBlock.tsx to render InventoryResultList instead
+    // of the generic list, giving item titles inline detail (a direct
+    // canonical GET, same pattern as Maintenance's inline task detail) in
+    // place of navigating to /inventory. No item `actions` are declared yet
+    // -- this is a read-only OPEN_INLINE_ENTITY slice; inline mutation would
+    // need real per-item operations registered first. 'inventory-entity-selection'
+    // and 'inventory-history' below are unaffected and still hand off via a
+    // bare href, matching Maintenance's own "flagship surface first, broader
+    // entry points later" rollout shape.
     type: 'GROUPED_LIST', filters: [], id: 'inventory-results', title: incompleteFocus ? 'Incomplete inventory records' : lifecycleFocus ? 'Recorded lifecycle dates approaching' : 'Inventory details',
     description: lifecycleFocus ? 'Only items with a recorded expected-expiry date within the next three years are included.' : null,
     sections: [{
@@ -4395,7 +4405,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
         const identity = [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ');
         const lifecycleDate = item.purchasedOn;
         return {
-          id: item.id, title: item.name,
+          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM',
           description: incompleteFocus && missingFacts.length ? `Missing: ${missingFacts.join(', ')}` : item.notes,
           meta: [
             item.room?.name ?? item.category.toLowerCase().replace(/_/g, ' '),

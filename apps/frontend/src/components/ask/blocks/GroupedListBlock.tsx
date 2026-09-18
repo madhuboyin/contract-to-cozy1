@@ -4,6 +4,7 @@ import { useContext } from 'react';
 import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
 import { ResultViewContext } from '@/features/ask/useResultView';
+import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
 import { ActionLink, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
@@ -99,16 +100,19 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   );
 }
 
-// The one bespoke rendering exception in the whole registry: a
-// `GROUPED_LIST` block with id `maintenance-groups` gets the dedicated
-// MaintenanceResultList treatment (view-state-aware filter chips, paging,
-// item actions) instead of the generic list above. Both are still
-// registered under the single `GROUPED_LIST` type (see ./registry.tsx) --
-// the split is by block id, not a second block type.
+// Two bespoke rendering exceptions in the whole registry: a `GROUPED_LIST`
+// block with id `maintenance-groups` or `inventory-results` gets a
+// dedicated, view-state-aware treatment instead of the generic list above.
+// Both are still registered under the single `GROUPED_LIST` type (see
+// ./registry.tsx) -- the split is by block id, not a second block type.
 export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
   if (block.id === 'maintenance-groups') {
     return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  if (block.id === 'inventory-results') {
+    return <InventoryResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

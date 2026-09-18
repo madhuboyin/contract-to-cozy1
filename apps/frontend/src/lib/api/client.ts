@@ -92,6 +92,7 @@ import {
   MaintenanceTaskStats,
   MaintenanceTaskStatus,
   MaintenanceTaskFilters,
+  InventoryItem,
   CreateMaintenanceTaskInput,
   CreateMaintenanceTaskFromActionCenterInput,
   CreateMaintenanceTasksFromTemplatesInput,
@@ -4313,6 +4314,21 @@ class APIClient {
    */
   async getMaintenanceTask(taskId: string): Promise<APIResponse<PropertyMaintenanceTask>> {
     return this.request<PropertyMaintenanceTask>(`/api/maintenance-tasks/${taskId}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get a single canonical inventory item by ID, scoped to its property.
+   * Response is nested ({ data: { item } }), unlike getMaintenanceTask's
+   * flat { data: task } -- callers must unwrap response.data.item.
+   *
+   * @param propertyId - Property ID the item belongs to
+   * @param itemId - Inventory item ID
+   * @returns The inventory item wrapped in { item }
+   */
+  async getInventoryItem(propertyId: string, itemId: string): Promise<APIResponse<{ item: InventoryItem }>> {
+    return this.request<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items/${itemId}`, {
       method: 'GET',
     });
   }
