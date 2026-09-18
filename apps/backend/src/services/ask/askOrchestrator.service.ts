@@ -1441,6 +1441,37 @@ async function quoteComparisonCreateResult(propertyId: string, message: string):
   };
 }
 
+// D05 fix (docs/architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md):
+// this href's own `?workspaceId=` was never read by the frontend page at
+// all -- confirmed by direct read of QuoteComparisonWorkspaceClient.tsx: it
+// seeds a `workspaceId` state from a DIFFERENT param name
+// (`quoteComparisonWorkspaceId`), then immediately overwrites that state
+// regardless, since `loadQuotes` unconditionally calls
+// getOrCreateQuoteComparisonWorkspace(propertyId, { serviceCategory,
+// inventoryItemId: itemId, ... }) -- a lookup keyed by scope, not by id.
+// Neither this link's dead `workspaceId` nor a corrected
+// `quoteComparisonWorkspaceId` would change what workspace loads. The fix
+// is to pass what the page's own lookup actually keys by, using its own
+// param names (`serviceCategory`/`itemId`), so a property with more than
+// one open workspace lands back on the SAME one Ask was just discussing
+// instead of silently resolving (or creating) a different one. A workspace
+// with neither field set (a "general," unscoped workspace) falls back to
+// the old `?workspaceId=` form -- not a fix for that case (the page's own
+// get-or-create lookup has no id-based path at all today), but not a
+// regression either, since that case had nothing this href could correct.
+// Pure and exported for direct unit testing.
+export function quoteComparisonWorkspaceHref(
+  baseHref: string,
+  workspace: { id: string; serviceCategory: string | null; inventoryItemId: string | null },
+): string {
+  const scopeParams = new URLSearchParams();
+  if (workspace.serviceCategory) scopeParams.set('serviceCategory', workspace.serviceCategory);
+  if (workspace.inventoryItemId) scopeParams.set('itemId', workspace.inventoryItemId);
+  return scopeParams.size
+    ? `${baseHref}?${scopeParams.toString()}`
+    : `${baseHref}?workspaceId=${encodeURIComponent(workspace.id)}`;
+}
+
 async function quoteComparisonReviewResult(propertyId: string): Promise<AskOperationResult> {
   const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true } });
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/quote-comparison`;
@@ -1458,7 +1489,7 @@ async function quoteComparisonReviewResult(propertyId: string): Promise<AskOpera
   const amounts = quotes.map((quote) => Number(quote.quoteAmount)).filter(Number.isFinite);
   const lowest = amounts.length ? Math.min(...amounts) : null;
   const highest = amounts.length ? Math.max(...amounts) : null;
-  const workspaceHref = `${href}?workspaceId=${encodeURIComponent(workspace.id)}`;
+  const workspaceHref = quoteComparisonWorkspaceHref(href, workspace);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'quote-review-summary', title: quotes.length < 2 ? 'Add another proposal before comparing' : comparability.status === 'COMPARABLE' ? `${quotes.length} proposals are ready for a scope-aligned review` : 'The recorded proposals are not safely comparable yet',
     body: `${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
