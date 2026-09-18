@@ -74,7 +74,11 @@ function maintenanceExecution() {
           href: `/dashboard/maintenance?propertyId=${propertyId}&taskId=maintenance-task-1&from=ask`, entityType: 'MAINTENANCE_TASK',
           actions: [{ id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_COMPLETE' }],
         }],
-      }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: `/dashboard/maintenance?propertyId=${propertyId}`, style: 'SECONDARY' }] },
+      }], actions: [
+        { id: 'open-maintenance', label: 'Open Maintenance', href: `/dashboard/maintenance?propertyId=${propertyId}`, style: 'SECONDARY' },
+        { id: 'create-maintenance', label: 'Create a task', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' },
+        { id: 'open-maintenance-setup', label: 'Maintenance Setup', href: `/dashboard/maintenance-setup?propertyId=${propertyId}&from=ask`, style: 'SECONDARY' },
+      ] },
     ],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [],
@@ -201,6 +205,25 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/multi-day heat risk/i.test(body.message)) {
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
+      return;
+    }
+    if (/create a maintenance task/i.test(body.message)) {
+      const response = {
+        ...maintenanceExecution(), executionId: 'execution-maintenance-create', question: body.message, status: 'NEEDS_CONTEXT',
+        blocks: [{ type: 'SUMMARY', id: 'maintenance-create-input', title: 'Add the task details', body: 'Nothing has been created yet.', tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open Maintenance instead', href: `/dashboard/maintenance?propertyId=${propertyId}`, style: 'SECONDARY' }] }],
+        captureRequests: [{
+          requirementId: 'maintenance-task-context-v1', captureKey: 'MAINTENANCE_TASK_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+          title: 'Maintenance task details', question: 'What task should be added, and when should it be due?', helpText: 'You will review everything before the task is created.',
+          inputSchema: { type: 'GROUP', fields: [
+            { key: 'title', label: 'Task', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+            { key: 'priority', label: 'Priority', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Medium', value: 'MEDIUM' }, { label: 'High', value: 'HIGH' }] } },
+            { key: 'isRecurring', label: 'Does this repeat?', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Recurring', falseLabel: 'One-time' } },
+          ] },
+          currentAnswer: {}, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this task; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: 'context-v1',
+        }],
+      };
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
       return;
     }
     if (/maintenance tasks are due/i.test(body.message)) {

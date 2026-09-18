@@ -370,6 +370,19 @@ test('Ask durable response contract accepts clarification and every planned pres
   assert.equal(AskPendingWorkItemSchema.safeParse({ pendingKind: 'CLARIFICATION', actionLabel: 'Answer one question', execution }).success, true);
 });
 
+test('response actions distinguish inline workflow commands from navigation links', () => {
+  const summary = {
+    type: 'SUMMARY', id: 'maintenance-summary', title: 'Maintenance', body: 'Choose how to continue.', tone: 'DEFAULT',
+    actions: [
+      { id: 'create-maintenance', label: 'Create a task', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' },
+      { id: 'open-maintenance-setup', label: 'Maintenance Setup', href: '/dashboard/maintenance-setup?propertyId=home', style: 'SECONDARY' },
+    ],
+  };
+  assert.equal(AskPresentationBlockSchema.safeParse(summary).success, true);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...summary, actions: [{ ...summary.actions[0], message: undefined }] }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...summary, actions: [{ ...summary.actions[0], href: '/dashboard/maintenance' }] }).success, false);
+});
+
 // Ask Cozy Stage 3, Phase 3 (implementation plan §9/§19; FRD §16/§28).
 test('childExecutions defaults to empty, accepts up to 3 full child response objects, and nests only one level deep', () => {
   const base = {

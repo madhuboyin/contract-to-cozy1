@@ -897,6 +897,7 @@ async function maintenanceTaskCreateResult(
   propertyId: string,
   message: string,
   suppliedInput?: MaintenanceTaskWorkflowInput,
+  sourceExecutionId?: string | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
@@ -922,7 +923,7 @@ async function maintenanceTaskCreateResult(
     const currentAnswer = Object.fromEntries(Object.entries(candidate).filter(([, value]) => value !== undefined));
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'MAINTENANCE_TASK_INPUT_REQUIRED', contextVersion: workflowVersion,
-      parameters: { maintenanceWorkflowVersion: workflowVersion },
+      parameters: { maintenanceWorkflowVersion: workflowVersion, sourceExecutionId: sourceExecutionId ?? null },
       blocks: [{
         type: 'SUMMARY', id: 'maintenance-create-input', title: 'Add the task details',
         body: 'Nothing has been created yet. Add the minimum useful details, then review the task before it is saved.',
@@ -970,6 +971,7 @@ async function maintenanceTaskCreateResult(
       maintenanceIsRecurring: parsed.data.isRecurring,
       maintenanceFrequency: parsed.data.frequency ?? null,
       maintenanceWorkflowVersion: workflowVersion,
+      sourceExecutionId: sourceExecutionId ?? null,
       confirmationVersion,
       confirmationExpiresAt: expiresAt.toISOString(),
     },
@@ -1886,7 +1888,10 @@ async function maintenanceResult(
       : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}`,
     tone: overdueCount ? 'CAUTION' : 'DEFAULT',
     actions: creationFocus && canManage
-      ? [{ id: 'create-maintenance', label: 'Create maintenance task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'PRIMARY' }]
+      ? [
+        { id: 'create-maintenance', label: 'Create maintenance task', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' },
+        { id: 'open-maintenance-setup', label: 'Open Maintenance Setup', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'SECONDARY' },
+      ]
       : [
         { id: 'open-maintenance', label: 'Open maintenance', href: maintenanceHref, style: 'PRIMARY' },
         ...(missingPurchaseDate ? [{ id: 'add-purchase-date', label: 'Add purchase date', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'SECONDARY' as const }] : []),
@@ -1944,7 +1949,10 @@ async function maintenanceResult(
     // permitted) stays available as a secondary action.
     sections, actions: [
       { id: 'view-all-maintenance', label: 'View all in Maintenance', href: maintenanceHref, style: 'SECONDARY' },
-      ...(canManage ? [{ id: 'create-maintenance', label: 'Create a task', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'SECONDARY' as const }] : []),
+      ...(canManage ? [
+        { id: 'create-maintenance', label: 'Create a task', interactionType: 'START_WORKFLOW' as const, message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' as const },
+        { id: 'open-maintenance-setup', label: 'Maintenance Setup', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'SECONDARY' as const },
+      ] : []),
     ],
   });
   const evidenceTasks = [...new Map([...filteredActive, ...filteredCompleted, ...(includeCancelled ? cancelled : [])].map((task) => [task.id, task])).values()];
@@ -7803,7 +7811,7 @@ registerCapabilityHandler('boundary.out-of-scope', async () => outOfScopeResult(
 const launchMaintenanceTaskId = (envelope: CapabilityInvocationEnvelope): string | null =>
   envelope.launchContext?.entityType === 'MAINTENANCE_TASK' ? envelope.launchContext.entityId ?? null : null;
 registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, (envelope.suppliedInput as MaintenanceCompletionWorkflowInput | undefined) ?? (launchMaintenanceTaskId(envelope) ? { taskId: launchMaintenanceTaskId(envelope)! } : undefined), envelope.launchContext?.sourceExecutionId ?? null));
-registerCapabilityHandler('maintenance.create', async (envelope) => maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('maintenance.create', async (envelope) => maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message, undefined, envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, launchMaintenanceTaskId(envelope), envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
   const composedContext = deps.composedContext!;
@@ -9835,7 +9843,16 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
       throw error;
     }
-    result = await maintenanceTaskCreateResult(userId, execution.propertyId, execution.message, candidate.data);
+    const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    result = await maintenanceTaskCreateResult(
+      userId,
+      execution.propertyId,
+      execution.message,
+      candidate.data,
+      typeof parameters.sourceExecutionId === 'string' ? parameters.sourceExecutionId : null,
+    );
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'PropertyMaintenanceTaskWorkflow';
@@ -11144,14 +11161,22 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
           { label: 'Due', value: task.nextDueDate ? humanDate(task.nextDueDate) ?? task.nextDueDate.toISOString() : 'Not scheduled' },
           { label: 'Recurrence', value: task.isRecurring && task.frequency ? task.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
         ],
-        actions: [{ id: 'open-task', label: 'Open task', href: maintenanceHref, style: 'PRIMARY' }],
+        actions: [{ id: 'open-task', label: 'Open task in Maintenance', href: maintenanceHref, style: 'SECONDARY' }],
       }],
       confirmation: null,
       suggestions: ['What maintenance is still pending?', 'Create another maintenance task'],
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK';
     artifactId = task.id;
-  return { result, artifactType, artifactId };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'BOUNDARY', id: 'maintenance-create-refresh-limitation', title: 'Task saved; list could not refresh',
+      body: 'The maintenance task was created successfully, but the earlier Ask Cozy list could not be refreshed. Refresh that result or ask for pending maintenance again.',
+      severity: 'CAUTION', suggestions: ['What maintenance is still pending?'],
+    });
+  }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;

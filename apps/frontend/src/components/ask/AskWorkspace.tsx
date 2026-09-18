@@ -121,6 +121,10 @@ const capturePolicy = {
 } satisfies Record<AskCaptureRequest['classification'], { eyebrow: string; note: string | null; border: string }>;
 
 const AskActionReturnContext = createContext('');
+const AskBlockActionContext = createContext<{
+  disabled: boolean;
+  invoke: (action: AskAction) => void;
+} | null>(null);
 
 function AskContextLink({ href, ...props }: Omit<ComponentProps<typeof Link>, 'href'> & { href: string }) {
   const askReturnHref = useContext(AskActionReturnContext);
@@ -143,14 +147,30 @@ function AskContextLink({ href, ...props }: Omit<ComponentProps<typeof Link>, 'h
 }
 
 function ActionLink({ action }: { action: AskAction }) {
+  const workflowControls = useContext(AskBlockActionContext);
+  const className = cn(
+    'inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+    action.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50',
+  );
+  if (action.interactionType === 'START_WORKFLOW') {
+    const supported = Boolean(action.message && action.operationId && workflowControls);
+    return (
+      <button
+        type="button"
+        disabled={!supported || workflowControls?.disabled}
+        onClick={() => workflowControls?.invoke(action)}
+        className={className}
+        title={supported ? undefined : 'This inline action is not available.'}
+      >
+        {action.label}<ArrowRight className="h-4 w-4" />
+      </button>
+    );
+  }
   if (!action.href) return null;
   return (
     <AskContextLink
       href={action.href}
-      className={cn(
-        'inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors',
-        action.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50',
-      )}
+      className={className}
     >
       {action.label}<ArrowRight className="h-4 w-4" />
     </AskContextLink>
@@ -1633,6 +1653,17 @@ function ExecutionCard({
       setItemActionIssue(dispatch.reason);
     }
   };
+  const dispatchBlockAction = (action: AskAction) => {
+    setItemActionIssue(null);
+    if (action.interactionType !== 'START_WORKFLOW' || !action.message || !action.operationId) {
+      setItemActionIssue('This action is not available inline yet. Use the traditional navigation option instead.');
+      return;
+    }
+    void ask(action.message, undefined, {
+      sourceExecutionId: execution.executionId,
+      operationId: action.operationId,
+    });
+  };
   // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is
   // claiming focus for this turn (no pending property selection, capture,
   // clarification or confirmation), the result just settled. Without this,
@@ -1710,7 +1741,9 @@ function ExecutionCard({
           </details>
         )}
         <div ref={bodyRef} className="space-y-3">
-          {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} />)}
+          <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
+            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} />)}
+          </AskBlockActionContext.Provider>
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}

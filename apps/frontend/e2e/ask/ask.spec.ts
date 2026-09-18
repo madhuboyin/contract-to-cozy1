@@ -209,6 +209,20 @@ test('maintenance task titles open canonical detail inline and keep traditional 
   await expect(response.getByRole('link', { name: /Open Maintenance/ })).toBeVisible();
 });
 
+test('maintenance create starts its capture inline and keeps setup optional', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-maintenance');
+  await response.getByRole('button', { name: 'Create a task' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Maintenance task details' })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+  await expect(page.getByRole('link', { name: 'Maintenance Setup' })).toBeVisible();
+});
+
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

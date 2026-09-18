@@ -9,6 +9,9 @@ export interface AskAction {
   id: string;
   label: string;
   href?: string;
+  interactionType?: 'START_WORKFLOW';
+  message?: string;
+  operationId?: string;
   style: 'PRIMARY' | 'SECONDARY' | 'QUIET';
 }
 

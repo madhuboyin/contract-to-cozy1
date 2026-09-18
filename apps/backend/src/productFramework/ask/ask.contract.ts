@@ -31,7 +31,20 @@ const AskActionSchema = z.object({
   id: z.string().trim().min(1).max(120),
   label: z.string().trim().min(1).max(160),
   href: z.string().trim().min(1).max(1200).optional(),
+  // Response-level workflow actions use the same server-owned Ask command
+  // path as row actions, while legacy destinations remain ordinary hrefs.
+  interactionType: z.literal('START_WORKFLOW').optional(),
+  message: z.string().trim().min(1).max(300).optional(),
+  operationId: z.string().trim().min(1).max(120).optional(),
   style: z.enum(['PRIMARY', 'SECONDARY', 'QUIET']).default('SECONDARY'),
+}).superRefine((action, ctx) => {
+  if (action.interactionType === 'START_WORKFLOW') {
+    if (!action.message) ctx.addIssue({ code: 'custom', path: ['message'], message: 'START_WORKFLOW actions require a message.' });
+    if (!action.operationId) ctx.addIssue({ code: 'custom', path: ['operationId'], message: 'START_WORKFLOW actions require an operationId.' });
+    if (action.href) ctx.addIssue({ code: 'custom', path: ['href'], message: 'START_WORKFLOW actions must not also navigate.' });
+  } else if (action.message || action.operationId) {
+    ctx.addIssue({ code: 'custom', path: ['interactionType'], message: 'Workflow metadata requires interactionType START_WORKFLOW.' });
+  }
 });
 
 const SummaryBlockSchema = z.object({
@@ -79,9 +92,9 @@ const ASK_ITEM_ACTION_INTERACTION_TYPES = [
 // the frontend sends back through the normal ask() path (launchContext
 // carries entityType/entityId so the operation resolves the target
 // directly; see launchMaintenanceTaskId in askOrchestrator.service.ts).
-// Deliberately not reusing AskActionSchema: that schema is href-only
-// (navigation), and ACT-002 requires the server -- not a client-guessed
-// href -- to own the resulting write.
+// Deliberately not reusing AskActionSchema: item commands also carry their
+// target entity, while response-level START_WORKFLOW actions only start a
+// workflow and navigation actions remain href-based.
 // External review finding: this shape originally carried only a label and
 // a canned message string, with no declared interaction type or registered
 // operation at all -- ACT-001 requires separating interaction type, domain
