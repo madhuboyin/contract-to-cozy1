@@ -16,11 +16,11 @@ function execution(revision = 1, executionId = 'execution'): AskExecutionRespons
     viewState: { resultId: 'result', revision, domainScopePhrase: 'hvac', dateScopePhrase: 'this month', statusFilter: 'ALL_OPEN', selectedTaskId: null },
   } as AskExecutionResponse;
 }
-function List({ response, onPage = () => {} }: { response: AskExecutionResponse; onPage?: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void }) {
+function List({ response, onPage = () => {}, onAccessLost = () => {} }: { response: AskExecutionResponse; onPage?: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost?: () => void }) {
   const controls = useResultView(response);
-  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onPage={onPage} onAction={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onPage={onPage} onAction={() => {}} onAccessLost={onAccessLost} link={(_, label) => label} /></ResultViewContext.Provider>;
 }
-beforeEach(() => window.sessionStorage.clear());
+beforeEach(() => { window.sessionStorage.clear(); jest.restoreAllMocks(); });
 
 test('a return refresh failure arriving after mount is displayed; success clears it', async () => {
   const content = <button>Complete task</button>;
@@ -82,6 +82,47 @@ test('clicking a maintenance task title opens canonical detail inline without na
   expect(window.location.pathname).toBe('/dashboard/ask');
   expect(window.location.search).toContain('sessionId=session');
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTaskId).toBe('task-0');
+});
+
+test('canonical completed state removes stale mutation actions from the row and detail', async () => {
+  const response = execution();
+  response.blocks = [{ ...block, sections: [{ ...block.sections[0], items: [{
+    ...block.sections[0].items[0], entityType: 'MAINTENANCE_TASK', actions: [
+      { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_COMPLETE' },
+      { id: 'why', label: 'Why?', message: 'Why?', style: 'QUIET', interactionType: 'CONVERSATION_CONTINUE', operationId: 'GROUNDED_GUIDANCE' },
+    ],
+  }] }] }];
+  jest.spyOn(api, 'getMaintenanceTask').mockResolvedValueOnce({ success: true, data: {
+    id: 'task-0', propertyId: 'home', title: 'Task 0', description: null, status: 'COMPLETED', priority: 'HIGH', source: 'USER_CREATED', assetType: null, riskLevel: null,
+    nextDueDate: null, isRecurring: false, frequency: null, lastCompletedDate: '2026-09-16T00:00:00.000Z', estimatedCost: null, actualCost: null, serviceCategory: null,
+    serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null, seasonalChecklistItemId: null, actionKey: null,
+    createdAt: new Date('2026-09-01T00:00:00.000Z'), updatedAt: new Date('2026-09-17T00:00:00.000Z'), completedAt: new Date('2026-09-16T00:00:00.000Z'),
+  } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>);
+  render(<List response={response} />);
+  expect(screen.getByRole('button', { name: 'Complete' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Complete' })).not.toBeInTheDocument());
+  expect(screen.getAllByRole('button', { name: 'Why?' }).length).toBeGreaterThan(0);
+});
+
+test('deleted task detail is distinct and removes stale actions until refresh', async () => {
+  const response = execution();
+  response.blocks = [{ ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], entityType: 'MAINTENANCE_TASK', actions: [
+    { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_COMPLETE' },
+  ] }] }] }];
+  jest.spyOn(api, 'getMaintenanceTask').mockRejectedValueOnce({ status: 404 });
+  render(<List response={response} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Task no longer exists'));
+  expect(screen.queryByRole('button', { name: 'Complete' })).not.toBeInTheDocument();
+});
+
+test('detail access revocation invokes whole-result redaction instead of leaving stale controls', async () => {
+  const onAccessLost = jest.fn();
+  jest.spyOn(api, 'getMaintenanceTask').mockRejectedValueOnce({ status: 403 });
+  render(<List response={execution()} onAccessLost={onAccessLost} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+  await waitFor(() => expect(onAccessLost).toHaveBeenCalledTimes(1));
 });
 
 test('server-paged maintenance sections navigate inline and retain the traditional page as a separate option', () => {
@@ -151,7 +192,7 @@ function buyerExecution(updatedAt: string, block: typeof buyerBlock = buyerBlock
 function BuyerList({ response }: { response: AskExecutionResponse }) {
   const controls = useResultView(response);
   return <ResultViewContext.Provider value={controls}>
-    <BlockView block={response.blocks[0]} executionId={response.executionId} onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} />
+    <BlockView block={response.blocks[0]} executionId={response.executionId} onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
   </ResultViewContext.Provider>;
 }
 function storeBuyerSelection(taskId: string) {

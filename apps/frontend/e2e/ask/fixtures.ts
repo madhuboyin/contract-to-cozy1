@@ -119,7 +119,7 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
@@ -127,12 +127,14 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   let pendingDismissed = false;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
   await page.route(`${apiOrigin}/api/properties*`, (route) => fulfill(route, { success: true, data: { properties: [{ id: propertyId, name: 'Acceptance Home', addressLine1: '1 Cozy Way', city: 'Boston', state: 'MA', zipCode: '02108' }] } }));
-  await page.route(`${apiOrigin}/api/maintenance-tasks/maintenance-task-1`, (route) => fulfill(route, { success: true, data: {
-    id: 'maintenance-task-1', propertyId, title: 'Service the heat pump', description: 'Annual preventive service for the recorded HVAC system.', status: 'PENDING', priority: 'HIGH', source: 'USER_CREATED',
-    assetType: 'HVAC', riskLevel: null, nextDueDate: '2026-10-01T00:00:00.000Z', isRecurring: true, frequency: 'ANNUALLY', lastCompletedDate: null,
-    estimatedCost: 250, actualCost: null, serviceCategory: 'HVAC', serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null,
-    seasonalChecklistItemId: null, actionKey: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-17T00:00:00.000Z', completedAt: null,
-  } }));
+  await page.route(`${apiOrigin}/api/maintenance-tasks/maintenance-task-1`, (route) => options.maintenanceDetailAccessLost
+    ? fulfill(route, { success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'Access to this home changed.' } }, 403)
+    : fulfill(route, { success: true, data: {
+      id: 'maintenance-task-1', propertyId, title: 'Service the heat pump', description: 'Annual preventive service for the recorded HVAC system.', status: 'PENDING', priority: 'HIGH', source: 'USER_CREATED',
+      assetType: 'HVAC', riskLevel: null, nextDueDate: '2026-10-01T00:00:00.000Z', isRecurring: true, frequency: 'ANNUALLY', lastCompletedDate: null,
+      estimatedCost: 250, actualCost: null, serviceCategory: 'HVAC', serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null,
+      seasonalChecklistItemId: null, actionKey: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-17T00:00:00.000Z', completedAt: null,
+    } }));
   await page.route(`${apiOrigin}/api/ask/pending*`, (route) => {
     const pendingExecution = {
       ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',

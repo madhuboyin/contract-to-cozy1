@@ -209,6 +209,23 @@ test('maintenance task titles open canonical detail inline and keep traditional 
   await expect(response.getByRole('link', { name: /Open Maintenance/ })).toBeVisible();
 });
 
+test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
+  await installAskApi(page, { maintenanceDetailAccessLost: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-maintenance');
+  await response.getByRole('button', { name: 'Service the heat pump' }).click();
+
+  await expect(response).toHaveAttribute('role', 'alert');
+  await expect(response.getByRole('heading', { name: 'Result unavailable' })).toBeVisible();
+  await expect(response).toContainText('This result is no longer available, or your access to this home has changed.');
+  await expect(response.getByRole('button', { name: 'Complete' })).toHaveCount(0);
+  await expect(response.getByRole('link', { name: /Open Maintenance/ })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('maintenance create starts its capture inline and keeps setup optional', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

@@ -10,6 +10,18 @@ import type { PropertyMaintenanceTask } from '@/types';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
+type ItemAction = NonNullable<Item['actions']>[number];
+
+function errorStatus(error: unknown): number | null {
+  return error && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
+    ? (error as { status: number }).status
+    : null;
+}
+
+function actionsForCanonicalStatus(actions: ItemAction[], status: string | null | undefined): ItemAction[] {
+  if (!status || ['PENDING', 'IN_PROGRESS', 'NEEDS_REVIEW'].includes(status)) return actions;
+  return actions.filter((action) => action.interactionType !== 'MUTATE_RECORD');
+}
 
 function formatDate(value: Date | string | null): string {
   if (!value) return 'Not recorded';
@@ -27,18 +39,23 @@ function fieldLabel(value: string | null): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
-function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disabled, onAction, onClose }: {
+function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disabled, onAction, onCanonicalTask, onUnavailable, onAccessLost, onClose }: {
   taskId: string;
   expectedPropertyId?: string;
   fallbackItem: Item;
   disabled: boolean;
   onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+  onCanonicalTask: (task: PropertyMaintenanceTask) => void;
+  onUnavailable: (taskId: string) => void;
+  onAccessLost: () => void;
   onClose: () => void;
 }) {
   const [task, setTask] = useState<PropertyMaintenanceTask | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const callbacksRef = useRef({ onCanonicalTask, onUnavailable, onAccessLost });
+  callbacksRef.current = { onCanonicalTask, onUnavailable, onAccessLost };
 
   useEffect(() => {
     let active = true;
@@ -53,9 +70,17 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
           throw new Error('This task no longer belongs to the home used for this conversation.');
         }
         setTask(response.data);
+        callbacksRef.current.onCanonicalTask(response.data);
       })
       .catch((caught) => {
-        if (active) setError(caught instanceof Error ? caught.message : 'This maintenance task is unavailable.');
+        if (!active) return;
+        const status = errorStatus(caught);
+        if (status === 401 || status === 403) {
+          callbacksRef.current.onAccessLost();
+          return;
+        }
+        callbacksRef.current.onUnavailable(taskId);
+        setError(status === 404 ? 'TASK_NOT_FOUND' : 'REVALIDATION_FAILED');
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -65,7 +90,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
     if (!loading) headingRef.current?.focus();
   }, [loading]);
 
-  const actions = fallbackItem.actions ?? [];
+  const actions = actionsForCanonicalStatus(fallbackItem.actions ?? [], task?.status);
   return (
     <aside className="border-t border-teal-100 bg-teal-50/40 p-4" aria-labelledby={`maintenance-detail-${taskId}`}>
       <div className="flex items-start justify-between gap-3">
@@ -76,7 +101,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
         <button type="button" onClick={onClose} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white" aria-label={`Close task detail for ${fallbackItem.title}`}><X className="h-4 w-4" /></button>
       </div>
       {loading && <p className="mt-4 flex items-center gap-2 text-sm text-slate-600" role="status"><Loader2 className="h-4 w-4 animate-spin" />Loading the current maintenance record…</p>}
-      {error && <div className="mt-4 rounded-xl border border-amber-200 bg-white p-3" role="alert"><p className="text-sm font-semibold text-amber-900">Task detail is unavailable</p><p className="mt-1 text-sm text-slate-700">{error}</p><p className="mt-2 text-xs text-slate-500">The conversation and source result remain available. Refresh the Ask result before acting if this record may have changed.</p></div>}
+      {error && <div className="mt-4 rounded-xl border border-amber-200 bg-white p-3" role="alert"><p className="text-sm font-semibold text-amber-900">{error === 'TASK_NOT_FOUND' ? 'Task no longer exists' : 'Could not verify the current task'}</p><p className="mt-1 text-sm text-slate-700">{error === 'TASK_NOT_FOUND' ? 'This task was removed after the Ask result was created.' : 'The current canonical record could not be loaded. Actions for this task are unavailable until the result is refreshed.'}</p><p className="mt-2 text-xs text-slate-500">The conversation remains available. Refresh this Ask result to reconcile with Maintenance.</p></div>}
       {task && <>
         {task.description && <p className="mt-3 text-sm leading-6 text-slate-700">{task.description}</p>}
         <dl className="mt-4 grid gap-x-5 gap-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
@@ -97,17 +122,24 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   );
 }
 
-export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, link }: {
+export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, onAccessLost, link }: {
   block: Block;
   propertyId?: string;
   disabled: boolean;
   onFilter: (message: string) => void;
   onPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void;
   onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+  onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
   const controls = useContext(ResultViewContext);
   const [localDetailTaskId, setLocalDetailTaskId] = useState<string | null>(null);
+  const [unavailableTaskIds, setUnavailableTaskIds] = useState<Set<string>>(() => new Set());
+  const [canonicalStatuses, setCanonicalStatuses] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setUnavailableTaskIds(new Set());
+    setCanonicalStatuses({});
+  }, [block]);
   const select = (id: string) => controls?.change((view) => ({ ...view, selectedTaskId: view.selectedTaskId === id ? null : id }));
   const detailTaskId = controls?.view.detailTaskId ?? localDetailTaskId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailTaskId);
@@ -141,6 +173,9 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
           {section.items.slice(0, controls ? visible : section.items.length).map((item) => {
             const selected = controls?.view.selectedTaskId === item.id;
             const expanded = !controls || controls.view.expandedRows.includes(item.id);
+            const actions = unavailableTaskIds.has(item.id)
+              ? []
+              : actionsForCanonicalStatus(item.actions ?? [], canonicalStatuses[item.id]);
             return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <button type="button" data-maintenance-detail-trigger={item.id} disabled={disabled} aria-expanded={detailTaskId === item.id} aria-controls={`maintenance-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline disabled:opacity-60">{item.title}</button>
@@ -153,7 +188,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
               </div>}
               {expanded && item.description && <p className="mt-2 text-sm text-slate-600">{item.description}</p>}
               <div className="mt-2 flex flex-wrap gap-2">
-                {item.actions?.map((action) => <button key={action.id} type="button" disabled={disabled} className="min-h-10 rounded border bg-white px-2 text-xs disabled:opacity-50" onClick={() => {
+                {actions.map((action) => <button key={action.id} type="button" disabled={disabled} className="min-h-10 rounded border bg-white px-2 text-xs disabled:opacity-50" onClick={() => {
                   controls?.change((view) => ({ ...view, selectedTaskId: item.id }));
                   onAction(item.entityType, item.id, action.message, action.operationId, action.interactionType);
                 }}>{action.label}</button>)}
@@ -171,7 +206,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         </nav>}
       </div>;
     })}
-    {detailTaskId && detailItem && <MaintenanceTaskDetail key={detailTaskId} taskId={detailTaskId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onClose={closeDetail} />}
+    {detailTaskId && detailItem && <MaintenanceTaskDetail key={detailTaskId} taskId={detailTaskId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(taskId) => setUnavailableTaskIds((current) => new Set(current).add(taskId))} onAccessLost={onAccessLost} onClose={closeDetail} />}
     <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
   </section>;
 }

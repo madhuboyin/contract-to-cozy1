@@ -429,7 +429,7 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
 // B07 fix: exported (previously module-private) so the generic
 // GROUPED_LIST renderer's selection marker/highlight can be tested
 // directly, same convention as MaintenanceResultList's own export.
-export function BlockView({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage }: { block: AskPresentationBlock; executionId: string; propertyId?: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void; onCollectionPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void }) {
+export function BlockView({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage, onAccessLost }: { block: AskPresentationBlock; executionId: string; propertyId?: string; onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; itemActionsDisabled: boolean; onFilterClick: (message: string) => void; onCollectionPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost: () => void }) {
   // B07 fix: the generic GROUPED_LIST renderer previously had no way to
   // show which item restoreResultPosition/reconcileResultView already
   // track as "selected" (captured generically from an outbound ?taskId=
@@ -484,7 +484,7 @@ export function BlockView({ block, executionId, propertyId, onItemAction, itemAc
   }
 
   if (block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups') {
-    return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction}
+    return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (block.type === 'GROUPED_LIST') {
@@ -1698,7 +1698,7 @@ function ExecutionCard({
         <details className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
           <summary className="cursor-pointer text-xs font-semibold text-slate-500">Superseded by a refinement below · view original response</summary>
           <div className="mt-3 space-y-3 opacity-75">
-            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} />)}
+            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />)}
           </div>
         </details>
       </article>
@@ -1736,13 +1736,13 @@ function ExecutionCard({
           <details className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <summary className="cursor-pointer text-[11px] font-semibold text-slate-500">Originally answered {new Date(execution.originalResponse.observedAt).toLocaleString()} · view original response</summary>
             <div className="mt-3 space-y-3 opacity-75">
-              <ResultViewContext.Provider value={null}>{execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} />)}</ResultViewContext.Provider>
+              <ResultViewContext.Provider value={null}>{execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />)}</ResultViewContext.Provider>
             </div>
           </details>
         )}
         <div ref={bodyRef} className="space-y-3">
           <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
-            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} />)}
+            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} />)}
           </AskBlockActionContext.Provider>
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
