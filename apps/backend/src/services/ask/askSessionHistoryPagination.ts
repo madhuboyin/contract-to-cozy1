@@ -34,6 +34,7 @@ export function askSessionHistoryWhere(input: {
   now: Date;
   retentionDays: number;
   cursor: AskSessionHistoryCursor | null;
+  titleQuery?: string;
 }): Prisma.AskSessionWhereInput {
   const retentionWindowMs = input.retentionDays * 24 * 60 * 60 * 1000;
   return {
@@ -42,6 +43,7 @@ export function askSessionHistoryWhere(input: {
     lastActiveAt: { gte: new Date(input.now.getTime() - retentionWindowMs) },
     OR: [{ expiresAt: null }, { expiresAt: { gt: input.now } }],
     executions: { some: { OR: [{ expiresAt: null }, { expiresAt: { gt: input.now } }] } },
+    ...(input.titleQuery ? { title: { contains: input.titleQuery, mode: 'insensitive' } } : {}),
     ...(input.cursor ? { AND: [{ OR: [
       { lastActiveAt: { lt: input.cursor.lastActiveAt } },
       { lastActiveAt: input.cursor.lastActiveAt, id: { lt: input.cursor.id } },

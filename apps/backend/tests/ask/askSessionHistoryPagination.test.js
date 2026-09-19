@@ -8,7 +8,7 @@ const {
   encodeAskSessionHistoryCursor,
   decodeAskSessionHistoryCursor,
 } = require('../../src/services/ask/askSessionHistoryPagination.ts');
-const { AskRecentSessionPageSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+const { AskRecentSessionPageSchema, AskSessionTitleSearchRequestSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 
 test('history pages are bounded and the keyset cursor round-trips exact identity', () => {
   assert.equal(ASK_SESSION_HISTORY_PAGE_SIZE, 20);
@@ -43,4 +43,25 @@ test('history page contract carries a continuation cursor or an explicit end', (
   assert.equal(AskRecentSessionPageSchema.safeParse({ items: [], nextCursor: null }).success, true);
   assert.equal(AskRecentSessionPageSchema.safeParse({ items: [], nextCursor: 'opaque' }).success, true);
   assert.equal(AskRecentSessionPageSchema.safeParse({ items: [] }).success, false);
+});
+
+test('title search stays property-scoped, retained, and cursor-bounded', () => {
+  const now = new Date('2026-09-18T12:00:00.000Z');
+  const where = askSessionHistoryWhere({
+    userId: 'owner-1', propertyId: 'home-1', now, retentionDays: 30,
+    cursor: { lastActiveAt: now, id: 'session-42' }, titleQuery: 'roof',
+  });
+  assert.equal(where.userId, 'owner-1');
+  assert.equal(where.propertyId, 'home-1');
+  assert.deepEqual(where.title, { contains: 'roof', mode: 'insensitive' });
+  assert.deepEqual(where.lastActiveAt, { gte: new Date('2026-08-19T12:00:00.000Z') });
+  assert.ok(where.AND);
+  assert.ok(where.executions);
+});
+
+test('title search request rejects empty and oversized terms or cursors', () => {
+  assert.deepEqual(AskSessionTitleSearchRequestSchema.parse({ propertyId: 'home-1', query: '  roof  ' }), { propertyId: 'home-1', query: 'roof' });
+  assert.equal(AskSessionTitleSearchRequestSchema.safeParse({ propertyId: 'home-1', query: '  ' }).success, false);
+  assert.equal(AskSessionTitleSearchRequestSchema.safeParse({ propertyId: 'home-1', query: 'a'.repeat(121) }).success, false);
+  assert.equal(AskSessionTitleSearchRequestSchema.safeParse({ propertyId: 'home-1', query: 'roof', cursor: '' }).success, false);
 });

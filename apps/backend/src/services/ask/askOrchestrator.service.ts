@@ -13371,12 +13371,12 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   return visibleExecutions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
 }
 
-export async function getRecentAskSessions(userId: string, propertyId: string, cursorValue?: string): Promise<AskRecentSessionPage> {
+export async function getRecentAskSessions(userId: string, propertyId: string, cursorValue?: string, titleQuery?: string): Promise<AskRecentSessionPage> {
   await ensurePropertyAccess(userId, propertyId);
   const cursor = cursorValue ? decodeAskSessionHistoryCursor(cursorValue) : null;
   if (cursorValue && !cursor) throw Object.assign(new Error('Invalid conversation history cursor.'), { code: 'ASK_INVALID_CURSOR' });
   const now = new Date();
-  const where = askSessionHistoryWhere({ userId, propertyId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, cursor });
+  const where = askSessionHistoryWhere({ userId, propertyId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, cursor, titleQuery });
   const sessions = await prisma.askSession.findMany({
     where,
     orderBy: [{ lastActiveAt: 'desc' }, { id: 'desc' }],

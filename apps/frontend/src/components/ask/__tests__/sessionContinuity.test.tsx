@@ -34,6 +34,8 @@ test('a failed history refresh keeps loaded conversations visible with an explic
     hasMore={false}
     issue="Could not refresh conversations. Previously loaded conversations remain visible; try again later."
     openingId={null}
+    query=""
+    onQueryChange={() => {}}
     onOpen={() => {}}
     onNew={() => {}}
     onLoadMore={() => {}}
@@ -44,6 +46,7 @@ test('a failed history refresh keeps loaded conversations visible with an explic
 
 test('older conversation pages are loaded by an explicit accessible control', () => {
   const onLoadMore = jest.fn();
+  const onQueryChange = jest.fn();
   render(<ConversationHistoryNav
     items={[recent]}
     activeSessionId={recent.sessionId}
@@ -52,11 +55,14 @@ test('older conversation pages are loaded by an explicit accessible control', ()
     hasMore
     issue={null}
     openingId={null}
+    query=""
+    onQueryChange={onQueryChange}
     onOpen={() => {}}
     onNew={() => {}}
     onLoadMore={onLoadMore}
   />);
   fireEvent.click(screen.getByRole('button', { name: 'Load older conversations' }));
   expect(onLoadMore).toHaveBeenCalledTimes(1);
-  expect(screen.getByPlaceholderText('Filter loaded conversations')).toBeInTheDocument();
+  fireEvent.change(screen.getByPlaceholderText('Search conversation titles'), { target: { value: 'roof' } });
+  expect(onQueryChange).toHaveBeenCalledWith('roof');
 });

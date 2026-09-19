@@ -864,6 +864,12 @@ export const AskRecentSessionPageSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 
+export const AskSessionTitleSearchRequestSchema = z.object({
+  propertyId: z.string().trim().min(1).max(160),
+  query: z.string().trim().min(1).max(120),
+  cursor: z.string().min(1).max(512).optional(),
+});
+
 export type AskExecutionStatus = z.infer<typeof AskExecutionStatusSchema>;
 export type AskPresentationBlock = z.infer<typeof AskPresentationBlockSchema>;
 export type AskCaptureRequest = z.infer<typeof AskCaptureRequestSchema>;

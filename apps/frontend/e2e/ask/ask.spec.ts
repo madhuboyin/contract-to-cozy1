@@ -50,7 +50,7 @@ test('new conversation returns to a fresh surface and recent sessions can be res
   await expect(conversationNav).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Conversation history' })).toHaveCount(1);
   await expect(conversationNav.getByText('Your home assistant')).toBeVisible();
-  await expect(conversationNav.getByPlaceholder('Filter loaded conversations')).toBeVisible();
+  await expect(conversationNav.getByPlaceholder('Search conversation titles')).toBeVisible();
   await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
 
   await conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
@@ -101,6 +101,20 @@ test('conversation rail loads an older page without replacing the already loaded
   await expect(conversationNav.getByRole('button', { name: /Older roof project/ })).toBeVisible();
   await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
   await expect(conversationNav.getByRole('button', { name: 'Load older conversations' })).toHaveCount(0);
+});
+
+test('conversation title search reaches older retained sessions without putting the title in a URL', async ({ page }) => {
+  await installAskApi(page, { recentSessions: true, searchSessions: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
+  const searchRequest = page.waitForRequest((request) => request.url().endsWith('/api/ask/sessions/search'));
+  await conversationNav.getByPlaceholder('Search conversation titles').fill('roof');
+  const request = await searchRequest;
+  expect(request.method()).toBe('POST');
+  expect(request.postDataJSON()).toMatchObject({ propertyId, query: 'roof' });
+  expect(request.url()).not.toContain('roof');
+  await expect(conversationNav.getByRole('button', { name: /Older roof project/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toHaveCount(0);
 });
 
 test('pending Ask actions stay compact and can be dismissed before execution', async ({ page }) => {

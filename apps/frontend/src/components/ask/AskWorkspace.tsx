@@ -892,7 +892,7 @@ function recentSessionGroup(lastActiveAt: string): string {
   return 'Older';
 }
 
-export function ConversationHistoryNav({ items, activeSessionId, loading, loadingMore, hasMore, issue, openingId, onOpen, onNew, onLoadMore, backHref, backLabel }: {
+export function ConversationHistoryNav({ items, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, onQueryChange, onOpen, onNew, onLoadMore, backHref, backLabel }: {
   items: AskRecentSessionSummary[];
   activeSessionId: string;
   loading: boolean;
@@ -900,16 +900,15 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
   hasMore: boolean;
   issue: string | null;
   openingId: string | null;
+  query: string;
+  onQueryChange: (query: string) => void;
   onOpen: (session: AskRecentSessionSummary) => void;
   onNew: () => void;
   onLoadMore: () => void;
   backHref?: string;
   backLabel?: string;
 }) {
-  const [query, setQuery] = useState('');
-  const normalizedQuery = query.trim().toLowerCase();
-  const filtered = items.filter((session) => !normalizedQuery || session.title.toLowerCase().includes(normalizedQuery) || session.property.label.toLowerCase().includes(normalizedQuery));
-  const grouped = filtered.reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
+  const grouped = items.reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
     const label = recentSessionGroup(session.lastActiveAt);
     const group = groups.find((candidate) => candidate.label === label);
     if (group) group.items.push(session);
@@ -926,15 +925,15 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
         <Plus className="h-4 w-4" aria-hidden="true" />New conversation
       </button>
       <label className="relative mt-4 block">
-        <span className="sr-only">Filter loaded conversations</span>
+        <span className="sr-only">Search conversation titles for this home</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter loaded conversations" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+        <input value={query} onChange={(event) => onQueryChange(event.target.value)} maxLength={120} placeholder="Search conversation titles" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
       </label>
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
         {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
-        {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">Loading recent conversations…</p>}
+        {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{query.trim() ? 'Searching conversation titles…' : 'Loading recent conversations…'}</p>}
         {grouped.length === 0 && !loading ? (
-          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{query ? 'No matches in loaded conversations.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
+          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversation titles match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
         ) : grouped.map((group) => (
           <section key={group.label} className="mb-5" aria-labelledby={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`}>
             <h3 id={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`} className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.label}</h3>
@@ -1197,6 +1196,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [recentSessionsLoadingMore, setRecentSessionsLoadingMore] = useState(false);
   const [recentSessionsNextCursor, setRecentSessionsNextCursor] = useState<string | null>(null);
   const [recentSessionsIssue, setRecentSessionsIssue] = useState<string | null>(null);
+  const [historySearchInput, setHistorySearchInput] = useState('');
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
+  const [searchSessions, setSearchSessions] = useState<AskRecentSessionSummary[]>([]);
+  const [searchNextCursor, setSearchNextCursor] = useState<string | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchLoadingMore, setSearchLoadingMore] = useState(false);
+  const [searchIssue, setSearchIssue] = useState<string | null>(null);
   const [openingRecentSessionId, setOpeningRecentSessionId] = useState<string | null>(null);
   const [recentSessionsEpoch, setRecentSessionsEpoch] = useState(0);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -1227,11 +1233,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const activeSessionPropertyRef = useRef<string | undefined>(undefined);
   const historyPropertyRef = useRef<string | undefined>(undefined);
   const historyRequestEpochRef = useRef(0);
+  const searchRequestEpochRef = useRef(0);
+  const searchScopeRef = useRef('');
   const appliedInitialQuestionRef = useRef('');
   const redactHistoryAccessLoss = useCallback((propertyId: string) => {
     setRecentSessions([]);
     setRecentSessionsNextCursor(null);
     setRecentSessionsIssue('Access to this home changed. Its conversations are no longer shown.');
+    setSearchSessions([]);
+    setSearchNextCursor(null);
+    setSearchIssue('Access to this home changed. Its conversations are no longer shown.');
     const currentSessionId = activeSessionRef.current;
     deniedProperties.current.add(`${currentSessionId}:${propertyId}`);
     clearResultViews(window.sessionStorage, currentSessionId);
@@ -1316,12 +1327,21 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   }, [selectedPropertyId, propertyMismatch, availabilityEpoch]);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setHistorySearchTerm(historySearchInput.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [historySearchInput]);
+
+  useEffect(() => {
     if (propertyMismatch || !selectedPropertyId) return;
     const controller = new AbortController();
     const requestEpoch = ++historyRequestEpochRef.current;
     if (historyPropertyRef.current !== selectedPropertyId) {
       setRecentSessions([]);
       setRecentSessionsNextCursor(null);
+      setSearchSessions([]);
+      setSearchNextCursor(null);
+      ++searchRequestEpochRef.current;
+      searchScopeRef.current = '';
       historyPropertyRef.current = selectedPropertyId;
     }
     setRecentSessionsLoading(true);
@@ -1349,6 +1369,44 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     return () => controller.abort();
   }, [selectedPropertyId, propertyMismatch, availabilityEpoch, recentSessionsEpoch, redactHistoryAccessLoss]);
 
+  useEffect(() => {
+    if (!historySearchTerm || propertyMismatch || !selectedPropertyId) {
+      setSearchSessions([]);
+      setSearchNextCursor(null);
+      setSearchIssue(null);
+      setSearchLoading(false);
+      setSearchLoadingMore(false);
+      searchScopeRef.current = '';
+      return;
+    }
+    const controller = new AbortController();
+    const requestEpoch = ++searchRequestEpochRef.current;
+    const searchScope = JSON.stringify([selectedPropertyId, historySearchTerm]);
+    if (searchScopeRef.current !== searchScope) {
+      setSearchSessions([]);
+      setSearchNextCursor(null);
+      searchScopeRef.current = searchScope;
+    }
+    setSearchIssue(null);
+    setSearchLoading(true);
+    setSearchLoadingMore(false);
+    api.searchAskSessionTitles(selectedPropertyId, historySearchTerm, { signal: controller.signal })
+      .then((response) => {
+        if (!response.success || !response.data) throw new Error(response.message || 'Could not search conversation titles.');
+        if (controller.signal.aborted || searchRequestEpochRef.current !== requestEpoch) return;
+        setSearchSessions(response.data.items);
+        setSearchNextCursor(response.data.nextCursor);
+      })
+      .catch((caught) => {
+        if (controller.signal.aborted || searchRequestEpochRef.current !== requestEpoch || (caught instanceof DOMException && caught.name === 'AbortError')) return;
+        if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) redactHistoryAccessLoss(selectedPropertyId);
+        else setSearchIssue('Could not refresh title matches. Previously loaded matches remain visible; recent conversations remain available when search is cleared.');
+        if (askServiceIsPaused(caught)) setServiceUnavailable(true);
+      })
+      .finally(() => { if (!controller.signal.aborted && searchRequestEpochRef.current === requestEpoch) setSearchLoading(false); });
+    return () => controller.abort();
+  }, [historySearchTerm, selectedPropertyId, propertyMismatch, availabilityEpoch, recentSessionsEpoch, redactHistoryAccessLoss]);
+
   const loadMoreRecentSessions = async () => {
     if (!selectedPropertyId || !recentSessionsNextCursor || recentSessionsLoading || recentSessionsLoadingMore) return;
     const requestEpoch = historyRequestEpochRef.current;
@@ -1373,6 +1431,30 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       if (askServiceIsPaused(caught)) setServiceUnavailable(true);
     } finally {
       if (historyRequestEpochRef.current === requestEpoch) setRecentSessionsLoadingMore(false);
+    }
+  };
+
+  const loadMoreSearchSessions = async () => {
+    if (!selectedPropertyId || !historySearchTerm || !searchNextCursor || searchLoading || searchLoadingMore) return;
+    const requestEpoch = searchRequestEpochRef.current;
+    setSearchLoadingMore(true);
+    setSearchIssue(null);
+    try {
+      const response = await api.searchAskSessionTitles(selectedPropertyId, historySearchTerm, { cursor: searchNextCursor });
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not load more title matches.');
+      if (searchRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== selectedPropertyId) return;
+      setSearchSessions((current) => {
+        const seen = new Set(current.map((item) => item.sessionId));
+        return [...current, ...response.data!.items.filter((item) => !seen.has(item.sessionId))];
+      });
+      setSearchNextCursor(response.data.nextCursor);
+    } catch (caught) {
+      if (searchRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== selectedPropertyId) return;
+      if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) redactHistoryAccessLoss(selectedPropertyId);
+      else setSearchIssue('Could not load more title matches. Matches already shown remain available.');
+      if (askServiceIsPaused(caught)) setServiceUnavailable(true);
+    } finally {
+      if (searchRequestEpochRef.current === requestEpoch) setSearchLoadingMore(false);
     }
   };
 
@@ -1797,9 +1879,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
-  const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId);
+  const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId && item.property.id === selectedPropertyId);
   const latestExecution = executions.at(-1);
-  const activeConversation = executions.length > 0 && latestExecution && !deniedProperties.current.has(`${sessionId}:${latestExecution.property?.id}`) ? {
+  const activeConversation = executions.length > 0 && latestExecution && latestExecution.property?.id === selectedPropertyId && !deniedProperties.current.has(`${sessionId}:${latestExecution.property?.id}`) ? {
     sessionId,
     title: executions[0].question,
     property: latestExecution.property ?? { id: selectedPropertyId ?? 'general', label: selectedPropertyId ? 'Selected home' : 'General home guidance' },
@@ -1808,7 +1890,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     executionCount: executions.length,
     lastActiveAt: latestExecution.updatedAt,
   } satisfies AskRecentSessionSummary : null;
-  const historySessions = activeConversation ? [activeConversation, ...visibleRecentSessions] : visibleRecentSessions;
+  const historySearchActive = Boolean(historySearchInput.trim());
+  const historySearchPending = historySearchActive && historySearchInput.trim() !== historySearchTerm;
+  const historySessions = historySearchActive
+    ? historySearchPending ? [] : searchSessions.filter((item) => item.property.id === selectedPropertyId)
+    : activeConversation ? [activeConversation, ...visibleRecentSessions] : visibleRecentSessions;
+  const historyRailLoading = historySearchActive ? historySearchPending || searchLoading : recentSessionsLoading;
+  const historyRailLoadingMore = historySearchActive ? searchLoadingMore : recentSessionsLoadingMore;
+  const historyRailHasMore = historySearchActive ? !historySearchPending && Boolean(searchNextCursor) : Boolean(recentSessionsNextCursor);
+  const historyRailIssue = historySearchActive ? searchIssue : recentSessionsIssue;
+  const loadMoreHistory = historySearchActive ? loadMoreSearchSessions : loadMoreRecentSessions;
   const personalizedFeaturedPrompts = concierge.view ? visibleConciergeFeaturedPrompts(concierge.view) : [];
   const usingFallbackPrompts = personalizedFeaturedPrompts.length === 0;
   const featuredPrompts = usingFallbackPrompts ? fallbackPrompts : personalizedFeaturedPrompts;
@@ -1865,7 +1956,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               <SheetDescription>Start something new or continue a recent conversation for this home.</SheetDescription>
             </SheetHeader>
             <div className="mt-5 min-h-0 flex-1">
-              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} loadingMore={recentSessionsLoadingMore} hasMore={Boolean(recentSessionsNextCursor)} issue={recentSessionsIssue} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreRecentSessions()} backHref={safeBackTo} backLabel={initialBackLabel} />
+              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} onQueryChange={setHistorySearchInput} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
             </div>
           </SheetContent>
         </Sheet>
@@ -1887,7 +1978,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
           <aside className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
-            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} loadingMore={recentSessionsLoadingMore} hasMore={Boolean(recentSessionsNextCursor)} issue={recentSessionsIssue} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreRecentSessions()} backHref={safeBackTo} backLabel={initialBackLabel} />
+            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} onQueryChange={setHistorySearchInput} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
           </aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
