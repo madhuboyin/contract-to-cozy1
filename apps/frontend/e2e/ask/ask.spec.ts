@@ -77,6 +77,21 @@ test('new conversation returns to a fresh surface and recent sessions can be res
   await expect(page.getByRole('button', { name: 'New Ask Cozy session' })).toBeVisible();
 });
 
+test('conversation switching restores each session draft without copying it to a new conversation', async ({ page }) => {
+  await installAskApi(page, { recentSessions: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
+  const composer = page.getByPlaceholder('Ask anything about your home…');
+
+  await conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
+  await composer.fill('Compare the repair estimates first');
+  await conversationNav.getByRole('button', { name: 'New Ask Cozy session' }).click();
+  await expect(composer).toHaveValue('');
+  await composer.fill('Plan the next project');
+  await conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
+  await expect(composer).toHaveValue('Compare the repair estimates first');
+});
+
 test('pending Ask actions stay compact and can be dismissed before execution', async ({ page }) => {
   await installAskApi(page, { pendingWork: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

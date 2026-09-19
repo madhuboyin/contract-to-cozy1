@@ -115,8 +115,8 @@ function askServiceIsPaused(error: unknown): boolean {
   return askFailureCode(error) === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
 }
 
-function draftStorageKey(propertyId?: string): string {
-  return `ctc:ask-draft:v1:${propertyId ?? 'general'}`;
+export function draftStorageKey(propertyId: string | undefined, sessionId: string): string {
+  return `ctc:ask-draft:v2:${propertyId ?? 'general'}:${sessionId}`;
 }
 
 function captureDraftStorageKey(executionId: string, requirementId: string): string {
@@ -890,10 +890,11 @@ function recentSessionGroup(lastActiveAt: string): string {
   return 'Previous 7 days';
 }
 
-function ConversationHistoryNav({ items, activeSessionId, loading, openingId, onOpen, onNew, backHref, backLabel }: {
+export function ConversationHistoryNav({ items, activeSessionId, loading, issue, openingId, onOpen, onNew, backHref, backLabel }: {
   items: AskRecentSessionSummary[];
   activeSessionId: string;
   loading: boolean;
+  issue: string | null;
   openingId: string | null;
   onOpen: (session: AskRecentSessionSummary) => void;
   onNew: () => void;
@@ -925,8 +926,10 @@ function ConversationHistoryNav({ items, activeSessionId, loading, openingId, on
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
       </label>
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
-        {loading ? <p className="px-2 py-3 text-xs text-slate-400" role="status">Loading recent conversations…</p> : grouped.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{query ? 'No conversations match your search.' : 'Your recent conversations will appear here.'}</p>
+        {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
+        {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">Loading recent conversations…</p>}
+        {grouped.length === 0 && !loading ? (
+          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{query ? 'No conversations match your search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
         ) : grouped.map((group) => (
           <section key={group.label} className="mb-5" aria-labelledby={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`}>
             <h3 id={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`} className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.label}</h3>
@@ -1150,7 +1153,7 @@ function ExecutionCard({
           const continuity = execution.skillHandoff.continuity;
           return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" disabled={loading} onClick={() => void ask(handoffPrompt, undefined, { propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500 disabled:opacity-50">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
         })()}
-        {visibleSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{visibleSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
+        {visibleSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{visibleSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId, execution.sessionId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
         <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} />
       </div>
     </article></ResultViewContext.Provider></ResultRevalidationBoundary>
@@ -1185,6 +1188,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [availabilityEpoch, setAvailabilityEpoch] = useState(0);
   const [recentSessions, setRecentSessions] = useState<AskRecentSessionSummary[]>([]);
   const [recentSessionsLoading, setRecentSessionsLoading] = useState(false);
+  const [recentSessionsIssue, setRecentSessionsIssue] = useState<string | null>(null);
   const [openingRecentSessionId, setOpeningRecentSessionId] = useState<string | null>(null);
   const [recentSessionsEpoch, setRecentSessionsEpoch] = useState(0);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -1213,6 +1217,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeSessionRef = useRef('');
   const activeSessionPropertyRef = useRef<string | undefined>(undefined);
+  const historyPropertyRef = useRef<string | undefined>(undefined);
+  const appliedInitialQuestionRef = useRef('');
   const landingVisible = executions.length === 0;
   // Also filter on read so conversations persisted before the backend policy
   // shipped do not keep displaying a prompt the homeowner already asked.
@@ -1290,15 +1296,35 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => {
     if (propertyMismatch || !selectedPropertyId) return;
     const controller = new AbortController();
+    if (historyPropertyRef.current !== selectedPropertyId) {
+      setRecentSessions([]);
+      historyPropertyRef.current = selectedPropertyId;
+    }
     setRecentSessionsLoading(true);
+    setRecentSessionsIssue(null);
     api.getRecentAskSessions(selectedPropertyId, { signal: controller.signal })
       .then((response) => {
-        const items = response.success && response.data ? response.data.items : [];
+        if (!response.success || !response.data) throw new Error(response.message || 'Could not refresh conversations.');
+        if (controller.signal.aborted) return;
+        const items = response.data.items;
         setRecentSessions(Array.isArray(items) ? items : []);
       })
       .catch((caught) => {
-        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-          setRecentSessions([]);
+        if (!controller.signal.aborted && !(caught instanceof DOMException && caught.name === 'AbortError')) {
+          if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) {
+            setRecentSessions([]);
+            setRecentSessionsIssue('Access to this home changed. Its conversations are no longer shown.');
+            const currentSessionId = activeSessionRef.current;
+            deniedProperties.current.add(`${currentSessionId}:${selectedPropertyId}`);
+            clearResultViews(window.sessionStorage, currentSessionId);
+            setExecutions((current) => current.map((item) => item.property?.id === selectedPropertyId ? {
+              ...item, question: 'Unavailable result', blocks: [], originalResponse: null, confirmation: null,
+              clarification: null, captureRequests: [], suggestions: [], skillHandoff: null, viewState: null,
+            } : item));
+            setPendingWork((current) => current.filter((item) => item.execution.property?.id !== selectedPropertyId));
+          } else {
+            setRecentSessionsIssue('Could not refresh conversations. Previously loaded conversations remain visible; try again later.');
+          }
           if (askServiceIsPaused(caught)) setServiceUnavailable(true);
         }
       })
@@ -1317,7 +1343,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     activeSessionRef.current = nextSession;
     activeSessionPropertyRef.current = selectedPropertyId;
     setSessionId(nextSession);
-    setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
+    setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId, nextSession)) || '');
     setExecutions([]);
     setRefreshIssues({});
     requests.current.clear();
@@ -1330,7 +1356,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     }
     api.getAskSession(nextSession, { signal: controller.signal })
       .then((response) => {
-        if (controller.signal.aborted || activeSessionRef.current !== nextSession) return;
+        if (controller.signal.aborted || activeSessionRef.current !== nextSession || deniedProperties.current.has(`${nextSession}:${selectedPropertyId}`)) return;
         const loaded = 'data' in response ? response.data?.executions ?? [] : [];
         clearResultViews(window.sessionStorage, nextSession, new Set(loaded.map((item) => resultViewKey(nextSession, item.property?.id ?? 'general', item.viewState?.resultId ?? item.executionId))));
         setExecutions(loaded);
@@ -1363,10 +1389,11 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   }, [selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch, availabilityEpoch]);
 
   useEffect(() => {
-    if (!initialQuestion) return;
+    if (!initialQuestion || !sessionId || appliedInitialQuestionRef.current === initialQuestion) return;
+    appliedInitialQuestionRef.current = initialQuestion;
     setInput(initialQuestion);
-    window.localStorage.setItem(draftStorageKey(selectedPropertyId), initialQuestion);
-  }, [initialQuestion, selectedPropertyId]);
+    window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), initialQuestion);
+  }, [initialQuestion, selectedPropertyId, sessionId]);
 
   useEffect(() => {
     if (loading) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1410,7 +1437,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     const requestKey = source ? resultRequestKey(source) : `${sessionId}:question`;
     const requestToken = requests.current.begin(requestKey);
     setInput('');
-    window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
+    window.localStorage.removeItem(draftStorageKey(selectedPropertyId, requestedSessionId));
     setError(null);
     setLoading(true);
     try {
@@ -1468,7 +1495,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     } catch (caught) {
       if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
       setInput(message);
-      window.localStorage.setItem(draftStorageKey(selectedPropertyId), message);
+      window.localStorage.setItem(draftStorageKey(selectedPropertyId, requestedSessionId), message);
       if (askServiceIsPaused(caught)) {
         setServiceUnavailable(true);
         setError(null);
@@ -1503,6 +1530,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       const response = await api.deleteAskSession(sessionId);
       if (!response.success) throw new Error(response.message || 'Could not clear Ask history.');
       clearResultViews(window.sessionStorage, sessionId);
+      window.localStorage.removeItem(draftStorageKey(selectedPropertyId, sessionId));
       const nextSession = newId();
       activeSessionRef.current = nextSession;
       activeSessionPropertyRef.current = selectedPropertyId;
@@ -1524,7 +1552,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setConfirmClear(false);
     setJustUpdatedExecutionId(null);
     setInput('');
-    window.localStorage.removeItem(draftStorageKey(selectedPropertyId));
     setRecentSessionsEpoch((current) => current + 1);
     setHistoryDrawerOpen(false);
     if (mode === 'page') updateAskLocation({ propertyId: selectedPropertyId }, 'push');
@@ -1543,6 +1570,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       activeSessionPropertyRef.current = recent.property.id;
       setSessionId(recent.sessionId);
       setExecutions(history.data.executions);
+      setInput(window.localStorage.getItem(draftStorageKey(recent.property.id, recent.sessionId)) || '');
       setJustUpdatedExecutionId(null);
       setHistoryDrawerOpen(false);
       if (mode === 'page') updateAskLocation({ sessionId: recent.sessionId, propertyId: recent.property.id, executionId: recent.latestExecutionId }, 'push');
@@ -1580,7 +1608,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         setSessionId(nextSession);
         setExecutions([]);
         setJustUpdatedExecutionId(null);
-        setInput(window.localStorage.getItem(draftStorageKey(selectedPropertyId)) || '');
+        setInput(window.localStorage.getItem(draftStorageKey(selectedPropertyId, nextSession)) || '');
         setHistoryLoading(false);
         return;
       }
@@ -1593,6 +1621,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           activeSessionPropertyRef.current = selectedPropertyId;
           setSessionId(targetSessionId);
           setExecutions(response.data.executions);
+          setInput(window.localStorage.getItem(draftStorageKey(selectedPropertyId, targetSessionId)) || '');
           setJustUpdatedExecutionId(null);
         })
         .catch((caught) => {
@@ -1726,7 +1755,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
   const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId);
   const latestExecution = executions.at(-1);
-  const activeConversation = executions.length > 0 && latestExecution ? {
+  const activeConversation = executions.length > 0 && latestExecution && !deniedProperties.current.has(`${sessionId}:${latestExecution.property?.id}`) ? {
     sessionId,
     title: executions[0].question,
     property: latestExecution.property ?? { id: selectedPropertyId ?? 'general', label: selectedPropertyId ? 'Selected home' : 'General home guidance' },
@@ -1758,7 +1787,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     <form onSubmit={submit} className="mx-auto w-full max-w-3xl" aria-label="Ask Cozy question">
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4" />{error}</div>}
       <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100', placement === 'hero' ? 'rounded-3xl p-3 shadow-[0_12px_40px_-20px_rgba(15,118,110,0.45)]' : 'rounded-2xl')}>
-        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); window.localStorage.setItem(draftStorageKey(selectedPropertyId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? 2 : 1} maxLength={4000} placeholder="Ask anything about your home…" className={cn('max-h-32 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? 'min-h-14 py-3 text-base' : 'min-h-10 py-2 text-sm')} />
+        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? 2 : 1} maxLength={4000} placeholder="Ask anything about your home…" className={cn('max-h-32 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? 'min-h-14 py-3 text-base' : 'min-h-10 py-2 text-sm')} />
         <button type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className={cn('grid shrink-0 place-items-center rounded-2xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40', placement === 'hero' ? 'h-12 w-12' : 'h-10 w-10 rounded-xl')}><Send className="h-4 w-4" /></button>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>
@@ -1792,7 +1821,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               <SheetDescription>Start something new or continue a recent conversation for this home.</SheetDescription>
             </SheetHeader>
             <div className="mt-5 min-h-0 flex-1">
-              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} backHref={safeBackTo} backLabel={initialBackLabel} />
+              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} issue={recentSessionsIssue} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} backHref={safeBackTo} backLabel={initialBackLabel} />
             </div>
           </SheetContent>
         </Sheet>
@@ -1814,7 +1843,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
           <aside className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
-            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} backHref={safeBackTo} backLabel={initialBackLabel} />
+            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={recentSessionsLoading} issue={recentSessionsIssue} openingId={openingRecentSessionId} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} backHref={safeBackTo} backLabel={initialBackLabel} />
           </aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
