@@ -249,10 +249,13 @@ export async function getAskRecentSessions(req: AuthRequest, res: Response, next
     if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
     const propertyId = z.string().trim().min(1).max(160).safeParse(req.query.propertyId);
     if (!propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required for recent Ask sessions.' } });
-    return res.status(200).json({ success: true, data: { items: await getRecentAskSessions(userId, propertyId.data) } });
+    const cursor = z.string().min(1).max(512).optional().safeParse(req.query.cursor);
+    if (!cursor.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation history cursor is invalid.' } });
+    return res.status(200).json({ success: true, data: await getRecentAskSessions(userId, propertyId.data, cursor.data) });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
+    if (code === 'ASK_INVALID_CURSOR') return res.status(400).json({ success: false, error: { code, message: 'The conversation history cursor is invalid.' } });
     return next(error);
   }
 }

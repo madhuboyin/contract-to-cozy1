@@ -50,7 +50,7 @@ test('new conversation returns to a fresh surface and recent sessions can be res
   await expect(conversationNav).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Conversation history' })).toHaveCount(1);
   await expect(conversationNav.getByText('Your home assistant')).toBeVisible();
-  await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
+  await expect(conversationNav.getByPlaceholder('Filter loaded conversations')).toBeVisible();
   await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
 
   await conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
@@ -90,6 +90,17 @@ test('conversation switching restores each session draft without copying it to a
   await composer.fill('Plan the next project');
   await conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
   await expect(composer).toHaveValue('Compare the repair estimates first');
+});
+
+test('conversation rail loads an older page without replacing the already loaded history', async ({ page }) => {
+  await installAskApi(page, { recentSessions: true, recentSessionsPages: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
+  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
+  await conversationNav.getByRole('button', { name: 'Load older conversations' }).click();
+  await expect(conversationNav.getByRole('button', { name: /Older roof project/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: 'Load older conversations' })).toHaveCount(0);
 });
 
 test('pending Ask actions stay compact and can be dismissed before execution', async ({ page }) => {

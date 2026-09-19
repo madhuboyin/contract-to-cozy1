@@ -149,6 +149,11 @@ export interface AskRecentSessionSummary {
   lastActiveAt: string;
 }
 
+export interface AskRecentSessionPage {
+  items: AskRecentSessionSummary[];
+  nextCursor: string | null;
+}
+
 export interface AskClarification {
   version: number;
   question: string;

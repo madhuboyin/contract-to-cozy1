@@ -859,6 +859,11 @@ export const AskRecentSessionSummarySchema = z.object({
   lastActiveAt: z.string().datetime(),
 });
 
+export const AskRecentSessionPageSchema = z.object({
+  items: z.array(AskRecentSessionSummarySchema),
+  nextCursor: z.string().nullable(),
+});
+
 export type AskExecutionStatus = z.infer<typeof AskExecutionStatusSchema>;
 export type AskPresentationBlock = z.infer<typeof AskPresentationBlockSchema>;
 export type AskCaptureRequest = z.infer<typeof AskCaptureRequestSchema>;
@@ -876,5 +881,6 @@ export type ContinueAskExecution = z.infer<typeof ContinueAskExecutionSchema>;
 export type ResolveAskExecutionProperty = z.infer<typeof ResolveAskExecutionPropertySchema>;
 export type AskPendingWorkItem = z.infer<typeof AskPendingWorkItemSchema>;
 export type AskRecentSessionSummary = z.infer<typeof AskRecentSessionSummarySchema>;
+export type AskRecentSessionPage = z.infer<typeof AskRecentSessionPageSchema>;
 export type SubmitAskClarification = z.infer<typeof SubmitAskClarificationSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;

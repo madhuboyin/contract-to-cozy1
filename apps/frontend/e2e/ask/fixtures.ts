@@ -306,7 +306,7 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
@@ -389,12 +389,20 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   await page.route(`${apiOrigin}/api/ask/sessions/*`, (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/recent')) {
+      if (options.recentSessionsPages && url.searchParams.has('cursor')) {
+        return fulfill(route, { success: true, data: { items: [{
+          sessionId: 'recent-session-2', title: 'Older roof project',
+          property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'ANSWERED',
+          latestExecutionId: 'execution-roof', executionCount: 1,
+          lastActiveAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+        }], nextCursor: null } });
+      }
       return fulfill(route, { success: true, data: { items: options.recentSessions ? [{
         sessionId: 'recent-session-1', title: 'Refrigerator replacement timing',
         property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'NEEDS_CONTEXT',
         latestExecutionId: 'execution-refrigerator', executionCount: 1,
         lastActiveAt: new Date().toISOString(),
-      }] : [] } });
+      }] : [], nextCursor: options.recentSessionsPages ? 'fixture-page-2' : null } });
     }
     if (url.pathname.endsWith('/recent-session-1')) {
       return fulfill(route, { success: true, data: { executions: [{ ...execution('refrigerator'), sessionId: 'recent-session-1' }] } });

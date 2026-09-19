@@ -10,6 +10,7 @@ import {
   type AskCaptureRequest,
   type AskExecutionResponse,
   type AskPendingWorkItem,
+  type AskRecentSessionPage,
   type AskRecentSessionSummary,
   type AskPresentationBlock,
   type CreateAskExecutionRequest,
@@ -25,6 +26,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
+import { ASK_SESSION_HISTORY_PAGE_SIZE, askSessionHistoryWhere, decodeAskSessionHistoryCursor, encodeAskSessionHistoryCursor } from './askSessionHistoryPagination';
 import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
@@ -13369,28 +13371,23 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   return visibleExecutions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
 }
 
-const ASK_RECENT_SESSION_LIMIT = 5;
-const ASK_RECENT_SESSION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-
-export async function getRecentAskSessions(userId: string, propertyId: string): Promise<AskRecentSessionSummary[]> {
+export async function getRecentAskSessions(userId: string, propertyId: string, cursorValue?: string): Promise<AskRecentSessionPage> {
   await ensurePropertyAccess(userId, propertyId);
+  const cursor = cursorValue ? decodeAskSessionHistoryCursor(cursorValue) : null;
+  if (cursorValue && !cursor) throw Object.assign(new Error('Invalid conversation history cursor.'), { code: 'ASK_INVALID_CURSOR' });
   const now = new Date();
+  const where = askSessionHistoryWhere({ userId, propertyId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, cursor });
   const sessions = await prisma.askSession.findMany({
-    where: {
-      userId,
-      propertyId,
-      lastActiveAt: { gte: new Date(now.getTime() - ASK_RECENT_SESSION_WINDOW_MS) },
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      executions: { some: {} },
-    },
+    where,
     orderBy: [{ lastActiveAt: 'desc' }, { id: 'desc' }],
-    take: ASK_RECENT_SESSION_LIMIT,
+    take: ASK_SESSION_HISTORY_PAGE_SIZE + 1,
     select: {
       id: true,
       title: true,
       lastActiveAt: true,
-      _count: { select: { executions: true } },
+      _count: { select: { executions: { where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } } },
       executions: {
+        where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 1,
         select: { id: true, message: true, status: true },
@@ -13398,8 +13395,9 @@ export async function getRecentAskSessions(userId: string, propertyId: string): 
     },
   });
   const property = await propertySummary(propertyId);
-  if (!property) return [];
-  return sessions.flatMap((session) => {
+  if (!property) return { items: [], nextCursor: null };
+  const page = sessions.slice(0, ASK_SESSION_HISTORY_PAGE_SIZE);
+  const items: AskRecentSessionSummary[] = page.flatMap((session) => {
     const latest = session.executions[0];
     if (!latest) return [];
     const title = (session.title?.trim() || latest.message.trim()).slice(0, 120);
@@ -13413,6 +13411,9 @@ export async function getRecentAskSessions(userId: string, propertyId: string): 
       lastActiveAt: session.lastActiveAt.toISOString(),
     }];
   });
+  const last = page.at(-1);
+  return { items, nextCursor: sessions.length > ASK_SESSION_HISTORY_PAGE_SIZE && last
+    ? encodeAskSessionHistoryCursor({ lastActiveAt: last.lastActiveAt, id: last.id }) : null };
 }
 
 export async function getAskExecution(userId: string, executionId: string): Promise<AskExecutionResponse> {
