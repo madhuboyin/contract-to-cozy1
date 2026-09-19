@@ -2,6 +2,10 @@ import type { Prisma } from '@prisma/client';
 
 export const ASK_SESSION_HISTORY_PAGE_SIZE = 20;
 
+export function askHistoryAccessiblePropertyWhere(userId: string): Prisma.PropertyWhereInput {
+  return { OR: [{ homeownerProfile: { userId } }, { householdMembers: { some: { userId } } }] };
+}
+
 export interface AskSessionHistoryCursor {
   lastActiveAt: Date;
   id: string;
@@ -30,19 +34,22 @@ export function decodeAskSessionHistoryCursor(value: string): AskSessionHistoryC
 
 export function askSessionHistoryWhere(input: {
   userId: string;
-  propertyId: string;
   now: Date;
   retentionDays: number;
   cursor: AskSessionHistoryCursor | null;
   titleQuery?: string;
-}): Prisma.AskSessionWhereInput {
+} & ({ propertyId: string; accessiblePropertyIds?: never } | { propertyId?: never; accessiblePropertyIds: string[] })): Prisma.AskSessionWhereInput {
   const retentionWindowMs = input.retentionDays * 24 * 60 * 60 * 1000;
+  const allHomes = input.accessiblePropertyIds !== undefined;
+  const liveExecution = { OR: [{ expiresAt: null }, { expiresAt: { gt: input.now } }] };
   return {
     userId: input.userId,
-    propertyId: input.propertyId,
+    propertyId: allHomes ? { in: input.accessiblePropertyIds } : input.propertyId,
     lastActiveAt: { gte: new Date(input.now.getTime() - retentionWindowMs) },
     OR: [{ expiresAt: null }, { expiresAt: { gt: input.now } }],
-    executions: { some: { OR: [{ expiresAt: null }, { expiresAt: { gt: input.now } }] } },
+    executions: allHomes
+      ? { some: liveExecution, every: { propertyId: { in: input.accessiblePropertyIds } } }
+      : { some: liveExecution },
     ...(input.titleQuery ? { title: { contains: input.titleQuery, mode: 'insensitive' } } : {}),
     ...(input.cursor ? { AND: [{ OR: [
       { lastActiveAt: { lt: input.cursor.lastActiveAt } },

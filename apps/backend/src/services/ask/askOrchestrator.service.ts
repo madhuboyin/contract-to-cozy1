@@ -26,7 +26,7 @@ import {
   type SubmitHomeActionUsefulnessFeedback,
 } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { ASK_SESSION_HISTORY_PAGE_SIZE, askSessionHistoryWhere, decodeAskSessionHistoryCursor, encodeAskSessionHistoryCursor } from './askSessionHistoryPagination';
+import { ASK_SESSION_HISTORY_PAGE_SIZE, askHistoryAccessiblePropertyWhere, askSessionHistoryWhere, decodeAskSessionHistoryCursor, encodeAskSessionHistoryCursor } from './askSessionHistoryPagination';
 import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
@@ -13371,18 +13371,26 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   return visibleExecutions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
 }
 
-export async function getRecentAskSessions(userId: string, propertyId: string, cursorValue?: string, titleQuery?: string): Promise<AskRecentSessionPage> {
-  await ensurePropertyAccess(userId, propertyId);
+export async function getRecentAskSessions(userId: string, propertyId: string | null, cursorValue?: string, titleQuery?: string): Promise<AskRecentSessionPage> {
+  if (propertyId) await ensurePropertyAccess(userId, propertyId);
+  const accessibleProperties = propertyId ? null : await prisma.property.findMany({
+    where: askHistoryAccessiblePropertyWhere(userId),
+    select: { id: true, name: true, address: true, city: true, state: true },
+  });
   const cursor = cursorValue ? decodeAskSessionHistoryCursor(cursorValue) : null;
   if (cursorValue && !cursor) throw Object.assign(new Error('Invalid conversation history cursor.'), { code: 'ASK_INVALID_CURSOR' });
   const now = new Date();
-  const where = askSessionHistoryWhere({ userId, propertyId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, cursor, titleQuery });
+  const bounds = { userId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, cursor, titleQuery };
+  const where = propertyId
+    ? askSessionHistoryWhere({ ...bounds, propertyId })
+    : askSessionHistoryWhere({ ...bounds, accessiblePropertyIds: accessibleProperties!.map((property) => property.id) });
   const sessions = await prisma.askSession.findMany({
     where,
     orderBy: [{ lastActiveAt: 'desc' }, { id: 'desc' }],
     take: ASK_SESSION_HISTORY_PAGE_SIZE + 1,
     select: {
       id: true,
+      propertyId: true,
       title: true,
       lastActiveAt: true,
       _count: { select: { executions: { where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } } },
@@ -13394,12 +13402,17 @@ export async function getRecentAskSessions(userId: string, propertyId: string, c
       },
     },
   });
-  const property = await propertySummary(propertyId);
-  if (!property) return { items: [], nextCursor: null };
+  const selectedProperty = propertyId ? await propertySummary(propertyId) : null;
+  if (propertyId && !selectedProperty) return { items: [], nextCursor: null };
+  const labels = new Map<string, { id: string; label: string }>(
+    propertyId && selectedProperty ? [[propertyId, selectedProperty]]
+      : accessibleProperties!.map((property) => [property.id, { id: property.id, label: propertyLabel(property) }]),
+  );
   const page = sessions.slice(0, ASK_SESSION_HISTORY_PAGE_SIZE);
   const items: AskRecentSessionSummary[] = page.flatMap((session) => {
     const latest = session.executions[0];
-    if (!latest) return [];
+    const property = session.propertyId ? labels.get(session.propertyId) : null;
+    if (!latest || !property) return [];
     const title = (session.title?.trim() || latest.message.trim()).slice(0, 120);
     return [{
       sessionId: session.id,

@@ -247,11 +247,13 @@ export async function getAskRecentSessions(req: AuthRequest, res: Response, next
   try {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
-    const propertyId = z.string().trim().min(1).max(160).safeParse(req.query.propertyId);
-    if (!propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required for recent Ask sessions.' } });
+    const allHomes = req.query.scope === 'all';
+    if ((req.query.scope !== undefined && !allHomes) || (allHomes && req.query.propertyId !== undefined)) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation history scope is invalid.' } });
+    const propertyId = allHomes ? null : z.string().trim().min(1).max(160).safeParse(req.query.propertyId);
+    if (propertyId && !propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required for recent Ask sessions.' } });
     const cursor = z.string().min(1).max(512).optional().safeParse(req.query.cursor);
     if (!cursor.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation history cursor is invalid.' } });
-    return res.status(200).json({ success: true, data: await getRecentAskSessions(userId, propertyId.data, cursor.data) });
+    return res.status(200).json({ success: true, data: await getRecentAskSessions(userId, propertyId?.data ?? null, cursor.data) });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
@@ -267,7 +269,8 @@ export async function postAskSessionTitleSearch(req: AuthRequest, res: Response,
     const input = AskSessionTitleSearchRequestSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation title search is invalid.' } });
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ success: true, data: await getRecentAskSessions(userId, input.data.propertyId, input.data.cursor, input.data.query) });
+    const propertyId = 'propertyId' in input.data ? input.data.propertyId : null;
+    return res.status(200).json({ success: true, data: await getRecentAskSessions(userId, propertyId, input.data.cursor, input.data.query) });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });

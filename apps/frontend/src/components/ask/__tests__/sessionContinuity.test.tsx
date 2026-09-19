@@ -35,7 +35,10 @@ test('a failed history refresh keeps loaded conversations visible with an explic
     issue="Could not refresh conversations. Previously loaded conversations remain visible; try again later."
     openingId={null}
     query=""
+    scope="THIS_HOME"
+    selectedHomeAvailable
     onQueryChange={() => {}}
+    onScopeChange={() => {}}
     onOpen={() => {}}
     onNew={() => {}}
     onLoadMore={() => {}}
@@ -56,7 +59,10 @@ test('older conversation pages are loaded by an explicit accessible control', ()
     issue={null}
     openingId={null}
     query=""
+    scope="THIS_HOME"
+    selectedHomeAvailable
     onQueryChange={onQueryChange}
+    onScopeChange={() => {}}
     onOpen={() => {}}
     onNew={() => {}}
     onLoadMore={onLoadMore}
@@ -65,4 +71,29 @@ test('older conversation pages are loaded by an explicit accessible control', ()
   expect(onLoadMore).toHaveBeenCalledTimes(1);
   fireEvent.change(screen.getByPlaceholderText('Search conversation titles'), { target: { value: 'roof' } });
   expect(onQueryChange).toHaveBeenCalledWith('roof');
+});
+
+test('the history rail exposes an accessible all-home scope without hiding property identity', () => {
+  const onScopeChange = jest.fn();
+  render(<ConversationHistoryNav
+    items={[recent]}
+    activeSessionId=""
+    loading={false}
+    loadingMore={false}
+    hasMore={false}
+    issue={null}
+    openingId={null}
+    query=""
+    scope="ALL_HOMES"
+    selectedHomeAvailable
+    onQueryChange={() => {}}
+    onScopeChange={onScopeChange}
+    onOpen={() => {}}
+    onNew={() => {}}
+    onLoadMore={() => {}}
+  />);
+  expect(screen.getByRole('button', { name: 'All homes' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByText('Main home')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'This home' }));
+  expect(onScopeChange).toHaveBeenCalledWith('THIS_HOME');
 });

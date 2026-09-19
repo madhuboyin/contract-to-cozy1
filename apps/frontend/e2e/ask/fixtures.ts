@@ -1,6 +1,7 @@
 import { expect, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
 
 export const propertyId = 'ask-property-fixture';
+export const otherPropertyId = 'ask-other-property-fixture';
 const apiOrigin = 'http://localhost:8080';
 
 function capabilityExecution(unavailable = false) {
@@ -306,7 +307,7 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
@@ -389,7 +390,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   await page.route(`${apiOrigin}/api/ask/sessions/*`, (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/search')) {
-      const body = route.request().postDataJSON() as { query?: string };
+      const body = route.request().postDataJSON() as { query?: string; scope?: string };
+      if (options.allHomeSessions && body.scope === 'ALL_HOMES') return fulfill(route, { success: true, data: { items: body.query?.toLowerCase().includes('boiler') ? [{
+        sessionId: 'other-home-session', title: 'Boiler replacement options',
+        property: { id: otherPropertyId, label: 'Second Home' }, latestStatus: 'ANSWERED',
+        latestExecutionId: 'other-home-execution', executionCount: 1, lastActiveAt: new Date().toISOString(),
+      }] : [], nextCursor: null } });
       return fulfill(route, { success: true, data: { items: options.searchSessions && body.query?.toLowerCase().includes('roof') ? [{
         sessionId: 'recent-session-2', title: 'Older roof project',
         property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'ANSWERED',
@@ -398,6 +404,13 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       }] : [], nextCursor: null } });
     }
     if (url.pathname.endsWith('/recent')) {
+      if (options.allHomeSessions && url.searchParams.get('scope') === 'all') {
+        return fulfill(route, { success: true, data: { items: [{
+          sessionId: 'other-home-session', title: 'Boiler replacement options',
+          property: { id: otherPropertyId, label: 'Second Home' }, latestStatus: 'ANSWERED',
+          latestExecutionId: 'other-home-execution', executionCount: 1, lastActiveAt: new Date().toISOString(),
+        }], nextCursor: null } });
+      }
       if (options.recentSessionsPages && url.searchParams.has('cursor')) {
         return fulfill(route, { success: true, data: { items: [{
           sessionId: 'recent-session-2', title: 'Older roof project',

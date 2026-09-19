@@ -117,6 +117,20 @@ test('conversation title search reaches older retained sessions without putting 
   await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toHaveCount(0);
 });
 
+test('conversation rail switches to authorized all-home history and keeps property labels visible', async ({ page }) => {
+  await installAskApi(page, { recentSessions: true, allHomeSessions: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
+  await conversationNav.getByRole('button', { name: 'All homes' }).click();
+  await expect(conversationNav.getByRole('button', { name: /Boiler replacement options.*Second Home/ })).toBeVisible();
+  const searchRequest = page.waitForRequest((request) => request.url().endsWith('/api/ask/sessions/search'));
+  await conversationNav.getByPlaceholder('Search conversation titles').fill('boiler');
+  const request = await searchRequest;
+  expect(request.postDataJSON()).toMatchObject({ scope: 'ALL_HOMES', query: 'boiler' });
+  expect(request.url()).not.toContain('boiler');
+  await expect(conversationNav.getByRole('button', { name: /Boiler replacement options.*Second Home/ })).toBeVisible();
+});
+
 test('pending Ask actions stay compact and can be dismissed before execution', async ({ page }) => {
   await installAskApi(page, { pendingWork: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

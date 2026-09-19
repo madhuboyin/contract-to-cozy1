@@ -1074,13 +1074,13 @@ class APIClient {
   async getAskSession(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
     return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, options);
   }
-  async getRecentAskSessions(propertyId: string, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
-    const query = new URLSearchParams({ propertyId });
+  async getRecentAskSessions(scope: { propertyId: string } | { allHomes: true }, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
+    const query = new URLSearchParams('allHomes' in scope ? { scope: 'all' } : { propertyId: scope.propertyId });
     if (options.cursor) query.set('cursor', options.cursor);
     return this.request(`/api/ask/sessions/recent?${query.toString()}`, { signal: options.signal });
   }
-  async searchAskSessionTitles(propertyId: string, query: string, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
-    return this.request('/api/ask/sessions/search', { method: 'POST', body: { propertyId, query, ...(options.cursor ? { cursor: options.cursor } : {}) }, signal: options.signal });
+  async searchAskSessionTitles(scope: { propertyId: string } | { allHomes: true }, query: string, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
+    return this.request('/api/ask/sessions/search', { method: 'POST', body: { ...('allHomes' in scope ? { scope: 'ALL_HOMES' } : { propertyId: scope.propertyId }), query, ...(options.cursor ? { cursor: options.cursor } : {}) }, signal: options.signal });
   }
   async getAskExecution(executionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}`, options);

@@ -4,6 +4,7 @@ require('ts-node/register');
 
 const {
   ASK_SESSION_HISTORY_PAGE_SIZE,
+  askHistoryAccessiblePropertyWhere,
   askSessionHistoryWhere,
   encodeAskSessionHistoryCursor,
   decodeAskSessionHistoryCursor,
@@ -64,4 +65,25 @@ test('title search request rejects empty and oversized terms or cursors', () => 
   assert.equal(AskSessionTitleSearchRequestSchema.safeParse({ propertyId: 'home-1', query: '  ' }).success, false);
   assert.equal(AskSessionTitleSearchRequestSchema.safeParse({ propertyId: 'home-1', query: 'a'.repeat(121) }).success, false);
   assert.equal(AskSessionTitleSearchRequestSchema.safeParse({ propertyId: 'home-1', query: 'roof', cursor: '' }).success, false);
+  assert.deepEqual(AskSessionTitleSearchRequestSchema.parse({ scope: 'ALL_HOMES', query: 'roof' }), { scope: 'ALL_HOMES', query: 'roof' });
+  assert.equal(AskSessionTitleSearchRequestSchema.safeParse({ scope: 'ALL_HOMES', propertyId: 'home-1', query: 'roof' }).success, false);
+});
+
+test('all-home history excludes unscoped, inaccessible, and mixed-access sessions before pagination', () => {
+  const now = new Date('2026-09-18T12:00:00.000Z');
+  const where = askSessionHistoryWhere({
+    userId: 'owner-1', accessiblePropertyIds: ['home-1', 'home-2'], now,
+    retentionDays: 30, cursor: null, titleQuery: 'roof',
+  });
+  assert.equal(where.userId, 'owner-1');
+  assert.deepEqual(where.propertyId, { in: ['home-1', 'home-2'] });
+  assert.deepEqual(where.executions, {
+    some: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+    every: { propertyId: { in: ['home-1', 'home-2'] } },
+  });
+  assert.deepEqual(where.title, { contains: 'roof', mode: 'insensitive' });
+  assert.deepEqual(askSessionHistoryWhere({ userId: 'owner-1', accessiblePropertyIds: [], now, retentionDays: 30, cursor: null }).propertyId, { in: [] });
+  assert.deepEqual(askHistoryAccessiblePropertyWhere('owner-1'), {
+    OR: [{ homeownerProfile: { userId: 'owner-1' } }, { householdMembers: { some: { userId: 'owner-1' } } }],
+  });
 });

@@ -880,7 +880,7 @@ function recentSessionStatus(status: AskRecentSessionSummary['latestStatus']): s
   return status.toLowerCase().replace(/_/g, ' ');
 }
 
-export function ConversationHistoryNav({ items, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, onQueryChange, onOpen, onNew, onLoadMore, backHref, backLabel }: {
+export function ConversationHistoryNav({ items, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel }: {
   items: AskRecentSessionSummary[];
   activeSessionId: string;
   loading: boolean;
@@ -889,7 +889,10 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
   issue: string | null;
   openingId: string | null;
   query: string;
+  scope: 'THIS_HOME' | 'ALL_HOMES';
+  selectedHomeAvailable: boolean;
   onQueryChange: (query: string) => void;
+  onScopeChange: (scope: 'THIS_HOME' | 'ALL_HOMES') => void;
   onOpen: (session: AskRecentSessionSummary) => void;
   onNew: () => void;
   onLoadMore: () => void;
@@ -923,8 +926,12 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
       <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-white hover:shadow-sm">
         <Plus className="h-4 w-4" aria-hidden="true" />New conversation
       </button>
+      <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="Conversation home scope">
+        <button type="button" aria-pressed={scope === 'THIS_HOME'} disabled={!selectedHomeAvailable} onClick={() => onScopeChange('THIS_HOME')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold disabled:opacity-50', scope === 'THIS_HOME' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>This home</button>
+        <button type="button" aria-pressed={scope === 'ALL_HOMES'} onClick={() => onScopeChange('ALL_HOMES')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold', scope === 'ALL_HOMES' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>All homes</button>
+      </div>
       <label className="relative mt-4 block">
-        <span className="sr-only">Search conversation titles for this home</span>
+        <span className="sr-only">Search conversation titles for {scope === 'ALL_HOMES' ? 'all homes' : 'this home'}</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
         <input value={query} onChange={(event) => onQueryChange(event.target.value)} maxLength={120} placeholder="Search conversation titles" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
       </label>
@@ -962,7 +969,7 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
       </div>
       <div className="border-t border-slate-200 pt-3">
         {backHref && <Link href={backHref} className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"><ArrowLeft className="h-4 w-4" />{backLabel || 'Back to Home'}</Link>}
-        <p className="mt-2 px-3 text-[11px] leading-4 text-slate-400">Recent conversations for the selected home. ContractToCozy navigation remains available above.</p>
+        <p className="mt-2 px-3 text-[11px] leading-4 text-slate-400">{scope === 'ALL_HOMES' ? 'Conversations across homes you can access.' : 'Recent conversations for the selected home.'} ContractToCozy navigation remains available above.</p>
       </div>
     </nav>
   );
@@ -1177,6 +1184,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => {
     if (propertyMismatch) setSelectedPropertyId(initialPropertyId);
   }, [propertyMismatch, initialPropertyId, setSelectedPropertyId]);
+  const [historyScope, setHistoryScope] = useState<'THIS_HOME' | 'ALL_HOMES'>('THIS_HOME');
+  const effectiveHistoryScope = selectedPropertyId ? historyScope : 'ALL_HOMES';
   const [sessionId, setSessionId] = useState('');
   const [executions, setExecutions] = useState<AskExecutionResponse[]>([]);
   const [input, setInput] = useState('');
@@ -1331,22 +1340,24 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   }, [historySearchInput]);
 
   useEffect(() => {
-    if (propertyMismatch || !selectedPropertyId) return;
+    if (propertyMismatch || (effectiveHistoryScope === 'THIS_HOME' && !selectedPropertyId)) return;
     const controller = new AbortController();
     const requestEpoch = ++historyRequestEpochRef.current;
-    if (historyPropertyRef.current !== selectedPropertyId) {
+    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId]);
+    const apiScope = effectiveHistoryScope === 'ALL_HOMES' ? { allHomes: true as const } : { propertyId: selectedPropertyId! };
+    if (historyPropertyRef.current !== scopeKey) {
       setRecentSessions([]);
       setRecentSessionsNextCursor(null);
       setSearchSessions([]);
       setSearchNextCursor(null);
       ++searchRequestEpochRef.current;
       searchScopeRef.current = '';
-      historyPropertyRef.current = selectedPropertyId;
+      historyPropertyRef.current = scopeKey;
     }
     setRecentSessionsLoading(true);
     setRecentSessionsLoadingMore(false);
     setRecentSessionsIssue(null);
-    api.getRecentAskSessions(selectedPropertyId, { signal: controller.signal })
+    api.getRecentAskSessions(apiScope, { signal: controller.signal })
       .then((response) => {
         if (!response.success || !response.data) throw new Error(response.message || 'Could not refresh conversations.');
         if (controller.signal.aborted || historyRequestEpochRef.current !== requestEpoch) return;
@@ -1357,7 +1368,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       .catch((caught) => {
         if (!controller.signal.aborted && historyRequestEpochRef.current === requestEpoch && !(caught instanceof DOMException && caught.name === 'AbortError')) {
           if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) {
-            redactHistoryAccessLoss(selectedPropertyId);
+            if (selectedPropertyId) redactHistoryAccessLoss(selectedPropertyId);
+            else { setRecentSessions([]); setRecentSessionsNextCursor(null); setRecentSessionsIssue('Conversation access changed.'); }
           } else {
             setRecentSessionsIssue('Could not refresh conversations. Previously loaded conversations remain visible; try again later.');
           }
@@ -1366,10 +1378,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       })
       .finally(() => { if (!controller.signal.aborted) setRecentSessionsLoading(false); });
     return () => controller.abort();
-  }, [selectedPropertyId, propertyMismatch, availabilityEpoch, recentSessionsEpoch, redactHistoryAccessLoss]);
+  }, [selectedPropertyId, effectiveHistoryScope, propertyMismatch, availabilityEpoch, recentSessionsEpoch, redactHistoryAccessLoss]);
 
   useEffect(() => {
-    if (!historySearchTerm || propertyMismatch || !selectedPropertyId) {
+    if (!historySearchTerm || propertyMismatch || (effectiveHistoryScope === 'THIS_HOME' && !selectedPropertyId)) {
       setSearchSessions([]);
       setSearchNextCursor(null);
       setSearchIssue(null);
@@ -1380,7 +1392,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     }
     const controller = new AbortController();
     const requestEpoch = ++searchRequestEpochRef.current;
-    const searchScope = JSON.stringify([selectedPropertyId, historySearchTerm]);
+    const searchScope = JSON.stringify([effectiveHistoryScope, selectedPropertyId, historySearchTerm]);
+    const apiScope = effectiveHistoryScope === 'ALL_HOMES' ? { allHomes: true as const } : { propertyId: selectedPropertyId! };
     if (searchScopeRef.current !== searchScope) {
       setSearchSessions([]);
       setSearchNextCursor(null);
@@ -1389,7 +1402,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setSearchIssue(null);
     setSearchLoading(true);
     setSearchLoadingMore(false);
-    api.searchAskSessionTitles(selectedPropertyId, historySearchTerm, { signal: controller.signal })
+    api.searchAskSessionTitles(apiScope, historySearchTerm, { signal: controller.signal })
       .then((response) => {
         if (!response.success || !response.data) throw new Error(response.message || 'Could not search conversation titles.');
         if (controller.signal.aborted || searchRequestEpochRef.current !== requestEpoch) return;
@@ -1398,32 +1411,35 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       })
       .catch((caught) => {
         if (controller.signal.aborted || searchRequestEpochRef.current !== requestEpoch || (caught instanceof DOMException && caught.name === 'AbortError')) return;
-        if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) redactHistoryAccessLoss(selectedPropertyId);
+        if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '') && selectedPropertyId) redactHistoryAccessLoss(selectedPropertyId);
         else setSearchIssue('Could not refresh title matches. Previously loaded matches remain visible; recent conversations remain available when search is cleared.');
         if (askServiceIsPaused(caught)) setServiceUnavailable(true);
       })
       .finally(() => { if (!controller.signal.aborted && searchRequestEpochRef.current === requestEpoch) setSearchLoading(false); });
     return () => controller.abort();
-  }, [historySearchTerm, selectedPropertyId, propertyMismatch, availabilityEpoch, recentSessionsEpoch, redactHistoryAccessLoss]);
+  }, [historySearchTerm, selectedPropertyId, effectiveHistoryScope, propertyMismatch, availabilityEpoch, recentSessionsEpoch, redactHistoryAccessLoss]);
 
   const loadMoreRecentSessions = async () => {
-    if (!selectedPropertyId || !recentSessionsNextCursor || recentSessionsLoading || recentSessionsLoadingMore) return;
+    if ((effectiveHistoryScope === 'THIS_HOME' && !selectedPropertyId) || !recentSessionsNextCursor || recentSessionsLoading || recentSessionsLoadingMore) return;
     const requestEpoch = historyRequestEpochRef.current;
+    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId]);
+    const apiScope = effectiveHistoryScope === 'ALL_HOMES' ? { allHomes: true as const } : { propertyId: selectedPropertyId! };
     setRecentSessionsLoadingMore(true);
     setRecentSessionsIssue(null);
     try {
-      const response = await api.getRecentAskSessions(selectedPropertyId, { cursor: recentSessionsNextCursor });
+      const response = await api.getRecentAskSessions(apiScope, { cursor: recentSessionsNextCursor });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not load older conversations.');
-      if (historyRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== selectedPropertyId) return;
+      if (historyRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== scopeKey) return;
       setRecentSessions((current) => {
         const seen = new Set(current.map((item) => item.sessionId));
         return [...current, ...response.data!.items.filter((item) => !seen.has(item.sessionId))];
       });
       setRecentSessionsNextCursor(response.data.nextCursor ?? null);
     } catch (caught) {
-      if (historyRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== selectedPropertyId) return;
+      if (historyRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== scopeKey) return;
       if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) {
-        redactHistoryAccessLoss(selectedPropertyId);
+        if (selectedPropertyId) redactHistoryAccessLoss(selectedPropertyId);
+        else { setRecentSessions([]); setRecentSessionsNextCursor(null); setRecentSessionsIssue('Conversation access changed.'); }
       } else {
         setRecentSessionsIssue('Could not load older conversations. The conversations already shown remain available.');
       }
@@ -1434,22 +1450,24 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
 
   const loadMoreSearchSessions = async () => {
-    if (!selectedPropertyId || !historySearchTerm || !searchNextCursor || searchLoading || searchLoadingMore) return;
+    if ((effectiveHistoryScope === 'THIS_HOME' && !selectedPropertyId) || !historySearchTerm || !searchNextCursor || searchLoading || searchLoadingMore) return;
     const requestEpoch = searchRequestEpochRef.current;
+    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId]);
+    const apiScope = effectiveHistoryScope === 'ALL_HOMES' ? { allHomes: true as const } : { propertyId: selectedPropertyId! };
     setSearchLoadingMore(true);
     setSearchIssue(null);
     try {
-      const response = await api.searchAskSessionTitles(selectedPropertyId, historySearchTerm, { cursor: searchNextCursor });
+      const response = await api.searchAskSessionTitles(apiScope, historySearchTerm, { cursor: searchNextCursor });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not load more title matches.');
-      if (searchRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== selectedPropertyId) return;
+      if (searchRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== scopeKey) return;
       setSearchSessions((current) => {
         const seen = new Set(current.map((item) => item.sessionId));
         return [...current, ...response.data!.items.filter((item) => !seen.has(item.sessionId))];
       });
       setSearchNextCursor(response.data.nextCursor);
     } catch (caught) {
-      if (searchRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== selectedPropertyId) return;
-      if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '')) redactHistoryAccessLoss(selectedPropertyId);
+      if (searchRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== scopeKey) return;
+      if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '') && selectedPropertyId) redactHistoryAccessLoss(selectedPropertyId);
       else setSearchIssue('Could not load more title matches. Matches already shown remain available.');
       if (askServiceIsPaused(caught)) setServiceUnavailable(true);
     } finally {
@@ -1691,6 +1709,19 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     try {
       const history = await api.getAskSession(recent.sessionId);
       if (!history.success || !history.data) throw new Error(history.message || 'Could not load that Ask Cozy session.');
+      if (history.data.executions.length === 0) {
+        setRecentSessions((current) => current.filter((item) => item.sessionId !== recent.sessionId));
+        setSearchSessions((current) => current.filter((item) => item.sessionId !== recent.sessionId));
+        throw new Error('This conversation is no longer available with your current home access.');
+      }
+      if (mode === 'page' && recent.property.id !== selectedPropertyId) {
+        const destination = new URL(window.location.href);
+        destination.searchParams.set('propertyId', recent.property.id);
+        destination.searchParams.set('sessionId', recent.sessionId);
+        destination.searchParams.set('executionId', recent.latestExecutionId);
+        window.location.assign(`${destination.pathname}${destination.search}${destination.hash}`);
+        return;
+      }
       activeSessionRef.current = recent.sessionId;
       activeSessionPropertyRef.current = recent.property.id;
       setSessionId(recent.sessionId);
@@ -1878,7 +1909,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
-  const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId && item.property.id === selectedPropertyId);
+  const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId && (effectiveHistoryScope === 'ALL_HOMES' || item.property.id === selectedPropertyId));
   const latestExecution = executions.at(-1);
   const activeConversation = executions.length > 0 && latestExecution && latestExecution.property?.id === selectedPropertyId && !deniedProperties.current.has(`${sessionId}:${latestExecution.property?.id}`) ? {
     sessionId,
@@ -1892,8 +1923,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const historySearchActive = Boolean(historySearchInput.trim());
   const historySearchPending = historySearchActive && historySearchInput.trim() !== historySearchTerm;
   const historySessions = historySearchActive
-    ? historySearchPending ? [] : searchSessions.filter((item) => item.property.id === selectedPropertyId)
-    : activeConversation ? [activeConversation, ...visibleRecentSessions] : visibleRecentSessions;
+    ? historySearchPending ? [] : searchSessions.filter((item) => effectiveHistoryScope === 'ALL_HOMES' || item.property.id === selectedPropertyId)
+    : effectiveHistoryScope === 'ALL_HOMES' ? recentSessions : activeConversation ? [activeConversation, ...visibleRecentSessions] : visibleRecentSessions;
   const historyRailLoading = historySearchActive ? historySearchPending || searchLoading : recentSessionsLoading;
   const historyRailLoadingMore = historySearchActive ? searchLoadingMore : recentSessionsLoadingMore;
   const historyRailHasMore = historySearchActive ? !historySearchPending && Boolean(searchNextCursor) : Boolean(recentSessionsNextCursor);
@@ -1952,10 +1983,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           <SheetContent side="left" className="flex w-[min(22rem,92vw)] flex-col bg-slate-50 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] lg:hidden">
             <SheetHeader className="pr-12 text-left">
               <SheetTitle>Ask Cozy conversations</SheetTitle>
-              <SheetDescription>Start something new or continue a recent conversation for this home.</SheetDescription>
+              <SheetDescription>Start something new or continue a conversation from an accessible home.</SheetDescription>
             </SheetHeader>
             <div className="mt-5 min-h-0 flex-1">
-              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} onQueryChange={setHistorySearchInput} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
+              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
             </div>
           </SheetContent>
         </Sheet>
@@ -1977,7 +2008,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
           <aside className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
-            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} onQueryChange={setHistorySearchInput} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
+            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
           </aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
