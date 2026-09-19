@@ -69,7 +69,7 @@ test('older conversation pages are loaded by an explicit accessible control', ()
   />);
   fireEvent.click(screen.getByRole('button', { name: 'Load older conversations' }));
   expect(onLoadMore).toHaveBeenCalledTimes(1);
-  fireEvent.change(screen.getByPlaceholderText('Search conversation titles'), { target: { value: 'roof' } });
+  fireEvent.change(screen.getByPlaceholderText('Search conversations'), { target: { value: 'roof' } });
   expect(onQueryChange).toHaveBeenCalledWith('roof');
 });
 

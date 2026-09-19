@@ -931,15 +931,15 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
         <button type="button" aria-pressed={scope === 'ALL_HOMES'} onClick={() => onScopeChange('ALL_HOMES')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold', scope === 'ALL_HOMES' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>All homes</button>
       </div>
       <label className="relative mt-4 block">
-        <span className="sr-only">Search conversation titles for {scope === 'ALL_HOMES' ? 'all homes' : 'this home'}</span>
+        <span className="sr-only">Search conversation titles and questions for {scope === 'ALL_HOMES' ? 'all homes' : 'this home'}</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-        <input value={query} onChange={(event) => onQueryChange(event.target.value)} maxLength={120} placeholder="Search conversation titles" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+        <input value={query} onChange={(event) => onQueryChange(event.target.value)} maxLength={120} placeholder="Search conversations" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
       </label>
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
         {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
-        {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{query.trim() ? 'Searching conversation titles…' : 'Loading recent conversations…'}</p>}
+        {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
         {grouped.length === 0 && !loading ? (
-          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversation titles match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
+          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversations match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
         ) : grouped.map((group) => (
           <section key={group.label} className="mb-5" aria-labelledby={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`}>
             <h3 id={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`} className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.label}</h3>
@@ -1402,7 +1402,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setSearchIssue(null);
     setSearchLoading(true);
     setSearchLoadingMore(false);
-    api.searchAskSessionTitles(apiScope, historySearchTerm, { signal: controller.signal })
+    api.searchAskSessions(apiScope, historySearchTerm, { signal: controller.signal })
       .then((response) => {
         if (!response.success || !response.data) throw new Error(response.message || 'Could not search conversation titles.');
         if (controller.signal.aborted || searchRequestEpochRef.current !== requestEpoch) return;
@@ -1412,7 +1412,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       .catch((caught) => {
         if (controller.signal.aborted || searchRequestEpochRef.current !== requestEpoch || (caught instanceof DOMException && caught.name === 'AbortError')) return;
         if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '') && selectedPropertyId) redactHistoryAccessLoss(selectedPropertyId);
-        else setSearchIssue('Could not refresh title matches. Previously loaded matches remain visible; recent conversations remain available when search is cleared.');
+        else setSearchIssue('Could not refresh matches. Previously loaded matches remain visible; recent conversations remain available when search is cleared.');
         if (askServiceIsPaused(caught)) setServiceUnavailable(true);
       })
       .finally(() => { if (!controller.signal.aborted && searchRequestEpochRef.current === requestEpoch) setSearchLoading(false); });
@@ -1457,8 +1457,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setSearchLoadingMore(true);
     setSearchIssue(null);
     try {
-      const response = await api.searchAskSessionTitles(apiScope, historySearchTerm, { cursor: searchNextCursor });
-      if (!response.success || !response.data) throw new Error(response.message || 'Could not load more title matches.');
+      const response = await api.searchAskSessions(apiScope, historySearchTerm, { cursor: searchNextCursor });
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not load more matches.');
       if (searchRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== scopeKey) return;
       setSearchSessions((current) => {
         const seen = new Set(current.map((item) => item.sessionId));
@@ -1468,7 +1468,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     } catch (caught) {
       if (searchRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== scopeKey) return;
       if (ACCESS_LOST_CODES.includes(askFailureCode(caught) ?? '') && selectedPropertyId) redactHistoryAccessLoss(selectedPropertyId);
-      else setSearchIssue('Could not load more title matches. Matches already shown remain available.');
+      else setSearchIssue('Could not load more matches. Matches already shown remain available.');
       if (askServiceIsPaused(caught)) setServiceUnavailable(true);
     } finally {
       if (searchRequestEpochRef.current === requestEpoch) setSearchLoadingMore(false);

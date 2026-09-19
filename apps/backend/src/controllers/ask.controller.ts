@@ -1,7 +1,7 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { AskSessionTitleSearchRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema } from '../productFramework/ask/ask.contract';
+import { AskSessionSearchRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema } from '../productFramework/ask/ask.contract';
 import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import {
@@ -262,12 +262,12 @@ export async function getAskRecentSessions(req: AuthRequest, res: Response, next
   }
 }
 
-export async function postAskSessionTitleSearch(req: AuthRequest, res: Response, next: NextFunction) {
+export async function postAskSessionSearch(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
-    const input = AskSessionTitleSearchRequestSchema.safeParse(req.body);
-    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation title search is invalid.' } });
+    const input = AskSessionSearchRequestSchema.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation search is invalid.' } });
     res.setHeader('Cache-Control', 'no-store');
     const propertyId = 'propertyId' in input.data ? input.data.propertyId : null;
     return res.status(200).json({ success: true, data: await getRecentAskSessions(userId, propertyId, input.data.cursor, input.data.query) });

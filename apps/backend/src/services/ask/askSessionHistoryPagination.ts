@@ -37,23 +37,39 @@ export function askSessionHistoryWhere(input: {
   now: Date;
   retentionDays: number;
   cursor: AskSessionHistoryCursor | null;
-  titleQuery?: string;
+  searchQuery?: string;
 } & ({ propertyId: string; accessiblePropertyIds?: never } | { propertyId?: never; accessiblePropertyIds: string[] })): Prisma.AskSessionWhereInput {
   const retentionWindowMs = input.retentionDays * 24 * 60 * 60 * 1000;
+  const retainedSince = new Date(input.now.getTime() - retentionWindowMs);
   const allHomes = input.accessiblePropertyIds !== undefined;
   const liveExecution = { OR: [{ expiresAt: null }, { expiresAt: { gt: input.now } }] };
+  const scopedExecution = allHomes
+    ? { propertyId: { in: input.accessiblePropertyIds } }
+    : { propertyId: input.propertyId };
+  const searchMatch = input.searchQuery ? { OR: [
+    { title: { contains: input.searchQuery, mode: 'insensitive' as const } },
+    { executions: { some: {
+      userId: input.userId,
+      ...scopedExecution,
+      createdAt: { gte: retainedSince },
+      message: { contains: input.searchQuery, mode: 'insensitive' as const },
+      ...liveExecution,
+    } } },
+  ] } : null;
   return {
     userId: input.userId,
     propertyId: allHomes ? { in: input.accessiblePropertyIds } : input.propertyId,
-    lastActiveAt: { gte: new Date(input.now.getTime() - retentionWindowMs) },
+    lastActiveAt: { gte: retainedSince },
     OR: [{ expiresAt: null }, { expiresAt: { gt: input.now } }],
     executions: allHomes
       ? { some: liveExecution, every: { propertyId: { in: input.accessiblePropertyIds } } }
-      : { some: liveExecution },
-    ...(input.titleQuery ? { title: { contains: input.titleQuery, mode: 'insensitive' } } : {}),
-    ...(input.cursor ? { AND: [{ OR: [
-      { lastActiveAt: { lt: input.cursor.lastActiveAt } },
-      { lastActiveAt: input.cursor.lastActiveAt, id: { lt: input.cursor.id } },
-    ] }] } : {}),
+      : { some: liveExecution, every: { propertyId: input.propertyId } },
+    ...(searchMatch || input.cursor ? { AND: [
+      ...(searchMatch ? [searchMatch] : []),
+      ...(input.cursor ? [{ OR: [
+        { lastActiveAt: { lt: input.cursor.lastActiveAt } },
+        { lastActiveAt: input.cursor.lastActiveAt, id: { lt: input.cursor.id } },
+      ] }] : []),
+    ] } : {}),
   };
 }

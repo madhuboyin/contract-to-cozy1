@@ -864,13 +864,13 @@ export const AskRecentSessionPageSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 
-const AskSessionTitleSearchBaseSchema = z.object({
+const AskSessionSearchBaseSchema = z.object({
   query: z.string().trim().min(1).max(120),
   cursor: z.string().min(1).max(512).optional(),
 });
-export const AskSessionTitleSearchRequestSchema = z.union([
-  AskSessionTitleSearchBaseSchema.extend({ propertyId: z.string().trim().min(1).max(160) }).strict(),
-  AskSessionTitleSearchBaseSchema.extend({ scope: z.literal('ALL_HOMES') }).strict(),
+export const AskSessionSearchRequestSchema = z.union([
+  AskSessionSearchBaseSchema.extend({ propertyId: z.string().trim().min(1).max(160) }).strict(),
+  AskSessionSearchBaseSchema.extend({ scope: z.literal('ALL_HOMES') }).strict(),
 ]);
 
 export type AskExecutionStatus = z.infer<typeof AskExecutionStatusSchema>;

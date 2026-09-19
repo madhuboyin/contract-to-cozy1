@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
-import { deleteAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskFeedback, postAskSessionTitleSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
+import { deleteAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskFeedback, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
@@ -25,7 +25,7 @@ router.get('/ask/pending', getAskPendingExecutions);
 router.patch('/ask/monitors/:monitorId', patchAskMonitor);
 router.get('/ask/monitors/:monitorId', getAskMonitor);
 router.get('/ask/sessions/recent', getAskRecentSessions);
-router.post('/ask/sessions/search', postAskSessionTitleSearch);
+router.post('/ask/sessions/search', postAskSessionSearch);
 router.get('/ask/sessions/:sessionId', getAskSessionExecutions);
 router.delete('/ask/sessions/:sessionId', deleteAskSession);
 

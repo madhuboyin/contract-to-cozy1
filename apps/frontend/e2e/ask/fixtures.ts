@@ -396,7 +396,9 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
         property: { id: otherPropertyId, label: 'Second Home' }, latestStatus: 'ANSWERED',
         latestExecutionId: 'other-home-execution', executionCount: 1, lastActiveAt: new Date().toISOString(),
       }] : [], nextCursor: null } });
-      return fulfill(route, { success: true, data: { items: options.searchSessions && body.query?.toLowerCase().includes('roof') ? [{
+      // "flashing" appears only in the homeowner's stored question; the
+      // search response intentionally returns a title, not a question snippet.
+      return fulfill(route, { success: true, data: { items: options.searchSessions && body.query?.toLowerCase().includes('flashing') ? [{
         sessionId: 'recent-session-2', title: 'Older roof project',
         property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'ANSWERED',
         latestExecutionId: 'execution-roof', executionCount: 1,

@@ -13371,7 +13371,7 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   return visibleExecutions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
 }
 
-export async function getRecentAskSessions(userId: string, propertyId: string | null, cursorValue?: string, titleQuery?: string): Promise<AskRecentSessionPage> {
+export async function getRecentAskSessions(userId: string, propertyId: string | null, cursorValue?: string, searchQuery?: string): Promise<AskRecentSessionPage> {
   if (propertyId) await ensurePropertyAccess(userId, propertyId);
   const accessibleProperties = propertyId ? null : await prisma.property.findMany({
     where: askHistoryAccessiblePropertyWhere(userId),
@@ -13380,7 +13380,7 @@ export async function getRecentAskSessions(userId: string, propertyId: string | 
   const cursor = cursorValue ? decodeAskSessionHistoryCursor(cursorValue) : null;
   if (cursorValue && !cursor) throw Object.assign(new Error('Invalid conversation history cursor.'), { code: 'ASK_INVALID_CURSOR' });
   const now = new Date();
-  const bounds = { userId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, cursor, titleQuery };
+  const bounds = { userId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, cursor, searchQuery };
   const where = propertyId
     ? askSessionHistoryWhere({ ...bounds, propertyId })
     : askSessionHistoryWhere({ ...bounds, accessiblePropertyIds: accessibleProperties!.map((property) => property.id) });

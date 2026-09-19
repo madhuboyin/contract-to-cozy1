@@ -1079,7 +1079,7 @@ class APIClient {
     if (options.cursor) query.set('cursor', options.cursor);
     return this.request(`/api/ask/sessions/recent?${query.toString()}`, { signal: options.signal });
   }
-  async searchAskSessionTitles(scope: { propertyId: string } | { allHomes: true }, query: string, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
+  async searchAskSessions(scope: { propertyId: string } | { allHomes: true }, query: string, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
     return this.request('/api/ask/sessions/search', { method: 'POST', body: { ...('allHomes' in scope ? { scope: 'ALL_HOMES' } : { propertyId: scope.propertyId }), query, ...(options.cursor ? { cursor: options.cursor } : {}) }, signal: options.signal });
   }
   async getAskExecution(executionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskExecutionResponse>> {
