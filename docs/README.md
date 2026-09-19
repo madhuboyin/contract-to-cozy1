@@ -2,6 +2,11 @@
 
 Comprehensive project documentation.
 
+## Start here
+
+- [Documentation Library](library/README.md) - categorized index of every doc, with stale/conflicting-document flags and a searchable `catalog.csv`.
+- [Code-grounded Wiki](wiki/README.md) - what the code does today.
+
 ## Structure
 
 - `architecture/` - System architecture
