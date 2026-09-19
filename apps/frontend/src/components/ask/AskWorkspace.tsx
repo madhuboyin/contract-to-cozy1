@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, KeyboardEvent, MutableRefObject, Ref, useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskFeaturedPrompt, AskItemActionInteractionType, AskPendingWorkItem, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
@@ -879,19 +880,6 @@ function recentSessionStatus(status: AskRecentSessionSummary['latestStatus']): s
   return status.toLowerCase().replace(/_/g, ' ');
 }
 
-function recentSessionGroup(lastActiveAt: string): string {
-  const now = new Date();
-  const value = new Date(lastActiveAt);
-  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startYesterday = startToday - 24 * 60 * 60 * 1000;
-  const startLastWeek = startToday - 7 * 24 * 60 * 60 * 1000;
-  const timestamp = value.getTime();
-  if (timestamp >= startToday) return 'Today';
-  if (timestamp >= startYesterday) return 'Yesterday';
-  if (timestamp >= startLastWeek) return 'Previous 7 days';
-  return 'Older';
-}
-
 export function ConversationHistoryNav({ items, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, onQueryChange, onOpen, onNew, onLoadMore, backHref, backLabel }: {
   items: AskRecentSessionSummary[];
   activeSessionId: string;
@@ -908,8 +896,19 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
   backHref?: string;
   backLabel?: string;
 }) {
+  const [calendar, setCalendar] = useState({ now: new Date(), locale: 'en-US', timeZone: 'UTC' });
+  useEffect(() => {
+    const refresh = () => setCalendar({
+      now: new Date(),
+      locale: navigator.language || 'en-US',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    });
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const grouped = items.reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
-    const label = recentSessionGroup(session.lastActiveAt);
+    const label = askHistoryGroupLabel(session.lastActiveAt, calendar);
     const group = groups.find((candidate) => candidate.label === label);
     if (group) group.items.push(session);
     else groups.push({ label, items: [session] });
