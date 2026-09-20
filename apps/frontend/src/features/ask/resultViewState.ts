@@ -3,13 +3,14 @@ import type { AskExecutionResponse } from './types';
 export type ResultView = {
   selectedTaskId: string | null;
   detailTaskId: string | null;
+  detailTarget: { blockId: string; entityId: string } | null;
   expandedRows: string[];
   visibleCounts: Record<string, number>;
   presentationModes: Record<string, 'AUTO' | 'TABLE' | 'CARDS'>;
-  comparisonLayouts: Record<string, 'STRIP' | 'GRID'>;
+  comparisonLayouts: Record<string, 'AUTO' | 'STRIP' | 'GRID'>;
   scrollOffset: number | null;
 };
-export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, scrollOffset: null };
+export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, detailTarget: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, scrollOffset: null };
 const PREFIX = 'ctc:ask-result-view:v1:';
 export const resultViewKey = (sessionId: string, propertyId: string, resultId: string) => `${PREFIX}${sessionId}:${propertyId}:${resultId}`;
 
@@ -21,13 +22,16 @@ export function readResultView(storage: Storage, key: string): ResultView {
     return {
       selectedTaskId: typeof value.selectedTaskId === 'string' ? value.selectedTaskId : null,
       detailTaskId: typeof value.detailTaskId === 'string' ? value.detailTaskId : null,
+      detailTarget: value.detailTarget && typeof value.detailTarget.blockId === 'string' && typeof value.detailTarget.entityId === 'string'
+        && value.detailTarget.blockId.length <= 120 && value.detailTarget.entityId.length <= 200
+        ? { blockId: value.detailTarget.blockId, entityId: value.detailTarget.entityId } : null,
       expandedRows: Array.isArray(value.expandedRows) ? value.expandedRows.filter((id: unknown) => typeof id === 'string').slice(0, 100) : [],
       visibleCounts: Object.fromEntries(Object.entries(value.visibleCounts ?? {}).filter(([, count]) => Number.isInteger(count) && Number(count) >= 5 && Number(count) <= 100).map(([key, count]) => [key, Number(count)])),
       presentationModes: Object.fromEntries(Object.entries(value.presentationModes ?? {})
         .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'TABLE', 'CARDS'].includes(String(mode)))
         .slice(0, 50)) as ResultView['presentationModes'],
       comparisonLayouts: Object.fromEntries(Object.entries(value.comparisonLayouts ?? {})
-        .filter(([key, mode]) => key.length <= 120 && ['STRIP', 'GRID'].includes(String(mode)))
+        .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'STRIP', 'GRID'].includes(String(mode)))
         .slice(0, 50)) as ResultView['comparisonLayouts'],
       scrollOffset: Number.isFinite(value.scrollOffset) ? value.scrollOffset : null,
     };
@@ -54,12 +58,17 @@ export function clearResultViews(storage: Storage, sessionId: string, keepKeys?:
 export function reconcileResultView(view: ResultView, execution: AskExecutionResponse): ResultView {
   const sections = execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' ? block.sections : []);
   const ids = new Set(sections.flatMap((section) => section.items.map((item) => item.id)));
+  const detailTarget = view.detailTarget && execution.blocks.some((block) => block.type === 'GROUPED_LIST'
+    && block.id === view.detailTarget!.blockId
+    && block.sections.some((section) => section.items.some((item) => item.id === view.detailTarget!.entityId)))
+    ? view.detailTarget : null;
   const tableIds = new Set(execution.blocks.filter((block) => block.type === 'TABLE').map((block) => block.id));
   const comparisonIds = new Set(execution.blocks.filter((block) => block.type === 'COMPARISON').map((block) => block.id));
   return {
     ...view,
     selectedTaskId: view.selectedTaskId && ids.has(view.selectedTaskId) ? view.selectedTaskId : null,
     detailTaskId: view.detailTaskId && ids.has(view.detailTaskId) ? view.detailTaskId : null,
+    detailTarget,
     expandedRows: view.expandedRows.filter((id) => ids.has(id)),
     visibleCounts: Object.fromEntries(sections.map((section) => [section.id, Math.max(5, Math.min(view.visibleCounts[section.id] ?? 5, section.items.length))])),
     presentationModes: Object.fromEntries(Object.entries(view.presentationModes ?? {}).filter(([blockId]) => tableIds.has(blockId))),

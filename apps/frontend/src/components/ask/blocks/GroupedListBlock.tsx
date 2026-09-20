@@ -3,6 +3,7 @@
 import { useContext } from 'react';
 import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
+import { resolveAdaptiveGroupedListPresentation } from '@/features/ask/adaptivePresentation';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
@@ -20,8 +21,9 @@ import type { AskBlockRenderer } from './types';
 // MaintenanceResultList's own export.
 export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
+  const presentation = resolveAdaptiveGroupedListPresentation(block);
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-grouped-list-presentation={presentation.toLowerCase()}>
       <div className="border-b border-slate-100 px-4 py-3">
         <h3 className="font-semibold text-slate-950">{block.title}</h3>
         {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
@@ -53,11 +55,11 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{section.count}</span>
             </div>
             {section.items.length === 0 ? <p className="text-sm text-slate-500">None recorded.</p> : (
-              <ul className="space-y-3">
+              <ul className={presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'}>
                 {section.items.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
                   const selected = controls?.view.selectedTaskId === item.id;
-                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
+                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border outline-offset-2', presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3', selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}

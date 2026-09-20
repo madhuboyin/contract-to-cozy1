@@ -82,6 +82,23 @@ test('clicking a maintenance task title opens canonical detail inline without na
   expect(window.location.pathname).toBe('/dashboard/ask');
   expect(window.location.search).toContain('sessionId=session');
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTaskId).toBe('task-0');
+  expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTarget).toEqual({ blockId: 'maintenance-groups', entityId: 'task-0' });
+  expect(window.history.state.askDetail).toEqual({ key: resultViewKey('session', 'home', 'result'), blockId: 'maintenance-groups', entityId: 'task-0' });
+});
+
+test('browser back closes the current in-Ask detail without changing the conversation', async () => {
+  jest.spyOn(api, 'getMaintenanceTask').mockResolvedValue({ success: true, data: {
+    id: 'task-0', propertyId: 'home', title: 'Task 0', status: 'PENDING', priority: 'HIGH', source: 'USER_CREATED',
+  } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>);
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  render(<List response={execution()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Close task detail for Task 0' })).toBeInTheDocument());
+  act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: {} })));
+  expect(screen.queryByRole('button', { name: 'Close task detail for Task 0' })).not.toBeInTheDocument();
+  expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTarget).toBeNull();
+  expect(window.location.pathname).toBe('/dashboard/ask');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Task 0' })).toHaveFocus());
 });
 
 test('canonical completed state removes stale mutation actions from the row and detail', async () => {

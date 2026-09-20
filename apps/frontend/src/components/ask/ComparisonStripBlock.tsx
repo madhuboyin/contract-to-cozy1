@@ -4,10 +4,10 @@ import { useContext, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskAction, AskPresentationBlock } from '@/features/ask/types';
+import { resolveAdaptiveComparisonPresentation, type ComparisonPresentationPreference } from '@/features/ask/adaptivePresentation';
 import { ResultViewContext } from '@/features/ask/useResultView';
 
 type ComparisonBlock = Extract<AskPresentationBlock, { type: 'COMPARISON' }>;
-type ComparisonLayout = 'STRIP' | 'GRID';
 
 const toneStyles = {
   DEFAULT: 'border-slate-100 bg-slate-50 text-slate-700',
@@ -18,12 +18,14 @@ const toneStyles = {
 
 export function ComparisonStripBlock({ block, renderAction }: { block: ComparisonBlock; renderAction: (action: AskAction) => ReactNode }) {
   const controls = useContext(ResultViewContext);
-  const layout = controls?.view.comparisonLayouts?.[block.id] ?? 'STRIP';
+  const preference = controls?.view.comparisonLayouts?.[block.id] ?? 'AUTO';
+  const decision = resolveAdaptiveComparisonPresentation(block, preference);
+  const layout = decision.layout;
   const [activeIndex, setActiveIndex] = useState(0);
   const stripRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLElement | null>>([]);
 
-  const setLayout = (next: ComparisonLayout) => controls?.change((view) => ({
+  const setLayout = (next: ComparisonPresentationPreference) => controls?.change((view) => ({
     ...view,
     comparisonLayouts: { ...(view.comparisonLayouts ?? {}), [block.id]: next },
   }));
@@ -54,10 +56,11 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
           <h3 id={`ask-comparison-${block.id}`} className="font-semibold text-slate-950">{block.title}</h3>
           {block.description && <p className="mt-1 text-sm leading-5 text-slate-600">{block.description}</p>}
         </div>
-        {controls && block.options.length > 2 && (
+        {controls && decision.offersChoice && (
           <div className="hidden items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 sm:flex" role="group" aria-label={`View ${block.title}`}>
-            <button type="button" aria-pressed={layout === 'STRIP'} onClick={() => setLayout('STRIP')} className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', layout === 'STRIP' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>Card strip</button>
-            <button type="button" aria-pressed={layout === 'GRID'} onClick={() => setLayout('GRID')} className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', layout === 'GRID' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>Show all</button>
+            <button type="button" aria-pressed={preference === 'AUTO'} onClick={() => setLayout('AUTO')} className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', preference === 'AUTO' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>Auto</button>
+            <button type="button" aria-pressed={preference === 'STRIP'} onClick={() => setLayout('STRIP')} className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', preference === 'STRIP' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>Card strip</button>
+            <button type="button" aria-pressed={preference === 'GRID'} onClick={() => setLayout('GRID')} className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', preference === 'GRID' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>Show all</button>
           </div>
         )}
       </div>

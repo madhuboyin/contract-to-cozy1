@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useMemo } from 'react';
 import { ComparisonStripBlock } from '../ComparisonStripBlock';
+import { resolveAdaptiveComparisonPresentation } from '@/features/ask/adaptivePresentation';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
@@ -42,13 +43,20 @@ beforeEach(() => window.sessionStorage.clear());
 
 test('renders bounded options, declared badge provenance and option-scoped actions', async () => {
   render(<Harness />);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Card strip' })).toHaveAttribute('aria-pressed', 'true'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('aria-pressed', 'true'));
+  expect(screen.getByRole('list', { name: 'Compare your options options' })).toHaveAttribute('data-comparison-presentation', 'strip');
   expect(screen.getAllByRole('listitem')).toHaveLength(3);
   expect(screen.getByText('Lowest upfront cost')).toHaveAttribute('data-badge-policy', 'LOWEST_RECORDED_UPFRONT_COST');
   fireEvent.click(screen.getByText('Why this label'));
   expect(screen.getByText('The recorded repair estimate is lower than the replacement estimate.')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Review repair' })).toBeVisible();
   expect(screen.getByText('positive')).toBeVisible();
+});
+
+test('two options use a non-carousel grid while an explicit choice controls larger sets', () => {
+  expect(resolveAdaptiveComparisonPresentation({ ...block, options: block.options.slice(0, 2) }, 'AUTO')).toEqual({ layout: 'GRID', offersChoice: false, reason: 'SMALL_SET' });
+  expect(resolveAdaptiveComparisonPresentation(block, 'AUTO')).toEqual({ layout: 'STRIP', offersChoice: true, reason: 'BOUNDED_ALTERNATIVES' });
+  expect(resolveAdaptiveComparisonPresentation(block, 'GRID')).toEqual({ layout: 'GRID', offersChoice: true, reason: 'USER_CHOICE' });
 });
 
 test('offers a persisted non-carousel path without issuing another response', async () => {

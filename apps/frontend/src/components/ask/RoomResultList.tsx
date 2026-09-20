@@ -111,15 +111,15 @@ export function RoomResultList({ block, propertyId, onAccessLost, link }: {
 }) {
   const controls = useContext(ResultViewContext);
   const [localDetailRoomId, setLocalDetailRoomId] = useState<string | null>(null);
-  const detailRoomId = controls?.view.detailTaskId ?? localDetailRoomId;
+  const detailRoomId = controls ? controls.detailIdFor(block.id) : localDetailRoomId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailRoomId);
   const openDetail = (item: Item) => {
-    if (controls) controls.change((view) => ({ ...view, selectedTaskId: item.id, detailTaskId: item.id }));
+    if (controls) controls.openDetail(block.id, item.id);
     else setLocalDetailRoomId(item.id);
   };
   const closeDetail = () => {
     const closingId = detailRoomId;
-    if (controls) controls.change((view) => ({ ...view, detailTaskId: null }));
+    if (controls) controls.closeDetail();
     else setLocalDetailRoomId(null);
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-room-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
@@ -137,7 +137,7 @@ export function RoomResultList({ block, propertyId, onAccessLost, link }: {
           const selected = controls?.view.selectedTaskId === item.id;
           return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <button type="button" data-room-detail-trigger={item.id} aria-expanded={detailRoomId === item.id} aria-controls={`room-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
+              <button type="button" data-room-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailRoomId === item.id} aria-controls={`room-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
               {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ')}</span>}
             </div>
             {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-600">{item.meta.join(' · ')}</p>}

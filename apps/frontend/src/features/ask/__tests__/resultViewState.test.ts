@@ -35,6 +35,13 @@ test('expandedRows on a non-maintenance block are also reconciled against that b
   expect(reconciled.expandedRows).toEqual(['buyer-task-1']);
 });
 
+test('restored detail is scoped to its source block even when another block has the same entity id', () => {
+  const view = { ...EMPTY_RESULT_VIEW, detailTarget: { blockId: 'buyer-deadlines-tasks', entityId: 'shared-id' } };
+  const wrongBlock = { ...buyerBlock(['shared-id']), id: 'other-block' };
+  expect(reconcileResultView(view, execution(wrongBlock)).detailTarget).toBeNull();
+  expect(reconcileResultView(view, execution(buyerBlock(['shared-id']))).detailTarget).toEqual(view.detailTarget);
+});
+
 test('a non-GROUPED_LIST block (e.g. SUMMARY) contributes no ids, clearing any stale selection', () => {
   const summaryBlock = { type: 'SUMMARY', id: 'summary', title: 'x', body: 'y', tone: 'DEFAULT', actions: [] } as unknown as AskPresentationBlock;
   const view = { ...EMPTY_RESULT_VIEW, selectedTaskId: 'buyer-task-1' };
