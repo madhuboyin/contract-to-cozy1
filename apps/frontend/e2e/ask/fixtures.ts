@@ -10,6 +10,8 @@ function capabilityExecution(unavailable = false) {
     description: 'Watch this mortgage for a refinance opportunity and compare the real tradeoffs.',
     expectedOutput: 'A property-specific opportunity conclusion and recorded refinance decision.',
     href: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`,
+    inlineLaunch: null,
+    inlineBoundary: 'This tool’s full journey is not available inside Ask Cozy yet.',
     readiness: unavailable ? 'UNAVAILABLE' : 'NEEDS_CONTEXT',
     readinessLabel: unavailable ? 'Not ready for the current context' : 'More home details will improve the result',
     readinessReasons: unavailable ? ['This tool is disabled by the current rollout policy.'] : ['Add current mortgage facts before running a comparison.'],

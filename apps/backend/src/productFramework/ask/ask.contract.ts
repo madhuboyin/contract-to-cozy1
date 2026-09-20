@@ -184,6 +184,8 @@ const CapabilityListBlockSchema = z.object({
     description: z.string(),
     expectedOutput: z.string(),
     href: z.string(),
+    inlineLaunch: z.object({ interactionType: z.literal('CONVERSATION_CONTINUE'), operationId: z.string().trim().min(1).max(120), message: z.string().trim().min(1).max(300) }).nullable(),
+    inlineBoundary: z.string().trim().min(1).max(300),
     readiness: z.enum(['READY', 'NEEDS_PROPERTY', 'NEEDS_CONTEXT', 'UNAVAILABLE', 'AVAILABLE']),
     readinessLabel: z.string().max(240).nullable().default(null),
     readinessReasons: z.array(z.string().max(600)).max(5).default([]),

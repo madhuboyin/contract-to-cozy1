@@ -11,6 +11,19 @@ const {
   explicitlyRelatedCapabilityIds,
   MAX_ASK_NEXT_ACTIONS,
 } = require('../../src/services/ask/askNextActions.ts');
+const { capabilityCardLaunch } = require('../../src/services/ask/askCapabilityCardLaunch.ts');
+const { canonicalCapabilityRegistry } = require('../../src/productFramework/capabilities/canonicalCapabilityRegistry.ts');
+
+test('every registered capability has an explicit card boundary; only reviewed entry reads launch inline', () => {
+  for (const capability of canonicalCapabilityRegistry.capabilities) {
+    const card = capabilityCardLaunch(capability.id);
+    assert.ok(card.inlineBoundary);
+    if (card.inlineLaunch) assert.equal(card.inlineLaunch.interactionType, 'CONVERSATION_CONTINUE');
+  }
+  assert.equal(capabilityCardLaunch('home-event-radar').inlineLaunch, null);
+  assert.equal(capabilityCardLaunch('capital-timeline').inlineLaunch, null);
+  assert.equal(capabilityCardLaunch('maintenance').inlineLaunch.operationId, 'MAINTENANCE_STATUS');
+});
 
 // Ask Cozy Stage 3, Phase 4 (implementation plan §10; FRD §27 "Next
 // Actions"). `selectAskNextActionCapabilities` is the pure half of this
@@ -43,6 +56,8 @@ test('selectAskNextActionCapabilities maps a READY suggestion onto the CAPABILIT
     description: 'Stay ahead of upcoming upkeep.',
     expectedOutput: 'A prioritized list of seasonal maintenance tasks.',
     href: '/dashboard/properties/p1/maintenance',
+    inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE', operationId: 'MAINTENANCE_STATUS', message: 'Show maintenance tasks for this home' },
+    inlineBoundary: 'You can inspect current records here. Further tool actions may still require opening the full page.',
     readiness: 'READY',
     readinessLabel: 'Ready for this home',
     readinessReasons: [],

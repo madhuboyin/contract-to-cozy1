@@ -1063,6 +1063,7 @@ function ExecutionCard({
     void ask(action.message, undefined, {
       sourceExecutionId: execution.executionId,
       operationId: action.operationId,
+      capabilityId: action.capabilityId,
     });
   };
   // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is

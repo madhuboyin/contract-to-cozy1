@@ -109,6 +109,7 @@ import { captureWarranty } from '../../modules/propertyContext/application/captu
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
 import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate } from './conversationalUnderstanding/conversationalCapture';
 import { buildAskNextActionsBlock, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, NEXT_ACTION_CONTEXT_PREFIX, nextActionContextOperation } from './askNextActions';
+import { capabilityCardLaunch } from './askCapabilityCardLaunch';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
 import { getFinancialContextDecisions } from '../financialContext/context';
@@ -7099,6 +7100,7 @@ async function capabilityResult(userId: string, propertyId: string | null | unde
       description: capability.shortDescription,
       expectedOutput: capability.expectedOutput,
       href: capability.href,
+      ...capabilityCardLaunch(capability.id),
       readiness: state,
       readinessLabel,
       readinessReasons: reasons.slice(0, 5),

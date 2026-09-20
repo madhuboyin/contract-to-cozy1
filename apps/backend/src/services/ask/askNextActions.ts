@@ -5,6 +5,7 @@ import { canonicalCapabilityRegistry, type CapabilityExplicitSourceContext, type
 import type { AskCaptureRequest, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import { ASK_OPERATION_CAPABILITY } from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import type { AskOperationId } from './askOperationRegistry';
+import { capabilityCardLaunch } from './askCapabilityCardLaunch';
 import { sellHoldRentDecisionFamilyAdapter } from '../decisionPlatform/domainSnapshotAdapters';
 import { getCaptureDefinitionForFact, CONTEXT_CAPTURE_DEFINITIONS } from '../../modules/propertyContext/catalog/captureRegistry';
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
@@ -239,6 +240,7 @@ export function selectAskNextActionCapabilities(
         description: suggestion.shortDescription,
         expectedOutput: suggestion.expectedOutcome,
         href: suggestion.launch.href,
+        ...capabilityCardLaunch(suggestion.capabilityId),
         readiness: suggestion.readiness.state,
         readinessLabel: readinessLabel(suggestion.readiness.state),
         readinessReasons: suggestion.readiness.explanations.slice(0, 5),

@@ -2,11 +2,14 @@ import { ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { AskContextLink } from './context';
+import { AskBlockActionContext } from './context';
+import { useContext } from 'react';
 import type { AskBlockRenderer } from './types';
 
 function CapabilityCard({ capability }: {
   capability: Extract<AskPresentationBlock, { type: 'CAPABILITY_LIST' }>['capabilities'][number];
 }) {
+  const actions = useContext(AskBlockActionContext);
   const unavailable = capability.readiness === 'UNAVAILABLE';
   const content = (
     <>
@@ -18,9 +21,8 @@ function CapabilityCard({ capability }: {
           </div>
           <p className="mt-1 text-sm leading-5 text-slate-600">{capability.description}</p>
         </div>
-        {!unavailable && <ExternalLink className="h-4 w-4 shrink-0 text-teal-700" />}
       </div>
-      <p className="mt-3 text-xs font-medium text-teal-800">You’ll get: {capability.expectedOutput}</p>
+      <p className="mt-3 text-xs font-medium text-teal-800">Full tool: {capability.expectedOutput}</p>
       {capability.readinessLabel && (
         <p className={cn('mt-2 text-xs font-semibold', capability.readiness === 'READY' ? 'text-emerald-700' : unavailable ? 'text-red-700' : 'text-amber-700')}>
           {capability.readinessLabel}
@@ -31,6 +33,11 @@ function CapabilityCard({ capability }: {
           {capability.readinessReasons.map((reason) => <li key={reason}>{reason}</li>)}
         </ul>
       )}
+      <p className="mt-3 text-xs text-slate-600">{capability.inlineBoundary}</p>
+      {!unavailable && <div className="mt-3 flex flex-wrap gap-2">
+        {capability.inlineLaunch && <button type="button" disabled={!actions || actions.disabled || capability.readiness === 'NEEDS_PROPERTY'} onClick={() => actions?.invoke({ id: `launch-${capability.id}`, label: `Explore ${capability.label} in Ask`, interactionType: 'START_WORKFLOW', operationId: capability.inlineLaunch!.operationId, message: capability.inlineLaunch!.message, capabilityId: capability.id, style: 'PRIMARY' })} className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Explore in Ask</button>}
+        <AskContextLink href={capability.href} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800">Open {capability.label}<ExternalLink className="h-4 w-4" /></AskContextLink>
+      </div>}
     </>
   );
   const className = cn(
@@ -39,9 +46,7 @@ function CapabilityCard({ capability }: {
       ? 'border-slate-200 bg-slate-50'
       : 'group border-teal-100 bg-teal-50/60 transition hover:border-teal-300 hover:bg-teal-50',
   );
-  return unavailable
-    ? <div className={className} aria-label={`${capability.label} unavailable`}>{content}</div>
-    : <AskContextLink href={capability.href} className={className}>{content}</AskContextLink>;
+  return <div className={className} aria-label={unavailable ? `${capability.label} unavailable` : undefined}>{content}</div>;
 }
 
 export const CapabilityListBlock: AskBlockRenderer<'CAPABILITY_LIST'> = ({ block }) => (
