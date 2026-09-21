@@ -55,6 +55,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   ROOM_RENAME: new Set(['open-rooms']),
   ROOM_CREATE: new Set(['open-rooms']),
   INVENTORY_ITEM_CREATE: new Set(['open-inventory', 'open-rooms']),
+  PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['open-property-record', 'continue-area-capture']),
   // Every action id PROPERTY_SUMMARY actually emits: the record link, one secondary "open the full collection"
   // link per section, and the contributor-only inline "Add a warranty" workflow action.
   PROPERTY_SUMMARY: new Set(['open-property-record', 'open-inventory', 'open-household', 'open-warranties', 'open-rooms', 'open-documents', 'open-home-timeline', 'add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),

@@ -220,6 +220,8 @@ export interface AskCaptureRequest {
   fallbackHref?: string | null;
   confirmationText: string | null;
   expectedContextVersion: string;
+  /** The homeowner may skip this question for now; skipping saves nothing (Property Summary per-area capture). */
+  skippable?: boolean;
 }
 
 export interface SubmitAskCapturePayload {

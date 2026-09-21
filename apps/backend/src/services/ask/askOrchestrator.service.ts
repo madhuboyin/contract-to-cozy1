@@ -1,4 +1,7 @@
-import { getCaptureDefinitionForFact } from '../../modules/propertyContext/catalog/captureRegistry';
+import { getCaptureDefinition, getCaptureDefinitionForFact } from '../../modules/propertyContext/catalog/captureRegistry';
+import { PROPERTY_AREA_CAPTURE_FEATURE, PROPERTY_AREA_CAPTURE_OPERATION, PROPERTY_AREA_CAPTURE_SCOPES, type PropertyAreaCaptureScope } from '../../modules/propertyContext/catalog/featureRequirementRegistry';
+import { PROPERTY_FACT_CATALOG, getFactDefinition } from '../../modules/propertyContext/catalog/factCatalog';
+import { getContextCompleteness } from '../../modules/propertyContext/application/getContextCompleteness';
 import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, BuyerPlanPriority, ClaimType as PrismaClaimType, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, RefinanceScenarioTerm, ServiceCategory, WarrantyCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -102,11 +105,11 @@ import {
 } from './confirmCapabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
 import { assertCoverageConflictFree } from '../coverageConflict.service';
-import { captureFeatureContext } from '../../modules/propertyContext/application/captureFeatureContext';
+import { captureFeatureContext, normalizeAnswers, PropertyContextCaptureValidationError, PropertyContextVersionConflictError } from '../../modules/propertyContext/application/captureFeatureContext';
 import { capturePropertyFact } from '../../modules/propertyContext/application/capturePropertyFact';
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { captureWarranty } from '../../modules/propertyContext/application/captureWarranty';
-import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
+import { PropertyContextAccessDeniedError, getPropertyContext } from '../../modules/propertyContext/application/getPropertyContext';
 import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate, warrantyAddCaptureRequest, eventAddCaptureRequest, buildUserAddedEventConfirmation, EVENT_ADD_CAPTURE_KEY, USER_ADD_ORIGIN } from './conversationalUnderstanding/conversationalCapture';
 import { buildAskNextActionsBlock, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, NEXT_ACTION_CONTEXT_PREFIX, nextActionContextOperation } from './askNextActions';
 import { capabilityCardLaunch } from './askCapabilityCardLaunch';
@@ -4733,7 +4736,9 @@ async function propertySummaryResult(userId: string, propertyId: string, message
           id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
           description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
           meta: [`${scope.missingFactKeys.length} missing`, `${scope.conflictedFactKeys.length} conflicted`, `${scope.staleFactKeys.length} stale`],
-          status: `${scope.completenessPercent}% COMPLETE`, href: propertyHref,
+          status: `${scope.completenessPercent}% COMPLETE`, href: areaCaptureFallbackHref(propertyId, scope.scope),
+          entityType: 'PROPERTY_CONTEXT_AREA',
+          actions: areaCaptureRowActions(scope.scope, canImproveContext, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
         })),
       }],
       actions: [],
@@ -9211,6 +9216,7 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'SELLER_PREP_ITEM_DECISION': return `${base}/seller-prep`;
     case 'INVENTORY_ITEM_CORRECT':
     case 'INVENTORY_ITEM_CREATE': return `${base}/inventory?tab=items`;
+    case 'PROPERTY_CONTEXT_AREA_CAPTURE': return base;
     case 'HOME_EVENT_CORRECT': return `${base}/timeline`;
     case 'WARRANTY_CORRECT': return '/dashboard/warranties';
     case 'ROOM_RENAME':
@@ -10434,7 +10440,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -10750,6 +10756,20 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryItem';
+  } else if (execution.operationId === 'PROPERTY_CONTEXT_AREA_CAPTURE') {
+    const state = areaCaptureStateFrom(execution.parametersJson);
+    if (!state) {
+      const error = new Error('This home-detail capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    result = await areaCaptureSubmitResult(userId, execution.propertyId, state.scope, new Set(state.skipFactKeys), state.sourceExecutionId, {
+      requirementId: input.requirementId, captureKey: input.captureKey, answer: input.answer,
+      expectedContextVersion: input.expectedContextVersion, sensitiveDataConfirmed: input.sensitiveDataConfirmed === true,
+    });
+    captureId = input.idempotencyKey;
+    capturedContextVersion = input.expectedContextVersion;
+    canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'CLAIM_FILE') {
     // P03 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
     // resumes claimFileResult with the structured answer from CLAIM_FILE_INPUTS
@@ -11557,6 +11577,8 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   ROOM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // A new item appears in the Property Summary inventory collection and the inventory lookup lists.
   INVENTORY_ITEM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
+  // Answering an area question changes the completeness rows and percentage the Property Summary shows.
+  PROPERTY_CONTEXT_AREA_CAPTURE: ['PROPERTY_SUMMARY'],
   // Accepting/deferring/snoozing/completing an Operational Work item changes
   // its state in the HOME_ACTIONS feed that surfaces it -- confirmed by this
   // handler's own suggested follow-up ("What needs my attention next?").
@@ -13570,6 +13592,332 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
   return { result, artifactType: 'INVENTORY_ITEM', artifactId: itemId, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('inventory.create', confirmInventoryItemCreate);
+
+// ── Property Summary per-area capture ──────────────────────────────────────────────────────────────────────
+// A completeness row on the Property Summary opens an inline flow for ONE area. Each answer goes form -> review card ->
+// confirm -> receipt (IW-CONF-001); nothing is written by the form. The questions come from the versioned Property Context
+// contract PROPERTY_RECORD_SUMMARY:CAPTURE_AREA, and the write is captureFeatureContext -- the same canonical capture the
+// rest of Property Context uses -- so this adds no new form and no new writer.
+//
+// Skipping ("Skip for now", or an answer that is "not sure" for everything) is kept in the execution's server-controlled
+// parameters (`skipFactKeys`) and is used ONLY to choose the next question: it writes nothing and never makes a fact
+// complete, and the completeness numbers shown afterwards come from the live facts. The client never supplies the skip
+// list. A fresh workflow from a row starts with no skips; the receipt's "Continue" carries them from that execution.
+const AREA_CAPTURE_MESSAGES: Record<PropertyAreaCaptureScope, string> = {
+  CORE: 'Fill in the missing core property details.',
+  LOCATION: 'Fill in the missing location details.',
+  STRUCTURE: 'Fill in the missing structure details.',
+  EXTERIOR: 'Fill in the missing exterior details.',
+  RESPONSIBILITY: 'Fill in the missing maintenance responsibility details.',
+  SYSTEMS: 'Fill in the missing home systems details.',
+  SAFETY: 'Fill in the missing safety details.',
+};
+const AREA_CAPTURE_ANCHORS: Record<PropertyAreaCaptureScope, string> = {
+  CORE: 'property-type', LOCATION: 'address', STRUCTURE: 'structure', EXTERIOR: 'exterior', RESPONSIBILITY: 'responsibility', SYSTEMS: 'systems', SAFETY: 'safety',
+};
+// Facts an answer here cannot fill: they are set from the address, calculated, or read from other records.
+const AREA_OTHER_SURFACE_LABELS: Record<string, string> = {
+  'core.activationStatus': 'Activation status (set by Cozy)',
+  'location.county': 'County (from your address)', 'location.countyFips': 'County code (from your address)',
+  'location.geocoded': 'Map location (from your address)', 'location.climateRegion': 'Climate region (from your location)',
+  'structure.roofAgeYears': 'Roof age (calculated from the replacement year)',
+  'systems.hasCooling': 'Cooling present (from your cooling type and inventory)', 'systems.installedItemTypes': 'Installed system types (from your inventory)',
+};
+const AREA_SKIP_MARKER = '$skip';
+const AREA_CAPTURE_MAX_SKIPPED = 200;
+const isAreaCaptureScope = (value: unknown): value is PropertyAreaCaptureScope => (PROPERTY_AREA_CAPTURE_SCOPES as readonly string[]).includes(String(value));
+const areaScopeForMessage = (message: string): PropertyAreaCaptureScope | null =>
+  PROPERTY_AREA_CAPTURE_SCOPES.find((scope) => AREA_CAPTURE_MESSAGES[scope] === message) ?? null;
+const areaLabel = (scope: string): string => PROPERTY_SCOPE_LABELS[scope] ?? readablePropertyValue(scope);
+const areaFallbackAnchor = (scope: string): string | null => isAreaCaptureScope(scope) ? AREA_CAPTURE_ANCHORS[scope] : null;
+
+function areaCaptureFallbackHref(propertyId: string, scope: string): string {
+  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
+  const anchor = areaFallbackAnchor(scope);
+  return anchor ? `${base}/edit#${anchor}` : base;
+}
+
+// Row actions: the eligible areas open the inline flow; the rooms and inventory rows reuse the existing Add actions.
+export function areaCaptureRowActions(scope: string, canManage: boolean, unmetCount: number) {
+  if (!canManage || unmetCount === 0) return undefined;
+  const action = (id: string, label: string, message: string, operationId: string) => ({ id, label, message, style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId });
+  if (isAreaCaptureScope(scope)) return [action(`fill-area-${scope.toLowerCase()}`, 'Fill in missing details', AREA_CAPTURE_MESSAGES[scope], 'PROPERTY_CONTEXT_AREA_CAPTURE')];
+  if (scope === 'ROOMS') return [action('add-room-from-completeness', 'Add a room', ROOM_ADD_MESSAGE, 'ROOM_CREATE')];
+  if (scope === 'INVENTORY') return [action('add-item-from-completeness', 'Add an item', INVENTORY_ADD_MESSAGE, 'INVENTORY_ITEM_CREATE')];
+  return undefined;
+}
+
+const AreaCaptureStateSchema = z.object({
+  areaScope: z.enum(PROPERTY_AREA_CAPTURE_SCOPES),
+  skipFactKeys: z.array(z.string().max(120)).max(AREA_CAPTURE_MAX_SKIPPED).default([]),
+  sourceExecutionId: z.string().nullable().default(null),
+});
+function areaCaptureStateFrom(parametersJson: unknown): { scope: PropertyAreaCaptureScope; skipFactKeys: string[]; sourceExecutionId: string | null } | null {
+  const parsed = AreaCaptureStateSchema.safeParse(parametersJson);
+  return parsed.success ? { scope: parsed.data.areaScope, skipFactKeys: parsed.data.skipFactKeys, sourceExecutionId: parsed.data.sourceExecutionId } : null;
+}
+const AreaCaptureAnswerSchema = z.object({
+  scope: z.enum(PROPERTY_AREA_CAPTURE_SCOPES),
+  requirementId: z.string().min(1).max(100),
+  captureKey: z.string().min(1).max(100),
+  answer: z.record(z.string(), z.unknown()),
+  expectedContextVersion: z.string().min(1).max(128),
+  rows: z.array(z.object({ label: z.string(), value: z.string() })).max(40).default([]),
+  areas: z.array(z.string()).max(10).default([]),
+}).strict();
+
+function areaCaptureError(code: string, message: string): Error {
+  return Object.assign(new Error(message), { code });
+}
+
+function areaValueDisplay(schema: { type: string; [key: string]: unknown }, value: unknown): string {
+  if (value === null || value === undefined || value === 'UNKNOWN') return 'Not sure';
+  if (schema.type === 'BOOLEAN') return value === true ? String(schema.trueLabel ?? 'Yes') : String(schema.falseLabel ?? 'No');
+  const options = Array.isArray(schema.options) ? schema.options as Array<{ label: string; value: string }> : [];
+  if (schema.type === 'SINGLE_SELECT') return options.find((option) => option.value === value)?.label ?? String(value);
+  if (schema.type === 'MULTI_SELECT') {
+    const values = Array.isArray(value) ? value : [];
+    return values.length ? values.map((entry) => options.find((option) => option.value === entry)?.label ?? String(entry)).join(', ') : 'None';
+  }
+  if ((schema.type === 'INTEGER' || schema.type === 'DECIMAL') && typeof schema.unit === 'string' && schema.unit) return `${value} ${schema.unit}`;
+  return String(value);
+}
+
+async function areaCaptureProgress(userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>) {
+  // Every area scope is loaded: fact applicability (for example a condo not owning a private fence) reads facts from other areas.
+  const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] });
+  const entry = getContextCompleteness(snapshot).scopes.find((candidate) => candidate.scope === scope);
+  const unmet = entry ? [...entry.missingFactKeys, ...entry.conflictedFactKeys, ...entry.staleFactKeys] : [];
+  const writable = new Set<string>(PROPERTY_FACT_CATALOG.filter((fact) => fact.scope === scope && fact.writable).map((fact) => fact.key));
+  return {
+    percent: entry?.completenessPercent ?? 100,
+    askable: unmet.filter((key) => writable.has(key) && !skip.has(key)),
+    skipped: unmet.filter((key) => writable.has(key) && skip.has(key)),
+    otherSurface: unmet.filter((key) => !writable.has(key)),
+  };
+}
+
+function areaProgressBlock(propertyId: string, scope: PropertyAreaCaptureScope, progress: Awaited<ReturnType<typeof areaCaptureProgress>>, terminal: boolean, continueAction: boolean): AskPresentationBlock {
+  const parts = [`${areaLabel(scope)} is ${progress.percent}% complete on the home record.`];
+  if (progress.skipped.length) parts.push(`${progress.skipped.length} detail${progress.skipped.length === 1 ? ' was' : 's were'} skipped or marked not sure this session and ${progress.skipped.length === 1 ? 'is' : 'are'} still incomplete.`);
+  const otherLabels = progress.otherSurface.map((key) => AREA_OTHER_SURFACE_LABELS[key]).filter(Boolean);
+  if (progress.otherSurface.length) parts.push(`${progress.otherSurface.length} detail${progress.otherSurface.length === 1 ? '' : 's'} cannot be filled in here${otherLabels.length ? `: ${otherLabels.join('; ')}` : ''}.`);
+  return {
+    type: 'SUMMARY', id: 'area-capture-progress',
+    title: terminal ? 'No more questions in this session' : `${areaLabel(scope)}: ${progress.askable.length} detail${progress.askable.length === 1 ? '' : 's'} left to answer`,
+    body: parts.join(' '), tone: terminal && (progress.skipped.length || progress.otherSurface.length || progress.percent < 100) ? 'CAUTION' : 'DEFAULT',
+    actions: [
+      ...(continueAction && progress.askable.length ? [{ id: 'continue-area-capture', label: `Continue with ${areaLabel(scope)}`, interactionType: 'START_WORKFLOW' as const, message: AREA_CAPTURE_MESSAGES[scope], operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', style: 'PRIMARY' as const }] : []),
+      { id: 'open-property-record', label: 'Open property record', href: areaCaptureFallbackHref(propertyId, scope), style: 'SECONDARY' as const },
+    ],
+  };
+}
+
+async function areaCapturePrompt(
+  userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, sourceExecutionId: string | null, notice?: string,
+): Promise<AskOperationResult> {
+  const [evaluation, progress] = await Promise.all([
+    evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: [...skip] } }),
+    areaCaptureProgress(userId, propertyId, scope, skip),
+  ]);
+  const parameters = { areaScope: scope, skipFactKeys: [...skip], sourceExecutionId };
+  const noticeBlock: AskPresentationBlock[] = notice ? [{ type: 'SUMMARY', id: 'area-capture-notice', title: notice, body: 'Nothing was saved. You can come back to it any time.', tone: 'DEFAULT', actions: [] }] : [];
+  const requirement = evaluation.requirements[0];
+  if (!requirement || requirement.capture.inputSchema.type === 'RELATIONAL_SELECT_CREATE' || requirement.capture.inputSchema.type === 'RELATIONAL_UPDATE') {
+    return {
+      status: 'ANSWERED', reasonCode: 'AREA_CAPTURE_NO_MORE_QUESTIONS', contextVersion: evaluation.contextVersion, parameters,
+      blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, true, false)], suggestions: ['How complete is my home record?'],
+    };
+  }
+  const capture = requirement.capture;
+  const areas = [...new Set(capture.factKeys.map((key) => areaLabel(getFactDefinition(key).scope)))];
+  const alsoUpdates = areas.length > 1 ? ` This answer updates: ${areas.join(', ')}.` : '';
+  const request: AskCaptureRequest = {
+    requirementId: requirement.requirementId, captureKey: capture.captureKey, classification: 'WORKFLOW_INPUT', state: requirement.state,
+    title: capture.title, question: capture.question,
+    helpText: `${capture.helpText ? `${capture.helpText} ` : ''}You will review it before anything is saved.${alsoUpdates}`.trim(),
+    inputSchema: capture.inputSchema, ...(requirement.currentAnswer === undefined ? {} : { currentAnswer: requirement.currentAnswer }),
+    allowNotSure: capture.allowNotSure, sensitivity: capture.sensitivity,
+    destinationLabel: 'Used to prepare this answer; nothing is saved until you confirm', confirmationText: null,
+    expectedContextVersion: evaluation.contextVersion, skippable: true,
+  };
+  return {
+    status: 'NEEDS_CONTEXT', reasonCode: 'AREA_CAPTURE_INPUT_REQUIRED', contextVersion: evaluation.contextVersion, parameters,
+    blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, false, false)], captureRequests: [request], suggestions: [],
+  };
+}
+
+export async function areaCaptureSubmitResult(
+  userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, sourceExecutionId: string | null,
+  submitted: { requirementId: string; captureKey: string; answer: Record<string, unknown>; expectedContextVersion: string; sensitiveDataConfirmed: boolean },
+): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  if (access.role === HouseholdRole.VIEWER) throw areaCaptureError('ASK_PERMISSION_REQUIRED', 'A contributor or owner is required to add home details.');
+  const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: [...skip] } });
+  const active = evaluation.requirements[0];
+  if (!active || active.requirementId !== submitted.requirementId || active.capture.captureKey !== submitted.captureKey) {
+    throw areaCaptureError('ASK_CAPTURE_NOT_ACTIVE', 'This question is no longer the current one. Start again from the area.');
+  }
+  if (evaluation.contextVersion !== submitted.expectedContextVersion) {
+    throw areaCaptureError('ASK_CONTEXT_VERSION_CONFLICT', 'The home record changed while this question was open. Start again from the area.');
+  }
+  const withSkipped = (): Set<string> => {
+    if (skip.size + active.capture.factKeys.length > AREA_CAPTURE_MAX_SKIPPED) throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', 'Too many details were skipped in this session. Start again from the area.');
+    return new Set([...skip, ...active.capture.factKeys]);
+  };
+  if (Object.keys(submitted.answer).length === 1 && submitted.answer[AREA_SKIP_MARKER] === true) {
+    return areaCapturePrompt(userId, propertyId, scope, withSkipped(), sourceExecutionId, 'Skipped for now');
+  }
+  const definition = getCaptureDefinition(submitted.captureKey);
+  if (definition.mode === 'RELATIONAL') throw areaCaptureError('ASK_CAPTURE_NOT_ACTIVE', 'This question cannot be answered here.');
+  if (definition.sensitivity !== 'STANDARD' && !submitted.sensitiveDataConfirmed) {
+    throw areaCaptureError('ASK_CAPTURE_CONFIRMATION_REQUIRED', 'Confirm that you want to save this sensitive home information.');
+  }
+  let answers: Array<{ factKey: string; value: unknown }>;
+  try {
+    answers = normalizeAnswers(definition, submitted.answer, active.capture.allowNotSure);
+  } catch (error) {
+    throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', error instanceof Error ? error.message : 'Check the answer and try again.');
+  }
+  if (!answers.length) throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', 'Answer at least one question, or skip it.');
+  // "Not sure" for everything saves nothing: it is treated as a skip so the same question does not come straight back.
+  if (answers.every(({ value }) => value === null || value === 'UNKNOWN')) {
+    return areaCapturePrompt(userId, propertyId, scope, withSkipped(), sourceExecutionId, 'Marked not sure for this session');
+  }
+  const fieldSchemas: Array<{ factKey: string; label: string; schema: { type: string; [key: string]: unknown } }> = definition.mode === 'SCALAR'
+    ? [{ factKey: definition.factKeys[0], label: definition.title, schema: definition.inputSchema as { type: string } }]
+    : (definition.inputSchema.type === 'GROUP' ? definition.inputSchema.fields : []).map((field) => ({
+      factKey: definition.answerBindings?.[field.key] ?? '', label: field.label, schema: field.inputSchema as { type: string },
+    }));
+  const rows = answers.map(({ factKey, value }) => {
+    const field = fieldSchemas.find((candidate) => candidate.factKey === factKey);
+    return { label: field?.label ?? definition.title, value: field ? areaValueDisplay(field.schema, value) : String(value) };
+  });
+  const areas = [...new Set(answers.map(({ factKey }) => areaLabel(getFactDefinition(factKey).scope)))];
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, address: true, city: true } });
+  const propertyName = property?.name?.trim() || (property ? `${property.address}, ${property.city}` : 'This property');
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const contextVersion = evaluation.contextVersion;
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'AREA_CAPTURE_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      areaScope: scope, skipFactKeys: [...skip], sourceExecutionId,
+      areaCapture: { scope, requirementId: active.requirementId, captureKey: submitted.captureKey, answer: submitted.answer, expectedContextVersion: contextVersion, rows, areas },
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [areaProgressBlock(propertyId, scope, await areaCaptureProgress(userId, propertyId, scope, skip), false, false)],
+    confirmation: {
+      confirmationId: `area-capture-${createHash('sha256').update(`${propertyId}:${scope}:${active.requirementId}`).digest('hex').slice(0, 12)}-1`, version: 1,
+      title: `Save "${definition.title}" to your home record?`,
+      description: 'This saves the answer to the shared home record through Property Context, the same record the property page and recommendations read. Nothing is saved until you confirm.',
+      fields: [{ label: 'Property', value: propertyName }, ...rows, { label: 'Areas updated', value: areas.join(', ') }],
+      editableFields: [], confirmLabel: 'Save details', consentText: 'I authorize saving these details to the shared home record.', expiresAt: expiresAt.toISOString(),
+    },
+    // Kept so the answer can be changed and resubmitted before confirming.
+    captureRequests: [{
+      requirementId: active.requirementId, captureKey: submitted.captureKey, classification: 'WORKFLOW_INPUT', state: active.state,
+      title: active.capture.title, question: active.capture.question, helpText: null, inputSchema: active.capture.inputSchema,
+      currentAnswer: definition.mode === 'SCALAR' ? { value: answers[0]?.value ?? null } : Object.fromEntries(Object.entries(definition.answerBindings ?? {}).map(([key, factKey]) => [key, answers.find((answer) => answer.factKey === factKey)?.value ?? null])),
+      allowNotSure: active.capture.allowNotSure, sensitivity: active.capture.sensitivity,
+      destinationLabel: 'Used to prepare this answer; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion, skippable: true,
+    }],
+    suggestions: [],
+  };
+}
+
+registerCapabilityHandler('property-context.area-capture', async (envelope) => {
+  const launch = envelope.launchContext;
+  const scope = areaScopeForMessage(envelope.message);
+  const entityMatches = !launch?.entityType || launch.entityType !== 'PROPERTY_CONTEXT_AREA' || launch.entityId === scope;
+  const declaredStart = launch?.operationId === 'PROPERTY_CONTEXT_AREA_CAPTURE' && launch.surface !== 'ASK_REFRESH' && scope !== null && entityMatches;
+  const notRoutable = (): AskOperationResult => ({
+    status: 'NOT_APPLICABLE', reasonCode: 'ASK_AREA_CAPTURE_NOT_DIRECTLY_ROUTABLE',
+    blocks: [{ type: 'SUMMARY', id: 'area-capture-not-routable', title: 'Use "Fill in missing details" on the home record', body: 'Missing home details are filled in from the completeness list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
+    suggestions: ['How complete is my home record?'],
+  });
+  if (declaredStart && scope) {
+    const access = await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+    if (access.role === HouseholdRole.VIEWER) {
+      return {
+        status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+        blocks: [{ type: 'SUMMARY', id: 'area-capture-permission', title: 'A contributor or owner can add home details', body: 'Your role can view the home record but not change it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-property-record', label: 'Open property record', href: areaCaptureFallbackHref(envelope.propertyId!, scope), style: 'SECONDARY' }] }],
+        suggestions: [],
+      };
+    }
+    // "Continue" from a receipt carries that workflow's skips; a start from any other result begins with none.
+    let skip = new Set<string>();
+    const sourceId = launch.sourceExecutionId ?? null;
+    if (sourceId) {
+      const source = await prisma.askExecution.findFirst({ where: { id: sourceId, userId: envelope.userId, propertyId: envelope.propertyId!, operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE' }, select: { parametersJson: true } });
+      const inherited = source ? areaCaptureStateFrom(source.parametersJson) : null;
+      if (inherited && inherited.scope === scope) skip = new Set(inherited.skipFactKeys);
+    }
+    return areaCapturePrompt(envelope.userId, envelope.propertyId!, scope, skip, sourceId);
+  }
+  // A refresh of this execution re-asks with ITS OWN stored skips (never reset, never client-supplied); anything else is not routable.
+  if (launch?.surface === 'ASK_REFRESH') {
+    const own = await prisma.askExecution.findFirst({ where: { id: envelope.executionId, userId: envelope.userId }, select: { parametersJson: true } });
+    const state = own ? areaCaptureStateFrom(own.parametersJson) : null;
+    if (state) return areaCapturePrompt(envelope.userId, envelope.propertyId!, state.scope, new Set(state.skipFactKeys), state.sourceExecutionId);
+  }
+  return notRoutable();
+});
+
+async function confirmPropertyAreaCapture(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const candidate = AreaCaptureAnswerSchema.safeParse(parameters.areaCapture);
+  const state = areaCaptureStateFrom(parameters);
+  if (!candidate.success || !state) throw areaCaptureError('ASK_CONFIRMATION_NOT_ACTIVE', 'The answer to save is invalid.');
+  const propertyId = execution.propertyId;
+  const stored = candidate.data;
+  const access = await ensurePropertyAccess(userId, propertyId);
+  if (access.role === HouseholdRole.VIEWER) throw areaCaptureError('ASK_PERMISSION_REQUIRED', 'A contributor or owner is required to add home details.');
+  const confirmationVersion = typeof parameters.confirmationVersion === 'number' ? parameters.confirmationVersion : 1;
+  // One write per execution + question + review version: a retry after a lost response returns the stored capture.
+  const idempotencyKey = `ask-area-${createHash('sha256').update(`${execution.id}:${stored.requirementId}:${confirmationVersion}`).digest('hex').slice(0, 40)}`;
+  const earlier = await prisma.propertyContextCaptureReceipt.findUnique({ where: { propertyId_userId_idempotencyKey: { propertyId, userId, idempotencyKey } }, select: { id: true, result: true } });
+  const alreadyApplied = Boolean(earlier?.result);
+  let updatedFactKeys: string[];
+  try {
+    const capture = await captureFeatureContext(propertyId, userId, {
+      requirementId: stored.requirementId, captureKey: stored.captureKey,
+      featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION,
+      operationInput: { scope: stored.scope, skipFactKeys: state.skipFactKeys },
+      expectedContextVersion: stored.expectedContextVersion, idempotencyKey, answer: stored.answer,
+    }) as { updatedFactKeys?: string[] };
+    updatedFactKeys = Array.isArray(capture.updatedFactKeys) ? capture.updatedFactKeys : [];
+  } catch (error) {
+    if (error instanceof PropertyContextVersionConflictError || (error instanceof Error && /no longer active/i.test(error.message))) {
+      throw areaCaptureError('ASK_CONTEXT_VERSION_CONFLICT', 'The home record changed while you were reviewing. Start again from the area.');
+    }
+    if (error instanceof PropertyContextCaptureValidationError) throw areaCaptureError('ASK_INVALID_CONFIRMATION_EDIT', error.message);
+    if (error instanceof PropertyContextAccessDeniedError) throw areaCaptureError('ASK_PERMISSION_REQUIRED', 'A contributor or owner is required to add home details.');
+    throw error;
+  }
+  const writtenAreas = [...new Set(updatedFactKeys.map((key) => areaLabel(getFactDefinition(key).scope)))];
+  const skip = new Set(state.skipFactKeys);
+  const progress = await areaCaptureProgress(userId, propertyId, state.scope, skip);
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'AREA_CAPTURE_SAVED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `area-capture-saved-${stored.requirementId}`, title: alreadyApplied ? 'Already saved' : 'Details saved', status: 'COMPLETED',
+      description: alreadyApplied ? 'This answer was already saved by this conversation; nothing was written again.' : 'The answer is now part of your home record.',
+      details: [...stored.rows, { label: 'Areas updated', value: (writtenAreas.length ? writtenAreas : stored.areas).join(', ') }],
+      actions: [{ id: 'open-property-record', label: 'Open property record', href: areaCaptureFallbackHref(propertyId, state.scope), style: 'SECONDARY' }],
+    },
+    areaProgressBlock(propertyId, state.scope, progress, progress.askable.length === 0, true)],
+    suggestions: ['How complete is my home record?'],
+  };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'LIMITATION', id: `area-capture-refresh-failed-${stored.requirementId}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+      body: 'This answer was saved to the home record. The summary you were viewing could not refresh automatically -- ask "How complete is my home record?" to see the current state.',
+    });
+  }
+  return { result, artifactType: 'PROPERTY_CONTEXT', artifactId: stored.requirementId, refreshedExecutions: refresh.refreshedExecutions };
+}
+registerConfirmCapabilityHandler('property-context.area-capture', confirmPropertyAreaCapture);
 registerConfirmCapabilityHandler('document-promotion.confirm', confirmDocumentPromotionConfirm);
 registerConfirmCapabilityHandler('home-operations.update', confirmOperationalWorkUpdate);
 registerConfirmCapabilityHandler('maintenance.complete', confirmMaintenanceTaskComplete);

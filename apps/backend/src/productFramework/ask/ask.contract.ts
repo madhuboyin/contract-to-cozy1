@@ -667,6 +667,8 @@ export const AskCaptureRequestSchema = z.object({
   fallbackHref: z.string().startsWith('/').nullable().optional(),
   confirmationText: z.string().nullable().default(null),
   expectedContextVersion: z.string(),
+  // The homeowner may skip this question for now (Property Summary per-area capture). Skipping writes nothing.
+  skippable: z.boolean().optional(),
 });
 
 export const SubmitAskCaptureRequestSchema = z.object({

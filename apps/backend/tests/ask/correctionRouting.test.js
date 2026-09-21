@@ -8,7 +8,7 @@ require('ts-node/register');
 // explicit correction phrasing or a declared item action -- and ordinary read questions must never land on them.
 
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
-const CORRECTION_OPERATIONS = new Set(['INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'WARRANTY_CORRECT', 'ROOM_RENAME', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE']);
+const CORRECTION_OPERATIONS = new Set(['INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'WARRANTY_CORRECT', 'ROOM_RENAME', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'PROPERTY_CONTEXT_AREA_CAPTURE']);
 const routeOf = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation.operationId;
 
 const READS = [
@@ -26,7 +26,7 @@ const READS = [
   'What is the policy number on my home warranty?', 'How much does my home warranty cost?', 'What does my HVAC warranty cover?', 'When did my warranty start?',
   'What type of warranty do I have?', 'Show the coverage details for my furnace warranty',
   // the add-an-item action's own message and read questions near it: the add command is reached only by the declared action
-  'Add an item to my home inventory.', 'Add a room to my home record.', 'How many items are in my inventory?', 'Show my inventory', 'Do I have a dishwasher in my inventory?',
+  'Add an item to my home inventory.', 'Add a room to my home record.', 'Fill in the missing structure details.', 'Fill in the missing safety details.', 'How many items are in my inventory?', 'Show my inventory', 'Do I have a dishwasher in my inventory?',
   // wording that resembles a correction but belongs to other operations
   'Update the notes on this maintenance task', 'Edit the notes for this seller prep checklist item', 'Change the model number on my quote request',
 ];

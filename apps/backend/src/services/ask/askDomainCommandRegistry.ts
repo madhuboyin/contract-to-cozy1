@@ -34,6 +34,7 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'ROOM_RENAME',
   'ROOM_CREATE',
   'INVENTORY_ITEM_CREATE',
+  'PROPERTY_CONTEXT_AREA_CAPTURE',
   'OPERATIONAL_WORK_UPDATE',
   // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20).
   'CAPTURE_FACT_CONFIRM',
@@ -113,6 +114,7 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   OPERATIONAL_WORK_UPDATE: command('OPERATIONAL_WORK_UPDATE', 'OPERATIONAL_WORK_UPDATE', 'home-operations.update', 'CONTRIBUTOR', 'OPERATIONAL_WORK_ITEM', ['EDIT', 'REOPEN', 'STOP'], { title: 'Operational Work not changed', body: 'The work item lifecycle, schedule, and evidence remain unchanged.', suggestion: 'Show my home operations' }),
   ROOM_CREATE: command('ROOM_CREATE', 'ROOM_CREATE', 'room.create', 'CONTRIBUTOR', 'INVENTORY_ROOM', ['EDIT', 'STOP'], { title: 'Room not added', body: 'No room was added.', suggestion: 'Show my rooms' }),
   INVENTORY_ITEM_CREATE: command('INVENTORY_ITEM_CREATE', 'INVENTORY_ITEM_CREATE', 'inventory.create', 'CONTRIBUTOR', 'INVENTORY_ITEM', ['EDIT', 'STOP'], { title: 'Item not added', body: 'No inventory item was added.', suggestion: 'Show my inventory' }),
+  PROPERTY_CONTEXT_AREA_CAPTURE: command('PROPERTY_CONTEXT_AREA_CAPTURE', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'property-context.area-capture', 'CONTRIBUTOR', 'PROPERTY_CONTEXT', ['EDIT', 'STOP'], { title: 'Home detail not saved', body: 'No home detail was saved.', suggestion: 'How complete is my home record?' }),
   ROOM_RENAME: command('ROOM_RENAME', 'ROOM_RENAME', 'room.rename', 'CONTRIBUTOR', 'INVENTORY_ROOM', ['EDIT', 'STOP'], { title: 'Room not renamed', body: 'The room was not changed.', suggestion: 'Show my rooms' }),
   WARRANTY_CORRECT: command('WARRANTY_CORRECT', 'WARRANTY_CORRECT', 'warranty.correct', 'CONTRIBUTOR', 'WARRANTY', ['EDIT', 'STOP'], { title: 'Warranty not changed', body: 'The warranty record was not changed.', suggestion: 'Show my warranties' }),
   HOME_EVENT_CORRECT: command('HOME_EVENT_CORRECT', 'HOME_EVENT_CORRECT', 'home-event.correct', 'CONTRIBUTOR', 'HOME_EVENT', ['EDIT', 'STOP'], { title: 'Timeline event not changed', body: 'The home timeline event was not changed.', suggestion: 'Show my home timeline' }),

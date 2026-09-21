@@ -760,9 +760,10 @@ function InlineCaptureCard({
     return !date.value || (date.precision === 'RANGE' && !date.rangeEnd);
   });
 
-  const save = async (event: FormEvent) => {
+  // `skipping` answers the question with the reserved skip marker: the server saves nothing and moves to the next question.
+  const save = async (event: FormEvent, skipping = false) => {
     event.preventDefault();
-    if (saving || missingRequired) return;
+    if (saving || (missingRequired && !skipping)) return;
     setSaving(true);
     setError(null);
     try {
@@ -771,8 +772,8 @@ function InlineCaptureCard({
         captureKey: request.captureKey,
         expectedContextVersion: request.expectedContextVersion,
         idempotencyKey,
-        answer: schema.type === 'RELATIONAL_UPDATE' ? { mode: 'UPDATE', entityId: schema.entityId, values } : values,
-        sensitiveDataConfirmed: request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY' ? sensitiveDataConfirmed : undefined,
+        answer: skipping ? { $skip: true } : schema.type === 'RELATIONAL_UPDATE' ? { mode: 'UPDATE', entityId: schema.entityId, values } : values,
+        sensitiveDataConfirmed: !skipping && (request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') ? sensitiveDataConfirmed : undefined,
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not save this home detail.');
       window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId));
@@ -817,6 +818,7 @@ function InlineCaptureCard({
       )}
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>
+        {request.skippable && <button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, true)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Skip for now</button>}
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
         {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}
       </div>

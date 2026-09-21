@@ -150,6 +150,16 @@ function correctableSummaryExecution() {
       { id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${propertyId}/inventory`, style: 'SECONDARY' },
     ],
   }, {
+    // What the real Property Summary emits for an incomplete area: a row whose id is the area, with the declared area action.
+    type: 'GROUPED_LIST', id: 'property-completeness', title: 'Areas that can improve', filters: [],
+    description: 'Open the property record or answer the inline prompt to add canonical information.',
+    sections: [{ id: 'incomplete-scopes', title: 'Property Context completeness', count: 1, items: [{
+      id: 'STRUCTURE', title: 'Structure', description: '4 of 7 facts known', meta: ['3 missing', '0 conflicted', '0 stale'], status: '57% COMPLETE',
+      href: `/dashboard/properties/${propertyId}/edit#structure`, entityType: 'PROPERTY_CONTEXT_AREA',
+      actions: [action('fill-area-structure', 'Fill in missing details', 'Fill in the missing structure details.', 'PROPERTY_CONTEXT_AREA_CAPTURE')],
+    }] }],
+    actions: [],
+  }, {
     type: 'GROUPED_LIST', id: 'property-warranties', title: 'Warranties', filters: [],
     description: 'Select a warranty to inspect its current canonical details without leaving Ask Cozy.',
     sections: [{ id: 'warranties', title: 'Recorded warranties', count: 1, items: [{
@@ -278,11 +288,13 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
 
 // Phase 3 add-record acceptance: "Add a timeline event" and "Add a room" -> form -> review -> receipt.
 // Shapes mirror buildUserAddedEventConfirmation / roomCreateResult / the existing confirm receipts.
-type AddKind = 'event' | 'room' | 'item';
-function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, unknown>) {
+type AddKind = 'event' | 'room' | 'item' | 'area';
+function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, unknown>, notice?: string) {
   const base = propertySummaryTimelineExecution();
   const spec = kind === 'event'
     ? { executionId: 'execution-event-add', question: 'Add an event to my home timeline.', operationId: 'CAPTURE_EVENT_CONFIRM', context: 'event-add-context-v1', requirementId: 'capture-event-add', captureKey: 'CAPTURE_EVENT_ADD', title: 'Add a timeline event', questionText: 'What would you like to add to your home timeline?' }
+    : kind === 'area'
+    ? { executionId: 'execution-area-add', question: 'Fill in the missing structure details.', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', context: 'area-add-context-v1', requirementId: 'area-roof-requirement', captureKey: 'ROOF_STRUCTURE_PROFILE', title: 'Roof details', questionText: 'Confirm the roof type, replacement year, and responsibility.' }
     : kind === 'item'
     ? { executionId: 'execution-item-add', question: 'Add an item to my home inventory.', operationId: 'INVENTORY_ITEM_CREATE', context: 'item-add-context-v1', requirementId: 'inventory-create-inputs', captureKey: 'INVENTORY_ITEM_CREATE_INPUTS', title: 'Add an item', questionText: 'Which item would you like to add to your home inventory?' }
     : { executionId: 'execution-room-add', question: 'Add a room to my home record.', operationId: 'ROOM_CREATE', context: 'room-add-context-v1', requirementId: 'room-create-inputs', captureKey: 'ROOM_CREATE_INPUTS', title: 'Add a room', questionText: 'Which room would you like to add to your home record?' };
@@ -296,6 +308,11 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
       field('summary', 'Details', false, { type: 'SHORT_TEXT', maxLength: 500 }),
       field('amount', 'Amount', false, { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' }),
       field('providerName', 'Provider', false, { type: 'SHORT_TEXT', maxLength: 160 }),
+    ]
+    : kind === 'area'
+    ? [
+      field('roofType', 'Roof type', true, { type: 'SINGLE_SELECT', options: [{ label: 'Asphalt shingle', value: 'ASPHALT_SHINGLE' }, { label: 'Metal', value: 'METAL' }] }),
+      field('roofReplacementYear', 'Roof replacement year', true, { type: 'INTEGER', min: 1600, max: 2200, unit: 'year' }),
     ]
     : kind === 'item'
     ? [
@@ -314,13 +331,18 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
     requirementId: spec.requirementId, captureKey: spec.captureKey, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: spec.title, question: spec.questionText,
     helpText: 'You will review everything before it is saved.', inputSchema: { type: 'GROUP', fields }, currentAnswer: current,
     allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Nothing is saved until you confirm', confirmationText: null, expectedContextVersion: spec.context,
+    ...(kind === 'area' ? { skippable: true } : {}),
   });
   const empty = kind === 'event' ? { title: null, type: null, occurredAt: null, summary: null, amount: null, providerName: null }
+    : kind === 'area' ? { roofType: null, roofReplacementYear: null }
     : kind === 'item' ? { name: null, category: null, roomId: null, brand: null, model: null }
     : { type: null, name: null, floorLevel: null };
   if (stage === 'FORM') {
     return { ...common, status: 'NEEDS_CONTEXT', confirmation: null, captureRequests: [captureRequest(empty)],
-      blocks: [{ type: 'SUMMARY', id: `${kind}-add-input`, title: spec.title, body: 'Nothing has been saved yet. Enter the details, then review them before it is added.', tone: 'DEFAULT', actions: [] }] };
+      blocks: [
+        ...(notice ? [{ type: 'SUMMARY', id: 'area-capture-notice', title: notice, body: 'Nothing was saved. You can come back to it any time.', tone: 'DEFAULT', actions: [] }] : []),
+        { type: 'SUMMARY', id: `${kind}-add-input`, title: spec.title, body: 'Nothing has been saved yet. Enter the details, then review them before it is added.', tone: 'DEFAULT', actions: [] },
+      ] };
   }
   if (stage === 'CONFIRMATION') {
     const entered = answer ?? {};
@@ -328,6 +350,10 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
       ? { confirmationId: 'capture-event-add-1', version: 1, title: 'Add this to your home timeline?', description: 'You entered these details. No change is saved until you confirm.',
         fields: [{ label: 'Event', value: String(entered.title ?? '') }, { label: 'Type', value: String(entered.type ?? '') }, { label: 'Date', value: String(entered.occurredAt ?? '') }],
         editableFields: [], confirmLabel: 'Add to timeline', consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my home timeline.' }
+      : kind === 'area'
+      ? { confirmationId: 'area-capture-1', version: 1, title: 'Save "Roof details" to your home record?', description: 'This saves the answer to the shared home record through Property Context.',
+        fields: [{ label: 'Property', value: 'Acceptance Home' }, { label: 'Roof type', value: String(entered.roofType ?? '') }, { label: 'Roof replacement year', value: String(entered.roofReplacementYear ?? '') }, { label: 'Areas updated', value: 'Structure, Maintenance responsibility' }],
+        editableFields: [], confirmLabel: 'Save details', consentText: 'I authorize saving these details to the shared home record.' }
       : kind === 'item'
       ? { confirmationId: 'inventory-create-1', version: 1, title: `Add "${String(entered.name ?? '')}" to your inventory?`, description: 'This adds the item through the canonical inventory service.',
         fields: [{ label: 'Item name', value: String(entered.name ?? '') }, { label: 'Category', value: String(entered.category ?? '') }, { label: 'Room', value: 'Kitchen' }],
@@ -338,6 +364,12 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
     return { ...common, status: 'NEEDS_CONFIRMATION', captureRequests: [captureRequest(entered)],
       blocks: [{ type: 'SUMMARY', id: `${kind}-add-review`, title: 'Review before adding', body: 'You entered these details. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
       confirmation: { ...confirmation, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+  }
+  if (kind === 'area') {
+    return { ...common, status: 'COMPLETED', captureRequests: [], confirmation: null, blocks: [
+      { type: 'WORKFLOW_PROGRESS', id: 'area-capture-saved', title: 'Details saved', status: 'COMPLETED', description: 'The answer is now part of your home record.', details: [{ label: 'Areas updated', value: 'Structure, Maintenance responsibility' }], actions: [] },
+      { type: 'SUMMARY', id: 'area-capture-progress', title: 'No more questions in this session', body: 'Structure is 71% complete on the home record. 1 detail cannot be filled in here: Roof age (calculated from the replacement year).', tone: 'CAUTION', actions: [] },
+    ] };
   }
   return { ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
     blocks: [{ type: 'WORKFLOW_PROGRESS', id: `${kind}-added`, title: kind === 'event' ? 'Added to your home timeline' : kind === 'item' ? 'Item added' : 'Room added', status: 'COMPLETED', description: 'The record was added.', details: [], actions: [] }] };
@@ -719,8 +751,8 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: response }, 201);
       return;
     }
-    if (/^add an event to my home timeline/i.test(body.message) || /^add a room to my home record/i.test(body.message) || /^add an item to my home inventory/i.test(body.message)) {
-      const addKind: AddKind = /event/i.test(body.message) ? 'event' : /item/i.test(body.message) ? 'item' : 'room';
+    if (/^add an event to my home timeline/i.test(body.message) || /^add a room to my home record/i.test(body.message) || /^add an item to my home inventory/i.test(body.message) || /^fill in the missing structure details/i.test(body.message)) {
+      const addKind: AddKind = /event/i.test(body.message) ? 'event' : /item/i.test(body.message) ? 'item' : /^fill in/i.test(body.message) ? 'area' : 'room';
       if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
       await fulfill(route, { success: true, data: addExecution(addKind, 'FORM', body.sessionId as string | undefined) }, 201);
       return;
@@ -883,12 +915,13 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
     await fulfill(route, { success: true, data: warrantyAddExecution('DONE', correctionSessionId) });
   });
-  for (const addKind of ['event', 'room', 'item'] as const) {
+  for (const addKind of ['event', 'room', 'item', 'area'] as const) {
     await page.route(`${apiOrigin}/api/ask/executions/execution-${addKind}-add/captures`, async (route) => {
       assertAuthenticated(route.request());
       const body = route.request().postDataJSON() as Record<string, unknown>;
       addCaptureBodies.push(body);
-      await fulfill(route, { success: true, data: addExecution(addKind, 'CONFIRMATION', correctionSessionId, body.answer as Record<string, unknown>) });
+      const skipped = addKind === 'area' && (body.answer as Record<string, unknown>)?.$skip === true;
+      await fulfill(route, { success: true, data: skipped ? addExecution(addKind, 'FORM', correctionSessionId, undefined, 'Skipped for now') : addExecution(addKind, 'CONFIRMATION', correctionSessionId, body.answer as Record<string, unknown>) });
     });
     await page.route(`${apiOrigin}/api/ask/executions/execution-${addKind}-add/confirm`, async (route) => {
       assertAuthenticated(route.request());

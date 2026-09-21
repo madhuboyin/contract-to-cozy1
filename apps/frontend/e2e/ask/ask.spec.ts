@@ -447,6 +447,55 @@ test('a contributor adds an inventory item inline: the Add action opens the form
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('a contributor fills in a missing area detail inline: the row action opens the question, Continue leads to a review naming every area, and confirming shows the receipt with what is still incomplete', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Areas that can improve', exact: true }) });
+  await response.getByRole('button', { name: 'Fill in missing details' }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Fill in the missing structure details.'
+    && (body.launchContext as { operationId?: string; entityType?: string; entityId?: string } | undefined)?.operationId === 'PROPERTY_CONTEXT_AREA_CAPTURE'
+    && (body.launchContext as { entityType?: string } | undefined)?.entityType === 'PROPERTY_CONTEXT_AREA'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'STRUCTURE')).toBe(true);
+  await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
+
+  const form = page.locator('#ask-execution-execution-area-add');
+  await form.getByRole('button', { name: 'Asphalt shingle', exact: true }).click();
+  await form.getByLabel('Roof replacement year', { exact: true }).fill('2018');
+  await form.getByRole('button', { name: 'Continue to review' }).click();
+  await expect.poll(() => api.addCaptureBodies).toEqual([expect.objectContaining({
+    requirementId: 'area-roof-requirement', captureKey: 'ROOF_STRUCTURE_PROFILE', expectedContextVersion: 'area-add-context-v1',
+    answer: { roofType: 'ASPHALT_SHINGLE', roofReplacementYear: 2018 },
+  })]);
+  await expect(page.getByText('Save "Roof details" to your home record?').first()).toBeVisible();
+  await expect(page.getByText('Structure, Maintenance responsibility').first()).toBeVisible();
+  await page.getByLabel(/I authorize saving these details to the shared home record/).check();
+  await page.getByRole('button', { name: 'Save details', exact: true }).click();
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
+  await expect(page.getByText('Details saved')).toBeVisible();
+  // The end state never claims the area is done.
+  await expect(page.getByText('No more questions in this session')).toBeVisible();
+  await expect(page.getByText(/cannot be filled in here/)).toBeVisible();
+  await expect(page.getByText(/all done/i)).toHaveCount(0);
+});
+
+test('"Skip for now" on an area question sends only the skip marker, saves nothing and offers the question flow again', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Areas that can improve', exact: true }) });
+  await response.getByRole('button', { name: 'Fill in missing details' }).click();
+  const form = page.locator('#ask-execution-execution-area-add');
+  // Skipping needs no answer: the required fields are still empty.
+  await form.getByRole('button', { name: 'Skip for now' }).click();
+  await expect.poll(() => api.addCaptureBodies).toEqual([expect.objectContaining({ answer: { $skip: true } })]);
+  await expect(page.getByText('Skipped for now')).toBeVisible();
+  expect(api.correctionConfirmBodies).toEqual([]);
+});
+
 test('a contributor adds a warranty inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

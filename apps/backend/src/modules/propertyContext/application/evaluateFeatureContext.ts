@@ -6,7 +6,7 @@ import {
   propertyContextFeatureEvaluationsTotal,
 } from '../../../lib/metrics';
 import { getCaptureDefinition } from '../catalog/captureRegistry';
-import { getFactDefinition } from '../catalog/factCatalog';
+import { getFactDefinition, isFactApplicable } from '../catalog/factCatalog';
 import {
   type DeclarativeCondition,
   type FactRequirementDefinition,
@@ -212,8 +212,17 @@ async function evaluateRequirement(
   };
 }
 
+// `skipFactKeys` only steers which question comes next, so it is excluded: a requirement keeps the same id as questions
+// are skipped, and an answer captured for it is still validated against the live evaluation.
 function inputForRequirementId(operationInput: Record<string, unknown> | undefined): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(operationInput ?? {}).sort(([left], [right]) => left.localeCompare(right)));
+  return Object.fromEntries(Object.entries(operationInput ?? {})
+    .filter(([key]) => key !== 'skipFactKeys')
+    .sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function skipFactKeysFrom(operationInput: Record<string, unknown> | undefined): Set<string> {
+  const supplied = operationInput?.skipFactKeys;
+  return new Set(Array.isArray(supplied) ? supplied.filter((key): key is string => typeof key === 'string') : []);
 }
 
 async function evaluateFeatureContextInternal(
@@ -233,13 +242,20 @@ async function evaluateFeatureContextInternal(
     getPropertyContext(propertyId, { userId }, { scopes }),
   ]);
   const contractKey = `${contract.featureKey}:${contract.operationKey}:${contract.policyVersion}`;
+  // Area-capture contracts only: leave out facts that do not apply to this property and facts skipped this session. A
+  // skipped fact is not treated as known; it is simply not the next question.
+  const skipFactKeys = contract.areaCapture ? skipFactKeysFrom(input.operationInput) : new Set<string>();
+  const selectable = (requirement: FactRequirementDefinition): boolean => !contract.areaCapture
+    || (!skipFactKeys.has(requirement.factKey) && isFactApplicable(getFactDefinition(requirement.factKey), context.facts));
   const required = (await Promise.all(contract.required
+    .filter(selectable)
     .sort((left, right) => left.priority - right.priority)
     .map((requirement) => evaluateRequirement(contractKey, requirement, context, input.operationInput))))
     .filter((value): value is EvaluatedContextRequirement => Boolean(value))
     .map(applyRequirementPolicy)
     .sort((left, right) => REQUIRED_CLASSIFICATION_RANK[left.classification] - REQUIRED_CLASSIFICATION_RANK[right.classification]);
   const enhancements = (await Promise.all(contract.enhancements
+    .filter(selectable)
     .sort((left, right) => left.priority - right.priority)
     .map((requirement) => evaluateRequirement(contractKey, requirement, context, input.operationInput))))
     .filter((value): value is EvaluatedContextRequirement => Boolean(value));

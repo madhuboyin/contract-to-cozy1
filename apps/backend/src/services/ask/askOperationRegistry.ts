@@ -111,6 +111,8 @@ export type AskOperationId =
   | 'ROOM_CREATE'
   // Phase 3 add slice: create an InventoryItem from a declared "Add an item" action (form -> confirmation -> write).
   | 'INVENTORY_ITEM_CREATE'
+  // Phase 3 add slice 5: fill in the missing facts of one Property Summary area, one confirmed answer at a time.
+  | 'PROPERTY_CONTEXT_AREA_CAPTURE'
   | 'MAJOR_EVENT_ENTRY'
   | 'EMERGENCY_BOUNDARY'
   | 'UNSAFE_RESTRICTED_BOUNDARY'
@@ -228,6 +230,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'ROOM_CREATE',
   // Reached only by the declared "Add an item" action: there is no message pattern for it and no fuzzy retrieval.
   'INVENTORY_ITEM_CREATE',
+  // Reached only by the declared "Fill in the missing details" action on a Property Summary completeness row.
+  'PROPERTY_CONTEXT_AREA_CAPTURE',
 ]);
 
 export function isAskMessageRoutableOperation(operationId: AskOperationId): boolean {
@@ -357,6 +361,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   ROOM_RENAME: definition('ROOM_RENAME', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.rename', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   ROOM_CREATE: definition('ROOM_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.create', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   INVENTORY_ITEM_CREATE: definition('INVENTORY_ITEM_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inventory.create', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  PROPERTY_CONTEXT_AREA_CAPTURE: definition('PROPERTY_CONTEXT_AREA_CAPTURE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'property-context.area-capture', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   MAJOR_EVENT_ENTRY: definition('MAJOR_EVENT_ENTRY', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'major-event.entry', ['SUMMARY', 'CAPABILITY_LIST', 'BOUNDARY']),
   EMERGENCY_BOUNDARY: definition('EMERGENCY_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'EMERGENCY_BOUNDARY', null, 'boundary.emergency', ['BOUNDARY']),
   UNSAFE_RESTRICTED_BOUNDARY: definition('UNSAFE_RESTRICTED_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'UNSAFE_RESTRICTED_BOUNDARY', null, 'boundary.unsafe-restricted', ['BOUNDARY']),

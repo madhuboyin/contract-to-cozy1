@@ -1,5 +1,5 @@
 import type { ContextRequirementClassification } from '../domain/contracts';
-import { getCaptureDefinition, getCaptureDefinitionForFact, validateCaptureRegistry } from './captureRegistry';
+import { CONTEXT_CAPTURE_DEFINITIONS, getCaptureDefinition, getCaptureDefinitionForFact, validateCaptureRegistry } from './captureRegistry';
 import { PROPERTY_FACT_CATALOG, getFactDefinition } from './factCatalog';
 
 export interface DeclarativeCondition {
@@ -48,6 +48,12 @@ export interface FeatureContextRequirementDefinition {
   promptStrategy: 'ONE_AT_A_TIME' | 'GROUP_RELATED' | 'MINIMUM_PATH';
   notApplicableWhen?: DeclarativeCondition;
   notApplicableReasonCode?: string;
+  /**
+   * Per-area capture contract (Ask Inline Workspace, Property Summary completeness rows). Only this contract honours the
+   * server-supplied `skipFactKeys` operation input (a skipped fact is left out when choosing the next question -- it is
+   * never treated as known) and leaves out facts that do not apply to this property (`notApplicableWhen`).
+   */
+  areaCapture?: boolean;
   adoption: {
     surfaceDisposition: 'INLINE_PANEL' | 'RESERVED_NO_INVOKER';
     executionDisposition: 'SHARED_GATE' | 'DOMAIN_POLICY' | 'CAPTURE_ONLY' | 'NOT_INVOKED';
@@ -110,6 +116,49 @@ function financialAccuracyContract(
         ...(fact === 'inventory' || fact === 'installedSystems' ? { minimumItems: 1 } : {}),
       };
     }),
+  };
+}
+
+// ── Property Summary per-area capture (Ask Inline Workspace, slice 2) ─────────────────────────────────────────────────
+// The summary's completeness rows open an inline flow for one area at a time. Every writable fact in the area gets an
+// enhancement entry selected by the `scope` operation input, so no new capture form and no new writer exists: each entry
+// reuses the fact's existing capture definition. A structured profile (HVAC, safety detectors, roof, outdoor space) is
+// preferred over the scalar form because one answer then fills several facts; the scalar form is the fallback.
+export const PROPERTY_AREA_CAPTURE_SCOPES = ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY'] as const;
+export type PropertyAreaCaptureScope = typeof PROPERTY_AREA_CAPTURE_SCOPES[number];
+export const PROPERTY_AREA_CAPTURE_FEATURE = 'PROPERTY_RECORD_SUMMARY';
+export const PROPERTY_AREA_CAPTURE_OPERATION = 'CAPTURE_AREA';
+
+function propertyAreaCaptureContract(): FeatureContextRequirementDefinition {
+  const enhancements: FactRequirementDefinition[] = [];
+  for (const scope of PROPERTY_AREA_CAPTURE_SCOPES) {
+    const facts = PROPERTY_FACT_CATALOG.filter((fact) => fact.scope === scope && fact.writable);
+    const structuredFor = (factKey: string) => CONTEXT_CAPTURE_DEFINITIONS.find((definition) => definition.mode === 'STRUCTURED' && definition.factKeys.includes(factKey));
+    // Structured profiles first, then catalog order, so the fewest prompts fill the most facts.
+    const ordered = [...facts.filter((fact) => structuredFor(fact.key)), ...facts.filter((fact) => !structuredFor(fact.key))];
+    ordered.forEach((fact, index) => {
+      const capture = structuredFor(fact.key) ?? getCaptureDefinitionForFact(fact.key);
+      if (!capture) return;
+      enhancements.push({
+        factKey: fact.key,
+        classification: 'ENHANCEMENT_ACCURACY',
+        reasonCode: `COMPLETE_${scope}_${fact.key.replace(/\./g, '_').toUpperCase()}`,
+        priority: (index + 1) * 10,
+        acceptableStates: ['KNOWN'],
+        captureKey: capture.captureKey,
+        operationInputWhen: { key: 'scope', operator: 'EQUALS', value: scope },
+      });
+    });
+  }
+  return {
+    featureKey: PROPERTY_AREA_CAPTURE_FEATURE,
+    operationKey: PROPERTY_AREA_CAPTURE_OPERATION,
+    policyVersion: '1.0',
+    promptStrategy: 'MINIMUM_PATH',
+    required: [],
+    enhancements,
+    areaCapture: true,
+    adoption: adopted('Ask Inline Workspace per-area capture', 'CAPTURE_ONLY'),
   };
 }
 
@@ -686,6 +735,7 @@ export const FEATURE_CONTEXT_REQUIREMENTS: readonly FeatureContextRequirementDef
     ],
     enhancements: [],
   },
+  propertyAreaCaptureContract(),
 ] as const;
 
 const contractByKey = new Map(

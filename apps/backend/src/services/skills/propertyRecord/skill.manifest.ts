@@ -13,6 +13,7 @@ export const PROPERTY_RECORD_SKILL_OPERATIONS: AskOperationId[] = [
   'ROOM_RENAME',
   'ROOM_CREATE',
   'INVENTORY_ITEM_CREATE',
+  'PROPERTY_CONTEXT_AREA_CAPTURE',
 ];
 
 export const PROPERTY_RECORD_SKILL = Object.freeze({
@@ -37,11 +38,12 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
     { id: 'room.rename', version: '1.0' },
     { id: 'room.create', version: '1.0' },
     { id: 'inventory.create', version: '1.0' },
+    { id: 'property-context.area-capture', version: '1.0' },
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [
     { consumer: 'ASK', operations: PROPERTY_RECORD_SKILL_OPERATIONS },
-    { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS.filter((operationId) => operationId !== 'INVENTORY_ITEM_CORRECT' && operationId !== 'HOME_EVENT_CORRECT' && operationId !== 'WARRANTY_CORRECT' && operationId !== 'ROOM_RENAME' && operationId !== 'ROOM_CREATE' && operationId !== 'INVENTORY_ITEM_CREATE') },
+    { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS.filter((operationId) => operationId !== 'INVENTORY_ITEM_CORRECT' && operationId !== 'HOME_EVENT_CORRECT' && operationId !== 'WARRANTY_CORRECT' && operationId !== 'ROOM_RENAME' && operationId !== 'ROOM_CREATE' && operationId !== 'INVENTORY_ITEM_CREATE' && operationId !== 'PROPERTY_CONTEXT_AREA_CAPTURE') },
     { consumer: 'HOME_ACTIONS', operations: ['PROPERTY_SUMMARY'] },
   ],
   autonomyLevel: 2,
