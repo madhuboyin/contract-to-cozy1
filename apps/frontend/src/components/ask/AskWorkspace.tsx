@@ -508,7 +508,9 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
               {editingKey === field.key ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <input
-                    type="date"
+                    type={field.type === 'TEXT' ? 'text' : 'date'}
+                    maxLength={field.type === 'TEXT' ? 160 : undefined}
+                    aria-label={field.label}
                     value={editValues[field.key] ?? field.value}
                     onChange={(event) => setEditValues((current) => ({ ...current, [field.key]: event.target.value }))}
                     className="min-h-9 rounded-lg border border-slate-300 px-2 py-1 text-sm"

@@ -551,8 +551,10 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
 const AskConfirmationEditableFieldSchema = z.object({
   key: z.string().trim().min(1).max(60),
   label: z.string().trim().min(1).max(160),
-  type: z.enum(['DATE']),
-  value: z.string(),
+  // DATE (YYYY-MM-DD) and single-line TEXT (max 160). Each operation's own
+  // edit handler owns the field-specific validation.
+  type: z.enum(['DATE', 'TEXT']),
+  value: z.string().max(200),
 });
 
 export const AskConfirmationSchema = z.object({

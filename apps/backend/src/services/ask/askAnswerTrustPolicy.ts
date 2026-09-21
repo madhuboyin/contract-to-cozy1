@@ -50,6 +50,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   OWNERSHIP_COSTS: new Set(['open-ownership-costs']),
   INVENTORY_LOOKUP: new Set(['add-inventory', 'search-inventory', 'open-inventory']),
   INVENTORY_ITEM_CORRECT: new Set(['open-inventory']),
+  HOME_EVENT_CORRECT: new Set(['open-timeline', 'open-home-timeline']),
   PROPERTY_SUMMARY: new Set(['open-property-record']),
   HOME_ACTIONS: new Set(['open-home', 'open-home-actions']),
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),

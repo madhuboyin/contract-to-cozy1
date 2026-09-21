@@ -89,6 +89,7 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'COVERAGE_COMPARISON_STATUS', message: 'Would we come out ahead switching insurance carriers?', category: 'PARAPHRASE' },
   { operationId: 'DOCUMENT_LOOKUP', message: 'What documents are on file for this address?', category: 'PARAPHRASE' },
   { operationId: 'SELLER_PREP_CHECKLIST', message: 'Am I ready to list this house yet?', category: 'COLLOQUIAL' },
+  { operationId: 'HOME_EVENT_CORRECT', message: 'The date on that timeline event is wrong, can you fix the date', category: 'COLLOQUIAL' },
   { operationId: 'INVENTORY_ITEM_CORRECT', message: 'The install date on my water heater record is wrong, please fix it', category: 'COLLOQUIAL' },
   { operationId: 'SELLER_PREP_ITEM_DECISION', message: 'Go ahead and waive that sale readiness item for me', category: 'COLLOQUIAL' },
 ];
@@ -192,6 +193,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PROPERTY_TAX_APPEAL_READINESS: 'The property-tax assessment appeal is not ready because it still needs comparable-value evidence.',
   RENOVATION_PERMIT_READINESS: 'The remodel is blocked until the recorded permit approval is complete.',
   SELLER_PREP_CHECKLIST: 'Open seller-prep checklist items are listed by category with estimated cost ranges.',
+  HOME_EVENT_CORRECT: 'The timeline event correction is reviewed before it is recorded as a new revision.',
   INVENTORY_ITEM_CORRECT: 'The inventory item date is reviewed before it is corrected on the shared home record.',
   SELLER_PREP_ITEM_DECISION: 'The checklist item decision is reviewed before it is applied to the shared seller-prep checklist.',
   MAJOR_EVENT_ENTRY: 'Preparing the home to go on the market begins with records, repairs, and disclosure readiness.',

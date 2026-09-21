@@ -181,7 +181,7 @@ export interface AskFeedbackResponse {
 export interface AskConfirmationEditableField {
   key: string;
   label: string;
-  type: 'DATE';
+  type: 'DATE' | 'TEXT';
   value: string;
 }
 

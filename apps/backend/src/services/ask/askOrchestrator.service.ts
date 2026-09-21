@@ -4466,7 +4466,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
       sections: [{
         id: 'events', title: 'Timeline', count: events.length,
         items: events.map((event) => ({
-          id: event.id, title: event.title, entityType: 'HOME_EVENT', description: event.summary,
+          id: event.id, title: event.title, entityType: 'HOME_EVENT', actions: homeEventCorrectionItemActions(access.role !== HouseholdRole.VIEWER), description: event.summary,
           meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
           status: event.datePrecision, href: inventoryItemHref(propertyId, selectedItem.id),
         })),
@@ -4725,7 +4725,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         items: timeline.recent.map((event) => ({
           id: event.id, title: event.title, description: null,
           meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
-          status: event.verificationStatus, href: null, entityType: 'HOME_EVENT',
+          status: event.verificationStatus, href: null, entityType: 'HOME_EVENT', actions: homeEventCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
         })),
       }],
       actions: [{ id: 'open-home-timeline', label: 'Open home timeline', href: `${propertyHref}/timeline`, style: 'SECONDARY' }],
@@ -8148,6 +8148,117 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
 }
 
 registerCapabilityHandler('inventory.item-correct', async (envelope) => inventoryItemCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+
+// Phase 3 write slice 2: title/date correction on an exact current HomeEvent.
+// updateHomeEvent supersedes the row and creates a replacement with a NEW id,
+// so the target is always re-resolved as (id, isCurrent, !deletedAt) and the
+// receipt/artifact carries the replacement's id.
+const HOME_EVENT_CORRECTION_FIELDS = {
+  title: { label: 'title', action: 'Correct title', message: 'Correct the title of this timeline event.', type: 'TEXT' as const },
+  occurredAt: { label: 'date', action: 'Correct date', message: 'Correct the date of this timeline event.', type: 'DATE' as const },
+} as const;
+type HomeEventCorrectionField = keyof typeof HOME_EVENT_CORRECTION_FIELDS;
+
+const HomeEventCorrectionInputSchema = z.object({
+  eventId: z.string().trim().min(1).max(160),
+  field: z.enum(['title', 'occurredAt']),
+  value: z.string().max(200).nullable(),
+}).strict();
+
+function homeEventCorrectionField(message: string): HomeEventCorrectionField | null {
+  if (/\b(?:title|name)\b/i.test(message)) return 'title';
+  if (/\bdate\b/i.test(message)) return 'occurredAt';
+  return null;
+}
+
+function homeEventCorrectionValueValid(field: HomeEventCorrectionField, value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  return field === 'occurredAt' ? isValidDateEditInput(value) : value.trim().length >= 3 && value.trim().length <= 140;
+}
+
+function homeEventContextVersion(event: { id: string; revision: number }): string {
+  return createHash('sha256').update(`${event.id}:${event.revision}`).digest('hex');
+}
+
+function homeEventCorrectionItemActions(canManage: boolean) {
+  if (!canManage) return undefined;
+  return (Object.keys(HOME_EVENT_CORRECTION_FIELDS) as HomeEventCorrectionField[]).map((field) => ({
+    id: `correct-${field}`, label: HOME_EVENT_CORRECTION_FIELDS[field].action, message: HOME_EVENT_CORRECTION_FIELDS[field].message,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT',
+  }));
+}
+
+function homeEventCorrectionConfirmation(event: { id: string; title: string }, field: HomeEventCorrectionField, current: string, proposed: string | null, version: number, expiresAt: Date) {
+  const meta = HOME_EVENT_CORRECTION_FIELDS[field];
+  return {
+    confirmationId: `home-event-correct-${event.id}-${version}`, version, title: `Correct the ${meta.label} of "${event.title}"?`,
+    description: 'This records a new revision on the canonical home timeline; the original is preserved as history.',
+    fields: [{ label: 'Event', value: event.title }, { label: 'Field', value: meta.label }, { label: 'Current value', value: current },
+      ...(field === 'occurredAt' ? [{ label: 'Date precision', value: 'Recorded as an exact date' }] : [])],
+    editableFields: [{ key: 'value', label: `Corrected ${meta.label}`, type: meta.type, value: proposed ?? '' }],
+    confirmLabel: `Save ${meta.label}`, consentText: 'I authorize this correction to the shared home timeline.', expiresAt: expiresAt.toISOString(),
+  };
+}
+
+async function homeEventCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
+  const events = await prisma.homeEvent.findMany({
+    where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
+    select: { id: true, title: true, revision: true, occurredAt: true, datePrecision: true },
+  });
+  const selected = exactEntityMatch(events, message, launchContext);
+  if (!selected) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HOME_EVENT_TARGET_REQUIRED',
+      ...durableFreeTextClarification('HOME_EVENT_CORRECT', 'Which timeline event should Ask correct? Use its exact title.'),
+      blocks: [{
+        type: 'GROUPED_LIST', filters: [], id: 'home-event-selection', title: 'Choose the event to correct',
+        description: 'Use the exact event title in your next message; nothing has changed.',
+        sections: [{ id: 'events', title: 'Timeline events', count: events.length, items: events.slice(0, 20).map((event) => ({
+          id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
+        })) }],
+        actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }],
+      }],
+      suggestions: events.slice(0, 3).map((event) => `Correct the title of the timeline event ${event.title}`),
+    };
+  }
+  const field = homeEventCorrectionField(message);
+  if (!field) {
+    return {
+      status: 'NEEDS_CLARIFICATION', reasonCode: 'HOME_EVENT_CORRECTION_FIELD_REQUIRED',
+      ...durableFreeTextClarification('HOME_EVENT_CORRECT', `Should the title or the date of "${selected.title}" change?`),
+      blocks: [{ type: 'SUMMARY', id: 'home-event-correct-field', title: `Should the title or the date change?`, body: 'Say title or date. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      suggestions: [`Correct the title of the timeline event ${selected.title}`, `Correct the date of the timeline event ${selected.title}`],
+    };
+  }
+  if (field === 'occurredAt' && selected.datePrecision === 'RANGE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HOME_EVENT_DATE_RANGE_UNSUPPORTED',
+      blocks: [{ type: 'SUMMARY', id: 'home-event-range-unsupported', title: 'This event is recorded as a date range', body: 'Ask can correct the date of an event recorded with a single date. Use the timeline to adjust a date range.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'PRIMARY' }] }],
+      suggestions: [],
+    };
+  }
+  const current = field === 'title' ? selected.title : (inventoryDateValue(selected.occurredAt) ?? 'Not recorded');
+  const stated = field === 'occurredAt' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
+  const proposed = stated && isValidDateEditInput(stated) ? stated : field === 'title' ? selected.title : inventoryDateValue(selected.occurredAt);
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const contextVersion = homeEventContextVersion(selected);
+  const input = HomeEventCorrectionInputSchema.parse({ eventId: selected.id, field, value: proposed });
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_CORRECTION_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      homeEventCorrection: input, homeEventCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'home-event-correct-review', title: `Review this ${HOME_EVENT_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
+    confirmation: homeEventCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt),
+    suggestions: [],
+  };
+}
+
+registerCapabilityHandler('home-event.correct', async (envelope) => homeEventCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 registerCapabilityHandler('household.invitation', async (envelope) => householdInvitationResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('guidance.journey.create', async (envelope) => guidanceJourneyCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteComparisonCreateResult(envelope.propertyId!, envelope.message));
@@ -8658,6 +8769,7 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'SELLER_PREP_CHECKLIST':
     case 'SELLER_PREP_ITEM_DECISION': return `${base}/seller-prep`;
     case 'INVENTORY_ITEM_CORRECT': return `${base}/inventory?tab=items`;
+    case 'HOME_EVENT_CORRECT': return `${base}/timeline`;
     case 'CAPITAL_RESERVE_PLAN': return `${base}/tools/capital-timeline`;
     case 'PROPERTY_TAX_APPEAL_READINESS': return `${base}/tools/property-tax`;
     case 'QUOTE_COMPARISON_REVIEW': return `${base}/tools/quote-comparison`;
@@ -10912,6 +11024,8 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   SELLER_PREP_ITEM_DECISION: ['SELLER_PREP_CHECKLIST'],
   // The corrected date is shown on the inventory lists and the Property Summary inventory collection.
   INVENTORY_ITEM_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'],
+  // The corrected revision replaces the event row shown in the item-history and Property Summary timeline lists.
+  HOME_EVENT_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'],
   // Accepting/deferring/snoozing/completing an Operational Work item changes
   // its state in the HOME_ACTIONS feed that surfaces it -- confirmed by this
   // handler's own suggested follow-up ("What needs my attention next?").
@@ -12407,6 +12521,69 @@ async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promi
   return { result, artifactType: 'INVENTORY_ITEM', artifactId: item.id, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('inventory.item-correct', confirmInventoryItemCorrect);
+
+async function confirmHomeEventCorrect(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const candidate = HomeEventCorrectionInputSchema.safeParse(parameters.homeEventCorrection);
+  if (!candidate.success) throw Object.assign(new Error('The timeline correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const { eventId, field, value } = candidate.data;
+  if (!homeEventCorrectionValueValid(field, value)) {
+    throw Object.assign(new Error(field === 'occurredAt' ? 'Enter the corrected date before confirming.' : 'Enter a corrected title of at least 3 characters before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  }
+  // updateHomeEvent has no idempotency of its own and supersedes every time:
+  // a lease-reclaim retry must find this execution's own replacement first.
+  const correctionKey = `ask-correction:${execution.id}`;
+  const finish = async (replacement: { id: string; title: string }): Promise<ConfirmCapabilityResult> => {
+    const result = captureEventResult(execution.propertyId!, replacement, true);
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `home-event-refresh-failed-${replacement.id}`, title: 'Saved; view could not refresh',
+        body: 'This correction was saved to your home timeline. The result you were viewing could not refresh automatically -- ask "Show my home timeline" to see its current state.',
+        severity: 'CAUTION',
+      });
+    }
+    return { result, artifactType: 'HOME_EVENT', artifactId: replacement.id, refreshedExecutions: refresh.refreshedExecutions };
+  };
+  const findWinner = () => prisma.homeEvent.findFirst({ where: { propertyId: execution.propertyId, idempotencyKey: correctionKey } });
+  const already = await findWinner();
+  if (already) return finish(already);
+  const current = await prisma.homeEvent.findFirst({
+    where: { id: eventId, propertyId: execution.propertyId, isCurrent: true, deletedAt: null },
+    select: { id: true, title: true, revision: true, visibility: true, createdById: true, datePrecision: true },
+  });
+  if (!current || (current.visibility === 'PRIVATE' && current.createdById !== userId)) {
+    throw Object.assign(new Error('This timeline event is no longer available. It may have been corrected or removed.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  }
+  if (parameters.homeEventCorrectionContextVersion !== homeEventContextVersion(current)) {
+    throw Object.assign(new Error('This timeline event changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  }
+  if (field === 'occurredAt' && current.datePrecision === 'RANGE') {
+    throw Object.assign(new Error('This event is recorded as a date range and cannot be corrected here.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  const patch = field === 'title'
+    ? { title: value.trim() }
+    : { occurredAt: `${value}T00:00:00.000Z`, datePrecision: 'EXACT_DATE' };
+  try {
+    const replacement = await homeEventsServiceForCapture.updateHomeEvent(
+      execution.propertyId!, current.id,
+      { ...patch, correctionReason: 'Corrected through Ask after homeowner confirmation.' },
+      userId, { idempotencyKey: correctionKey },
+    );
+    return finish(replacement);
+  } catch (error) {
+    // Same two race recoveries as confirmCaptureEvent: the winner's whole
+    // supersede+create transaction commits atomically, so re-reading by this
+    // execution's key finds it.
+    if ((error instanceof APIError && error.code === 'HOME_EVENT_NOT_FOUND') || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+      const winner = await findWinner();
+      if (winner) return finish(winner);
+      if (error instanceof APIError) throw Object.assign(new Error('The event to correct is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    }
+    throw error;
+  }
+}
+registerConfirmCapabilityHandler('home-event.correct', confirmHomeEventCorrect);
 registerConfirmCapabilityHandler('document-promotion.confirm', confirmDocumentPromotionConfirm);
 registerConfirmCapabilityHandler('home-operations.update', confirmOperationalWorkUpdate);
 registerConfirmCapabilityHandler('maintenance.complete', confirmMaintenanceTaskComplete);
@@ -13464,6 +13641,44 @@ async function editInventoryItemCorrectConfirmation(
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 
+async function editHomeEventCorrectConfirmation(
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+): Promise<AskExecutionResponse> {
+  const existing = HomeEventCorrectionInputSchema.safeParse(parameters.homeEventCorrection);
+  if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
+  const valueEdit = input.edits.value;
+  if (!homeEventCorrectionValueValid(existing.data.field, valueEdit)) {
+    throw Object.assign(new Error(existing.data.field === 'occurredAt' ? 'Enter a valid date.' : 'Enter a title of 3 to 140 characters.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  }
+  const event = await prisma.homeEvent.findFirst({ where: { id: existing.data.eventId, propertyId: execution.propertyId!, isCurrent: true, deletedAt: null }, select: { id: true, title: true, occurredAt: true } });
+  if (!event) throw Object.assign(new Error('The selected timeline event is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  const cleaned = existing.data.field === 'title' ? valueEdit.trim() : valueEdit;
+  const updatedInput = HomeEventCorrectionInputSchema.parse({ ...existing.data, value: cleaned });
+  const nextVersion = input.confirmationVersion + 1;
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const current = existing.data.field === 'title' ? event.title : (inventoryDateValue(event.occurredAt) ?? 'Not recorded');
+  const newConfirmation = homeEventCorrectionConfirmation(event, existing.data.field, current, cleaned, nextVersion, expiresAt);
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'home-event-correct-review', title: `Review this ${HOME_EVENT_CORRECTION_FIELDS[existing.data.field].label} correction`, body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT' as const, actions: [] };
+  const editWrite = await prisma.askExecution.updateMany({
+    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
+    data: {
+      parametersJson: asInputJson({ ...parameters, homeEventCorrection: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+        ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),
+      }),
+    },
+  });
+  if (editWrite.count !== 1) throw Object.assign(new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  await prisma.askExecutionEvent.create({
+    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+  });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
 const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
   execution: AskExecution,
   parameters: Record<string, unknown>,
@@ -13471,6 +13686,7 @@ const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
 ) => Promise<AskExecutionResponse>>> = {
   MAINTENANCE_TASK_UPDATE: editMaintenanceTaskUpdateConfirmation,
   INVENTORY_ITEM_CORRECT: editInventoryItemCorrectConfirmation,
+  HOME_EVENT_CORRECT: editHomeEventCorrectConfirmation,
   BUYER_TASK_UPDATE: editBuyerTaskUpdateConfirmation,
 };
 

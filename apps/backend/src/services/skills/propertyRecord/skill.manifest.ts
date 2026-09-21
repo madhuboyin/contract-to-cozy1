@@ -8,6 +8,7 @@ export const PROPERTY_RECORD_SKILL_OPERATIONS: AskOperationId[] = [
   'INVENTORY_LOOKUP',
   'HOME_CHANGE_SUMMARY',
   'INVENTORY_ITEM_CORRECT',
+  'HOME_EVENT_CORRECT',
 ];
 
 export const PROPERTY_RECORD_SKILL = Object.freeze({
@@ -27,11 +28,12 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
     { id: 'inventory.lookup', version: '1.0' },
     { id: 'home-change.summary', version: '1.0' },
     { id: 'inventory.item-correct', version: '1.0' },
+    { id: 'home-event.correct', version: '1.0' },
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [
     { consumer: 'ASK', operations: PROPERTY_RECORD_SKILL_OPERATIONS },
-    { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS.filter((operationId) => operationId !== 'INVENTORY_ITEM_CORRECT') },
+    { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS.filter((operationId) => operationId !== 'INVENTORY_ITEM_CORRECT' && operationId !== 'HOME_EVENT_CORRECT') },
     { consumer: 'HOME_ACTIONS', operations: ['PROPERTY_SUMMARY'] },
   ],
   autonomyLevel: 2,

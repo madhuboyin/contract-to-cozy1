@@ -891,6 +891,17 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     note: '',
     uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY, GROUPED_LIST (filters:[]).' }, freshnessSource: { status: 'TRACED', notes: 'GAP: no contextVersion set anywhere in this handler -- same \'substantive branch missing freshness\' pattern as HOME_CHANGE_SUMMARY/INSPECTION_FINDINGS in Home intelligence and work.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. items.slice(0,20) -- the undisclosed-cap pattern again.' }, handoff: { status: 'TRACED', notes: 'Bare href to /seller-prep throughout.' },
   },
+  HOME_EVENT_CORRECT: {
+    track: 'Records and capture',
+    rollClass: 'CONFIRMED_MUTATION',
+    canonicalOwner: 'home-event.correct',
+    roleFloor: 'CONTRIBUTOR',
+    messageRoutable: true,
+    confirmationCapable: true,
+    correctionModes: ['EDIT', 'STOP'],
+    note: 'Phase 3 write slice 2: only the title (TEXT editable field, 3-140 chars) and date (DATE editable field) of a current, non-deleted, visible HomeEvent are correctable; a RANGE-precision event is declined for date correction, and a date correction records EXACT_DATE precision (disclosed on the confirmation card). Written through HomeEventsService.updateHomeEvent, which supersedes the row and creates a replacement with a NEW id -- the receipt/artifact carries the replacement id, and the source lists are refreshed via reconciliation. Summary, amount, type, importance, visibility, links remain uncorrectable inline.',
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer: GROUPED_LIST (disambiguation), SUMMARY (review) + DATE/TEXT editable confirmation, WORKFLOW_PROGRESS (receipt via captureEventResult).' }, freshnessSource: { status: 'TRACED', notes: 'homeEventContextVersion = sha256(id:revision), rechecked at confirm against the current non-deleted row; a superseded/deleted/private-not-yours event fails as ASK_CONTEXT_VERSION_CONFLICT.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism PLUS the same ask-correction:{executionId} idempotencyKey guard confirmCaptureEvent uses (pre-check, HOME_EVENT_NOT_FOUND and P2002 winner recovery), since updateHomeEvent has no idempotency of its own.' }, reconciliation: { status: 'TRACED', notes: 'Calls reconcileAskExecutionSideEffects; ASK_MUTATION_IMPACT_MAP declares INVENTORY_LOOKUP/PROPERTY_SUMMARY as siblings (the lists that carry HOME_EVENT rows).' }, handoff: { status: 'TRACED', notes: 'Secondary Open home timeline href.' },
+  },
   INVENTORY_ITEM_CORRECT: {
     track: 'Records and capture',
     rollClass: 'CONFIRMED_MUTATION',

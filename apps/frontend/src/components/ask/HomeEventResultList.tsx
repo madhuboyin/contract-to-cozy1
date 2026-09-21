@@ -2,7 +2,7 @@
 
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
-import type { AskPresentationBlock } from '@/features/ask/types';
+import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { getHomeEvent, type HomeEvent } from '@/app/(dashboard)/dashboard/properties/[id]/timeline/homeEventsApi';
 import { cn } from '@/lib/utils';
@@ -44,10 +44,14 @@ function fieldLabel(value: string | null | undefined): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
-function HomeEventDetail({ eventId, expectedPropertyId, fallbackItem, onAccessLost, onClose }: {
+type HomeEventItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+
+function HomeEventDetail({ eventId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose }: {
   eventId: string;
   expectedPropertyId?: string;
   fallbackItem: Item;
+  disabled?: boolean;
+  onAction?: HomeEventItemActionHandler;
   onAccessLost: () => void;
   onClose: () => void;
 }) {
@@ -118,6 +122,11 @@ function HomeEventDetail({ eventId, expectedPropertyId, fallbackItem, onAccessLo
           <div><dt className="text-xs text-slate-500">Recorded as</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(event.observationKind)}</dd></div>
           <div><dt className="text-xs text-slate-500">Amount</dt><dd className="mt-0.5 font-medium text-slate-900">{formatAmount(event.amount, event.currency)}</dd></div>
         </dl>
+        {onAction && (fallbackItem.actions?.length ?? 0) > 0 && <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={`Corrections for ${event.title}`}>
+          {fallbackItem.actions!.map((action) => <button key={action.id} type="button" disabled={disabled}
+            className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
+            onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}<span className="sr-only"> for {event.title}</span></button>)}
+        </div>}
         <p className="mt-3 text-xs text-slate-500">{event.documents?.length ?? 0} document{(event.documents?.length ?? 0) === 1 ? '' : 's'} · Current canonical record · updated {formatDate(event.updatedAt)}</p>
       </>}
     </aside>
@@ -131,9 +140,11 @@ function HomeEventDetail({ eventId, expectedPropertyId, fallbackItem, onAccessLo
 // entity (HomeEvent, via the existing homeEventsApi.getHomeEvent -- no new
 // API client method needed). No per-item mutation actions exist for these
 // blocks.
-export function HomeEventResultList({ block, propertyId, onFilter, onPage, onAccessLost, link }: {
+export function HomeEventResultList({ block, propertyId, disabled, onAction, onFilter, onPage, onAccessLost, link }: {
   block: Block;
   propertyId?: string;
+  disabled?: boolean;
+  onAction?: HomeEventItemActionHandler;
   onFilter: (message: string) => void;
   onPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void;
   onAccessLost: () => void;
@@ -192,7 +203,7 @@ export function HomeEventResultList({ block, propertyId, onFilter, onPage, onAcc
         </nav>}
       </div>;
     })}
-    {detailEventId && detailItem && <HomeEventDetail key={detailEventId} eventId={detailEventId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />}
+    {detailEventId && detailItem && <HomeEventDetail key={detailEventId} eventId={detailEventId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
     <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
   </section>;
 }

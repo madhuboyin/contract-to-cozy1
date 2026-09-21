@@ -107,3 +107,29 @@ test('"Open home inventory" remains available as a separate, secondary option', 
   render(<List response={execution()} />);
   expect(screen.getByText('Open home inventory')).toBeInTheDocument();
 });
+
+test('inline event detail exposes declared correction actions with exact event identity; none render without declared actions', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  mockedGetHomeEvent.mockResolvedValue(canonicalEvent());
+  const withActions: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], actions: [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }] },
+    ...block.sections[0].items.slice(1),
+  ] }] };
+  const onAction = jest.fn();
+  const response = { ...execution(), blocks: [withActions] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><HomeEventResultList block={withActions} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  const first = render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater replaced' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Correct title/ }));
+  expect(onAction).toHaveBeenCalledWith('HOME_EVENT', 'event-0', 'Correct the title of this timeline event.', 'HOME_EVENT_CORRECT', 'MUTATE_RECORD');
+  first.unmount();
+  window.sessionStorage.clear();
+
+  render(<List response={execution()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater replaced' }));
+  await waitFor(() => expect(screen.getByText('Homeowner confirmed')).toBeInTheDocument());
+  expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+});

@@ -96,6 +96,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('OWNERSHIP_COSTS', ALL_MODES),
   definePolicy('INVENTORY_LOOKUP', ALL_MODES),
   definePolicy('INVENTORY_ITEM_CORRECT', ALL_MODES),
+  definePolicy('HOME_EVENT_CORRECT', ALL_MODES),
   definePolicy('DOCUMENT_LOOKUP', ALL_MODES),
   definePolicy('PROPERTY_SUMMARY', ALL_MODES),
   // A bounded read of normalized intelligence already derived for this home.

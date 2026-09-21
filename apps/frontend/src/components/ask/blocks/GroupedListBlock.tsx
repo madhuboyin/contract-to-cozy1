@@ -146,7 +146,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (HOME_EVENT_DETAIL_BLOCK_IDS.has(block.id)) {
-    return <HomeEventResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
+    return <HomeEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (block.id === 'property-rooms') {
