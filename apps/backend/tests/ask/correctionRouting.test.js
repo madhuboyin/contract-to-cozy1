@@ -1,0 +1,48 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+require('ts-node/register');
+
+// Routing guard for the Inline Workspace correction commands. They are excluded from fuzzy semantic retrieval
+// (a plain read question scored as a near match for a write example), so they must be reached only by an
+// explicit correction phrasing or a declared item action -- and ordinary read questions must never land on them.
+
+const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+const CORRECTION_OPERATIONS = new Set(['INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'WARRANTY_CORRECT', 'ROOM_RENAME']);
+const routeOf = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation.operationId;
+
+const READS = [
+  'When was my water heater last serviced?', 'When was my dishwasher installed?', 'When did I purchase the refrigerator?', 'How old is my furnace?',
+  'What is the install date of my HVAC system?', 'Show the purchase date for my dishwasher', 'What do you know about my water heater?', 'Show my appliance details',
+  'When was the roof replaced?', 'What happened with my roof last year?', 'Show my home timeline', 'What is the date of my last repair?',
+  'When does my HVAC warranty expire?', 'Who is the provider on my home warranty?', 'Show my warranties', 'Is my furnace under warranty?',
+  'What is in the kitchen?', 'Show my rooms', 'How many rooms are in my house?', 'What is the name of the room with the water heater?',
+  'Show incomplete inventory records', 'What appliances do I have?', 'Which items were serviced this year?', 'What is the warranty expiration date for the roof?',
+  // read questions about the detail fields
+  'What is the model of my furnace?', 'What condition is my water heater in?', 'How much did I pay for my dishwasher?', 'What is the serial number of my refrigerator?',
+  'What brand is my dryer?', 'What is the replacement cost of my roof?', 'Show the notes on my furnace', 'What is the condition of my appliances?',
+  // wording that resembles a correction but belongs to other operations
+  'Update the notes on this maintenance task', 'Edit the notes for this seller prep checklist item', 'Change the model number on my quote request',
+];
+
+const WRITES = [
+  ['Correct the install date of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the purchase date of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
+  ['Correct the last serviced date of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['The install date on my water heater item is wrong, please fix the install date', 'INVENTORY_ITEM_CORRECT'],
+  ['Correct the condition of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the brand of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
+  ['Correct the model of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the serial number of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
+  ['Correct the purchase cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the replacement cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
+  ['Correct the notes of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Please fix the serial number on my inventory record for the dryer', 'INVENTORY_ITEM_CORRECT'],
+  ['Correct the title of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the date of this timeline event.', 'HOME_EVENT_CORRECT'],
+  ['Correct the provider of this warranty.', 'WARRANTY_CORRECT'], ['Correct the expiry date of this warranty.', 'WARRANTY_CORRECT'],
+  ['Rename this room.', 'ROOM_RENAME'], ['Can you rename the spare room to office', 'ROOM_RENAME'],
+];
+
+test('ordinary read questions never route to a correction command', () => {
+  const misrouted = READS.map((message) => [message, routeOf(message)]).filter(([, operationId]) => CORRECTION_OPERATIONS.has(operationId));
+  assert.deepEqual(misrouted, []);
+});
+
+test('explicit correction phrasings and the declared item-action messages route to the right command', () => {
+  const wrong = WRITES.map(([message, expected]) => [message, routeOf(message), expected]).filter(([, actual, expected]) => actual !== expected);
+  assert.deepEqual(wrong, []);
+});

@@ -121,7 +121,7 @@ const GroupedListItemSchema = z.object({
   entityType: z.string().trim().min(1).max(60).nullable().optional(),
   // Additive for existing grouped-list producers: actionable rows opt in;
   // historical/non-actionable rows remain valid without emitting an empty list.
-  actions: z.array(GroupedListItemActionSchema).max(3).optional(),
+  actions: z.array(GroupedListItemActionSchema).max(12).optional(),
 });
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD §7 (ACT-001 FILTER_RESULT): a declared,
@@ -551,10 +551,12 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
 const AskConfirmationEditableFieldSchema = z.object({
   key: z.string().trim().min(1).max(60),
   label: z.string().trim().min(1).max(160),
-  // DATE (YYYY-MM-DD) and single-line TEXT (max 160). Each operation's own
-  // edit handler owns the field-specific validation.
-  type: z.enum(['DATE', 'TEXT']),
-  value: z.string().max(200),
+  // DATE (YYYY-MM-DD), single-line TEXT, multi-line TEXTAREA, SELECT (one of
+  // `options`) and MONEY (dollars, up to two decimals). The value is always a
+  // string; each operation's own edit handler owns the field-specific validation.
+  type: z.enum(['DATE', 'TEXT', 'TEXTAREA', 'SELECT', 'MONEY']),
+  value: z.string().max(2000),
+  options: z.array(z.object({ label: z.string().trim().min(1).max(80), value: z.string().trim().min(1).max(80) })).max(12).optional(),
 });
 
 export const AskConfirmationSchema = z.object({
@@ -582,7 +584,7 @@ export const SubmitAskConfirmationSchema = z.object({
 // confirmation currently open, exactly like confirming does.
 export const EditAskConfirmationSchema = z.object({
   confirmationVersion: z.number().int().positive(),
-  edits: z.record(z.string().trim().min(1).max(60), z.string().trim().min(1).max(500)).refine(
+  edits: z.record(z.string().trim().min(1).max(60), z.string().trim().min(1).max(2000)).refine(
     (value) => Object.keys(value).length > 0 && Object.keys(value).length <= 3,
     { message: 'Provide at least one edited field.' },
   ),

@@ -176,13 +176,15 @@ export interface AskFeedbackResponse {
 }
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD §8 (CONF-002/CONF-003): a declared,
-// typed field the homeowner may change before confirming. DATE only for
-// now -- the one case maintenance v1 needs (rescheduling).
+// typed field the homeowner may change before confirming. The value is always
+// a string: DATE is YYYY-MM-DD, MONEY is dollars with up to two decimals, and
+// SELECT is one of `options`.
 export interface AskConfirmationEditableField {
   key: string;
   label: string;
-  type: 'DATE' | 'TEXT';
+  type: 'DATE' | 'TEXT' | 'TEXTAREA' | 'SELECT' | 'MONEY';
   value: string;
+  options?: Array<{ label: string; value: string }>;
 }
 
 export interface AskConfirmation {

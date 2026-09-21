@@ -7,7 +7,7 @@ import { api } from '@/lib/api/client';
 import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionResponse, AskFeaturedPrompt, AskItemActionInteractionType, AskPendingWorkItem, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
+import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskConfirmationEditableField, AskExecutionResponse, AskFeaturedPrompt, AskItemActionInteractionType, AskPendingWorkItem, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -388,6 +388,44 @@ function ClarificationCard({ executionId, clarification, onCompleted, autoFocus 
   );
 }
 
+// Renders the input for one editable confirmation field, by its declared type.
+function EditableFieldInput({ field, value, onChange }: { field: AskConfirmationEditableField; value: string; onChange: (next: string) => void }) {
+  const base = 'rounded-lg border border-slate-300 px-2 py-1 text-sm';
+  if (field.type === 'SELECT') {
+    return (
+      <select aria-label={field.label} value={value} onChange={(event) => onChange(event.target.value)} className={`min-h-9 ${base}`}>
+        {!(field.options ?? []).some((option) => option.value === value) && <option value="" disabled>Choose…</option>}
+        {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    );
+  }
+  if (field.type === 'TEXTAREA') {
+    return <textarea aria-label={field.label} rows={4} maxLength={2000} value={value} onChange={(event) => onChange(event.target.value)} className={`w-full ${base}`} />;
+  }
+  if (field.type === 'MONEY') {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden="true" className="text-slate-500">$</span>
+        <input type="text" inputMode="decimal" maxLength={11} aria-label={field.label} value={value} onChange={(event) => onChange(event.target.value)} className={`min-h-9 w-32 ${base}`} />
+      </span>
+    );
+  }
+  return (
+    <input
+      type={field.type === 'TEXT' ? 'text' : 'date'} maxLength={field.type === 'TEXT' ? 160 : undefined} aria-label={field.label}
+      value={value} onChange={(event) => onChange(event.target.value)} className={`min-h-9 ${base}`}
+    />
+  );
+}
+
+// How an editable field's current value reads when it is not being edited.
+function editableFieldDisplay(field: AskConfirmationEditableField, value: string): string {
+  if (!value) return 'Not set';
+  if (field.type === 'SELECT') return field.options?.find((option) => option.value === value)?.label ?? value;
+  if (field.type === 'MONEY') return `$${value}`;
+  return value;
+}
+
 function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = false, onAccessLost }: { executionId: string; confirmation: AskConfirmation; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean; onAccessLost: () => void }) {
   const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
   const [consent, setConsent] = useState(false);
@@ -507,20 +545,13 @@ function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = 
             <dd>
               {editingKey === field.key ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type={field.type === 'TEXT' ? 'text' : 'date'}
-                    maxLength={field.type === 'TEXT' ? 160 : undefined}
-                    aria-label={field.label}
-                    value={editValues[field.key] ?? field.value}
-                    onChange={(event) => setEditValues((current) => ({ ...current, [field.key]: event.target.value }))}
-                    className="min-h-9 rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                  />
+                  <EditableFieldInput field={field} value={editValues[field.key] ?? field.value} onChange={(next) => setEditValues((current) => ({ ...current, [field.key]: next }))} />
                   <button type="button" disabled={editSaving} onClick={() => void saveEdit(field.key)} className="min-h-8 rounded-lg bg-teal-700 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">{editSaving ? 'Saving…' : 'Save'}</button>
                   <button type="button" disabled={editSaving} onClick={() => { setEditingKey(null); setEditValues((current) => ({ ...current, [field.key]: field.value })); setEditError(null); }} className="min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-50">Cancel</button>
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-slate-800">{field.value}</span>
+                  <span className="whitespace-pre-wrap font-medium text-slate-800">{editableFieldDisplay(field, field.value)}</span>
                   <button type="button" onClick={() => setEditingKey(field.key)} className="text-xs font-semibold text-teal-700 underline underline-offset-2">Edit</button>
                 </div>
               )}

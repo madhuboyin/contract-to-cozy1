@@ -124,7 +124,13 @@ function correctableSummaryExecution() {
     sections: [{ id: 'inventory', title: 'Recorded items', count: 1, items: [{
       id: 'item-property-summary', title: 'Water heater', description: null, entityType: 'INVENTORY_ITEM', href: null, status: 'VERIFIED',
       meta: ['Plumbing', 'Good', 'Updated Sep 1, 2026'],
-      actions: [action('correct-installedOn', 'Correct install date', 'Correct the install date of this inventory item.', 'INVENTORY_ITEM_CORRECT')],
+      // More than three corrections, so the detail folds them behind one "Correct a detail" disclosure.
+      actions: [
+        action('correct-installedOn', 'Correct install date', 'Correct the install date of this inventory item.', 'INVENTORY_ITEM_CORRECT'),
+        action('correct-condition', 'Correct condition', 'Correct the condition of this inventory item.', 'INVENTORY_ITEM_CORRECT'),
+        action('correct-purchaseCostCents', 'Correct purchase cost', 'Correct the purchase cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'),
+        action('correct-notes', 'Correct notes', 'Correct the notes of this inventory item.', 'INVENTORY_ITEM_CORRECT'),
+      ],
     }] }],
     actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${propertyId}/inventory`, style: 'SECONDARY' }],
   }, {
@@ -169,10 +175,12 @@ function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ve
 // Phase 3 write-slice acceptance: confirmation -> edit -> confirm for the
 // inventory (DATE), warranty (DATE) and room (TEXT) corrections. Shapes mirror
 // the real server's confirmation cards.
-export type CorrectionKind = 'inventory' | 'warranty' | 'room';
-const CORRECTIONS: Record<CorrectionKind, { message: RegExp; operationId: string; title: string; label: string; type: 'DATE' | 'TEXT'; initial: string; confirmLabel: string; consentText: string; receiptTitle: string; current: string }> = {
+export type CorrectionKind = 'inventory' | 'warranty' | 'room' | 'inventoryCondition' | 'inventoryCost';
+const CORRECTIONS: Record<CorrectionKind, { message: RegExp; operationId: string; title: string; label: string; type: 'DATE' | 'TEXT' | 'SELECT' | 'MONEY'; initial: string; confirmLabel: string; consentText: string; receiptTitle: string; current: string; options?: Array<{ label: string; value: string }> }> = {
   inventory: { message: /correct the install date of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct installed date for Water heater?', label: 'Corrected installed date', type: 'DATE', initial: '2022-01-15', current: '2022-01-15', confirmLabel: 'Save installed date', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
   warranty: { message: /correct the expiry date of this warranty/i, operationId: 'WARRANTY_CORRECT', title: 'Correct the expiry date of the Acme Home Warranty warranty?', label: 'Corrected expiry date', type: 'DATE', initial: '2027-12-01', current: '2027-12-01', confirmLabel: 'Save expiry date', consentText: 'I authorize this correction to the warranty record.', receiptTitle: 'Warranty updated' },
+  inventoryCondition: { message: /correct the condition of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct condition for Water heater?', label: 'Corrected condition', type: 'SELECT', initial: 'GOOD', current: 'Good', confirmLabel: 'Save condition', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated', options: [{ label: 'New', value: 'NEW' }, { label: 'Good', value: 'GOOD' }, { label: 'Fair', value: 'FAIR' }, { label: 'Poor', value: 'POOR' }, { label: 'Unknown', value: 'UNKNOWN' }] },
+  inventoryCost: { message: /correct the purchase cost of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct purchase cost for Water heater?', label: 'Corrected purchase cost', type: 'MONEY', initial: '850.00', current: '$850.00', confirmLabel: 'Save purchase cost', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
   room: { message: /rename this room/i, operationId: 'ROOM_RENAME', title: 'Rename "Kitchen"?', label: 'New room name', type: 'TEXT', initial: 'Kitchen', current: 'Kitchen', confirmLabel: 'Save room name', consentText: 'I authorize this rename of the shared home record.', receiptTitle: 'Room renamed' },
 };
 
@@ -188,7 +196,7 @@ function correctionExecution(kind: CorrectionKind, status: 'NEEDS_CONFIRMATION' 
     confirmation: status === 'COMPLETED' ? null : {
       confirmationId: `correct-${kind}-${version}`, version, title: spec.title, description: 'Review before it is written to the canonical record.',
       fields: [{ label: 'Current value', value: spec.current }],
-      editableFields: [{ key: 'value', label: spec.label, type: spec.type, value }],
+      editableFields: [{ key: 'value', label: spec.label, type: spec.type, value, ...(spec.options ? { options: spec.options } : {}) }],
       confirmLabel: spec.confirmLabel, consentText: spec.consentText, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
     },
     updatedAt: new Date().toISOString(),

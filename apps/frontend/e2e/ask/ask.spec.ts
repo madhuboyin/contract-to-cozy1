@@ -253,6 +253,8 @@ test('a contributor corrects a timeline event title inline: exact identity is se
 async function correctionFlow(page: import('@playwright/test').Page, api: Awaited<ReturnType<typeof installAskApi>>, spec: {
   block: string; recordButton: string; detailText: string; actionLabel: RegExp; actionMessage: string; entityType: string; entityId: string;
   confirmationTitle: string; fieldLabel: string; newValue: string; confirmLabel: string; consentText: RegExp; receiptTitle: string;
+  // Optional: open the "Correct a detail" disclosure first, pick from a dropdown, and how the saved value reads.
+  disclosure?: boolean; select?: boolean; shownValue?: string;
 }) {
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
@@ -261,6 +263,7 @@ async function correctionFlow(page: import('@playwright/test').Page, api: Awaite
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: spec.block, exact: true }) });
   await response.getByRole('button', { name: spec.recordButton, exact: true }).click();
   await expect(response.getByText(spec.detailText)).toBeVisible();
+  if (spec.disclosure) await response.getByText('Correct a detail').click();
   await response.getByRole('button', { name: spec.actionLabel }).click();
 
   await expect.poll(() => api.executionBodies.some((body) => body.message === spec.actionMessage
@@ -270,10 +273,11 @@ async function correctionFlow(page: import('@playwright/test').Page, api: Awaite
   await expect(page.getByText('No shared-home record has changed yet', { exact: false })).toBeVisible();
 
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await page.getByLabel(spec.fieldLabel).fill(spec.newValue);
+  if (spec.select) await page.getByLabel(spec.fieldLabel).selectOption(spec.newValue);
+  else await page.getByLabel(spec.fieldLabel).fill(spec.newValue);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect.poll(() => api.correctionEditBodies).toEqual([{ confirmationVersion: 1, edits: { value: spec.newValue } }]);
-  await expect(page.getByRole('definition').filter({ hasText: spec.newValue })).toBeVisible();
+  await expect(page.getByRole('definition').filter({ hasText: spec.shownValue ?? spec.newValue })).toBeVisible();
   await page.getByLabel(spec.consentText).check();
   await page.getByRole('button', { name: spec.confirmLabel, exact: true }).click();
 
@@ -286,8 +290,28 @@ test('a contributor corrects an inventory item install date inline through the D
   const api = await installAskApi(page);
   await correctionFlow(page, api, {
     block: 'Systems and inventory', recordButton: 'Water heater', detailText: 'Tank-style, in basement utility closet.', actionLabel: /^Correct install date/,
-    actionMessage: 'Correct the install date of this inventory item.', entityType: 'INVENTORY_ITEM', entityId: 'item-property-summary',
+    actionMessage: 'Correct the install date of this inventory item.', entityType: 'INVENTORY_ITEM', entityId: 'item-property-summary', disclosure: true,
     confirmationTitle: 'Correct installed date for Water heater?', fieldLabel: 'Corrected installed date', newValue: '2021-03-15', confirmLabel: 'Save installed date',
+    consentText: /I authorize this correction to the shared home inventory record/, receiptTitle: 'Inventory record updated',
+  });
+});
+
+test('a contributor corrects an inventory item condition inline through a dropdown', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Systems and inventory', recordButton: 'Water heater', detailText: 'Tank-style, in basement utility closet.', actionLabel: /^Correct condition/,
+    actionMessage: 'Correct the condition of this inventory item.', entityType: 'INVENTORY_ITEM', entityId: 'item-property-summary', disclosure: true, select: true,
+    confirmationTitle: 'Correct condition for Water heater?', fieldLabel: 'Corrected condition', newValue: 'FAIR', shownValue: 'Fair', confirmLabel: 'Save condition',
+    consentText: /I authorize this correction to the shared home inventory record/, receiptTitle: 'Inventory record updated',
+  });
+});
+
+test('a contributor corrects an inventory item purchase cost inline through the money field', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Systems and inventory', recordButton: 'Water heater', detailText: 'Tank-style, in basement utility closet.', actionLabel: /^Correct purchase cost/,
+    actionMessage: 'Correct the purchase cost of this inventory item.', entityType: 'INVENTORY_ITEM', entityId: 'item-property-summary', disclosure: true,
+    confirmationTitle: 'Correct purchase cost for Water heater?', fieldLabel: 'Corrected purchase cost', newValue: '925.50', shownValue: '$925.50', confirmLabel: 'Save purchase cost',
     consentText: /I authorize this correction to the shared home inventory record/, receiptTitle: 'Inventory record updated',
   });
 });

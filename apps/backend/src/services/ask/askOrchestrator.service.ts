@@ -145,7 +145,8 @@ import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.servic
 import { getOrCreateQuoteComparisonWorkspace, getQuoteComparisonWorkspace, getWorkspaceComparability } from '../quoteComparison.service';
 import { upsertNotificationPreference } from '../notificationPreference.service';
 import { updateInsurancePolicy, updateWarranty } from '../home-management.service';
-import { markCoverageAnalysisStale } from '../coverageAnalysis.service';
+import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../coverageAnalysis.service';
+import { markReplaceRepairStale } from '../replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../riskPremiumOptimizer.service';
 import { markDoNothingRunsStale } from '../doNothingSimulator.service';
 import { ReplaceRepairService } from '../replaceRepairAnalysis.service';
@@ -8048,30 +8049,92 @@ registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRent
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 write slice: date corrections on an
-// exact InventoryItem, written through the canonical inventoryService
-// .updateItem. The three fields are deliberately the only ones offered --
-// each maps to one DATE editable field on the confirmation card, which is
-// the one editable-field type the confirmation contract supports today.
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 write slice: corrections on an exact
+// InventoryItem, written through the canonical inventoryService.updateItem.
+// Each field maps to one editable field on the confirmation card (DATE, SELECT,
+// TEXT, TEXTAREA or MONEY). Only these fields are offered; clearing a value is
+// not (a blank is rejected), and room, category and links stay on the
+// traditional Inventory page.
+type InventoryFieldKind = 'DATE' | 'TEXT' | 'TEXTAREA' | 'SELECT' | 'MONEY';
+const INVENTORY_CONDITION_OPTIONS = [
+  { label: 'New', value: 'NEW' }, { label: 'Good', value: 'GOOD' }, { label: 'Fair', value: 'FAIR' },
+  { label: 'Poor', value: 'POOR' }, { label: 'Unknown', value: 'UNKNOWN' },
+];
 const INVENTORY_CORRECTION_FIELDS = {
-  installedOn: { label: 'installed date', action: 'Correct install date' },
-  purchasedOn: { label: 'purchase date', action: 'Correct purchase date' },
-  lastServicedOn: { label: 'last serviced date', action: 'Correct last serviced date' },
+  installedOn: { label: 'installed date', action: 'Correct install date', message: 'Correct the install date of this inventory item.', kind: 'DATE' as InventoryFieldKind, max: 0 },
+  purchasedOn: { label: 'purchase date', action: 'Correct purchase date', message: 'Correct the purchase date of this inventory item.', kind: 'DATE' as InventoryFieldKind, max: 0 },
+  lastServicedOn: { label: 'last serviced date', action: 'Correct last serviced date', message: 'Correct the last serviced date of this inventory item.', kind: 'DATE' as InventoryFieldKind, max: 0 },
+  condition: { label: 'condition', action: 'Correct condition', message: 'Correct the condition of this inventory item.', kind: 'SELECT' as InventoryFieldKind, max: 0 },
+  brand: { label: 'brand', action: 'Correct brand', message: 'Correct the brand of this inventory item.', kind: 'TEXT' as InventoryFieldKind, max: 80 },
+  model: { label: 'model', action: 'Correct model', message: 'Correct the model of this inventory item.', kind: 'TEXT' as InventoryFieldKind, max: 80 },
+  serialNo: { label: 'serial number', action: 'Correct serial number', message: 'Correct the serial number of this inventory item.', kind: 'TEXT' as InventoryFieldKind, max: 120 },
+  purchaseCostCents: { label: 'purchase cost', action: 'Correct purchase cost', message: 'Correct the purchase cost of this inventory item.', kind: 'MONEY' as InventoryFieldKind, max: 0 },
+  replacementCostCents: { label: 'replacement cost', action: 'Correct replacement cost', message: 'Correct the replacement cost of this inventory item.', kind: 'MONEY' as InventoryFieldKind, max: 0 },
+  notes: { label: 'notes', action: 'Correct notes', message: 'Correct the notes of this inventory item.', kind: 'TEXTAREA' as InventoryFieldKind, max: 2000 },
 } as const;
 type InventoryCorrectionField = keyof typeof INVENTORY_CORRECTION_FIELDS;
+const MAX_INVENTORY_MONEY_DOLLARS = 10_000_000;
 
 const InventoryItemCorrectionInputSchema = z.object({
   itemId: z.string().trim().min(1).max(160),
-  field: z.enum(['installedOn', 'purchasedOn', 'lastServicedOn']),
-  // null until the homeowner supplies (or edits in) a date; confirm rejects null.
-  value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  field: z.enum(['installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model', 'serialNo', 'purchaseCostCents', 'replacementCostCents', 'notes']),
+  // null until the homeowner supplies (or edits in) a value; confirm rejects null.
+  value: z.string().max(2000).nullable(),
 }).strict();
 
+// Cost fields are checked before the date fields: "purchase cost" and "purchase date" share a word.
 function inventoryCorrectionField(message: string): InventoryCorrectionField | null {
+  if (/\breplacement\b.{0,12}\b(?:cost|price|value)\b/i.test(message)) return 'replacementCostCents';
+  if (/\b(?:purchase[d]?|bought)\b.{0,12}\b(?:cost|price|amount)\b/i.test(message)) return 'purchaseCostCents';
   if (/\binstall(?:ed|ation)?\b/i.test(message)) return 'installedOn';
   if (/\bpurchase[d]?\b/i.test(message)) return 'purchasedOn';
   if (/\b(?:last[- ]serviced|service[d]?)\b/i.test(message)) return 'lastServicedOn';
+  if (/\bcondition\b/i.test(message)) return 'condition';
+  if (/\b(?:brand|manufacturer)\b/i.test(message)) return 'brand';
+  if (/\bserial\b/i.test(message)) return 'serialNo';
+  if (/\bmodel\b/i.test(message)) return 'model';
+  if (/\bnotes?\b/i.test(message)) return 'notes';
   return null;
+}
+
+// The value currently recorded for a field, in the same canonical string form the confirmation card edits.
+function inventoryFieldCurrent(item: object, field: InventoryCorrectionField): string | null {
+  const raw = (item as Record<string, unknown>)[field];
+  const kind = INVENTORY_CORRECTION_FIELDS[field].kind;
+  if (kind === 'DATE') return inventoryDateValue(raw as Date | string | null | undefined);
+  if (kind === 'MONEY') return typeof raw === 'number' ? (raw / 100).toFixed(2) : null;
+  return typeof raw === 'string' && raw.trim() ? raw : null;
+}
+
+// Returns a homeowner-facing reason the value is unusable, else null.
+function inventoryFieldValueError(field: InventoryCorrectionField, value: unknown): string | null {
+  const meta = INVENTORY_CORRECTION_FIELDS[field];
+  if (typeof value !== 'string' || !value.trim()) return `Enter the corrected ${meta.label} before confirming.`;
+  const text = value.trim();
+  if (meta.kind === 'DATE') return isValidDateEditInput(text) ? null : 'Enter a valid date.';
+  if (meta.kind === 'SELECT') return INVENTORY_CONDITION_OPTIONS.some((option) => option.value === text) ? null : 'Choose one of the listed conditions.';
+  if (meta.kind === 'MONEY') {
+    if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(text)) return 'Enter an amount in dollars, such as 850 or 850.50.';
+    return Number(text) > MAX_INVENTORY_MONEY_DOLLARS ? 'Enter an amount of $10,000,000 or less.' : null;
+  }
+  return text.length <= meta.max ? null : `Use at most ${meta.max} characters.`;
+}
+
+function inventoryFieldNormalized(field: InventoryCorrectionField, value: string): string {
+  const text = value.trim();
+  return INVENTORY_CORRECTION_FIELDS[field].kind === 'MONEY' ? Number(text).toFixed(2) : text;
+}
+
+function inventoryFieldPatch(field: InventoryCorrectionField, normalized: string): Record<string, unknown> {
+  return INVENTORY_CORRECTION_FIELDS[field].kind === 'MONEY' ? { [field]: Math.round(Number(normalized) * 100) } : { [field]: normalized };
+}
+
+function inventoryFieldDisplay(field: InventoryCorrectionField, value: string | null): string {
+  if (!value) return 'Not recorded';
+  const kind = INVENTORY_CORRECTION_FIELDS[field].kind;
+  if (kind === 'MONEY') return `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (kind === 'SELECT') return INVENTORY_CONDITION_OPTIONS.find((option) => option.value === value)?.label ?? value;
+  return value;
 }
 
 function inventoryDateValue(value: Date | string | null | undefined): string | null {
@@ -8088,13 +8151,8 @@ function inventoryItemContextVersion(item: { id: string; updatedAt: Date }): str
 // only -- a VIEWER never receives a control implying the write will be accepted.
 function inventoryCorrectionItemActions(canManage: boolean) {
   if (!canManage) return undefined;
-  const messages: Record<InventoryCorrectionField, string> = {
-    installedOn: 'Correct the install date of this inventory item.',
-    purchasedOn: 'Correct the purchase date of this inventory item.',
-    lastServicedOn: 'Correct the last serviced date of this inventory item.',
-  };
   return (Object.keys(INVENTORY_CORRECTION_FIELDS) as InventoryCorrectionField[]).map((field) => ({
-    id: `correct-${field}`, label: INVENTORY_CORRECTION_FIELDS[field].action, message: messages[field],
+    id: `correct-${field}`, label: INVENTORY_CORRECTION_FIELDS[field].action, message: INVENTORY_CORRECTION_FIELDS[field].message,
     style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
   }));
 }
@@ -8103,9 +8161,12 @@ function inventoryCorrectionConfirmation(item: { id: string; name: string }, fie
   const meta = INVENTORY_CORRECTION_FIELDS[field];
   return {
     confirmationId: `inventory-correct-${item.id}-${version}`, version, title: `Correct ${meta.label} for ${item.name}?`,
-    description: 'This writes through the canonical inventory service, the same record the Inventory page edits.',
-    fields: [{ label: 'Item', value: item.name }, { label: 'Field', value: meta.label }, { label: 'Current value', value: current ?? 'Not recorded' }],
-    editableFields: [{ key: 'value', label: `Corrected ${meta.label}`, type: 'DATE' as const, value: proposed ?? '' }],
+    description: 'This writes through the canonical inventory service, the same record the Inventory page edits, and refreshes dependent coverage and replace-or-repair analysis.',
+    fields: [{ label: 'Item', value: item.name }, { label: 'Field', value: meta.label }, { label: 'Current value', value: inventoryFieldDisplay(field, current) }],
+    editableFields: [{
+      key: 'value', label: `Corrected ${meta.label}`, type: meta.kind, value: proposed ?? '',
+      ...(meta.kind === 'SELECT' ? { options: INVENTORY_CONDITION_OPTIONS } : {}),
+    }],
     confirmLabel: `Save ${meta.label}`, consentText: 'I authorize this correction to the shared home inventory record.', expiresAt: expiresAt.toISOString(),
   };
 }
@@ -8135,13 +8196,13 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
   if (!field) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'INVENTORY_CORRECTION_FIELD_REQUIRED',
-      ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', `Which date should change for ${selected.name}? Ask can correct the installed, purchased, or last serviced date.`),
-      blocks: [{ type: 'SUMMARY', id: 'inventory-correct-field', title: `Which date should change for ${selected.name}?`, body: 'Say install date, purchase date, or last serviced date. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', `Which detail should change for ${selected.name}? Ask can correct its dates, condition, brand, model, serial number, costs, or notes.`),
+      blocks: [{ type: 'SUMMARY', id: 'inventory-correct-field', title: `Which detail should change for ${selected.name}?`, body: 'Say which one: install date, purchase date, last serviced date, condition, brand, model, serial number, purchase cost, replacement cost, or notes. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [`Correct the install date of ${selected.name}`, `Correct the purchase date of ${selected.name}`],
     };
   }
-  const current = inventoryDateValue(selected[field]);
-  const stated = message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null;
+  const current = inventoryFieldCurrent(selected, field);
+  const stated = INVENTORY_CORRECTION_FIELDS[field].kind === 'DATE' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
   const proposed = stated && isValidDateEditInput(stated) ? stated : current;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const contextVersion = inventoryItemContextVersion(selected);
@@ -8152,7 +8213,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
       inventoryCorrection: input, inventoryCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'inventory-correct-review', title: `Review this ${INVENTORY_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Enter the corrected date, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'inventory-correct-review', title: `Review this ${INVENTORY_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Enter the corrected value, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }] }],
     confirmation: inventoryCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt),
     suggestions: [],
   };
@@ -12737,7 +12798,9 @@ async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promi
   const candidate = InventoryItemCorrectionInputSchema.safeParse(parameters.inventoryCorrection);
   if (!candidate.success) throw Object.assign(new Error('The inventory correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const { itemId, field, value } = candidate.data;
-  if (!value || !isValidDateEditInput(value)) throw Object.assign(new Error('Enter the corrected date before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const invalid = inventoryFieldValueError(field, value);
+  if (invalid || typeof value !== 'string') throw Object.assign(new Error(invalid ?? 'Enter the corrected value before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const normalized = inventoryFieldNormalized(field, value);
   const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId: execution.propertyId } });
   if (!item) throw Object.assign(new Error('This inventory item is no longer available. It may have been deleted.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   // A recovery retry of this same execution (receipt reclaimed after the
@@ -12745,19 +12808,30 @@ async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promi
   // applied rather than misreporting the execution's own success as a
   // concurrent change. updateItem is a plain overwrite, so this is also the
   // only replay guard the write needs.
-  const alreadyApplied = inventoryDateValue(item[field]) === value;
+  const previous = inventoryFieldCurrent(item, field);
+  const alreadyApplied = previous === normalized;
   if (!alreadyApplied && parameters.inventoryCorrectionContextVersion !== inventoryItemContextVersion(item)) {
     throw Object.assign(new Error('This inventory item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   }
-  if (!alreadyApplied) await inventoryService.updateItem(execution.propertyId!, item.id, { [field]: value });
+  if (!alreadyApplied) {
+    await inventoryService.updateItem(execution.propertyId!, item.id, inventoryFieldPatch(field, normalized));
+    // The traditional item PATCH controller (not the service) marks these five analyses stale; repeat them so an
+    // Ask correction has the same downstream effect (a changed date, cost or condition alters replace-or-repair,
+    // coverage and risk analyses).
+    await markCoverageAnalysisStale(execution.propertyId!);
+    await markItemCoverageAnalysesStale(execution.propertyId!, item.id);
+    await markReplaceRepairStale(execution.propertyId!, item.id);
+    await markRiskPremiumOptimizerStale(execution.propertyId!);
+    await markDoNothingRunsStale(execution.propertyId!);
+  }
   const updated = await prisma.inventoryItem.findUniqueOrThrow({ where: { id: item.id } });
   const meta = INVENTORY_CORRECTION_FIELDS[field];
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'INVENTORY_ITEM_CORRECTED', contextVersion: inventoryItemContextVersion(updated),
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `inventory-corrected-${item.id}`, title: 'Inventory record updated', status: 'COMPLETED',
-      description: 'The canonical inventory record was updated.',
-      details: [{ label: 'Item', value: item.name }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: inventoryDateValue(item[field]) === value ? 'Already corrected' : (inventoryDateValue(item[field]) ?? 'Not recorded') }, { label: 'New value', value }],
+      description: 'The canonical inventory record was updated and dependent analyses were marked for refresh.',
+      details: [{ label: 'Item', value: item.name }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : inventoryFieldDisplay(field, previous) }, { label: 'New value', value: inventoryFieldDisplay(field, normalized) }],
       actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/inventory?tab=items`, style: 'PRIMARY' }],
     }],
     suggestions: ['Show my home inventory'],
@@ -13961,15 +14035,16 @@ async function editInventoryItemCorrectConfirmation(
 ): Promise<AskExecutionResponse> {
   const existing = InventoryItemCorrectionInputSchema.safeParse(parameters.inventoryCorrection);
   if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
-  const valueEdit = input.edits.value;
-  if (!isValidDateEditInput(valueEdit)) throw Object.assign(new Error('Enter a valid date.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const invalidEdit = inventoryFieldValueError(existing.data.field, input.edits.value);
+  if (invalidEdit) throw Object.assign(new Error(invalidEdit), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const valueEdit = inventoryFieldNormalized(existing.data.field, input.edits.value);
   const item = await prisma.inventoryItem.findFirst({ where: { id: existing.data.itemId, propertyId: execution.propertyId! } });
   if (!item) throw Object.assign(new Error('The selected inventory item is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   const updatedInput = InventoryItemCorrectionInputSchema.parse({ ...existing.data, value: valueEdit });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const newConfirmation = inventoryCorrectionConfirmation(item, existing.data.field, inventoryDateValue(item[existing.data.field]), valueEdit, nextVersion, expiresAt);
-  const reviewBlock = { type: 'SUMMARY' as const, id: 'inventory-correct-review', title: `Review this ${INVENTORY_CORRECTION_FIELDS[existing.data.field].label} correction`, body: 'No shared-home record has changed yet. Enter the corrected date, then confirm.', tone: 'DEFAULT' as const, actions: [] };
+  const newConfirmation = inventoryCorrectionConfirmation(item, existing.data.field, inventoryFieldCurrent(item, existing.data.field), valueEdit, nextVersion, expiresAt);
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'inventory-correct-review', title: `Review this ${INVENTORY_CORRECTION_FIELDS[existing.data.field].label} correction`, body: 'No shared-home record has changed yet. Enter the corrected value, then confirm.', tone: 'DEFAULT' as const, actions: [] };
   // Same version-AND-status guarded optimistic write as the maintenance edit
   // path: a claimed/completed/expired execution matches nothing.
   const editWrite = await prisma.askExecution.updateMany({

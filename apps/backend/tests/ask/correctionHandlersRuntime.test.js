@@ -20,6 +20,7 @@ const homeManagement = require('../../src/services/home-management.service.ts');
 const coverageAnalysis = require('../../src/services/coverageAnalysis.service.ts');
 const riskPremium = require('../../src/services/riskPremiumOptimizer.service.ts');
 const doNothing = require('../../src/services/doNothingSimulator.service.ts');
+const replaceRepair = require('../../src/services/replaceRepairAnalysis.service.ts');
 const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const captureWarrantyModule = require('../../src/modules/propertyContext/application/captureWarranty.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
@@ -34,6 +35,8 @@ const originals = {
   markCoverage: coverageAnalysis.markCoverageAnalysisStale,
   markRisk: riskPremium.markRiskPremiumOptimizerStale,
   markDoNothing: doNothing.markDoNothingRunsStale,
+  markItemCoverage: coverageAnalysis.markItemCoverageAnalysesStale,
+  markReplaceRepair: replaceRepair.markReplaceRepairStale,
   resolveAccess: propertyAccess.resolvePropertyAccess,
   captureWarranty: captureWarrantyModule.captureWarranty,
 };
@@ -65,6 +68,8 @@ function install() {
   coverageAnalysis.markCoverageAnalysisStale = async () => { calls.markers.push('coverage'); };
   riskPremium.markRiskPremiumOptimizerStale = async () => { calls.markers.push('risk'); };
   doNothing.markDoNothingRunsStale = async () => { calls.markers.push('doNothing'); };
+  coverageAnalysis.markItemCoverageAnalysesStale = async () => { calls.markers.push('itemCoverage'); };
+  replaceRepair.markReplaceRepairStale = async () => { calls.markers.push('replaceRepair'); };
   propertyAccess.resolvePropertyAccess = async () => ({ role: accessRole, userId: 'u1', propertyId: 'p1' });
   captureWarrantyModule.captureWarranty = async (...args) => { calls.captureWarranty.push(args); return { id: 'warranty-new' }; };
   // Reconciliation: no sibling/source executions to refresh.
@@ -80,6 +85,8 @@ function restore() {
   coverageAnalysis.markCoverageAnalysisStale = originals.markCoverage;
   riskPremium.markRiskPremiumOptimizerStale = originals.markRisk;
   doNothing.markDoNothingRunsStale = originals.markDoNothing;
+  coverageAnalysis.markItemCoverageAnalysesStale = originals.markItemCoverage;
+  replaceRepair.markReplaceRepairStale = originals.markReplaceRepair;
   propertyAccess.resolvePropertyAccess = originals.resolveAccess;
   captureWarrantyModule.captureWarranty = originals.captureWarranty;
 }
@@ -196,8 +203,12 @@ test('WARRANTY_CORRECT confirm treats an already-applied value as done without a
 // ───────────────────────────── INVENTORY_ITEM_CORRECT ─────────────────────────────
 const itemUpdatedAt = new Date('2026-09-03T00:00:00.000Z');
 const itemVersion = sha(`item-1:${itemUpdatedAt.toISOString()}`);
-function itemModel({ installedOn = new Date('2022-01-15T00:00:00.000Z'), missing = false } = {}) {
-  const row = { id: 'item-1', propertyId: 'p1', name: 'Water heater', installedOn, purchasedOn: null, lastServicedOn: null, updatedAt: itemUpdatedAt };
+function itemModel({ installedOn = new Date('2022-01-15T00:00:00.000Z'), missing = false, ...overrides } = {}) {
+  const row = {
+    id: 'item-1', propertyId: 'p1', name: 'Water heater', installedOn, purchasedOn: null, lastServicedOn: null, updatedAt: itemUpdatedAt,
+    condition: 'GOOD', brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', purchaseCostCents: 85000, replacementCostCents: null, notes: 'Basement utility closet.',
+    ...overrides,
+  };
   models.inventoryItem = { findFirst: async () => (missing ? null : row), findUniqueOrThrow: async () => row };
 }
 const itemParams = (value, version = itemVersion, field = 'installedOn') => ({ inventoryCorrection: { itemId: 'item-1', field, value }, inventoryCorrectionContextVersion: version, confirmationVersion: 2 });
@@ -352,4 +363,130 @@ test('Add a warranty: confirming the form-built parameters writes through captur
   );
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.reasonCode, 'WARRANTY_CAPTURED');
+});
+
+// ── Inventory: every correctable field kind, and the controller-level side effects ──
+const ALL_INVENTORY_MARKERS = ['coverage', 'doNothing', 'itemCoverage', 'replaceRepair', 'risk'];
+
+test('INVENTORY_ITEM_CORRECT confirm repeats the traditional item PATCH controller\'s five stale-analysis markers after a write, and none when nothing is written', async () => {
+  itemModel();
+  await invoke('INVENTORY_ITEM_CORRECT', itemParams('2021-03-15'));
+  assert.deepEqual([...calls.markers].sort(), ALL_INVENTORY_MARKERS);
+  install(); itemModel({ installedOn: new Date('2021-03-15T00:00:00.000Z') });
+  await invoke('INVENTORY_ITEM_CORRECT', itemParams('2021-03-15', 'version-from-before'));
+  assert.equal(calls.markers.length, 0);
+});
+
+test('INVENTORY_ITEM_CORRECT writes each field kind as the right narrowed patch', async () => {
+  const cases = [
+    ['condition', 'FAIR', { condition: 'FAIR' }],
+    ['brand', '  Bradford White ', { brand: 'Bradford White' }],
+    ['model', 'RE2H50', { model: 'RE2H50' }],
+    ['serialNo', 'SN-2024-77', { serialNo: 'SN-2024-77' }],
+    ['purchaseCostCents', '900', { purchaseCostCents: 90000 }],
+    ['purchaseCostCents', '850.5', { purchaseCostCents: 85050 }],
+    ['replacementCostCents', '1200.75', { replacementCostCents: 120075 }],
+    ['notes', 'Replaced anode rod in 2024.\nFlushed twice.', { notes: 'Replaced anode rod in 2024.\nFlushed twice.' }],
+  ];
+  for (const [field, value, patch] of cases) {
+    install(); itemModel();
+    await invoke('INVENTORY_ITEM_CORRECT', itemParams(value, itemVersion, field));
+    assert.deepEqual(calls.updateItem, [['p1', 'item-1', patch]], `${field}=${value}`);
+  }
+});
+
+test('INVENTORY_ITEM_CORRECT rejects invalid values for each field kind without writing', async () => {
+  const invalid = [
+    ['condition', 'EXCELLENT'], ['condition', ''], ['brand', '   '], ['brand', 'x'.repeat(81)], ['serialNo', 'y'.repeat(121)],
+    ['purchaseCostCents', 'abc'], ['purchaseCostCents', '12.345'], ['purchaseCostCents', '-5'], ['purchaseCostCents', '10000000.01'], ['replacementCostCents', '$500'],
+    ['notes', ''], ['installedOn', '2024-02-31x'],
+  ];
+  for (const [field, value] of invalid) {
+    install(); itemModel();
+    assert.equal(await codeOf(invoke('INVENTORY_ITEM_CORRECT', itemParams(value, itemVersion, field))), 'ASK_INVALID_CONFIRMATION_EDIT', `${field}=${JSON.stringify(value).slice(0, 30)}`);
+    assert.equal(calls.updateItem.length, 0);
+  }
+});
+
+test('INVENTORY_ITEM_CORRECT: an over-long notes value is stopped by the parameter schema (the edit handler rejects it earlier in normal use) and never written', async () => {
+  itemModel();
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CORRECT', itemParams('n'.repeat(2001), itemVersion, 'notes'))), 'ASK_CONFIRMATION_NOT_ACTIVE');
+  assert.equal(calls.updateItem.length, 0);
+});
+
+test('INVENTORY_ITEM_CORRECT treats an already-applied value of any kind as done, comparing in canonical form (850 equals 850.00)', async () => {
+  for (const [field, value, row] of [['condition', 'GOOD', {}], ['purchaseCostCents', '850', {}], ['brand', 'Rheem', {}], ['notes', 'Basement utility closet.', {}]]) {
+    install(); itemModel(row);
+    const { result } = await invoke('INVENTORY_ITEM_CORRECT', itemParams(value, 'version-from-before', field));
+    assert.equal(result.status, 'COMPLETED', field);
+    assert.equal(calls.updateItem.length, 0, field);
+    assert.equal(calls.markers.length, 0, field);
+  }
+});
+
+test('INVENTORY_ITEM_CORRECT receipt shows money and condition in readable form', async () => {
+  itemModel();
+  const { result } = await invoke('INVENTORY_ITEM_CORRECT', itemParams('1200', itemVersion, 'replacementCostCents'));
+  const details = Object.fromEntries(result.blocks[0].details.map((detail) => [detail.label, detail.value]));
+  assert.equal(details['New value'], '$1,200.00');
+  assert.equal(details['Previous value'], 'Not recorded');
+  install(); itemModel();
+  const condition = await invoke('INVENTORY_ITEM_CORRECT', itemParams('POOR', itemVersion, 'condition'));
+  const cd = Object.fromEntries(condition.result.blocks[0].details.map((detail) => [detail.label, detail.value]));
+  assert.deepEqual([cd['Previous value'], cd['New value']], ['Good', 'Poor']);
+});
+
+// ── Inventory propose: each field kind builds the right editable field on the confirmation card ──
+const proposeItem = { id: 'item-1', name: 'Water heater', category: 'PLUMBING', condition: 'GOOD', room: null, installedOn: new Date('2022-01-15T00:00:00.000Z'), purchasedOn: null, lastServicedOn: null, brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', purchaseCostCents: 85000, replacementCostCents: null, notes: 'Basement utility closet.', updatedAt: itemUpdatedAt };
+const proposeInventory = async (message) => {
+  const original = InventoryService.prototype.listItems;
+  InventoryService.prototype.listItems = async () => [proposeItem];
+  try {
+    return await capabilityInvoke('INVENTORY_ITEM_CORRECT', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ITEM', entityId: 'item-1', operationId: 'INVENTORY_ITEM_CORRECT' } });
+  } finally { InventoryService.prototype.listItems = original; }
+};
+
+test('inventory propose: each field kind builds the matching editable field, current value and proposal, and writes nothing', async () => {
+  const cases = [
+    ['Correct the install date of this inventory item.', 'DATE', '2022-01-15', undefined, '2022-01-15'],
+    ['Correct the condition of this inventory item.', 'SELECT', 'GOOD', ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'], 'Good'],
+    ['Correct the brand of this inventory item.', 'TEXT', 'Rheem', undefined, 'Rheem'],
+    ['Correct the model of this inventory item.', 'TEXT', 'XE50', undefined, 'XE50'],
+    ['Correct the serial number of this inventory item.', 'TEXT', 'SN-1', undefined, 'SN-1'],
+    ['Correct the purchase cost of this inventory item.', 'MONEY', '850.00', undefined, '$850.00'],
+    ['Correct the replacement cost of this inventory item.', 'MONEY', '', undefined, 'Not recorded'],
+    ['Correct the notes of this inventory item.', 'TEXTAREA', 'Basement utility closet.', undefined, 'Basement utility closet.'],
+  ];
+  for (const [message, type, value, optionValues, currentShown] of cases) {
+    const result = await proposeInventory(message);
+    assert.equal(result.status, 'NEEDS_CONFIRMATION', message);
+    const [field] = result.confirmation.editableFields;
+    assert.equal(field.type, type, message);
+    assert.equal(field.value, value, message);
+    assert.deepEqual(field.options?.map((option) => option.value), optionValues, message);
+    assert.equal(result.confirmation.fields.find((entry) => entry.label === 'Current value').value, currentShown, message);
+    assert.equal(calls.updateItem.length, 0, 'proposing writes nothing');
+  }
+});
+
+test('inventory propose: an unspecified field asks which detail to correct instead of guessing', async () => {
+  const result = await proposeInventory('Correct this inventory item.');
+  assert.equal(result.status, 'NEEDS_CLARIFICATION');
+  assert.equal(result.reasonCode, 'INVENTORY_CORRECTION_FIELD_REQUIRED');
+  assert.equal(result.confirmation, undefined);
+});
+
+test('inventory item actions: contributors get one action per correctable field, all pinned to the operation; the row schema accepts them', () => {
+  const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  assert.ok(AskPresentationBlockSchema, 'the block schema export must exist for this test to mean anything');
+  const source = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  assert.match(source, /function inventoryCorrectionItemActions\(canManage: boolean\) \{\s*if \(!canManage\) return undefined;\s*return \(Object\.keys\(INVENTORY_CORRECTION_FIELDS\)/);
+  // ten actions on one row must validate (the row schema used to cap actions at three)
+  const row = { id: 'item-1', title: 'Water heater', meta: [], actions: Array.from({ length: 10 }, (_, index) => ({ id: `a${index}`, label: `A${index}`, message: 'Correct the condition of this inventory item.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' })) };
+  const block = { type: 'GROUPED_LIST', id: 'inventory-results', title: 'Inventory', filters: [], sections: [{ id: 's', title: 's', count: 1, items: [row] }], actions: [] };
+  const parsed = AskPresentationBlockSchema.safeParse(block);
+  assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues ?? []).slice(0, 200));
+  // ...but the cap still holds: thirteen actions are refused
+  const tooMany = { ...block, sections: [{ ...block.sections[0], items: [{ ...row, actions: Array.from({ length: 13 }, (_, index) => ({ ...row.actions[0], id: `b${index}` })) }] }] };
+  assert.equal(AskPresentationBlockSchema.safeParse(tooMany).success, false);
 });

@@ -127,11 +127,18 @@ function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disable
           <div><dt className="text-xs text-slate-500">Replacement cost</dt><dd className="mt-0.5 font-medium text-slate-900">{formatCents(item.replacementCostCents, item.currency)}</dd></div>
           <div><dt className="text-xs text-slate-500">Verification</dt><dd className="mt-0.5 font-medium text-slate-900">{item.isVerified ? 'Verified record' : 'Not verified'}</dd></div>
         </dl>
-        {onAction && (fallbackItem.actions?.length ?? 0) > 0 && <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={`Corrections for ${item.name}`}>
-          {fallbackItem.actions!.map((action) => <button key={action.id} type="button" disabled={disabled}
+        {onAction && (fallbackItem.actions?.length ?? 0) > 0 && (() => {
+          const buttons = fallbackItem.actions!.map((action) => <button key={action.id} type="button" disabled={disabled}
             className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
-            onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}<span className="sr-only"> for {item.name}</span></button>)}
-        </div>}
+            onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}<span className="sr-only"> for {item.name}</span></button>);
+          // A few corrections sit inline; a longer list is folded behind one disclosure so the detail stays readable.
+          return buttons.length <= 3
+            ? <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={`Corrections for ${item.name}`}>{buttons}</div>
+            : <details className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+              <summary className="min-h-8 cursor-pointer text-sm font-semibold text-teal-800">Correct a detail</summary>
+              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={`Corrections for ${item.name}`}>{buttons}</div>
+            </details>;
+        })()}
         <p className="mt-3 text-xs text-slate-500">{item.documents?.length ?? 0} document{(item.documents?.length ?? 0) === 1 ? '' : 's'} · {item.warranty ? 'Warranty on file' : 'No warranty on file'} · Current canonical record · updated {formatDate(item.updatedAt)}</p>
       </>}
     </aside>

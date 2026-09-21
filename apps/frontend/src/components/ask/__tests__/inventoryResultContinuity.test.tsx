@@ -158,3 +158,46 @@ test('inventory detail renders no correction controls when the item declares no 
   await waitFor(() => expect(screen.getByText('Rheem')).toBeInTheDocument());
   expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
 });
+
+test('a long list of corrections is folded behind one disclosure and each button still dispatches its exact action', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  jest.spyOn(api, 'getInventoryItem').mockResolvedValue({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
+  const labels = ['install date', 'purchase date', 'last serviced date', 'condition', 'brand', 'model', 'serial number', 'purchase cost', 'replacement cost', 'notes'];
+  const actions = labels.map((label, index) => ({
+    id: `correct-${index}`, label: `Correct ${label}`, message: `Correct the ${label} of this inventory item.`,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+  }));
+  const withMany: typeof block = { ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], actions }, ...block.sections[0].items.slice(1)] }] };
+  const onAction = jest.fn();
+  const response = { ...execution(), blocks: [withMany] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><InventoryResultList block={withMany} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
+  const summary = await screen.findByText('Correct a detail');
+  expect(summary.tagName).toBe('SUMMARY');
+  expect(screen.getAllByRole('button', { name: /^Correct / })).toHaveLength(10);
+  fireEvent.click(screen.getByRole('button', { name: /^Correct condition/ }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Correct the condition of this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
+});
+
+test('three or fewer corrections stay inline with no disclosure', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  jest.spyOn(api, 'getInventoryItem').mockResolvedValue({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
+  const actions = ['condition', 'brand', 'notes'].map((label, index) => ({
+    id: `c${index}`, label: `Correct ${label}`, message: `Correct the ${label} of this inventory item.`,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+  }));
+  const few: typeof block = { ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], actions }, ...block.sections[0].items.slice(1)] }] };
+  const response = { ...execution(), blocks: [few] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><InventoryResultList block={few} propertyId="home" onAction={() => {}} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
+  await screen.findByRole('group', { name: /Corrections for/ });
+  expect(screen.queryByText('Correct a detail')).not.toBeInTheDocument();
+});

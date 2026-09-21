@@ -541,7 +541,16 @@ const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\
 // inventory/appliance/item noun -- deliberately narrower than
 // maintenanceUpdatePattern (which owns bare "update ... service"), and
 // checked before it below.
-const inventoryItemCorrectPattern = /\b(?:correct|fix|change|update|edit|set)\b.{0,40}\b(?:install(?:ed|ation)?|purchase[d]?|last[- ]serviced|service[d]?)\s+date\b.{0,60}\b(?:inventory|item|appliance|system)\b|\b(?:inventory|item|appliance|system)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:install(?:ed|ation)?|purchase[d]?|last[- ]serviced|service[d]?)\s+date\b/i;
+const inventoryItemCorrectPattern = new RegExp(
+  // The three date fields keep their original nouns (inventory/item/appliance/system).
+  String.raw`\b(?:correct|fix|change|update|edit|set)\b.{0,40}\b(?:install(?:ed|ation)?|purchase[d]?|last[- ]serviced|service[d]?)\s+date\b.{0,60}\b(?:inventory|item|appliance|system)\b`
+  + String.raw`|\b(?:inventory|item|appliance|system)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:install(?:ed|ation)?|purchase[d]?|last[- ]serviced|service[d]?)\s+date\b`
+  // The other detail fields require "inventory" or "appliance", not a bare "item"/"system": "edit the notes on this
+  // checklist item" must not be captured.
+  + String.raw`|\b(?:correct|fix|change|update|edit|set)\b.{0,40}\b(?:condition|brand|manufacturer|model(?:\s+(?:name|number))?|serial(?:\s+(?:number|no))?|(?:purchase|replacement)\s+(?:cost|price|value)|notes?)\b.{0,60}\b(?:inventory|appliance)\b`
+  + String.raw`|\b(?:inventory|appliance)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:condition|brand|manufacturer|model(?:\s+(?:name|number))?|serial(?:\s+(?:number|no))?|(?:purchase|replacement)\s+(?:cost|price|value)|notes?)\b`,
+  'i',
+);
 // Timeline event title/date correction (Phase 3 write slice 2). Requires an
 // explicit correction verb, title/date/name, and the words "timeline event"
 // or "home event" -- checked before the maintenance/inventory patterns.
