@@ -61,7 +61,7 @@ jobs:
 
       - name: Upload Ownership Cost target-build evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ownership-cost-target-build-evidence
           path: apps/frontend/test-results/ownership-cost-evidence.json
@@ -69,7 +69,7 @@ jobs:
 
       - name: Upload Savings and Benefits target-build evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: savings-benefits-target-build-evidence
           path: apps/frontend/test-results/savings-benefits-evidence.json
