@@ -891,6 +891,17 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     note: '',
     uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY, GROUPED_LIST (filters:[]).' }, freshnessSource: { status: 'TRACED', notes: 'GAP: no contextVersion set anywhere in this handler -- same \'substantive branch missing freshness\' pattern as HOME_CHANGE_SUMMARY/INSPECTION_FINDINGS in Home intelligence and work.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. items.slice(0,20) -- the undisclosed-cap pattern again.' }, handoff: { status: 'TRACED', notes: 'Bare href to /seller-prep throughout.' },
   },
+  ROOM_RENAME: {
+    track: 'Records and capture',
+    rollClass: 'CONFIRMED_MUTATION',
+    canonicalOwner: 'room.rename',
+    roleFloor: 'CONTRIBUTOR',
+    messageRoutable: true,
+    confirmationCapable: true,
+    correctionModes: ['EDIT', 'STOP'],
+    note: 'Phase 3 write slice 4: rename only (TEXT editable field, 1-80 chars, unique per property). Written through inventoryService.updateRoom with a narrowed { name } patch, then the same markCoverageAnalysisStale / markRiskPremiumOptimizerStale / markDoNothingRunsStale calls the traditional PATCH controller makes (those live in the controller, not the service, so Ask must repeat them for parity). Ask is STRICTER than the traditional route, which applies propertyAuthMiddleware only with no role floor -- flagged as a pre-existing gap in the traditional route, not widened here. Room type, floor level, sort order, profile and hero image remain uncorrectable inline.',
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer: GROUPED_LIST (disambiguation), SUMMARY (review) + TEXT editable confirmation, WORKFLOW_PROGRESS (receipt).' }, freshnessSource: { status: 'TRACED', notes: 'roomContextVersion = sha256(id:updatedAt), rechecked at confirm; an already-applied name bypasses the check so a lease-reclaim retry is not misreported as a conflict.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; the rename is a plain overwrite so the already-applied compare is the replay guard. Name uniqueness is checked at edit and confirm time and the DB @@unique([propertyId,name]) (ROOM_ALREADY_EXISTS) is mapped to a clear error. No compare-and-swap between the freshness check and the update (disclosed).' }, reconciliation: { status: 'TRACED', notes: 'Calls reconcileAskExecutionSideEffects; ASK_MUTATION_IMPACT_MAP declares PROPERTY_SUMMARY and INVENTORY_LOOKUP (item rows show the room name).' }, handoff: { status: 'TRACED', notes: 'Secondary Open Rooms href.' },
+  },
   WARRANTY_CORRECT: {
     track: 'Records and capture',
     rollClass: 'CONFIRMED_MUTATION',

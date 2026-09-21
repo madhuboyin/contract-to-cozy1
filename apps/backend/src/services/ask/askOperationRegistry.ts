@@ -104,6 +104,9 @@ export type AskOperationId =
   // owner-only (a Warranty belongs to one member's homeownerProfile, and the
   // canonical updateWarranty is scoped to it).
   | 'WARRANTY_CORRECT'
+  // Phase 3 write slice 4: rename an InventoryRoom via the canonical
+  // inventoryService.updateRoom (plus the controller's stale-analysis markers).
+  | 'ROOM_RENAME'
   | 'MAJOR_EVENT_ENTRY'
   | 'EMERGENCY_BOUNDARY'
   | 'UNSAFE_RESTRICTED_BOUNDARY'
@@ -228,7 +231,7 @@ export interface AskOperationResult {
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
-  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'WARRANTY_CORRECT',
+  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'WARRANTY_CORRECT', 'ROOM_RENAME',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -332,6 +335,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   INVENTORY_ITEM_CORRECT: definition('INVENTORY_ITEM_CORRECT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inventory.item-correct', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   HOME_EVENT_CORRECT: definition('HOME_EVENT_CORRECT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event.correct', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   WARRANTY_CORRECT: definition('WARRANTY_CORRECT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'warranty.correct', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  ROOM_RENAME: definition('ROOM_RENAME', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.rename', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   MAJOR_EVENT_ENTRY: definition('MAJOR_EVENT_ENTRY', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'major-event.entry', ['SUMMARY', 'CAPABILITY_LIST', 'BOUNDARY']),
   EMERGENCY_BOUNDARY: definition('EMERGENCY_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'EMERGENCY_BOUNDARY', null, 'boundary.emergency', ['BOUNDARY']),
   UNSAFE_RESTRICTED_BOUNDARY: definition('UNSAFE_RESTRICTED_BOUNDARY', 'UNSAFE_OR_RESTRICTED', false, 'DETERMINISTIC', 'UNSAFE_RESTRICTED_BOUNDARY', null, 'boundary.unsafe-restricted', ['BOUNDARY']),
@@ -533,6 +537,9 @@ const inventoryItemCorrectPattern = /\b(?:correct|fix|change|update|edit|set)\b.
 const homeEventCorrectPattern = /\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:title|date|name)\b.{0,40}\b(?:timeline|home)\s+event\b|\b(?:timeline|home)\s+event\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:title|date|name)\b/i;
 // Warranty provider / expiry-date correction (Phase 3 write slice 3).
 const warrantyCorrectPattern = /\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:provider|expir(?:y|ation)|expires)\b.{0,40}\bwarrant(?:y|ies)\b|\bwarrant(?:y|ies)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:provider|expir(?:y|ation))\b/i;
+// Room rename (Phase 3 write slice 4): an explicit rename/correct-name verb
+// tied to the word "room".
+const roomRenamePattern = /\brename\b.{0,40}\broom\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\bname\b.{0,40}\broom\b|\broom\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\bname\b/i;
 const maintenanceUpdatePattern = /\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore)\b.{0,100}\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b|\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:reschedule|assign|archive|cancel|reopen|priority|due date)\b/i;
 const guidanceJourneyCreatePattern = /\b(?:start|create|open|begin)\b.{0,50}\b(?:guided plan|guidance journey|guided journey|step-by-step plan)\b/i;
 const quoteComparisonCreatePattern = /\b(?:create|start|open|set up)\b.{0,50}\b(?:quote comparison|comparison workspace|workspace for (?:my )?(?:quotes|bids|proposals))\b/i;
@@ -795,6 +802,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (hvacDecisionStartPattern.test(message)) {
     return resolved('HVAC_DECISION_START', 0.96);
+  }
+  if (roomRenamePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('ROOM_RENAME', 0.97);
   }
   if (warrantyCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('WARRANTY_CORRECT', 0.97);

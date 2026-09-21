@@ -57,6 +57,7 @@ const DEFINITIONS = [
   adapter('ownership.costs', 'Ownership Cost Intelligence', 'OWNERSHIP_COSTS'),
   adapter('sale-case.analysis', 'Seller Preparation Decision Service', 'SELL_HOLD_RENT_ANALYSIS'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
+  adapter('room.rename', 'InventoryService', 'ROOM_RENAME', 'MUTATION_PREPARATION'),
   adapter('warranty.correct', 'HomeManagementService', 'WARRANTY_CORRECT', 'MUTATION_PREPARATION'),
   adapter('home-event.correct', 'HomeEventsService', 'HOME_EVENT_CORRECT', 'MUTATION_PREPARATION'),
   adapter('inventory.item-correct', 'InventoryService', 'INVENTORY_ITEM_CORRECT', 'MUTATION_PREPARATION'),

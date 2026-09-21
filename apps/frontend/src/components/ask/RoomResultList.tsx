@@ -3,7 +3,7 @@
 import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
 import { getRoomInsights, type RoomInsightsDTO } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
-import type { AskPresentationBlock } from '@/features/ask/types';
+import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { cn } from '@/lib/utils';
 
@@ -30,10 +30,14 @@ function currencyFromCents(value: number): string {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value / 100);
 }
 
-function RoomDetail({ roomId, expectedPropertyId, fallbackItem, onAccessLost, onClose }: {
+type RoomItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+
+function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose }: {
   roomId: string;
   expectedPropertyId?: string;
   fallbackItem: Item;
+  disabled?: boolean;
+  onAction?: RoomItemActionHandler;
   onAccessLost: () => void;
   onClose: () => void;
 }) {
@@ -98,14 +102,21 @@ function RoomDetail({ roomId, expectedPropertyId, fallbackItem, onAccessLost, on
         <div><dt className="text-xs text-slate-500">Recorded replacement value</dt><dd className="mt-0.5 font-medium text-slate-900">{currencyFromCents(room.stats.replacementTotalCents)}</dd></div>
         <div><dt className="text-xs text-slate-500">Room health</dt><dd className="mt-0.5 font-medium text-slate-900">{room.healthScore.score == null ? room.healthScore.label : `${room.healthScore.label} · ${room.healthScore.score}/100`}</dd></div>
       </dl>
+      {onAction && (fallbackItem.actions?.length ?? 0) > 0 && <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={`Corrections for ${room.room.name}`}>
+        {fallbackItem.actions!.map((action) => <button key={action.id} type="button" disabled={disabled}
+          className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
+          onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}<span className="sr-only"> for {room.room.name}</span></button>)}
+      </div>}
       <p className="mt-3 text-xs text-slate-500">Current canonical room record and room-level inventory analysis.</p>
     </>}
   </aside>;
 }
 
-export function RoomResultList({ block, propertyId, onAccessLost, link }: {
+export function RoomResultList({ block, propertyId, disabled, onAction, onAccessLost, link }: {
   block: Block;
   propertyId?: string;
+  disabled?: boolean;
+  onAction?: RoomItemActionHandler;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
@@ -146,7 +157,7 @@ export function RoomResultList({ block, propertyId, onAccessLost, link }: {
       </ul>
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more rooms are available through the full Rooms collection.</p>}
     </div>)}
-    {detailRoomId && detailItem && <RoomDetail key={detailRoomId} roomId={detailRoomId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />}
+    {detailRoomId && detailItem && <RoomDetail key={detailRoomId} roomId={detailRoomId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
     <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
   </section>;
 }

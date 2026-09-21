@@ -90,3 +90,29 @@ test('a room leaving the refreshed result clears selection without choosing a su
   rerender(<List response={next} />);
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'property-summary')).detailTaskId).toBeNull();
 });
+
+test('room detail shows the declared rename action with exact identity, and none when the server declares none (viewer)', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  mockedGetRoomInsights.mockResolvedValue(canonicalRoom());
+  const withAction: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], actions: [{ id: 'rename-room', label: 'Rename room', message: 'Rename this room.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'ROOM_RENAME' }] },
+    ...block.sections[0].items.slice(1),
+  ] }] };
+  const onAction = jest.fn();
+  const response = { ...execution(), blocks: [withAction] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><RoomResultList block={withAction} propertyId="home" onAction={onAction} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  const first = render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Rename room/ }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ROOM', 'room-0', 'Rename this room.', 'ROOM_RENAME', 'MUTATE_RECORD');
+  first.unmount();
+  window.sessionStorage.clear();
+
+  render(<List response={execution()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
+  await waitFor(() => expect(screen.getByText('$12,500')).toBeInTheDocument());
+  expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+});
