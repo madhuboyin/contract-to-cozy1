@@ -102,6 +102,42 @@ function propertySummaryTimelineExecution() {
   };
 }
 
+// Phase 3 write-slice acceptance: the same Property Summary timeline result,
+// but with the contributor-only "Correct title" item action declared, as the
+// server does for CONTRIBUTOR/OWNER (a VIEWER's result carries no actions).
+function correctableSummaryExecution() {
+  const response = propertySummaryTimelineExecution();
+  const list = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'property-recent-events') as
+    { sections: Array<{ items: Array<Record<string, unknown>> }> } | undefined;
+  if (list) {
+    list.sections[0].items[0].actions = [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }];
+  }
+  return response;
+}
+
+function eventCorrectionConfirmation(version: number, value: string) {
+  return {
+    confirmationId: `home-event-correct-event-property-summary-${version}`, version, title: 'Correct the title of "Roof replacement"?',
+    description: 'This records a new revision on the canonical home timeline; the original is preserved as history.',
+    fields: [{ label: 'Event', value: 'Roof replacement' }, { label: 'Field', value: 'title' }, { label: 'Current value', value: 'Roof replacement' }],
+    editableFields: [{ key: 'value', label: 'Corrected title', type: 'TEXT', value }],
+    confirmLabel: 'Save title', consentText: 'I authorize this correction to the shared home timeline.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+  };
+}
+
+function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', version: number, value: string, sessionId?: string) {
+  const base = propertySummaryTimelineExecution();
+  return {
+    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-event-correction', question: 'Correct the title of this timeline event.', status,
+    operation: { id: 'HOME_EVENT_CORRECT', version: '1.0', family: 'COMMAND' }, contextVersion: 'home-event-correction-v1',
+    blocks: status === 'COMPLETED'
+      ? [{ type: 'WORKFLOW_PROGRESS', id: 'event-corrected-event-replacement', title: 'Home timeline event corrected', status: 'COMPLETED', description: 'A new revision replaces the prior entry on your home\'s canonical timeline; the original is preserved as history.', details: [{ label: 'Event', value }], actions: [] }]
+      : [{ type: 'SUMMARY', id: 'home-event-correct-review', title: 'Review this title correction', body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [] }],
+    confirmation: status === 'COMPLETED' ? null : eventCorrectionConfirmation(version, value),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function maintenanceExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance', sessionId: 'ask-acceptance-session',
@@ -313,6 +349,9 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
+  const correctionEditBodies: Array<{ confirmationVersion: number; edits: Record<string, string> }> = [];
+  const correctionConfirmBodies: Array<Record<string, unknown>> = [];
+  let correctionSessionId: string | undefined;
   let captureAttempts = 0;
   let pendingDismissed = false;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
@@ -452,6 +491,18 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
       return;
     }
+    if (/correctable summary of my home record/i.test(body.message)) {
+      const response = correctableSummaryExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/correct the title of this timeline event/i.test(body.message)) {
+      const response = eventCorrectionExecution('NEEDS_CONFIRMATION', 1, 'Roof replacement', body.sessionId);
+      if (body.sessionId) correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
     if (/summary of my home record/i.test(body.message)) {
       const response = propertySummaryTimelineExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
@@ -556,6 +607,18 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     await fulfill(route, { success: true, data: execution(body.captureKey === 'FINANCING_PROFILE_REFINANCE_INPUTS' ? 'refinance' : 'refrigerator', true) });
   });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-event-correction/confirm/edit`, async (route) => {
+    assertAuthenticated(route.request());
+    const body = route.request().postDataJSON() as { confirmationVersion: number; edits: Record<string, string> };
+    correctionEditBodies.push(body);
+    await fulfill(route, { success: true, data: eventCorrectionExecution('NEEDS_CONFIRMATION', body.confirmationVersion + 1, body.edits.value, correctionSessionId) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-event-correction/confirm`, async (route) => {
+    assertAuthenticated(route.request());
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    correctionConfirmBodies.push(body);
+    await fulfill(route, { success: true, data: eventCorrectionExecution('COMPLETED', 2, 'Roof replacement (full tear-off)', correctionSessionId) });
+  });
   await page.route(`${apiOrigin}/api/ask/executions/execution-pending-maintenance/cancel`, (route) => {
     pendingDismissed = true;
     const cancelled = {
@@ -566,7 +629,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { captureBodies, executionQuestions, executionBodies, captureAttempts: () => captureAttempts };
+  return { captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

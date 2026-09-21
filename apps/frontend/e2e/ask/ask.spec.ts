@@ -212,6 +212,50 @@ test('Property Summary timeline events open canonical detail inline with traditi
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('a contributor corrects a timeline event title inline: exact identity is sent, the text field is edited, and the receipt stays in the conversation', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
+  await response.getByRole('button', { name: 'Roof replacement' }).click();
+  await expect(response.getByText('The roof replacement is recorded with verified evidence.')).toBeVisible();
+  await response.getByRole('button', { name: /Correct title/ }).click();
+
+  // The click dispatches through the normal Ask path with the exact event identity.
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Correct the title of this timeline event.'
+    && (body.launchContext as { entityType?: string; entityId?: string } | undefined)?.entityType === 'HOME_EVENT'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'event-property-summary')).toBe(true);
+  await expect(page.getByText('Correct the title of "Roof replacement"?')).toBeVisible();
+  await expect(page.getByText('No shared-home record has changed yet', { exact: false })).toBeVisible();
+
+  // The new TEXT editable field: edit, save (a new confirmation version), consent, confirm.
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('textbox', { name: 'Corrected title' }).fill('Roof replacement (full tear-off)');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => api.correctionEditBodies).toEqual([{ confirmationVersion: 1, edits: { value: 'Roof replacement (full tear-off)' } }]);
+  await expect(page.getByRole('definition').filter({ hasText: 'Roof replacement (full tear-off)' })).toBeVisible();
+  await page.getByLabel(/I authorize this correction to the shared home timeline/).check();
+  await page.getByRole('button', { name: 'Save title' }).click();
+
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 2, consentConfirmed: true })]);
+  await expect(page.getByText('Home timeline event corrected')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('a viewer-shaped result declares no correction actions, so no correction control renders', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
+  await response.getByRole('button', { name: 'Roof replacement' }).click();
+  await expect(response.getByText('The roof replacement is recorded with verified evidence.')).toBeVisible();
+  await expect(response.getByRole('button', { name: /^Correct (title|date|install|purchase|provider|expiry)/ })).toHaveCount(0);
+});
+
 test('Property Summary rooms open canonical detail inline with the full Rooms collection secondary', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
