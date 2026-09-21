@@ -891,6 +891,17 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     note: '',
     uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY, GROUPED_LIST (filters:[]).' }, freshnessSource: { status: 'TRACED', notes: 'GAP: no contextVersion set anywhere in this handler -- same \'substantive branch missing freshness\' pattern as HOME_CHANGE_SUMMARY/INSPECTION_FINDINGS in Home intelligence and work.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. items.slice(0,20) -- the undisclosed-cap pattern again.' }, handoff: { status: 'TRACED', notes: 'Bare href to /seller-prep throughout.' },
   },
+  INVENTORY_ITEM_CORRECT: {
+    track: 'Records and capture',
+    rollClass: 'CONFIRMED_MUTATION',
+    canonicalOwner: 'inventory.item-correct',
+    roleFloor: 'CONTRIBUTOR',
+    messageRoutable: true,
+    confirmationCapable: true,
+    correctionModes: ['EDIT', 'STOP'],
+    note: 'Phase 3 write slice: only the installed / purchased / last-serviced dates are correctable, each as a DATE editable field on the confirmation card (the one editable-field type the contract supports). Other inventory fields (condition, brand, model, serial, costs, room) are NOT yet correctable inline. Launched from the inline inventory detail via three MUTATE_RECORD item actions (contributor+ only).',
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer: GROUPED_LIST (disambiguation), SUMMARY (review) + DATE editable confirmation, WORKFLOW_PROGRESS (receipt).' }, freshnessSource: { status: 'TRACED', notes: 'inventoryItemContextVersion = sha256(id:updatedAt), rechecked at confirm; an already-applied value bypasses the check so a lease-reclaim retry is not misreported as a conflict.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; updateItem is a plain overwrite so the already-applied compare is the replay guard. updateItem has no compare-and-swap of its own -- a write landing between the version check and the update is not detected (small window, disclosed).' }, reconciliation: { status: 'TRACED', notes: 'Calls reconcileAskExecutionSideEffects; ASK_MUTATION_IMPACT_MAP declares INVENTORY_LOOKUP/PROPERTY_SUMMARY as siblings.' }, handoff: { status: 'TRACED', notes: 'Secondary Open home inventory href.' },
+  },
   SELLER_PREP_ITEM_DECISION: {
     track: 'Decisions and projects',
     rollClass: 'CONFIRMED_MUTATION',

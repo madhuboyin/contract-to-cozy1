@@ -7,6 +7,7 @@ export const PROPERTY_RECORD_SKILL_OPERATIONS: AskOperationId[] = [
   'PROPERTY_SUMMARY',
   'INVENTORY_LOOKUP',
   'HOME_CHANGE_SUMMARY',
+  'INVENTORY_ITEM_CORRECT',
 ];
 
 export const PROPERTY_RECORD_SKILL = Object.freeze({
@@ -16,7 +17,7 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
   displayName: 'Property Record',
   description: 'Summarize the selected home and find recorded appliances, systems, and inventory details.',
   homeownerJobs: ['STAY_AHEAD', 'DECIDE_WITH_CONFIDENCE'],
-  supportedGoals: ['summarize-property-record', 'find-recorded-home-item'],
+  supportedGoals: ['summarize-property-record', 'find-recorded-home-item', 'correct-recorded-home-item'],
   aliases: ['property record', 'home record summary', 'living home record', 'home inventory lookup'],
   operations: PROPERTY_RECORD_SKILL_OPERATIONS.map((operationId) => ({ operationId, version: '1.0', requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER], optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER] })),
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
@@ -25,22 +26,23 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
     { id: 'property.summary', version: '1.0' },
     { id: 'inventory.lookup', version: '1.0' },
     { id: 'home-change.summary', version: '1.0' },
+    { id: 'inventory.item-correct', version: '1.0' },
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [
     { consumer: 'ASK', operations: PROPERTY_RECORD_SKILL_OPERATIONS },
-    { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS },
+    { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS.filter((operationId) => operationId !== 'INVENTORY_ITEM_CORRECT') },
     { consumer: 'HOME_ACTIONS', operations: ['PROPERTY_SUMMARY'] },
   ],
-  autonomyLevel: 0,
+  autonomyLevel: 2,
   riskPolicy: {
-    effects: ['READ'],
-    materiality: 'LOW',
+    effects: ['READ', 'WRITE'],
+    materiality: 'MATERIAL',
     riskDomains: ['PRIVACY'],
-    reversibility: 'REVERSIBLE',
+    reversibility: 'PARTIALLY_REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'CAPABILITY_LIST', 'CHANGE_SUMMARY', 'EMPTY_STATE'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'CAPABILITY_LIST', 'CHANGE_SUMMARY', 'EMPTY_STATE', 'WORKFLOW_PROGRESS', 'LIMITATION'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

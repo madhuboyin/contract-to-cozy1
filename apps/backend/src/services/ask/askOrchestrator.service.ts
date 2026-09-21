@@ -4356,7 +4356,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
           // match now opens inline detail instead of implicitly ejecting to
           // /inventory before the homeowner even confirmed which item they meant.
           items: matches.slice(0, MAX_RESULT_ITEMS).map((item) => ({
-            id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', description: [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ') || null,
+            id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', actions: inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER), description: [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ') || null,
             meta: [item.room?.name, item.category.toLowerCase().replace(/_/g, ' '), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`].filter((value): value is string => Boolean(value)),
             status: item.condition, href: inventoryItemHref(propertyId, item.id),
           })),
@@ -4428,7 +4428,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
         const identity = [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ');
         const lifecycleDate = item.purchasedOn;
         return {
-          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM',
+          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', actions: inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
           description: incompleteFocus && missingFacts.length ? `Missing: ${missingFacts.join(', ')}` : item.notes,
           meta: [
             item.room?.name ?? item.category.toLowerCase().replace(/_/g, ' '),
@@ -4620,7 +4620,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         sections: [{
           id: 'inventory', title: 'Recorded items', count: inventory.totalCount,
           items: inventory.items.slice(0, 50).map((item) => ({
-            id: item.id, title: item.name, description: null, entityType: 'INVENTORY_ITEM', href: null,
+            id: item.id, title: item.name, description: null, entityType: 'INVENTORY_ITEM', href: null, actions: inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
             status: item.isVerified ? 'VERIFIED' : null,
             meta: [readablePropertyValue(item.category), readablePropertyValue(item.condition), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`],
           })),
@@ -8036,6 +8036,118 @@ registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRate
 registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 write slice: date corrections on an
+// exact InventoryItem, written through the canonical inventoryService
+// .updateItem. The three fields are deliberately the only ones offered --
+// each maps to one DATE editable field on the confirmation card, which is
+// the one editable-field type the confirmation contract supports today.
+const INVENTORY_CORRECTION_FIELDS = {
+  installedOn: { label: 'installed date', action: 'Correct install date' },
+  purchasedOn: { label: 'purchase date', action: 'Correct purchase date' },
+  lastServicedOn: { label: 'last serviced date', action: 'Correct last serviced date' },
+} as const;
+type InventoryCorrectionField = keyof typeof INVENTORY_CORRECTION_FIELDS;
+
+const InventoryItemCorrectionInputSchema = z.object({
+  itemId: z.string().trim().min(1).max(160),
+  field: z.enum(['installedOn', 'purchasedOn', 'lastServicedOn']),
+  // null until the homeowner supplies (or edits in) a date; confirm rejects null.
+  value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+}).strict();
+
+function inventoryCorrectionField(message: string): InventoryCorrectionField | null {
+  if (/\binstall(?:ed|ation)?\b/i.test(message)) return 'installedOn';
+  if (/\bpurchase[d]?\b/i.test(message)) return 'purchasedOn';
+  if (/\b(?:last[- ]serviced|service[d]?)\b/i.test(message)) return 'lastServicedOn';
+  return null;
+}
+
+function inventoryDateValue(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function inventoryItemContextVersion(item: { id: string; updatedAt: Date }): string {
+  return createHash('sha256').update(`${item.id}:${item.updatedAt.toISOString()}`).digest('hex');
+}
+
+// Item actions offered from the inline inventory detail. Contributor-and-up
+// only -- a VIEWER never receives a control implying the write will be accepted.
+function inventoryCorrectionItemActions(canManage: boolean) {
+  if (!canManage) return undefined;
+  const messages: Record<InventoryCorrectionField, string> = {
+    installedOn: 'Correct the install date of this inventory item.',
+    purchasedOn: 'Correct the purchase date of this inventory item.',
+    lastServicedOn: 'Correct the last serviced date of this inventory item.',
+  };
+  return (Object.keys(INVENTORY_CORRECTION_FIELDS) as InventoryCorrectionField[]).map((field) => ({
+    id: `correct-${field}`, label: INVENTORY_CORRECTION_FIELDS[field].action, message: messages[field],
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+  }));
+}
+
+function inventoryCorrectionConfirmation(item: { id: string; name: string }, field: InventoryCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
+  const meta = INVENTORY_CORRECTION_FIELDS[field];
+  return {
+    confirmationId: `inventory-correct-${item.id}-${version}`, version, title: `Correct ${meta.label} for ${item.name}?`,
+    description: 'This writes through the canonical inventory service, the same record the Inventory page edits.',
+    fields: [{ label: 'Item', value: item.name }, { label: 'Field', value: meta.label }, { label: 'Current value', value: current ?? 'Not recorded' }],
+    editableFields: [{ key: 'value', label: `Corrected ${meta.label}`, type: 'DATE' as const, value: proposed ?? '' }],
+    confirmLabel: `Save ${meta.label}`, consentText: 'I authorize this correction to the shared home inventory record.', expiresAt: expiresAt.toISOString(),
+  };
+}
+
+async function inventoryItemCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
+  const items = await inventoryService.listItems(propertyId, {});
+  const selected = exactEntityMatch(items.map((item) => ({ ...item, title: item.name })), message, launchContext);
+  if (!selected) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'INVENTORY_ITEM_TARGET_REQUIRED',
+      ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', 'Which inventory item should Ask correct? Use its exact name.'),
+      blocks: [{
+        type: 'GROUPED_LIST', filters: [], id: 'inventory-entity-selection', title: 'Choose the item to correct',
+        description: 'Use the exact item name in your next message; nothing has changed.',
+        sections: [{ id: 'items', title: 'Inventory items', count: items.length, items: items.slice(0, 20).map((item) => ({
+          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', description: null,
+          meta: [item.room?.name, item.category.toLowerCase().replace(/_/g, ' ')].filter((value): value is string => Boolean(value)), status: item.condition, href: null,
+        })) }],
+        actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }],
+      }],
+      suggestions: items.slice(0, 3).map((item) => `Correct the install date of ${item.name}`),
+    };
+  }
+  const field = inventoryCorrectionField(message);
+  if (!field) {
+    return {
+      status: 'NEEDS_CLARIFICATION', reasonCode: 'INVENTORY_CORRECTION_FIELD_REQUIRED',
+      ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', `Which date should change for ${selected.name}? Ask can correct the installed, purchased, or last serviced date.`),
+      blocks: [{ type: 'SUMMARY', id: 'inventory-correct-field', title: `Which date should change for ${selected.name}?`, body: 'Say install date, purchase date, or last serviced date. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      suggestions: [`Correct the install date of ${selected.name}`, `Correct the purchase date of ${selected.name}`],
+    };
+  }
+  const current = inventoryDateValue(selected[field]);
+  const stated = message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null;
+  const proposed = stated && isValidDateEditInput(stated) ? stated : current;
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const contextVersion = inventoryItemContextVersion(selected);
+  const input = InventoryItemCorrectionInputSchema.parse({ itemId: selected.id, field, value: proposed });
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'INVENTORY_CORRECTION_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      inventoryCorrection: input, inventoryCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'inventory-correct-review', title: `Review this ${INVENTORY_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Enter the corrected date, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }] }],
+    confirmation: inventoryCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt),
+    suggestions: [],
+  };
+}
+
+registerCapabilityHandler('inventory.item-correct', async (envelope) => inventoryItemCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 registerCapabilityHandler('household.invitation', async (envelope) => householdInvitationResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('guidance.journey.create', async (envelope) => guidanceJourneyCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteComparisonCreateResult(envelope.propertyId!, envelope.message));
@@ -8545,6 +8657,7 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'SELL_HOLD_RENT_ANALYSIS':
     case 'SELLER_PREP_CHECKLIST':
     case 'SELLER_PREP_ITEM_DECISION': return `${base}/seller-prep`;
+    case 'INVENTORY_ITEM_CORRECT': return `${base}/inventory?tab=items`;
     case 'CAPITAL_RESERVE_PLAN': return `${base}/tools/capital-timeline`;
     case 'PROPERTY_TAX_APPEAL_READINESS': return `${base}/tools/property-tax`;
     case 'QUOTE_COMPARISON_REVIEW': return `${base}/tools/quote-comparison`;
@@ -10797,6 +10910,8 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   INSPECTION_FINDING_UPDATE: ['INSPECTION_FINDINGS'],
   // The item's status is exactly what SELLER_PREP_CHECKLIST's list shows per row.
   SELLER_PREP_ITEM_DECISION: ['SELLER_PREP_CHECKLIST'],
+  // The corrected date is shown on the inventory lists and the Property Summary inventory collection.
+  INVENTORY_ITEM_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'],
   // Accepting/deferring/snoozing/completing an Operational Work item changes
   // its state in the HOME_ACTIONS feed that surfaces it -- confirmed by this
   // handler's own suggested follow-up ("What needs my attention next?").
@@ -12251,6 +12366,47 @@ registerConfirmCapabilityHandler('incident-claim.file', confirmClaimFile);
 registerConfirmCapabilityHandler('incident-claim.transition', confirmClaimTransition);
 registerConfirmCapabilityHandler('inspection-findings.update', confirmInspectionFindingUpdate);
 registerConfirmCapabilityHandler('seller-prep.item-decision', confirmSellerPrepItemDecision);
+
+async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const candidate = InventoryItemCorrectionInputSchema.safeParse(parameters.inventoryCorrection);
+  if (!candidate.success) throw Object.assign(new Error('The inventory correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const { itemId, field, value } = candidate.data;
+  if (!value || !isValidDateEditInput(value)) throw Object.assign(new Error('Enter the corrected date before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId: execution.propertyId } });
+  if (!item) throw Object.assign(new Error('This inventory item is no longer available. It may have been deleted.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  // A recovery retry of this same execution (receipt reclaimed after the
+  // write below committed) sees the already-corrected value: treat it as
+  // applied rather than misreporting the execution's own success as a
+  // concurrent change. updateItem is a plain overwrite, so this is also the
+  // only replay guard the write needs.
+  const alreadyApplied = inventoryDateValue(item[field]) === value;
+  if (!alreadyApplied && parameters.inventoryCorrectionContextVersion !== inventoryItemContextVersion(item)) {
+    throw Object.assign(new Error('This inventory item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  }
+  if (!alreadyApplied) await inventoryService.updateItem(execution.propertyId!, item.id, { [field]: value });
+  const updated = await prisma.inventoryItem.findUniqueOrThrow({ where: { id: item.id } });
+  const meta = INVENTORY_CORRECTION_FIELDS[field];
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'INVENTORY_ITEM_CORRECTED', contextVersion: inventoryItemContextVersion(updated),
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `inventory-corrected-${item.id}`, title: 'Inventory record updated', status: 'COMPLETED',
+      description: 'The canonical inventory record was updated.',
+      details: [{ label: 'Item', value: item.name }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: inventoryDateValue(item[field]) === value ? 'Already corrected' : (inventoryDateValue(item[field]) ?? 'Not recorded') }, { label: 'New value', value }],
+      actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/inventory?tab=items`, style: 'PRIMARY' }],
+    }],
+    suggestions: ['Show my home inventory'],
+  };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'LIMITATION', id: `inventory-refresh-failed-${item.id}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+      body: 'This correction was saved to the canonical inventory record. The result you were viewing could not refresh automatically -- ask "Show my home inventory" to see its current state.',
+    });
+  }
+  return { result, artifactType: 'INVENTORY_ITEM', artifactId: item.id, refreshedExecutions: refresh.refreshedExecutions };
+}
+registerConfirmCapabilityHandler('inventory.item-correct', confirmInventoryItemCorrect);
 registerConfirmCapabilityHandler('document-promotion.confirm', confirmDocumentPromotionConfirm);
 registerConfirmCapabilityHandler('home-operations.update', confirmOperationalWorkUpdate);
 registerConfirmCapabilityHandler('maintenance.complete', confirmMaintenanceTaskComplete);
@@ -13272,12 +13428,49 @@ async function editBuyerTaskUpdateConfirmation(
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 
+async function editInventoryItemCorrectConfirmation(
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+): Promise<AskExecutionResponse> {
+  const existing = InventoryItemCorrectionInputSchema.safeParse(parameters.inventoryCorrection);
+  if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
+  const valueEdit = input.edits.value;
+  if (!isValidDateEditInput(valueEdit)) throw Object.assign(new Error('Enter a valid date.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const item = await prisma.inventoryItem.findFirst({ where: { id: existing.data.itemId, propertyId: execution.propertyId! } });
+  if (!item) throw Object.assign(new Error('The selected inventory item is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  const updatedInput = InventoryItemCorrectionInputSchema.parse({ ...existing.data, value: valueEdit });
+  const nextVersion = input.confirmationVersion + 1;
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const newConfirmation = inventoryCorrectionConfirmation(item, existing.data.field, inventoryDateValue(item[existing.data.field]), valueEdit, nextVersion, expiresAt);
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'inventory-correct-review', title: `Review this ${INVENTORY_CORRECTION_FIELDS[existing.data.field].label} correction`, body: 'No shared-home record has changed yet. Enter the corrected date, then confirm.', tone: 'DEFAULT' as const, actions: [] };
+  // Same version-AND-status guarded optimistic write as the maintenance edit
+  // path: a claimed/completed/expired execution matches nothing.
+  const editWrite = await prisma.askExecution.updateMany({
+    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
+    data: {
+      parametersJson: asInputJson({ ...parameters, inventoryCorrection: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+        ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),
+      }),
+    },
+  });
+  if (editWrite.count !== 1) throw Object.assign(new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  await prisma.askExecutionEvent.create({
+    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+  });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
 const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
   execution: AskExecution,
   parameters: Record<string, unknown>,
   input: EditAskConfirmation,
 ) => Promise<AskExecutionResponse>>> = {
   MAINTENANCE_TASK_UPDATE: editMaintenanceTaskUpdateConfirmation,
+  INVENTORY_ITEM_CORRECT: editInventoryItemCorrectConfirmation,
   BUYER_TASK_UPDATE: editBuyerTaskUpdateConfirmation,
 };
 

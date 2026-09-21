@@ -128,3 +128,33 @@ test('server-paged inventory sections navigate inline and retain "Open home inve
   expect(onPage).toHaveBeenNthCalledWith(2, 'items', 'NEXT');
   expect(screen.getByText('Open home inventory')).toBeInTheDocument();
 });
+
+test('inline inventory detail exposes declared correction actions and dispatches the exact item identity; none render without declared actions', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  jest.spyOn(api, 'getInventoryItem').mockResolvedValue({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
+  const withActions: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], actions: [{ id: 'correct-installedOn', label: 'Correct install date', message: 'Correct the install date of this inventory item.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' }] },
+    ...block.sections[0].items.slice(1),
+  ] }] };
+  const onAction = jest.fn();
+  const response = { ...execution(), blocks: [withActions] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><InventoryResultList block={withActions} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
+  const button = await screen.findByRole('button', { name: /Correct install date/ });
+  fireEvent.click(button);
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Correct the install date of this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
+
+});
+
+test('inventory detail renders no correction controls when the item declares no actions (viewer role)', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  jest.spyOn(api, 'getInventoryItem').mockResolvedValue({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
+  render(<List response={execution()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
+  await waitFor(() => expect(screen.getByText('Rheem')).toBeInTheDocument());
+  expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+});

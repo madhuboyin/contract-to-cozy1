@@ -224,6 +224,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'COLLOQUIAL', message: 'Are there any pending details to be filled for the home?', expectedOperationId: 'PROPERTY_SUMMARY' },
       { mode: 'MISSPELLED', message: 'Summarize my property recrod', expectedOperationId: 'PROPERTY_SUMMARY' },
       { mode: 'EXACT', message: 'What changed around my home lately?', expectedOperationId: 'HOME_CHANGE_SUMMARY' },
+      { mode: 'EXACT', message: 'Correct the install date of this inventory item', expectedOperationId: 'INVENTORY_ITEM_CORRECT' },
     ],
     ambiguityCases: [{ message: 'Show my home record and item details', candidateOperationIds: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [

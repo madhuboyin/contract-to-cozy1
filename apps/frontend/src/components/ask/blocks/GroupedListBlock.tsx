@@ -142,7 +142,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (INVENTORY_ITEM_DETAIL_BLOCK_IDS.has(block.id)) {
-    return <InventoryResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
+    return <InventoryResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (HOME_EVENT_DETAIL_BLOCK_IDS.has(block.id)) {
