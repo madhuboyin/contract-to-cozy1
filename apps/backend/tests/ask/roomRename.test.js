@@ -21,7 +21,7 @@ function body(startMarker, endMarker) {
 }
 
 test('declared item-action message and natural phrasing route to ROOM_RENAME', () => {
-  for (const message of ['Rename this room.', 'Can you rename the spare room to office', 'The room name is wrong, please fix the name of the guest room']) {
+  for (const message of ['Rename this room.', 'Can you rename the spare room to office', 'The room name is wrong, please fix the name of the guest room', 'Change the type of this room.', 'Change the floor level of this room.', 'Correct the room type of the office', 'Change the floor level of the guest room']) {
     assert.equal(routeOf(message), 'ROOM_RENAME', message);
   }
 });
@@ -37,12 +37,13 @@ test('registered as a contributor-floor confirmed command', () => {
   assert.equal(getAskDomainCommandByOperation('ROOM_RENAME').roleFloor, 'CONTRIBUTOR');
 });
 
-test('propose never writes; confirm writes a narrowed { name } patch and repeats the controller stale-analysis markers', () => {
+test('propose never writes; confirm writes a patch narrowed to the one field being corrected and repeats the controller stale-analysis markers', () => {
   const propose = body('async function roomRenameResult(', "registerCapabilityHandler('room.rename'");
   assert.doesNotMatch(propose, /updateRoom\(/);
   assert.match(propose, /NEEDS_CONFIRMATION/);
   const confirm = body('async function confirmRoomRename(', "registerConfirmCapabilityHandler('room.rename'");
-  assert.match(confirm, /inventoryService\.updateRoom\(execution\.propertyId!, room\.id, \{ name \}\)/);
+  assert.match(confirm, /inventoryService\.updateRoom\(execution\.propertyId!, room\.id, patch\)/);
+  assert.match(confirm, /const patch = field === 'floorLevel' \? \{ floorLevel: Number\(proposed\) \} : field === 'type' \? \{ type: proposed \} : \{ name: proposed \};/);
   for (const marker of ['markCoverageAnalysisStale', 'markRiskPremiumOptimizerStale', 'markDoNothingRunsStale']) assert.match(confirm, new RegExp(marker));
   assert.match(confirm, /roomContextVersion\(room\)/);
   assert.match(confirm, /alreadyApplied/);
@@ -52,7 +53,8 @@ test('propose never writes; confirm writes a narrowed { name } patch and repeats
 
 test('name uniqueness is checked in propose-edit and confirm; rename action is contributor-and-up on the rooms producer', () => {
   assert.match(body('async function roomRenameNameError(', 'function roomRenameItemActions('), /id: \{ not: roomId \}/);
-  assert.match(body('async function editRoomRenameConfirmation(', 'const EDIT_CONFIRMATION_HANDLERS'), /roomRenameNameError\(/);
+  assert.match(body('async function editRoomRenameConfirmation(', 'const EDIT_CONFIRMATION_HANDLERS'), /roomCorrectionValueError\(/);
+  assert.match(body('async function roomCorrectionValueError(', 'function roomCorrectionNormalized('), /roomRenameNameError\(/, 'the name field still uses the uniqueness check');
   assert.match(body('function roomRenameItemActions(', 'function roomRenameConfirmation('), /if \(!canManage\) return undefined;/);
   assert.match(source, /actions: roomRenameItemActions\(access\.role !== HouseholdRole\.VIEWER\)/);
   assert.match(source, /ROOM_RENAME: editRoomRenameConfirmation/);

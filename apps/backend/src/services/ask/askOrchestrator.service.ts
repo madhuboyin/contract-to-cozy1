@@ -8602,12 +8602,51 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
 
 registerCapabilityHandler('warranty.correct', async (envelope) => warrantyCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-// Phase 3 write slice 4: rename an InventoryRoom. The room id is stable
-// across a rename, so an open inline detail stays valid.
+// Phase 3 write slice 4: correct an InventoryRoom -- its name (the original rename), and its type and floor level. The
+// operation keeps the ROOM_RENAME id so nothing already registered has to move; the input's `field` says which one. The room
+// id is stable across a correction, so an open inline detail stays valid.
+const ROOM_TYPE_VALUES = ['KITCHEN', 'LIVING_ROOM', 'BEDROOM', 'BATHROOM', 'DINING', 'LAUNDRY', 'GARAGE', 'OFFICE', 'BASEMENT', 'OTHER'] as const;
+const roomTypeLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
+const ROOM_FLOOR_MIN = -5;
+const ROOM_FLOOR_MAX = 50;
+type RoomCorrectionMeta = CorrectionFieldSpec & { action: string; message: string };
+const ROOM_CORRECTION_FIELDS: Record<'name' | 'type' | 'floorLevel', RoomCorrectionMeta> = {
+  name: { label: 'name', action: 'Rename room', message: 'Rename this room.', kind: 'TEXT', min: 1, max: 80 },
+  type: { label: 'type', action: 'Change room type', message: 'Change the type of this room.', kind: 'SELECT', options: ROOM_TYPE_VALUES.map((value) => ({ label: roomTypeLabel(value), value })) },
+  // Whole number of storeys from the ground floor (0); a basement is negative. Validated in roomCorrectionValueError.
+  floorLevel: { label: 'floor level', action: 'Change floor level', message: 'Change the floor level of this room.', kind: 'TEXT', min: 1, max: 3 },
+};
+type RoomCorrectionField = keyof typeof ROOM_CORRECTION_FIELDS;
 const RoomRenameInputSchema = z.object({
   roomId: z.string().trim().min(1).max(160),
+  // Defaults to the name so a proposal stored before type and floor level existed still confirms as a rename.
+  field: z.enum(['name', 'type', 'floorLevel']).default('name'),
   value: z.string().max(200).nullable(),
 }).strict();
+
+// Which field a message asks to change. The declared row actions send an exact canned message, and "rename" always means the
+// name (so a room called "Floor 2 office" is not mistaken for a floor-level request); only free text falls back to keywords.
+function roomCorrectionField(message: string): RoomCorrectionField {
+  const exact = (Object.keys(ROOM_CORRECTION_FIELDS) as RoomCorrectionField[]).find((field) => ROOM_CORRECTION_FIELDS[field].message === message);
+  if (exact) return exact;
+  if (/\brename\b/i.test(message)) return 'name';
+  if (/\bfloor\b|\bstor(?:e)?y\b/i.test(message)) return 'floorLevel';
+  if (/\b(?:type|kind)\b/i.test(message)) return 'type';
+  return 'name';
+}
+
+function roomFieldCurrent(room: { name: string; type: string | null; floorLevel: number | null }, field: RoomCorrectionField): string | null {
+  if (field === 'name') return room.name;
+  if (field === 'type') return room.type;
+  return room.floorLevel === null || room.floorLevel === undefined ? null : String(room.floorLevel);
+}
+
+function roomFieldDisplay(field: RoomCorrectionField, value: string | null): string {
+  if (value === null || value === '') return 'Not recorded';
+  if (field === 'type') return roomTypeLabel(value);
+  if (field === 'floorLevel') return value === '0' ? '0 (ground floor)' : Number(value) < 0 ? `${value} (below ground)` : value;
+  return value;
+}
 
 function roomContextVersion(room: { id: string; updatedAt: Date }): string {
   return createHash('sha256').update(`${room.id}:${room.updatedAt.toISOString()}`).digest('hex');
@@ -8622,21 +8661,43 @@ async function roomRenameNameError(propertyId: string, roomId: string, value: un
   return clash ? 'Another room in this home already has that name.' : null;
 }
 
-function roomRenameItemActions(canManage: boolean) {
-  if (!canManage) return undefined;
-  return [{
-    id: 'rename-room', label: 'Rename room', message: 'Rename this room.',
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'ROOM_RENAME',
-  }];
+// A homeowner-facing reason the proposed value is unusable for this field, else null.
+async function roomCorrectionValueError(propertyId: string, roomId: string, field: RoomCorrectionField, value: unknown): Promise<string | null> {
+  if (field === 'name') return roomRenameNameError(propertyId, roomId, value);
+  if (field === 'type') return correctionValueError(ROOM_CORRECTION_FIELDS.type, value);
+  if (typeof value !== 'string' || !/^-?\d{1,2}$/.test(value.trim())) return `Enter a whole number from ${ROOM_FLOOR_MIN} to ${ROOM_FLOOR_MAX}: 0 is the ground floor, -1 a basement.`;
+  const level = Number(value.trim());
+  return level >= ROOM_FLOOR_MIN && level <= ROOM_FLOOR_MAX ? null : `The floor level must be from ${ROOM_FLOOR_MIN} to ${ROOM_FLOOR_MAX}.`;
 }
 
-function roomRenameConfirmation(room: { id: string; name: string }, proposed: string | null, version: number, expiresAt: Date) {
+// Canonical stored form of a value: trimmed text; a floor level is a plain integer string ("01" and "-0" are "1" and "0").
+function roomCorrectionNormalized(field: RoomCorrectionField, value: string): string {
+  const text = value.trim();
+  return field === 'floorLevel' ? String(Number(text)) : text;
+}
+
+export function roomRenameItemActions(canManage: boolean) {
+  if (!canManage) return undefined;
+  return (Object.keys(ROOM_CORRECTION_FIELDS) as RoomCorrectionField[]).map((field) => ({
+    id: field === 'name' ? 'rename-room' : `correct-room-${field}`, label: ROOM_CORRECTION_FIELDS[field].action, message: ROOM_CORRECTION_FIELDS[field].message,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'ROOM_RENAME',
+  }));
+}
+
+function roomRenameConfirmation(room: { id: string; name: string }, field: RoomCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
+  const meta = ROOM_CORRECTION_FIELDS[field];
   return {
-    confirmationId: `room-rename-${room.id}-${version}`, version, title: `Rename "${room.name}"?`,
+    confirmationId: `room-${field === 'name' ? 'rename' : `correct-${field}`}-${room.id}-${version}`, version,
+    title: field === 'name' ? `Rename "${room.name}"?` : `Change the ${meta.label} of "${room.name}"?`,
     description: 'This writes through the canonical inventory service, the same record the Rooms page edits, and refreshes dependent coverage analysis.',
-    fields: [{ label: 'Room', value: room.name }, { label: 'Current name', value: room.name }],
-    editableFields: [{ key: 'value', label: 'New room name', type: 'TEXT' as const, value: proposed ?? '' }],
-    confirmLabel: 'Save room name', consentText: 'I authorize this rename of the shared home record.', expiresAt: expiresAt.toISOString(),
+    fields: [{ label: 'Room', value: room.name }, ...(field === 'name' ? [{ label: 'Current name', value: room.name }] : [{ label: 'Field', value: meta.label }, { label: 'Current value', value: roomFieldDisplay(field, current) }])],
+    editableFields: [{
+      key: 'value', label: field === 'name' ? 'New room name' : `New ${meta.label}`, type: meta.kind, value: proposed ?? '',
+      ...(meta.kind === 'SELECT' ? { options: [...(meta.options ?? [])] } : {}),
+    }],
+    confirmLabel: field === 'name' ? 'Save room name' : `Save ${meta.label}`,
+    consentText: field === 'name' ? 'I authorize this rename of the shared home record.' : `I authorize this ${meta.label} change to the shared home record.`,
+    expiresAt: expiresAt.toISOString(),
   };
 }
 
@@ -8645,39 +8706,42 @@ async function roomRenameResult(userId: string, propertyId: string, message: str
   const roomsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/rooms`;
   const rooms = await prisma.inventoryRoom.findMany({
     where: { propertyId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: 200,
-    select: { id: true, name: true, type: true, updatedAt: true },
+    select: { id: true, name: true, type: true, floorLevel: true, updatedAt: true },
   });
+  const field = roomCorrectionField(message);
   const selected = exactEntityMatch(rooms.map((room) => ({ ...room, title: room.name })), message, launchContext);
   if (!selected) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'ROOM_TARGET_REQUIRED',
-      ...durableFreeTextClarification('ROOM_RENAME', 'Which room should Ask rename? Use its exact current name.'),
+      ...durableFreeTextClarification('ROOM_RENAME', `Which room should Ask ${field === 'name' ? 'rename' : `change the ${ROOM_CORRECTION_FIELDS[field].label} of`}? Use its exact current name.`),
       blocks: [{
-        type: 'GROUPED_LIST', filters: [], id: 'room-selection', title: 'Choose the room to rename',
+        type: 'GROUPED_LIST', filters: [], id: 'room-selection', title: field === 'name' ? 'Choose the room to rename' : `Choose the room whose ${ROOM_CORRECTION_FIELDS[field].label} to change`,
         description: 'Use the exact room name in your next message; nothing has changed.',
         sections: [{ id: 'rooms', title: 'Rooms', count: rooms.length, items: rooms.slice(0, 20).map((room) => ({
           id: room.id, title: room.name, description: null, meta: [readablePropertyValue(room.type)], status: null, href: null,
         })) }],
         actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }],
       }],
-      suggestions: rooms.slice(0, 3).map((room) => `Rename ${room.name}`),
+      suggestions: rooms.slice(0, 3).map((room) => (field === 'name' ? `Rename ${room.name}` : `Change the ${ROOM_CORRECTION_FIELDS[field].label} of ${room.name}`)),
     };
   }
+  const current = roomFieldCurrent(selected, field);
   // The new name comes from the confirmation card's editable field; a name
   // quoted in the message ("rename X to Y") only pre-fills it.
-  const stated = message.match(/\brename\b.+?\bto\s+["']?([^"'.]{1,80}?)["']?\s*$/i)?.[1]?.trim() ?? null;
-  const proposed = stated && stated.toLowerCase() !== selected.name.toLowerCase() ? stated : selected.name;
+  const stated = field === 'name' ? message.match(/\brename\b.+?\bto\s+["']?([^"'.]{1,80}?)["']?\s*$/i)?.[1]?.trim() ?? null : null;
+  // A type or floor level is always picked on the card, starting from what is recorded now.
+  const proposed = field === 'name' ? (stated && stated.toLowerCase() !== selected.name.toLowerCase() ? stated : selected.name) : current;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const contextVersion = roomContextVersion(selected);
-  const input = RoomRenameInputSchema.parse({ roomId: selected.id, value: proposed });
+  const input = RoomRenameInputSchema.parse({ roomId: selected.id, field, value: proposed });
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'ROOM_RENAME_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
       roomRename: input, roomRenameContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'room-rename-review', title: `Review renaming ${selected.name}`, body: 'No shared-home record has changed yet. Enter the new name, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }] }],
-    confirmation: roomRenameConfirmation(selected, proposed, 1, expiresAt),
+    blocks: [{ type: 'SUMMARY', id: 'room-rename-review', title: field === 'name' ? `Review renaming ${selected.name}` : `Review the ${ROOM_CORRECTION_FIELDS[field].label} of ${selected.name}`, body: `No shared-home record has changed yet. ${field === 'name' ? 'Enter the new name' : 'Choose the corrected value'}, then confirm.`, tone: 'DEFAULT', actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }] }],
+    confirmation: roomRenameConfirmation(selected, field, current, proposed, 1, expiresAt),
     suggestions: [],
   };
 }
@@ -13200,37 +13264,44 @@ registerConfirmCapabilityHandler('warranty.correct', confirmWarrantyCorrect);
 async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
   const candidate = RoomRenameInputSchema.safeParse(parameters.roomRename);
-  if (!candidate.success) throw Object.assign(new Error('The room rename is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-  const { roomId, value } = candidate.data;
+  if (!candidate.success) throw Object.assign(new Error('The room correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const { roomId, field, value } = candidate.data;
+  const meta = ROOM_CORRECTION_FIELDS[field];
   const room = await prisma.inventoryRoom.findFirst({ where: { id: roomId, propertyId: execution.propertyId } });
   if (!room) throw Object.assign(new Error('This room is no longer available. It may have been deleted.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-  const name = typeof value === 'string' ? value.trim() : '';
-  // A recovery retry of this same execution sees the already-applied name.
-  const alreadyApplied = name.length > 0 && room.name === name;
+  const proposed = typeof value === 'string' ? roomCorrectionNormalized(field, value) : '';
+  const previous = roomFieldCurrent(room, field);
+  // A recovery retry of this same execution sees the already-applied value.
+  const alreadyApplied = proposed.length > 0 && previous === proposed;
   if (!alreadyApplied) {
-    const invalid = await roomRenameNameError(execution.propertyId!, room.id, value);
+    const invalid = await roomCorrectionValueError(execution.propertyId!, room.id, field, value);
     if (invalid) throw Object.assign(new Error(invalid), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
     if (parameters.roomRenameContextVersion !== roomContextVersion(room)) {
       throw Object.assign(new Error('This room changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
     }
+    // Narrowed to the one field being corrected.
+    const patch = field === 'floorLevel' ? { floorLevel: Number(proposed) } : field === 'type' ? { type: proposed } : { name: proposed };
     try {
-      await inventoryService.updateRoom(execution.propertyId!, room.id, { name });
+      await inventoryService.updateRoom(execution.propertyId!, room.id, patch);
     } catch (error) {
       if (error instanceof APIError && error.code === 'ROOM_ALREADY_EXISTS') throw Object.assign(new Error('Another room in this home already has that name.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
       throw error;
     }
     // The traditional PATCH controller (not the service) marks these stale;
-    // repeat them so an Ask rename has the same downstream effect.
+    // repeat them so an Ask correction has the same downstream effect.
     await markCoverageAnalysisStale(execution.propertyId!);
     await markRiskPremiumOptimizerStale(execution.propertyId!);
     await markDoNothingRunsStale(execution.propertyId!);
   }
+  const renamed = field === 'name';
   const result: AskOperationResult = {
-    status: 'COMPLETED', reasonCode: 'ROOM_RENAMED',
+    status: 'COMPLETED', reasonCode: renamed ? 'ROOM_RENAMED' : 'ROOM_CORRECTED',
     blocks: [{
-      type: 'WORKFLOW_PROGRESS', id: `room-renamed-${room.id}`, title: 'Room renamed', status: 'COMPLETED',
+      type: 'WORKFLOW_PROGRESS', id: `room-${renamed ? 'renamed' : 'corrected'}-${room.id}`, title: renamed ? 'Room renamed' : 'Room updated', status: 'COMPLETED',
       description: 'The canonical room record was updated and dependent coverage analysis was marked for refresh.',
-      details: [{ label: 'Previous name', value: alreadyApplied ? 'Already renamed' : room.name }, { label: 'New name', value: name }],
+      details: renamed
+        ? [{ label: 'Previous name', value: alreadyApplied ? 'Already renamed' : room.name }, { label: 'New name', value: proposed }]
+        : [{ label: 'Room', value: room.name }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : roomFieldDisplay(field, previous) }, { label: 'New value', value: roomFieldDisplay(field, proposed) }],
       actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/rooms`, style: 'PRIMARY' }],
     }],
     suggestions: ['Show my rooms'],
@@ -13239,7 +13310,7 @@ async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<Confirm
   if (refresh.attemptedAndFailed) {
     result.blocks.push({
       type: 'LIMITATION', id: `room-refresh-failed-${room.id}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
-      body: 'This rename was saved to the canonical room record. The result you were viewing could not refresh automatically -- ask "Show my rooms" to see its current state.',
+      body: `This ${renamed ? 'rename' : 'correction'} was saved to the canonical room record. The result you were viewing could not refresh automatically -- ask "Show my rooms" to see its current state.`,
     });
   }
   return { result, artifactType: 'INVENTORY_ROOM', artifactId: room.id, refreshedExecutions: refresh.refreshedExecutions };
@@ -13253,8 +13324,6 @@ registerConfirmCapabilityHandler('room.rename', confirmRoomRename);
 // repeats the three stale-analysis markers the traditional POST controller calls.
 const ROOM_ADD_MESSAGE = 'Add a room to my home record.';
 const ROOM_CREATE_CAPTURE_KEY = 'ROOM_CREATE_INPUTS';
-const ROOM_TYPE_VALUES = ['KITCHEN', 'LIVING_ROOM', 'BEDROOM', 'BATHROOM', 'DINING', 'LAUNDRY', 'GARAGE', 'OFFICE', 'BASEMENT', 'OTHER'] as const;
-const roomTypeLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
 const RoomCreateInputSchema = z.object({
   type: z.enum(ROOM_TYPE_VALUES),
   name: z.string().trim().min(1).max(80),
@@ -15060,16 +15129,18 @@ async function editRoomRenameConfirmation(
 ): Promise<AskExecutionResponse> {
   const existing = RoomRenameInputSchema.safeParse(parameters.roomRename);
   if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
-  const room = await prisma.inventoryRoom.findFirst({ where: { id: existing.data.roomId, propertyId: execution.propertyId! }, select: { id: true, name: true } });
+  const { field } = existing.data;
+  const meta = ROOM_CORRECTION_FIELDS[field];
+  const room = await prisma.inventoryRoom.findFirst({ where: { id: existing.data.roomId, propertyId: execution.propertyId! }, select: { id: true, name: true, type: true, floorLevel: true } });
   if (!room) throw Object.assign(new Error('The selected room is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-  const invalid = await roomRenameNameError(execution.propertyId!, room.id, input.edits.value);
+  const invalid = await roomCorrectionValueError(execution.propertyId!, room.id, field, input.edits.value);
   if (invalid) throw Object.assign(new Error(invalid), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-  const cleaned = input.edits.value.trim();
+  const cleaned = roomCorrectionNormalized(field, input.edits.value);
   const updatedInput = RoomRenameInputSchema.parse({ ...existing.data, value: cleaned });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const newConfirmation = roomRenameConfirmation(room, cleaned, nextVersion, expiresAt);
-  const reviewBlock = { type: 'SUMMARY' as const, id: 'room-rename-review', title: `Review renaming ${room.name}`, body: 'No shared-home record has changed yet. Enter the new name, then confirm.', tone: 'DEFAULT' as const, actions: [] };
+  const newConfirmation = roomRenameConfirmation(room, field, roomFieldCurrent(room, field), cleaned, nextVersion, expiresAt);
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'room-rename-review', title: field === 'name' ? `Review renaming ${room.name}` : `Review the ${meta.label} of ${room.name}`, body: `No shared-home record has changed yet. ${field === 'name' ? 'Enter the new name' : 'Choose the corrected value'}, then confirm.`, tone: 'DEFAULT' as const, actions: [] };
   const editWrite = await prisma.askExecution.updateMany({
     where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
     data: {

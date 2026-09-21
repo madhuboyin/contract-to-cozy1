@@ -27,6 +27,8 @@ const READS = [
   'What type of warranty do I have?', 'Show the coverage details for my furnace warranty',
   // the add-an-item action's own message and read questions near it: the add command is reached only by the declared action
   'Add an item to my home inventory.', 'Add a room to my home record.', 'Fill in the missing structure details.', 'Fill in the missing safety details.', 'How many items are in my inventory?', 'Show my inventory', 'Do I have a dishwasher in my inventory?',
+  // read questions about a room's type and floor level
+  'What type of room is the office?', 'What floor is the bedroom on?', 'What floor level is my basement room?', 'Show room types', 'What is the floor level of the kitchen?', 'Which floor is the laundry room on?',
   // wording that resembles a correction but belongs to other operations
   'Update the notes on this maintenance task', 'Edit the notes for this seller prep checklist item', 'Change the model number on my quote request',
 ];
@@ -46,6 +48,7 @@ const WRITES = [
   ['Correct the policy number of this warranty.', 'WARRANTY_CORRECT'], ['Correct the cost of this warranty.', 'WARRANTY_CORRECT'],
   ['Correct the coverage details of this warranty.', 'WARRANTY_CORRECT'],
   ['Rename this room.', 'ROOM_RENAME'], ['Can you rename the spare room to office', 'ROOM_RENAME'],
+  ['Change the type of this room.', 'ROOM_RENAME'], ['Change the floor level of this room.', 'ROOM_RENAME'], ['Correct the room type of the office', 'ROOM_RENAME'], ['Change the floor level of the guest room', 'ROOM_RENAME'],
 ];
 
 test('ordinary read questions never route to a correction command', () => {

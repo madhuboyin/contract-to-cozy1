@@ -12,7 +12,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 require('../../src/services/ask/askOrchestrator.service.ts');
-const { roomCreateResult, inventoryItemCreateResult } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { roomCreateResult, inventoryItemCreateResult, roomRenameItemActions } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
 const { InventoryService } = require('../../src/services/inventory.service.ts');
@@ -116,11 +116,11 @@ test.afterEach(restore);
 const roomUpdatedAt = new Date('2026-09-01T00:00:00.000Z');
 const roomVersion = sha(`room-1:${roomUpdatedAt.toISOString()}`);
 const roomParams = (value = 'Chef kitchen', version = roomVersion) => ({ roomRename: { roomId: 'room-1', value }, roomRenameContextVersion: version, confirmationVersion: 2 });
-function roomModel({ name = 'Kitchen', clash = false, missing = false } = {}) {
+function roomModel({ name = 'Kitchen', clash = false, missing = false, type = 'KITCHEN', floorLevel = null } = {}) {
   models.inventoryRoom = {
     findFirst: async ({ where }) => {
       if (where.id && where.id.not) return clash ? { id: 'room-other' } : null; // name-uniqueness probe
-      return missing ? null : { id: 'room-1', propertyId: 'p1', name, updatedAt: roomUpdatedAt };
+      return missing ? null : { id: 'room-1', propertyId: 'p1', name, type, floorLevel, updatedAt: roomUpdatedAt };
     },
   };
 }
@@ -162,6 +162,114 @@ test('ROOM_RENAME confirm treats an already-applied name as done: no second writ
   assert.equal(result.status, 'COMPLETED');
   assert.equal(calls.updateRoom.length, 0);
   assert.equal(calls.markers.length, 0);
+});
+
+// ── ROOM_RENAME extended: room type and floor level ──
+const roomFieldParams = (field, value, version = roomVersion) => ({ roomRename: { roomId: 'room-1', field, value }, roomRenameContextVersion: version, confirmationVersion: 2 });
+
+test('room type correction writes a { type } patch only, repeats the stale markers, and shows the previous and new type', async () => {
+  roomModel({ type: 'KITCHEN' });
+  const { result, artifactId } = await invoke('ROOM_RENAME', roomFieldParams('type', 'OFFICE'));
+  assert.deepEqual(calls.updateRoom, [['p1', 'room-1', { type: 'OFFICE' }]]);
+  assert.deepEqual([...calls.markers].sort(), ['coverage', 'doNothing', 'risk']);
+  assert.equal(result.reasonCode, 'ROOM_CORRECTED');
+  assert.equal(result.blocks[0].title, 'Room updated');
+  assert.deepEqual(result.blocks[0].details.map((detail) => [detail.label, detail.value]), [['Room', 'Kitchen'], ['Field', 'type'], ['Previous value', 'Kitchen'], ['New value', 'Office']]);
+  assert.equal(artifactId, 'room-1');
+});
+
+test('floor level correction writes a numeric { floorLevel } patch in canonical form ("01" is 1, "-0" is 0)', async () => {
+  roomModel({ floorLevel: null });
+  await invoke('ROOM_RENAME', roomFieldParams('floorLevel', ' 01 '));
+  assert.deepEqual(calls.updateRoom[0][2], { floorLevel: 1 });
+  install(); roomModel({ floorLevel: 2 });
+  const { result } = await invoke('ROOM_RENAME', roomFieldParams('floorLevel', '-1'));
+  assert.deepEqual(calls.updateRoom[0][2], { floorLevel: -1 });
+  assert.equal(result.blocks[0].details.find((detail) => detail.label === 'New value').value, '-1 (below ground)');
+  assert.equal(result.blocks[0].details.find((detail) => detail.label === 'Previous value').value, '2');
+  install(); roomModel({ floorLevel: 3 });
+  await invoke('ROOM_RENAME', roomFieldParams('floorLevel', '-0'));
+  assert.deepEqual(calls.updateRoom[0][2], { floorLevel: 0 });
+});
+
+test('type and floor level reject values outside the allowed set without writing', async () => {
+  for (const [field, bad] of [['type', 'GARDEN'], ['type', ''], ['type', 'office'], ['floorLevel', '1.5'], ['floorLevel', 'two'], ['floorLevel', '51'], ['floorLevel', '-6'], ['floorLevel', ''], ['floorLevel', '1e2']]) {
+    install(); roomModel();
+    assert.equal(await codeOf(invoke('ROOM_RENAME', roomFieldParams(field, bad))), 'ASK_INVALID_CONFIRMATION_EDIT', `${field}=${JSON.stringify(bad)}`);
+    assert.equal(calls.updateRoom.length, 0);
+    assert.equal(calls.markers.length, 0);
+  }
+  install(); roomModel();
+  for (const [field, ok] of [['floorLevel', '50'], ['floorLevel', '-5'], ['type', 'BASEMENT']]) {
+    install(); roomModel();
+    await invoke('ROOM_RENAME', roomFieldParams(field, ok));
+    assert.equal(calls.updateRoom.length, 1, `${field}=${ok} is allowed`);
+  }
+});
+
+test('type and floor level: a stale version or a deleted room blocks the write; an already-applied value is done without a second write', async () => {
+  roomModel();
+  assert.equal(await codeOf(invoke('ROOM_RENAME', roomFieldParams('type', 'OFFICE', 'stale-version'))), 'ASK_CONTEXT_VERSION_CONFLICT');
+  install(); roomModel({ missing: true });
+  assert.equal(await codeOf(invoke('ROOM_RENAME', roomFieldParams('floorLevel', '2'))), 'ASK_CONTEXT_VERSION_CONFLICT');
+  assert.equal(calls.updateRoom.length, 0);
+  install(); roomModel({ type: 'OFFICE', floorLevel: 2 });
+  for (const [field, value] of [['type', 'OFFICE'], ['floorLevel', '2']]) {
+    const { result } = await invoke('ROOM_RENAME', roomFieldParams(field, value, 'version-from-before-the-first-write'));
+    assert.equal(result.blocks[0].details.find((detail) => detail.label === 'Previous value').value, 'Already corrected');
+  }
+  assert.equal(calls.updateRoom.length, 0);
+  assert.equal(calls.markers.length, 0);
+});
+
+test('a proposal stored before type and floor level existed (no field) still confirms as a rename', async () => {
+  roomModel();
+  const { result } = await invoke('ROOM_RENAME', { roomRename: { roomId: 'room-1', value: 'Chef kitchen' }, roomRenameContextVersion: roomVersion, confirmationVersion: 2 });
+  assert.deepEqual(calls.updateRoom[0][2], { name: 'Chef kitchen' });
+  assert.equal(result.reasonCode, 'ROOM_RENAMED');
+});
+
+const proposeRoom = async (message, entityId = 'room-1') => {
+  models.inventoryRoom = { findMany: async () => [{ id: 'room-1', name: 'Kitchen', type: 'KITCHEN', floorLevel: 1, updatedAt: roomUpdatedAt }, { id: 'room-2', name: 'Floor 2 office', type: 'OFFICE', floorLevel: null, updatedAt: roomUpdatedAt }] };
+  return capabilityInvoke('ROOM_RENAME', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ROOM', entityId, operationId: 'ROOM_RENAME' } });
+};
+
+test('room propose: each field builds the matching editable field starting from the recorded value, and writes nothing', async () => {
+  const cases = [
+    ['Rename this room.', 'TEXT', 'Kitchen', undefined, undefined],
+    ['Change the type of this room.', 'SELECT', 'KITCHEN', ['KITCHEN', 'LIVING_ROOM', 'BEDROOM', 'BATHROOM', 'DINING', 'LAUNDRY', 'GARAGE', 'OFFICE', 'BASEMENT', 'OTHER'], 'Kitchen'],
+    ['Change the floor level of this room.', 'TEXT', '1', undefined, '1'],
+  ];
+  for (const [message, type, value, optionValues, currentShown] of cases) {
+    const result = await proposeRoom(message);
+    assert.equal(result.status, 'NEEDS_CONFIRMATION', message);
+    const [field] = result.confirmation.editableFields;
+    assert.equal(field.type, type, message);
+    assert.equal(field.value, value, message);
+    assert.deepEqual(field.options?.map((option) => option.value), optionValues, message);
+    if (currentShown !== undefined) assert.equal(result.confirmation.fields.find((entry) => entry.label === 'Current value').value, currentShown, message);
+    assert.equal(calls.updateRoom.length, 0, 'proposing writes nothing');
+  }
+  const noFloor = await proposeRoom('Change the floor level of this room.', 'room-2');
+  assert.equal(noFloor.confirmation.fields.find((entry) => entry.label === 'Current value').value, 'Not recorded');
+  assert.equal(noFloor.confirmation.editableFields[0].value, '');
+});
+
+test('room propose: "rename" always means the name, even for a room called "Floor 2 office"', async () => {
+  const result = await proposeRoom('Rename the Floor 2 office to Studio', 'room-2');
+  assert.equal(result.confirmation.editableFields[0].label, 'New room name');
+  assert.equal(result.parameters.roomRename.field, 'name');
+  assert.equal(result.parameters.roomRename.value, 'Studio');
+});
+
+test('room actions: a contributor gets rename, type and floor level (all pinned to the operation, three stay inline); a viewer gets none', () => {
+  const actions = roomRenameItemActions(true);
+  assert.deepEqual(actions.map((action) => [action.id, action.message]), [
+    ['rename-room', 'Rename this room.'], ['correct-room-type', 'Change the type of this room.'], ['correct-room-floorLevel', 'Change the floor level of this room.'],
+  ]);
+  assert.ok(actions.every((action) => action.operationId === 'ROOM_RENAME' && action.interactionType === 'MUTATE_RECORD'));
+  assert.ok(actions.length <= 3, 'more than three would fold behind the disclosure');
+  assert.equal(roomRenameItemActions(false), undefined);
 });
 
 // ───────────────────────────── WARRANTY_CORRECT ─────────────────────────────

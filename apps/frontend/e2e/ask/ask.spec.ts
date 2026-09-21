@@ -357,6 +357,26 @@ test('a contributor renames a room inline through the TEXT field', async ({ page
   });
 });
 
+test('a contributor changes a room type inline through a dropdown', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Good · 82/100', actionLabel: /^Change room type/,
+    actionMessage: 'Change the type of this room.', entityType: 'INVENTORY_ROOM', entityId: 'room-property-summary', select: true,
+    confirmationTitle: 'Change the type of "Kitchen"?', fieldLabel: 'New type', newValue: 'OFFICE', shownValue: 'OFFICE', confirmLabel: 'Save type',
+    consentText: /I authorize this type change to the shared home record/, receiptTitle: 'Room updated',
+  });
+});
+
+test('a contributor changes a room floor level inline through the TEXT field', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Good · 82/100', actionLabel: /^Change floor level/,
+    actionMessage: 'Change the floor level of this room.', entityType: 'INVENTORY_ROOM', entityId: 'room-property-summary',
+    confirmationTitle: 'Change the floor level of "Kitchen"?', fieldLabel: 'New floor level', newValue: '-1', confirmLabel: 'Save floor level',
+    consentText: /I authorize this floor level change to the shared home record/, receiptTitle: 'Room updated',
+  });
+});
+
 test('a contributor adds a timeline event inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

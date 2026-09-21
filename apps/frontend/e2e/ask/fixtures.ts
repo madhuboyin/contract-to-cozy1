@@ -122,7 +122,11 @@ function correctableSummaryExecution() {
   const action = (id: string, label: string, message: string, operationId: string) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId });
   const rooms = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'property-rooms') as
     { sections: Array<{ items: Array<Record<string, unknown>> }> } | undefined;
-  if (rooms) rooms.sections[0].items[0].actions = [action('rename-room', 'Rename room', 'Rename this room.', 'ROOM_RENAME')];
+  if (rooms) rooms.sections[0].items[0].actions = [
+    action('rename-room', 'Rename room', 'Rename this room.', 'ROOM_RENAME'),
+    action('correct-room-type', 'Change room type', 'Change the type of this room.', 'ROOM_RENAME'),
+    action('correct-room-floorLevel', 'Change floor level', 'Change the floor level of this room.', 'ROOM_RENAME'),
+  ];
   const withAddAction = (blockId: string, addAction: Record<string, unknown>) => {
     const target = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === blockId) as { actions: Array<Record<string, unknown>> } | undefined;
     if (target) target.actions = [addAction, ...target.actions];
@@ -206,7 +210,7 @@ function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ve
 // Phase 3 write-slice acceptance: confirmation -> edit -> confirm for the
 // inventory (DATE), warranty (DATE) and room (TEXT) corrections. Shapes mirror
 // the real server's confirmation cards.
-export type CorrectionKind = 'inventory' | 'warranty' | 'room' | 'inventoryCondition' | 'inventoryCost' | 'eventAmount' | 'warrantyCategory';
+export type CorrectionKind = 'inventory' | 'warranty' | 'room' | 'roomType' | 'roomFloor' | 'inventoryCondition' | 'inventoryCost' | 'eventAmount' | 'warrantyCategory';
 const CORRECTIONS: Record<CorrectionKind, { message: RegExp; operationId: string; title: string; label: string; type: 'DATE' | 'TEXT' | 'SELECT' | 'MONEY'; initial: string; confirmLabel: string; consentText: string; receiptTitle: string; current: string; options?: Array<{ label: string; value: string }> }> = {
   inventory: { message: /correct the install date of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct installed date for Water heater?', label: 'Corrected installed date', type: 'DATE', initial: '2022-01-15', current: '2022-01-15', confirmLabel: 'Save installed date', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
   warranty: { message: /correct the expiry date of this warranty/i, operationId: 'WARRANTY_CORRECT', title: 'Correct the expiry date of the Acme Home Warranty warranty?', label: 'Corrected expiry date', type: 'DATE', initial: '2027-12-01', current: '2027-12-01', confirmLabel: 'Save expiry date', consentText: 'I authorize this correction to the warranty record.', receiptTitle: 'Warranty updated' },
@@ -214,6 +218,8 @@ const CORRECTIONS: Record<CorrectionKind, { message: RegExp; operationId: string
   inventoryCost: { message: /correct the purchase cost of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct purchase cost for Water heater?', label: 'Corrected purchase cost', type: 'MONEY', initial: '850.00', current: '$850.00', confirmLabel: 'Save purchase cost', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
   eventAmount: { message: /correct the amount of this timeline event/i, operationId: 'HOME_EVENT_CORRECT', title: 'Correct the amount of "Roof replacement"?', label: 'Corrected amount', type: 'MONEY', initial: '18500.00', current: '$18,500.00', confirmLabel: 'Save amount', consentText: 'I authorize this correction to the shared home timeline.', receiptTitle: 'Home timeline event corrected' },
   warrantyCategory: { message: /correct the coverage type of this warranty/i, operationId: 'WARRANTY_CORRECT', title: 'Correct the coverage type of the Acme Home Warranty warranty?', label: 'Corrected coverage type', type: 'SELECT', initial: 'HOME_WARRANTY_PLAN', current: 'Home warranty plan', confirmLabel: 'Save coverage type', consentText: 'I authorize this correction to the warranty record.', receiptTitle: 'Warranty updated', options: [{ label: 'Appliance', value: 'APPLIANCE' }, { label: 'HVAC', value: 'HVAC' }, { label: 'Roofing', value: 'ROOFING' }, { label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'Other', value: 'OTHER' }] },
+  roomType: { message: /change the type of this room/i, operationId: 'ROOM_RENAME', title: 'Change the type of "Kitchen"?', label: 'New type', type: 'SELECT', initial: 'KITCHEN', current: 'Kitchen', confirmLabel: 'Save type', consentText: 'I authorize this type change to the shared home record.', receiptTitle: 'Room updated', options: [{ label: 'Kitchen', value: 'KITCHEN' }, { label: 'Office', value: 'OFFICE' }, { label: 'Basement', value: 'BASEMENT' }] },
+  roomFloor: { message: /change the floor level of this room/i, operationId: 'ROOM_RENAME', title: 'Change the floor level of "Kitchen"?', label: 'New floor level', type: 'TEXT', initial: '1', current: '1', confirmLabel: 'Save floor level', consentText: 'I authorize this floor level change to the shared home record.', receiptTitle: 'Room updated' },
   room: { message: /rename this room/i, operationId: 'ROOM_RENAME', title: 'Rename "Kitchen"?', label: 'New room name', type: 'TEXT', initial: 'Kitchen', current: 'Kitchen', confirmLabel: 'Save room name', consentText: 'I authorize this rename of the shared home record.', receiptTitle: 'Room renamed' },
 };
 
