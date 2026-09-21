@@ -112,6 +112,31 @@ function correctableSummaryExecution() {
   if (list) {
     list.sections[0].items[0].actions = [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }];
   }
+  const action = (id: string, label: string, message: string, operationId: string) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId });
+  const rooms = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'property-rooms') as
+    { sections: Array<{ items: Array<Record<string, unknown>> }> } | undefined;
+  if (rooms) rooms.sections[0].items[0].actions = [action('rename-room', 'Rename room', 'Rename this room.', 'ROOM_RENAME')];
+  // The two collections below are what the real Property Summary emits for inventory and warranties
+  // (owner-only warranty actions are declared here because the fixture user owns the warranty).
+  (response.blocks as unknown[]).push({
+    type: 'GROUPED_LIST', id: 'property-inventory', title: 'Systems and inventory', filters: [],
+    description: 'Select an item to inspect its current canonical details without leaving Ask Cozy.',
+    sections: [{ id: 'inventory', title: 'Recorded items', count: 1, items: [{
+      id: 'item-property-summary', title: 'Water heater', description: null, entityType: 'INVENTORY_ITEM', href: null, status: 'VERIFIED',
+      meta: ['Plumbing', 'Good', 'Updated Sep 1, 2026'],
+      actions: [action('correct-installedOn', 'Correct install date', 'Correct the install date of this inventory item.', 'INVENTORY_ITEM_CORRECT')],
+    }] }],
+    actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${propertyId}/inventory`, style: 'SECONDARY' }],
+  }, {
+    type: 'GROUPED_LIST', id: 'property-warranties', title: 'Warranties', filters: [],
+    description: 'Select a warranty to inspect its current canonical details without leaving Ask Cozy.',
+    sections: [{ id: 'warranties', title: 'Recorded warranties', count: 1, items: [{
+      id: 'warranty-property-summary', title: 'Acme Home Warranty', description: null, entityType: 'WARRANTY', href: null, status: 'ACTIVE',
+      meta: ['Home warranty plan', 'Expires Dec 1, 2027'],
+      actions: [action('correct-expiryDate', 'Correct expiry date', 'Correct the expiry date of this warranty.', 'WARRANTY_CORRECT')],
+    }] }],
+    actions: [{ id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' }],
+  });
   return response;
 }
 
@@ -134,6 +159,35 @@ function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ve
       ? [{ type: 'WORKFLOW_PROGRESS', id: 'event-corrected-event-replacement', title: 'Home timeline event corrected', status: 'COMPLETED', description: 'A new revision replaces the prior entry on your home\'s canonical timeline; the original is preserved as history.', details: [{ label: 'Event', value }], actions: [] }]
       : [{ type: 'SUMMARY', id: 'home-event-correct-review', title: 'Review this title correction', body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: status === 'COMPLETED' ? null : eventCorrectionConfirmation(version, value),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+// Phase 3 write-slice acceptance: confirmation -> edit -> confirm for the
+// inventory (DATE), warranty (DATE) and room (TEXT) corrections. Shapes mirror
+// the real server's confirmation cards.
+export type CorrectionKind = 'inventory' | 'warranty' | 'room';
+const CORRECTIONS: Record<CorrectionKind, { message: RegExp; operationId: string; title: string; label: string; type: 'DATE' | 'TEXT'; initial: string; confirmLabel: string; consentText: string; receiptTitle: string; current: string }> = {
+  inventory: { message: /correct the install date of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct installed date for Water heater?', label: 'Corrected installed date', type: 'DATE', initial: '2022-01-15', current: '2022-01-15', confirmLabel: 'Save installed date', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
+  warranty: { message: /correct the expiry date of this warranty/i, operationId: 'WARRANTY_CORRECT', title: 'Correct the expiry date of the Acme Home Warranty warranty?', label: 'Corrected expiry date', type: 'DATE', initial: '2027-12-01', current: '2027-12-01', confirmLabel: 'Save expiry date', consentText: 'I authorize this correction to the warranty record.', receiptTitle: 'Warranty updated' },
+  room: { message: /rename this room/i, operationId: 'ROOM_RENAME', title: 'Rename "Kitchen"?', label: 'New room name', type: 'TEXT', initial: 'Kitchen', current: 'Kitchen', confirmLabel: 'Save room name', consentText: 'I authorize this rename of the shared home record.', receiptTitle: 'Room renamed' },
+};
+
+function correctionExecution(kind: CorrectionKind, status: 'NEEDS_CONFIRMATION' | 'COMPLETED', version: number, value: string, sessionId?: string) {
+  const spec = CORRECTIONS[kind];
+  const base = propertySummaryTimelineExecution();
+  return {
+    ...base, sessionId: sessionId ?? base.sessionId, executionId: `execution-correct-${kind}`, question: 'Correction', status,
+    operation: { id: spec.operationId, version: '1.0', family: 'COMMAND' }, contextVersion: `correct-${kind}-v1`,
+    blocks: status === 'COMPLETED'
+      ? [{ type: 'WORKFLOW_PROGRESS', id: `corrected-${kind}`, title: spec.receiptTitle, status: 'COMPLETED', description: 'The canonical record was updated.', details: [{ label: 'New value', value }], actions: [] }]
+      : [{ type: 'SUMMARY', id: `correct-${kind}-review`, title: 'Review this correction', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [] }],
+    confirmation: status === 'COMPLETED' ? null : {
+      confirmationId: `correct-${kind}-${version}`, version, title: spec.title, description: 'Review before it is written to the canonical record.',
+      fields: [{ label: 'Current value', value: spec.current }],
+      editableFields: [{ key: 'value', label: spec.label, type: spec.type, value }],
+      confirmLabel: spec.confirmLabel, consentText: spec.consentText, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    },
     updatedAt: new Date().toISOString(),
   };
 }
@@ -367,6 +421,17 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       estimatedCost: 250, actualCost: null, serviceCategory: 'HVAC', serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null,
       seasonalChecklistItemId: null, actionKey: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-17T00:00:00.000Z', completedAt: null,
     } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/inventory/items/item-property-summary`, (route) => fulfill(route, { success: true, data: { item: {
+    id: 'item-property-summary', propertyId, roomId: null, warrantyId: null, insurancePolicyId: null, name: 'Water heater', category: 'PLUMBING', condition: 'GOOD',
+    brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z', lastServicedOn: null,
+    purchaseCostCents: 85000, replacementCostCents: 120000, currency: 'USD', notes: 'Tank-style, in basement utility closet.', tags: [], sourceHash: null,
+    coverageNotRequired: false, isVerified: true, documents: [], warranty: null, createdAt: '2022-01-15T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
+  } } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/warranties`, (route) => fulfill(route, { success: true, data: { warranties: [{
+    id: 'warranty-property-summary', homeownerProfileId: 'profile-0', propertyId, inventoryItemId: null, category: 'HOME_WARRANTY_PLAN', providerName: 'Acme Home Warranty',
+    policyNumber: 'POL-123', coverageDetails: 'Covers HVAC and major appliances.', cost: 45000, startDate: '2026-01-01T00:00:00.000Z', expiryDate: '2027-12-01T00:00:00.000Z',
+    documents: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  }] } }));
   await page.route(`${apiOrigin}/api/properties/${propertyId}/home-events/event-property-summary`, (route) => fulfill(route, { success: true, data: { event: {
     id: 'event-property-summary', propertyId, type: 'IMPROVEMENT', subtype: 'ROOF', importance: 'HIGH', visibility: 'HOUSEHOLD',
     occurredAt: '2026-09-01T12:00:00.000Z', endAt: null, datePrecision: 'EXACT_DATE', dateRangeStart: null, dateRangeEnd: null,
@@ -501,6 +566,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: response }, 201);
       return;
     }
+    const correctionKind = (Object.keys(CORRECTIONS) as CorrectionKind[]).find((kind) => CORRECTIONS[kind].message.test(body.message));
+    if (correctionKind) {
+      if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: correctionExecution(correctionKind, 'NEEDS_CONFIRMATION', 1, CORRECTIONS[correctionKind].initial, body.sessionId as string | undefined) }, 201);
+      return;
+    }
     if (/correct the title of this timeline event/i.test(body.message)) {
       const response = eventCorrectionExecution('NEEDS_CONFIRMATION', 1, 'Roof replacement', body.sessionId);
       if (body.sessionId) correctionSessionId = body.sessionId;
@@ -611,6 +682,19 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     await fulfill(route, { success: true, data: execution(body.captureKey === 'FINANCING_PROFILE_REFINANCE_INPUTS' ? 'refinance' : 'refrigerator', true) });
   });
+  for (const kind of Object.keys(CORRECTIONS) as CorrectionKind[]) {
+    await page.route(`${apiOrigin}/api/ask/executions/execution-correct-${kind}/confirm/edit`, async (route) => {
+      assertAuthenticated(route.request());
+      const body = route.request().postDataJSON() as { confirmationVersion: number; edits: Record<string, string> };
+      correctionEditBodies.push(body);
+      await fulfill(route, { success: true, data: correctionExecution(kind, 'NEEDS_CONFIRMATION', body.confirmationVersion + 1, body.edits.value, correctionSessionId) });
+    });
+    await page.route(`${apiOrigin}/api/ask/executions/execution-correct-${kind}/confirm`, async (route) => {
+      assertAuthenticated(route.request());
+      correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      await fulfill(route, { success: true, data: correctionExecution(kind, 'COMPLETED', 2, correctionEditBodies.at(-1)?.edits.value ?? '', correctionSessionId) });
+    });
+  }
   await page.route(`${apiOrigin}/api/ask/executions/execution-event-correction/confirm/edit`, async (route) => {
     assertAuthenticated(route.request());
     const body = route.request().postDataJSON() as { confirmationVersion: number; edits: Record<string, string> };

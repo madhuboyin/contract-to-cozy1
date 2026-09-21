@@ -247,6 +247,71 @@ test('a contributor corrects a timeline event title inline: exact identity is se
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+// Shared flow for the inventory / warranty / room corrections: open the record's inline detail from the
+// Property Summary, click the declared correction action, verify the exact identity reaches the server,
+// edit the confirmation's editable field, consent, confirm, and see the receipt without leaving Ask.
+async function correctionFlow(page: import('@playwright/test').Page, api: Awaited<ReturnType<typeof installAskApi>>, spec: {
+  block: string; recordButton: string; detailText: string; actionLabel: RegExp; actionMessage: string; entityType: string; entityId: string;
+  confirmationTitle: string; fieldLabel: string; newValue: string; confirmLabel: string; consentText: RegExp; receiptTitle: string;
+}) {
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: spec.block, exact: true }) });
+  await response.getByRole('button', { name: spec.recordButton, exact: true }).click();
+  await expect(response.getByText(spec.detailText)).toBeVisible();
+  await response.getByRole('button', { name: spec.actionLabel }).click();
+
+  await expect.poll(() => api.executionBodies.some((body) => body.message === spec.actionMessage
+    && (body.launchContext as { entityType?: string } | undefined)?.entityType === spec.entityType
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === spec.entityId)).toBe(true);
+  await expect(page.getByText(spec.confirmationTitle)).toBeVisible();
+  await expect(page.getByText('No shared-home record has changed yet', { exact: false })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByLabel(spec.fieldLabel).fill(spec.newValue);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => api.correctionEditBodies).toEqual([{ confirmationVersion: 1, edits: { value: spec.newValue } }]);
+  await expect(page.getByRole('definition').filter({ hasText: spec.newValue })).toBeVisible();
+  await page.getByLabel(spec.consentText).check();
+  await page.getByRole('button', { name: spec.confirmLabel, exact: true }).click();
+
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 2, consentConfirmed: true })]);
+  await expect(page.getByText(spec.receiptTitle)).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+}
+
+test('a contributor corrects an inventory item install date inline through the DATE field', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Systems and inventory', recordButton: 'Water heater', detailText: 'Tank-style, in basement utility closet.', actionLabel: /^Correct install date/,
+    actionMessage: 'Correct the install date of this inventory item.', entityType: 'INVENTORY_ITEM', entityId: 'item-property-summary',
+    confirmationTitle: 'Correct installed date for Water heater?', fieldLabel: 'Corrected installed date', newValue: '2021-03-15', confirmLabel: 'Save installed date',
+    consentText: /I authorize this correction to the shared home inventory record/, receiptTitle: 'Inventory record updated',
+  });
+});
+
+test('a contributor corrects their own warranty expiry date inline through the DATE field', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Warranties', recordButton: 'Acme Home Warranty', detailText: 'Covers HVAC and major appliances.', actionLabel: /^Correct expiry date/,
+    actionMessage: 'Correct the expiry date of this warranty.', entityType: 'WARRANTY', entityId: 'warranty-property-summary',
+    confirmationTitle: 'Correct the expiry date of the Acme Home Warranty warranty?', fieldLabel: 'Corrected expiry date', newValue: '2028-06-30', confirmLabel: 'Save expiry date',
+    consentText: /I authorize this correction to the warranty record/, receiptTitle: 'Warranty updated',
+  });
+});
+
+test('a contributor renames a room inline through the TEXT field', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Rooms', recordButton: 'Kitchen', detailText: 'Good · 82/100', actionLabel: /^Rename room/,
+    actionMessage: 'Rename this room.', entityType: 'INVENTORY_ROOM', entityId: 'room-property-summary',
+    confirmationTitle: 'Rename "Kitchen"?', fieldLabel: 'New room name', newValue: 'Chef kitchen', confirmLabel: 'Save room name',
+    consentText: /I authorize this rename of the shared home record/, receiptTitle: 'Room renamed',
+  });
+});
+
 test('a viewer-shaped result declares no correction actions, so no correction control renders', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
