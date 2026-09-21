@@ -107,7 +107,7 @@ import { capturePropertyFact } from '../../modules/propertyContext/application/c
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { captureWarranty } from '../../modules/propertyContext/application/captureWarranty';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
-import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate, warrantyAddCaptureRequest, USER_ADD_ORIGIN } from './conversationalUnderstanding/conversationalCapture';
+import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate, warrantyAddCaptureRequest, eventAddCaptureRequest, buildUserAddedEventConfirmation, EVENT_ADD_CAPTURE_KEY, USER_ADD_ORIGIN } from './conversationalUnderstanding/conversationalCapture';
 import { buildAskNextActionsBlock, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, NEXT_ACTION_CONTEXT_PREFIX, nextActionContextOperation } from './askNextActions';
 import { capabilityCardLaunch } from './askCapabilityCardLaunch';
 import { HomeEventsService } from '../homeEvents.service';
@@ -145,6 +145,10 @@ import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.servic
 import { getOrCreateQuoteComparisonWorkspace, getQuoteComparisonWorkspace, getWorkspaceComparability } from '../quoteComparison.service';
 import { upsertNotificationPreference } from '../notificationPreference.service';
 import { updateInsurancePolicy, updateWarranty } from '../home-management.service';
+import {
+  correctionDateString, correctionDisplay, correctionMoneyFromDollars, correctionMoneyToCents, correctionNormalized, correctionValueError,
+  type CorrectionFieldSpec, type CorrectionOption,
+} from './askCorrectionFields';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../coverageAnalysis.service';
 import { markReplaceRepairStale } from '../replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../riskPremiumOptimizer.service';
@@ -4688,7 +4692,10 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             meta: [readablePropertyValue(room.type), `Updated ${humanDate(room.updatedAt) ?? 'date unavailable'}`],
           })),
         }],
-        actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `${propertyHref}/rooms`, style: 'SECONDARY' }],
+        actions: [
+          ...(access.role !== HouseholdRole.VIEWER ? [{ id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW' as const, message: ROOM_ADD_MESSAGE, operationId: 'ROOM_CREATE', style: 'PRIMARY' as const }] : []),
+          { id: 'open-rooms', label: 'Open Rooms', href: `${propertyHref}/rooms`, style: 'SECONDARY' as const },
+        ],
       });
     }
     if (documents) {
@@ -4728,19 +4735,27 @@ async function propertySummaryResult(userId: string, propertyId: string, message
     });
   }
 
-  if (!completenessFocus && timeline?.recent.length) {
+  const recentEvents = timeline?.recent ?? [];
+  const canAddEvent = access.role !== HouseholdRole.VIEWER;
+  // The block also appears on a home with no confirmed events yet, so a contributor still has the Add entry point.
+  if (!completenessFocus && timeline && (recentEvents.length > 0 || canAddEvent)) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'property-recent-events', title: 'Recent verified home activity',
-      description: `${timeline.confirmedCount} current confirmed or evidence-verified event${timeline.confirmedCount === 1 ? '' : 's'} are visible to you. Showing the most recent records.`,
+      description: recentEvents.length
+        ? `${timeline.confirmedCount} current confirmed or evidence-verified event${timeline.confirmedCount === 1 ? '' : 's'} are visible to you. Showing the most recent records.`
+        : 'No confirmed or evidence-verified events are recorded for this home yet.',
       sections: [{
-        id: 'recent-events', title: 'Home Timeline', count: timeline.recent.length,
-        items: timeline.recent.map((event) => ({
+        id: 'recent-events', title: 'Home Timeline', count: recentEvents.length,
+        items: recentEvents.map((event) => ({
           id: event.id, title: event.title, description: null,
           meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
           status: event.verificationStatus, href: null, entityType: 'HOME_EVENT', actions: homeEventCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
         })),
       }],
-      actions: [{ id: 'open-home-timeline', label: 'Open home timeline', href: `${propertyHref}/timeline`, style: 'SECONDARY' }],
+      actions: [
+        ...(canAddEvent ? [{ id: 'add-timeline-event', label: 'Add a timeline event', interactionType: 'START_WORKFLOW' as const, message: EVENT_ADD_MESSAGE, operationId: 'CAPTURE_EVENT_CONFIRM', style: 'PRIMARY' as const }] : []),
+        { id: 'open-home-timeline', label: 'Open home timeline', href: `${propertyHref}/timeline`, style: 'SECONDARY' as const },
+      ],
     });
   }
 
@@ -8225,27 +8240,70 @@ registerCapabilityHandler('inventory.item-correct', async (envelope) => inventor
 // updateHomeEvent supersedes the row and creates a replacement with a NEW id,
 // so the target is always re-resolved as (id, isCurrent, !deletedAt) and the
 // receipt/artifact carries the replacement's id.
-const HOME_EVENT_CORRECTION_FIELDS = {
-  title: { label: 'title', action: 'Correct title', message: 'Correct the title of this timeline event.', type: 'TEXT' as const },
-  occurredAt: { label: 'date', action: 'Correct date', message: 'Correct the date of this timeline event.', type: 'DATE' as const },
-} as const;
+// VERIFIED_RESOLUTION is created by the system when a guidance journey completes, so it is not offered as a type
+// and an event that already has it cannot have its type changed here.
+const HOME_EVENT_TYPE_OPTIONS: readonly CorrectionOption[] = [
+  { label: 'Purchase', value: 'PURCHASE' }, { label: 'Document', value: 'DOCUMENT' }, { label: 'Repair', value: 'REPAIR' },
+  { label: 'Maintenance', value: 'MAINTENANCE' }, { label: 'Claim', value: 'CLAIM' }, { label: 'Improvement', value: 'IMPROVEMENT' },
+  { label: 'Value update', value: 'VALUE_UPDATE' }, { label: 'Inspection', value: 'INSPECTION' }, { label: 'Note', value: 'NOTE' },
+  { label: 'Milestone', value: 'MILESTONE' }, { label: 'Other', value: 'OTHER' },
+];
+const HOME_EVENT_IMPORTANCE_OPTIONS: readonly CorrectionOption[] = [
+  { label: 'Low', value: 'LOW' }, { label: 'Normal', value: 'NORMAL' }, { label: 'High', value: 'HIGH' }, { label: 'Highlight', value: 'HIGHLIGHT' },
+];
+type HomeEventCorrectionMeta = CorrectionFieldSpec & { action: string; message: string };
+const HOME_EVENT_CORRECTION_FIELDS: Record<'title' | 'occurredAt' | 'summary' | 'amount' | 'type' | 'importance', HomeEventCorrectionMeta> = {
+  title: { label: 'title', action: 'Correct title', message: 'Correct the title of this timeline event.', kind: 'TEXT', min: 3, max: 140 },
+  occurredAt: { label: 'date', action: 'Correct date', message: 'Correct the date of this timeline event.', kind: 'DATE' },
+  summary: { label: 'summary', action: 'Correct summary', message: 'Correct the summary of this timeline event.', kind: 'TEXTAREA', max: 500 },
+  amount: { label: 'amount', action: 'Correct amount', message: 'Correct the amount of this timeline event.', kind: 'MONEY' },
+  type: { label: 'type', action: 'Correct type', message: 'Correct the type of this timeline event.', kind: 'SELECT', options: HOME_EVENT_TYPE_OPTIONS },
+  importance: { label: 'importance', action: 'Correct importance', message: 'Correct the importance of this timeline event.', kind: 'SELECT', options: HOME_EVENT_IMPORTANCE_OPTIONS },
+};
 type HomeEventCorrectionField = keyof typeof HOME_EVENT_CORRECTION_FIELDS;
 
 const HomeEventCorrectionInputSchema = z.object({
   eventId: z.string().trim().min(1).max(160),
-  field: z.enum(['title', 'occurredAt']),
-  value: z.string().max(200).nullable(),
+  field: z.enum(['title', 'occurredAt', 'summary', 'amount', 'type', 'importance']),
+  value: z.string().max(2000).nullable(),
 }).strict();
 
+// "amount"/"cost"/"price" are checked before "type" and "date" only to keep the parse order explicit; the
+// fields do not overlap in practice.
 function homeEventCorrectionField(message: string): HomeEventCorrectionField | null {
+  if (/\b(?:amount|cost|price)\b/i.test(message)) return 'amount';
+  if (/\b(?:summary|description)\b/i.test(message)) return 'summary';
+  if (/\bimportance\b/i.test(message)) return 'importance';
+  if (/\btype\b/i.test(message)) return 'type';
   if (/\b(?:title|name)\b/i.test(message)) return 'title';
   if (/\bdate\b/i.test(message)) return 'occurredAt';
   return null;
 }
 
-function homeEventCorrectionValueValid(field: HomeEventCorrectionField, value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  return field === 'occurredAt' ? isValidDateEditInput(value) : value.trim().length >= 3 && value.trim().length <= 140;
+function homeEventCorrectionValueError(field: HomeEventCorrectionField, value: unknown): string | null {
+  return correctionValueError(HOME_EVENT_CORRECTION_FIELDS[field], value);
+}
+
+// The value currently recorded for a field, in the canonical string form the card edits.
+function homeEventFieldCurrent(event: object, field: HomeEventCorrectionField): string | null {
+  const raw = (event as Record<string, unknown>)[field === 'occurredAt' ? 'occurredAt' : field];
+  const kind = HOME_EVENT_CORRECTION_FIELDS[field].kind;
+  if (kind === 'DATE') return correctionDateString(raw);
+  if (kind === 'MONEY') return correctionMoneyFromDollars(raw);
+  return typeof raw === 'string' && raw.trim() ? raw : null;
+}
+
+function homeEventFieldPatch(field: HomeEventCorrectionField, normalized: string): Record<string, unknown> {
+  if (field === 'occurredAt') return { occurredAt: `${normalized}T00:00:00.000Z`, datePrecision: 'EXACT_DATE' };
+  if (field === 'amount') return { amount: Number(normalized) };
+  return { [field]: normalized };
+}
+
+// Why this event cannot take this correction, or null.
+function homeEventCorrectionBlocker(event: { datePrecision: string; type?: string }, field: HomeEventCorrectionField): string | null {
+  if (field === 'occurredAt' && event.datePrecision === 'RANGE') return 'This event is recorded as a date range and cannot be corrected here.';
+  if (field === 'type' && event.type === 'VERIFIED_RESOLUTION') return 'This event was created automatically when a guided plan was completed, so its type cannot be changed here.';
+  return null;
 }
 
 function homeEventContextVersion(event: { id: string; revision: number }): string {
@@ -8260,14 +8318,17 @@ function homeEventCorrectionItemActions(canManage: boolean) {
   }));
 }
 
-function homeEventCorrectionConfirmation(event: { id: string; title: string }, field: HomeEventCorrectionField, current: string, proposed: string | null, version: number, expiresAt: Date) {
+function homeEventCorrectionConfirmation(event: { id: string; title: string }, field: HomeEventCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
   const meta = HOME_EVENT_CORRECTION_FIELDS[field];
   return {
     confirmationId: `home-event-correct-${event.id}-${version}`, version, title: `Correct the ${meta.label} of "${event.title}"?`,
-    description: 'This records a new revision on the canonical home timeline; the original is preserved as history.',
-    fields: [{ label: 'Event', value: event.title }, { label: 'Field', value: meta.label }, { label: 'Current value', value: current },
+    description: 'This records a new revision on the canonical home timeline; the original is preserved as history. An evidence-verified event returns to pending confirmation until it is verified again.',
+    fields: [{ label: 'Event', value: event.title }, { label: 'Field', value: meta.label }, { label: 'Current value', value: correctionDisplay(meta, current) },
       ...(field === 'occurredAt' ? [{ label: 'Date precision', value: 'Recorded as an exact date' }] : [])],
-    editableFields: [{ key: 'value', label: `Corrected ${meta.label}`, type: meta.type, value: proposed ?? '' }],
+    editableFields: [{
+      key: 'value', label: `Corrected ${meta.label}`, type: meta.kind, value: proposed ?? '',
+      ...(meta.kind === 'SELECT' ? { options: [...(meta.options ?? [])] } : {}),
+    }],
     confirmLabel: `Save ${meta.label}`, consentText: 'I authorize this correction to the shared home timeline.', expiresAt: expiresAt.toISOString(),
   };
 }
@@ -8278,7 +8339,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
   const events = await prisma.homeEvent.findMany({
     where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
-    select: { id: true, title: true, revision: true, occurredAt: true, datePrecision: true },
+    select: { id: true, title: true, revision: true, occurredAt: true, datePrecision: true, summary: true, amount: true, type: true, importance: true },
   });
   const selected = exactEntityMatch(events, message, launchContext);
   if (!selected) {
@@ -8300,21 +8361,22 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
   if (!field) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'HOME_EVENT_CORRECTION_FIELD_REQUIRED',
-      ...durableFreeTextClarification('HOME_EVENT_CORRECT', `Should the title or the date of "${selected.title}" change?`),
-      blocks: [{ type: 'SUMMARY', id: 'home-event-correct-field', title: `Should the title or the date change?`, body: 'Say title or date. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      ...durableFreeTextClarification('HOME_EVENT_CORRECT', `Which detail of "${selected.title}" should change? Ask can correct its title, date, summary, amount, type, or importance.`),
+      blocks: [{ type: 'SUMMARY', id: 'home-event-correct-field', title: 'Which detail should change?', body: 'Say title, date, summary, amount, type, or importance. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [`Correct the title of the timeline event ${selected.title}`, `Correct the date of the timeline event ${selected.title}`],
     };
   }
-  if (field === 'occurredAt' && selected.datePrecision === 'RANGE') {
+  const blocker = homeEventCorrectionBlocker(selected, field);
+  if (blocker) {
     return {
-      status: 'NOT_APPLICABLE', reasonCode: 'HOME_EVENT_DATE_RANGE_UNSUPPORTED',
-      blocks: [{ type: 'SUMMARY', id: 'home-event-range-unsupported', title: 'This event is recorded as a date range', body: 'Ask can correct the date of an event recorded with a single date. Use the timeline to adjust a date range.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'PRIMARY' }] }],
+      status: 'NOT_APPLICABLE', reasonCode: field === 'type' ? 'HOME_EVENT_TYPE_LOCKED' : 'HOME_EVENT_DATE_RANGE_UNSUPPORTED',
+      blocks: [{ type: 'SUMMARY', id: 'home-event-correction-unsupported', title: 'This detail cannot be corrected here', body: `${blocker} Nothing has changed.`, tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'PRIMARY' }] }],
       suggestions: [],
     };
   }
-  const current = field === 'title' ? selected.title : (inventoryDateValue(selected.occurredAt) ?? 'Not recorded');
+  const current = homeEventFieldCurrent(selected, field);
   const stated = field === 'occurredAt' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
-  const proposed = stated && isValidDateEditInput(stated) ? stated : field === 'title' ? selected.title : inventoryDateValue(selected.occurredAt);
+  const proposed = stated && isValidDateEditInput(stated) ? stated : current;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const contextVersion = homeEventContextVersion(selected);
   const input = HomeEventCorrectionInputSchema.parse({ eventId: selected.id, field, value: proposed });
@@ -8337,31 +8399,63 @@ registerCapabilityHandler('home-event.correct', async (envelope) => homeEventCor
 // canonical updateWarranty is scoped to it (the traditional Warranties page
 // has the same rule), so actions are declared only for warranties the
 // requester added and confirm re-verifies ownership.
-const WARRANTY_CORRECTION_FIELDS = {
-  providerName: { label: 'provider', action: 'Correct provider', message: 'Correct the provider of this warranty.', type: 'TEXT' as const },
-  expiryDate: { label: 'expiry date', action: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', type: 'DATE' as const },
-} as const;
+const WARRANTY_CATEGORY_OPTIONS: readonly CorrectionOption[] = [
+  { label: 'Appliance', value: 'APPLIANCE' }, { label: 'HVAC', value: 'HVAC' }, { label: 'Roofing', value: 'ROOFING' }, { label: 'Plumbing', value: 'PLUMBING' },
+  { label: 'Electrical', value: 'ELECTRICAL' }, { label: 'Structural', value: 'STRUCTURAL' }, { label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'Other', value: 'OTHER' },
+];
+type WarrantyCorrectionMeta = CorrectionFieldSpec & { action: string; message: string };
+const WARRANTY_CORRECTION_FIELDS: Record<'providerName' | 'expiryDate' | 'startDate' | 'category' | 'policyNumber' | 'cost' | 'coverageDetails', WarrantyCorrectionMeta> = {
+  providerName: { label: 'provider', action: 'Correct provider', message: 'Correct the provider of this warranty.', kind: 'TEXT', min: 2, max: 120 },
+  expiryDate: { label: 'expiry date', action: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', kind: 'DATE' },
+  startDate: { label: 'start date', action: 'Correct start date', message: 'Correct the start date of this warranty.', kind: 'DATE' },
+  category: { label: 'coverage type', action: 'Correct coverage type', message: 'Correct the coverage type of this warranty.', kind: 'SELECT', options: WARRANTY_CATEGORY_OPTIONS },
+  policyNumber: { label: 'policy number', action: 'Correct policy number', message: 'Correct the policy number of this warranty.', kind: 'TEXT', max: 160 },
+  cost: { label: 'cost', action: 'Correct cost', message: 'Correct the cost of this warranty.', kind: 'MONEY' },
+  coverageDetails: { label: 'coverage details', action: 'Correct coverage details', message: 'Correct the coverage details of this warranty.', kind: 'TEXTAREA', max: 2000 },
+};
 type WarrantyCorrectionField = keyof typeof WARRANTY_CORRECTION_FIELDS;
 
 const WarrantyCorrectionInputSchema = z.object({
   warrantyId: z.string().trim().min(1).max(160),
-  field: z.enum(['providerName', 'expiryDate']),
-  value: z.string().max(200).nullable(),
+  field: z.enum(['providerName', 'expiryDate', 'startDate', 'category', 'policyNumber', 'cost', 'coverageDetails']),
+  value: z.string().max(2000).nullable(),
 }).strict();
 
+// Order matters where words overlap: "coverage details" before "coverage type", and the dates before "provider".
 function warrantyCorrectionField(message: string): WarrantyCorrectionField | null {
+  if (/\b(?:coverage details|details)\b/i.test(message)) return 'coverageDetails';
+  if (/\b(?:coverage type|category)\b/i.test(message)) return 'category';
+  if (/\bpolicy\b/i.test(message)) return 'policyNumber';
+  if (/\b(?:cost|price|premium)\b/i.test(message)) return 'cost';
+  if (/\bstart(?:s|ed|ing)?\b/i.test(message)) return 'startDate';
   if (/\bexpir(?:y|ation|es)\b/i.test(message)) return 'expiryDate';
   if (/\b(?:provider|name)\b/i.test(message)) return 'providerName';
   return null;
 }
 
-function warrantyCorrectionValueError(field: WarrantyCorrectionField, value: unknown, startDate: Date): string | null {
-  if (typeof value !== 'string') return field === 'expiryDate' ? 'Enter the corrected expiry date.' : 'Enter the corrected provider.';
-  if (field === 'expiryDate') {
-    if (!isValidDateEditInput(value)) return 'Enter a valid date.';
-    return new Date(`${value}T00:00:00Z`) < startDate ? 'The expiry date cannot be before the warranty start date.' : null;
-  }
-  return value.trim().length >= 2 && value.trim().length <= 120 ? null : 'Enter a provider of 2 to 120 characters.';
+// Field-level validation plus the one cross-field rule: the start date must stay before the expiry date.
+function warrantyCorrectionValueError(field: WarrantyCorrectionField, value: unknown, row: { startDate: Date; expiryDate: Date }): string | null {
+  const base = correctionValueError(WARRANTY_CORRECTION_FIELDS[field], value);
+  if (base || typeof value !== 'string') return base;
+  if (field === 'expiryDate' && new Date(`${value.trim()}T00:00:00Z`) < row.startDate) return 'The expiry date cannot be before the warranty start date.';
+  if (field === 'startDate' && new Date(`${value.trim()}T00:00:00Z`) >= row.expiryDate) return 'The start date must be before the warranty expiry date.';
+  return null;
+}
+
+function warrantyFieldCurrent(warranty: object, field: WarrantyCorrectionField): string | null {
+  const raw = (warranty as Record<string, unknown>)[field];
+  const kind = WARRANTY_CORRECTION_FIELDS[field].kind;
+  if (kind === 'DATE') return correctionDateString(raw);
+  if (kind === 'MONEY') return correctionMoneyFromDollars(raw);
+  return typeof raw === 'string' && raw.trim() ? raw : null;
+}
+
+// Narrowed patch: only the one confirmed field, never a request body.
+function warrantyFieldPatch(field: WarrantyCorrectionField, normalized: string): Record<string, unknown> {
+  const kind = WARRANTY_CORRECTION_FIELDS[field].kind;
+  if (kind === 'DATE') return { [field]: new Date(`${normalized}T00:00:00Z`) };
+  if (kind === 'MONEY') return { [field]: Number(normalized) };
+  return { [field]: normalized };
 }
 
 function warrantyContextVersion(warranty: { id: string; updatedAt: Date }): string {
@@ -8378,13 +8472,16 @@ function warrantyCorrectionItemActions(canManage: boolean, owned: boolean) {
   }));
 }
 
-function warrantyCorrectionConfirmation(warranty: { id: string; providerName: string }, field: WarrantyCorrectionField, current: string, proposed: string | null, version: number, expiresAt: Date) {
+function warrantyCorrectionConfirmation(warranty: { id: string; providerName: string }, field: WarrantyCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
   const meta = WARRANTY_CORRECTION_FIELDS[field];
   return {
     confirmationId: `warranty-correct-${warranty.id}-${version}`, version, title: `Correct the ${meta.label} of the ${warranty.providerName} warranty?`,
     description: 'This writes through the canonical warranty service, the same record the Warranties page edits, and refreshes dependent coverage analysis.',
-    fields: [{ label: 'Warranty', value: warranty.providerName }, { label: 'Field', value: meta.label }, { label: 'Current value', value: current }],
-    editableFields: [{ key: 'value', label: `Corrected ${meta.label}`, type: meta.type, value: proposed ?? '' }],
+    fields: [{ label: 'Warranty', value: warranty.providerName }, { label: 'Field', value: meta.label }, { label: 'Current value', value: correctionDisplay(meta, current) }],
+    editableFields: [{
+      key: 'value', label: `Corrected ${meta.label}`, type: meta.kind, value: proposed ?? '',
+      ...(meta.kind === 'SELECT' ? { options: [...(meta.options ?? [])] } : {}),
+    }],
     confirmLabel: `Save ${meta.label}`, consentText: 'I authorize this correction to the warranty record.', expiresAt: expiresAt.toISOString(),
   };
 }
@@ -8412,12 +8509,35 @@ async function warrantyAddResult(userId: string, propertyId: string, sourceExecu
   };
 }
 
+// Start a user-initiated timeline event add: returns the empty form. Submitting it (CAPTURE_EVENT_ADD) builds the
+// review card with the parameters extraction produces, and confirming writes through the existing
+// confirmCaptureEvent / createHomeEvent path keyed on this execution.
+async function eventAddResult(userId: string, propertyId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'event-add-permission', title: 'A contributor or owner can add a timeline event', body: 'Your role can view the timeline but not add to it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
+      suggestions: [],
+    };
+  }
+  const contextVersion = createHash('sha256').update(`event-add:${propertyId}`).digest('hex');
+  return {
+    status: 'NEEDS_CONTEXT', reasonCode: 'EVENT_ADD_INPUT_REQUIRED', contextVersion,
+    parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
+    blocks: [{ type: 'SUMMARY', id: 'event-add-input', title: 'Add a timeline event', body: 'Nothing has been saved yet. Enter the details, then review them before the event is added.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline instead', href: timelineHref, style: 'SECONDARY' }] }],
+    captureRequests: [eventAddCaptureRequest(contextVersion)],
+    suggestions: [],
+  };
+}
+
 async function warrantyCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   const warrantiesHref = '/dashboard/warranties';
   const warranties = await prisma.warranty.findMany({
     where: { propertyId }, orderBy: { expiryDate: 'asc' }, take: 200,
-    select: { id: true, providerName: true, startDate: true, expiryDate: true, updatedAt: true, homeownerProfile: { select: { userId: true } } },
+    select: { id: true, providerName: true, startDate: true, expiryDate: true, updatedAt: true, category: true, policyNumber: true, cost: true, coverageDetails: true, homeownerProfile: { select: { userId: true } } },
   });
   const selected = exactEntityMatch(warranties.map((warranty) => ({ ...warranty, title: warranty.providerName })), message, launchContext);
   if (!selected) {
@@ -8447,14 +8567,14 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
   if (!field) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'WARRANTY_CORRECTION_FIELD_REQUIRED',
-      ...durableFreeTextClarification('WARRANTY_CORRECT', `Should the provider or the expiry date of the ${selected.providerName} warranty change?`),
-      blocks: [{ type: 'SUMMARY', id: 'warranty-correct-field', title: 'Should the provider or the expiry date change?', body: 'Say provider or expiry date. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      ...durableFreeTextClarification('WARRANTY_CORRECT', `Which detail of the ${selected.providerName} warranty should change? Ask can correct its provider, dates, coverage type, policy number, cost, or coverage details.`),
+      blocks: [{ type: 'SUMMARY', id: 'warranty-correct-field', title: 'Which detail should change?', body: 'Say provider, expiry date, start date, coverage type, policy number, cost, or coverage details. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [`Correct the provider of the ${selected.providerName} warranty`, `Correct the expiry date of the ${selected.providerName} warranty`],
     };
   }
-  const current = field === 'providerName' ? selected.providerName : (inventoryDateValue(selected.expiryDate) ?? 'Not recorded');
-  const stated = field === 'expiryDate' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
-  const proposed = stated && isValidDateEditInput(stated) ? stated : field === 'providerName' ? selected.providerName : inventoryDateValue(selected.expiryDate);
+  const current = warrantyFieldCurrent(selected, field);
+  const stated = WARRANTY_CORRECTION_FIELDS[field].kind === 'DATE' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
+  const proposed = stated && isValidDateEditInput(stated) ? stated : current;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const contextVersion = warrantyContextVersion(selected);
   const input = WarrantyCorrectionInputSchema.parse({ warrantyId: selected.id, field, value: proposed });
@@ -8639,7 +8759,17 @@ function captureNotDirectlyRoutableResult(kind: 'fact' | 'event' | 'warranty' | 
   };
 }
 registerCapabilityHandler('capture.fact.confirm', async () => captureNotDirectlyRoutableResult('fact'));
-registerCapabilityHandler('capture.event.confirm', async () => captureNotDirectlyRoutableResult('event'));
+// A timeline event is added inline only from the declared "Add a timeline event" action (same guard as the warranty
+// add: never for an ASK_REFRESH re-run of a pending extraction-created confirmation, never for a bare message).
+const EVENT_ADD_MESSAGE = 'Add an event to my home timeline.';
+registerCapabilityHandler('capture.event.confirm', async (envelope) => {
+  const declaredAddAction = envelope.launchContext?.operationId === 'CAPTURE_EVENT_CONFIRM'
+    && envelope.launchContext.surface !== 'ASK_REFRESH'
+    && envelope.message === EVENT_ADD_MESSAGE;
+  return declaredAddAction
+    ? eventAddResult(envelope.userId, envelope.propertyId!, envelope.launchContext?.sourceExecutionId ?? null)
+    : captureNotDirectlyRoutableResult('event');
+});
 // A warranty is added inline only from the declared "Add a warranty" action on the warranties list. Every other
 // call for this operation (an ASK_REFRESH re-run of a pending, extraction-created confirmation, or a message that
 // merely names it) keeps the original not-directly-routable boundary, so a pending candidate is never replaced
@@ -9077,7 +9207,8 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'INVENTORY_ITEM_CORRECT': return `${base}/inventory?tab=items`;
     case 'HOME_EVENT_CORRECT': return `${base}/timeline`;
     case 'WARRANTY_CORRECT': return '/dashboard/warranties';
-    case 'ROOM_RENAME': return `${base}/rooms`;
+    case 'ROOM_RENAME':
+    case 'ROOM_CREATE': return `${base}/rooms`;
     case 'CAPITAL_RESERVE_PLAN': return `${base}/tools/capital-timeline`;
     case 'PROPERTY_TAX_APPEAL_READINESS': return `${base}/tools/property-tax`;
     case 'QUOTE_COMPARISON_REVIEW': return `${base}/tools/quote-comparison`;
@@ -10297,7 +10428,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -10551,6 +10682,37 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'PropertyMaintenanceTaskWorkflow';
+  } else if (execution.operationId === 'ROOM_CREATE') {
+    if (input.captureKey !== ROOM_CREATE_CAPTURE_KEY) {
+      const error = new Error('This room capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to add a room.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const currentVersion = roomCreateContextVersion(execution.propertyId);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('This form is out of date. Start again from the Add a room button.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const candidate = RoomCreateInputSchema.safeParse(input.answer);
+    if (!candidate.success) {
+      const error = new Error('Choose a room type and enter a name of up to 80 characters; a floor level, if given, must be a whole number from -5 to 50.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    result = await roomCreateResult(userId, execution.propertyId, candidate.data, typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'InventoryRoom';
   } else if (execution.operationId === 'CLAIM_FILE') {
     // P03 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
     // resumes claimFileResult with the structured answer from CLAIM_FILE_INPUTS
@@ -10621,7 +10783,10 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       : execution.operationId === 'CAPTURE_EVENT_CONFIRM'
         ? 'CAPTURE_EVENT_EDIT'
         : 'CAPTURE_WARRANTY_EDIT';
-    if (input.captureKey !== editCaptureKey) {
+    // A user-added event resubmits its own form (CAPTURE_EVENT_ADD); every other pending entry edits through its
+    // per-category edit key.
+    const isEventAdd = execution.operationId === 'CAPTURE_EVENT_CONFIRM' && input.captureKey === EVENT_ADD_CAPTURE_KEY;
+    if (!isEventAdd && input.captureKey !== editCaptureKey) {
       const error = new Error('This pending entry can no longer be edited.');
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
       throw error;
@@ -10632,6 +10797,18 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
+    if (isEventAdd) {
+      const built = buildUserAddedEventConfirmation(execution.parametersJson, storedContextVersion, input.answer, new Date());
+      if ('error' in built) {
+        const error = new Error(built.error);
+        (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+        throw error;
+      }
+      result = built.result;
+      captureId = input.idempotencyKey;
+      capturedContextVersion = storedContextVersion;
+      canonicalOwner = 'AskCaptureCandidateEdit';
+    } else {
     const edited = execution.operationId === 'CAPTURE_FACT_CONFIRM'
       ? editCaptureFactCandidate(execution.parametersJson, execution.message, storedContextVersion, input.answer, new Date())
       : execution.operationId === 'CAPTURE_EVENT_CONFIRM'
@@ -10646,6 +10823,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = input.idempotencyKey;
     capturedContextVersion = storedContextVersion;
     canonicalOwner = 'AskCaptureCandidateEdit';
+    }
   } else if (execution.operationId === 'HOME_DEADLINE_MONITOR') {
     const access = await ensurePropertyAccess(userId, execution.propertyId);
     if (access.role === HouseholdRole.VIEWER) {
@@ -11338,6 +11516,8 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   WARRANTY_CORRECT: ['PROPERTY_SUMMARY'],
   // Room names appear in the Property Summary rooms collection and on inventory item rows.
   ROOM_RENAME: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
+  // A new room appears in the Property Summary rooms collection and can be chosen for inventory items.
+  ROOM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // Accepting/deferring/snoozing/completing an Operational Work item changes
   // its state in the HOME_ACTIONS feed that surfaces it -- confirmed by this
   // handler's own suggested follow-up ("What needs my attention next?").
@@ -12852,9 +13032,9 @@ async function confirmHomeEventCorrect(ctx: ConfirmCapabilityContext): Promise<C
   const candidate = HomeEventCorrectionInputSchema.safeParse(parameters.homeEventCorrection);
   if (!candidate.success) throw Object.assign(new Error('The timeline correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const { eventId, field, value } = candidate.data;
-  if (!homeEventCorrectionValueValid(field, value)) {
-    throw Object.assign(new Error(field === 'occurredAt' ? 'Enter the corrected date before confirming.' : 'Enter a corrected title of at least 3 characters before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-  }
+  const invalid = homeEventCorrectionValueError(field, value);
+  if (invalid || typeof value !== 'string') throw Object.assign(new Error(invalid ?? 'Enter the corrected value before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const normalized = correctionNormalized(HOME_EVENT_CORRECTION_FIELDS[field], value);
   // updateHomeEvent has no idempotency of its own and supersedes every time:
   // a lease-reclaim retry must find this execution's own replacement first.
   const correctionKey = `ask-correction:${execution.id}`;
@@ -12875,7 +13055,7 @@ async function confirmHomeEventCorrect(ctx: ConfirmCapabilityContext): Promise<C
   if (already) return finish(already);
   const current = await prisma.homeEvent.findFirst({
     where: { id: eventId, propertyId: execution.propertyId, isCurrent: true, deletedAt: null },
-    select: { id: true, title: true, revision: true, visibility: true, createdById: true, datePrecision: true },
+    select: { id: true, title: true, revision: true, visibility: true, createdById: true, datePrecision: true, type: true },
   });
   if (!current || (current.visibility === 'PRIVATE' && current.createdById !== userId)) {
     throw Object.assign(new Error('This timeline event is no longer available. It may have been corrected or removed.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
@@ -12883,12 +13063,9 @@ async function confirmHomeEventCorrect(ctx: ConfirmCapabilityContext): Promise<C
   if (parameters.homeEventCorrectionContextVersion !== homeEventContextVersion(current)) {
     throw Object.assign(new Error('This timeline event changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   }
-  if (field === 'occurredAt' && current.datePrecision === 'RANGE') {
-    throw Object.assign(new Error('This event is recorded as a date range and cannot be corrected here.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-  }
-  const patch = field === 'title'
-    ? { title: value.trim() }
-    : { occurredAt: `${value}T00:00:00.000Z`, datePrecision: 'EXACT_DATE' };
+  const blocker = homeEventCorrectionBlocker(current, field);
+  if (blocker) throw Object.assign(new Error(blocker), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const patch = homeEventFieldPatch(field, normalized);
   try {
     const replacement = await homeEventsServiceForCapture.updateHomeEvent(
       execution.propertyId!, current.id,
@@ -12925,17 +13102,17 @@ async function confirmWarrantyCorrect(ctx: ConfirmCapabilityContext): Promise<Co
   if (warranty.homeownerProfile.userId !== userId) {
     throw Object.assign(new Error('Only the household member who added this warranty can change it.'), { code: 'ASK_PERMISSION_REQUIRED' });
   }
-  const invalid = warrantyCorrectionValueError(field, value, warranty.startDate);
+  const invalid = warrantyCorrectionValueError(field, value, warranty);
   if (invalid || typeof value !== 'string') throw Object.assign(new Error(invalid ?? 'Enter a corrected value before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-  const next = field === 'providerName' ? value.trim() : value;
-  const previous = field === 'providerName' ? warranty.providerName : inventoryDateValue(warranty.expiryDate);
+  const next = correctionNormalized(WARRANTY_CORRECTION_FIELDS[field], value);
+  const previous = warrantyFieldCurrent(warranty, field);
   // A recovery retry of this same execution sees the already-corrected value.
   const alreadyApplied = previous === next;
   if (!alreadyApplied && parameters.warrantyCorrectionContextVersion !== warrantyContextVersion(warranty)) {
     throw Object.assign(new Error('This warranty changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   }
   // Narrowed patch: never the request body, only the one confirmed field.
-  if (!alreadyApplied) await updateWarranty(warranty.id, warranty.homeownerProfile.id, field === 'providerName' ? { providerName: next } : { expiryDate: new Date(`${next}T00:00:00Z`) });
+  if (!alreadyApplied) await updateWarranty(warranty.id, warranty.homeownerProfile.id, warrantyFieldPatch(field, next));
   const updated = await prisma.warranty.findUniqueOrThrow({ where: { id: warranty.id } });
   const meta = WARRANTY_CORRECTION_FIELDS[field];
   const result: AskOperationResult = {
@@ -12943,7 +13120,7 @@ async function confirmWarrantyCorrect(ctx: ConfirmCapabilityContext): Promise<Co
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `warranty-corrected-${warranty.id}`, title: 'Warranty updated', status: 'COMPLETED',
       description: 'The warranty record was updated and dependent coverage analysis was marked for refresh.',
-      details: [{ label: 'Warranty', value: updated.providerName }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : (previous ?? 'Not recorded') }, { label: 'New value', value: next }],
+      details: [{ label: 'Warranty', value: updated.providerName }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : correctionDisplay(meta, previous) }, { label: 'New value', value: correctionDisplay(meta, next) }],
       actions: [{ id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'PRIMARY' }],
     }],
     suggestions: ['Show my warranties'],
@@ -13007,6 +13184,154 @@ async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<Confirm
   return { result, artifactType: 'INVENTORY_ROOM', artifactId: room.id, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('room.rename', confirmRoomRename);
+
+// ── Add a room (user-initiated) ──────────────────────────────────────────────────────────────────────────
+// A room is added inline only from the declared "Add a room" action. The form asks for a type, a REQUIRED name (the
+// service would otherwise derive a default name from the type, which could silently collide) and an optional floor
+// level. Submitting builds the review card; confirming creates the room through inventoryService.createRoom and
+// repeats the three stale-analysis markers the traditional POST controller calls.
+const ROOM_ADD_MESSAGE = 'Add a room to my home record.';
+const ROOM_CREATE_CAPTURE_KEY = 'ROOM_CREATE_INPUTS';
+const ROOM_TYPE_VALUES = ['KITCHEN', 'LIVING_ROOM', 'BEDROOM', 'BATHROOM', 'DINING', 'LAUNDRY', 'GARAGE', 'OFFICE', 'BASEMENT', 'OTHER'] as const;
+const roomTypeLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
+const RoomCreateInputSchema = z.object({
+  type: z.enum(ROOM_TYPE_VALUES),
+  name: z.string().trim().min(1).max(80),
+  floorLevel: z.number().int().min(-5).max(50).nullish().transform((value) => value ?? null),
+}).strict();
+type RoomCreateInput = z.infer<typeof RoomCreateInputSchema>;
+
+const roomCreateContextVersion = (propertyId: string): string => createHash('sha256').update(`room-create:${propertyId}`).digest('hex');
+
+function roomCreateCaptureRequest(contextVersion: string, entered?: Partial<RoomCreateInput>): AskCaptureRequest {
+  return {
+    requirementId: 'room-create-inputs', captureKey: ROOM_CREATE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: 'Add a room', question: 'Which room would you like to add to your home record?',
+    helpText: 'Give the room a name that is not already used. The floor level is optional. You will review everything before it is added.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'type', label: 'Room type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: ROOM_TYPE_VALUES.map((value) => ({ label: roomTypeLabel(value), value })) } },
+      { key: 'name', label: 'Room name', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 80 } },
+      { key: 'floorLevel', label: 'Floor level', helpText: 'Optional: 0 is the ground floor, -1 a basement.', required: false, inputSchema: { type: 'INTEGER', min: -5, max: 50 } },
+    ] },
+    currentAnswer: { type: entered?.type ?? null, name: entered?.name ?? null, floorLevel: entered?.floorLevel ?? null },
+    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this room; nothing is added until you confirm', confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
+
+export async function roomCreateResult(userId: string, propertyId: string, suppliedInput: RoomCreateInput | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const roomsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/rooms`;
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'room-add-permission', title: 'A contributor or owner can add a room', body: 'Your role can view rooms but not add them. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }] }],
+      suggestions: [],
+    };
+  }
+  const contextVersion = roomCreateContextVersion(propertyId);
+  const openRooms = { id: 'open-rooms', label: 'Open Rooms instead', href: roomsHref, style: 'SECONDARY' as const };
+  if (!suppliedInput) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'ROOM_CREATE_INPUT_REQUIRED', contextVersion,
+      parameters: { sourceExecutionId },
+      blocks: [{ type: 'SUMMARY', id: 'room-create-input', title: 'Add a room', body: 'Nothing has been added yet. Enter the details, then review them before the room is added.', tone: 'DEFAULT', actions: [openRooms] }],
+      captureRequests: [roomCreateCaptureRequest(contextVersion)], suggestions: [],
+    };
+  }
+  const clash = await prisma.inventoryRoom.findFirst({ where: { propertyId, name: suppliedInput.name }, select: { id: true } });
+  if (clash) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'ROOM_NAME_ALREADY_USED', contextVersion,
+      parameters: { sourceExecutionId },
+      blocks: [{ type: 'SUMMARY', id: 'room-create-name-used', title: `A room named "${suppliedInput.name}" already exists`, body: 'Choose a different name. Nothing has been added.', tone: 'CAUTION', actions: [openRooms] }],
+      captureRequests: [roomCreateCaptureRequest(contextVersion, suppliedInput)], suggestions: [],
+    };
+  }
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'ROOM_CREATE_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { roomCreate: suppliedInput, roomCreateContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'room-create-review', title: 'Review this room', body: 'You entered these details. Nothing is added until you confirm.', tone: 'DEFAULT', actions: [openRooms] }],
+    confirmation: {
+      confirmationId: `room-create-${createHash('sha256').update(`${propertyId}:${suppliedInput.name}`).digest('hex').slice(0, 12)}-1`, version: 1,
+      title: `Add the room "${suppliedInput.name}"?`,
+      description: 'This adds the room through the canonical inventory service, the same record the Rooms page edits, and refreshes dependent coverage analysis.',
+      fields: [
+        { label: 'Room name', value: suppliedInput.name }, { label: 'Type', value: roomTypeLabel(suppliedInput.type) },
+        ...(suppliedInput.floorLevel !== null ? [{ label: 'Floor level', value: String(suppliedInput.floorLevel) }] : []),
+      ],
+      editableFields: [], confirmLabel: 'Add room', consentText: 'I authorize adding this room to the shared home record.', expiresAt: expiresAt.toISOString(),
+    },
+    // Kept so the entry can be changed and resubmitted before confirming.
+    captureRequests: [roomCreateCaptureRequest(contextVersion, suppliedInput)],
+    suggestions: [],
+  };
+}
+
+registerCapabilityHandler('room.create', async (envelope) => {
+  const declaredAddAction = envelope.launchContext?.operationId === 'ROOM_CREATE'
+    && envelope.launchContext.surface !== 'ASK_REFRESH'
+    && envelope.message === ROOM_ADD_MESSAGE;
+  if (declaredAddAction) return roomCreateResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null);
+  // A refresh of an in-progress add, or a bare message: never start (or reset) a form here.
+  return {
+    status: 'NOT_APPLICABLE', reasonCode: 'ASK_ROOM_CREATE_NOT_DIRECTLY_ROUTABLE',
+    blocks: [{ type: 'SUMMARY', id: 'room-create-not-routable', title: 'Use the Add a room button', body: 'Rooms are added from the Rooms list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
+    suggestions: ['Show my rooms'],
+  };
+});
+
+async function confirmRoomCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const candidate = RoomCreateInputSchema.safeParse(parameters.roomCreate);
+  if (!candidate.success) throw Object.assign(new Error('The room to add is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const { type, name, floorLevel } = candidate.data;
+  const propertyId = execution.propertyId!;
+  const existing = await prisma.inventoryRoom.findFirst({ where: { propertyId, name }, select: { id: true, createdAt: true } });
+  let roomId: string;
+  let alreadyAdded = false;
+  if (existing) {
+    // createRoom has no idempotency key: a same-named room created since this execution began is this execution's own
+    // earlier write (a lease-reclaim retry), not a clash with something else.
+    if (existing.createdAt.getTime() < execution.createdAt.getTime()) {
+      throw Object.assign(new Error(`A room named "${name}" already exists in this home.`), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+    }
+    roomId = existing.id;
+    alreadyAdded = true;
+  } else {
+    try {
+      const created = await inventoryService.createRoom(propertyId, { type, name, floorLevel });
+      roomId = created.id;
+    } catch (error) {
+      if (error instanceof APIError && error.code === 'ROOM_ALREADY_EXISTS') throw Object.assign(new Error(`A room named "${name}" already exists in this home.`), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+      throw error;
+    }
+    // The traditional POST controller (not the service) marks these stale; repeat them for the same downstream effect.
+    await markCoverageAnalysisStale(propertyId);
+    await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
+  }
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'ROOM_CREATED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `room-created-${roomId}`, title: alreadyAdded ? 'Room already added' : 'Room added', status: 'COMPLETED',
+      description: 'The room is now part of your home record and dependent coverage analysis was marked for refresh.',
+      details: [{ label: 'Room name', value: name }, { label: 'Type', value: roomTypeLabel(type) }, ...(floorLevel !== null ? [{ label: 'Floor level', value: String(floorLevel) }] : [])],
+      actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/rooms`, style: 'PRIMARY' }],
+    }],
+    suggestions: ['Show my rooms'],
+  };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'LIMITATION', id: `room-refresh-failed-${roomId}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+      body: 'This room was added to the canonical record. The result you were viewing could not refresh automatically -- ask "Show my rooms" to see its current state.',
+    });
+  }
+  return { result, artifactType: 'INVENTORY_ROOM', artifactId: roomId, refreshedExecutions: refresh.refreshedExecutions };
+}
+registerConfirmCapabilityHandler('room.create', confirmRoomCreate);
 registerConfirmCapabilityHandler('document-promotion.confirm', confirmDocumentPromotionConfirm);
 registerConfirmCapabilityHandler('home-operations.update', confirmOperationalWorkUpdate);
 registerConfirmCapabilityHandler('maintenance.complete', confirmMaintenanceTaskComplete);
@@ -14072,17 +14397,15 @@ async function editHomeEventCorrectConfirmation(
 ): Promise<AskExecutionResponse> {
   const existing = HomeEventCorrectionInputSchema.safeParse(parameters.homeEventCorrection);
   if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
-  const valueEdit = input.edits.value;
-  if (!homeEventCorrectionValueValid(existing.data.field, valueEdit)) {
-    throw Object.assign(new Error(existing.data.field === 'occurredAt' ? 'Enter a valid date.' : 'Enter a title of 3 to 140 characters.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-  }
-  const event = await prisma.homeEvent.findFirst({ where: { id: existing.data.eventId, propertyId: execution.propertyId!, isCurrent: true, deletedAt: null }, select: { id: true, title: true, occurredAt: true } });
+  const invalidEdit = homeEventCorrectionValueError(existing.data.field, input.edits.value);
+  if (invalidEdit) throw Object.assign(new Error(invalidEdit), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const event = await prisma.homeEvent.findFirst({ where: { id: existing.data.eventId, propertyId: execution.propertyId!, isCurrent: true, deletedAt: null }, select: { id: true, title: true, occurredAt: true, summary: true, amount: true, type: true, importance: true } });
   if (!event) throw Object.assign(new Error('The selected timeline event is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-  const cleaned = existing.data.field === 'title' ? valueEdit.trim() : valueEdit;
+  const cleaned = correctionNormalized(HOME_EVENT_CORRECTION_FIELDS[existing.data.field], input.edits.value);
   const updatedInput = HomeEventCorrectionInputSchema.parse({ ...existing.data, value: cleaned });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const current = existing.data.field === 'title' ? event.title : (inventoryDateValue(event.occurredAt) ?? 'Not recorded');
+  const current = homeEventFieldCurrent(event, existing.data.field);
   const newConfirmation = homeEventCorrectionConfirmation(event, existing.data.field, current, cleaned, nextVersion, expiresAt);
   const reviewBlock = { type: 'SUMMARY' as const, id: 'home-event-correct-review', title: `Review this ${HOME_EVENT_CORRECTION_FIELDS[existing.data.field].label} correction`, body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT' as const, actions: [] };
   const editWrite = await prisma.askExecution.updateMany({
@@ -14113,18 +14436,17 @@ async function editWarrantyCorrectConfirmation(
   if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
   const warranty = await prisma.warranty.findFirst({
     where: { id: existing.data.warrantyId, propertyId: execution.propertyId! },
-    select: { id: true, providerName: true, startDate: true, expiryDate: true, homeownerProfile: { select: { userId: true } } },
+    select: { id: true, providerName: true, startDate: true, expiryDate: true, category: true, policyNumber: true, cost: true, coverageDetails: true, homeownerProfile: { select: { userId: true } } },
   });
   if (!warranty) throw Object.assign(new Error('The selected warranty is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   if (warranty.homeownerProfile.userId !== userId) throw Object.assign(new Error('Only the household member who added this warranty can change it.'), { code: 'ASK_PERMISSION_REQUIRED' });
-  const valueEdit = input.edits.value;
-  const invalid = warrantyCorrectionValueError(existing.data.field, valueEdit, warranty.startDate);
+  const invalid = warrantyCorrectionValueError(existing.data.field, input.edits.value, warranty);
   if (invalid) throw Object.assign(new Error(invalid), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-  const cleaned = existing.data.field === 'providerName' ? valueEdit.trim() : valueEdit;
+  const cleaned = correctionNormalized(WARRANTY_CORRECTION_FIELDS[existing.data.field], input.edits.value);
   const updatedInput = WarrantyCorrectionInputSchema.parse({ ...existing.data, value: cleaned });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const current = existing.data.field === 'providerName' ? warranty.providerName : (inventoryDateValue(warranty.expiryDate) ?? 'Not recorded');
+  const current = warrantyFieldCurrent(warranty, existing.data.field);
   const newConfirmation = warrantyCorrectionConfirmation(warranty, existing.data.field, current, cleaned, nextVersion, expiresAt);
   const reviewBlock = { type: 'SUMMARY' as const, id: 'warranty-correct-review', title: `Review this ${WARRANTY_CORRECTION_FIELDS[existing.data.field].label} correction`, body: 'No warranty record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT' as const, actions: [] };
   const editWrite = await prisma.askExecution.updateMany({

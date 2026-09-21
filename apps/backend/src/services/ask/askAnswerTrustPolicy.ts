@@ -53,10 +53,12 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_EVENT_CORRECT: new Set(['open-timeline', 'open-home-timeline']),
   WARRANTY_CORRECT: new Set(['open-warranties']),
   ROOM_RENAME: new Set(['open-rooms']),
+  ROOM_CREATE: new Set(['open-rooms']),
   // Every action id PROPERTY_SUMMARY actually emits: the record link, one secondary "open the full collection"
   // link per section, and the contributor-only inline "Add a warranty" workflow action.
-  PROPERTY_SUMMARY: new Set(['open-property-record', 'open-inventory', 'open-household', 'open-warranties', 'open-rooms', 'open-documents', 'open-home-timeline', 'add-warranty']),
+  PROPERTY_SUMMARY: new Set(['open-property-record', 'open-inventory', 'open-household', 'open-warranties', 'open-rooms', 'open-documents', 'open-home-timeline', 'add-warranty', 'add-timeline-event', 'add-room']),
   CAPTURE_WARRANTY_CONFIRM: new Set(['open-warranties', 'open-property-record']),
+  CAPTURE_EVENT_CONFIRM: new Set(['open-timeline', 'open-home-timeline']),
   HOME_ACTIONS: new Set(['open-home', 'open-home-actions']),
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),
   REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace']),

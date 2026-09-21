@@ -61,7 +61,9 @@ test('propose never writes; confirm writes only via updateHomeEvent with the ide
   assert.match(confirm, /homeEventContextVersion\(current\)/);
   assert.match(confirm, /PRIVATE/);
   assert.match(confirm, /reconcileAskExecutionSideEffects/);
-  assert.match(confirm, /datePrecision: 'EXACT_DATE'/, 'a corrected date must not keep a coarser precision');
+  // The patch is built by homeEventFieldPatch (behaviour is proven by correctionHandlersRuntime.test.js).
+  assert.match(confirm, /homeEventFieldPatch\(field, normalized\)/);
+  assert.match(body('function homeEventFieldPatch(', 'function homeEventCorrectionBlocker('), /datePrecision: 'EXACT_DATE'/, 'a corrected date must not keep a coarser precision');
 });
 
 test('event correction actions are declared only for contributor-and-up on both event producers; edit handler registered', () => {

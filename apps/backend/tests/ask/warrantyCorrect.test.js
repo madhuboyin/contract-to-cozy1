@@ -56,7 +56,9 @@ test('owner-only: propose, confirm and edit all verify the requester owns the wa
 
 test('confirm writes a NARROWED patch through updateWarranty with freshness, replay and date-order guards', () => {
   const confirm = body('async function confirmWarrantyCorrect(', "registerConfirmCapabilityHandler('warranty.correct'");
-  assert.match(confirm, /updateWarranty\(warranty\.id, warranty\.homeownerProfile\.id, field === 'providerName' \? \{ providerName: next \} : \{ expiryDate:/);
+  // Only the one confirmed field is written, built by warrantyFieldPatch, and scoped to the owning profile.
+  assert.match(confirm, /updateWarranty\(warranty\.id, warranty\.homeownerProfile\.id, warrantyFieldPatch\(field, next\)\)/);
+  assert.doesNotMatch(body('function warrantyFieldPatch(', 'function warrantyContextVersion('), /\.\.\.parameters|req\.body|\.\.\.value/);
   assert.doesNotMatch(confirm, /\.\.\.parameters|req\.body/);
   assert.match(confirm, /warrantyContextVersion\(warranty\)/);
   assert.match(confirm, /alreadyApplied/);

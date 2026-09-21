@@ -891,6 +891,17 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     note: '',
     uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY, GROUPED_LIST (filters:[]).' }, freshnessSource: { status: 'TRACED', notes: 'GAP: no contextVersion set anywhere in this handler -- same \'substantive branch missing freshness\' pattern as HOME_CHANGE_SUMMARY/INSPECTION_FINDINGS in Home intelligence and work.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. items.slice(0,20) -- the undisclosed-cap pattern again.' }, handoff: { status: 'TRACED', notes: 'Bare href to /seller-prep throughout.' },
   },
+  ROOM_CREATE: {
+    track: 'Records and capture',
+    rollClass: 'CONFIRMED_MUTATION',
+    canonicalOwner: 'room.create',
+    roleFloor: 'CONTRIBUTOR',
+    messageRoutable: false,
+    confirmationCapable: true,
+    correctionModes: ['EDIT', 'STOP'],
+    note: 'Phase 3 add slice: creates an InventoryRoom from a declared "Add a room" workflow action on the Property Summary rooms list (no message pattern, no fuzzy retrieval). Form (type, required name, optional floor level) -> validated -> confirmation -> inventoryService.createRoom with the three stale-analysis markers the traditional POST controller repeats (coverage, risk premium, do-nothing). The name is REQUIRED in the form (the service would otherwise derive a default from the type, which could silently collide). Name uniqueness is checked at propose and confirm; a retry after a successful write is recognised as done when a same-named room was created since the execution began. Room profile, sort order and hero image are not settable inline.',
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer: SUMMARY + capture form (WORKFLOW_INPUT, "Continue to review"), SUMMARY + confirmation with the form kept for resubmission, WORKFLOW_PROGRESS (receipt).' }, freshnessSource: { status: 'TRACED', notes: 'Constant per-property context version (nothing drifts before the room exists); uniqueness is re-checked at confirm against the live rooms.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; createRoom has no idempotency key, so a lease-reclaim retry is recognised by an existing same-named room created at or after this execution began. DB @@unique([propertyId,name]) is the backstop (ROOM_ALREADY_EXISTS mapped to a clear error).' }, reconciliation: { status: 'TRACED', notes: 'Calls reconcileAskExecutionSideEffects; ASK_MUTATION_IMPACT_MAP declares PROPERTY_SUMMARY and INVENTORY_LOOKUP as siblings.' }, handoff: { status: 'TRACED', notes: 'Secondary Open Rooms href.' },
+  },
   ROOM_RENAME: {
     track: 'Records and capture',
     rollClass: 'CONFIRMED_MUTATION',

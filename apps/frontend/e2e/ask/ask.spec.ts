@@ -224,6 +224,7 @@ test('a contributor corrects a timeline event title inline: exact identity is se
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
   await response.getByRole('button', { name: 'Roof replacement' }).click();
   await expect(response.getByText('The roof replacement is recorded with verified evidence.')).toBeVisible();
+  await response.getByText('Correct a detail').click();
   await response.getByRole('button', { name: /Correct title/ }).click();
 
   // The click dispatches through the normal Ask path with the exact event identity.
@@ -320,8 +321,28 @@ test('a contributor corrects their own warranty expiry date inline through the D
   const api = await installAskApi(page);
   await correctionFlow(page, api, {
     block: 'Warranties', recordButton: 'Acme Home Warranty', detailText: 'Covers HVAC and major appliances.', actionLabel: /^Correct expiry date/,
-    actionMessage: 'Correct the expiry date of this warranty.', entityType: 'WARRANTY', entityId: 'warranty-property-summary',
+    actionMessage: 'Correct the expiry date of this warranty.', entityType: 'WARRANTY', entityId: 'warranty-property-summary', disclosure: true,
     confirmationTitle: 'Correct the expiry date of the Acme Home Warranty warranty?', fieldLabel: 'Corrected expiry date', newValue: '2028-06-30', confirmLabel: 'Save expiry date',
+    consentText: /I authorize this correction to the warranty record/, receiptTitle: 'Warranty updated',
+  });
+});
+
+test('a contributor corrects a timeline event amount inline through the money field', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Recent verified home activity', recordButton: 'Roof replacement', detailText: 'The roof replacement is recorded with verified evidence.', actionLabel: /^Correct amount/,
+    actionMessage: 'Correct the amount of this timeline event.', entityType: 'HOME_EVENT', entityId: 'event-property-summary', disclosure: true,
+    confirmationTitle: 'Correct the amount of "Roof replacement"?', fieldLabel: 'Corrected amount', newValue: '19250.50', shownValue: '$19250.50', confirmLabel: 'Save amount',
+    consentText: /I authorize this correction to the shared home timeline/, receiptTitle: 'Home timeline event corrected',
+  });
+});
+
+test('a contributor corrects a warranty coverage type inline through a dropdown', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Warranties', recordButton: 'Acme Home Warranty', detailText: 'Covers HVAC and major appliances.', actionLabel: /^Correct coverage type/,
+    actionMessage: 'Correct the coverage type of this warranty.', entityType: 'WARRANTY', entityId: 'warranty-property-summary', disclosure: true, select: true,
+    confirmationTitle: 'Correct the coverage type of the Acme Home Warranty warranty?', fieldLabel: 'Corrected coverage type', newValue: 'HVAC', shownValue: 'HVAC', confirmLabel: 'Save coverage type',
     consentText: /I authorize this correction to the warranty record/, receiptTitle: 'Warranty updated',
   });
 });
@@ -334,6 +355,65 @@ test('a contributor renames a room inline through the TEXT field', async ({ page
     confirmationTitle: 'Rename "Kitchen"?', fieldLabel: 'New room name', newValue: 'Chef kitchen', confirmLabel: 'Save room name',
     consentText: /I authorize this rename of the shared home record/, receiptTitle: 'Room renamed',
   });
+});
+
+test('a contributor adds a timeline event inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
+  await response.getByRole('button', { name: 'Add a timeline event' }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Add an event to my home timeline.'
+    && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'CAPTURE_EVENT_CONFIRM')).toBe(true);
+  await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
+
+  await page.getByLabel('Title', { exact: true }).fill('Water heater replaced');
+  await page.getByRole('button', { name: 'Repair', exact: true }).click();
+  await page.getByLabel('Date', { exact: true }).fill('2026-08-15');
+  await page.getByRole('button', { name: 'Continue to review' }).click();
+
+  await expect.poll(() => api.addCaptureBodies).toEqual([expect.objectContaining({
+    requirementId: 'capture-event-add', captureKey: 'CAPTURE_EVENT_ADD', expectedContextVersion: 'event-add-context-v1',
+    answer: expect.objectContaining({ title: 'Water heater replaced', type: 'REPAIR', occurredAt: '2026-08-15' }),
+  })]);
+  await expect(page.getByText('Add this to your home timeline?').first()).toBeVisible();
+  await expect(page.getByText('You entered these details', { exact: false }).first()).toBeVisible();
+  await page.getByLabel(/I confirm this is accurate and authorize ContractToCozy to save it to my home timeline/).check();
+  await page.getByRole('button', { name: 'Add to timeline', exact: true }).click();
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
+  await expect(page.getByText('Added to your home timeline')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('a contributor adds a room inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Rooms', exact: true }) });
+  await response.getByRole('button', { name: 'Add a room' }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Add a room to my home record.'
+    && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'ROOM_CREATE')).toBe(true);
+  await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Office', exact: true }).click();
+  await page.getByLabel('Room name', { exact: true }).fill('Home office');
+  await page.getByLabel('Floor level', { exact: true }).fill('1');
+  await page.getByRole('button', { name: 'Continue to review' }).click();
+
+  await expect.poll(() => api.addCaptureBodies).toEqual([expect.objectContaining({
+    requirementId: 'room-create-inputs', captureKey: 'ROOM_CREATE_INPUTS', expectedContextVersion: 'room-add-context-v1',
+    answer: expect.objectContaining({ type: 'OFFICE', name: 'Home office' }),
+  })]);
+  await expect(page.getByText('Add the room "Home office"?').first()).toBeVisible();
+  await page.getByLabel(/I authorize adding this room to the shared home record/).check();
+  await page.getByRole('button', { name: 'Add room', exact: true }).click();
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
+  await expect(page.getByText('Room added')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
 test('a contributor adds a warranty inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {

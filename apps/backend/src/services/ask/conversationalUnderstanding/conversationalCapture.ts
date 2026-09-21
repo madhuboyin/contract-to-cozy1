@@ -361,6 +361,105 @@ export function warrantyAddCaptureRequest(contextVersion: string): AskCaptureReq
   };
 }
 
+// ── User-initiated event add ─────────────────────────────────────────────────────────────────────────────
+// An event the homeowner chose to add (rather than one Ask extracted from something they said) needs the one thing
+// the extraction edit path deliberately excludes: a date. So it has its own form (CAPTURE_EVENT_ADD), and its
+// submission builds the same confirmation parameters extraction produces, so the existing confirmCaptureEvent
+// writer handles it unchanged. A user-added event is always an exact date: a timeline records what happened, so
+// a date in the future is refused.
+export const EVENT_ADD_CAPTURE_KEY = 'CAPTURE_EVENT_ADD';
+const EVENT_ADD_TYPES = Object.values(HomeEventType).filter((value) => value !== 'VERIFIED_RESOLUTION');
+const eventTypeLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+const EVENT_ADD_ANSWER_SCHEMA = z.object({
+  title: z.string().trim().min(3).max(140),
+  type: z.nativeEnum(HomeEventType).refine((value) => value !== 'VERIFIED_RESOLUTION', { message: 'Choose one of the listed types.' }),
+  occurredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()), { message: 'Enter a valid date.' }),
+  summary: z.string().trim().max(500).nullish().transform((value) => value || null),
+  amount: z.number().nonnegative().max(10_000_000).nullish().transform((value) => value ?? null),
+  providerName: z.string().trim().max(160).nullish().transform((value) => value || null),
+}).strict();
+
+export function eventAddCaptureRequest(contextVersion: string, entered: Record<string, unknown> = {}): AskCaptureRequest {
+  return {
+    requirementId: 'capture-event-add',
+    captureKey: EVENT_ADD_CAPTURE_KEY,
+    // WORKFLOW_INPUT makes the submit button read "Continue to review": nothing is saved until the confirmation.
+    classification: 'WORKFLOW_INPUT',
+    state: 'UNKNOWN',
+    title: 'Add a timeline event',
+    question: 'What would you like to add to your home timeline?',
+    helpText: 'Enter the date as YYYY-MM-DD. You will review everything before it is saved.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'title', label: 'Title', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 140 } },
+      { key: 'type', label: 'Type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: EVENT_ADD_TYPES.map((value) => ({ label: eventTypeLabel(value), value })) } },
+      { key: 'occurredAt', label: 'Date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+      { key: 'summary', label: 'Details', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 500 } },
+      { key: 'amount', label: 'Amount', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
+      { key: 'providerName', label: 'Provider', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+    ] },
+    currentAnswer: {
+      title: entered.title ?? null, type: entered.type ?? null, occurredAt: entered.occurredAt ?? null,
+      summary: entered.summary ?? null, amount: entered.amount ?? null, providerName: entered.providerName ?? null,
+    },
+    allowNotSure: false,
+    sensitivity: 'STANDARD',
+    destinationLabel: 'Used to prepare this timeline entry; nothing is saved until you confirm',
+    confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
+
+// Builds (or rebuilds, on a resubmission) the review card for a user-added event. Returns a homeowner-facing reason
+// instead of a result when the answer is unusable.
+export function buildUserAddedEventConfirmation(
+  storedParameters: unknown,
+  contextVersion: string,
+  answer: unknown,
+  now: Date,
+): { result: AskOperationResult } | { error: string } {
+  const parameters = asParameterRecord(storedParameters);
+  const parsed = EVENT_ADD_ANSWER_SCHEMA.safeParse(answer);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message && !/expected|invalid/i.test(parsed.error.issues[0].message) ? parsed.error.issues[0].message : 'Enter a title, a type, and a date as YYYY-MM-DD.' };
+  const entered = parsed.data;
+  if (new Date(`${entered.occurredAt}T00:00:00Z`).getTime() > now.getTime() + ONE_DAY_MS) return { error: 'A timeline records what has happened, so the date cannot be in the future.' };
+  const confirmationVersion = nextConfirmationVersion(parameters);
+  const expiresAt = confirmationExpiry(now);
+  const merged: Record<string, unknown> = {
+    ...parameters,
+    captureOrigin: USER_ADD_ORIGIN,
+    type: entered.type, title: entered.title, summary: entered.summary,
+    occurredAt: `${entered.occurredAt}T00:00:00.000Z`, datePrecision: 'EXACT_DATE', dateRangeStart: null, dateRangeEnd: null,
+    amount: entered.amount, currency: entered.amount != null ? 'USD' : null, providerName: entered.providerName,
+    attribution: 'FIRSTHAND', captureChannel: CAPTURE_CHANNEL,
+  };
+  const fields: Array<{ label: string; value: string }> = [
+    { label: 'Event', value: entered.title }, { label: 'Type', value: eventTypeLabel(entered.type) }, { label: 'Date', value: entered.occurredAt },
+  ];
+  if (entered.amount != null) fields.push({ label: 'Amount', value: `$${entered.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` });
+  if (entered.providerName) fields.push({ label: 'Provider', value: entered.providerName });
+  if (entered.summary) fields.push({ label: 'Details', value: entered.summary });
+  const title = 'Add this to your home timeline?';
+  return {
+    result: {
+      status: 'NEEDS_CONFIRMATION',
+      reasonCode: 'EVENT_CAPTURE_CONFIRMATION_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'capture-event-add-preview', title, body: 'You entered these details. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: `capture-event-add-${expiresAt.getTime()}`, version: confirmationVersion, title,
+        description: 'You entered these details. No change is saved until you confirm.',
+        fields, editableFields: [], confirmLabel: 'Add to timeline',
+        consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my home timeline.',
+        expiresAt: expiresAt.toISOString(),
+      },
+      suggestions: [],
+      captureRequests: [eventAddCaptureRequest(contextVersion, { ...entered })],
+      parameters: { ...merged, confirmationVersion, confirmationExpiresAt: expiresAt.toISOString() },
+    },
+  };
+}
+
 function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expiresAt: Date, index: number, version: number) {
   const confirmationId = `capture-fact-${candidate.factKey}-${index}-${expiresAt.getTime()}`;
   return {

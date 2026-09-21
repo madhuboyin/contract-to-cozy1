@@ -6,6 +6,7 @@ import type { AskItemActionInteractionType, AskPresentationBlock } from '@/featu
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
+import { CorrectionActions } from './CorrectionActions';
 import { ActionLink } from './blocks/context';
 import type { Warranty } from '@/types';
 
@@ -109,11 +110,7 @@ function WarrantyDetail({ warrantyId, expectedPropertyId, fallbackItem, disabled
         <div><dt className="text-xs text-slate-500">Linked documents</dt><dd className="mt-0.5 font-medium text-slate-900">{warranty.documents?.length ?? 0}</dd></div>
       </dl>
       {warranty.coverageDetails && <p className="mt-3 text-sm leading-6 text-slate-700">{warranty.coverageDetails}</p>}
-      {onAction && (fallbackItem.actions?.length ?? 0) > 0 && <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={`Corrections for ${warranty.providerName}`}>
-        {fallbackItem.actions!.map((action) => <button key={action.id} type="button" disabled={disabled}
-          className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
-          onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}<span className="sr-only"> for {warranty.providerName}</span></button>)}
-      </div>}
+      {onAction && <CorrectionActions actions={fallbackItem.actions ?? []} subject={warranty.providerName} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />}
       <p className="mt-3 text-xs text-slate-500">Current canonical warranty record.</p>
     </>}
   </aside>;

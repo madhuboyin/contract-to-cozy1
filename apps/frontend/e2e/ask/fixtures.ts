@@ -110,12 +110,25 @@ function correctableSummaryExecution() {
   const list = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'property-recent-events') as
     { sections: Array<{ items: Array<Record<string, unknown>> }> } | undefined;
   if (list) {
-    list.sections[0].items[0].actions = [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }];
+    const eventAction = (id: string, label: string, message: string) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' });
+    // More than three corrections, so the detail folds them behind one "Correct a detail" disclosure.
+    list.sections[0].items[0].actions = [
+      eventAction('correct-title', 'Correct title', 'Correct the title of this timeline event.'),
+      eventAction('correct-occurredAt', 'Correct date', 'Correct the date of this timeline event.'),
+      eventAction('correct-amount', 'Correct amount', 'Correct the amount of this timeline event.'),
+      eventAction('correct-type', 'Correct type', 'Correct the type of this timeline event.'),
+    ];
   }
   const action = (id: string, label: string, message: string, operationId: string) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId });
   const rooms = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'property-rooms') as
     { sections: Array<{ items: Array<Record<string, unknown>> }> } | undefined;
   if (rooms) rooms.sections[0].items[0].actions = [action('rename-room', 'Rename room', 'Rename this room.', 'ROOM_RENAME')];
+  const withAddAction = (blockId: string, addAction: Record<string, unknown>) => {
+    const target = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === blockId) as { actions: Array<Record<string, unknown>> } | undefined;
+    if (target) target.actions = [addAction, ...target.actions];
+  };
+  withAddAction('property-recent-events', { id: 'add-timeline-event', label: 'Add a timeline event', interactionType: 'START_WORKFLOW', message: 'Add an event to my home timeline.', operationId: 'CAPTURE_EVENT_CONFIRM', style: 'PRIMARY' });
+  withAddAction('property-rooms', { id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW', message: 'Add a room to my home record.', operationId: 'ROOM_CREATE', style: 'PRIMARY' });
   // The two collections below are what the real Property Summary emits for inventory and warranties
   // (owner-only warranty actions are declared here because the fixture user owns the warranty).
   (response.blocks as unknown[]).push({
@@ -139,7 +152,12 @@ function correctableSummaryExecution() {
     sections: [{ id: 'warranties', title: 'Recorded warranties', count: 1, items: [{
       id: 'warranty-property-summary', title: 'Acme Home Warranty', description: null, entityType: 'WARRANTY', href: null, status: 'ACTIVE',
       meta: ['Home warranty plan', 'Expires Dec 1, 2027'],
-      actions: [action('correct-expiryDate', 'Correct expiry date', 'Correct the expiry date of this warranty.', 'WARRANTY_CORRECT')],
+      actions: [
+        action('correct-expiryDate', 'Correct expiry date', 'Correct the expiry date of this warranty.', 'WARRANTY_CORRECT'),
+        action('correct-category', 'Correct coverage type', 'Correct the coverage type of this warranty.', 'WARRANTY_CORRECT'),
+        action('correct-cost', 'Correct cost', 'Correct the cost of this warranty.', 'WARRANTY_CORRECT'),
+        action('correct-coverageDetails', 'Correct coverage details', 'Correct the coverage details of this warranty.', 'WARRANTY_CORRECT'),
+      ],
     }] }],
     actions: [
       { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW', message: 'Add a warranty to my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' },
@@ -175,12 +193,14 @@ function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ve
 // Phase 3 write-slice acceptance: confirmation -> edit -> confirm for the
 // inventory (DATE), warranty (DATE) and room (TEXT) corrections. Shapes mirror
 // the real server's confirmation cards.
-export type CorrectionKind = 'inventory' | 'warranty' | 'room' | 'inventoryCondition' | 'inventoryCost';
+export type CorrectionKind = 'inventory' | 'warranty' | 'room' | 'inventoryCondition' | 'inventoryCost' | 'eventAmount' | 'warrantyCategory';
 const CORRECTIONS: Record<CorrectionKind, { message: RegExp; operationId: string; title: string; label: string; type: 'DATE' | 'TEXT' | 'SELECT' | 'MONEY'; initial: string; confirmLabel: string; consentText: string; receiptTitle: string; current: string; options?: Array<{ label: string; value: string }> }> = {
   inventory: { message: /correct the install date of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct installed date for Water heater?', label: 'Corrected installed date', type: 'DATE', initial: '2022-01-15', current: '2022-01-15', confirmLabel: 'Save installed date', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
   warranty: { message: /correct the expiry date of this warranty/i, operationId: 'WARRANTY_CORRECT', title: 'Correct the expiry date of the Acme Home Warranty warranty?', label: 'Corrected expiry date', type: 'DATE', initial: '2027-12-01', current: '2027-12-01', confirmLabel: 'Save expiry date', consentText: 'I authorize this correction to the warranty record.', receiptTitle: 'Warranty updated' },
   inventoryCondition: { message: /correct the condition of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct condition for Water heater?', label: 'Corrected condition', type: 'SELECT', initial: 'GOOD', current: 'Good', confirmLabel: 'Save condition', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated', options: [{ label: 'New', value: 'NEW' }, { label: 'Good', value: 'GOOD' }, { label: 'Fair', value: 'FAIR' }, { label: 'Poor', value: 'POOR' }, { label: 'Unknown', value: 'UNKNOWN' }] },
   inventoryCost: { message: /correct the purchase cost of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct purchase cost for Water heater?', label: 'Corrected purchase cost', type: 'MONEY', initial: '850.00', current: '$850.00', confirmLabel: 'Save purchase cost', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
+  eventAmount: { message: /correct the amount of this timeline event/i, operationId: 'HOME_EVENT_CORRECT', title: 'Correct the amount of "Roof replacement"?', label: 'Corrected amount', type: 'MONEY', initial: '18500.00', current: '$18,500.00', confirmLabel: 'Save amount', consentText: 'I authorize this correction to the shared home timeline.', receiptTitle: 'Home timeline event corrected' },
+  warrantyCategory: { message: /correct the coverage type of this warranty/i, operationId: 'WARRANTY_CORRECT', title: 'Correct the coverage type of the Acme Home Warranty warranty?', label: 'Corrected coverage type', type: 'SELECT', initial: 'HOME_WARRANTY_PLAN', current: 'Home warranty plan', confirmLabel: 'Save coverage type', consentText: 'I authorize this correction to the warranty record.', receiptTitle: 'Warranty updated', options: [{ label: 'Appliance', value: 'APPLIANCE' }, { label: 'HVAC', value: 'HVAC' }, { label: 'Roofing', value: 'ROOFING' }, { label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'Other', value: 'OTHER' }] },
   room: { message: /rename this room/i, operationId: 'ROOM_RENAME', title: 'Rename "Kitchen"?', label: 'New room name', type: 'TEXT', initial: 'Kitchen', current: 'Kitchen', confirmLabel: 'Save room name', consentText: 'I authorize this rename of the shared home record.', receiptTitle: 'Room renamed' },
 };
 
@@ -251,6 +271,57 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
     ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
     blocks: [{ type: 'SUMMARY', id: 'warranty-captured-new', title: 'Recorded to your property record', body: 'Your Acme Home Warranty warranty is now saved to your Living Home Record.', tone: 'POSITIVE', actions: [] }],
   };
+}
+
+// Phase 3 add-record acceptance: "Add a timeline event" and "Add a room" -> form -> review -> receipt.
+// Shapes mirror buildUserAddedEventConfirmation / roomCreateResult / the existing confirm receipts.
+type AddKind = 'event' | 'room';
+function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, unknown>) {
+  const base = propertySummaryTimelineExecution();
+  const spec = kind === 'event'
+    ? { executionId: 'execution-event-add', question: 'Add an event to my home timeline.', operationId: 'CAPTURE_EVENT_CONFIRM', context: 'event-add-context-v1', requirementId: 'capture-event-add', captureKey: 'CAPTURE_EVENT_ADD', title: 'Add a timeline event', questionText: 'What would you like to add to your home timeline?' }
+    : { executionId: 'execution-room-add', question: 'Add a room to my home record.', operationId: 'ROOM_CREATE', context: 'room-add-context-v1', requirementId: 'room-create-inputs', captureKey: 'ROOM_CREATE_INPUTS', title: 'Add a room', questionText: 'Which room would you like to add to your home record?' };
+  const common = { ...base, sessionId: sessionId ?? base.sessionId, executionId: spec.executionId, question: spec.question, operation: { id: spec.operationId, version: '1.0', family: 'COMMAND' }, contextVersion: spec.context, updatedAt: new Date().toISOString() };
+  const field = (key: string, label: string, required: boolean, inputSchema: Record<string, unknown>) => ({ key, label, required, inputSchema });
+  const fields = kind === 'event'
+    ? [
+      field('title', 'Title', true, { type: 'SHORT_TEXT', maxLength: 140 }),
+      field('type', 'Type', true, { type: 'SINGLE_SELECT', options: [{ label: 'Repair', value: 'REPAIR' }, { label: 'Improvement', value: 'IMPROVEMENT' }, { label: 'Note', value: 'NOTE' }] }),
+      field('occurredAt', 'Date', true, { type: 'SHORT_TEXT', maxLength: 10 }),
+      field('summary', 'Details', false, { type: 'SHORT_TEXT', maxLength: 500 }),
+      field('amount', 'Amount', false, { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' }),
+      field('providerName', 'Provider', false, { type: 'SHORT_TEXT', maxLength: 160 }),
+    ]
+    : [
+      field('type', 'Room type', true, { type: 'SINGLE_SELECT', options: [{ label: 'Office', value: 'OFFICE' }, { label: 'Bedroom', value: 'BEDROOM' }, { label: 'Other', value: 'OTHER' }] }),
+      field('name', 'Room name', true, { type: 'SHORT_TEXT', maxLength: 80 }),
+      field('floorLevel', 'Floor level', false, { type: 'INTEGER', min: -5, max: 50 }),
+    ];
+  const captureRequest = (current: Record<string, unknown>) => ({
+    requirementId: spec.requirementId, captureKey: spec.captureKey, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: spec.title, question: spec.questionText,
+    helpText: 'You will review everything before it is saved.', inputSchema: { type: 'GROUP', fields }, currentAnswer: current,
+    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Nothing is saved until you confirm', confirmationText: null, expectedContextVersion: spec.context,
+  });
+  const empty = kind === 'event' ? { title: null, type: null, occurredAt: null, summary: null, amount: null, providerName: null } : { type: null, name: null, floorLevel: null };
+  if (stage === 'FORM') {
+    return { ...common, status: 'NEEDS_CONTEXT', confirmation: null, captureRequests: [captureRequest(empty)],
+      blocks: [{ type: 'SUMMARY', id: `${kind}-add-input`, title: spec.title, body: 'Nothing has been saved yet. Enter the details, then review them before it is added.', tone: 'DEFAULT', actions: [] }] };
+  }
+  if (stage === 'CONFIRMATION') {
+    const entered = answer ?? {};
+    const confirmation = kind === 'event'
+      ? { confirmationId: 'capture-event-add-1', version: 1, title: 'Add this to your home timeline?', description: 'You entered these details. No change is saved until you confirm.',
+        fields: [{ label: 'Event', value: String(entered.title ?? '') }, { label: 'Type', value: String(entered.type ?? '') }, { label: 'Date', value: String(entered.occurredAt ?? '') }],
+        editableFields: [], confirmLabel: 'Add to timeline', consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my home timeline.' }
+      : { confirmationId: 'room-create-1', version: 1, title: `Add the room "${String(entered.name ?? '')}"?`, description: 'This adds the room through the canonical inventory service.',
+        fields: [{ label: 'Room name', value: String(entered.name ?? '') }, { label: 'Type', value: String(entered.type ?? '') }],
+        editableFields: [], confirmLabel: 'Add room', consentText: 'I authorize adding this room to the shared home record.' };
+    return { ...common, status: 'NEEDS_CONFIRMATION', captureRequests: [captureRequest(entered)],
+      blocks: [{ type: 'SUMMARY', id: `${kind}-add-review`, title: 'Review before adding', body: 'You entered these details. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: { ...confirmation, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+  }
+  return { ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `${kind}-added`, title: kind === 'event' ? 'Added to your home timeline' : 'Room added', status: 'COMPLETED', description: 'The record was added.', details: [], actions: [] }] };
 }
 
 function maintenanceExecution() {
@@ -471,6 +542,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   const correctionConfirmBodies: Array<Record<string, unknown>> = [];
   let correctionSessionId: string | undefined;
   const warrantyAddCaptureBodies: Array<Record<string, unknown>> = [];
+  const addCaptureBodies: Array<Record<string, unknown>> = [];
   let captureAttempts = 0;
   let pendingDismissed = false;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
@@ -626,6 +698,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       const response = correctableSummaryExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/^add an event to my home timeline/i.test(body.message) || /^add a room to my home record/i.test(body.message)) {
+      const addKind: AddKind = /event/i.test(body.message) ? 'event' : 'room';
+      if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: addExecution(addKind, 'FORM', body.sessionId as string | undefined) }, 201);
       return;
     }
     if (/^add a warranty to my home record/i.test(body.message)) {
@@ -786,6 +864,19 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
     await fulfill(route, { success: true, data: warrantyAddExecution('DONE', correctionSessionId) });
   });
+  for (const addKind of ['event', 'room'] as const) {
+    await page.route(`${apiOrigin}/api/ask/executions/execution-${addKind}-add/captures`, async (route) => {
+      assertAuthenticated(route.request());
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      addCaptureBodies.push(body);
+      await fulfill(route, { success: true, data: addExecution(addKind, 'CONFIRMATION', correctionSessionId, body.answer as Record<string, unknown>) });
+    });
+    await page.route(`${apiOrigin}/api/ask/executions/execution-${addKind}-add/confirm`, async (route) => {
+      assertAuthenticated(route.request());
+      correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      await fulfill(route, { success: true, data: addExecution(addKind, 'DONE', correctionSessionId) });
+    });
+  }
   await page.route(`${apiOrigin}/api/ask/executions/execution-pending-maintenance/cancel`, (route) => {
     pendingDismissed = true;
     const cancelled = {
@@ -796,7 +887,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, captureAttempts: () => captureAttempts };
+  return { captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

@@ -6,6 +6,7 @@ import { getRoomInsights, type RoomInsightsDTO } from '@/app/(dashboard)/dashboa
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { cn } from '@/lib/utils';
+import { ActionLink } from './blocks/context';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -158,6 +159,6 @@ export function RoomResultList({ block, propertyId, disabled, onAction, onAccess
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more rooms are available through the full Rooms collection.</p>}
     </div>)}
     {detailRoomId && detailItem && <RoomDetail key={detailRoomId} roomId={detailRoomId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
+    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
   </section>;
 }

@@ -21,6 +21,10 @@ const READS = [
   // read questions about the detail fields
   'What is the model of my furnace?', 'What condition is my water heater in?', 'How much did I pay for my dishwasher?', 'What is the serial number of my refrigerator?',
   'What brand is my dryer?', 'What is the replacement cost of my roof?', 'Show the notes on my furnace', 'What is the condition of my appliances?',
+  // read questions about the event and warranty detail fields
+  'What type of event was the roof replacement?', 'How much did the roof replacement cost?', 'What is the summary of my last repair?', 'How important is the roof event?',
+  'What is the policy number on my home warranty?', 'How much does my home warranty cost?', 'What does my HVAC warranty cover?', 'When did my warranty start?',
+  'What type of warranty do I have?', 'Show the coverage details for my furnace warranty',
   // wording that resembles a correction but belongs to other operations
   'Update the notes on this maintenance task', 'Edit the notes for this seller prep checklist item', 'Change the model number on my quote request',
 ];
@@ -34,6 +38,11 @@ const WRITES = [
   ['Correct the notes of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Please fix the serial number on my inventory record for the dryer', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the title of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the date of this timeline event.', 'HOME_EVENT_CORRECT'],
   ['Correct the provider of this warranty.', 'WARRANTY_CORRECT'], ['Correct the expiry date of this warranty.', 'WARRANTY_CORRECT'],
+  ['Correct the summary of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the amount of this timeline event.', 'HOME_EVENT_CORRECT'],
+  ['Correct the type of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the importance of this timeline event.', 'HOME_EVENT_CORRECT'],
+  ['Correct the start date of this warranty.', 'WARRANTY_CORRECT'], ['Correct the coverage type of this warranty.', 'WARRANTY_CORRECT'],
+  ['Correct the policy number of this warranty.', 'WARRANTY_CORRECT'], ['Correct the cost of this warranty.', 'WARRANTY_CORRECT'],
+  ['Correct the coverage details of this warranty.', 'WARRANTY_CORRECT'],
   ['Rename this room.', 'ROOM_RENAME'], ['Can you rename the spare room to office', 'ROOM_RENAME'],
 ];
 

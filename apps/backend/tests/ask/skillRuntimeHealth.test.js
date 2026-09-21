@@ -55,6 +55,7 @@ test('adapter failure degrades or removes only operations that depend on that ad
     ASK_ADAPTER_HOME_EVENT_CORRECT_KILL_SWITCH: 'true',
     ASK_ADAPTER_WARRANTY_CORRECT_KILL_SWITCH: 'true',
     ASK_ADAPTER_ROOM_RENAME_KILL_SWITCH: 'true',
+    ASK_ADAPTER_ROOM_CREATE_KILL_SWITCH: 'true',
   });
   assert.equal(deriveSkillHealth('property-record', 'ASK', allDisabled).status, 'UNAVAILABLE');
   assert.equal(listDiscoverableSkills('ASK', allDisabled).some((skill) => skill.id === 'property-record'), false);

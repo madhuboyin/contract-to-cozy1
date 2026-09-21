@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BlockView } from '../blocks/registry';
 import { RoomResultList } from '../RoomResultList';
+import { AskBlockActionContext } from '../blocks/context';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
@@ -115,4 +116,21 @@ test('room detail shows the declared rename action with exact identity, and none
   fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
   await waitFor(() => expect(screen.getByText('$12,500')).toBeInTheDocument());
   expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+});
+
+
+test('the rooms list renders its declared START_WORKFLOW block action as a button and dispatches that exact action; href actions stay links', () => {
+  const addAction = { id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW' as const, message: 'Add a room to my home record.', operationId: 'ROOM_CREATE', style: 'PRIMARY' as const };
+  const withAdd: typeof block = { ...block, actions: [addAction, ...block.actions] };
+  const invoke = jest.fn();
+  render(
+    <AskBlockActionContext.Provider value={{ disabled: false, invoke }}>
+      <ResultViewContext.Provider value={null}>
+        <RoomResultList block={withAdd} propertyId="home" onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} />
+      </ResultViewContext.Provider>
+    </AskBlockActionContext.Provider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Add a room/ }));
+  expect(invoke).toHaveBeenCalledWith(addAction);
+  expect(screen.getByRole('link', { name: /Open Rooms/ })).toBeInTheDocument();
 });

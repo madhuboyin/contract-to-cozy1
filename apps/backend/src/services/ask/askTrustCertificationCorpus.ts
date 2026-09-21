@@ -192,6 +192,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   RENOVATION_PERMIT_READINESS: 'The remodel is blocked until the recorded permit approval is complete.',
   SELLER_PREP_CHECKLIST: 'Open seller-prep checklist items are listed by category with estimated cost ranges.',
   ROOM_RENAME: 'The selected room has a corrected name after your confirmation.',
+  ROOM_CREATE: 'The new room is reviewed and then added to your home record after your confirmation.',
   WARRANTY_CORRECT: 'The selected warranty has a corrected provider name or expiry date after your confirmation.',
   HOME_EVENT_CORRECT: 'The timeline event correction is reviewed before it is recorded as a new revision.',
   INVENTORY_ITEM_CORRECT: 'The inventory item date is reviewed before it is corrected on the shared home record.',

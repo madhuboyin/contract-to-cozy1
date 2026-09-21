@@ -32,6 +32,7 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'HOME_EVENT_CORRECT',
   'WARRANTY_CORRECT',
   'ROOM_RENAME',
+  'ROOM_CREATE',
   'OPERATIONAL_WORK_UPDATE',
   // Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20).
   'CAPTURE_FACT_CONFIRM',
@@ -109,6 +110,7 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   INSPECTION_FINDING_UPDATE: command('INSPECTION_FINDING_UPDATE', 'INSPECTION_FINDING_UPDATE', 'inspection-findings.update', 'CONTRIBUTOR', 'INSPECTION_FINDING', ['EDIT', 'REOPEN'], { title: 'Inspection finding not changed', body: 'The finding and any linked Operational Work Item remain unchanged.', suggestion: 'Show my open inspection findings' }),
   DOCUMENT_PROMOTION_CONFIRM: command('DOCUMENT_PROMOTION_CONFIRM', 'DOCUMENT_PROMOTION_CONFIRM', 'document-promotion.confirm', 'CONTRIBUTOR', 'DOCUMENT_PROMOTION', ['EDIT'], { title: 'Document candidate not promoted', body: 'No extracted candidate became canonical Home Record truth.', suggestion: 'Show pending document reviews' }),
   OPERATIONAL_WORK_UPDATE: command('OPERATIONAL_WORK_UPDATE', 'OPERATIONAL_WORK_UPDATE', 'home-operations.update', 'CONTRIBUTOR', 'OPERATIONAL_WORK_ITEM', ['EDIT', 'REOPEN', 'STOP'], { title: 'Operational Work not changed', body: 'The work item lifecycle, schedule, and evidence remain unchanged.', suggestion: 'Show my home operations' }),
+  ROOM_CREATE: command('ROOM_CREATE', 'ROOM_CREATE', 'room.create', 'CONTRIBUTOR', 'INVENTORY_ROOM', ['EDIT', 'STOP'], { title: 'Room not added', body: 'No room was added.', suggestion: 'Show my rooms' }),
   ROOM_RENAME: command('ROOM_RENAME', 'ROOM_RENAME', 'room.rename', 'CONTRIBUTOR', 'INVENTORY_ROOM', ['EDIT', 'STOP'], { title: 'Room not renamed', body: 'The room was not changed.', suggestion: 'Show my rooms' }),
   WARRANTY_CORRECT: command('WARRANTY_CORRECT', 'WARRANTY_CORRECT', 'warranty.correct', 'CONTRIBUTOR', 'WARRANTY', ['EDIT', 'STOP'], { title: 'Warranty not changed', body: 'The warranty record was not changed.', suggestion: 'Show my warranties' }),
   HOME_EVENT_CORRECT: command('HOME_EVENT_CORRECT', 'HOME_EVENT_CORRECT', 'home-event.correct', 'CONTRIBUTOR', 'HOME_EVENT', ['EDIT', 'STOP'], { title: 'Timeline event not changed', body: 'The home timeline event was not changed.', suggestion: 'Show my home timeline' }),

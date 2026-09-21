@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HomeEventResultList } from '../HomeEventResultList';
+import { AskBlockActionContext } from '../blocks/context';
 import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
@@ -132,4 +133,21 @@ test('inline event detail exposes declared correction actions with exact event i
   fireEvent.click(screen.getByRole('button', { name: 'Water heater replaced' }));
   await waitFor(() => expect(screen.getByText('Homeowner confirmed')).toBeInTheDocument());
   expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+});
+
+
+test('the events list renders its declared START_WORKFLOW block action as a button and dispatches that exact action; href actions stay links', () => {
+  const addAction = { id: 'add-timeline-event', label: 'Add a timeline event', interactionType: 'START_WORKFLOW' as const, message: 'Add an event to my home timeline.', operationId: 'CAPTURE_EVENT_CONFIRM', style: 'PRIMARY' as const };
+  const withAdd: typeof block = { ...block, actions: [addAction, ...block.actions] };
+  const invoke = jest.fn();
+  render(
+    <AskBlockActionContext.Provider value={{ disabled: false, invoke }}>
+      <ResultViewContext.Provider value={null}>
+        <HomeEventResultList block={withAdd} propertyId="home" onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} />
+      </ResultViewContext.Provider>
+    </AskBlockActionContext.Provider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Add a timeline event/ }));
+  expect(invoke).toHaveBeenCalledWith(addAction);
+  expect(screen.getByRole('link', { name: /Open home inventory/ })).toBeInTheDocument();
 });

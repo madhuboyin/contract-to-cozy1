@@ -17,9 +17,9 @@ const {
   validateAskInteractionCoverageMatrix,
 } = require('../../src/services/ask/askInteractionCoverageMatrix.ts');
 
-test('every one of the 81 Ask operations has a coverage-matrix entry with no registry drift', () => {
+test('every one of the 82 Ask operations has a coverage-matrix entry with no registry drift', () => {
   const operationIds = Object.keys(ASK_OPERATION_DEFINITIONS);
-  assert.equal(operationIds.length, 81);
+  assert.equal(operationIds.length, 82);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -81,6 +81,7 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'HOME_EVENT_CORRECT',
   'WARRANTY_CORRECT',
   'ROOM_RENAME',
+  'ROOM_CREATE',
   'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY',
   'DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM', 'MAJOR_EVENT_ENTRY',
   'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'CAPTURE_EVIDENCE_CONFIRM',
@@ -114,13 +115,13 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 81);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 82);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
 test('Stage 2 fields are TRACED with real notes only for operations actually traced this pass; every other operation stays honestly PENDING', () => {
   const operationIds = Object.keys(ASK_INTERACTION_COVERAGE_MATRIX);
-  assert.equal(operationIds.length, 81);
+  assert.equal(operationIds.length, 82);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

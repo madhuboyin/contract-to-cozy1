@@ -12,6 +12,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 require('../../src/services/ask/askOrchestrator.service.ts');
+const { roomCreateResult } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
 const { InventoryService } = require('../../src/services/inventory.service.ts');
@@ -24,13 +25,15 @@ const replaceRepair = require('../../src/services/replaceRepairAnalysis.service.
 const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const captureWarrantyModule = require('../../src/modules/propertyContext/application/captureWarranty.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { editCaptureWarrantyCandidate } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
+const { editCaptureWarrantyCandidate, buildUserAddedEventConfirmation, editCaptureEventCandidate } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
 
 const realPrisma = prismaModule.prisma;
 const originals = {
   updateRoom: InventoryService.prototype.updateRoom,
+  createRoom: InventoryService.prototype.createRoom,
   updateItem: InventoryService.prototype.updateItem,
   updateHomeEvent: HomeEventsService.prototype.updateHomeEvent,
+  createHomeEvent: HomeEventsService.prototype.createHomeEvent,
   updateWarranty: homeManagement.updateWarranty,
   markCoverage: coverageAnalysis.markCoverageAnalysisStale,
   markRisk: riskPremium.markRiskPremiumOptimizerStale,
@@ -46,7 +49,7 @@ let models;
 let accessRole = 'CONTRIBUTOR';
 
 function install() {
-  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [] };
+  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [], createHomeEvent: [], createRoom: [] };
   accessRole = 'CONTRIBUTOR';
   models = {};
   prismaModule.prisma = new Proxy({}, {
@@ -63,7 +66,9 @@ function install() {
   });
   InventoryService.prototype.updateRoom = async function (...args) { calls.updateRoom.push(args); return {}; };
   InventoryService.prototype.updateItem = async function (...args) { calls.updateItem.push(args); return {}; };
+  InventoryService.prototype.createRoom = async function (...args) { calls.createRoom.push(args); return { id: 'room-new', name: args[1].name }; };
   HomeEventsService.prototype.updateHomeEvent = async function (...args) { calls.updateHomeEvent.push(args); return { id: 'event-2', title: args[2].title ?? 'Roof replacement' }; };
+  HomeEventsService.prototype.createHomeEvent = async function (...args) { calls.createHomeEvent.push(args); return { id: 'event-new', title: args[0].body.title }; };
   homeManagement.updateWarranty = async (...args) => { calls.updateWarranty.push(args); return {}; };
   coverageAnalysis.markCoverageAnalysisStale = async () => { calls.markers.push('coverage'); };
   riskPremium.markRiskPremiumOptimizerStale = async () => { calls.markers.push('risk'); };
@@ -79,8 +84,10 @@ function install() {
 function restore() {
   prismaModule.prisma = realPrisma;
   InventoryService.prototype.updateRoom = originals.updateRoom;
+  InventoryService.prototype.createRoom = originals.createRoom;
   InventoryService.prototype.updateItem = originals.updateItem;
   HomeEventsService.prototype.updateHomeEvent = originals.updateHomeEvent;
+  HomeEventsService.prototype.createHomeEvent = originals.createHomeEvent;
   homeManagement.updateWarranty = originals.updateWarranty;
   coverageAnalysis.markCoverageAnalysisStale = originals.markCoverage;
   riskPremium.markRiskPremiumOptimizerStale = originals.markRisk;
@@ -92,7 +99,8 @@ function restore() {
 }
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
-const execution = (operationId) => ({ id: 'exec-1', propertyId: 'p1', sessionId: 's1', userId: 'u1', operationId });
+const EXECUTION_CREATED_AT = new Date('2026-09-20T00:00:00.000Z');
+const execution = (operationId) => ({ id: 'exec-1', propertyId: 'p1', sessionId: 's1', userId: 'u1', operationId, createdAt: EXECUTION_CREATED_AT });
 const invoke = (operationId, parameters, userId = 'u1') => confirmCapabilityInvoke(operationId, {
   userId, execution: execution(operationId), parameters, access: { role: 'CONTRIBUTOR' }, command: getAskDomainCommandByOperation(operationId),
 });
@@ -157,8 +165,11 @@ test('ROOM_RENAME confirm treats an already-applied name as done: no second writ
 const warrantyUpdatedAt = new Date('2026-09-02T00:00:00.000Z');
 const warrantyVersion = sha(`w1:${warrantyUpdatedAt.toISOString()}`);
 function warrantyModel({ ownerUserId = 'u1', providerName = 'Acme Home Warranty', expiryDate = new Date('2027-12-01T00:00:00.000Z') } = {}) {
-  const row = { id: 'w1', propertyId: 'p1', providerName, startDate: new Date('2026-01-01T00:00:00.000Z'), expiryDate, updatedAt: warrantyUpdatedAt, homeownerProfile: { id: 'hp1', userId: ownerUserId } };
-  models.warranty = { findFirst: async () => row, findUniqueOrThrow: async () => row };
+  const row = {
+    id: 'w1', propertyId: 'p1', providerName, startDate: new Date('2026-01-01T00:00:00.000Z'), expiryDate, updatedAt: warrantyUpdatedAt,
+    category: 'HOME_WARRANTY_PLAN', policyNumber: 'POL-123', cost: '450', coverageDetails: 'HVAC and appliances.', homeownerProfile: { id: 'hp1', userId: ownerUserId },
+  };
+  models.warranty = { findFirst: async () => row, findUniqueOrThrow: async () => row, findMany: async () => [row] };
 }
 const warrantyParams = (field, value, version = warrantyVersion) => ({ warrantyCorrection: { warrantyId: 'w1', field, value }, warrantyCorrectionContextVersion: version, confirmationVersion: 2 });
 
@@ -236,8 +247,8 @@ test('INVENTORY_ITEM_CORRECT confirm rejects a missing date, a stale version and
 
 // ───────────────────────────── HOME_EVENT_CORRECT ─────────────────────────────
 const eventVersion = sha('event-1:3');
-function eventModel({ current = { id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE' }, winner = null } = {}) {
-  models.homeEvent = { findFirst: async ({ where }) => (where.idempotencyKey ? winner : where.id === 'event-1' ? current : null) };
+function eventModel({ current = { id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', occurredAt: new Date('2026-09-01T00:00:00.000Z'), summary: 'Full tear-off.', amount: '18500', type: 'IMPROVEMENT', importance: 'NORMAL' }, winner = null } = {}) {
+  models.homeEvent = { findFirst: async ({ where }) => (where.idempotencyKey ? winner : where.id === 'event-1' ? current : null), findMany: async () => [current] };
 }
 const eventParams = (field, value, version = eventVersion) => ({ homeEventCorrection: { eventId: 'event-1', field, value }, homeEventCorrectionContextVersion: version, confirmationVersion: 2 });
 
@@ -489,4 +500,334 @@ test('inventory item actions: contributors get one action per correctable field,
   // ...but the cap still holds: thirteen actions are refused
   const tooMany = { ...block, sections: [{ ...block.sections[0], items: [{ ...row, actions: Array.from({ length: 13 }, (_, index) => ({ ...row.actions[0], id: `b${index}` })) }] }] };
   assert.equal(AskPresentationBlockSchema.safeParse(tooMany).success, false);
+});
+
+// ── Timeline event: the richer fields ──
+test('HOME_EVENT_CORRECT writes each new field kind as a narrowed patch (money as a number, selects as their value)', async () => {
+  const cases = [
+    ['summary', '  Replaced all shingles.\nNew underlayment. ', { summary: 'Replaced all shingles.\nNew underlayment.' }],
+    ['amount', '19250.5', { amount: 19250.5 }],
+    ['type', 'REPAIR', { type: 'REPAIR' }],
+    ['importance', 'HIGH', { importance: 'HIGH' }],
+  ];
+  for (const [field, value, expected] of cases) {
+    install(); eventModel();
+    await invoke('HOME_EVENT_CORRECT', eventParams(field, value));
+    const [, , patch] = calls.updateHomeEvent[0];
+    assert.deepEqual({ ...patch, correctionReason: undefined }, { ...expected, correctionReason: undefined }, field);
+    assert.ok(patch.correctionReason, 'a correction always carries a reason');
+  }
+});
+
+test('HOME_EVENT_CORRECT rejects invalid values for each new field kind without writing', async () => {
+  const invalid = [['summary', ''], ['summary', 'x'.repeat(501)], ['amount', 'abc'], ['amount', '-1'], ['amount', '12.345'], ['type', 'VERIFIED_RESOLUTION'], ['type', 'nonsense'], ['importance', 'URGENT']];
+  for (const [field, value] of invalid) {
+    install(); eventModel();
+    assert.equal(await codeOf(invoke('HOME_EVENT_CORRECT', eventParams(field, value))), 'ASK_INVALID_CONFIRMATION_EDIT', `${field}=${value.slice(0, 20)}`);
+    assert.equal(calls.updateHomeEvent.length, 0);
+  }
+});
+
+test('HOME_EVENT_CORRECT will not change the type of a system-created VERIFIED_RESOLUTION event', async () => {
+  eventModel({ current: { id: 'event-1', title: 'Guided plan completed', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', type: 'VERIFIED_RESOLUTION' } });
+  assert.equal(await codeOf(invoke('HOME_EVENT_CORRECT', eventParams('type', 'REPAIR'))), 'ASK_CONFIRMATION_NOT_ACTIVE');
+  assert.equal(calls.updateHomeEvent.length, 0);
+  install(); eventModel({ current: { id: 'event-1', title: 'Guided plan completed', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', type: 'VERIFIED_RESOLUTION', summary: 'Done.' } });
+  await invoke('HOME_EVENT_CORRECT', eventParams('summary', 'Corrected wording of the summary'));
+  assert.equal(calls.updateHomeEvent.length, 1, 'its other fields remain correctable');
+});
+
+const proposeEvent = async (message) => capabilityInvoke('HOME_EVENT_CORRECT', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'HOME_EVENT', entityId: 'event-1', operationId: 'HOME_EVENT_CORRECT' } });
+
+test('event propose: each field kind builds the matching editable field and current value, and offers no VERIFIED_RESOLUTION type', async () => {
+  const cases = [
+    ['Correct the title of this timeline event.', 'TEXT', 'Roof replacement', 'Roof replacement'],
+    ['Correct the date of this timeline event.', 'DATE', '2026-09-01', '2026-09-01'],
+    ['Correct the summary of this timeline event.', 'TEXTAREA', 'Full tear-off.', 'Full tear-off.'],
+    ['Correct the amount of this timeline event.', 'MONEY', '18500.00', '$18,500.00'],
+    ['Correct the type of this timeline event.', 'SELECT', 'IMPROVEMENT', 'Improvement'],
+    ['Correct the importance of this timeline event.', 'SELECT', 'NORMAL', 'Normal'],
+  ];
+  for (const [message, type, value, shown] of cases) {
+    install(); eventModel();
+    const result = await proposeEvent(message);
+    assert.equal(result.status, 'NEEDS_CONFIRMATION', message);
+    const [field] = result.confirmation.editableFields;
+    assert.deepEqual([field.type, field.value], [type, value], message);
+    assert.equal(result.confirmation.fields.find((entry) => entry.label === 'Current value').value, shown, message);
+    if (type === 'SELECT' && message.includes('type of')) assert.ok(!field.options.some((option) => option.value === 'VERIFIED_RESOLUTION'));
+    assert.match(result.confirmation.description, /pending confirmation/, 'the evidence-verification downgrade is disclosed');
+    assert.equal(calls.updateHomeEvent.length, 0, 'proposing writes nothing');
+  }
+});
+
+test('event propose: a system-created type and a date range are declined with a clear reason', async () => {
+  eventModel({ current: { id: 'event-1', title: 'Guided plan completed', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'RANGE', type: 'VERIFIED_RESOLUTION' } });
+  const type = await proposeEvent('Correct the type of this timeline event.');
+  assert.equal(type.reasonCode, 'HOME_EVENT_TYPE_LOCKED');
+  const date = await proposeEvent('Correct the date of this timeline event.');
+  assert.equal(date.reasonCode, 'HOME_EVENT_DATE_RANGE_UNSUPPORTED');
+});
+
+// ── Warranty: the richer fields ──
+test('WARRANTY_CORRECT writes each new field kind as a narrowed patch scoped to the owning profile', async () => {
+  const cases = [
+    ['category', 'HVAC', { category: 'HVAC' }],
+    ['policyNumber', '  POL-999 ', { policyNumber: 'POL-999' }],
+    ['cost', '525.5', { cost: 525.5 }],
+    ['coverageDetails', 'Covers compressor and coils.\nExcludes filters.', { coverageDetails: 'Covers compressor and coils.\nExcludes filters.' }],
+  ];
+  for (const [field, value, patch] of cases) {
+    install(); warrantyModel();
+    await invoke('WARRANTY_CORRECT', warrantyParams(field, value));
+    assert.deepEqual([calls.updateWarranty[0][0], calls.updateWarranty[0][1], calls.updateWarranty[0][2]], ['w1', 'hp1', patch], field);
+  }
+  install(); warrantyModel();
+  await invoke('WARRANTY_CORRECT', warrantyParams('startDate', '2026-03-01'));
+  assert.deepEqual(Object.keys(calls.updateWarranty[0][2]), ['startDate']);
+  assert.equal(calls.updateWarranty[0][2].startDate.toISOString(), '2026-03-01T00:00:00.000Z');
+});
+
+test('WARRANTY_CORRECT keeps the dates in order and rejects invalid values for each new field kind', async () => {
+  const invalid = [
+    ['startDate', '2027-12-01'], ['startDate', '2028-01-01'], ['expiryDate', '2025-12-31'],
+    ['category', 'GADGET'], ['cost', 'abc'], ['cost', '-3'], ['policyNumber', ''], ['policyNumber', 'p'.repeat(161)], ['coverageDetails', ''], ['coverageDetails', 'c'.repeat(2001)],
+  ];
+  for (const [field, value] of invalid) {
+    install(); warrantyModel();
+    const code = await codeOf(invoke('WARRANTY_CORRECT', warrantyParams(field, value)));
+    // an over-long coverage text is stopped by the parameter schema before the field check; everything else by the field check
+    assert.ok(['ASK_INVALID_CONFIRMATION_EDIT', 'ASK_CONFIRMATION_NOT_ACTIVE'].includes(code), `${field}=${String(value).slice(0, 12)} -> ${code}`);
+    assert.equal(calls.updateWarranty.length, 0, field);
+  }
+  install(); warrantyModel();
+  assert.equal(await codeOf(invoke('WARRANTY_CORRECT', warrantyParams('startDate', '2027-12-01'))), 'ASK_INVALID_CONFIRMATION_EDIT', 'start on the expiry date is refused');
+});
+
+test('WARRANTY_CORRECT already-applied check compares in canonical form (450 equals 450.00)', async () => {
+  warrantyModel();
+  const { result } = await invoke('WARRANTY_CORRECT', warrantyParams('cost', '450.00', 'version-from-before'));
+  assert.equal(result.status, 'COMPLETED');
+  assert.equal(calls.updateWarranty.length, 0);
+});
+
+const proposeWarranty = async (message) => capabilityInvoke('WARRANTY_CORRECT', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'WARRANTY', entityId: 'w1', operationId: 'WARRANTY_CORRECT' } });
+
+test('warranty propose: each field kind builds the matching editable field and current value', async () => {
+  const cases = [
+    ['Correct the provider of this warranty.', 'TEXT', 'Acme Home Warranty', 'Acme Home Warranty'],
+    ['Correct the expiry date of this warranty.', 'DATE', '2027-12-01', '2027-12-01'],
+    ['Correct the start date of this warranty.', 'DATE', '2026-01-01', '2026-01-01'],
+    ['Correct the coverage type of this warranty.', 'SELECT', 'HOME_WARRANTY_PLAN', 'Home warranty plan'],
+    ['Correct the policy number of this warranty.', 'TEXT', 'POL-123', 'POL-123'],
+    ['Correct the cost of this warranty.', 'MONEY', '450.00', '$450.00'],
+    ['Correct the coverage details of this warranty.', 'TEXTAREA', 'HVAC and appliances.', 'HVAC and appliances.'],
+  ];
+  for (const [message, type, value, shown] of cases) {
+    install(); warrantyModel();
+    const result = await proposeWarranty(message);
+    assert.equal(result.status, 'NEEDS_CONFIRMATION', message);
+    const [field] = result.confirmation.editableFields;
+    assert.deepEqual([field.type, field.value], [type, value], message);
+    assert.equal(result.confirmation.fields.find((entry) => entry.label === 'Current value').value, shown, message);
+    assert.equal(calls.updateWarranty.length, 0, 'proposing writes nothing');
+  }
+  install(); warrantyModel({ ownerUserId: 'someone-else' });
+  assert.equal((await proposeWarranty('Correct the cost of this warranty.')).reasonCode, 'WARRANTY_NOT_OWNED_BY_REQUESTER');
+});
+
+// ── Add a timeline event (user-initiated capture) ──
+const eventAddEnvelope = (launchContext, message = 'Add an event to my home timeline.') => ({ userId: 'u1', propertyId: 'p1', message, launchContext });
+const declaredEventAdd = { surface: 'ASK_WORKSPACE', operationId: 'CAPTURE_EVENT_CONFIRM', sourceExecutionId: 'source-summary-1' };
+const NOW = new Date('2026-09-21T12:00:00.000Z');
+const eventAnswer = { title: '  Water heater replaced ', type: 'REPAIR', occurredAt: '2026-08-15', summary: 'Old tank failed.', amount: 1450.5, providerName: 'Acme Plumbing' };
+
+test('Add event: the declared action returns the empty form under its own capture key and carries the source list; nothing is written', async () => {
+  const result = await capabilityInvoke('CAPTURE_EVENT_CONFIRM', eventAddEnvelope(declaredEventAdd));
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  assert.equal(result.reasonCode, 'EVENT_ADD_INPUT_REQUIRED');
+  assert.equal(result.parameters.captureOrigin, 'USER_ADD');
+  assert.equal(result.parameters.sourceExecutionId, 'source-summary-1');
+  const [request] = result.captureRequests;
+  assert.equal(request.captureKey, 'CAPTURE_EVENT_ADD');
+  assert.equal(request.requirementId, 'capture-event-add');
+  assert.equal(request.classification, 'WORKFLOW_INPUT');
+  assert.equal(request.expectedContextVersion, result.contextVersion);
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['title', 'type', 'occurredAt', 'summary', 'amount', 'providerName']);
+  const typeField = request.inputSchema.fields.find((field) => field.key === 'type');
+  assert.ok(!typeField.inputSchema.options.some((option) => option.value === 'VERIFIED_RESOLUTION'), 'the system-created type is not offered');
+  assert.ok(Object.values(request.currentAnswer).every((value) => value === null), 'nothing is pre-filled');
+  assert.equal(calls.createHomeEvent.length, 0);
+});
+
+test('Add event: a refresh, a bare message, or a missing declared action keeps the not-routable boundary; a viewer is blocked', async () => {
+  for (const launchContext of [{ surface: 'ASK_REFRESH', sourceExecutionId: 'exec-1' }, { surface: 'ASK_WORKSPACE', operationId: 'PROPERTY_SUMMARY' }, undefined]) {
+    const result = await capabilityInvoke('CAPTURE_EVENT_CONFIRM', eventAddEnvelope(launchContext));
+    assert.equal(result.reasonCode, 'ASK_CAPTURE_NOT_DIRECTLY_ROUTABLE', JSON.stringify(launchContext));
+  }
+  assert.equal((await capabilityInvoke('CAPTURE_EVENT_CONFIRM', eventAddEnvelope(declaredEventAdd, 'I replaced the roof last year'))).reasonCode, 'ASK_CAPTURE_NOT_DIRECTLY_ROUTABLE');
+  accessRole = 'VIEWER';
+  const blocked = await capabilityInvoke('CAPTURE_EVENT_CONFIRM', eventAddEnvelope(declaredEventAdd));
+  assert.equal(blocked.status, 'BLOCKED');
+  assert.equal(blocked.captureRequests, undefined);
+});
+
+test('Add event: the submitted form becomes a review card with user-entered copy and the parameters extraction produces', () => {
+  const built = buildUserAddedEventConfirmation({ captureOrigin: 'USER_ADD', sourceExecutionId: 'source-summary-1' }, 'ctx-1', eventAnswer, NOW);
+  assert.ok(built.result, JSON.stringify(built));
+  const { result } = built;
+  assert.equal(result.status, 'NEEDS_CONFIRMATION');
+  const p = result.parameters;
+  assert.deepEqual(
+    { type: p.type, title: p.title, occurredAt: p.occurredAt, datePrecision: p.datePrecision, dateRangeStart: p.dateRangeStart, amount: p.amount, currency: p.currency, providerName: p.providerName, summary: p.summary },
+    { type: 'REPAIR', title: 'Water heater replaced', occurredAt: '2026-08-15T00:00:00.000Z', datePrecision: 'EXACT_DATE', dateRangeStart: null, amount: 1450.5, currency: 'USD', providerName: 'Acme Plumbing', summary: 'Old tank failed.' },
+  );
+  assert.deepEqual([p.attribution, p.captureChannel, p.captureOrigin, p.sourceExecutionId, p.confirmationVersion], ['FIRSTHAND', 'ASK_CONVERSATIONAL_CAPTURE', 'USER_ADD', 'source-summary-1', 1]);
+  assert.match(result.confirmation.description, /You entered these details/);
+  assert.doesNotMatch(JSON.stringify(result.blocks) + result.confirmation.description, /noticed you mentioned/);
+  assert.equal(result.confirmation.confirmLabel, 'Add to timeline');
+  assert.equal(result.captureRequests[0].captureKey, 'CAPTURE_EVENT_ADD', 'the form stays available so the entry can be changed');
+  assert.equal(result.captureRequests[0].currentAnswer.title, 'Water heater replaced');
+});
+
+test('Add event: blank optional fields become null, and resubmitting raises the confirmation version', () => {
+  const first = buildUserAddedEventConfirmation({ captureOrigin: 'USER_ADD' }, 'ctx-1', { title: 'Gutter cleaning', type: 'MAINTENANCE', occurredAt: '2026-09-01', summary: '', amount: null, providerName: '' }, NOW).result;
+  assert.deepEqual([first.parameters.summary, first.parameters.amount, first.parameters.currency, first.parameters.providerName], [null, null, null, null]);
+  const second = buildUserAddedEventConfirmation(first.parameters, 'ctx-1', { title: 'Gutter cleaning', type: 'MAINTENANCE', occurredAt: '2026-09-02' }, NOW).result;
+  assert.equal(second.parameters.confirmationVersion, 2, 'a stale confirmation can never match the edited one');
+});
+
+test('Add event: an unusable answer is refused with a reason (short title, unlisted or system type, bad or future date, negative amount)', () => {
+  const base = { title: 'Roof replaced', type: 'IMPROVEMENT', occurredAt: '2026-08-15' };
+  const cases = [
+    [{ ...base, title: 'ab' }, /./], [{ ...base, type: 'VERIFIED_RESOLUTION' }, /listed types/], [{ ...base, type: 'NOPE' }, /./],
+    [{ ...base, occurredAt: '15/08/2026' }, /./], [{ ...base, occurredAt: '2026-13-45' }, /./], [{ ...base, occurredAt: '2026-10-01' }, /future/],
+    [{ ...base, amount: -5 }, /./], [{ ...base, extra: 1 }, /./],
+  ];
+  for (const [answer, reason] of cases) {
+    const built = buildUserAddedEventConfirmation({}, 'ctx-1', answer, NOW);
+    assert.ok(built.error, JSON.stringify(answer));
+    assert.match(built.error, reason, JSON.stringify(answer));
+  }
+  assert.ok(buildUserAddedEventConfirmation({}, 'ctx-1', { ...base, occurredAt: '2026-09-22' }, NOW).result, 'tomorrow is tolerated for timezone skew');
+});
+
+test('Add event: confirming the form-built parameters creates the event through createHomeEvent keyed on this execution, then reconciles', async () => {
+  const { result: card } = buildUserAddedEventConfirmation({ captureOrigin: 'USER_ADD', sourceExecutionId: 'source-summary-1' }, 'ctx-1', eventAnswer, NOW);
+  const { result, artifactType, artifactId } = await invoke('CAPTURE_EVENT_CONFIRM', card.parameters);
+  assert.equal(calls.createHomeEvent.length, 1);
+  const [{ propertyId, userId, body }] = calls.createHomeEvent[0];
+  assert.deepEqual([propertyId, userId], ['p1', 'u1']);
+  assert.deepEqual(
+    { type: body.type, title: body.title, occurredAt: body.occurredAt, datePrecision: body.datePrecision, amount: body.amount, currency: body.currency, providerName: body.providerName, summary: body.summary, idempotencyKey: body.idempotencyKey },
+    { type: 'REPAIR', title: 'Water heater replaced', occurredAt: '2026-08-15T00:00:00.000Z', datePrecision: 'EXACT_DATE', amount: 1450.5, currency: 'USD', providerName: 'Acme Plumbing', summary: 'Old tank failed.', idempotencyKey: 'exec-1' },
+  );
+  assert.equal(result.reasonCode, 'EVENT_CAPTURED');
+  assert.equal(artifactType, 'HOME_EVENT');
+  assert.equal(artifactId, 'event-new');
+});
+
+test('Add event: an extraction-created pending event still edits through its own key and keeps its "Cozy noticed" copy', () => {
+  const edited = editCaptureEventCandidate({ type: 'REPAIR', title: 'Roof repair', summary: null, amount: null, providerName: null }, 'We fixed the roof', 'ctx-1', { type: 'REPAIR', title: 'Roof repair (flashing)', summary: null, amount: null, providerName: null }, NOW);
+  assert.match(edited.confirmation.description, /Cozy noticed you mentioned: "We fixed the roof"/);
+});
+
+// ── Add a room (user-initiated) ──
+const roomAddEnvelope = (launchContext, message = 'Add a room to my home record.') => ({ userId: 'u1', propertyId: 'p1', message, launchContext });
+const declaredRoomAdd = { surface: 'ASK_WORKSPACE', operationId: 'ROOM_CREATE', sourceExecutionId: 'source-summary-1' };
+const noRooms = () => { models.inventoryRoom = { findFirst: async () => null }; };
+
+test('Add room: the declared action returns the empty form (type, required name, optional floor), carries the source list, and writes nothing', async () => {
+  noRooms();
+  const result = await capabilityInvoke('ROOM_CREATE', roomAddEnvelope(declaredRoomAdd));
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  assert.equal(result.reasonCode, 'ROOM_CREATE_INPUT_REQUIRED');
+  assert.equal(result.parameters.sourceExecutionId, 'source-summary-1');
+  const [request] = result.captureRequests;
+  assert.equal(request.captureKey, 'ROOM_CREATE_INPUTS');
+  assert.equal(request.classification, 'WORKFLOW_INPUT');
+  assert.equal(request.expectedContextVersion, result.contextVersion);
+  const byKey = Object.fromEntries(request.inputSchema.fields.map((field) => [field.key, field]));
+  assert.deepEqual(Object.keys(byKey), ['type', 'name', 'floorLevel']);
+  assert.equal(byKey.name.required, true, 'a name is required so a default can never silently collide');
+  assert.equal(byKey.floorLevel.required, false);
+  assert.deepEqual(byKey.type.inputSchema.options.map((option) => option.value), ['KITCHEN', 'LIVING_ROOM', 'BEDROOM', 'BATHROOM', 'DINING', 'LAUNDRY', 'GARAGE', 'OFFICE', 'BASEMENT', 'OTHER']);
+  assert.equal(calls.createRoom.length, 0);
+});
+
+test('Add room: a refresh, a bare message or a missing declared action never starts or resets a form; a viewer is blocked', async () => {
+  noRooms();
+  for (const launchContext of [{ surface: 'ASK_REFRESH', sourceExecutionId: 'exec-1' }, { surface: 'ASK_WORKSPACE', operationId: 'PROPERTY_SUMMARY' }, undefined]) {
+    const result = await capabilityInvoke('ROOM_CREATE', roomAddEnvelope(launchContext));
+    assert.equal(result.reasonCode, 'ASK_ROOM_CREATE_NOT_DIRECTLY_ROUTABLE', JSON.stringify(launchContext));
+    assert.equal(result.captureRequests, undefined);
+  }
+  assert.equal((await capabilityInvoke('ROOM_CREATE', roomAddEnvelope(declaredRoomAdd, 'add a room'))).reasonCode, 'ASK_ROOM_CREATE_NOT_DIRECTLY_ROUTABLE');
+  accessRole = 'VIEWER';
+  const blocked = await capabilityInvoke('ROOM_CREATE', roomAddEnvelope(declaredRoomAdd));
+  assert.equal(blocked.status, 'BLOCKED');
+  assert.equal(blocked.captureRequests, undefined);
+});
+
+test('Add room: a valid submission builds the review card and keeps the form for changes; a used name asks for another without confirming', async () => {
+  noRooms();
+  const card = await roomCreateResult('u1', 'p1', { type: 'OFFICE', name: 'Home office', floorLevel: 1 }, 'source-summary-1');
+  assert.equal(card.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(card.parameters.roomCreate, { type: 'OFFICE', name: 'Home office', floorLevel: 1 });
+  assert.equal(card.parameters.sourceExecutionId, 'source-summary-1');
+  assert.equal(card.parameters.confirmationVersion, 1);
+  assert.deepEqual(card.confirmation.fields.map((field) => [field.label, field.value]), [['Room name', 'Home office'], ['Type', 'Office'], ['Floor level', '1']]);
+  assert.equal(card.confirmation.confirmLabel, 'Add room');
+  assert.equal(card.captureRequests[0].currentAnswer.name, 'Home office');
+  const noFloor = await roomCreateResult('u1', 'p1', { type: 'BEDROOM', name: 'Guest room', floorLevel: null }, null);
+  assert.ok(!noFloor.confirmation.fields.some((field) => field.label === 'Floor level'));
+
+  models.inventoryRoom = { findFirst: async () => ({ id: 'room-existing' }) };
+  const clash = await roomCreateResult('u1', 'p1', { type: 'OFFICE', name: 'Home office', floorLevel: null }, null);
+  assert.equal(clash.status, 'NEEDS_CONTEXT');
+  assert.equal(clash.reasonCode, 'ROOM_NAME_ALREADY_USED');
+  assert.equal(clash.confirmation, undefined, 'a used name is never offered for confirmation');
+  assert.equal(clash.captureRequests[0].currentAnswer.name, 'Home office', 'what was typed is kept');
+  accessRole = 'VIEWER';
+  assert.equal((await roomCreateResult('u1', 'p1', { type: 'OFFICE', name: 'X', floorLevel: null }, null)).status, 'BLOCKED');
+});
+
+const roomCreateParams = (roomCreate = { type: 'OFFICE', name: 'Home office', floorLevel: 1 }) => ({ roomCreate, sourceExecutionId: 'source-summary-1', confirmationVersion: 1 });
+
+test('ROOM_CREATE confirm creates the room with a narrowed body and repeats the traditional POST controller\'s three stale-analysis markers', async () => {
+  noRooms();
+  const { result, artifactType, artifactId } = await invoke('ROOM_CREATE', roomCreateParams());
+  assert.deepEqual(calls.createRoom, [['p1', { type: 'OFFICE', name: 'Home office', floorLevel: 1 }]]);
+  assert.deepEqual([...calls.markers].sort(), ['coverage', 'doNothing', 'risk']);
+  assert.equal(result.reasonCode, 'ROOM_CREATED');
+  assert.equal(result.blocks[0].title, 'Room added');
+  assert.deepEqual([artifactType, artifactId], ['INVENTORY_ROOM', 'room-new']);
+});
+
+test('ROOM_CREATE confirm refuses a name another room already has (created before this execution) and never writes', async () => {
+  models.inventoryRoom = { findFirst: async () => ({ id: 'room-old', createdAt: new Date('2026-01-01T00:00:00.000Z') }) };
+  assert.equal(await codeOf(invoke('ROOM_CREATE', roomCreateParams())), 'ASK_INVALID_CONFIRMATION_EDIT');
+  assert.equal(calls.createRoom.length, 0);
+  assert.equal(calls.markers.length, 0);
+});
+
+test('ROOM_CREATE confirm recognises its own earlier write on a retry (same-named room created since the execution began) and does not write again', async () => {
+  models.inventoryRoom = { findFirst: async () => ({ id: 'room-mine', createdAt: new Date('2026-09-20T00:00:05.000Z') }) };
+  const { result, artifactId } = await invoke('ROOM_CREATE', roomCreateParams());
+  assert.equal(result.status, 'COMPLETED');
+  assert.equal(result.blocks[0].title, 'Room already added');
+  assert.equal(artifactId, 'room-mine');
+  assert.equal(calls.createRoom.length, 0);
+  assert.equal(calls.markers.length, 0);
+});
+
+test('ROOM_CREATE confirm maps a lost race on the unique name to a clear refusal, and rejects invalid stored input', async () => {
+  noRooms();
+  const { APIError } = require('../../src/middleware/error.middleware.ts');
+  InventoryService.prototype.createRoom = async () => { throw new APIError('Room name already exists for this property', 409, 'ROOM_ALREADY_EXISTS'); };
+  assert.equal(await codeOf(invoke('ROOM_CREATE', roomCreateParams())), 'ASK_INVALID_CONFIRMATION_EDIT');
+  assert.equal(calls.markers.length, 0);
+  for (const bad of [{ type: 'GARDEN', name: 'x', floorLevel: null }, { type: 'OFFICE', name: '', floorLevel: null }, { type: 'OFFICE', name: 'x'.repeat(81), floorLevel: null }, { type: 'OFFICE', name: 'ok', floorLevel: 51 }, { type: 'OFFICE', name: 'ok', floorLevel: 1.5 }]) {
+    assert.equal(await codeOf(invoke('ROOM_CREATE', roomCreateParams(bad))), 'ASK_CONFIRMATION_NOT_ACTIVE', JSON.stringify(bad).slice(0, 40));
+  }
 });

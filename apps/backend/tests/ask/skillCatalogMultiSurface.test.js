@@ -47,7 +47,7 @@ test('consumer-specific discovery returns only explicitly permitted operations',
   const proactive = catalogSkill('PROACTIVE', 'property-record');
 
   // ASK also lists the four Inline Workspace correction commands; Concierge Home and Home Actions do not (write commands are Ask-only).
-  assert.deepEqual(ask.operations.map(({ id }) => id), ['HOME_CHANGE_SUMMARY', 'HOME_EVENT_CORRECT', 'INVENTORY_ITEM_CORRECT', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'ROOM_RENAME', 'WARRANTY_CORRECT']);
+  assert.deepEqual(ask.operations.map(({ id }) => id), ['HOME_CHANGE_SUMMARY', 'HOME_EVENT_CORRECT', 'INVENTORY_ITEM_CORRECT', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'ROOM_CREATE', 'ROOM_RENAME', 'WARRANTY_CORRECT']);
   assert.deepEqual(concierge.operations.map(({ id }) => id), ['HOME_CHANGE_SUMMARY', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY']);
   assert.deepEqual(homeActions.operations.map(({ id }) => id), ['PROPERTY_SUMMARY']);
   assert.equal(proactive, undefined);
@@ -76,7 +76,7 @@ test('catalog projection applies Skill and operation controls independently', ()
   const inventoryDisabled = readAskOperationalControls({ ASK_OPERATION_INVENTORY_LOOKUP_ENABLED: 'false' });
   assert.deepEqual(
     catalogSkill('ASK', 'property-record', inventoryDisabled).operations.map(({ id }) => id),
-    ['HOME_CHANGE_SUMMARY', 'HOME_EVENT_CORRECT', 'INVENTORY_ITEM_CORRECT', 'PROPERTY_SUMMARY', 'ROOM_RENAME', 'WARRANTY_CORRECT'],
+    ['HOME_CHANGE_SUMMARY', 'HOME_EVENT_CORRECT', 'INVENTORY_ITEM_CORRECT', 'PROPERTY_SUMMARY', 'ROOM_CREATE', 'ROOM_RENAME', 'WARRANTY_CORRECT'],
   );
 
   const homeActionsSummaryDisabled = readAskOperationalControls({ ASK_OPERATION_PROPERTY_SUMMARY_ENABLED: 'false' });
