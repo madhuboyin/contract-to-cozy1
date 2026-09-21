@@ -1283,6 +1283,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     const contextSessionId = contextExecution?.sessionId ?? sessionId;
     if (contextSessionId) window.sessionStorage.removeItem(contextPanelStorageKey(contextSessionId, contextExecution?.property?.id ?? selectedPropertyId));
     setContextExecutionId(null);
+    if (window.history.state?.askResponseContext?.sessionId === contextSessionId
+      && window.history.state.askResponseContext.executionId === contextExecution?.executionId) window.history.back();
     const returnTarget = contextReturnFocusRef.current
       ?? document.querySelector<HTMLButtonElement>('button[aria-controls="ask-response-context"][aria-expanded="true"]');
     contextReturnFocusRef.current = null;
@@ -1290,9 +1292,34 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
   const openResponseContext = (execution: AskExecutionResponse, trigger: HTMLButtonElement) => {
     contextReturnFocusRef.current = trigger;
+    const target = { sessionId: execution.sessionId, propertyId: execution.property?.id ?? null, executionId: execution.executionId };
+    if (window.history.state?.askResponseContext?.executionId !== execution.executionId) {
+      window.history.pushState({ ...window.history.state, askResponseContext: target }, '', window.location.href);
+    }
     setContextExecutionId(execution.executionId);
     window.sessionStorage.setItem(contextPanelStorageKey(execution.sessionId, execution.property?.id), execution.executionId);
   };
+
+  useEffect(() => {
+    const restoreContextLevel = (event: PopStateEvent) => {
+      const target = event.state?.askResponseContext;
+      if (target?.sessionId === sessionId && target.propertyId === (selectedPropertyId ?? null)
+        && executions.some((execution) => execution.executionId === target.executionId && hasResponseContext(execution))) {
+        setContextExecutionId(target.executionId);
+        window.sessionStorage.setItem(contextPanelStorageKey(sessionId, selectedPropertyId), target.executionId);
+      } else {
+        setContextExecutionId(null);
+        if (sessionId) window.sessionStorage.removeItem(contextPanelStorageKey(sessionId, selectedPropertyId));
+        if (new URL(window.location.href).searchParams.get('sessionId') === sessionId) {
+          const trigger = contextReturnFocusRef.current;
+          contextReturnFocusRef.current = null;
+          window.requestAnimationFrame(() => trigger?.isConnected && trigger.focus({ preventScroll: true }));
+        }
+      }
+    };
+    window.addEventListener('popstate', restoreContextLevel);
+    return () => window.removeEventListener('popstate', restoreContextLevel);
+  }, [executions, selectedPropertyId, sessionId]);
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
 

@@ -62,6 +62,14 @@ test('stored presentation modes are bounded to known values', () => {
   expect(readResultView(storage, 'view').presentationModes).toEqual({ safe: 'TABLE' });
 });
 
+test('grouped-list choice is bounded and retained only for its source block', () => {
+  const view = { ...EMPTY_RESULT_VIEW, groupedListModes: { 'buyer-deadlines-tasks': 'LIST' as const, stale: 'CARDS' as const } };
+  expect(reconcileResultView(view, execution(buyerBlock(['buyer-task-1']))).groupedListModes).toEqual({ 'buyer-deadlines-tasks': 'LIST' });
+  expect(reconcileResultView(view, execution({ type: 'SUMMARY', id: 'summary', title: 'x', body: 'y', tone: 'DEFAULT', actions: [] })).groupedListModes).toEqual({});
+  window.sessionStorage.setItem('grouped-view', JSON.stringify({ groupedListModes: { safe: 'LIST', invalid: 'TABLE' } }));
+  expect(readResultView(window.sessionStorage, 'grouped-view').groupedListModes).toEqual({ safe: 'LIST' });
+});
+
 test('comparison layout survives only while its exact comparison remains and rejects unknown modes', () => {
   const comparison = {
     type: 'COMPARISON', id: 'repair-options', title: 'Options',

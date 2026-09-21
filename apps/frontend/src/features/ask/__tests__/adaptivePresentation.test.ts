@@ -1,4 +1,4 @@
-import { resolveAdaptiveGroupedListPresentation } from '../adaptivePresentation';
+import { resolveAdaptiveGroupedListPresentation, resolveGroupedListView } from '../adaptivePresentation';
 import type { AskPresentationBlock } from '../types';
 
 type GroupedListBlock = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -19,4 +19,10 @@ test('five or more low-attribute records use a compact scan-friendly list', () =
 
 test('richer records retain card density even when the result is large', () => {
   expect(resolveAdaptiveGroupedListPresentation(groupedList(6, 'Important detail'))).toBe('CARDS');
+});
+
+test('larger grouped results allow a saved view choice without changing their records', () => {
+  expect(resolveGroupedListView(groupedList(6, 'Important detail'), 'AUTO')).toEqual({ mode: 'CARDS', offersChoice: true });
+  expect(resolveGroupedListView(groupedList(6, 'Important detail'), 'LIST')).toEqual({ mode: 'COMPACT_LIST', offersChoice: true });
+  expect(resolveGroupedListView(groupedList(4), 'LIST')).toEqual({ mode: 'CARDS', offersChoice: false });
 });

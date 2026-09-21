@@ -3,7 +3,7 @@
 import { useContext } from 'react';
 import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
-import { resolveAdaptiveGroupedListPresentation } from '@/features/ask/adaptivePresentation';
+import { resolveGroupedListView, type GroupedListPresentationPreference } from '@/features/ask/adaptivePresentation';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
@@ -21,12 +21,20 @@ import type { AskBlockRenderer } from './types';
 // MaintenanceResultList's own export.
 export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
-  const presentation = resolveAdaptiveGroupedListPresentation(block);
+  const preference = controls?.view.groupedListModes[block.id] ?? 'AUTO';
+  const decision = resolveGroupedListView(block, preference);
+  const presentation = decision.mode;
+  const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
+    ...view, groupedListModes: { ...view.groupedListModes, [block.id]: mode },
+  }));
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-grouped-list-presentation={presentation.toLowerCase()}>
       <div className="border-b border-slate-100 px-4 py-3">
         <h3 className="font-semibold text-slate-950">{block.title}</h3>
         {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+        {decision.offersChoice && controls && <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label={`View ${block.title}`}>
+          {(['AUTO', 'LIST', 'CARDS'] as const).map((mode) => <button key={mode} type="button" aria-pressed={preference === mode} onClick={() => setPreference(mode)} className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', preference === mode ? 'bg-teal-700 text-white' : 'border border-slate-200 text-slate-700 hover:bg-slate-50')}>{mode === 'AUTO' ? 'Auto' : mode === 'LIST' ? 'List' : 'Cards'}</button>)}
+        </div>}
         {block.filters.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter">
             {block.filters.map((filter) => (

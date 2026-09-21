@@ -8,9 +8,10 @@ export type ResultView = {
   visibleCounts: Record<string, number>;
   presentationModes: Record<string, 'AUTO' | 'TABLE' | 'CARDS'>;
   comparisonLayouts: Record<string, 'AUTO' | 'STRIP' | 'GRID'>;
+  groupedListModes: Record<string, 'AUTO' | 'LIST' | 'CARDS'>;
   scrollOffset: number | null;
 };
-export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, detailTarget: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, scrollOffset: null };
+export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, detailTarget: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, groupedListModes: {}, scrollOffset: null };
 const PREFIX = 'ctc:ask-result-view:v1:';
 export const resultViewKey = (sessionId: string, propertyId: string, resultId: string) => `${PREFIX}${sessionId}:${propertyId}:${resultId}`;
 
@@ -33,6 +34,9 @@ export function readResultView(storage: Storage, key: string): ResultView {
       comparisonLayouts: Object.fromEntries(Object.entries(value.comparisonLayouts ?? {})
         .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'STRIP', 'GRID'].includes(String(mode)))
         .slice(0, 50)) as ResultView['comparisonLayouts'],
+      groupedListModes: Object.fromEntries(Object.entries(value.groupedListModes ?? {})
+        .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'LIST', 'CARDS'].includes(String(mode)))
+        .slice(0, 50)) as ResultView['groupedListModes'],
       scrollOffset: Number.isFinite(value.scrollOffset) ? value.scrollOffset : null,
     };
   } catch { return EMPTY_RESULT_VIEW; }
@@ -64,6 +68,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
     ? view.detailTarget : null;
   const tableIds = new Set(execution.blocks.filter((block) => block.type === 'TABLE').map((block) => block.id));
   const comparisonIds = new Set(execution.blocks.filter((block) => block.type === 'COMPARISON').map((block) => block.id));
+  const groupedListIds = new Set(execution.blocks.filter((block) => block.type === 'GROUPED_LIST').map((block) => block.id));
   return {
     ...view,
     selectedTaskId: view.selectedTaskId && ids.has(view.selectedTaskId) ? view.selectedTaskId : null,
@@ -73,6 +78,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
     visibleCounts: Object.fromEntries(sections.map((section) => [section.id, Math.max(5, Math.min(view.visibleCounts[section.id] ?? 5, section.items.length))])),
     presentationModes: Object.fromEntries(Object.entries(view.presentationModes ?? {}).filter(([blockId]) => tableIds.has(blockId))),
     comparisonLayouts: Object.fromEntries(Object.entries(view.comparisonLayouts ?? {}).filter(([blockId]) => comparisonIds.has(blockId))),
+    groupedListModes: Object.fromEntries(Object.entries(view.groupedListModes ?? {}).filter(([blockId]) => groupedListIds.has(blockId))),
   };
 }
 export function mergeResultExecutions(current: AskExecutionResponse[], incoming: AskExecutionResponse[]): AskExecutionResponse[] {

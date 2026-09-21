@@ -453,6 +453,11 @@ test('response sources open beside the desktop conversation without replacing th
   await expect.poll(() => api.executionBodies.length).toBe(1);
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('ctc:ask-context-panel:v1:ask-acceptance-session:ask-property-fixture'))).toBe('execution-adaptive-table');
 
+  await page.goBack();
+  await expect(panel).toHaveCount(0);
+  await page.goForward();
+  await expect(panel.getByRole('heading', { name: 'Response context' })).toBeVisible();
+
   await panel.getByRole('button', { name: 'Close' }).click();
   await expect(panel).toHaveCount(0);
   await expect(sourceTrigger).toBeFocused();

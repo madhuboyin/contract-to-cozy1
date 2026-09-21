@@ -44,6 +44,7 @@ export function resolveAdaptiveComparisonPresentation(
 }
 
 export type GroupedListPresentation = 'COMPACT_LIST' | 'CARDS';
+export type GroupedListPresentationPreference = 'AUTO' | 'LIST' | 'CARDS';
 
 /** Dense homogeneous results scan better as a list; a small or richly
  * described result keeps the more spacious record-card treatment. */
@@ -51,4 +52,13 @@ export function resolveAdaptiveGroupedListPresentation(block: GroupedListBlock):
   const items = block.sections.flatMap((section) => section.items);
   return items.length >= 5 && items.every((item) => item.meta.length <= 2 && !item.description)
     ? 'COMPACT_LIST' : 'CARDS';
+}
+
+export function resolveGroupedListView(block: GroupedListBlock, preference: GroupedListPresentationPreference) {
+  const itemCount = block.sections.reduce((total, section) => total + section.items.length, 0);
+  const offersChoice = itemCount >= 5;
+  const mode = offersChoice && preference !== 'AUTO'
+    ? preference === 'LIST' ? 'COMPACT_LIST' : 'CARDS'
+    : resolveAdaptiveGroupedListPresentation(block);
+  return { mode, offersChoice } as const;
 }
