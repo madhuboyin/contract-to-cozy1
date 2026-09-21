@@ -48,15 +48,16 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   INCIDENT_CLAIM_STATUS: new Set(['open-incidents', 'open-claims']),
   SAVINGS_OPPORTUNITIES: new Set(['open-savings', 'review-all-savings']),
   OWNERSHIP_COSTS: new Set(['open-ownership-costs']),
-  INVENTORY_LOOKUP: new Set(['add-inventory', 'search-inventory', 'open-inventory']),
+  INVENTORY_LOOKUP: new Set(['add-inventory', 'search-inventory', 'open-inventory', 'add-inventory-item']),
   INVENTORY_ITEM_CORRECT: new Set(['open-inventory']),
   HOME_EVENT_CORRECT: new Set(['open-timeline', 'open-home-timeline']),
   WARRANTY_CORRECT: new Set(['open-warranties']),
   ROOM_RENAME: new Set(['open-rooms']),
   ROOM_CREATE: new Set(['open-rooms']),
+  INVENTORY_ITEM_CREATE: new Set(['open-inventory', 'open-rooms']),
   // Every action id PROPERTY_SUMMARY actually emits: the record link, one secondary "open the full collection"
   // link per section, and the contributor-only inline "Add a warranty" workflow action.
-  PROPERTY_SUMMARY: new Set(['open-property-record', 'open-inventory', 'open-household', 'open-warranties', 'open-rooms', 'open-documents', 'open-home-timeline', 'add-warranty', 'add-timeline-event', 'add-room']),
+  PROPERTY_SUMMARY: new Set(['open-property-record', 'open-inventory', 'open-household', 'open-warranties', 'open-rooms', 'open-documents', 'open-home-timeline', 'add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),
   CAPTURE_WARRANTY_CONFIRM: new Set(['open-warranties', 'open-property-record']),
   CAPTURE_EVENT_CONFIRM: new Set(['open-timeline', 'open-home-timeline']),
   HOME_ACTIONS: new Set(['open-home', 'open-home-actions']),

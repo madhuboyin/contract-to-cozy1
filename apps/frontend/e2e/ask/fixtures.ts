@@ -145,7 +145,10 @@ function correctableSummaryExecution() {
         action('correct-notes', 'Correct notes', 'Correct the notes of this inventory item.', 'INVENTORY_ITEM_CORRECT'),
       ],
     }] }],
-    actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${propertyId}/inventory`, style: 'SECONDARY' }],
+    actions: [
+      { id: 'add-inventory-item', label: 'Add an item', interactionType: 'START_WORKFLOW', message: 'Add an item to my home inventory.', operationId: 'INVENTORY_ITEM_CREATE', style: 'PRIMARY' },
+      { id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${propertyId}/inventory`, style: 'SECONDARY' },
+    ],
   }, {
     type: 'GROUPED_LIST', id: 'property-warranties', title: 'Warranties', filters: [],
     description: 'Select a warranty to inspect its current canonical details without leaving Ask Cozy.',
@@ -275,11 +278,13 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
 
 // Phase 3 add-record acceptance: "Add a timeline event" and "Add a room" -> form -> review -> receipt.
 // Shapes mirror buildUserAddedEventConfirmation / roomCreateResult / the existing confirm receipts.
-type AddKind = 'event' | 'room';
+type AddKind = 'event' | 'room' | 'item';
 function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, unknown>) {
   const base = propertySummaryTimelineExecution();
   const spec = kind === 'event'
     ? { executionId: 'execution-event-add', question: 'Add an event to my home timeline.', operationId: 'CAPTURE_EVENT_CONFIRM', context: 'event-add-context-v1', requirementId: 'capture-event-add', captureKey: 'CAPTURE_EVENT_ADD', title: 'Add a timeline event', questionText: 'What would you like to add to your home timeline?' }
+    : kind === 'item'
+    ? { executionId: 'execution-item-add', question: 'Add an item to my home inventory.', operationId: 'INVENTORY_ITEM_CREATE', context: 'item-add-context-v1', requirementId: 'inventory-create-inputs', captureKey: 'INVENTORY_ITEM_CREATE_INPUTS', title: 'Add an item', questionText: 'Which item would you like to add to your home inventory?' }
     : { executionId: 'execution-room-add', question: 'Add a room to my home record.', operationId: 'ROOM_CREATE', context: 'room-add-context-v1', requirementId: 'room-create-inputs', captureKey: 'ROOM_CREATE_INPUTS', title: 'Add a room', questionText: 'Which room would you like to add to your home record?' };
   const common = { ...base, sessionId: sessionId ?? base.sessionId, executionId: spec.executionId, question: spec.question, operation: { id: spec.operationId, version: '1.0', family: 'COMMAND' }, contextVersion: spec.context, updatedAt: new Date().toISOString() };
   const field = (key: string, label: string, required: boolean, inputSchema: Record<string, unknown>) => ({ key, label, required, inputSchema });
@@ -292,6 +297,14 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
       field('amount', 'Amount', false, { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' }),
       field('providerName', 'Provider', false, { type: 'SHORT_TEXT', maxLength: 160 }),
     ]
+    : kind === 'item'
+    ? [
+      field('name', 'Item name', true, { type: 'SHORT_TEXT', maxLength: 120 }),
+      field('category', 'Category', true, { type: 'SINGLE_SELECT', options: [{ label: 'Appliance', value: 'APPLIANCE' }, { label: 'Hvac', value: 'HVAC' }, { label: 'Plumbing', value: 'PLUMBING' }] }),
+      field('roomId', 'Room', true, { type: 'SINGLE_SELECT', options: [{ label: 'Kitchen', value: 'room-kitchen' }, { label: 'No room (whole-home)', value: 'NONE' }] }),
+      field('brand', 'Brand', false, { type: 'SHORT_TEXT', maxLength: 80 }),
+      field('model', 'Model', false, { type: 'SHORT_TEXT', maxLength: 80 }),
+    ]
     : [
       field('type', 'Room type', true, { type: 'SINGLE_SELECT', options: [{ label: 'Office', value: 'OFFICE' }, { label: 'Bedroom', value: 'BEDROOM' }, { label: 'Other', value: 'OTHER' }] }),
       field('name', 'Room name', true, { type: 'SHORT_TEXT', maxLength: 80 }),
@@ -302,7 +315,9 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
     helpText: 'You will review everything before it is saved.', inputSchema: { type: 'GROUP', fields }, currentAnswer: current,
     allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Nothing is saved until you confirm', confirmationText: null, expectedContextVersion: spec.context,
   });
-  const empty = kind === 'event' ? { title: null, type: null, occurredAt: null, summary: null, amount: null, providerName: null } : { type: null, name: null, floorLevel: null };
+  const empty = kind === 'event' ? { title: null, type: null, occurredAt: null, summary: null, amount: null, providerName: null }
+    : kind === 'item' ? { name: null, category: null, roomId: null, brand: null, model: null }
+    : { type: null, name: null, floorLevel: null };
   if (stage === 'FORM') {
     return { ...common, status: 'NEEDS_CONTEXT', confirmation: null, captureRequests: [captureRequest(empty)],
       blocks: [{ type: 'SUMMARY', id: `${kind}-add-input`, title: spec.title, body: 'Nothing has been saved yet. Enter the details, then review them before it is added.', tone: 'DEFAULT', actions: [] }] };
@@ -313,6 +328,10 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
       ? { confirmationId: 'capture-event-add-1', version: 1, title: 'Add this to your home timeline?', description: 'You entered these details. No change is saved until you confirm.',
         fields: [{ label: 'Event', value: String(entered.title ?? '') }, { label: 'Type', value: String(entered.type ?? '') }, { label: 'Date', value: String(entered.occurredAt ?? '') }],
         editableFields: [], confirmLabel: 'Add to timeline', consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my home timeline.' }
+      : kind === 'item'
+      ? { confirmationId: 'inventory-create-1', version: 1, title: `Add "${String(entered.name ?? '')}" to your inventory?`, description: 'This adds the item through the canonical inventory service.',
+        fields: [{ label: 'Item name', value: String(entered.name ?? '') }, { label: 'Category', value: String(entered.category ?? '') }, { label: 'Room', value: 'Kitchen' }],
+        editableFields: [], confirmLabel: 'Add item', consentText: 'I authorize adding this item to the shared home record.' }
       : { confirmationId: 'room-create-1', version: 1, title: `Add the room "${String(entered.name ?? '')}"?`, description: 'This adds the room through the canonical inventory service.',
         fields: [{ label: 'Room name', value: String(entered.name ?? '') }, { label: 'Type', value: String(entered.type ?? '') }],
         editableFields: [], confirmLabel: 'Add room', consentText: 'I authorize adding this room to the shared home record.' };
@@ -321,7 +340,7 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
       confirmation: { ...confirmation, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
   }
   return { ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `${kind}-added`, title: kind === 'event' ? 'Added to your home timeline' : 'Room added', status: 'COMPLETED', description: 'The record was added.', details: [], actions: [] }] };
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `${kind}-added`, title: kind === 'event' ? 'Added to your home timeline' : kind === 'item' ? 'Item added' : 'Room added', status: 'COMPLETED', description: 'The record was added.', details: [], actions: [] }] };
 }
 
 function maintenanceExecution() {
@@ -700,8 +719,8 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: response }, 201);
       return;
     }
-    if (/^add an event to my home timeline/i.test(body.message) || /^add a room to my home record/i.test(body.message)) {
-      const addKind: AddKind = /event/i.test(body.message) ? 'event' : 'room';
+    if (/^add an event to my home timeline/i.test(body.message) || /^add a room to my home record/i.test(body.message) || /^add an item to my home inventory/i.test(body.message)) {
+      const addKind: AddKind = /event/i.test(body.message) ? 'event' : /item/i.test(body.message) ? 'item' : 'room';
       if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
       await fulfill(route, { success: true, data: addExecution(addKind, 'FORM', body.sessionId as string | undefined) }, 201);
       return;
@@ -864,7 +883,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
     await fulfill(route, { success: true, data: warrantyAddExecution('DONE', correctionSessionId) });
   });
-  for (const addKind of ['event', 'room'] as const) {
+  for (const addKind of ['event', 'room', 'item'] as const) {
     await page.route(`${apiOrigin}/api/ask/executions/execution-${addKind}-add/captures`, async (route) => {
       assertAuthenticated(route.request());
       const body = route.request().postDataJSON() as Record<string, unknown>;

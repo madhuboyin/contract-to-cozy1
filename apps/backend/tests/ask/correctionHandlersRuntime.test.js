@@ -12,7 +12,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 require('../../src/services/ask/askOrchestrator.service.ts');
-const { roomCreateResult } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { roomCreateResult, inventoryItemCreateResult } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
 const { InventoryService } = require('../../src/services/inventory.service.ts');
@@ -31,6 +31,7 @@ const realPrisma = prismaModule.prisma;
 const originals = {
   updateRoom: InventoryService.prototype.updateRoom,
   createRoom: InventoryService.prototype.createRoom,
+  createItem: InventoryService.prototype.createItem,
   updateItem: InventoryService.prototype.updateItem,
   updateHomeEvent: HomeEventsService.prototype.updateHomeEvent,
   createHomeEvent: HomeEventsService.prototype.createHomeEvent,
@@ -49,7 +50,7 @@ let models;
 let accessRole = 'CONTRIBUTOR';
 
 function install() {
-  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [], createHomeEvent: [], createRoom: [] };
+  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [], createHomeEvent: [], createRoom: [], createItem: [] };
   accessRole = 'CONTRIBUTOR';
   models = {};
   prismaModule.prisma = new Proxy({}, {
@@ -66,6 +67,7 @@ function install() {
   });
   InventoryService.prototype.updateRoom = async function (...args) { calls.updateRoom.push(args); return {}; };
   InventoryService.prototype.updateItem = async function (...args) { calls.updateItem.push(args); return {}; };
+  InventoryService.prototype.createItem = async function (...args) { calls.createItem.push(args); return { id: 'item-new', name: args[1].name }; };
   InventoryService.prototype.createRoom = async function (...args) { calls.createRoom.push(args); return { id: 'room-new', name: args[1].name }; };
   HomeEventsService.prototype.updateHomeEvent = async function (...args) { calls.updateHomeEvent.push(args); return { id: 'event-2', title: args[2].title ?? 'Roof replacement' }; };
   HomeEventsService.prototype.createHomeEvent = async function (...args) { calls.createHomeEvent.push(args); return { id: 'event-new', title: args[0].body.title }; };
@@ -85,6 +87,7 @@ function restore() {
   prismaModule.prisma = realPrisma;
   InventoryService.prototype.updateRoom = originals.updateRoom;
   InventoryService.prototype.createRoom = originals.createRoom;
+  InventoryService.prototype.createItem = originals.createItem;
   InventoryService.prototype.updateItem = originals.updateItem;
   HomeEventsService.prototype.updateHomeEvent = originals.updateHomeEvent;
   HomeEventsService.prototype.createHomeEvent = originals.createHomeEvent;
@@ -829,5 +832,130 @@ test('ROOM_CREATE confirm maps a lost race on the unique name to a clear refusal
   assert.equal(calls.markers.length, 0);
   for (const bad of [{ type: 'GARDEN', name: 'x', floorLevel: null }, { type: 'OFFICE', name: '', floorLevel: null }, { type: 'OFFICE', name: 'x'.repeat(81), floorLevel: null }, { type: 'OFFICE', name: 'ok', floorLevel: 51 }, { type: 'OFFICE', name: 'ok', floorLevel: 1.5 }]) {
     assert.equal(await codeOf(invoke('ROOM_CREATE', roomCreateParams(bad))), 'ASK_CONFIRMATION_NOT_ACTIVE', JSON.stringify(bad).slice(0, 40));
+  }
+});
+
+
+// ── Add an inventory item (user-initiated) ──
+const itemAddEnvelope = (launchContext, message = 'Add an item to my home inventory.') => ({ userId: 'u1', propertyId: 'p1', message, launchContext });
+const declaredItemAdd = { surface: 'ASK_WORKSPACE', operationId: 'INVENTORY_ITEM_CREATE', sourceExecutionId: 'source-summary-1' };
+const ROOM_KITCHEN = { id: '11111111-1111-4111-8111-111111111111', name: 'Kitchen' };
+function itemModels({ rooms = [ROOM_KITCHEN], existingByHash = null, earlier = null } = {}) {
+  models.inventoryRoom = { findMany: async () => rooms };
+  models.inventoryItem = {
+    findFirst: async ({ where }) => (where.sourceHash ? existingByHash : earlier),
+  };
+}
+const itemInput = (over = {}) => ({ name: 'Bosch dishwasher', category: 'APPLIANCE', roomId: ROOM_KITCHEN.id, brand: 'Bosch', model: null, ...over });
+
+test('Add item: the declared action returns the form (name, category, room with a no-room option, optional brand/model), carries the source list, and writes nothing', async () => {
+  itemModels();
+  const result = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(declaredItemAdd));
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  assert.equal(result.reasonCode, 'INVENTORY_CREATE_INPUT_REQUIRED');
+  assert.equal(result.parameters.sourceExecutionId, 'source-summary-1');
+  const [request] = result.captureRequests;
+  assert.equal(request.captureKey, 'INVENTORY_ITEM_CREATE_INPUTS');
+  assert.equal(request.classification, 'WORKFLOW_INPUT');
+  assert.equal(request.expectedContextVersion, result.contextVersion);
+  const byKey = Object.fromEntries(request.inputSchema.fields.map((field) => [field.key, field]));
+  assert.deepEqual(Object.keys(byKey), ['name', 'category', 'roomId', 'brand', 'model']);
+  assert.deepEqual([byKey.name.required, byKey.category.required, byKey.roomId.required, byKey.brand.required, byKey.model.required], [true, true, true, false, false]);
+  assert.deepEqual(byKey.roomId.inputSchema.options.map((option) => option.value), [ROOM_KITCHEN.id, 'NONE']);
+  assert.equal(byKey.category.inputSchema.options.length, 14);
+  assert.equal(calls.createItem.length, 0);
+});
+
+test('Add item: a refresh, a bare message or a missing declared action never starts or resets a form; a viewer is blocked', async () => {
+  itemModels();
+  for (const launchContext of [{ surface: 'ASK_REFRESH', sourceExecutionId: 'exec-1' }, { surface: 'ASK_WORKSPACE', operationId: 'PROPERTY_SUMMARY' }, undefined]) {
+    const result = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(launchContext));
+    assert.equal(result.reasonCode, 'ASK_INVENTORY_CREATE_NOT_DIRECTLY_ROUTABLE', JSON.stringify(launchContext));
+    assert.equal(result.captureRequests, undefined);
+  }
+  assert.equal((await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(declaredItemAdd, 'add a dishwasher'))).reasonCode, 'ASK_INVENTORY_CREATE_NOT_DIRECTLY_ROUTABLE');
+  accessRole = 'VIEWER';
+  const blocked = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(declaredItemAdd));
+  assert.equal(blocked.status, 'BLOCKED');
+  assert.equal(blocked.captureRequests, undefined);
+});
+
+test('Add item: a valid submission builds the review card and keeps the form; the writer\'s own rules are surfaced before confirmation', async () => {
+  itemModels();
+  const card = await inventoryItemCreateResult('u1', 'p1', itemInput(), 'source-summary-1');
+  assert.equal(card.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(card.parameters.inventoryCreate, itemInput());
+  assert.deepEqual(card.confirmation.fields.map((field) => [field.label, field.value]), [['Item name', 'Bosch dishwasher'], ['Category', 'Appliance'], ['Room', 'Kitchen'], ['Brand', 'Bosch']]);
+  assert.equal(card.confirmation.confirmLabel, 'Add item');
+  assert.equal(card.captureRequests[0].currentAnswer.name, 'Bosch dishwasher');
+  const whole = await inventoryItemCreateResult('u1', 'p1', itemInput({ name: 'Furnace', category: 'HVAC', roomId: 'NONE', brand: null }), null);
+  assert.equal(whole.status, 'NEEDS_CONFIRMATION');
+  assert.equal(whole.confirmation.fields.find((field) => field.label === 'Room').value, 'No room (whole-home)');
+
+  const blockers = [
+    [itemInput({ roomId: 'NONE' }), 'INVENTORY_ROOM_REQUIRED'],
+    [itemInput({ roomId: '22222222-2222-4222-8222-222222222222' }), 'INVENTORY_ROOM_UNKNOWN'],
+    [itemInput({ name: 'Tankless water heater' }), 'INVENTORY_WATER_HEATER_CATEGORY'],
+  ];
+  for (const [input, code] of blockers) {
+    const blocked = await inventoryItemCreateResult('u1', 'p1', input, null);
+    assert.equal(blocked.status, 'NEEDS_CONTEXT', code);
+    assert.equal(blocked.reasonCode, code);
+    assert.equal(blocked.confirmation, undefined, 'a doomed item is never offered for confirmation');
+    assert.equal(blocked.captureRequests[0].currentAnswer.name, input.name, 'what was typed is kept');
+  }
+  itemModels({ existingByHash: { id: 'item-old' } });
+  const dup = await inventoryItemCreateResult('u1', 'p1', itemInput(), null);
+  assert.equal(dup.reasonCode, 'INVENTORY_APPLIANCE_EXISTS');
+  itemModels({ rooms: [] });
+  assert.match((await inventoryItemCreateResult('u1', 'p1', itemInput({ roomId: 'NONE' }), null)).blocks[0].body, /Add a room first/);
+  accessRole = 'VIEWER';
+  assert.equal((await inventoryItemCreateResult('u1', 'p1', itemInput(), null)).status, 'BLOCKED');
+});
+
+const itemCreateParams = (inventoryCreate = itemInput()) => ({ inventoryCreate, sourceExecutionId: 'source-summary-1', confirmationVersion: 1 });
+
+test('INVENTORY_ITEM_CREATE confirm creates the item through createItem with a narrowed body and repeats the traditional POST controller\'s three stale-analysis markers', async () => {
+  itemModels();
+  const { result, artifactType, artifactId } = await invoke('INVENTORY_ITEM_CREATE', itemCreateParams());
+  assert.deepEqual(calls.createItem, [['p1', { name: 'Bosch dishwasher', category: 'APPLIANCE', roomId: ROOM_KITCHEN.id, brand: 'Bosch', model: null }, 'u1']]);
+  assert.deepEqual([...calls.markers].sort(), ['coverage', 'doNothing', 'risk']);
+  assert.equal(result.reasonCode, 'INVENTORY_ITEM_CREATED');
+  assert.equal(result.blocks[0].title, 'Item added');
+  assert.deepEqual([artifactType, artifactId], ['INVENTORY_ITEM', 'item-new']);
+  calls.createItem.length = 0;
+  await invoke('INVENTORY_ITEM_CREATE', itemCreateParams(itemInput({ name: 'Furnace', category: 'HVAC', roomId: 'NONE', brand: null })));
+  assert.equal(calls.createItem[0][1].roomId, null, '"No room" is stored as no room');
+});
+
+test('INVENTORY_ITEM_CREATE confirm re-checks the writer\'s rules against live data and never writes when one fails', async () => {
+  itemModels({ rooms: [] });
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CREATE', itemCreateParams())), 'ASK_INVALID_CONFIRMATION_EDIT', 'the room was removed since the review');
+  itemModels({ existingByHash: { id: 'item-old' } });
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CREATE', itemCreateParams())), 'ASK_INVALID_CONFIRMATION_EDIT', 'a dishwasher was added since the review');
+  assert.equal(calls.createItem.length, 0);
+  assert.equal(calls.markers.length, 0);
+});
+
+test('INVENTORY_ITEM_CREATE confirm recognises its own earlier write on a retry and does not write again, even for a one-per-home appliance', async () => {
+  itemModels({ earlier: { id: 'item-mine' }, existingByHash: { id: 'item-mine' } });
+  const { result, artifactId } = await invoke('INVENTORY_ITEM_CREATE', itemCreateParams());
+  assert.equal(result.status, 'COMPLETED');
+  assert.equal(result.blocks[0].title, 'Item already added');
+  assert.equal(artifactId, 'item-mine');
+  assert.equal(calls.createItem.length, 0);
+  assert.equal(calls.markers.length, 0);
+});
+
+test('INVENTORY_ITEM_CREATE confirm maps a writer refusal to a clear error, lets a server fault through, and rejects invalid stored input', async () => {
+  itemModels();
+  const { APIError } = require('../../src/middleware/error.middleware.ts');
+  InventoryService.prototype.createItem = async () => { throw new APIError('A dishwasher already exists for this property.', 409, 'APPLIANCE_ALREADY_EXISTS'); };
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CREATE', itemCreateParams())), 'ASK_INVALID_CONFIRMATION_EDIT');
+  InventoryService.prototype.createItem = async () => { throw new Error('db down'); };
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CREATE', itemCreateParams())), 'NO_CODE:db down');
+  assert.equal(calls.markers.length, 0);
+  for (const bad of [itemInput({ category: 'GARDEN' }), itemInput({ name: '' }), itemInput({ name: 'x'.repeat(121) }), itemInput({ brand: 'x'.repeat(81) }), { ...itemInput(), extra: 1 }]) {
+    assert.equal(await codeOf(invoke('INVENTORY_ITEM_CREATE', itemCreateParams(bad))), 'ASK_CONFIRMATION_NOT_ACTIVE', JSON.stringify(bad).slice(0, 40));
   }
 });

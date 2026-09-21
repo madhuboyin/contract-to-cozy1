@@ -8,6 +8,7 @@ import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { CorrectionActions } from './CorrectionActions';
 import type { InventoryItem } from '@/types';
+import { ActionLink } from './blocks/context';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -208,6 +209,6 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
       </div>;
     })}
     {detailItemId && detailItem && <InventoryItemDetail key={detailItemId} itemId={detailItemId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
+    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
   </section>;
 }

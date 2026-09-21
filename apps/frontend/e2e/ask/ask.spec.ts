@@ -416,6 +416,37 @@ test('a contributor adds a room inline: the Add action opens the form, Continue 
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('a contributor adds an inventory item inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory', exact: true }) });
+  await expect(response.getByRole('link', { name: /Open home inventory/ })).toBeVisible();
+  await response.getByRole('button', { name: 'Add an item' }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Add an item to my home inventory.'
+    && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'INVENTORY_ITEM_CREATE')).toBe(true);
+  await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
+
+  await page.getByLabel('Item name', { exact: true }).fill('Bosch dishwasher');
+  await page.getByRole('button', { name: 'Appliance', exact: true }).click();
+  await page.locator('#ask-execution-execution-item-add').getByRole('button', { name: 'Kitchen', exact: true }).click();
+  await page.getByLabel('Brand', { exact: true }).fill('Bosch');
+  await page.getByRole('button', { name: 'Continue to review' }).click();
+
+  await expect.poll(() => api.addCaptureBodies).toEqual([expect.objectContaining({
+    requirementId: 'inventory-create-inputs', captureKey: 'INVENTORY_ITEM_CREATE_INPUTS', expectedContextVersion: 'item-add-context-v1',
+    answer: expect.objectContaining({ name: 'Bosch dishwasher', category: 'APPLIANCE', roomId: 'room-kitchen', brand: 'Bosch' }),
+  })]);
+  await expect(page.getByText('Add "Bosch dishwasher" to your inventory?').first()).toBeVisible();
+  await page.getByLabel(/I authorize adding this item to the shared home record/).check();
+  await page.getByRole('button', { name: 'Add item', exact: true }).click();
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
+  await expect(page.getByText('Item added')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('a contributor adds a warranty inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

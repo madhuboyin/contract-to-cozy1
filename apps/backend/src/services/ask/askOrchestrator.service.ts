@@ -112,6 +112,8 @@ import { buildAskNextActionsBlock, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSI
 import { capabilityCardLaunch } from './askCapabilityCardLaunch';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
+import { isWaterHeaterInventoryName } from '../repairReplaceEligibility';
+import { inferMajorApplianceType, formatMajorApplianceType, PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX } from '../majorAppliance.util';
 import { getFinancialContextDecisions } from '../financialContext/context';
 import { getProfile, upsertProfile } from '../financing.service';
 import { RefinanceRadarService } from '../../refinanceRadar/refinanceRadar.service';
@@ -125,7 +127,7 @@ import { savingsBenefitsUnifiedService } from '../savingsBenefitsUnified.service
 import { SellHoldRentService } from '../sellHoldRent.service';
 import { PropertySaleCaseService } from '../propertySaleCase.service';
 import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../ownershipCosts/ownershipCostReadModel.service';
-import { InventoryService } from '../inventory.service';
+import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import { queryIntelligenceEnvelope } from '../intelligenceEnvelope';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
@@ -4450,7 +4452,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
         };
       }),
     }],
-    actions: [],
+    actions: access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : [],
   }];
 
   if (historyFocus && selectedItem) {
@@ -4633,7 +4635,10 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             meta: [readablePropertyValue(item.category), readablePropertyValue(item.condition), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`],
           })),
         }],
-        actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `${propertyHref}/inventory`, style: 'SECONDARY' }],
+        actions: [
+          ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
+          { id: 'open-inventory', label: 'Open home inventory', href: `${propertyHref}/inventory`, style: 'SECONDARY' as const },
+        ],
       });
     }
     if (household) {
@@ -9204,7 +9209,8 @@ function captureFallbackHref(operationId: string | null, propertyId: string | nu
     case 'SELL_HOLD_RENT_ANALYSIS':
     case 'SELLER_PREP_CHECKLIST':
     case 'SELLER_PREP_ITEM_DECISION': return `${base}/seller-prep`;
-    case 'INVENTORY_ITEM_CORRECT': return `${base}/inventory?tab=items`;
+    case 'INVENTORY_ITEM_CORRECT':
+    case 'INVENTORY_ITEM_CREATE': return `${base}/inventory?tab=items`;
     case 'HOME_EVENT_CORRECT': return `${base}/timeline`;
     case 'WARRANTY_CORRECT': return '/dashboard/warranties';
     case 'ROOM_RENAME':
@@ -10428,7 +10434,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -10713,6 +10719,37 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryRoom';
+  } else if (execution.operationId === 'INVENTORY_ITEM_CREATE') {
+    if (input.captureKey !== INVENTORY_CREATE_CAPTURE_KEY) {
+      const error = new Error('This inventory capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to add an inventory item.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const currentVersion = await inventoryCreateContextVersion(execution.propertyId);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('The rooms in this home changed while the form was open. Start again from the Add an item button.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const candidate = InventoryCreateInputSchema.safeParse(input.answer);
+    if (!candidate.success) {
+      const error = new Error('Enter a name of up to 120 characters and choose a category and a room (or "No room"); brand and model, if given, are up to 80 characters.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    result = await inventoryItemCreateResult(userId, execution.propertyId, candidate.data, typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'InventoryItem';
   } else if (execution.operationId === 'CLAIM_FILE') {
     // P03 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
     // resumes claimFileResult with the structured answer from CLAIM_FILE_INPUTS
@@ -11518,6 +11555,8 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   ROOM_RENAME: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // A new room appears in the Property Summary rooms collection and can be chosen for inventory items.
   ROOM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
+  // A new item appears in the Property Summary inventory collection and the inventory lookup lists.
+  INVENTORY_ITEM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // Accepting/deferring/snoozing/completing an Operational Work item changes
   // its state in the HOME_ACTIONS feed that surfaces it -- confirmed by this
   // handler's own suggested follow-up ("What needs my attention next?").
@@ -13332,6 +13371,205 @@ async function confirmRoomCreate(ctx: ConfirmCapabilityContext): Promise<Confirm
   return { result, artifactType: 'INVENTORY_ROOM', artifactId: roomId, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('room.create', confirmRoomCreate);
+
+// ── Add an inventory item (user-initiated) ───────────────────────────────────────────────────────────────
+// An item is added inline only from the declared "Add an item" action. The form collects identity only (name,
+// category, room, optional brand and model); dates, costs, condition and notes are then correctable inline through
+// INVENTORY_ITEM_CORRECT. Confirming writes through inventoryService.createItem -- the same writer the Inventory page
+// uses, including its water-heater, room-required and one-per-major-appliance rules -- and repeats the three
+// stale-analysis markers the traditional POST controller calls.
+const INVENTORY_ADD_MESSAGE = 'Add an item to my home inventory.';
+const INVENTORY_CREATE_CAPTURE_KEY = 'INVENTORY_ITEM_CREATE_INPUTS';
+const INVENTORY_NO_ROOM_VALUE = 'NONE';
+const INVENTORY_CATEGORY_VALUES = ['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'SAFETY', 'SMART_HOME', 'FURNITURE', 'ELECTRONICS', 'INTERIOR', 'STRUCTURAL', 'EXTERIOR', 'SITE', 'OTHER'] as const;
+const inventoryCategoryLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
+const optionalShortText = (max: number) => z.string().trim().max(max).nullish().transform((value) => (value ? value : null));
+const InventoryCreateInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  category: z.enum(INVENTORY_CATEGORY_VALUES),
+  roomId: z.string().min(1).max(64),
+  brand: optionalShortText(80),
+  model: optionalShortText(80),
+}).strict();
+type InventoryCreateInput = z.infer<typeof InventoryCreateInputSchema>;
+
+const inventoryAddItemAction = () => ({ id: 'add-inventory-item', label: 'Add an item', interactionType: 'START_WORKFLOW' as const, message: INVENTORY_ADD_MESSAGE, operationId: 'INVENTORY_ITEM_CREATE', style: 'PRIMARY' as const });
+
+async function inventoryCreateRooms(propertyId: string): Promise<Array<{ id: string; name: string }>> {
+  return prisma.inventoryRoom.findMany({ where: { propertyId }, select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 50 });
+}
+
+// The room options are part of the form, so the version changes when the room list does.
+const inventoryCreateVersionFor = (propertyId: string, rooms: Array<{ id: string }>): string => createHash('sha256').update(`inventory-create:${propertyId}:${rooms.map((room) => room.id).sort().join(',')}`).digest('hex');
+async function inventoryCreateContextVersion(propertyId: string): Promise<string> {
+  return inventoryCreateVersionFor(propertyId, await inventoryCreateRooms(propertyId));
+}
+
+function inventoryCreateCaptureRequest(contextVersion: string, rooms: Array<{ id: string; name: string }>, entered?: Partial<InventoryCreateInput>): AskCaptureRequest {
+  return {
+    requirementId: 'inventory-create-inputs', captureKey: INVENTORY_CREATE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: 'Add an item', question: 'Which item would you like to add to your home inventory?',
+    helpText: 'Appliances and belongings need a room; whole-home systems such as HVAC or plumbing do not. Dates, costs and notes can be corrected after it is added. You will review everything before it is added.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'name', label: 'Item name', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+      { key: 'category', label: 'Category', required: true, inputSchema: { type: 'SINGLE_SELECT', options: INVENTORY_CATEGORY_VALUES.map((value) => ({ label: inventoryCategoryLabel(value), value })) } },
+      { key: 'roomId', label: 'Room', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [...rooms.map((room) => ({ label: room.name, value: room.id })), { label: 'No room (whole-home)', value: INVENTORY_NO_ROOM_VALUE }] } },
+      { key: 'brand', label: 'Brand', helpText: 'Optional.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 80 } },
+      { key: 'model', label: 'Model', helpText: 'Optional.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 80 } },
+    ] },
+    currentAnswer: { name: entered?.name ?? null, category: entered?.category ?? null, roomId: entered?.roomId ?? null, brand: entered?.brand ?? null, model: entered?.model ?? null },
+    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this item; nothing is added until you confirm', confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
+
+// The writer's own rules, checked before the review card so a doomed request is corrected up front instead of failing
+// at confirm. Returns the reason the item cannot be added, or null.
+async function inventoryCreateBlocker(propertyId: string, input: InventoryCreateInput, rooms: Array<{ id: string; name: string }>): Promise<{ code: string; title: string; body: string } | null> {
+  if (input.roomId !== INVENTORY_NO_ROOM_VALUE && !rooms.some((room) => room.id === input.roomId)) {
+    return { code: 'INVENTORY_ROOM_UNKNOWN', title: 'That room is not in this home', body: 'Choose one of the recorded rooms, or "No room". Nothing has been added.' };
+  }
+  if (ROOM_REQUIRED_CATEGORIES.has(input.category) && input.roomId === INVENTORY_NO_ROOM_VALUE) {
+    return { code: 'INVENTORY_ROOM_REQUIRED', title: 'Choose a room for this item', body: rooms.length ? 'Appliances and belongings need a room; only whole-home systems can be recorded without one. Nothing has been added.' : 'Appliances and belongings need a room and this home has none yet. Add a room first (Show my rooms), then add the item. Nothing has been added.' };
+  }
+  if (input.category === 'APPLIANCE' && isWaterHeaterInventoryName(input.name)) {
+    return { code: 'INVENTORY_WATER_HEATER_CATEGORY', title: 'Water heaters are plumbing systems', body: 'Choose the Plumbing category for a water heater. Nothing has been added.' };
+  }
+  if (input.category === 'APPLIANCE') {
+    const inferred = inferMajorApplianceType(input.name);
+    if (inferred) {
+      const existing = await prisma.inventoryItem.findFirst({ where: { propertyId, sourceHash: `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${inferred}` }, select: { id: true } });
+      if (existing) return { code: 'INVENTORY_APPLIANCE_EXISTS', title: `A ${formatMajorApplianceType(inferred).toLowerCase()} is already recorded`, body: 'This home keeps one record per major appliance. Correct the existing item instead. Nothing has been added.' };
+    }
+  }
+  return null;
+}
+
+export async function inventoryItemCreateResult(userId: string, propertyId: string, suppliedInput: InventoryCreateInput | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'inventory-add-permission', title: 'A contributor or owner can add an item', body: 'Your role can view the inventory but not add to it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }] }],
+      suggestions: [],
+    };
+  }
+  const rooms = await inventoryCreateRooms(propertyId);
+  const contextVersion = inventoryCreateVersionFor(propertyId, rooms);
+  const openInventory = { id: 'open-inventory', label: 'Open inventory instead', href: inventoryHref, style: 'SECONDARY' as const };
+  if (!suppliedInput) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'INVENTORY_CREATE_INPUT_REQUIRED', contextVersion,
+      parameters: { sourceExecutionId },
+      blocks: [{ type: 'SUMMARY', id: 'inventory-create-input', title: 'Add an item', body: 'Nothing has been added yet. Enter the details, then review them before the item is added.', tone: 'DEFAULT', actions: [openInventory] }],
+      captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms)], suggestions: [],
+    };
+  }
+  const blocker = await inventoryCreateBlocker(propertyId, suppliedInput, rooms);
+  if (blocker) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: blocker.code, contextVersion,
+      parameters: { sourceExecutionId },
+      blocks: [{ type: 'SUMMARY', id: 'inventory-create-blocked', title: blocker.title, body: blocker.body, tone: 'CAUTION', actions: [openInventory] }],
+      captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms, suppliedInput)], suggestions: [],
+    };
+  }
+  const roomName = suppliedInput.roomId === INVENTORY_NO_ROOM_VALUE ? 'No room (whole-home)' : rooms.find((room) => room.id === suppliedInput.roomId)?.name ?? '';
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'INVENTORY_CREATE_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { inventoryCreate: suppliedInput, inventoryCreateContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'inventory-create-review', title: 'Review this item', body: 'You entered these details. Nothing is added until you confirm.', tone: 'DEFAULT', actions: [openInventory] }],
+    confirmation: {
+      confirmationId: `inventory-create-${createHash('sha256').update(`${propertyId}:${suppliedInput.name}:${suppliedInput.category}`).digest('hex').slice(0, 12)}-1`, version: 1,
+      title: `Add "${suppliedInput.name}" to your inventory?`,
+      description: 'This adds the item through the canonical inventory service, the same record the Inventory page edits, and refreshes dependent coverage analysis.',
+      fields: [
+        { label: 'Item name', value: suppliedInput.name }, { label: 'Category', value: inventoryCategoryLabel(suppliedInput.category) }, { label: 'Room', value: roomName },
+        ...(suppliedInput.brand ? [{ label: 'Brand', value: suppliedInput.brand }] : []),
+        ...(suppliedInput.model ? [{ label: 'Model', value: suppliedInput.model }] : []),
+      ],
+      editableFields: [], confirmLabel: 'Add item', consentText: 'I authorize adding this item to the shared home record.', expiresAt: expiresAt.toISOString(),
+    },
+    // Kept so the entry can be changed and resubmitted before confirming.
+    captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms, suppliedInput)],
+    suggestions: [],
+  };
+}
+
+registerCapabilityHandler('inventory.create', async (envelope) => {
+  const declaredAddAction = envelope.launchContext?.operationId === 'INVENTORY_ITEM_CREATE'
+    && envelope.launchContext.surface !== 'ASK_REFRESH'
+    && envelope.message === INVENTORY_ADD_MESSAGE;
+  if (declaredAddAction) return inventoryItemCreateResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null);
+  // A refresh of an in-progress add, or a bare message: never start (or reset) a form here.
+  return {
+    status: 'NOT_APPLICABLE', reasonCode: 'ASK_INVENTORY_CREATE_NOT_DIRECTLY_ROUTABLE',
+    blocks: [{ type: 'SUMMARY', id: 'inventory-create-not-routable', title: 'Use the Add an item button', body: 'Items are added from the inventory list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
+    suggestions: ['Show my inventory'],
+  };
+});
+
+async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const candidate = InventoryCreateInputSchema.safeParse(parameters.inventoryCreate);
+  if (!candidate.success) throw Object.assign(new Error('The item to add is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const input = candidate.data;
+  const propertyId = execution.propertyId!;
+  const refuse = (message: string) => Object.assign(new Error(message), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  // createItem has no idempotency key: a same-named, same-category item created since this execution began is this
+  // execution's own earlier write (a lease-reclaim retry). Checked first so the writer's own duplicate-appliance rule
+  // cannot misreport that retry as a clash.
+  const earlier = await prisma.inventoryItem.findFirst({
+    where: { propertyId, name: input.name, category: input.category, createdAt: { gte: execution.createdAt } },
+    select: { id: true },
+  });
+  let itemId: string;
+  let alreadyAdded = false;
+  if (earlier) {
+    itemId = earlier.id;
+    alreadyAdded = true;
+  } else {
+    const rooms = await inventoryCreateRooms(propertyId);
+    const blocker = await inventoryCreateBlocker(propertyId, input, rooms);
+    if (blocker) throw refuse(`${blocker.title}. ${blocker.body}`);
+    try {
+      const created = await inventoryService.createItem(propertyId, {
+        name: input.name, category: input.category,
+        roomId: input.roomId === INVENTORY_NO_ROOM_VALUE ? null : input.roomId,
+        brand: input.brand, model: input.model,
+      }, userId);
+      itemId = created.id;
+    } catch (error) {
+      if (error instanceof APIError && error.statusCode < 500) throw refuse(error.message);
+      throw error;
+    }
+    // The traditional POST controller (not the service) marks these stale; repeat them for the same downstream effect.
+    await markCoverageAnalysisStale(propertyId);
+    await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
+  }
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'INVENTORY_ITEM_CREATED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `inventory-created-${itemId}`, title: alreadyAdded ? 'Item already added' : 'Item added', status: 'COMPLETED',
+      description: 'The item is now part of your home record and dependent coverage analysis was marked for refresh. Ask can correct its dates, condition, costs and notes from the inventory list.',
+      details: [{ label: 'Item name', value: input.name }, { label: 'Category', value: inventoryCategoryLabel(input.category) }, ...(input.brand ? [{ label: 'Brand', value: input.brand }] : []), ...(input.model ? [{ label: 'Model', value: input.model }] : [])],
+      actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`, style: 'PRIMARY' }],
+    }],
+    suggestions: ['Show my home inventory'],
+  };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'LIMITATION', id: `inventory-refresh-failed-${itemId}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+      body: 'This item was added to the canonical record. The result you were viewing could not refresh automatically -- ask "Show my inventory" to see its current state.',
+    });
+  }
+  return { result, artifactType: 'INVENTORY_ITEM', artifactId: itemId, refreshedExecutions: refresh.refreshedExecutions };
+}
+registerConfirmCapabilityHandler('inventory.create', confirmInventoryItemCreate);
 registerConfirmCapabilityHandler('document-promotion.confirm', confirmDocumentPromotionConfirm);
 registerConfirmCapabilityHandler('home-operations.update', confirmOperationalWorkUpdate);
 registerConfirmCapabilityHandler('maintenance.complete', confirmMaintenanceTaskComplete);

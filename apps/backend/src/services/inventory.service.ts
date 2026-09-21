@@ -88,7 +88,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 8000) {
 }
 
 const TAG_PROPERTY_APPLIANCE = 'PROPERTY_APPLIANCE';
-const ROOM_REQUIRED_CATEGORIES = new Set(['APPLIANCE', 'FURNITURE', 'ELECTRONICS', 'OTHER']);
+export const ROOM_REQUIRED_CATEGORIES = new Set(['APPLIANCE', 'FURNITURE', 'ELECTRONICS', 'OTHER']);
 const INVENTORY_ITEMS_FACT_KEY = 'inventory.items';
 
 type InventoryItemMutation = 'CREATED' | 'REVISED' | 'DELETED';
