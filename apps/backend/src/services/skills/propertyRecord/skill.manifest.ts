@@ -9,6 +9,7 @@ export const PROPERTY_RECORD_SKILL_OPERATIONS: AskOperationId[] = [
   'HOME_CHANGE_SUMMARY',
   'INVENTORY_ITEM_CORRECT',
   'HOME_EVENT_CORRECT',
+  'WARRANTY_CORRECT',
 ];
 
 export const PROPERTY_RECORD_SKILL = Object.freeze({
@@ -29,11 +30,12 @@ export const PROPERTY_RECORD_SKILL = Object.freeze({
     { id: 'home-change.summary', version: '1.0' },
     { id: 'inventory.item-correct', version: '1.0' },
     { id: 'home-event.correct', version: '1.0' },
+    { id: 'warranty.correct', version: '1.0' },
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [
     { consumer: 'ASK', operations: PROPERTY_RECORD_SKILL_OPERATIONS },
-    { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS.filter((operationId) => operationId !== 'INVENTORY_ITEM_CORRECT' && operationId !== 'HOME_EVENT_CORRECT') },
+    { consumer: 'CONCIERGE_HOME', operations: PROPERTY_RECORD_SKILL_OPERATIONS.filter((operationId) => operationId !== 'INVENTORY_ITEM_CORRECT' && operationId !== 'HOME_EVENT_CORRECT' && operationId !== 'WARRANTY_CORRECT') },
     { consumer: 'HOME_ACTIONS', operations: ['PROPERTY_SUMMARY'] },
   ],
   autonomyLevel: 2,

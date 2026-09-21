@@ -17,9 +17,9 @@ const {
   validateAskInteractionCoverageMatrix,
 } = require('../../src/services/ask/askInteractionCoverageMatrix.ts');
 
-test('every one of the 79 Ask operations has a coverage-matrix entry with no registry drift', () => {
+test('every one of the 80 Ask operations has a coverage-matrix entry with no registry drift', () => {
   const operationIds = Object.keys(ASK_OPERATION_DEFINITIONS);
-  assert.equal(operationIds.length, 79);
+  assert.equal(operationIds.length, 80);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -79,6 +79,7 @@ test('a property-scoped operation never has a null role floor (ROLL-002 authoriz
 const STAGE_2_TRACED_OPERATIONS = new Set([
   'INVENTORY_ITEM_CORRECT',
   'HOME_EVENT_CORRECT',
+  'WARRANTY_CORRECT',
   'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY',
   'DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM', 'MAJOR_EVENT_ENTRY',
   'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'CAPTURE_EVIDENCE_CONFIRM',
@@ -112,13 +113,13 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 79);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 80);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
 test('Stage 2 fields are TRACED with real notes only for operations actually traced this pass; every other operation stays honestly PENDING', () => {
   const operationIds = Object.keys(ASK_INTERACTION_COVERAGE_MATRIX);
-  assert.equal(operationIds.length, 79);
+  assert.equal(operationIds.length, 80);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

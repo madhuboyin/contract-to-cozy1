@@ -891,6 +891,17 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     note: '',
     uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY, GROUPED_LIST (filters:[]).' }, freshnessSource: { status: 'TRACED', notes: 'GAP: no contextVersion set anywhere in this handler -- same \'substantive branch missing freshness\' pattern as HOME_CHANGE_SUMMARY/INSPECTION_FINDINGS in Home intelligence and work.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. items.slice(0,20) -- the undisclosed-cap pattern again.' }, handoff: { status: 'TRACED', notes: 'Bare href to /seller-prep throughout.' },
   },
+  WARRANTY_CORRECT: {
+    track: 'Records and capture',
+    rollClass: 'CONFIRMED_MUTATION',
+    canonicalOwner: 'warranty.correct',
+    roleFloor: 'CONTRIBUTOR',
+    messageRoutable: true,
+    confirmationCapable: true,
+    correctionModes: ['EDIT', 'STOP'],
+    note: 'Phase 3 write slice 3: only the provider name (TEXT, 2-120 chars) and expiry date (DATE, must not precede the start date) are correctable, written through HomeManagementService.updateWarranty with a NARROWED patch (the traditional PATCH route spreads its whole request body; Ask never does). OWNER-ONLY BY DESIGN: a Warranty belongs to one member\'s homeownerProfile and updateWarranty is scoped to it, exactly like the traditional Warranties page -- so item actions are declared only for warranties the requester added, and confirm re-verifies ownership; other members see a limitation, not a control. Household-shared warranty editing would be a product/authorization decision, not made here. Coverage/risk/do-nothing staleness side effects are inherited from updateWarranty.',
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer: GROUPED_LIST (disambiguation), SUMMARY (review) + DATE/TEXT editable confirmation, WORKFLOW_PROGRESS (receipt), SUMMARY (not-your-warranty limitation).' }, freshnessSource: { status: 'TRACED', notes: 'warrantyContextVersion = sha256(id:updatedAt), rechecked at confirm; an already-applied value bypasses the check so a lease-reclaim retry is not misreported as a conflict.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; updateWarranty is a plain overwrite so the already-applied compare is the replay guard. No compare-and-swap: a write landing between the freshness check and the update is not detected (disclosed).' }, reconciliation: { status: 'TRACED', notes: 'Calls reconcileAskExecutionSideEffects; ASK_MUTATION_IMPACT_MAP declares PROPERTY_SUMMARY (the list that carries WARRANTY rows).' }, handoff: { status: 'TRACED', notes: 'Secondary Open Warranties href.' },
+  },
   HOME_EVENT_CORRECT: {
     track: 'Records and capture',
     rollClass: 'CONFIRMED_MUTATION',

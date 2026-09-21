@@ -90,3 +90,28 @@ test('a warranty leaving the refreshed result clears selection without choosing 
   rerender(<List response={next} />);
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'property-summary')).detailTaskId).toBeNull();
 });
+
+test('warranty detail shows declared correction actions with exact identity, and none when the server declares none (not the owner / viewer)', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  mockedGetPropertyWarranties.mockResolvedValue([canonicalWarranty()]);
+  const owned: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], actions: [{ id: 'correct-expiryDate', label: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' }] },
+  ] }] };
+  const onAction = jest.fn();
+  const response = { ...execution(), blocks: [owned] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><WarrantyResultList block={owned} propertyId="home" onAction={onAction} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  const first = render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Acme Home Warranty' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Correct expiry date/ }));
+  expect(onAction).toHaveBeenCalledWith('WARRANTY', 'warranty-0', 'Correct the expiry date of this warranty.', 'WARRANTY_CORRECT', 'MUTATE_RECORD');
+  first.unmount();
+  window.sessionStorage.clear();
+
+  render(<List response={execution()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Acme Home Warranty' }));
+  await waitFor(() => expect(screen.getByText('POL-123')).toBeInTheDocument());
+  expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+});

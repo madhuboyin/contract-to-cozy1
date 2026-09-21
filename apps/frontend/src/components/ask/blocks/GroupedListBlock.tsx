@@ -162,7 +162,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (block.id === 'property-warranties') {
-    return <WarrantyResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
+    return <WarrantyResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

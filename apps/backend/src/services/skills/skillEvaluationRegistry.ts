@@ -226,6 +226,7 @@ export const SKILL_EVALUATION_PACKAGES: Readonly<Record<string, SkillEvaluationP
       { mode: 'EXACT', message: 'What changed around my home lately?', expectedOperationId: 'HOME_CHANGE_SUMMARY' },
       { mode: 'EXACT', message: 'Correct the install date of this inventory item', expectedOperationId: 'INVENTORY_ITEM_CORRECT' },
       { mode: 'EXACT', message: 'Correct the title of this timeline event', expectedOperationId: 'HOME_EVENT_CORRECT' },
+      { mode: 'EXACT', message: 'Correct the expiry date of this warranty', expectedOperationId: 'WARRANTY_CORRECT' },
     ],
     ambiguityCases: [{ message: 'Show my home record and item details', candidateOperationIds: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'], expectedBehavior: 'CLARIFY_OR_SAFE_BLOCK' }],
     policyCases: [
