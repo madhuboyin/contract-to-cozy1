@@ -2028,7 +2028,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             <SheetTitle>Response context</SheetTitle>
             <SheetDescription>Sources, assumptions, limitations, related records, and output records for the selected Ask Cozy response.</SheetDescription>
           </SheetHeader>
-          {contextExecution && contextContentAvailable && <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />}
+          {contextExecution && contextContentAvailable && <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} showCloseButton={false} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />}
         </SheetContent>
       </Sheet>
 

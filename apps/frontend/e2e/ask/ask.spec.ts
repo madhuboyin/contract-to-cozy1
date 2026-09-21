@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { installAskApi, installAskContext, propertyId } from './fixtures';
 
+// The page uses a generated per-conversation session id; sessionStorage keys embed it.
+const sessionIdOf = (url: string) => new URL(url).searchParams.get('sessionId');
+
 test.beforeEach(async ({ context }) => installAskContext(context));
 
 test('starting surface teaches capability breadth without competing CTAs', async ({ page }) => {
@@ -51,18 +54,18 @@ test('new conversation returns to a fresh surface and recent sessions can be res
   await expect(page.getByRole('complementary', { name: 'Conversation history' })).toHaveCount(1);
   await expect(conversationNav.getByText('Your home assistant')).toBeVisible();
   await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
-  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toBeVisible();
 
-  await conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
+  await conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ }).click();
   await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();
   await expect(page).toHaveURL(/sessionId=recent-session-1/);
-  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toHaveAttribute('aria-current', 'page');
+  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toHaveAttribute('aria-current', 'page');
 
   await conversationNav.getByRole('button', { name: 'New Ask Cozy session' }).click();
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toHaveCount(0);
   await expect(page).not.toHaveURL(/sessionId=/);
-  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toBeVisible();
 
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();
@@ -83,12 +86,12 @@ test('conversation switching restores each session draft without copying it to a
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
   const composer = page.getByPlaceholder('Ask anything about your home…');
 
-  await conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
+  await conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ }).click();
   await composer.fill('Compare the repair estimates first');
   await conversationNav.getByRole('button', { name: 'New Ask Cozy session' }).click();
   await expect(composer).toHaveValue('');
   await composer.fill('Plan the next project');
-  await conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ }).click();
+  await conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ }).click();
   await expect(composer).toHaveValue('Compare the repair estimates first');
 });
 
@@ -96,10 +99,10 @@ test('conversation rail loads an older page without replacing the already loaded
   await installAskApi(page, { recentSessions: true, recentSessionsPages: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
-  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toBeVisible();
   await conversationNav.getByRole('button', { name: 'Load older conversations' }).click();
   await expect(conversationNav.getByRole('button', { name: /Older roof project/ })).toBeVisible();
-  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toBeVisible();
   await expect(conversationNav.getByRole('button', { name: 'Load older conversations' })).toHaveCount(0);
 });
 
@@ -114,7 +117,7 @@ test('conversation search finds a question beyond the title without putting it i
   expect(request.postDataJSON()).toMatchObject({ propertyId, query: 'flashing' });
   expect(request.url()).not.toContain('flashing');
   await expect(conversationNav.getByRole('button', { name: /Older roof project/ })).toBeVisible();
-  await expect(conversationNav.getByRole('button', { name: /Refrigerator replacement timing/ })).toHaveCount(0);
+  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toHaveCount(0);
 });
 
 test('conversation rail switches to authorized all-home history and keeps property labels visible', async ({ page }) => {
@@ -150,7 +153,7 @@ test('a completed question is not repeated as its own follow-up suggestion', asy
   await page.getByPlaceholder('Ask anything about your home…').fill(question);
   await page.getByRole('button', { name: 'Send question' }).click();
 
-  await expect(page.getByText(question, { exact: true })).toHaveCount(1);
+  await expect(page.getByRole('article').getByText(question, { exact: true })).toHaveCount(1);
   await expect(page.getByRole('button', { name: question, exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'List all appliances', exact: true })).toBeVisible();
 });
@@ -204,7 +207,7 @@ test('Property Summary timeline events open canonical detail inline with traditi
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
   await expect(response.getByRole('link', { name: 'Roof replacement' })).toHaveCount(0);
   await expect(response.getByRole('button', { name: 'Roof replacement' })).toBeVisible();
-  await expect(response.getByRole('link', { name: /Open home timeline/ })).toHaveAttribute('href', `/dashboard/properties/${propertyId}/timeline`);
+  await expect(response.getByRole('link', { name: /Open home timeline/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/timeline\\?backTo=`));
 
   await response.getByRole('button', { name: 'Roof replacement' }).click();
   await expect(response.getByText('The roof replacement is recorded with verified evidence.')).toBeVisible();
@@ -265,7 +268,7 @@ test('Property Summary rooms open canonical detail inline with the full Rooms co
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Rooms', exact: true }) });
   await expect(response.getByRole('link', { name: 'Kitchen' })).toHaveCount(0);
   await expect(response.getByRole('button', { name: 'Kitchen' })).toBeVisible();
-  await expect(response.getByRole('link', { name: /Open Rooms/ })).toHaveAttribute('href', `/dashboard/properties/${propertyId}/rooms`);
+  await expect(response.getByRole('link', { name: /Open Rooms/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/rooms\\?backTo=`));
 
   await response.getByRole('button', { name: 'Kitchen' }).click();
   await expect(response.getByText('Good · 82/100')).toBeVisible();
@@ -282,7 +285,7 @@ test('Property Summary documents open canonical detail inline with the full Docu
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Documents', exact: true }) });
   await expect(response.getByRole('link', { name: 'Homeowners policy declaration' })).toHaveCount(0);
   await expect(response.getByRole('button', { name: 'Homeowners policy declaration' })).toBeVisible();
-  await expect(response.getByRole('link', { name: /Open Documents/ })).toHaveAttribute('href', `/dashboard/documents?propertyId=${propertyId}`);
+  await expect(response.getByRole('link', { name: /Open Documents/ })).toHaveAttribute('href', new RegExp(`^/dashboard/documents\\?propertyId=${propertyId}&backTo=`));
 
   await response.getByRole('button', { name: 'Homeowners policy declaration' }).click();
   await expect(response.getByText('Annual declarations page from the carrier.')).toBeVisible();
@@ -350,9 +353,9 @@ test('maintenance task titles open canonical detail inline and keep traditional 
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-maintenance');
-  await expect(response.getByRole('button', { name: 'Service the heat pump' })).toBeVisible();
+  await expect(response.getByRole('button', { name: 'Service the heat pump', exact: true })).toBeVisible();
   await expect(response.getByRole('link', { name: 'Service the heat pump' })).toHaveCount(0);
-  await response.getByRole('button', { name: 'Service the heat pump' }).click();
+  await response.getByRole('button', { name: 'Service the heat pump', exact: true }).click();
 
   await expect(response.getByRole('heading', { name: 'Service the heat pump' })).toBeVisible();
   await expect(response.getByText('Annual preventive service for the recorded HVAC system.')).toBeVisible();
@@ -368,11 +371,11 @@ test('maintenance detail access loss redacts the stale result and its actions wi
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-maintenance');
-  await response.getByRole('button', { name: 'Service the heat pump' }).click();
+  await response.getByRole('button', { name: 'Service the heat pump', exact: true }).click();
 
   await expect(response).toHaveAttribute('role', 'alert');
   await expect(response.getByRole('heading', { name: 'Result unavailable' })).toBeVisible();
-  await expect(response).toContainText('This result is no longer available, or your access to this home has changed.');
+  await expect(response).toContainText('Access to this result is no longer available.');
   await expect(response.getByRole('button', { name: 'Complete' })).toHaveCount(0);
   await expect(response.getByRole('link', { name: /Open Maintenance/ })).toHaveCount(0);
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
@@ -400,9 +403,11 @@ test('maintenance collection pages through the full server result without leavin
 
   await page.getByRole('button', { name: /Next page of Pending and in progress/ }).click();
 
-  await expect(page.getByText('Inspect the attic fan')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Inspect the attic fan', exact: true })).toBeVisible();
   await expect(page.getByText('Server results 51–51 of 51')).toBeVisible();
-  await expect(page.locator('[id^="ask-execution-"]').filter({ hasText: 'Maintenance record' })).toHaveCount(1);
+  // The first page is kept as a collapsed, superseded card on purpose (question stays visible, content
+  // collapsed), so count expanded result headings rather than execution containers.
+  await expect(page.getByRole('heading', { name: 'Maintenance record', exact: true })).toHaveCount(1);
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
   await expect(page.getByRole('link', { name: 'View all in Maintenance' })).toBeVisible();
 });
@@ -423,7 +428,7 @@ test('adaptive table view switches locally and persists the homeowner choice wit
   await expect(response.getByText('Showing 2 of 3 records. View: cards.')).toBeVisible();
   await expect(response.getByRole('link', { name: 'Open ownership costs' })).toBeVisible();
   await expect.poll(() => api.executionBodies.length).toBe(1);
-  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('ctc:ask-result-view:v1:ask-acceptance-session:ask-property-fixture:adaptive-table-result') ?? '{}').presentationModes?.['ownership-cost-categories'])).toBe('CARDS');
+  await expect.poll(() => page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? '{}').presentationModes?.['ownership-cost-categories'], `ctc:ask-result-view:v1:${sessionIdOf(page.url())}:ask-property-fixture:adaptive-table-result`)).toBe('CARDS');
 
   await response.getByRole('button', { name: 'Table' }).click();
   await expect(response.getByRole('table', { name: 'Cost by category' })).toBeVisible();
@@ -439,7 +444,8 @@ test('bounded comparison strip explains declared badges and offers a persistent 
 
   const response = page.locator('#ask-execution-execution-comparison-strip');
   await expect(response.getByRole('listitem')).toHaveCount(3);
-  await expect(response.getByRole('button', { name: 'Card strip' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(response.getByRole('button', { name: 'Auto' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(response.locator('[data-comparison-presentation="strip"]')).toBeVisible();
   await response.getByText('Why this label').first().click();
   await expect(response.getByText('The recorded $650 repair estimate is lower than the modeled replacement estimate.')).toBeVisible();
   await expect(response.getByRole('button', { name: 'Review repair' })).toBeVisible();
@@ -448,7 +454,7 @@ test('bounded comparison strip explains declared badges and offers a persistent 
   await expect(response.getByText(/Option 2 of 3/)).toBeVisible();
   await response.getByRole('button', { name: 'Show all' }).click();
   await expect(response.locator('[data-comparison-presentation="grid"]')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('ctc:ask-result-view:v1:ask-acceptance-session:ask-property-fixture:comparison-strip-result') ?? '{}').comparisonLayouts?.['refrigerator-options'])).toBe('GRID');
+  await expect.poll(() => page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? '{}').comparisonLayouts?.['refrigerator-options'], `ctc:ask-result-view:v1:${sessionIdOf(page.url())}:ask-property-fixture:comparison-strip-result`)).toBe('GRID');
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
@@ -495,7 +501,7 @@ test('response sources open beside the desktop conversation without replacing th
   await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
   await expect.poll(() => api.executionBodies.length).toBe(1);
-  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('ctc:ask-context-panel:v1:ask-acceptance-session:ask-property-fixture'))).toBe('execution-adaptive-table');
+  await expect.poll(() => page.evaluate((key) => sessionStorage.getItem(key), `ctc:ask-context-panel:v1:${sessionIdOf(page.url())}:ask-property-fixture`)).toBe('execution-adaptive-table');
 
   await page.goBack();
   await expect(panel).toHaveCount(0);
@@ -505,7 +511,7 @@ test('response sources open beside the desktop conversation without replacing th
   await panel.getByRole('button', { name: 'Close' }).click();
   await expect(panel).toHaveCount(0);
   await expect(sourceTrigger).toBeFocused();
-  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('ctc:ask-context-panel:v1:ask-acceptance-session:ask-property-fixture'))).toBeNull();
+  await expect.poll(() => page.evaluate((key) => sessionStorage.getItem(key), `ctc:ask-context-panel:v1:${sessionIdOf(page.url())}:ask-property-fixture`)).toBeNull();
 });
 
 test('response sources use a dismissible sheet on mobile and restore trigger focus', async ({ page }) => {
@@ -521,7 +527,8 @@ test('response sources use a dismissible sheet on mobile and restore trigger foc
   await expect(sheet.getByText('Home insurance premium')).toBeVisible();
   await expect(sheet.getByText('Insurance: $1,900 per year.')).toBeVisible();
   await expect(sheet.getByText('Recorded insurance premiums remain representative for this planning view.')).toBeVisible();
-  await sheet.getByText('Close', { exact: true }).click();
+  // The sheet has a single labelled close control (its X).
+  await sheet.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(sheet).toHaveCount(0);
   await expect(sourceTrigger).toBeFocused();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);

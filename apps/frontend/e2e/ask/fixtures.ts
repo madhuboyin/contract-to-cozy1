@@ -42,7 +42,7 @@ function heatPreparationExecution() {
     blocks: [
       { type: 'SUMMARY', id: 'focused-home-action-summary', title: 'Multi-day heat risk ahead', body: 'Three days may reach 95°F or higher. This home uses central cooling.', tone: 'CAUTION', actions: [] },
       {
-        type: 'GROUPED_LIST', id: 'focused-home-action-guidance', title: 'Prepare this home',
+        type: 'GROUPED_LIST', filters: [], id: 'focused-home-action-guidance', title: 'Prepare this home',
         description: 'Due Aug 20, 2026. These steps come from the preparation plan for this home.',
         sections: [
           { id: 'next-step', title: 'Preparation checklist', count: 3, items: [
@@ -56,7 +56,7 @@ function heatPreparationExecution() {
       },
       { type: 'EVIDENCE', id: 'heat-evidence', title: 'Evidence for this guidance', items: [{ label: 'Local heat forecast', source: 'Open-Meteo forecast and property profile', observedAt: '2026-08-14T12:00:00.000Z' }] },
     ],
-    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null,
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
     suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
@@ -154,6 +154,8 @@ function maintenanceExecution() {
           actions: [{ id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_COMPLETE' }],
         }],
       }], actions: [
+        // Matches the real producer, which lists this first so a truncated section always has a full-result link.
+        { id: 'view-all-maintenance', label: 'View all in Maintenance', href: `/dashboard/maintenance?propertyId=${propertyId}`, style: 'SECONDARY' },
         { id: 'open-maintenance', label: 'Open Maintenance', href: `/dashboard/maintenance?propertyId=${propertyId}`, style: 'SECONDARY' },
         { id: 'create-maintenance', label: 'Create a task', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' },
         { id: 'open-maintenance-setup', label: 'Maintenance Setup', href: `/dashboard/maintenance-setup?propertyId=${propertyId}&from=ask`, style: 'SECONDARY' },
@@ -346,6 +348,7 @@ export async function installAskContext(context: BrowserContext) {
 }
 
 export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
+  activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
@@ -463,7 +466,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
         }], nextCursor: null } });
       }
       return fulfill(route, { success: true, data: { items: options.recentSessions ? [{
-        sessionId: 'recent-session-1', title: 'Refrigerator replacement timing',
+        sessionId: 'recent-session-1', title: 'When should I replace my refrigerator?',
         property: { id: propertyId, label: 'Acceptance Home' }, latestStatus: 'NEEDS_CONTEXT',
         latestExecutionId: 'execution-refrigerator', executionCount: 1,
         lastActiveAt: new Date().toISOString(),
@@ -478,6 +481,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     assertAuthenticated(route.request());
     const body = route.request().postDataJSON() as { message: string; sessionId?: string } & Record<string, unknown>;
     executionBodies.push(body);
+    if (typeof body.sessionId === 'string') activeSessionId = body.sessionId;
     executionQuestions.push(body.message);
     if (/disabled refinance tool/i.test(body.message)) {
       await fulfill(route, { success: true, data: capabilityExecution(true) }, 201);
@@ -636,6 +640,23 @@ function assertAuthenticated(request: Request) {
   expect(request.headers().cookie).toContain('ctc.at=ask-acceptance-token');
 }
 
+// The page uses a per-conversation session id (a UUID it generates), but most
+// fixture executions were authored with the fixed FIXTURE_SESSION_ID. A
+// response for a different session is (correctly) ignored by the client, so
+// every execution response adopts the session id of the create request the
+// page most recently sent. Reset per installAskApi call.
+const FIXTURE_SESSION_ID = 'ask-acceptance-session';
+let activeSessionId: string | null = null;
+
+function withActiveSession<T>(body: T): T {
+  if (!activeSessionId || !body || typeof body !== 'object') return body;
+  const record = body as { data?: { sessionId?: string } };
+  if (record.data && typeof record.data === 'object' && record.data.sessionId === FIXTURE_SESSION_ID) {
+    return { ...record, data: { ...record.data, sessionId: activeSessionId } } as T;
+  }
+  return body;
+}
+
 async function fulfill(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ status, contentType: 'application/json', body: status === 204 ? '' : JSON.stringify(body) });
+  await route.fulfill({ status, contentType: 'application/json', body: status === 204 ? '' : JSON.stringify(withActiveSession(body)) });
 }

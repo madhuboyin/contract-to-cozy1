@@ -107,7 +107,9 @@ export function ResponseContextSummary({ execution, open, onOpen }: { execution:
   </section>;
 }
 
-export function ResponseContextContent({ execution, headingRef, onClose, renderNavigation }: { execution: AskExecutionResponse; headingRef?: Ref<HTMLHeadingElement>; onClose: () => void; renderNavigation: (navigation: { label: string; href: string } | null) => ReactNode }) {
+export function ResponseContextContent({ execution, headingRef, onClose, renderNavigation, showCloseButton = true }: {
+  // The mobile sheet supplies its own labelled X; rendering this text button as well stacked two close controls on top of each other.
+  showCloseButton?: boolean; execution: AskExecutionResponse; headingRef?: Ref<HTMLHeadingElement>; onClose: () => void; renderNavigation: (navigation: { label: string; href: string } | null) => ReactNode }) {
   const evidenceBlocks = execution.blocks.filter((block): block is EvidenceBlock => block.type === 'EVIDENCE' && block.items.length > 0);
   const assumptionBlocks = execution.blocks.filter((block): block is AssumptionsBlock => block.type === 'ASSUMPTIONS' && block.items.length > 0);
   const limitationBlocks = execution.blocks.filter((block): block is LimitationBlock => block.type === 'LIMITATION' && Boolean(block.body.trim()));
@@ -122,7 +124,7 @@ export function ResponseContextContent({ execution, headingRef, onClose, renderN
         <h2 ref={headingRef} tabIndex={-1} className="mt-1 text-lg font-semibold text-slate-950 focus:outline-none">Response context</h2>
         <p className="mt-1 text-xs leading-5 text-slate-500">{countSummary(counts)} for this response{execution.property ? ` about ${execution.property.label}` : ''}.</p>
       </div>
-      <button type="button" onClick={onClose} className="min-h-10 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>
+      {showCloseButton && <button type="button" onClick={onClose} className="min-h-10 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto py-4">
       <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">This context belongs to the response “{execution.question}”. Required status and limitations remain visible in the conversation so important information is not hidden behind this panel.</p>

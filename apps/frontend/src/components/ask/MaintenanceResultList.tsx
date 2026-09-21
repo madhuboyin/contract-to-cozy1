@@ -6,6 +6,7 @@ import type { AskItemActionInteractionType, AskPresentationBlock } from '@/featu
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
+import { ActionLink } from './blocks/context';
 import type { PropertyMaintenanceTask } from '@/types';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -207,6 +208,6 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
       </div>;
     })}
     {detailTaskId && detailItem && <MaintenanceTaskDetail key={detailTaskId} taskId={detailTaskId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(taskId) => setUnavailableTaskIds((current) => new Set(current).add(taskId))} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
+    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
   </section>;
 }
