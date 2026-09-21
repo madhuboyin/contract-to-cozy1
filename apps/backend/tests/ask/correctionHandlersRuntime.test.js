@@ -20,6 +20,10 @@ const homeManagement = require('../../src/services/home-management.service.ts');
 const coverageAnalysis = require('../../src/services/coverageAnalysis.service.ts');
 const riskPremium = require('../../src/services/riskPremiumOptimizer.service.ts');
 const doNothing = require('../../src/services/doNothingSimulator.service.ts');
+const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+const captureWarrantyModule = require('../../src/modules/propertyContext/application/captureWarranty.ts');
+const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
+const { editCaptureWarrantyCandidate } = require('../../src/services/ask/conversationalUnderstanding/conversationalCapture.ts');
 
 const realPrisma = prismaModule.prisma;
 const originals = {
@@ -30,13 +34,17 @@ const originals = {
   markCoverage: coverageAnalysis.markCoverageAnalysisStale,
   markRisk: riskPremium.markRiskPremiumOptimizerStale,
   markDoNothing: doNothing.markDoNothingRunsStale,
+  resolveAccess: propertyAccess.resolvePropertyAccess,
+  captureWarranty: captureWarrantyModule.captureWarranty,
 };
 
 let calls;
 let models;
+let accessRole = 'CONTRIBUTOR';
 
 function install() {
-  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [] };
+  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [] };
+  accessRole = 'CONTRIBUTOR';
   models = {};
   prismaModule.prisma = new Proxy({}, {
     get(_target, model) {
@@ -57,6 +65,8 @@ function install() {
   coverageAnalysis.markCoverageAnalysisStale = async () => { calls.markers.push('coverage'); };
   riskPremium.markRiskPremiumOptimizerStale = async () => { calls.markers.push('risk'); };
   doNothing.markDoNothingRunsStale = async () => { calls.markers.push('doNothing'); };
+  propertyAccess.resolvePropertyAccess = async () => ({ role: accessRole, userId: 'u1', propertyId: 'p1' });
+  captureWarrantyModule.captureWarranty = async (...args) => { calls.captureWarranty.push(args); return { id: 'warranty-new' }; };
   // Reconciliation: no sibling/source executions to refresh.
   models.askExecution = { findMany: async () => [] };
 }
@@ -70,6 +80,8 @@ function restore() {
   coverageAnalysis.markCoverageAnalysisStale = originals.markCoverage;
   riskPremium.markRiskPremiumOptimizerStale = originals.markRisk;
   doNothing.markDoNothingRunsStale = originals.markDoNothing;
+  propertyAccess.resolvePropertyAccess = originals.resolveAccess;
+  captureWarrantyModule.captureWarranty = originals.captureWarranty;
 }
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
@@ -261,4 +273,83 @@ test('HOME_EVENT_CORRECT confirm lets the creator correct their own PRIVATE even
   eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'PRIVATE', createdById: 'u1', datePrecision: 'EXACT_DATE' } });
   await invoke('HOME_EVENT_CORRECT', eventParams('title', 'New title'));
   assert.equal(calls.updateHomeEvent.length, 1);
+});
+
+// ───────────────────────────── ADD A WARRANTY (user-initiated capture) ─────────────────────────────
+const addEnvelope = (launchContext) => ({ userId: 'u1', propertyId: 'p1', message: 'Add a warranty to my home record.', launchContext });
+const declaredAdd = { surface: 'ASK_WORKSPACE', operationId: 'CAPTURE_WARRANTY_CONFIRM', sourceExecutionId: 'source-summary-1' };
+
+test('Add a warranty: the declared action returns the empty capture form, reusing the edit-before-confirm key and carrying the source list', async () => {
+  const result = await capabilityInvoke('CAPTURE_WARRANTY_CONFIRM', addEnvelope(declaredAdd));
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  assert.equal(result.reasonCode, 'WARRANTY_ADD_INPUT_REQUIRED');
+  assert.equal(result.parameters.captureOrigin, 'USER_ADD');
+  assert.equal(result.parameters.sourceExecutionId, 'source-summary-1');
+  const [request] = result.captureRequests;
+  assert.equal(request.captureKey, 'CAPTURE_WARRANTY_EDIT', 'submitting must go through the existing edit-before-confirm branch');
+  assert.equal(request.requirementId, 'capture-warranty-edit');
+  assert.equal(request.classification, 'WORKFLOW_INPUT', 'the submit button must say "Continue to review", not "Save"');
+  assert.equal(request.expectedContextVersion, result.contextVersion, 'the submit branch compares the execution context version to the request');
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'cost', 'startDate', 'expiryDate']);
+  assert.ok(request.currentAnswer && Object.values(request.currentAnswer).every((value) => value === null), 'nothing is pre-filled');
+  assert.equal(calls.captureWarranty.length, 0, 'proposing writes nothing');
+});
+
+test('Add a warranty: a refresh, a message that merely names the operation, or a missing declared action keeps the original not-routable boundary', async () => {
+  for (const launchContext of [
+    { surface: 'ASK_REFRESH', sourceExecutionId: 'exec-1' },
+    { surface: 'ASK_WORKSPACE', operationId: 'PROPERTY_SUMMARY' },
+    undefined,
+  ]) {
+    const result = await capabilityInvoke('CAPTURE_WARRANTY_CONFIRM', addEnvelope(launchContext));
+    assert.equal(result.reasonCode, 'ASK_CAPTURE_NOT_DIRECTLY_ROUTABLE', JSON.stringify(launchContext));
+    assert.equal(result.captureRequests, undefined);
+  }
+  const typed = await capabilityInvoke('CAPTURE_WARRANTY_CONFIRM', { ...addEnvelope(declaredAdd), message: 'I bought a warranty from Acme' });
+  assert.equal(typed.reasonCode, 'ASK_CAPTURE_NOT_DIRECTLY_ROUTABLE');
+});
+
+test('Add a warranty: a viewer is blocked before any form is offered', async () => {
+  accessRole = 'VIEWER';
+  const result = await capabilityInvoke('CAPTURE_WARRANTY_CONFIRM', addEnvelope(declaredAdd));
+  assert.equal(result.status, 'BLOCKED');
+  assert.equal(result.reasonCode, 'ASK_PERMISSION_REQUIRED');
+  assert.equal(result.captureRequests, undefined);
+});
+
+const addAnswer = { providerName: '  Acme Home Warranty ', category: 'HOME_WARRANTY_PLAN', policyNumber: 'POL-123', coverageDetails: null, cost: 450, startDate: '2026-01-01', expiryDate: '2027-12-01' };
+
+test('Add a warranty: submitting the form builds a confirmation with user-entered copy and the ISO-dated parameters the confirm handler reads', () => {
+  const stored = { captureOrigin: 'USER_ADD', sourceExecutionId: 'source-summary-1' };
+  const edited = editCaptureWarrantyCandidate(stored, 'Add a warranty to my home record.', 'ctx-1', addAnswer, new Date('2026-09-21T00:00:00.000Z'));
+  assert.equal(edited.status, 'NEEDS_CONFIRMATION');
+  assert.equal(edited.parameters.providerName, 'Acme Home Warranty');
+  assert.equal(edited.parameters.startDate, '2026-01-01T00:00:00.000Z');
+  assert.equal(edited.parameters.expiryDate, '2027-12-01T00:00:00.000Z');
+  assert.equal(edited.parameters.captureOrigin, 'USER_ADD');
+  assert.equal(edited.parameters.sourceExecutionId, 'source-summary-1', 'the source list must survive to confirm so it can be reconciled');
+  assert.equal(edited.parameters.confirmationVersion, 1);
+  assert.match(edited.confirmation.description, /You entered these details/);
+  assert.doesNotMatch(JSON.stringify(edited.blocks) + edited.confirmation.description, /noticed you mentioned/);
+});
+
+test('Add a warranty: the extraction path keeps its original "Cozy noticed" copy, and an expiry that is not after the start is rejected', () => {
+  const extracted = editCaptureWarrantyCandidate({ providerName: 'Acme' }, 'My Acme warranty lasts a year', 'ctx-1', addAnswer, new Date('2026-09-21T00:00:00.000Z'));
+  assert.match(extracted.confirmation.description, /Cozy noticed you mentioned: "My Acme warranty lasts a year"/);
+  assert.equal(editCaptureWarrantyCandidate({ captureOrigin: 'USER_ADD' }, 'x', 'ctx-1', { ...addAnswer, expiryDate: '2026-01-01' }, new Date()), null);
+  assert.equal(editCaptureWarrantyCandidate({ captureOrigin: 'USER_ADD' }, 'x', 'ctx-1', { ...addAnswer, providerName: '' }, new Date()), null);
+});
+
+test('Add a warranty: confirming the form-built parameters writes through captureWarranty keyed on this execution and reconciles the source list', async () => {
+  const edited = editCaptureWarrantyCandidate({ captureOrigin: 'USER_ADD', sourceExecutionId: 'source-summary-1' }, 'Add a warranty to my home record.', 'ctx-1', addAnswer, new Date('2026-09-21T00:00:00.000Z'));
+  const { result } = await invoke('CAPTURE_WARRANTY_CONFIRM', edited.parameters);
+  assert.equal(calls.captureWarranty.length, 1);
+  const [propertyId, userId, input] = calls.captureWarranty[0];
+  assert.deepEqual([propertyId, userId], ['p1', 'u1']);
+  assert.deepEqual(
+    { providerName: input.providerName, category: input.category, startDate: input.startDate, expiryDate: input.expiryDate, policyNumber: input.policyNumber, cost: input.cost, sourceExecutionId: input.sourceExecutionId },
+    { providerName: 'Acme Home Warranty', category: 'HOME_WARRANTY_PLAN', startDate: '2026-01-01T00:00:00.000Z', expiryDate: '2027-12-01T00:00:00.000Z', policyNumber: 'POL-123', cost: 450, sourceExecutionId: 'exec-1' },
+  );
+  assert.equal(result.status, 'COMPLETED');
+  assert.equal(result.reasonCode, 'WARRANTY_CAPTURED');
 });

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BlockView } from '../blocks/registry';
 import { WarrantyResultList } from '../WarrantyResultList';
+import { AskBlockActionContext } from '../blocks/context';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
@@ -114,4 +115,20 @@ test('warranty detail shows declared correction actions with exact identity, and
   fireEvent.click(screen.getByRole('button', { name: 'Acme Home Warranty' }));
   await waitFor(() => expect(screen.getByText('POL-123')).toBeInTheDocument());
   expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+});
+
+test('the warranties list renders its declared START_WORKFLOW block action as a button and dispatches that exact action; href actions stay links', () => {
+  const addAction = { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW' as const, message: 'Add a warranty to my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const };
+  const withAdd: typeof block = { ...block, actions: [addAction, ...block.actions] };
+  const invoke = jest.fn();
+  render(
+    <AskBlockActionContext.Provider value={{ disabled: false, invoke }}>
+      <ResultViewContext.Provider value={null}>
+        <WarrantyResultList block={withAdd} propertyId="home" onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} />
+      </ResultViewContext.Provider>
+    </AskBlockActionContext.Provider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Add a warranty/ }));
+  expect(invoke).toHaveBeenCalledWith(addAction);
+  expect(screen.getByRole('link', { name: /Open Warranties/ })).toHaveAttribute('href', '/dashboard/warranties');
 });

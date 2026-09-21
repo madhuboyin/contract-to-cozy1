@@ -18,7 +18,9 @@ const { SKILL_DEFINITIONS, validateSkillDefinitions } = require('../../src/servi
 test('every represented Skill operation resolves to one registered immutable adapter', () => {
   assert.deepEqual(validateSkillAdapterDefinitions(), []);
   assert.deepEqual(validateSkillDefinitions(), []);
-  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 67);
+  // 67 before the Inline Workspace Phase 3 write slices, + inventory.item-correct, home-event.correct,
+  // warranty.correct and room.rename (each a MUTATION_PREPARATION adapter under the property-record skill).
+  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 71);
   for (const skill of Object.values(SKILL_DEFINITIONS)) {
     for (const operation of skill.operations) {
       const reference = skill.allowedAdapters.find((candidate) => candidate.id === getSkillAdapterForOperation(operation.operationId).id);

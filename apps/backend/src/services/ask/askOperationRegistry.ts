@@ -209,6 +209,17 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'CAPTURE_WARRANTY_CONFIRM',
   'CAPTURE_EVIDENCE_CONFIRM',
   'SELL_HOLD_RENT_GOAL_CAPTURE',
+  // Inline Workspace Phase 3 correction commands. Fuzzy semantic retrieval scores a plain question such as
+  // "When was my water heater last serviced?" or "What is the warranty expiration date for the roof?" as a near
+  // match for a correction example (the phrases share the same nouns and date words, and a hard negative cannot
+  // outweigh an already-saturated positive), which would route a read question to a write command. These are
+  // therefore never candidates for semantic retrieval: they are reached only by an explicit correction-verb
+  // pattern (see the *CorrectPattern / roomRenamePattern checks in the deterministic cascade) or by the declared
+  // item action a homeowner clicked, which pins the operation.
+  'INVENTORY_ITEM_CORRECT',
+  'HOME_EVENT_CORRECT',
+  'WARRANTY_CORRECT',
+  'ROOM_RENAME',
 ]);
 
 export function isAskMessageRoutableOperation(operationId: AskOperationId): boolean {

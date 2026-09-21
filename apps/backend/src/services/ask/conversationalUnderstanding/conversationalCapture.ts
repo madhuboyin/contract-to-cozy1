@@ -339,6 +339,28 @@ function warrantyEditCaptureRequest(parameters: Record<string, unknown>, context
   };
 }
 
+// Marks a candidate the homeowner started themselves (an "Add" action) rather than one Ask extracted from
+// something they said. Stored in the execution's parameters, so it survives edit-before-confirm.
+export const USER_ADD_ORIGIN = 'USER_ADD';
+
+// The empty form for a user-initiated warranty add. It deliberately reuses the CAPTURE_WARRANTY_EDIT capture
+// key, so submitting it goes through the existing edit-before-confirm path (same validation, ISO date
+// normalisation and parameter shape the confirm handler already reads).
+export function warrantyAddCaptureRequest(contextVersion: string): AskCaptureRequest {
+  const base = warrantyEditCaptureRequest({ captureOrigin: USER_ADD_ORIGIN }, contextVersion);
+  return {
+    ...base,
+    // WORKFLOW_INPUT makes the submit button read "Continue to review": nothing is saved until the confirmation.
+    classification: 'WORKFLOW_INPUT',
+    state: 'UNKNOWN',
+    title: 'Add a warranty',
+    question: 'Which warranty would you like to add to your home record?',
+    helpText: 'Enter dates as YYYY-MM-DD. You will review everything before it is saved.',
+    currentAnswer: { providerName: null, category: null, policyNumber: null, coverageDetails: null, cost: null, startDate: null, expiryDate: null },
+    destinationLabel: 'Used to prepare this warranty; nothing is saved until you confirm',
+  };
+}
+
 function factConfirmationBlocksAndCard(candidate: FactExtractionCandidate, expiresAt: Date, index: number, version: number) {
   const confirmationId = `capture-fact-${candidate.factKey}-${index}-${expiresAt.getTime()}`;
   return {
@@ -573,12 +595,17 @@ function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, 
   if (typeof mergedParameters.startDate === 'string') fields.push({ label: startDateApproximate ? 'Start date (estimated -- please confirm)' : 'Start date', value: new Date(mergedParameters.startDate).toLocaleDateString() });
   if (typeof mergedParameters.expiryDate === 'string') fields.push({ label: 'Expires', value: new Date(mergedParameters.expiryDate).toLocaleDateString() });
   const confirmationId = `capture-warranty-edit-${expiresAt.getTime()}`;
+  // A warranty the homeowner chose to add (USER_ADD_ORIGIN) was typed in, not noticed in conversation, so the
+  // "Cozy noticed you mentioned ..." copy would be false for it.
+  const userAdded = mergedParameters.captureOrigin === USER_ADD_ORIGIN;
+  const previewBody = userAdded ? 'You entered these details. Nothing is saved until you confirm.' : `Cozy noticed you mentioned: "${sourceSentence}"`;
+  const description = userAdded ? 'You entered these details. No change is saved until you confirm.' : `Cozy noticed you mentioned: "${sourceSentence}". No change is saved until you confirm.`;
   return {
     blocks: [{
       type: 'SUMMARY' as const,
       id: 'capture-warranty-edit-preview',
       title: 'Save this warranty to your property record?',
-      body: `Cozy noticed you mentioned: "${sourceSentence}"`,
+      body: previewBody,
       tone: 'DEFAULT' as const,
       actions: [],
     }],
@@ -586,7 +613,7 @@ function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, 
       confirmationId,
       version,
       title: 'Save this warranty to your property record?',
-      description: `Cozy noticed you mentioned: "${sourceSentence}". No change is saved until you confirm.`,
+      description,
       fields,
       editableFields: [], confirmLabel: 'Save warranty',
       consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.',

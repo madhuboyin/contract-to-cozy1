@@ -49,6 +49,12 @@ test('adapter failure degrades or removes only operations that depend on that ad
     ASK_ADAPTER_PROPERTY_SUMMARY_KILL_SWITCH: 'true',
     ASK_ADAPTER_INVENTORY_LOOKUP_KILL_SWITCH: 'true',
     ASK_ADAPTER_HOME_CHANGE_SUMMARY_KILL_SWITCH: 'true',
+    // The four Inline Workspace correction adapters belong to the same skill, so "every adapter disabled" includes them;
+    // with them enabled the skill is correctly only DEGRADED.
+    ASK_ADAPTER_INVENTORY_ITEM_CORRECT_KILL_SWITCH: 'true',
+    ASK_ADAPTER_HOME_EVENT_CORRECT_KILL_SWITCH: 'true',
+    ASK_ADAPTER_WARRANTY_CORRECT_KILL_SWITCH: 'true',
+    ASK_ADAPTER_ROOM_RENAME_KILL_SWITCH: 'true',
   });
   assert.equal(deriveSkillHealth('property-record', 'ASK', allDisabled).status, 'UNAVAILABLE');
   assert.equal(listDiscoverableSkills('ASK', allDisabled).some((skill) => skill.id === 'property-record'), false);

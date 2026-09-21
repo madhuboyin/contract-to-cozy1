@@ -135,7 +135,10 @@ function correctableSummaryExecution() {
       meta: ['Home warranty plan', 'Expires Dec 1, 2027'],
       actions: [action('correct-expiryDate', 'Correct expiry date', 'Correct the expiry date of this warranty.', 'WARRANTY_CORRECT')],
     }] }],
-    actions: [{ id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' }],
+    actions: [
+      { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW', message: 'Add a warranty to my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' },
+      { id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' },
+    ],
   });
   return response;
 }
@@ -189,6 +192,56 @@ function correctionExecution(kind: CorrectionKind, status: 'NEEDS_CONFIRMATION' 
       confirmLabel: spec.confirmLabel, consentText: spec.consentText, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
     },
     updatedAt: new Date().toISOString(),
+  };
+}
+
+// Phase 3 add-record acceptance: user-initiated "Add a warranty" -> empty form -> confirmation -> receipt.
+// Shapes mirror what warrantyAddResult / editCaptureWarrantyCandidate / confirmCaptureWarranty produce.
+function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, string>) {
+  const base = propertySummaryTimelineExecution();
+  const common = {
+    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-warranty-add', question: 'Add a warranty to my home record.',
+    operation: { id: 'CAPTURE_WARRANTY_CONFIRM', version: '1.0', family: 'COMMAND' }, contextVersion: 'warranty-add-context-v1', updatedAt: new Date().toISOString(),
+  };
+  const field = (key: string, label: string, required: boolean, inputSchema: Record<string, unknown>) => ({ key, label, required, inputSchema });
+  if (stage === 'FORM') {
+    return {
+      ...common, status: 'NEEDS_CONTEXT', confirmation: null,
+      blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Add a warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
+      captureRequests: [{
+        requirementId: 'capture-warranty-edit', captureKey: 'CAPTURE_WARRANTY_EDIT', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+        title: 'Add a warranty', question: 'Which warranty would you like to add to your home record?', helpText: 'Enter dates as YYYY-MM-DD. You will review everything before it is saved.',
+        inputSchema: { type: 'GROUP', fields: [
+          field('providerName', 'Provider', true, { type: 'SHORT_TEXT', maxLength: 160 }),
+          field('category', 'Coverage type', true, { type: 'SINGLE_SELECT', options: [{ label: 'HOME_WARRANTY_PLAN', value: 'HOME_WARRANTY_PLAN' }, { label: 'HVAC', value: 'HVAC' }] }),
+          field('policyNumber', 'Policy number', false, { type: 'SHORT_TEXT', maxLength: 160 }),
+          field('coverageDetails', 'Coverage details', false, { type: 'SHORT_TEXT', maxLength: 2000 }),
+          field('cost', 'Cost', false, { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' }),
+          field('startDate', 'Start date', true, { type: 'SHORT_TEXT', maxLength: 10 }),
+          field('expiryDate', 'Expiration date', true, { type: 'SHORT_TEXT', maxLength: 10 }),
+        ] },
+        currentAnswer: { providerName: null, category: null, policyNumber: null, coverageDetails: null, cost: null, startDate: null, expiryDate: null },
+        allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this warranty; nothing is saved until you confirm', confirmationText: null,
+        expectedContextVersion: 'warranty-add-context-v1',
+      }],
+    };
+  }
+  if (stage === 'CONFIRMATION') {
+    return {
+      ...common, status: 'NEEDS_CONFIRMATION', captureRequests: [],
+      blocks: [{ type: 'SUMMARY', id: 'capture-warranty-edit-preview', title: 'Save this warranty to your property record?', body: 'You entered these details. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: 'capture-warranty-edit-1', version: 1, title: 'Save this warranty to your property record?',
+        description: 'You entered these details. No change is saved until you confirm.',
+        fields: [{ label: 'Provider', value: answer?.providerName ?? '' }, { label: 'Coverage', value: answer?.category ?? '' }, { label: 'Expires', value: answer?.expiryDate ?? '' }],
+        editableFields: [], confirmLabel: 'Save warranty',
+        consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      },
+    };
+  }
+  return {
+    ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
+    blocks: [{ type: 'SUMMARY', id: 'warranty-captured-new', title: 'Recorded to your property record', body: 'Your Acme Home Warranty warranty is now saved to your Living Home Record.', tone: 'POSITIVE', actions: [] }],
   };
 }
 
@@ -409,6 +462,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   const correctionEditBodies: Array<{ confirmationVersion: number; edits: Record<string, string> }> = [];
   const correctionConfirmBodies: Array<Record<string, unknown>> = [];
   let correctionSessionId: string | undefined;
+  const warrantyAddCaptureBodies: Array<Record<string, unknown>> = [];
   let captureAttempts = 0;
   let pendingDismissed = false;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
@@ -566,6 +620,11 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: response }, 201);
       return;
     }
+    if (/^add a warranty to my home record/i.test(body.message)) {
+      if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: warrantyAddExecution('FORM', body.sessionId as string | undefined) }, 201);
+      return;
+    }
     const correctionKind = (Object.keys(CORRECTIONS) as CorrectionKind[]).find((kind) => CORRECTIONS[kind].message.test(body.message));
     if (correctionKind) {
       if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
@@ -707,6 +766,18 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     correctionConfirmBodies.push(body);
     await fulfill(route, { success: true, data: eventCorrectionExecution('COMPLETED', 2, 'Roof replacement (full tear-off)', correctionSessionId) });
   });
+  // Registered after the generic captures route above so it takes precedence for this execution only.
+  await page.route(`${apiOrigin}/api/ask/executions/execution-warranty-add/captures`, async (route) => {
+    assertAuthenticated(route.request());
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    warrantyAddCaptureBodies.push(body);
+    await fulfill(route, { success: true, data: warrantyAddExecution('CONFIRMATION', correctionSessionId, body.answer as Record<string, string>) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-warranty-add/confirm`, async (route) => {
+    assertAuthenticated(route.request());
+    correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfill(route, { success: true, data: warrantyAddExecution('DONE', correctionSessionId) });
+  });
   await page.route(`${apiOrigin}/api/ask/executions/execution-pending-maintenance/cancel`, (route) => {
     pendingDismissed = true;
     const cancelled = {
@@ -717,7 +788,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, captureAttempts: () => captureAttempts };
+  return { captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

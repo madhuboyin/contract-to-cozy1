@@ -107,7 +107,7 @@ import { capturePropertyFact } from '../../modules/propertyContext/application/c
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { captureWarranty } from '../../modules/propertyContext/application/captureWarranty';
 import { PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
-import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate } from './conversationalUnderstanding/conversationalCapture';
+import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate, warrantyAddCaptureRequest, USER_ADD_ORIGIN } from './conversationalUnderstanding/conversationalCapture';
 import { buildAskNextActionsBlock, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, NEXT_ACTION_CONTEXT_PREFIX, nextActionContextOperation } from './askNextActions';
 import { capabilityCardLaunch } from './askCapabilityCardLaunch';
 import { HomeEventsService } from '../homeEvents.service';
@@ -4668,7 +4668,10 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             meta: [readablePropertyValue(warranty.category), `Expires ${humanDate(warranty.expiryDate) ?? 'date unavailable'}`],
           })),
         }],
-        actions: [{ id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' }],
+        actions: [
+          ...(access.role !== HouseholdRole.VIEWER ? [{ id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW' as const, message: WARRANTY_ADD_MESSAGE, operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const }] : []),
+          { id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' as const },
+        ],
       });
     }
     if (rooms) {
@@ -8325,6 +8328,29 @@ function warrantyCorrectionConfirmation(warranty: { id: string; providerName: st
   };
 }
 
+// Phase 3 add slice: start a user-initiated warranty add. Returns the empty form; submitting it resumes through
+// the existing CAPTURE_WARRANTY_EDIT path (validation, ISO date normalisation, confirmation card) and confirming
+// writes through the existing confirmCaptureWarranty / captureWarranty writer.
+async function warrantyAddResult(userId: string, propertyId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const warrantiesHref = '/dashboard/warranties';
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'warranty-add-permission', title: 'A contributor or owner can add a warranty', body: 'Your role can view warranties but not add them. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'SECONDARY' }] }],
+      suggestions: [],
+    };
+  }
+  const contextVersion = createHash('sha256').update(`warranty-add:${propertyId}`).digest('hex');
+  return {
+    status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_ADD_INPUT_REQUIRED', contextVersion,
+    parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
+    blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Add a warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [{ id: 'open-warranties', label: 'Open Warranties instead', href: warrantiesHref, style: 'SECONDARY' }] }],
+    captureRequests: [warrantyAddCaptureRequest(contextVersion)],
+    suggestions: [],
+  };
+}
+
 async function warrantyCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   const warrantiesHref = '/dashboard/warranties';
@@ -8553,7 +8579,19 @@ function captureNotDirectlyRoutableResult(kind: 'fact' | 'event' | 'warranty' | 
 }
 registerCapabilityHandler('capture.fact.confirm', async () => captureNotDirectlyRoutableResult('fact'));
 registerCapabilityHandler('capture.event.confirm', async () => captureNotDirectlyRoutableResult('event'));
-registerCapabilityHandler('capture.warranty.confirm', async () => captureNotDirectlyRoutableResult('warranty'));
+// A warranty is added inline only from the declared "Add a warranty" action on the warranties list. Every other
+// call for this operation (an ASK_REFRESH re-run of a pending, extraction-created confirmation, or a message that
+// merely names it) keeps the original not-directly-routable boundary, so a pending candidate is never replaced
+// by an empty form.
+const WARRANTY_ADD_MESSAGE = 'Add a warranty to my home record.';
+registerCapabilityHandler('capture.warranty.confirm', async (envelope) => {
+  const declaredAddAction = envelope.launchContext?.operationId === 'CAPTURE_WARRANTY_CONFIRM'
+    && envelope.launchContext.surface !== 'ASK_REFRESH'
+    && envelope.message === WARRANTY_ADD_MESSAGE;
+  return declaredAddAction
+    ? warrantyAddResult(envelope.userId, envelope.propertyId!, envelope.launchContext?.sourceExecutionId ?? null)
+    : captureNotDirectlyRoutableResult('warranty');
+});
 registerCapabilityHandler('capture.evidence.confirm', async () => captureNotDirectlyRoutableResult('evidence'));
 
 // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same

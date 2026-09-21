@@ -89,10 +89,6 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'COVERAGE_COMPARISON_STATUS', message: 'Would we come out ahead switching insurance carriers?', category: 'PARAPHRASE' },
   { operationId: 'DOCUMENT_LOOKUP', message: 'What documents are on file for this address?', category: 'PARAPHRASE' },
   { operationId: 'SELLER_PREP_CHECKLIST', message: 'Am I ready to list this house yet?', category: 'COLLOQUIAL' },
-  { operationId: 'ROOM_RENAME', message: 'Can you rename the spare room to office', category: 'COLLOQUIAL' },
-  { operationId: 'WARRANTY_CORRECT', message: 'The expiry date on my furnace warranty is wrong, please fix the expiry', category: 'COLLOQUIAL' },
-  { operationId: 'HOME_EVENT_CORRECT', message: 'The date on that timeline event is wrong, can you fix the date', category: 'COLLOQUIAL' },
-  { operationId: 'INVENTORY_ITEM_CORRECT', message: 'The install date on my water heater record is wrong, please fix it', category: 'COLLOQUIAL' },
   { operationId: 'SELLER_PREP_ITEM_DECISION', message: 'Go ahead and waive that sale readiness item for me', category: 'COLLOQUIAL' },
 ];
 
@@ -195,8 +191,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PROPERTY_TAX_APPEAL_READINESS: 'The property-tax assessment appeal is not ready because it still needs comparable-value evidence.',
   RENOVATION_PERMIT_READINESS: 'The remodel is blocked until the recorded permit approval is complete.',
   SELLER_PREP_CHECKLIST: 'Open seller-prep checklist items are listed by category with estimated cost ranges.',
-  ROOM_RENAME: 'The room rename is reviewed before it is applied to the shared home record.',
-  WARRANTY_CORRECT: 'The warranty correction is reviewed before it is applied to the warranty record.',
+  ROOM_RENAME: 'The selected room has a corrected name after your confirmation.',
+  WARRANTY_CORRECT: 'The selected warranty has a corrected provider name or expiry date after your confirmation.',
   HOME_EVENT_CORRECT: 'The timeline event correction is reviewed before it is recorded as a new revision.',
   INVENTORY_ITEM_CORRECT: 'The inventory item date is reviewed before it is corrected on the shared home record.',
   SELLER_PREP_ITEM_DECISION: 'The checklist item decision is reviewed before it is applied to the shared seller-prep checklist.',

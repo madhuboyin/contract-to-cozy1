@@ -40,16 +40,24 @@ test('every operation exposes a valid English semantic contract', () => {
   }
 });
 
-test('orchestration-only capture operations are absent from raw-message retrieval', () => {
+test('operations that must never be reached by fuzzy retrieval are absent from raw-message retrieval', () => {
   const internalOperations = Object.values(ASK_OPERATION_DEFINITIONS)
     .filter((definition) => !definition.messageRoutable)
     .map((definition) => definition.operationId);
   assert.deepEqual(new Set(internalOperations), new Set([
+    // Orchestration-only capture operations: created by the conversational-extraction pipeline or a declared action.
     'CAPTURE_FACT_CONFIRM',
     'CAPTURE_EVENT_CONFIRM',
     'CAPTURE_WARRANTY_CONFIRM',
     'CAPTURE_EVIDENCE_CONFIRM',
     'SELL_HOLD_RENT_GOAL_CAPTURE',
+    // Inline Workspace correction commands: reached only by an explicit correction-verb pattern or a declared item
+    // action. Fuzzy retrieval scores read questions ("When was my water heater last serviced?") as near matches for
+    // these write commands, so they must not be retrieval candidates.
+    'INVENTORY_ITEM_CORRECT',
+    'HOME_EVENT_CORRECT',
+    'WARRANTY_CORRECT',
+    'ROOM_RENAME',
   ]));
   const candidates = retrieveAskOperationCandidates("I'm thinking about selling next year", { topK: 100 });
   assert.equal(candidates.some((candidate) => internalOperations.includes(candidate.operationId)), false);

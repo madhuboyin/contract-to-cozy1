@@ -312,6 +312,43 @@ test('a contributor renames a room inline through the TEXT field', async ({ page
   });
 });
 
+test('a contributor adds a warranty inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Warranties', exact: true }) });
+  await expect(response.getByRole('link', { name: /Open Warranties/ })).toBeVisible();
+  await response.getByRole('button', { name: 'Add a warranty' }).click();
+
+  // The declared action dispatches through the normal Ask path, pinned to the capture operation.
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Add a warranty to my home record.'
+    && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'CAPTURE_WARRANTY_CONFIRM')).toBe(true);
+  await expect(page.getByRole('heading', { name: 'Add a warranty', level: 3 }).last()).toBeVisible();
+  await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
+
+  await page.getByLabel('Provider').fill('Acme Home Warranty');
+  await page.getByRole('button', { name: 'HOME_WARRANTY_PLAN' }).click();
+  await page.getByLabel('Start date').fill('2026-01-01');
+  await page.getByLabel('Expiration date').fill('2027-12-01');
+  await page.getByRole('button', { name: 'Continue to review' }).click();
+
+  await expect.poll(() => api.warrantyAddCaptureBodies).toEqual([expect.objectContaining({
+    requirementId: 'capture-warranty-edit', captureKey: 'CAPTURE_WARRANTY_EDIT', expectedContextVersion: 'warranty-add-context-v1',
+    answer: expect.objectContaining({ providerName: 'Acme Home Warranty', category: 'HOME_WARRANTY_PLAN', startDate: '2026-01-01', expiryDate: '2027-12-01' }),
+  })]);
+  await expect(page.getByText('Save this warranty to your property record?').first()).toBeVisible();
+  await expect(page.getByText('You entered these details', { exact: false }).first()).toBeVisible();
+  await expect(page.getByText('Cozy noticed', { exact: false })).toHaveCount(0);
+
+  await page.getByLabel(/I confirm this is accurate and authorize ContractToCozy/).check();
+  await page.getByRole('button', { name: 'Save warranty', exact: true }).click();
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
+  await expect(page.getByText('Recorded to your property record')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('a viewer-shaped result declares no correction actions, so no correction control renders', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
