@@ -785,6 +785,22 @@ test('attaching evidence rejects an unsupported file type before ever calling th
   expect(api.executionBodies.some((body) => body.message === 'Attach evidence to this home timeline entry.')).toBe(false);
 });
 
+test('Home Capital Timeline: a reserve allocation opens canonical detail inline, keeping the traditional Reserve Fund page as a secondary option', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Create a capital reserve plan for future replacements.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Active reserve allocations', exact: true }) });
+  await expect(response.getByRole('link', { name: 'Water heater' })).toHaveCount(0);
+  await expect(response.getByRole('link', { name: /Open Reserve Fund/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/tools/reserve-fund\\?backTo=`));
+
+  await response.getByRole('button', { name: 'Water heater' }).click();
+  await expect(response.getByText('Typical service life for this water heater type is 10-12 years; it was installed 5 years ago.')).toBeVisible();
+  await expect(response.getByText('$1,200', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

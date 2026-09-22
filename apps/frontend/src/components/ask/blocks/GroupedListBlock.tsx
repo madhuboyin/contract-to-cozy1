@@ -10,6 +10,7 @@ import { HomeEventResultList } from '../HomeEventResultList';
 import { HouseholdResultList } from '../HouseholdResultList';
 import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
+import { ReserveAllocationResultList } from '../ReserveAllocationResultList';
 import { RoomResultList } from '../RoomResultList';
 import { WarrantyResultList } from '../WarrantyResultList';
 import { ActionLink, AskContextLink } from './context';
@@ -163,6 +164,14 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   }
   if (block.id === 'property-warranties') {
     return <WarrantyResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: reserve-allocations'
+  // line items get canonical detail the same way every other read-only Property Records collection does.
+  // capital-timeline-table (a TABLE block, not GROUPED_LIST) is NOT part of this -- TABLE blocks have no
+  // row-click-to-detail mechanism anywhere in this codebase yet; that is a separate, unscoped platform question.
+  if (block.id === 'reserve-allocations') {
+    return <ReserveAllocationResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

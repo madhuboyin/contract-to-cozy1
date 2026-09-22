@@ -114,6 +114,36 @@ function propertySummaryTimelineExecution() {
   };
 }
 
+// Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: CAPITAL_RESERVE_PLAN's
+// real response also has a TABLE and EVIDENCE block (askOrchestrator.service.ts's capitalReservePlanResult) --
+// trimmed here to what exercises reserve-allocations' inline detail, the only block this slice changed.
+function capitalReservePlanExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-capital-reserve-plan', sessionId: 'ask-acceptance-session',
+    question: 'Create a capital reserve plan for future replacements.', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'CAPITAL_RESERVE_PLAN', version: '1.0', family: 'DECISION_ANALYSIS' }, contextVersion: 'capital-reserve-plan-v1',
+    blocks: [{
+      type: 'SUMMARY', id: 'capital-reserve-summary', title: '1 upcoming capital event is in the current plan',
+      body: 'The modeled cost range for the displayed 10-year horizon is $1,000–$1,400. The canonical reserve plan currently suggests $25 per month and records a $0 shortfall.',
+      tone: 'DEFAULT', actions: [
+        { id: 'open-timeline', label: 'Open capital timeline', href: `/dashboard/properties/${propertyId}/tools/capital-timeline`, style: 'PRIMARY' },
+        { id: 'open-reserve', label: 'Open reserve fund', href: `/dashboard/properties/${propertyId}/tools/reserve-fund`, style: 'SECONDARY' },
+      ],
+    }, {
+      type: 'GROUPED_LIST', id: 'reserve-allocations', title: 'Active reserve allocations', filters: [],
+      description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.',
+      sections: [{ id: 'allocations', title: 'Funding plan', count: 1, items: [
+        { id: 'line-property-summary', title: 'Water heater', entityType: 'RESERVE_LINE_ITEM', description: '$25/month toward $1,200', meta: ['active'], status: 'ACTIVE', href: `/dashboard/properties/${propertyId}/tools/reserve-fund` },
+      ] }],
+      actions: [{ id: 'open-reserve-fund', label: 'Open Reserve Fund', href: `/dashboard/properties/${propertyId}/tools/reserve-fund`, style: 'SECONDARY' }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    suggestions: [], createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z',
+  };
+}
+
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: INVENTORY_LOOKUP's own disambiguation shape (askOrchestrator.service.ts's
 // 'inventory-entity-selection' block) when a free-text question matches more than one item. Routed through the
 // same InventoryResultList as 'inventory-results' (IW-PRIN-002) -- selecting an ambiguous match opens inline
@@ -708,6 +738,18 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     purchaseCostCents: 3200, replacementCostCents: 3200, currency: 'USD', notes: 'Combination smoke/CO alarm outside the bedrooms.', tags: [], sourceHash: null,
     coverageNotRequired: true, isVerified: true, documents: [], warranty: null, createdAt: '2024-03-01T00:00:00.000Z', updatedAt: '2026-08-20T00:00:00.000Z',
   } } }));
+  // No single-line-item GET exists on the real backend either -- ReserveAllocationDetail re-fetches the whole
+  // list and finds its own id, the same pattern as Household/Warranty detail.
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/reserve-fund/line-items`, (route) => fulfill(route, { success: true, data: { lineItems: [{
+    id: 'line-property-summary', fundId: 'fund-property-summary', timelineItemId: 'timeline-property-summary', status: 'ACTIVE',
+    targetCostCents: 120000, allocatedMonthlyCents: 2500, allocatedBalanceCents: 45000, retiredAt: null, retiredReason: null, retiredEvidenceRef: null,
+    timelineItem: {
+      id: 'timeline-property-summary', inventoryItemId: 'item-property-summary', category: 'PLUMBING', eventType: 'REPLACEMENT',
+      windowStart: '2027-01-01T00:00:00.000Z', windowEnd: '2027-06-01T00:00:00.000Z', estimatedCostMinCents: 100000, estimatedCostMaxCents: 140000,
+      why: 'Typical service life for this water heater type is 10-12 years; it was installed 5 years ago.',
+      inventoryItem: { name: 'Water heater', condition: 'GOOD', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z' },
+    },
+  }] } }));
   await page.route(`${apiOrigin}/api/properties/${propertyId}/warranties`, (route) => fulfill(route, { success: true, data: { warranties: [{
     id: 'warranty-property-summary', homeownerProfileId: 'profile-0', propertyId, inventoryItemId: null, category: 'HOME_WARRANTY_PLAN', providerName: 'Acme Home Warranty',
     policyNumber: 'POL-123', coverageDetails: 'Covers HVAC and major appliances.', cost: 45000, startDate: '2026-01-01T00:00:00.000Z', expiryDate: '2027-12-01T00:00:00.000Z',
@@ -862,6 +904,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/smoke detector/i.test(body.message)) {
       const response = inventoryDisambiguationExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/capital reserve plan/i.test(body.message)) {
+      const response = capitalReservePlanExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;
