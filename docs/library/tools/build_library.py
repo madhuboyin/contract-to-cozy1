@@ -10,7 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 DOCS = os.path.join(ROOT, 'docs')
 OUT = os.path.join(DOCS, 'library') + '/'
-TODAY = '2026-09-19'  # snapshot date shown in FLAGS.md; update when re-baselining
+TODAY = '2026-09-22'  # snapshot date shown in FLAGS.md; update when re-baselining
 os.chdir(ROOT)
 
 def git_dates():
@@ -149,6 +149,12 @@ flag(['functional/HOME_RISK_REPLAY.md'], 'ORANGE', 'C15', 'Top banner (2026-07-3
 flag(['functional/MATERIAL_SPEC_REGISTRY.md', 'functional/HIDDEN_ASSET_FINDER.md'], 'ORANGE', 'C15', 'Route exists in code but many cited frontend/worker files do not (14/24 and 3/8): implementation moved or partial. Verify before relying on file-level detail.')
 flag(['product/SALE_READINESS_VALUE_MAXIMIZATION_IMPLEMENTATION_PLAN.md'], 'ORANGE', 'C16', 'Status "Design fully resolved" (Aug 6) - project memory says it is fully implemented; 6/19 cited sellerPrep paths no longer exist.')
 flag(['feature-data-flow-pass2.md'], 'ORANGE', 'C17', 'Pass docs are Mar 27 snapshots; this one was touched Jul 24 but still cites 9 missing files (homeRiskReplay service/controller/validators, orchestrationCompletion controller).')
+flag(['wiki/README.md', 'wiki/00-introduction.md', 'wiki/01-getting-started.md', 'wiki/02-architecture-and-data-model.md',
+      'wiki/features/01-onboarding-and-property-setup.md', 'wiki/features/02-home-health-inventory-and-maintenance.md',
+      'wiki/features/03-guidance-ai-concierge-and-personalization.md', 'wiki/features/04-coverage-risk-and-financial-tools.md',
+      'wiki/features/05-marketplace-providers-and-services.md', 'wiki/features/06-home-events-environment-and-community.md',
+      'wiki/features/07-sale-buyer-and-life-transitions.md', 'wiki/features/08-admin-analytics-and-platform-operations.md'],
+     'YELLOW', 'W', '2026 code snapshot. Home Actions/Resolution Center and Emergency entry paths were rechecked 2026-09-22; other claims need current route, service, and render-path verification before implementation.')
 
 REDCOUNT = collections.Counter()
 
@@ -257,14 +263,14 @@ guide = {
  'meta': 'Docs index and audit methodology'}
 L = ['# Documentation Library', '',
  'A searchable map of everything under `docs/` (%d files, snapshot %s). Start here instead of scanning raw folders.' % (len(rows), TODAY), '',
- '> This complements - not replaces - [`../wiki/`](../wiki/README.md), the code-grounded feature guide. **Use the wiki for what the code does today; use this library to find the governing requirement, plan, ADR, audit or runbook, and to see whether it can be trusted.**', '',
+ '> This complements [`../wiki/`](../wiki/README.md), a code-grounded feature snapshot. **Use the wiki to locate the relevant workflow, then verify its route, service, schema, and render path before changing behavior. Use this library to find the governing requirement, plan, ADR, audit, or runbook and its review flags.**', '',
  '## Find something', '',
  '| I want to... | Go to |', '|---|---|',
  '| Find docs about a feature/area | the area table below |',
  '| Find all runbooks / all ADRs / all FRDs | [BY-TYPE.md](BY-TYPE.md) |',
  '| Know whether a doc is stale or conflicts with another | [FLAGS.md](FLAGS.md) |',
  '| Grep/filter by anything (status, date, dead-code refs) | [`catalog.csv`](catalog.csv) |',
- '| Understand what the code does now | [`../wiki/`](../wiki/README.md) |', '',
+ '| Find a code-path starting point | [`../wiki/`](../wiki/README.md), then verify against current code |', '',
  'Quick searches from the repo root:', '', '```bash',
  'grep -i "smart home" docs/library/catalog.csv                      # locate a doc',
  "python3 -c \"import csv;[print(r['path']) for r in csv.DictReader(open('docs/library/catalog.csv')) if r['flag']=='RED']\"   # conflicting docs",

@@ -1,6 +1,6 @@
 # Stale & Conflicting Documents
 
-[Library home](README.md) · Snapshot date: 2026-09-19 · Scope: all 313 files under `docs/`
+[Library home](README.md) · Snapshot date: 2026-09-22 · Scope: all 313 files under `docs/`
 
 **How to read this.** Each flag says *how it was established*:
 
@@ -18,7 +18,7 @@ Flag key: 🔴 conflicting / superseded · 🟠 status lags reality, or cites co
 2. **Families with no declared winner.** Guidance Engine (3 specs), Ask (Aug "AI Home Concierge" vs Sep "Ask Cozy"), and ~7 overlapping April pre-launch plans each have several docs and none says which governs (C3, C6, C10).
 3. **Banner-only reconciliation.** Some docs got a dated banner pointing at the new behaviour while the multi-hundred-line body still describes the old design (C15). The banner is right; do not trust the body.
 4. **Code-path drift is measurable.** 1,657 backtick-quoted `apps/...` / `docs/...` paths were checked for existence **[executed]**: 153 do not exist. Concentrated in Smart Home, Material Registry, Seasonal, Jan-2026 analyses, and Sale Readiness. (Caveat: ~10 of the 153 are `apps/workers/prisma/schema.prisma`, which does not exist by design - workers use `apps/backend/prisma/schema.prisma`; those docs should cite the backend path.)
-5. **The wiki *itself* warns about this.** `wiki/02-architecture-and-data-model.md` states functional/ and product/ docs "are historical planning docs and drift from what's actually implemented", and the Intelligence Readiness Audit calls docs "frequently stale vs. shipped code" **[read]**. Prefer `docs/wiki/` for *what the code does today*; use FRDs for *intent and rationale*.
+5. **The wiki is also a snapshot.** The August 2026 guidance and introduction pages described an obsolete Fix/Resolution Center redirect chain and standalone orchestration routes. Their Home Actions and Resolution Center sections were corrected against current route, service, and render paths on 2026-09-22. The Emergency entry path was corrected too. The remaining wiki claims were not re-verified end to end. Use the wiki to locate a workflow, then trace current code; use FRDs for intent and rationale. **[executed]**
 
 ## Detailed flags
 
@@ -64,7 +64,7 @@ Flag key: 🔴 conflicting / superseded · 🟠 status lags reality, or cites co
 - "Last changed" is git history date. A recent touch (e.g. a banner) does not mean the body is current - see C15.
 - Domain/type classification is rule-based on paths and titles (see `catalog.csv`); a few docs may sit in a slightly odd area. Correct by editing `catalog.csv` or the page.
 - No cross-doc contradictions in *numbers or requirements* were hunted document-by-document (e.g. two FRDs specifying different thresholds). That would need a separate pass per family.
-
+- The wiki's `W` flag denotes a 2026 code snapshot. The specific 2026-09-22 corrections are documented in the wiki; the flag does not imply every statement in those pages was rechecked.
 
 ## Auto-flagged: historical (🟡 H) - last changed on/before 2026-04-30
 

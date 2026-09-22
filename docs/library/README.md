@@ -1,8 +1,8 @@
 # Documentation Library
 
-A searchable map of everything under `docs/` (313 files, snapshot 2026-09-19). Start here instead of scanning raw folders.
+A searchable map of everything under `docs/` (313 files, snapshot 2026-09-22). Start here instead of scanning raw folders.
 
-> This complements - not replaces - [`../wiki/`](../wiki/README.md), the code-grounded feature guide. **Use the wiki for what the code does today; use this library to find the governing requirement, plan, ADR, audit or runbook, and to see whether it can be trusted.**
+> This complements [`../wiki/`](../wiki/README.md), a code-grounded feature snapshot. **Use the wiki to locate the relevant workflow, then verify its route, service, schema, and render path before changing behavior. Use this library to find the governing requirement, plan, ADR, audit, or runbook and its review flags.**
 
 ## Find something
 
@@ -12,7 +12,7 @@ A searchable map of everything under `docs/` (313 files, snapshot 2026-09-19). S
 | Find all runbooks / all ADRs / all FRDs | [BY-TYPE.md](BY-TYPE.md) |
 | Know whether a doc is stale or conflicts with another | [FLAGS.md](FLAGS.md) |
 | Grep/filter by anything (status, date, dead-code refs) | [`catalog.csv`](catalog.csv) |
-| Understand what the code does now | [`../wiki/`](../wiki/README.md) |
+| Find a code-path starting point | [`../wiki/`](../wiki/README.md), then verify against current code |
 
 Quick searches from the repo root:
 
@@ -39,7 +39,7 @@ python3 -c "import csv;[print(r['path']) for r in csv.DictReader(open('docs/libr
 | [Data Architecture (Pass 1-7)](12-data.md) | 8 | 0 | 1 | 7 | Pass 1-7 schema/data-flow analyses |
 | [Pre-Launch Audits & Strategy (Mar-Apr 2026)](13-prelaunch.md) | 54 | 2 | 7 | 38 | Mar-Apr 2026 audits, 90-day plans, route audits, production readiness |
 | [Acquisition & Business](14-business.md) | 6 | 0 | 0 | 0 | Acquisition one-pagers, pilot/fundraise plan |
-| [Code-Grounded Wiki (existing docs/wiki)](15-wiki.md) | 12 | 0 | 0 | 0 | Existing code-grounded wiki (setup, architecture, 8 feature guides) |
+| [Code-Grounded Wiki (existing docs/wiki)](15-wiki.md) | 12 | 0 | 0 | 12 | Existing code-grounded wiki (setup, architecture, 8 feature guides) |
 | [Meta & Methodology](16-meta.md) | 2 | 0 | 1 | 0 | Docs index and audit methodology |
 
 ## Which doc wins? (reading order when several overlap)

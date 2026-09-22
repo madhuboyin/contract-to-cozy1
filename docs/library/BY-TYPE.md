@@ -85,17 +85,17 @@ Most recently changed first; showing area.
 |---|---|---|---|
 |  | [Ask Cozy — Target Product & Architecture (Stage 2)](../architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md) | Ask Cozy | 2026-09-17 |
 |  | [Worker Jobs — Feature Documentation](../functional/WORKER_JOBS.md) | Admin | 2026-09-09 |
-|  | [Onboarding, Auth & Property Setup](../wiki/features/01-onboarding-and-property-setup.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-09 |
+| 🟡 | [Onboarding, Auth & Property Setup](../wiki/features/01-onboarding-and-property-setup.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-09 |
 |  | [C2C Intelligence & Agentic Evolution Architecture (Stage 3)](../architecture/C2C_INTELLIGENCE_AGENTIC_EVOLUTION_ARCHITECTURE.md) | Ask Cozy | 2026-08-31 |
-|  | [Introduction](../wiki/00-introduction.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-|  | [Getting Started](../wiki/01-getting-started.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-|  | [Architecture & Data Model](../wiki/02-architecture-and-data-model.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-|  | [Guidance, AI Concierge & Personalization](../wiki/features/03-guidance-ai-concierge-and-personalization.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-|  | [Coverage, Risk & Financial Tools](../wiki/features/04-coverage-risk-and-financial-tools.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-|  | [Execution, Providers & Services](../wiki/features/05-marketplace-providers-and-services.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-|  | [Home Events, Environment & Community](../wiki/features/06-home-events-environment-and-community.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-|  | [Sale, Buyer & Life Transitions](../wiki/features/07-sale-buyer-and-life-transitions.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-|  | [Admin, Analytics & Platform Operations](../wiki/features/08-admin-analytics-and-platform-operations.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Introduction](../wiki/00-introduction.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Getting Started](../wiki/01-getting-started.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Architecture & Data Model](../wiki/02-architecture-and-data-model.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Guidance, AI Concierge & Personalization](../wiki/features/03-guidance-ai-concierge-and-personalization.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Coverage, Risk & Financial Tools](../wiki/features/04-coverage-risk-and-financial-tools.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Execution, Providers & Services](../wiki/features/05-marketplace-providers-and-services.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Home Events, Environment & Community](../wiki/features/06-home-events-environment-and-community.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Sale, Buyer & Life Transitions](../wiki/features/07-sale-buyer-and-life-transitions.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Admin, Analytics & Platform Operations](../wiki/features/08-admin-analytics-and-platform-operations.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 |  | [AI Home Concierge Ask — Manual Certification Living Addendum](../product/AI_HOME_CONCIERGE_ASK_MANUAL_CERTIFICATION_ADDENDUM.md) | Ask Cozy | 2026-08-16 |
 |  | [Unified Home Action Card Enhancement Brief](../product/UNIFIED_HOME_ACTION_CARD_ENHANCEMENT_BRIEF.md) | Guidance | 2026-08-10 |
 |  | [Home Event Radar](../functional/HOME_EVENT_RADAR.md) | Property Intelligence | 2026-08-06 |
@@ -266,12 +266,12 @@ Most recently changed first; showing area.
 |---|---|---|---|
 |  | [Ask Cozy Inline Workspace — Session Handoff](../architecture/ASK_COZY_INLINE_WORKSPACE_SESSION_HANDOFF.md) | Ask Cozy | 2026-09-18 |
 | 🟠 | [Documentation](../README.md) | Meta & Methodology | 2026-09-17 |
-|  | [Home Health, Inventory & Maintenance](../wiki/features/02-home-health-inventory-and-maintenance.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-09 |
+| 🟡 | [Home Health, Inventory & Maintenance](../wiki/features/02-home-health-inventory-and-maintenance.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-09 |
 |  | [Product Framework Phase 2 — Unified Home and Action System](../product/phase2/README.md) | Product Framework & Capability Platform | 2026-08-31 |
 |  | [Home Intelligence Phase 0 — Registry and Ownership Report](../product/HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md) | Guidance | 2026-08-25 |
 |  | [Home Intelligence Phase 1 — Source Parity Status](../product/HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md) | Guidance | 2026-08-25 |
 |  | [Current Capability Inventory](../product/capability-discovery/current-capability-inventory.md) | Product Framework & Capability Platform | 2026-08-25 |
-|  | [Contract to Cozy — Wiki](../wiki/README.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
+| 🟡 | [Contract to Cozy — Wiki](../wiki/README.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 |  | [Decision Platform — Phase 7A (P0 Contract Closure)](../product/decision-platform/README.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [Decision Platform — Metrics Dictionary and Zero-Tolerance Gates](../product/decision-platform/metrics-dictionary.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [Decision Platform — Retention, Erasure, and Export Policy](../product/decision-platform/policy-retention-erasure-export.md) | Product Framework & Capability Platform | 2026-08-13 |

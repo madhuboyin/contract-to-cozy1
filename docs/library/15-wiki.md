@@ -8,20 +8,20 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Onboarding, Auth & Property Setup](../wiki/features/01-onboarding-and-property-setup.md) |  | 2026-09-09 | 114 |
-|  | [Introduction](../wiki/00-introduction.md) |  | 2026-08-22 | 116 |
-|  | [Getting Started](../wiki/01-getting-started.md) |  | 2026-08-22 | 126 |
-|  | [Architecture & Data Model](../wiki/02-architecture-and-data-model.md) |  | 2026-08-22 | 169 |
-|  | [Guidance, AI Concierge & Personalization](../wiki/features/03-guidance-ai-concierge-and-personalization.md) |  | 2026-08-22 | 110 |
-|  | [Coverage, Risk & Financial Tools](../wiki/features/04-coverage-risk-and-financial-tools.md) |  | 2026-08-22 | 131 |
-|  | [Execution, Providers & Services](../wiki/features/05-marketplace-providers-and-services.md) |  | 2026-08-22 | 113 |
-|  | [Home Events, Environment & Community](../wiki/features/06-home-events-environment-and-community.md) |  | 2026-08-22 | 138 |
-|  | [Sale, Buyer & Life Transitions](../wiki/features/07-sale-buyer-and-life-transitions.md) |  | 2026-08-22 | 98 |
-|  | [Admin, Analytics & Platform Operations](../wiki/features/08-admin-analytics-and-platform-operations.md) |  | 2026-08-22 | 194 |
+| 🟡 W | [Onboarding, Auth & Property Setup](../wiki/features/01-onboarding-and-property-setup.md) |  | 2026-09-09 | 114 |
+| 🟡 W | [Introduction](../wiki/00-introduction.md) |  | 2026-08-22 | 106 |
+| 🟡 W | [Getting Started](../wiki/01-getting-started.md) |  | 2026-08-22 | 126 |
+| 🟡 W | [Architecture & Data Model](../wiki/02-architecture-and-data-model.md) |  | 2026-08-22 | 169 |
+| 🟡 W | [Guidance, AI Concierge & Personalization](../wiki/features/03-guidance-ai-concierge-and-personalization.md) |  | 2026-08-22 | 107 |
+| 🟡 W | [Coverage, Risk & Financial Tools](../wiki/features/04-coverage-risk-and-financial-tools.md) |  | 2026-08-22 | 131 |
+| 🟡 W | [Execution, Providers & Services](../wiki/features/05-marketplace-providers-and-services.md) |  | 2026-08-22 | 113 |
+| 🟡 W | [Home Events, Environment & Community](../wiki/features/06-home-events-environment-and-community.md) |  | 2026-08-22 | 138 |
+| 🟡 W | [Sale, Buyer & Life Transitions](../wiki/features/07-sale-buyer-and-life-transitions.md) |  | 2026-08-22 | 98 |
+| 🟡 W | [Admin, Analytics & Platform Operations](../wiki/features/08-admin-analytics-and-platform-operations.md) |  | 2026-08-22 | 194 |
 
 ## Status / phase record (2)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Home Health, Inventory & Maintenance](../wiki/features/02-home-health-inventory-and-maintenance.md) |  | 2026-09-09 | 109 |
-|  | [Contract to Cozy — Wiki](../wiki/README.md) |  | 2026-08-22 | 51 |
+| 🟡 W | [Home Health, Inventory & Maintenance](../wiki/features/02-home-health-inventory-and-maintenance.md) |  | 2026-09-09 | 109 |
+| 🟡 W | [Contract to Cozy — Wiki](../wiki/README.md) |  | 2026-08-22 | 51 |
