@@ -2546,6 +2546,22 @@ class APIClient {
   }
 
   /**
+   * ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22): uploads a file as Ask
+   * evidence, scoped to a property (CONTRIBUTOR floor), with no AI analysis and no Magic Scan quota consumed --
+   * deliberately not analyzeDocument()/POST /analyze, a different product surface. Returns the stored document's
+   * identity only; the caller then dispatches CAPTURE_EVIDENCE_CONFIRM with that documentId to attach it to a
+   * specific home timeline event through the normal Ask propose/confirm path.
+   */
+  async uploadAskEvidence(propertyId: string, file: File): Promise<APIResponse<{
+    document: { id: string; name: string; mimeType: string; fileSize: number };
+  }>> {
+    this.validateFile(file, { allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'] });
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.formDataRequest(`/api/documents/property/${encodeURIComponent(propertyId)}/evidence-upload`, formData);
+  }
+
+  /**
    * List all documents
    */
   async listDocuments(propertyId?: string): Promise<APIResponse<{

@@ -435,6 +435,112 @@ router.get('/property/:propertyId/:documentId', authenticate, propertyAuthMiddle
   }
 });
 
+/**
+ * @swagger
+ * /api/documents/property/{propertyId}/evidence-upload:
+ *   post:
+ *     summary: Upload a file as Ask Cozy evidence for a home timeline event (CONTRIBUTOR floor)
+ *     description: >
+ *       ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 (evidence upload design,
+ *       approved 2026-09-22): the byte-upload half of inline evidence
+ *       attach. Deliberately NOT POST /analyze -- this route runs no AI
+ *       document-type analysis and consumes no Magic Scan subscription
+ *       limit, since attaching a receipt/invoice to a timeline event the
+ *       homeowner already chose is a different product behaviour than
+ *       Magic Scan. Stores the file exactly as /analyze does (same
+ *       validateDocumentUpload magic-byte check, same uploadDocumentBuffer
+ *       S3 path) and returns a documentId; nothing is linked to any event
+ *       here -- CAPTURE_EVIDENCE_CONFIRM's own confirm step does that write,
+ *       so an upload with no follow-up confirm leaves an unlinked Document
+ *       row (the same already-accepted orphan characteristic /analyze has
+ *       today if a homeowner uploads then abandons the flow).
+ *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: propertyId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: The stored document's identity
+ *       403:
+ *         description: Contributor access is required
+ *       404:
+ *         description: Property not found or access denied
+ */
+router.post('/property/:propertyId/evidence-upload', authenticate, uploadRateLimiter, propertyAuthMiddleware, upload.single('file'), validateDocumentUpload, async (req: CustomRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { propertyId } = req.params;
+
+    if (ROLE_RANK[req.householdRole!] < ROLE_RANK.CONTRIBUTOR) {
+      return res.status(403).json({ success: false, message: 'Contributor access is required to attach evidence to this home.' });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'File is required.' });
+    }
+
+    const homeownerProfile = await prisma.homeownerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!homeownerProfile) {
+      return res.status(404).json({ success: false, message: 'Homeowner profile not found' });
+    }
+
+    auditLog('ASK_EVIDENCE_UPLOAD_ATTEMPT', userId, {
+      ip: req.ip,
+      propertyId,
+      fileName: file.originalname,
+      fileType: file.mimetype,
+      fileSizeBytes: file.size,
+    });
+
+    // Upload to S3; no AI analysis is run for this route (see the doc
+    // comment above) so the buffer is not read further after this call.
+    const { key } = await uploadDocumentBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      userId,
+      propertyId,
+    });
+
+    const document = await prisma.document.create({
+      data: {
+        uploadedBy: homeownerProfile.id,
+        propertyId,
+        type: DocumentType.OTHER,
+        name: file.originalname,
+        fileUrl: key,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+      },
+      select: { id: true, name: true, mimeType: true, fileSize: true },
+    });
+
+    return res.json({ success: true, data: { document } });
+  } catch (err: any) {
+    logger.error({ err }, '[DOCUMENTS] ask evidence upload failed');
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to upload evidence' });
+  }
+});
+
 router.get('/insurance-policies', authenticate, async (req: CustomRequest, res: Response) => {
   try {
     const userId = req.user!.userId;

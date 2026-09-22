@@ -1063,7 +1063,7 @@ function ExecutionCard({
   // REMIND_LATER once their domain policy lands; NAVIGATE once item
   // actions carry an href), it surfaces here instead of silently no-oping.
   const [itemActionIssue, setItemActionIssue] = useState<string | null>(null);
-  const dispatchItemAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => {
+  const dispatchItemAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => {
     setItemActionIssue(null);
     const dispatch = resolveItemActionDispatch(interactionType);
     if (dispatch.kind === 'ASK_WITH_ENTITY_CONTEXT') {
@@ -1080,6 +1080,9 @@ function ExecutionCard({
         // important?" accidentally match the generic maintenance
         // pattern and misroute away from grounded guidance).
         operationId,
+        // Evidence upload design (approved 2026-09-22): undefined for every action except HomeEventResultList's
+        // "Attach evidence" control, which already uploaded the file and resolved this id before calling here.
+        documentId,
       });
     } else if (dispatch.kind === 'ASK_FILTER_ONLY') {
       void ask(message, undefined, { sourceExecutionId: execution.executionId });
@@ -1666,6 +1669,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           returnTo: promptContext?.returnTo ?? (safeBackTo || null),
           sourceExecutionId: promptContext?.sourceExecutionId,
           operationId: promptContext?.operationId,
+          documentId: promptContext?.documentId,
         },
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Ask could not complete that request.');

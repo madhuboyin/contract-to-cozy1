@@ -718,6 +718,15 @@ export const CreateAskExecutionRequestSchema = z.object({
     // role/target/confirmation check still runs exactly as it does for any
     // other route to that same operation (ACT-002).
     operationId: z.string().trim().max(120).nullable().optional(),
+    // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design
+    // (approved 2026-09-22): the id of a Document already uploaded via
+    // POST /api/documents/property/:propertyId/evidence-upload, carried
+    // the same way entityId carries an existing record's id. Only ever
+    // honored by capture.evidence.confirm's own declared-action guard,
+    // which independently re-verifies the document belongs to this
+    // property before building any confirmation -- like operationId, a
+    // routing hint, never a bypass of that re-check.
+    documentId: z.string().trim().max(160).nullable().optional(),
   }).optional(),
 }).strict();
 

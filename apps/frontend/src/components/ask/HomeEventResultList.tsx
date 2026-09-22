@@ -1,13 +1,22 @@
 'use client';
 
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, X } from 'lucide-react';
+import { ExternalLink, Loader2, Paperclip, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { getHomeEvent, type HomeEvent } from '@/app/(dashboard)/dashboard/properties/[id]/timeline/homeEventsApi';
+import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { CorrectionActions } from './CorrectionActions';
 import { ActionLink } from './blocks/context';
+
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22). Must match
+// EVIDENCE_ATTACH_MESSAGE in apps/backend/src/services/ask/askOrchestrator.service.ts exactly -- the propose
+// handler's declared-action guard checks the message verbatim, the same way every other "Add"/declared-action
+// canned message is a fixed string shared between server and client.
+export const EVIDENCE_ATTACH_MESSAGE = 'Attach evidence to this home timeline entry.';
+const EVIDENCE_UPLOAD_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+const EVIDENCE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -46,7 +55,64 @@ function fieldLabel(value: string | null | undefined): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
-type HomeEventItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+// documentId (optional 6th param) is set only by AttachEvidenceControl below, once its upload has already
+// succeeded -- see blocks/types.ts's onItemAction for the same shape one level up.
+type HomeEventItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => void;
+
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22). A bespoke control, not one
+// of fallbackItem.actions/CorrectionActions -- unlike every other declared item action, this one needs a file
+// picked and uploaded (out of band, via the new evidence-upload endpoint) BEFORE anything can be dispatched to
+// Ask, since CAPTURE_EVIDENCE_CONFIRM's declared-action guard requires documentId up front. Shown whenever
+// fallbackItem.actions is non-empty, the same "this requester can manage this event" signal
+// homeEventCorrectionItemActions already encodes server-side -- no separate capability flag needed. The actual
+// contributor-floor/PRIVATE-visibility check still happens server-side in evidenceAttachResult regardless of
+// what this control shows.
+function AttachEvidenceControl({ event, propertyId, disabled, onAttached }: {
+  event: { entityType: string | null | undefined; id: string; title: string };
+  propertyId?: string;
+  disabled?: boolean;
+  onAttached: (documentId: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [status, setStatus] = useState<'IDLE' | 'UPLOADING' | 'ERROR'>('IDLE');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = async (file: File) => {
+    setError(null);
+    if (!propertyId) { setError('This home could not be determined. Refresh and try again.'); setStatus('ERROR'); return; }
+    if (!EVIDENCE_UPLOAD_ALLOWED_TYPES.includes(file.type)) { setError('Choose a JPEG, PNG, WEBP, or PDF file.'); setStatus('ERROR'); return; }
+    if (file.size > EVIDENCE_UPLOAD_MAX_BYTES) { setError('That file is larger than 10MB.'); setStatus('ERROR'); return; }
+    setStatus('UPLOADING');
+    try {
+      const response = await api.uploadAskEvidence(propertyId, file);
+      if (!response.success || !response.data) throw new Error(response.message || 'The file could not be uploaded.');
+      setStatus('IDLE');
+      onAttached(response.data.document.id);
+    } catch (caught) {
+      setStatus('ERROR');
+      setError(caught instanceof Error ? caught.message : 'The file could not be uploaded.');
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      <input
+        ref={inputRef} type="file" accept={EVIDENCE_UPLOAD_ALLOWED_TYPES.join(',')} className="sr-only" tabIndex={-1}
+        aria-label={`Attach evidence file for ${event.title}`}
+        onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void handleFile(file); }}
+      />
+      <button
+        type="button" disabled={disabled || status === 'UPLOADING'}
+        className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
+        onClick={() => inputRef.current?.click()}
+      >
+        {status === 'UPLOADING' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Paperclip className="h-4 w-4" aria-hidden="true" />}
+        {status === 'UPLOADING' ? 'Uploading…' : 'Attach evidence'}<span className="sr-only"> for {event.title}</span>
+      </button>
+      {error && <p className="mt-1 text-xs text-red-700" role="alert">{error}</p>}
+    </div>
+  );
+}
 
 function HomeEventDetail({ eventId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose }: {
   eventId: string;
@@ -125,6 +191,14 @@ function HomeEventDetail({ eventId, expectedPropertyId, fallbackItem, disabled, 
           <div><dt className="text-xs text-slate-500">Amount</dt><dd className="mt-0.5 font-medium text-slate-900">{formatAmount(event.amount, event.currency)}</dd></div>
         </dl>
         {onAction && <CorrectionActions actions={fallbackItem.actions ?? []} subject={event.title} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />}
+        {onAction && (fallbackItem.actions?.length ?? 0) > 0 && (
+          <AttachEvidenceControl
+            event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: event.title }}
+            propertyId={expectedPropertyId}
+            disabled={disabled}
+            onAttached={(documentId) => onAction(fallbackItem.entityType, fallbackItem.id, EVIDENCE_ATTACH_MESSAGE, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
+          />
+        )}
         <p className="mt-3 text-xs text-slate-500">{event.documents?.length ?? 0} document{(event.documents?.length ?? 0) === 1 ? '' : 's'} · Current canonical record · updated {formatDate(event.updatedAt)}</p>
       </>}
     </aside>

@@ -251,6 +251,10 @@ export interface CreateAskExecutionPayload {
     returnTo?: string | null;
     sourceExecutionId?: string | null;
     operationId?: string | null;
+    // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22): the id of a Document
+    // already uploaded via POST /api/documents/property/:propertyId/evidence-upload, carried the same way
+    // entityId carries an existing record's id.
+    documentId?: string | null;
   };
 }
 // Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" — a dedicated
@@ -344,6 +348,9 @@ export interface AskCapabilityPrompt {
     // ACT-001/ACT-003: a declared item action's own registered operation,
     // routing directly instead of relying on free-text pattern matching.
     operationId?: string;
+    // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22): mirrors
+    // CreateAskExecutionPayload.launchContext.documentId, above.
+    documentId?: string;
   };
 }
 

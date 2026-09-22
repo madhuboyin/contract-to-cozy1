@@ -1,16 +1,19 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { HomeEventResultList } from '../HomeEventResultList';
+import { EVIDENCE_ATTACH_MESSAGE, HomeEventResultList } from '../HomeEventResultList';
 import { AskBlockActionContext } from '../blocks/context';
 import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 import { getHomeEvent, type HomeEvent } from '@/app/(dashboard)/dashboard/properties/[id]/timeline/homeEventsApi';
+import { api } from '@/lib/api/client';
 
 jest.mock('@/app/(dashboard)/dashboard/properties/[id]/timeline/homeEventsApi', () => ({
   getHomeEvent: jest.fn(),
 }));
+jest.mock('@/lib/api/client', () => ({ api: { uploadAskEvidence: jest.fn() } }));
 const mockedGetHomeEvent = getHomeEvent as jest.MockedFunction<typeof getHomeEvent>;
+const mockedUploadAskEvidence = api.uploadAskEvidence as jest.MockedFunction<typeof api.uploadAskEvidence>;
 
 const block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }> = {
   type: 'GROUPED_LIST', id: 'inventory-history', title: 'Water heater history', filters: [], actions: [
@@ -133,6 +136,64 @@ test('inline event detail exposes declared correction actions with exact event i
   fireEvent.click(screen.getByRole('button', { name: 'Water heater replaced' }));
   await waitFor(() => expect(screen.getByText('Homeowner confirmed')).toBeInTheDocument());
   expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Attach evidence/ })).not.toBeInTheDocument();
+});
+
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22).
+test('Attach evidence control: uploads the picked file out of band, then dispatches CAPTURE_EVIDENCE_CONFIRM with the resulting documentId', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  mockedGetHomeEvent.mockResolvedValue(canonicalEvent());
+  mockedUploadAskEvidence.mockResolvedValueOnce({ success: true, data: { document: { id: 'doc-1', name: 'invoice.pdf', mimeType: 'application/pdf', fileSize: 1024 } } } as Awaited<ReturnType<typeof api.uploadAskEvidence>>);
+  const withActions: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], actions: [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }] },
+    ...block.sections[0].items.slice(1),
+  ] }] };
+  const onAction = jest.fn();
+  const response = { ...execution(), blocks: [withActions] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><HomeEventResultList block={withActions} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater replaced' }));
+  await screen.findByRole('button', { name: /Attach evidence/ });
+
+  const file = new File(['invoice'], 'invoice.pdf', { type: 'application/pdf' });
+  fireEvent.change(screen.getByLabelText('Attach evidence file for Water heater replaced'), { target: { files: [file] } });
+
+  await waitFor(() => expect(onAction).toHaveBeenCalledWith('HOME_EVENT', 'event-0', EVIDENCE_ATTACH_MESSAGE, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', 'doc-1'));
+  expect(mockedUploadAskEvidence).toHaveBeenCalledWith('home', file);
+});
+
+test('Attach evidence control: an unsupported file type or a failed upload is refused with a visible error and never dispatches', async () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  mockedGetHomeEvent.mockResolvedValue(canonicalEvent());
+  mockedUploadAskEvidence.mockRejectedValueOnce(new Error('The server refused the file.'));
+  const withActions: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], actions: [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }] },
+    ...block.sections[0].items.slice(1),
+  ] }] };
+  const onAction = jest.fn();
+  const response = { ...execution(), blocks: [withActions] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><HomeEventResultList block={withActions} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Water heater replaced' }));
+  await screen.findByRole('button', { name: /Attach evidence/ });
+
+  // Client-side type rejection: never even calls the upload endpoint.
+  const badType = new File(['x'], 'notes.txt', { type: 'text/plain' });
+  fireEvent.change(screen.getByLabelText('Attach evidence file for Water heater replaced'), { target: { files: [badType] } });
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Choose a JPEG, PNG, WEBP, or PDF file.'));
+  expect(mockedUploadAskEvidence).not.toHaveBeenCalled();
+
+  // Server-side failure: the upload is attempted but rejected.
+  const goodType = new File(['x'], 'invoice.pdf', { type: 'application/pdf' });
+  fireEvent.change(screen.getByLabelText('Attach evidence file for Water heater replaced'), { target: { files: [goodType] } });
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('The server refused the file.'));
+  expect(onAction).not.toHaveBeenCalled();
 });
 
 

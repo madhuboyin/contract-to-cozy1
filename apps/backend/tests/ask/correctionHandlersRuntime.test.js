@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 
 require('ts-node/register');
 
@@ -12,7 +14,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 require('../../src/services/ask/askOrchestrator.service.ts');
-const { roomCreateResult, inventoryItemCreateResult, roomRenameItemActions, HOME_EVENT_VISIBILITY_MESSAGE } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { roomCreateResult, inventoryItemCreateResult, roomRenameItemActions, HOME_EVENT_VISIBILITY_MESSAGE, EVIDENCE_ATTACH_MESSAGE } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
 const { InventoryService } = require('../../src/services/inventory.service.ts');
@@ -36,6 +38,7 @@ const originals = {
   updateHomeEvent: HomeEventsService.prototype.updateHomeEvent,
   createHomeEvent: HomeEventsService.prototype.createHomeEvent,
   setVisibility: HomeEventsService.prototype.setVisibility,
+  attachDocument: HomeEventsService.prototype.attachDocument,
   updateWarranty: homeManagement.updateWarranty,
   markCoverage: coverageAnalysis.markCoverageAnalysisStale,
   markRisk: riskPremium.markRiskPremiumOptimizerStale,
@@ -51,7 +54,7 @@ let models;
 let accessRole = 'CONTRIBUTOR';
 
 function install() {
-  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [], createHomeEvent: [], createRoom: [], createItem: [], setVisibility: [] };
+  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [], createHomeEvent: [], createRoom: [], createItem: [], setVisibility: [], attachDocument: [] };
   accessRole = 'CONTRIBUTOR';
   models = {};
   prismaModule.prisma = new Proxy({}, {
@@ -73,6 +76,10 @@ function install() {
   HomeEventsService.prototype.updateHomeEvent = async function (...args) { calls.updateHomeEvent.push(args); return { id: 'event-2', title: args[2].title ?? 'Roof replacement' }; };
   HomeEventsService.prototype.createHomeEvent = async function (...args) { calls.createHomeEvent.push(args); return { id: 'event-new', title: args[0].body.title }; };
   HomeEventsService.prototype.setVisibility = async function (...args) { calls.setVisibility.push(args); };
+  HomeEventsService.prototype.attachDocument = async function (...args) {
+    calls.attachDocument.push(args);
+    return { id: 'link-1', documentId: args[0].documentId, eventId: args[0].eventId, document: { name: 'Invoice.pdf' }, event: { id: args[0].eventId, title: 'Roof replacement' } };
+  };
   homeManagement.updateWarranty = async (...args) => { calls.updateWarranty.push(args); return {}; };
   coverageAnalysis.markCoverageAnalysisStale = async () => { calls.markers.push('coverage'); };
   riskPremium.markRiskPremiumOptimizerStale = async () => { calls.markers.push('risk'); };
@@ -94,6 +101,7 @@ function restore() {
   HomeEventsService.prototype.updateHomeEvent = originals.updateHomeEvent;
   HomeEventsService.prototype.createHomeEvent = originals.createHomeEvent;
   HomeEventsService.prototype.setVisibility = originals.setVisibility;
+  HomeEventsService.prototype.attachDocument = originals.attachDocument;
   homeManagement.updateWarranty = originals.updateWarranty;
   coverageAnalysis.markCoverageAnalysisStale = originals.markCoverage;
   riskPremium.markRiskPremiumOptimizerStale = originals.markRisk;
@@ -1332,4 +1340,108 @@ test('INVENTORY_ITEM_CREATE confirm maps a writer refusal to a clear error, lets
   for (const bad of [itemInput({ category: 'GARDEN' }), itemInput({ name: '' }), itemInput({ name: 'x'.repeat(121) }), itemInput({ brand: 'x'.repeat(81) }), { ...itemInput(), extra: 1 }]) {
     assert.equal(await codeOf(invoke('INVENTORY_ITEM_CREATE', itemCreateParams(bad))), 'ASK_CONFIRMATION_NOT_ACTIVE', JSON.stringify(bad).slice(0, 40));
   }
+});
+
+// ───────────────────────────── Evidence upload attach (Phase 3, evidence upload design, approved 2026-09-22) ─────
+// Reuses the existing CAPTURE_EVIDENCE_CONFIRM operation/adapter -- these tests are the first runtime coverage
+// for confirmCaptureEvidence's write path at all (previously covered only by registration/source-shape checks;
+// see groundedAskProposalRetirement.test.js). Covers both the new USER_ADD branch and, as a regression guard, the
+// pre-existing extraction-sibling branch it sits alongside.
+const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+
+function evidenceModels({
+  event = { id: 'event-1', propertyId: 'p1', title: 'Roof replacement', isCurrent: true, deletedAt: null, visibility: 'HOUSEHOLD', createdById: 'u9' },
+  document = { id: 'doc-1', propertyId: 'p1', name: 'Invoice.pdf' },
+  receipt = null,
+} = {}) {
+  models.homeEvent = { findFirst: async () => event };
+  models.document = { findFirst: async () => document };
+  if (receipt !== undefined) models.askConfirmationReceipt = { findUnique: async () => receipt };
+}
+
+const proposeEvidenceAttach = async ({ message = EVIDENCE_ATTACH_MESSAGE, entityId = 'event-1', documentId = 'doc-1', surface = 'ASK_WORKSPACE' } = {}) =>
+  capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface, entityType: 'HOME_EVENT', entityId, documentId, operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
+
+test('CAPTURE_EVIDENCE_CONFIRM propose: only the declared "Attach evidence" action (operationId + surface + exact message + entityType + entityId + documentId all present) builds a confirmation card; anything else stays not-directly-routable', async () => {
+  evidenceModels();
+  const declared = await proposeEvidenceAttach();
+  assert.equal(declared.status, 'NEEDS_CONFIRMATION');
+  assert.equal(declared.reasonCode, 'EVIDENCE_ATTACH_CONFIRMATION_REQUIRED');
+  assert.deepEqual(declared.parameters, { documentId: 'doc-1', eventId: 'event-1', captureOrigin: 'USER_ADD', sourceExecutionId: null, confirmationVersion: 1, confirmationExpiresAt: declared.parameters.confirmationExpiresAt });
+  assert.equal(declared.confirmation.title, 'Attach this document as evidence?');
+  assert.deepEqual(declared.confirmation.fields, [{ label: 'Document', value: 'Invoice.pdf' }, { label: 'Attach to', value: 'Roof replacement' }]);
+
+  const refresh = await proposeEvidenceAttach({ surface: 'ASK_REFRESH' });
+  assert.equal(refresh.status, 'OUT_OF_SCOPE', 'an ASK_REFRESH re-run (no operationId in practice) must not rebuild the card');
+  const wrongMessage = await proposeEvidenceAttach({ message: 'Attach this file.' });
+  assert.equal(wrongMessage.status, 'OUT_OF_SCOPE');
+  const noDocumentId = await capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message: EVIDENCE_ATTACH_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'HOME_EVENT', entityId: 'event-1', operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
+  assert.equal(noDocumentId.status, 'OUT_OF_SCOPE', 'documentId missing entirely (no file uploaded yet) must not build a card');
+  const wrongEntityType = await capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message: EVIDENCE_ATTACH_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ITEM', entityId: 'event-1', documentId: 'doc-1', operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
+  assert.equal(wrongEntityType.status, 'OUT_OF_SCOPE');
+});
+
+test('CAPTURE_EVIDENCE_CONFIRM propose blocks a VIEWER, and re-verifies the event and document against live data rather than trusting launchContext', async () => {
+  evidenceModels();
+  accessRole = 'VIEWER';
+  assert.equal((await proposeEvidenceAttach()).status, 'BLOCKED');
+  accessRole = 'CONTRIBUTOR';
+
+  models.homeEvent = { findFirst: async () => null };
+  const missingEvent = await proposeEvidenceAttach();
+  assert.equal(missingEvent.status, 'NOT_APPLICABLE');
+  assert.equal(missingEvent.reasonCode, 'HOME_EVENT_NOT_FOUND');
+
+  evidenceModels();
+  models.document = { findFirst: async () => null };
+  const missingDocument = await proposeEvidenceAttach();
+  assert.equal(missingDocument.status, 'NOT_APPLICABLE');
+  assert.equal(missingDocument.reasonCode, 'DOCUMENT_NOT_FOUND');
+});
+
+// Mutation-testing gotcha (see feedback_ask_write_command_design_rules item 2 / this file's own convention): the
+// fakes above ignore their `where` argument entirely, so a regression that dropped propertyId scoping or the
+// PRIVATE-creator-only exclusion from the real query would pass every test above unnoticed. Source-shape assertion
+// against the real function body closes that gap, the same pattern used elsewhere in this arc.
+test('CAPTURE_EVIDENCE_CONFIRM propose: source shape -- the event query is property-scoped and excludes another creator\'s PRIVATE event; the document query is property-scoped', () => {
+  const fn = orchestratorSource.slice(orchestratorSource.indexOf('async function evidenceAttachResult'), orchestratorSource.indexOf('async function warrantyCorrectResult'));
+  assert.match(fn, /where:\s*\{\s*id:\s*eventId,\s*propertyId,\s*isCurrent:\s*true,\s*deletedAt:\s*null,\s*OR:\s*\[\{\s*visibility:\s*\{\s*not:\s*'PRIVATE'\s*\}\s*\},\s*\{\s*createdById:\s*userId\s*\}\]/);
+  assert.match(fn, /prisma\.document\.findFirst\(\{\s*where:\s*\{\s*id:\s*documentId,\s*propertyId\s*\}/);
+});
+
+test('CAPTURE_EVIDENCE_CONFIRM confirm (USER_ADD origin): attaches the already-uploaded document to the event named in the execution\'s own parameters, no sibling execution involved', async () => {
+  evidenceModels({ receipt: null });
+  models.askConfirmationReceipt = { findUnique: async () => { throw new Error('must not be queried on the USER_ADD path'); } };
+  const { result, artifactType, artifactId } = await invoke('CAPTURE_EVIDENCE_CONFIRM', { documentId: 'doc-1', eventId: 'event-1', captureOrigin: 'USER_ADD' });
+  assert.deepEqual(calls.attachDocument, [[{ propertyId: 'p1', eventId: 'event-1', documentId: 'doc-1', userId: 'u1' }]]);
+  assert.equal(result.reasonCode, 'EVIDENCE_ATTACHED');
+  assert.equal(artifactId, 'link-1');
+  assert.ok(artifactType);
+});
+
+test('CAPTURE_EVIDENCE_CONFIRM confirm (USER_ADD origin) rejects a missing/invalid eventId or documentId without writing', async () => {
+  evidenceModels();
+  for (const bad of [{ documentId: 'doc-1', captureOrigin: 'USER_ADD' }, { documentId: 'doc-1', eventId: '', captureOrigin: 'USER_ADD' }, { eventId: 'event-1', captureOrigin: 'USER_ADD' }]) {
+    assert.equal(await codeOf(invoke('CAPTURE_EVIDENCE_CONFIRM', bad)), 'ASK_CONFIRMATION_NOT_ACTIVE', JSON.stringify(bad));
+  }
+  assert.equal(calls.attachDocument.length, 0);
+});
+
+test('CAPTURE_EVIDENCE_CONFIRM confirm: the pre-existing extraction-sibling branch is unchanged (regression guard) -- still requires linkedExecutionId and a COMPLETED HOME_EVENT sibling receipt when captureOrigin is not USER_ADD', async () => {
+  evidenceModels({ receipt: { status: 'COMPLETED', artifactType: 'HOME_EVENT', artifactId: 'event-sibling' } });
+  const executionWithSibling = { id: 'exec-1', propertyId: 'p1', sessionId: 's1', userId: 'u1', operationId: 'CAPTURE_EVIDENCE_CONFIRM', createdAt: EXECUTION_CREATED_AT, linkedExecutionId: 'exec-0' };
+  const { result } = await confirmCapabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', {
+    userId: 'u1', execution: executionWithSibling, parameters: { documentId: 'doc-1' }, access: { role: 'CONTRIBUTOR' }, command: getAskDomainCommandByOperation('CAPTURE_EVIDENCE_CONFIRM'),
+  });
+  assert.deepEqual(calls.attachDocument, [[{ propertyId: 'p1', eventId: 'event-sibling', documentId: 'doc-1', userId: 'u1' }]]);
+  assert.equal(result.reasonCode, 'EVIDENCE_ATTACHED');
+
+  // No captureOrigin, no linkedExecutionId: still refused exactly as before this slice.
+  assert.equal(await codeOf(invoke('CAPTURE_EVIDENCE_CONFIRM', { documentId: 'doc-1' })), 'EVIDENCE_SIBLING_EVENT_MISSING');
+
+  // No captureOrigin, linkedExecutionId set, but the sibling isn't a COMPLETED HOME_EVENT: still refused.
+  evidenceModels({ receipt: { status: 'PENDING', artifactType: 'HOME_EVENT', artifactId: 'event-sibling' } });
+  assert.equal(await codeOf(confirmCapabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', {
+    userId: 'u1', execution: executionWithSibling, parameters: { documentId: 'doc-1' }, access: { role: 'CONTRIBUTOR' }, command: getAskDomainCommandByOperation('CAPTURE_EVIDENCE_CONFIRM'),
+  })), 'EVIDENCE_SIBLING_EVENT_NOT_CONFIRMED');
 });

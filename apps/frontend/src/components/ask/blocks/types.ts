@@ -11,7 +11,10 @@ export type AskBlockRendererProps<TBlock extends AskPresentationBlock = AskPrese
   block: TBlock;
   executionId: string;
   propertyId?: string;
-  onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+  // documentId (optional 6th param) exists only for HomeEventResultList's bespoke "Attach evidence" control
+  // (ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design, approved 2026-09-22): every other caller
+  // omits it, since every other item action dispatches immediately with no out-of-band upload step first.
+  onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => void;
   itemActionsDisabled: boolean;
   onFilterClick: (message: string) => void;
   onCollectionPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void;

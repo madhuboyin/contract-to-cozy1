@@ -8723,6 +8723,75 @@ async function eventAddResult(userId: string, propertyId: string, sourceExecutio
   };
 }
 
+// Phase 3 evidence-upload add slice (design approved 2026-09-22): a homeowner-initiated evidence attach, reached
+// only from the declared "Attach evidence" control on a HomeEvent's inline detail. Unlike CAPTURE_EVIDENCE_CONFIRM's
+// extraction path below (confirmCaptureEvidence's non-USER_ADD branch, which requires a freshly-confirmed sibling
+// EVENT execution because extraction proposes an EVENT and its EVIDENCE together), this attaches to an EXISTING,
+// already-confirmed event the homeowner chose from the timeline, so eventId is known up front and re-verified
+// directly rather than resolved through a linked execution. The file itself was already uploaded out of band, via
+// POST /api/documents/property/:propertyId/evidence-upload, by the time this runs -- documentId is all this needs.
+// One-shot, like HOME_EVENT_VISIBILITY: propose builds the confirmation card directly, no separate form step,
+// since the "form" (picking and uploading a file) already happened client-side before this call.
+export const EVIDENCE_ATTACH_MESSAGE = 'Attach evidence to this home timeline entry.';
+
+function evidenceAttachConfirmation(document: { id: string; name: string }, event: { id: string; title: string }, version: number, expiresAt: Date) {
+  return {
+    confirmationId: `evidence-attach-${event.id}-${version}`, version, title: 'Attach this document as evidence?',
+    description: 'You are attaching a document you just uploaded to this home timeline entry. No change is saved until you confirm.',
+    fields: [{ label: 'Document', value: document.name }, { label: 'Attach to', value: event.title }],
+    editableFields: [], confirmLabel: 'Attach document',
+    consentText: 'I confirm this document is evidence for this home record entry.',
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
+async function evidenceAttachResult(userId: string, propertyId: string, eventId: string, documentId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
+  if (access.role === HouseholdRole.VIEWER) {
+    return {
+      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
+      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-permission', title: 'A contributor or owner can attach evidence', body: 'Your role can view the timeline but not attach documents to it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
+      suggestions: [],
+    };
+  }
+  // Same PRIVATE-creator-only scoping as HOME_EVENT_CORRECT/HOME_EVENT_VISIBILITY: a PRIVATE event this requester
+  // did not create is excluded here rather than surfacing a distinct permission message, matching every other
+  // event read/write producer's existing behaviour (the event simply never reaches a contributor who cannot see it).
+  const event = await prisma.homeEvent.findFirst({
+    where: { id: eventId, propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
+    select: { id: true, title: true },
+  });
+  if (!event) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'HOME_EVENT_NOT_FOUND',
+      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-event-missing', title: 'This timeline event is no longer available', body: 'It may have been corrected, removed, or you no longer have access. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'PRIMARY' }] }],
+      suggestions: [],
+    };
+  }
+  // The document was just uploaded (property-scoped) by POST .../evidence-upload; re-verified here rather than
+  // trusted from launchContext, same "never trust the client's id" pattern as every dynamic room/item dropdown.
+  const document = await prisma.document.findFirst({ where: { id: documentId, propertyId }, select: { id: true, name: true } });
+  if (!document) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'DOCUMENT_NOT_FOUND',
+      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-document-missing', title: 'The uploaded document could not be found', body: 'Upload the file again from this event.', tone: 'CAUTION', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'EVIDENCE_ATTACH_CONFIRMATION_REQUIRED',
+    parameters: {
+      documentId: document.id, eventId: event.id, captureOrigin: USER_ADD_ORIGIN, sourceExecutionId,
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'evidence-attach-review', title: `Attach this document to "${event.title}"?`, body: 'Nothing has been saved yet. Review, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline instead', href: timelineHref, style: 'SECONDARY' }] }],
+    confirmation: evidenceAttachConfirmation(document, event, 1, expiresAt),
+    suggestions: [],
+  };
+}
+
 async function warrantyCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   const warrantiesHref = '/dashboard/warranties';
@@ -9038,7 +9107,22 @@ registerCapabilityHandler('capture.warranty.confirm', async (envelope) => {
     ? warrantyAddResult(envelope.userId, envelope.propertyId!, envelope.launchContext?.sourceExecutionId ?? null)
     : captureNotDirectlyRoutableResult('warranty');
 });
-registerCapabilityHandler('capture.evidence.confirm', async () => captureNotDirectlyRoutableResult('evidence'));
+// A document is attached as evidence to an EXISTING event only from the declared "Attach evidence" control (see
+// evidenceAttachResult above), which requires the file to already be uploaded (documentId) and the exact target
+// event pinned (entityId) -- never resolved by fuzzy message matching. Every other call (an ASK_REFRESH re-run,
+// which never carries operationId; a bare message naming the operation) keeps the original not-directly-routable
+// boundary, same guard shape as the warranty/event add actions above.
+registerCapabilityHandler('capture.evidence.confirm', async (envelope) => {
+  const declaredAttachAction = envelope.launchContext?.operationId === 'CAPTURE_EVIDENCE_CONFIRM'
+    && envelope.launchContext.surface !== 'ASK_REFRESH'
+    && envelope.message === EVIDENCE_ATTACH_MESSAGE
+    && envelope.launchContext.entityType === 'HOME_EVENT'
+    && typeof envelope.launchContext.entityId === 'string'
+    && typeof envelope.launchContext.documentId === 'string';
+  return declaredAttachAction
+    ? evidenceAttachResult(envelope.userId, envelope.propertyId!, envelope.launchContext!.entityId as string, envelope.launchContext!.documentId as string, envelope.launchContext?.sourceExecutionId ?? null)
+    : captureNotDirectlyRoutableResult('evidence');
+});
 
 // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same
 // defensive shape as the three capture operations above -- a
@@ -14566,21 +14650,33 @@ async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<Co
   if (typeof documentId !== 'string' || !documentId.trim()) {
     throw Object.assign(new Error('The document to attach is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   }
-  if (!execution.linkedExecutionId) {
-    throw Object.assign(new Error('Cozy could not find the home timeline event this evidence belongs to. Attach the document from the property record instead.'), { code: 'EVIDENCE_SIBLING_EVENT_MISSING' });
-  }
-  const sibling = await prisma.askConfirmationReceipt.findUnique({
-    where: { executionId: execution.linkedExecutionId },
-    select: { status: true, artifactType: true, artifactId: true },
-  });
-  if (sibling?.status !== 'COMPLETED' || sibling.artifactType !== 'HOME_EVENT' || !sibling.artifactId) {
-    throw Object.assign(new Error('Confirm the related home timeline event first, then attach this document.'), { code: 'EVIDENCE_SIBLING_EVENT_NOT_CONFIRMED' });
+  // Phase 3 evidence-upload add slice: a homeowner-initiated attach (evidenceAttachResult, above) already knows and
+  // re-verified its target event at propose time, so it has no extraction sibling to wait on -- eventId comes
+  // straight from this execution's own stored parameters, not a linked execution's receipt.
+  let eventId: string;
+  if (parameters.captureOrigin === USER_ADD_ORIGIN) {
+    if (typeof parameters.eventId !== 'string' || !parameters.eventId.trim()) {
+      throw Object.assign(new Error('The timeline event to attach evidence to is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    }
+    eventId = parameters.eventId;
+  } else {
+    if (!execution.linkedExecutionId) {
+      throw Object.assign(new Error('Cozy could not find the home timeline event this evidence belongs to. Attach the document from the property record instead.'), { code: 'EVIDENCE_SIBLING_EVENT_MISSING' });
+    }
+    const sibling = await prisma.askConfirmationReceipt.findUnique({
+      where: { executionId: execution.linkedExecutionId },
+      select: { status: true, artifactType: true, artifactId: true },
+    });
+    if (sibling?.status !== 'COMPLETED' || sibling.artifactType !== 'HOME_EVENT' || !sibling.artifactId) {
+      throw Object.assign(new Error('Confirm the related home timeline event first, then attach this document.'), { code: 'EVIDENCE_SIBLING_EVENT_NOT_CONFIRMED' });
+    }
+    eventId = sibling.artifactId;
   }
   let link: Awaited<ReturnType<typeof homeEventsServiceForCapture.attachDocument>>;
   try {
     link = await homeEventsServiceForCapture.attachDocument({
       propertyId: execution.propertyId,
-      eventId: sibling.artifactId,
+      eventId,
       documentId,
       userId,
     });
