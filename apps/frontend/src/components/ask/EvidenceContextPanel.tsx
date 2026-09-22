@@ -1,8 +1,22 @@
 'use client';
 
-import type { ReactNode, Ref } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 import { ArrowRight, BookOpen, ExternalLink, FileCheck2, Link2 } from 'lucide-react';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
+
+// IW-PRES-010 ("progressive density" -- "show the decision-driving attributes first, with expandable detail for
+// secondary data, evidence, assumptions, and provenance"): evidence/output-artifact/related-record lists
+// previously rendered every item unconditionally -- unlike GROUPED_LIST, which already compacts at 5+ items, a
+// response with 50 evidence items rendered all 50 inline. Same PREVIEW_COUNT convention GROUPED_LIST's own
+// density resolver uses. Keyed by block id (not a single count) because ResponseContextContent loops over
+// potentially several blocks of the same type in one component instance.
+const EVIDENCE_PREVIEW_COUNT = 5;
+function useProgressiveReveal() {
+  const [visible, setVisible] = useState<Record<string, number>>({});
+  const countFor = (blockId: string) => visible[blockId] ?? EVIDENCE_PREVIEW_COUNT;
+  const showMore = (blockId: string, total: number) => setVisible((current) => ({ ...current, [blockId]: Math.min(total, countFor(blockId) + EVIDENCE_PREVIEW_COUNT) }));
+  return { countFor, showMore };
+}
 
 type EvidenceBlock = Extract<AskPresentationBlock, { type: 'EVIDENCE' }>;
 type AssumptionsBlock = Extract<AskPresentationBlock, { type: 'ASSUMPTIONS' }>;
@@ -51,32 +65,38 @@ function outputArtifactLifecycle(item: OutputArtifactsBlock['items'][number]): s
 }
 
 export function InlineEvidenceBlock({ block }: { block: EvidenceBlock }) {
+  const [visible, setVisible] = useState(EVIDENCE_PREVIEW_COUNT);
   return <details className="rounded-2xl border border-slate-200 bg-white p-4">
     <summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title} ({block.items.length})</summary>
-    <ul className="mt-3 space-y-2 text-xs text-slate-600">{block.items.map((item, index) => <li key={`${item.label}-${index}`}>{item.claim && <span className="block font-medium text-slate-700">Supports: {item.claim.text}</span>}{item.label}{item.source ? ` · ${item.source}` : ''}{observedDate(item.observedAt) ? ` · ${observedDate(item.observedAt)}` : ''}</li>)}</ul>
+    <ul className="mt-3 space-y-2 text-xs text-slate-600">{block.items.slice(0, visible).map((item, index) => <li key={`${item.label}-${index}`}>{item.claim && <span className="block font-medium text-slate-700">Supports: {item.claim.text}</span>}{item.label}{item.source ? ` · ${item.source}` : ''}{observedDate(item.observedAt) ? ` · ${observedDate(item.observedAt)}` : ''}</li>)}</ul>
+    {visible < block.items.length && <button type="button" className="mt-3 min-h-8 text-xs font-semibold text-teal-800" onClick={() => setVisible((current) => Math.min(block.items.length, current + EVIDENCE_PREVIEW_COUNT))}>Show more ({visible} of {block.items.length} shown)</button>}
   </details>;
 }
 
 export function InlineOutputArtifactsBlock({ block, renderNavigation }: { block: OutputArtifactsBlock; renderNavigation: (item: OutputArtifactsBlock['items'][number]['navigation']) => ReactNode }) {
+  const [visible, setVisible] = useState(EVIDENCE_PREVIEW_COUNT);
   return <details className="rounded-2xl border border-slate-200 bg-white p-4">
     <summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title} ({block.items.length})</summary>
-    <ul className="mt-3 space-y-2">{block.items.map((item) => <li key={`${item.artifactType}-${item.artifactId}`} className="rounded-xl border border-slate-100 p-3">
+    <ul className="mt-3 space-y-2">{block.items.slice(0, visible).map((item) => <li key={`${item.artifactType}-${item.artifactId}`} className="rounded-xl border border-slate-100 p-3">
       <p className="text-sm font-medium text-slate-900">{item.label}</p>
       <p className="mt-1 text-xs text-slate-500">{outputArtifactKind(item)} · {item.status.toLowerCase().replace(/_/g, ' ')} · {outputArtifactRelationship(item)}</p>
       {item.navigation && <div className="mt-2">{renderNavigation(item.navigation)}</div>}
     </li>)}</ul>
+    {visible < block.items.length && <button type="button" className="mt-3 min-h-8 text-xs font-semibold text-teal-800" onClick={() => setVisible((current) => Math.min(block.items.length, current + EVIDENCE_PREVIEW_COUNT))}>Show more ({visible} of {block.items.length} shown)</button>}
   </details>;
 }
 
 export function InlineRelatedRecordsBlock({ block, renderNavigation }: { block: RelatedRecordsBlock; renderNavigation: (navigation: RelatedRecordsBlock['relationships'][number]['navigation']) => ReactNode }) {
+  const [visible, setVisible] = useState(EVIDENCE_PREVIEW_COUNT);
   return <details className="rounded-2xl border border-slate-200 bg-white p-4">
     <summary className="cursor-pointer text-sm font-semibold text-slate-800">{block.title} ({block.relationships.length})</summary>
-    <ul className="mt-3 space-y-2">{block.relationships.map((relationship) => <li key={`${relationship.relationshipType}-${relationship.source.recordId}-${relationship.target.recordId}`} className="rounded-xl border border-slate-100 p-3">
+    <ul className="mt-3 space-y-2">{block.relationships.slice(0, visible).map((relationship) => <li key={`${relationship.relationshipType}-${relationship.source.recordId}-${relationship.target.recordId}`} className="rounded-xl border border-slate-100 p-3">
       <p className="text-sm font-medium text-slate-900">{relationship.source.label}</p>
       <p className="my-1 text-xs font-semibold text-teal-700">Evidence for</p>
       <p className="text-sm text-slate-700">{relationship.target.label}</p>
       {relationship.navigation && <div className="mt-2">{renderNavigation(relationship.navigation)}</div>}
     </li>)}</ul>
+    {visible < block.relationships.length && <button type="button" className="mt-3 min-h-8 text-xs font-semibold text-teal-800" onClick={() => setVisible((current) => Math.min(block.relationships.length, current + EVIDENCE_PREVIEW_COUNT))}>Show more ({visible} of {block.relationships.length} shown)</button>}
   </details>;
 }
 
@@ -110,6 +130,7 @@ export function ResponseContextSummary({ execution, open, onOpen }: { execution:
 export function ResponseContextContent({ execution, headingRef, onClose, renderNavigation, showCloseButton = true }: {
   // The mobile sheet supplies its own labelled X; rendering this text button as well stacked two close controls on top of each other.
   showCloseButton?: boolean; execution: AskExecutionResponse; headingRef?: Ref<HTMLHeadingElement>; onClose: () => void; renderNavigation: (navigation: { label: string; href: string } | null) => ReactNode }) {
+  const { countFor, showMore } = useProgressiveReveal();
   const evidenceBlocks = execution.blocks.filter((block): block is EvidenceBlock => block.type === 'EVIDENCE' && block.items.length > 0);
   const assumptionBlocks = execution.blocks.filter((block): block is AssumptionsBlock => block.type === 'ASSUMPTIONS' && block.items.length > 0);
   const limitationBlocks = execution.blocks.filter((block): block is LimitationBlock => block.type === 'LIMITATION' && Boolean(block.body.trim()));
@@ -130,7 +151,7 @@ export function ResponseContextContent({ execution, headingRef, onClose, renderN
       <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">This context belongs to the response “{execution.question}”. Required status and limitations remain visible in the conversation so important information is not hidden behind this panel.</p>
       <div className="mt-4 space-y-5">{evidenceBlocks.map((block) => <section key={block.id} aria-labelledby={`evidence-group-${block.id}`}>
         <h3 id={`evidence-group-${block.id}`} className="text-sm font-semibold text-slate-900">{block.title}</h3>
-        <ol className="mt-2 space-y-2">{block.items.map((item, index) => {
+        <ol className="mt-2 space-y-2">{block.items.slice(0, countFor(block.id)).map((item, index) => {
           const date = observedDate(item.observedAt);
           return <li key={`${item.label}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
             {item.claim && <div className="mb-2 border-b border-slate-100 pb-2">
@@ -141,6 +162,7 @@ export function ResponseContextContent({ execution, headingRef, onClose, renderN
             <p className="mt-1 text-xs leading-5 text-slate-500">{item.source || 'Source name not provided'}{date && ` · Observed ${date}`}</p>
           </li>;
         })}</ol>
+        {countFor(block.id) < block.items.length && <button type="button" className="mt-2 min-h-8 text-xs font-semibold text-teal-800" onClick={() => showMore(block.id, block.items.length)}>Show more ({countFor(block.id)} of {block.items.length} shown)</button>}
       </section>)}
       {assumptionBlocks.map((block) => <section key={block.id} aria-labelledby={`assumption-group-${block.id}`}>
         <h3 id={`assumption-group-${block.id}`} className="text-sm font-semibold text-slate-900">{block.title}</h3>
@@ -152,14 +174,15 @@ export function ResponseContextContent({ execution, headingRef, onClose, renderN
       </section>)}
       {outputBlocks.map((block) => <section key={block.id} aria-labelledby={`output-group-${block.id}`}>
         <h3 id={`output-group-${block.id}`} className="text-sm font-semibold text-slate-900">{block.title}</h3>
-        <ul className="mt-2 space-y-2">{block.items.map((item) => <li key={`${item.artifactType}-${item.artifactId}`} className="rounded-xl border border-slate-200 bg-white p-3">
+        <ul className="mt-2 space-y-2">{block.items.slice(0, countFor(block.id)).map((item) => <li key={`${item.artifactType}-${item.artifactId}`} className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><FileCheck2 className="h-4 w-4" aria-hidden="true" /></span><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{item.label}</p><p className="mt-1 text-xs text-slate-500">{outputArtifactKind(item)} · {item.status.toLowerCase().replace(/_/g, ' ')} · {outputArtifactLifecycle(item)}</p></div></div>
           {item.navigation && <div className="mt-3">{renderNavigation(item.navigation)}</div>}
         </li>)}</ul>
+        {countFor(block.id) < block.items.length && <button type="button" className="mt-2 min-h-8 text-xs font-semibold text-teal-800" onClick={() => showMore(block.id, block.items.length)}>Show more ({countFor(block.id)} of {block.items.length} shown)</button>}
       </section>)}
       {relatedRecordBlocks.map((block) => <section key={block.id} aria-labelledby={`related-group-${block.id}`}>
         <h3 id={`related-group-${block.id}`} className="text-sm font-semibold text-slate-900">{block.title}</h3>
-        <ul className="mt-2 space-y-2">{block.relationships.map((relationship) => <li key={`${relationship.relationshipType}-${relationship.source.recordId}-${relationship.target.recordId}`} className="rounded-xl border border-slate-200 bg-white p-3">
+        <ul className="mt-2 space-y-2">{block.relationships.slice(0, countFor(block.id)).map((relationship) => <li key={`${relationship.relationshipType}-${relationship.source.recordId}-${relationship.target.recordId}`} className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700"><Link2 className="h-4 w-4" aria-hidden="true" /></span><div className="min-w-0 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Document</p><p className="mt-1 text-sm font-medium text-slate-900">{relationship.source.label}</p>
             <div className="my-2 flex items-center gap-2 text-xs font-semibold text-teal-700"><ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />Evidence for</div>
@@ -167,6 +190,7 @@ export function ResponseContextContent({ execution, headingRef, onClose, renderN
           </div></div>
           {relationship.navigation && <div className="mt-3">{renderNavigation(relationship.navigation)}</div>}
         </li>)}</ul>
+        {countFor(block.id) < block.relationships.length && <button type="button" className="mt-2 min-h-8 text-xs font-semibold text-teal-800" onClick={() => showMore(block.id, block.relationships.length)}>Show more ({countFor(block.id)} of {block.relationships.length} shown)</button>}
       </section>)}</div>
     </div>
   </div>;

@@ -1,4 +1,4 @@
-import { resolveAdaptiveGroupedListPresentation, resolveGroupedListView } from '../adaptivePresentation';
+import { prefersReducedMotion, resolveAdaptiveGroupedListPresentation, resolveGroupedListView } from '../adaptivePresentation';
 import type { AskPresentationBlock } from '../types';
 
 type GroupedListBlock = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -25,4 +25,21 @@ test('larger grouped results allow a saved view choice without changing their re
   expect(resolveGroupedListView(groupedList(6, 'Important detail'), 'AUTO')).toEqual({ mode: 'CARDS', offersChoice: true });
   expect(resolveGroupedListView(groupedList(6, 'Important detail'), 'LIST')).toEqual({ mode: 'COMPACT_LIST', offersChoice: true });
   expect(resolveGroupedListView(groupedList(4), 'LIST')).toEqual({ mode: 'CARDS', offersChoice: false });
+});
+
+// IW-PRES-011: a single source of truth for the reduced-motion check, so every JS-driven scroll/transition in Ask
+// (previously only ComparisonStripBlock's own strip navigation checked this inline) respects the OS-level
+// preference the same way.
+describe('prefersReducedMotion', () => {
+  afterEach(() => { (window.matchMedia as jest.Mock).mockReset(); });
+
+  test('reflects the OS-level media query', () => {
+    (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' }));
+    expect(prefersReducedMotion()).toBe(true);
+  });
+
+  test('is false when the homeowner has no reduced-motion preference', () => {
+    (window.matchMedia as jest.Mock).mockImplementation(() => ({ matches: false }));
+    expect(prefersReducedMotion()).toBe(false);
+  });
 });

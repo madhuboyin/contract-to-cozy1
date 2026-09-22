@@ -4,7 +4,7 @@ import { useContext, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskAction, AskPresentationBlock } from '@/features/ask/types';
-import { resolveAdaptiveComparisonPresentation, type ComparisonPresentationPreference } from '@/features/ask/adaptivePresentation';
+import { prefersReducedMotion, resolveAdaptiveComparisonPresentation, type ComparisonPresentationPreference } from '@/features/ask/adaptivePresentation';
 import { ResultViewContext } from '@/features/ask/useResultView';
 
 type ComparisonBlock = Extract<AskPresentationBlock, { type: 'COMPARISON' }>;
@@ -34,8 +34,7 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
     const bounded = Math.max(0, Math.min(next, block.options.length - 1));
     setActiveIndex(bounded);
     const option = optionRefs.current[bounded];
-    const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    option?.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
+    option?.scrollIntoView?.({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
     option?.focus({ preventScroll: true });
   };
 

@@ -143,3 +143,34 @@ test('archived related records retain an inline disclosure fallback', () => {
   expect(screen.getByText('Roof invoice.pdf')).toBeInTheDocument();
   expect(screen.getByText('Roof replacement')).toBeInTheDocument();
 });
+
+// IW-PRES-010 progressive density: a large evidence list previously rendered every item unconditionally.
+const manyEvidence: EvidenceBlock = {
+  type: 'EVIDENCE', id: 'many-sources', title: 'Sources for this estimate',
+  items: Array.from({ length: 7 }, (_, index) => ({ label: `Source ${index + 1}`, source: 'County assessor', observedAt: null })),
+};
+
+test('a large inline evidence list previews five items and reveals the rest on demand', () => {
+  render(<InlineEvidenceBlock block={manyEvidence} />);
+  expect(screen.getByText(/Source 5/)).toBeInTheDocument();
+  expect(screen.queryByText(/Source 6/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Show more (5 of 7 shown)' }));
+  expect(screen.getByText(/Source 6/)).toBeInTheDocument();
+  expect(screen.getByText(/Source 7/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Show more/ })).not.toBeInTheDocument();
+});
+
+test('the response context panel previews a large evidence list independently per block, and reveals more without affecting a smaller sibling block', () => {
+  const largeExecution = { ...execution, blocks: [manyEvidence, evidence] } as AskExecutionResponse;
+  render(<ResponseContextContent execution={largeExecution} onClose={() => undefined} renderNavigation={() => null} />);
+  expect(screen.getByText(/Source 5/)).toBeInTheDocument();
+  expect(screen.queryByText(/Source 6/)).not.toBeInTheDocument();
+  // The smaller sibling block (2 items, from the shared `evidence` fixture) never needed truncation and shows no button.
+  expect(screen.getAllByRole('button', { name: /Show more/ })).toHaveLength(1);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show more (5 of 7 shown)' }));
+  expect(screen.getByText(/Source 7/)).toBeInTheDocument();
+  // Revealing the large block's remainder does not add a button to (or otherwise disturb) the small sibling block.
+  expect(screen.queryByRole('button', { name: /Show more/ })).not.toBeInTheDocument();
+  expect(screen.getByText('Property tax: $517 per month and $6,200 per year.')).toBeInTheDocument();
+});

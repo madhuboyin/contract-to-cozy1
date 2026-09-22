@@ -1,5 +1,14 @@
 import type { AskPresentationBlock } from './types';
 
+// IW-PRES-011 ("reduced-motion behavior"): a single source of truth for the reduced-motion check, reused
+// wherever Ask JS-drives a scroll or transition, so a smooth/animated affordance never overrides the homeowner's
+// OS-level preference. Previously checked inline, only inside ComparisonStripBlock's own strip-navigation
+// scroll -- AskWorkspace.tsx's two unconditional `behavior: 'smooth'` autoscrolls (new message, just-updated
+// result) never checked it at all.
+export function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+}
+
 export type TablePresentationPreference = 'AUTO' | 'TABLE' | 'CARDS';
 export type TablePresentationMode = 'RESPONSIVE' | 'TABLE' | 'CARDS';
 type TableBlock = Extract<AskPresentationBlock, { type: 'TABLE' }>;

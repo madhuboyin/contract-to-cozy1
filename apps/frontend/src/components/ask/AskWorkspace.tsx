@@ -5,6 +5,7 @@ import { FormEvent, KeyboardEvent, MutableRefObject, Ref, useCallback, useEffect
 import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
+import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskConfirmationEditableField, AskExecutionResponse, AskFeaturedPrompt, AskItemActionInteractionType, AskPendingWorkItem, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
@@ -1605,7 +1606,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   }, [initialQuestion, selectedPropertyId, sessionId]);
 
   useEffect(() => {
-    if (loading) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (loading) endRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
   }, [loading]);
   useEffect(() => {
     if (mode !== 'page' || historyLoading || !sessionId || executions.length === 0) return;
@@ -1617,7 +1618,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   useEffect(() => {
     if (!justUpdatedExecutionId || loading) return;
     const timeout = window.setTimeout(() => {
-      document.getElementById(`ask-execution-${justUpdatedExecutionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById(`ask-execution-${justUpdatedExecutionId}`)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
     }, 50);
     return () => window.clearTimeout(timeout);
   }, [justUpdatedExecutionId, loading]);
