@@ -801,6 +801,22 @@ test('Home Capital Timeline: a reserve allocation opens canonical detail inline,
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Home Event Radar: a monitored event opens canonical detail inline, keeping the traditional Home Event Radar page as a secondary option', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home event radar feed.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Home Event Radar feed', exact: true }) });
+  await expect(response.getByRole('link', { name: 'severe thunderstorm warning' })).toHaveCount(0);
+  await expect(response.getByRole('link', { name: /Open Home Event Radar/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/tools/home-event-radar\\?backTo=`));
+
+  await response.getByRole('button', { name: 'severe thunderstorm warning' }).click();
+  await expect(response.getByText('This storm cell tracks over your recorded property location.')).toBeVisible();
+  await expect(response.getByText('Secure outdoor furniture and loose items')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

@@ -144,6 +144,32 @@ function capitalReservePlanExecution() {
   };
 }
 
+// Capability-card audit (FRD Appendix D), second reference journey. Real
+// response also groups by every sourceFamily the feed returns; trimmed to
+// one section here since that's all this slice's scenario exercises.
+function homeEventRadarFeedExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-home-event-radar-feed', sessionId: 'ask-acceptance-session',
+    question: 'Show my home event radar feed.', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'HOME_EVENT_RADAR_FEED', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
+    blocks: [{
+      type: 'SUMMARY', id: 'home-event-radar-summary', title: 'Monitored home events',
+      body: '1 monitored event from Home Event Radar.', tone: 'DEFAULT', actions: [],
+    }, {
+      type: 'GROUPED_LIST', id: 'home-event-radar-feed', title: 'Home Event Radar feed', filters: [],
+      description: 'This is the same canonical feed the Home Event Radar page reads, grouped by source.',
+      sections: [{ id: 'radar-weather', title: 'Weather', count: 1, items: [
+        { id: 'match-property-summary', title: 'severe thunderstorm warning', entityType: 'RADAR_MATCH', description: 'A severe thunderstorm warning is in effect for this area.', meta: ['high', 'National Weather Service'], status: 'new', href: `/dashboard/properties/${propertyId}/tools/home-event-radar?matchId=match-property-summary` },
+      ] }],
+      actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: `/dashboard/properties/${propertyId}/tools/home-event-radar`, style: 'SECONDARY' }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    suggestions: [], createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z',
+  };
+}
+
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: INVENTORY_LOOKUP's own disambiguation shape (askOrchestrator.service.ts's
 // 'inventory-entity-selection' block) when a free-text question matches more than one item. Routed through the
 // same InventoryResultList as 'inventory-results' (IW-PRIN-002) -- selecting an ambiguous match opens inline
@@ -750,6 +776,34 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       inventoryItem: { name: 'Water heater', condition: 'GOOD', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z' },
     },
   }] } }));
+  // radarQueryService.getDetail has a real single-match GET (unlike reserve-fund/warranty/household above) --
+  // its own genuine 404 (RADAR_MATCH_NOT_FOUND) is real, not a list-scan data-absence state.
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/radar/events/match-property-summary`, (route) => fulfill(route, { success: true, data: {
+    id: 'match-property-summary', propertyMatchId: 'match-property-summary', eventId: 'event-radar-property-summary', eventType: 'SEVERE_THUNDERSTORM_WARNING',
+    sourceFamily: 'weather', title: 'severe thunderstorm warning', summary: 'A severe thunderstorm warning is in effect for this area.',
+    severity: 'high', impact: 'moderate', confidence: 'high', priorityBand: 'high', priorityScore: 0.82,
+    matchLifecycleStatus: 'active', sourceFreshnessStatus: 'fresh', sourceFreshnessReason: null,
+    isSourceStale: false, isMaterialUpdate: false, lifecycleStatus: 'active',
+    effectiveAt: '2026-09-22T12:00:00.000Z', expiresAt: '2026-09-22T18:00:00.000Z',
+    sourceName: 'National Weather Service', provider: 'NOAA', userState: 'new',
+    geography: null,
+    matchExplanation: { matcherVersion: 'v1', matchedAt: '2026-09-22T11:00:00.000Z', matchType: 'geofence', confidence: 'high', homeownerExplanation: 'This storm cell tracks over your recorded property location.', reasons: ['Within the active warning polygon'], propertyFactsUsed: ['property.location'] },
+    impactSummary: 'Expect heavy rain and possible hail through this evening.',
+    impactFactors: null, matchedSystems: [],
+    recommendedActions: [{
+      code: 'SECURE_OUTDOOR_ITEMS', label: 'Secure outdoor furniture and loose items', priority: 'high',
+      registryVersion: 'radar-actions-v1', completionEvidence: 'user_attestation', safetyClassification: 'property_protection',
+      targetCapability: null, supportedTaskOperations: [], taskLink: null,
+      destination: { kind: 'informational', purpose: null, label: null, href: null },
+    }],
+    compoundInsights: [], canonicalUrl: null, observedAt: '2026-09-22T11:00:00.000Z',
+    revision: { observedAt: '2026-09-22T11:00:00.000Z', receivedAt: '2026-09-22T11:00:00.000Z', materialUpdatedAt: null },
+    sourceEvidence: { providerEventId: 'nws-123', providerRevision: '1', revisionIdentity: null },
+    missingFacts: [], propertyGeographyVersion: 1, matcherVersion: 'v1',
+    relatedIncident: null, relatedGuidance: null,
+    resolutionContinuity: { state: 'not_started', incidentState: null, guidanceState: null, continueResolution: null },
+    userFeedback: null,
+  } }));
   await page.route(`${apiOrigin}/api/properties/${propertyId}/warranties`, (route) => fulfill(route, { success: true, data: { warranties: [{
     id: 'warranty-property-summary', homeownerProfileId: 'profile-0', propertyId, inventoryItemId: null, category: 'HOME_WARRANTY_PLAN', providerName: 'Acme Home Warranty',
     policyNumber: 'POL-123', coverageDetails: 'Covers HVAC and major appliances.', cost: 45000, startDate: '2026-01-01T00:00:00.000Z', expiryDate: '2027-12-01T00:00:00.000Z',
@@ -910,6 +964,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/capital reserve plan/i.test(body.message)) {
       const response = capitalReservePlanExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/home event radar feed/i.test(body.message)) {
+      const response = homeEventRadarFeedExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

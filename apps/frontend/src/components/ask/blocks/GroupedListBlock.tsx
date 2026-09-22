@@ -10,6 +10,7 @@ import { HomeEventResultList } from '../HomeEventResultList';
 import { HouseholdResultList } from '../HouseholdResultList';
 import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
+import { RadarEventResultList } from '../RadarEventResultList';
 import { ReserveAllocationResultList } from '../ReserveAllocationResultList';
 import { RoomResultList } from '../RoomResultList';
 import { WarrantyResultList } from '../WarrantyResultList';
@@ -116,7 +117,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   );
 }
 
-// Six bespoke rendering exceptions in the whole registry: a
+// Nine bespoke rendering exceptions in the whole registry: a
 // `GROUPED_LIST` block with id `maintenance-groups`; Inventory's
 // item-detail-eligible ids (`inventory-results`, the primary result;
 // `inventory-entity-selection`, the disambiguation list; and
@@ -129,10 +130,14 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
 // PROPERTY_SUMMARY); `document-lookup-groups` / `property-documents`
 // (canonical documents surfaced by DOCUMENT_LOOKUP or PROPERTY_SUMMARY);
 // `property-household` (canonical HouseholdMember records from
-// PROPERTY_SUMMARY); or `property-warranties` (canonical Warranty records
-// from PROPERTY_SUMMARY). All are still registered under the single
-// `GROUPED_LIST` type (see ./registry.tsx) -- the split is by block id,
-// not a second block type.
+// PROPERTY_SUMMARY); `property-warranties` (canonical Warranty records
+// from PROPERTY_SUMMARY); `reserve-allocations` (canonical
+// ReserveFundLineItem records from CAPITAL_RESERVE_PLAN, FRD Appendix D's
+// first reference-journey slice); or `home-event-radar-feed` (canonical
+// PropertyRadarMatch records from HOME_EVENT_RADAR_FEED, FRD Appendix D's
+// second reference-journey slice). All are still registered under the
+// single `GROUPED_LIST` type (see ./registry.tsx) -- the split is by block
+// id, not a second block type.
 const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection', 'property-inventory']);
 const HOME_EVENT_DETAIL_BLOCK_IDS = new Set(['inventory-history', 'property-recent-events']);
 
@@ -172,6 +177,14 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // row-click-to-detail mechanism anywhere in this codebase yet; that is a separate, unscoped platform question.
   if (block.id === 'reserve-allocations') {
     return <ReserveAllocationResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  // Home Event Radar reference journey (FRD Appendix D), second inline-detail
+  // slice: home-event-radar-feed's items get canonical detail via the real
+  // radarQueryService.getDetail read (a genuine per-match GET, unlike the
+  // reserve-allocations/warranty/household list-scan exception above).
+  if (block.id === 'home-event-radar-feed') {
+    return <RadarEventResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;
