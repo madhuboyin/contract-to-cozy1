@@ -801,6 +801,29 @@ test('Home Capital Timeline: a reserve allocation opens canonical detail inline,
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Home Capital Timeline: a TABLE row opens canonical capital-window detail inline (TABLE-block row-click-to-detail platform capability)', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Create a capital reserve plan for future replacements.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Upcoming capital windows', exact: true }) });
+  await expect(response.getByRole('button', { name: 'Roof replacement' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(response.getByText('Typical service life for asphalt shingle roofing')).toHaveCount(0);
+
+  await response.getByRole('button', { name: 'Roof replacement' }).click();
+  await expect(response.getByText('Typical service life for asphalt shingle roofing is 20-25 years; this roof was installed 22 years ago.')).toBeVisible();
+  await expect(response.getByText('$8,000 – $12,000', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+
+  // Closing returns focus to the row trigger and leaves the reserve-allocations block (a separate,
+  // pre-existing detail-eligible block in the same response) unaffected.
+  await response.getByRole('button', { name: /Close capital window detail/ }).click();
+  await expect(response.getByText('Typical service life for asphalt shingle roofing')).toHaveCount(0);
+  await expect(response.getByRole('button', { name: 'Roof replacement' })).toBeFocused();
+  await expect(response.getByRole('button', { name: 'Water heater' })).toBeVisible();
+});
+
 test('Home Event Radar: a monitored event opens canonical detail inline, keeping the traditional Home Event Radar page as a secondary option', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

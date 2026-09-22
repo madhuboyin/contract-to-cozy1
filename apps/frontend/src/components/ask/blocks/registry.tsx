@@ -7,7 +7,6 @@
 // left unregistered -- the same drift-proofing convention already used for
 // `AskOperationId` in askInteractionCoverageMatrix.ts and for
 // `AskItemActionInteractionType` in interactionDispatch.ts.
-import { AdaptiveTableBlock } from '../AdaptiveTableBlock';
 import { ComparisonStripBlock } from '../ComparisonStripBlock';
 import { ActionLink } from './context';
 import { CapabilityListBlock } from './CapabilityListBlock';
@@ -37,6 +36,7 @@ import {
 import { GroupedListBlock } from './GroupedListBlock';
 import { MonitorBlock } from './MonitorBlock';
 import { OutcomeSummaryBlock, PriorityListBlock } from './PriorityAndOutcomeBlocks';
+import { TableBlock } from './TableBlock';
 import type { AskBlockRenderer, AskBlockRendererProps, AskBlockType } from './types';
 
 type AskBlockRendererRegistry = { [T in AskBlockType]: AskBlockRenderer<T> };
@@ -45,7 +45,7 @@ export const ASK_BLOCK_RENDERERS: AskBlockRendererRegistry = {
   SUMMARY: SummaryBlock,
   PROACTIVE_INSIGHT: ProactiveInsightBlock,
   GROUPED_LIST: GroupedListBlock,
-  TABLE: ({ block }) => <AdaptiveTableBlock block={block} renderAction={(action) => <ActionLink action={action} />} />,
+  TABLE: TableBlock,
   CAPABILITY_LIST: CapabilityListBlock,
   EVIDENCE: EvidenceBlock,
   BOUNDARY: BoundaryBlock,

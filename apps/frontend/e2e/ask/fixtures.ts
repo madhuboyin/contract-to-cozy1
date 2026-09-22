@@ -114,9 +114,10 @@ function propertySummaryTimelineExecution() {
   };
 }
 
-// Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: CAPITAL_RESERVE_PLAN's
-// real response also has a TABLE and EVIDENCE block (askOrchestrator.service.ts's capitalReservePlanResult) --
-// trimmed here to what exercises reserve-allocations' inline detail, the only block this slice changed.
+// Home Capital Timeline reference journey (FRD Appendix D): both inline-detail slices exercised here --
+// reserve-allocations (first slice, a GROUPED_LIST) and capital-timeline-table (the TABLE-block row-click-to-detail
+// platform capability, second slice). The real response also has an EVIDENCE block
+// (askOrchestrator.service.ts's capitalReservePlanResult), trimmed here since neither slice touches it.
 function capitalReservePlanExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-capital-reserve-plan', sessionId: 'ask-acceptance-session',
@@ -130,6 +131,16 @@ function capitalReservePlanExecution() {
         { id: 'open-timeline', label: 'Open capital timeline', href: `/dashboard/properties/${propertyId}/tools/capital-timeline`, style: 'PRIMARY' },
         { id: 'open-reserve', label: 'Open reserve fund', href: `/dashboard/properties/${propertyId}/tools/reserve-fund`, style: 'SECONDARY' },
       ],
+    }, {
+      // capital-timeline-table row-click-to-detail platform capability (FRD Appendix D): its own row (a
+      // different item than reserve-allocations' "Water heater" below, deliberately, so the two blocks'
+      // detail-trigger buttons in the same response never collide on accessible name), exercised inline
+      // via TableBlock.tsx's dispatch. Row id matches capitalReservePlanResult's real HomeCapitalTimelineItem.id.
+      type: 'TABLE', id: 'capital-timeline-table', title: 'Upcoming capital windows',
+      description: 'The next 12 planning windows across your capital timeline.',
+      columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Planning window' }, { key: 'cost', label: 'Estimated range' }, { key: 'confidence', label: 'Confidence' }],
+      rows: [{ id: 'timeline-roof-property-summary', values: { item: 'Roof replacement', window: 'Jan 2027 – Jun 2027', cost: '$7,800 – $11,600', confidence: 'High' } }],
+      totalCount: 1, actions: [],
     }, {
       type: 'GROUPED_LIST', id: 'reserve-allocations', title: 'Active reserve allocations', filters: [],
       description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.',
@@ -776,6 +787,22 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       inventoryItem: { name: 'Water heater', condition: 'GOOD', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z' },
     },
   }] } }));
+  // capital-timeline-table row-click-to-detail platform capability: same list-scan exception as
+  // reserve-fund/line-items above -- capitalTimelineApi.getLatestTimeline has no per-item GET, only the whole
+  // analysis, so CapitalWindowDetail re-fetches it and finds its own id.
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/capital-timeline`, (route) => fulfill(route, { success: true, data: {
+    analysis: {
+      id: 'analysis-property-summary', status: 'READY', confidence: 'HIGH', horizonYears: 10, summary: null, computedAt: '2026-09-22T12:00:00.000Z',
+      items: [{
+        id: 'timeline-roof-property-summary', inventoryItemId: null, category: 'ROOFING', eventType: 'REPLACEMENT',
+        windowStart: '2027-01-01T00:00:00.000Z', windowEnd: '2027-06-01T00:00:00.000Z',
+        estimatedCostMinCents: 800000, estimatedCostMaxCents: 1200000, currency: 'USD', confidence: 'HIGH', priority: 'HIGH',
+        why: 'Typical service life for asphalt shingle roofing is 20-25 years; this roof was installed 22 years ago.',
+        missingFactors: [], inventoryItem: null,
+      }],
+    },
+    assumptionSetId: null, nextAction: null,
+  } }));
   // radarQueryService.getDetail has a real single-match GET (unlike reserve-fund/warranty/household above) --
   // its own genuine 404 (RADAR_MATCH_NOT_FOUND) is real, not a list-scan data-absence state.
   await page.route(`${apiOrigin}/api/properties/${propertyId}/radar/events/match-property-summary`, (route) => fulfill(route, { success: true, data: {

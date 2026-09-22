@@ -173,8 +173,8 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   }
   // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: reserve-allocations'
   // line items get canonical detail the same way every other read-only Property Records collection does.
-  // capital-timeline-table (a TABLE block, not GROUPED_LIST) is NOT part of this -- TABLE blocks have no
-  // row-click-to-detail mechanism anywhere in this codebase yet; that is a separate, unscoped platform question.
+  // capital-timeline-table (a TABLE block, not GROUPED_LIST) got its own row-click-to-detail platform
+  // capability separately -- see ./TableBlock.tsx, not this file.
   if (block.id === 'reserve-allocations') {
     return <ReserveAllocationResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
