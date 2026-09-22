@@ -134,6 +134,7 @@ import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '..
 import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import { queryIntelligenceEnvelope } from '../intelligenceEnvelope';
+import { radarQueryService } from '../../modules/homeEventRadar/services/radarQuery.service';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
 // C2C Intelligence & Agentic Evolution Phase 3 / PR 12b (architecture §8 task 2,
 // §22): Ask engagement with a delivered HVAC repair-or-replace Home Action is
@@ -7595,6 +7596,111 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
   };
 }
 
+const RADAR_SOURCE_FAMILY_LABEL: Record<string, string> = {
+  weather: 'Weather', air_quality: 'Air quality', disaster: 'Disaster', utility: 'Utility', tax: 'Tax', insurance: 'Insurance', other: 'Other',
+};
+const RADAR_FEED_STATE_COPY: Record<string, { title: string; body: string }> = {
+  CONFIRMED_CLEAR: { title: 'No active monitored events', body: 'Registered monitoring sources have confirmed no active events for this property right now.' },
+  UNCOVERED: { title: 'No monitored events recorded yet', body: 'Home Event Radar has not recorded any monitored events for this property yet -- confirm your property address to enable monitoring.' },
+  DEGRADED: { title: 'Monitoring is degraded', body: 'One or more registered monitoring sources are degraded right now, so this may not reflect every current event.' },
+  PARTIAL_COVERAGE: { title: 'Monitoring only partially covers this property', body: 'Only some registered monitoring sources cover this property, so this may not reflect every current event.' },
+};
+
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 1 cross-cutting, capability-card audit
+// (Appendix D), second reference journey (2026-09-22). Reads
+// radarQueryService.listFeed directly -- the SAME canonical read the
+// traditional Home Event Radar page itself calls (via /radar/events) --
+// deliberately NOT a reuse of INTELLIGENCE_ENVELOPE_QUERY (see
+// intelligenceEnvelopeQueryResult above), which the FRD explicitly flags as
+// not proof of this specific workflow: wrong item set (cross-domain
+// normalized envelope items, not radar matches), wrong filters, wrong
+// grouping. Read-only first slice: state transitions (save/dismiss/
+// acted-on), structured feedback, and task-candidate/creation writes, and
+// filter chips (the canonical endpoint supports lifecycle/sourceFamily/
+// severity/impact/confidence/state/attention filters -- none surfaced here)
+// are all a deliberately separate, unscoped follow-up.
+async function homeEventRadarFeedResult(userId: string, propertyId: string, cursor?: string | null): Promise<AskOperationResult> {
+  const page = await radarQueryService.listFeed(propertyId, userId, { limit: 20, ...(cursor ? { cursor } : {}) }) as {
+    items: Array<Record<string, any>>;
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    totalCount: number;
+    feedState: string;
+    asOf: string;
+  };
+  const items = page.items ?? [];
+  const radarHref = (matchId?: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-event-radar${matchId ? `?matchId=${encodeURIComponent(matchId)}` : ''}`;
+
+  if (!items.length) {
+    const copy = RADAR_FEED_STATE_COPY[page.feedState] ?? RADAR_FEED_STATE_COPY.UNCOVERED;
+    return {
+      status: 'ANSWERED',
+      blocks: [{
+        type: 'EMPTY_STATE',
+        id: 'home-event-radar-empty',
+        title: copy.title,
+        body: copy.body,
+        actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' }],
+      }],
+      suggestions: [],
+    };
+  }
+
+  const grouped = new Map<string, typeof items>();
+  for (const item of items) {
+    const family = typeof item.sourceFamily === 'string' && RADAR_SOURCE_FAMILY_LABEL[item.sourceFamily] ? item.sourceFamily : 'other';
+    const existing = grouped.get(family) ?? [];
+    existing.push(item);
+    grouped.set(family, existing);
+  }
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY',
+    id: 'home-event-radar-summary',
+    title: 'Monitored home events',
+    body: `${items.length} monitored event${items.length === 1 ? '' : 's'} from Home Event Radar${page.totalCount > items.length ? ` (${page.totalCount} total)` : ''}.`,
+    tone: items.some((item) => item.isSourceStale) ? 'CAUTION' : 'DEFAULT',
+    actions: [],
+  }, {
+    type: 'GROUPED_LIST', filters: [],
+    id: 'home-event-radar-feed',
+    title: 'Home Event Radar feed',
+    description: 'This is the same canonical feed the Home Event Radar page reads, grouped by source.',
+    sections: [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([family, sectionItems]) => ({
+      id: `radar-${family}`,
+      title: RADAR_SOURCE_FAMILY_LABEL[family] ?? family,
+      count: sectionItems.length,
+      items: sectionItems.map((item) => ({
+        id: String(item.id),
+        title: String(item.title),
+        description: String(item.summary ?? item.title),
+        meta: [String(item.severity ?? 'info'), item.sourceName ? String(item.sourceName) : null].filter(Boolean) as string[],
+        status: item.userState ? String(item.userState) : null,
+        href: radarHref(String(item.id)),
+        entityType: 'RADAR_MATCH',
+      })),
+    })),
+    actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' }],
+  }];
+  const degraded = page.feedState === 'PARTIAL_COVERAGE' || page.feedState === 'DEGRADED' || page.feedState === 'UNCOVERED';
+  if (degraded) {
+    const copy = RADAR_FEED_STATE_COPY[page.feedState];
+    blocks.push({
+      type: 'BOUNDARY',
+      id: 'home-event-radar-partial',
+      title: copy.title,
+      body: copy.body,
+      severity: 'INFO',
+      suggestions: ['Ask again later'],
+    });
+  }
+  return {
+    status: degraded ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: degraded ? 'HOME_EVENT_RADAR_FEED_PARTIAL' : undefined,
+    blocks,
+    suggestions: page.pageInfo?.hasNextPage ? ['Show more monitored events'] : [],
+    parameters: page.pageInfo?.hasNextPage ? { nextCursor: page.pageInfo.endCursor } : undefined,
+  };
+}
+
 // C2C Intelligence & Agentic Evolution Phase 3 / PR 12b. Routes an Ask "help me
 // decide / why / walk me through" question that references an already-delivered
 // HVAC repair-or-replace Home Action to the bounded Phase 2 Specialist Agent
@@ -8057,6 +8163,7 @@ registerCapabilityHandler('ownership.costs', async (envelope) => ownershipCostsR
 registerCapabilityHandler('inventory.lookup', async (envelope) => inventoryLookupResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('property.summary', async (envelope) => propertySummaryResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('intelligence-envelope.query', async (envelope) => intelligenceEnvelopeQueryResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor, envelope.suppliedInput as RadarEnvelopeQuerySuppliedInput | undefined));
+registerCapabilityHandler('home-event-radar.feed', async (envelope) => homeEventRadarFeedResult(envelope.userId, envelope.propertyId!, envelope.continuationCursor));
 registerCapabilityHandler('home-actions.feed', async (envelope) => homeActionsResult(
   envelope.userId,
   envelope.propertyId!,

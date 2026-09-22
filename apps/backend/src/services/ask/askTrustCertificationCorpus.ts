@@ -90,6 +90,13 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'DOCUMENT_LOOKUP', message: 'What documents are on file for this address?', category: 'PARAPHRASE' },
   { operationId: 'SELLER_PREP_CHECKLIST', message: 'Am I ready to list this house yet?', category: 'COLLOQUIAL' },
   { operationId: 'SELLER_PREP_ITEM_DECISION', message: 'Go ahead and waive that sale readiness item for me', category: 'COLLOQUIAL' },
+  // Capability-card audit (FRD Appendix D), second reference journey
+  // (2026-09-22). Deliberately appended at the END of this array, not
+  // inserted mid-list -- every fixtureId below is derived positionally
+  // (index + 1), so an earlier insertion point would silently renumber
+  // every fixture after it and desync askRoutingCalibrationEvidence.ts's
+  // own position-keyed evidence rows for fixtures that were never touched.
+  { operationId: 'HOME_EVENT_RADAR_FEED', message: 'Tell me what the radar has picked up near this address lately', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -171,6 +178,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   DOCUMENT_LOOKUP: 'Documents on file for this property are grouped by type, each with its verification status and upload date.',
   PROPERTY_SUMMARY: 'The home record is missing three governed details and has one stale field.',
   INTELLIGENCE_ENVELOPE_QUERY: 'The registered Envelope producers returned a bounded normalized view of this property intelligence.',
+  HOME_EVENT_RADAR_FEED: "The canonical Home Event Radar feed shows this property's monitored events, grouped by source and severity.",
   HOME_ACTIONS: 'The Home Actions priority list puts the overdue safety inspection first.',
   OPERATIONAL_WORK_UPDATE: 'The selected home-work item can be accepted, deferred, snoozed, or completed through its governed workflow.',
   INSPECTION_FINDINGS: 'The confirmed inspection report has one unresolved major roof finding.',

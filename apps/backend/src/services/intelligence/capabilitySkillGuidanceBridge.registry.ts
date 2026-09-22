@@ -32,6 +32,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'guidance-overview': ['GUIDANCE_JOURNEY_CREATE'],
   'quote-comparison': ['QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW'],
   'capital-timeline': ['CAPITAL_RESERVE_PLAN'],
+  'home-event-radar': ['HOME_EVENT_RADAR_FEED'],
   'property-tax': ['PROPERTY_TAX_APPEAL_READINESS'],
   'home-renovation-risk-advisor': ['RENOVATION_PERMIT_READINESS'],
   'buyer-closing': [
@@ -60,7 +61,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
  */
 const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
   'break-even', 'diy', 'hoa-compliance', 'home-digital-twin', 'home-digital-will',
-  'home-event-radar', 'home-habit-coach', 'home-risk-replay', 'home-briefing',
+  'home-habit-coach', 'home-risk-replay', 'home-briefing',
   'neighborhood-change-radar', 'permits',
   'plant-advisor', 'project-tracker', 'seller-prep', 'service-price-radar', 'status-board',
 ];

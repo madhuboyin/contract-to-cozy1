@@ -70,6 +70,7 @@ const DEFINITIONS = [
   adapter('quote-comparison.create', 'Quote Comparison Workspace', 'QUOTE_COMPARISON_CREATE', 'MUTATION_PREPARATION'),
   adapter('quote-comparison.review', 'Quote Comparison Workspace', 'QUOTE_COMPARISON_REVIEW'),
   adapter('capital-reserve.plan', 'Capital Planning Intelligence', 'CAPITAL_RESERVE_PLAN'),
+  adapter('home-event-radar.feed', 'Home Event Radar (radarQueryService)', 'HOME_EVENT_RADAR_FEED'),
   adapter('property-tax.appeal-readiness', 'Property Tax Intelligence', 'PROPERTY_TAX_APPEAL_READINESS'),
   adapter('renovation-permit.readiness', 'Renovation Readiness Service', 'RENOVATION_PERMIT_READINESS'),
   adapter('major-event.entry', 'Major Event Navigation', 'MAJOR_EVENT_ENTRY'),

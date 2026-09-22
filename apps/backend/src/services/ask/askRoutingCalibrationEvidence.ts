@@ -93,6 +93,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['070-expected', '070', 'DOCUMENT_LOOKUP', .1773, true], ['070-competitor', '070', 'INVENTORY_LOOKUP', .6844, false],
   ['071-expected', '071', 'SELLER_PREP_CHECKLIST', .8358, true], ['071-competitor', '071', 'PROPERTY_TAX_APPEAL_READINESS', .7613, false],
   ['072-expected', '072', 'SELLER_PREP_ITEM_DECISION', .1505, true], ['072-competitor', '072', 'SELLER_PREP_CHECKLIST', .221, false],
+  ['073-expected', '073', 'HOME_EVENT_RADAR_FEED', .1058, true], ['073-competitor', '073', 'OUT_OF_SCOPE_BOUNDARY', .1611, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

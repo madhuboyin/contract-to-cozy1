@@ -8,6 +8,12 @@ const INLINE_ENTRY_READS = {
   maintenance: { operationId: 'MAINTENANCE_STATUS', message: 'Show maintenance tasks for this home' },
   documents: { operationId: 'DOCUMENT_LOOKUP', message: 'Show documents for this home' },
   'home-records': { operationId: 'PROPERTY_SUMMARY', message: 'Show this home’s records' },
+  // Capability-card audit (FRD Appendix D), second reference journey
+  // (2026-09-22). Deliberately points at HOME_EVENT_RADAR_FEED, a new
+  // operation reading the real canonical radar feed/detail directly -- NOT
+  // INTELLIGENCE_ENVELOPE_QUERY, which the audit already flagged as not
+  // proof of this specific workflow.
+  'home-event-radar': { operationId: 'HOME_EVENT_RADAR_FEED', message: 'Show my home event radar feed' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

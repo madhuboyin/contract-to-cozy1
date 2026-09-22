@@ -17,9 +17,9 @@ const {
   validateAskInteractionCoverageMatrix,
 } = require('../../src/services/ask/askInteractionCoverageMatrix.ts');
 
-test('every one of the 85 Ask operations has a coverage-matrix entry with no registry drift', () => {
+test('every one of the 86 Ask operations has a coverage-matrix entry with no registry drift', () => {
   const operationIds = Object.keys(ASK_OPERATION_DEFINITIONS);
-  assert.equal(operationIds.length, 85);
+  assert.equal(operationIds.length, 86);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -106,6 +106,7 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'HOUSEHOLD_INVITATION', 'CAPABILITY_DISCOVERY', 'GROUNDED_GUIDANCE',
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE',
   'OPERATIONAL_WORK_UPDATE', 'INSPECTION_FINDING_UPDATE', 'HOME_DEADLINE_MONITOR',
+  'HOME_EVENT_RADAR_FEED',
 ]);
 // Phase 0 Stage 2 is now complete: every one of the 77 registered operations
 // has been traced. This assertion is the actual completion signal -- if a
@@ -118,13 +119,13 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 85);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 86);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
 test('Stage 2 fields are TRACED with real notes only for operations actually traced this pass; every other operation stays honestly PENDING', () => {
   const operationIds = Object.keys(ASK_INTERACTION_COVERAGE_MATRIX);
-  assert.equal(operationIds.length, 85);
+  assert.equal(operationIds.length, 86);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

@@ -31,6 +31,7 @@ import { INSPECTION_FINDINGS_SKILL } from './inspection-findings';
 import { DOCUMENT_PROMOTION_SKILL } from './document-promotion';
 import { DOCUMENTS_SKILL } from './documents';
 import { QUERY_ENVELOPE_SKILL } from './query-envelope';
+import { HOME_EVENT_RADAR_SKILL } from './home-event-radar';
 import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from './context/propertyIdentityContext.contract';
 import { getSkillAdapter, REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
@@ -73,6 +74,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'document-promotion': DOCUMENT_PROMOTION_SKILL,
   documents: DOCUMENTS_SKILL,
   'query-envelope': QUERY_ENVELOPE_SKILL,
+  'home-event-radar': HOME_EVENT_RADAR_SKILL,
 } satisfies Readonly<Record<string, SkillDefinition>>);
 
 export type SkillId = keyof typeof SKILL_DEFINITIONS;

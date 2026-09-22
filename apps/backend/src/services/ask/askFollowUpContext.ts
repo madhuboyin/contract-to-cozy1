@@ -298,6 +298,26 @@ export async function resolveAskFollowUpMessage(input: {
     }
   }
 
+  // Capability-card audit (FRD Appendix D), second reference journey. Same
+  // cursor-forwarding shape as INTELLIGENCE_ENVELOPE_QUERY's own pagination
+  // branch above -- homeEventRadarFeedResult's suggestion ("Show more
+  // monitored events") matches ENVELOPE_PAGINATION_PATTERN's generic
+  // show/more phrasing.
+  if (isEnvelopePagination && prior.operationId === 'HOME_EVENT_RADAR_FEED') {
+    const parameters = isRecord(prior.parametersJson) ? prior.parametersJson : {};
+    const cursor = typeof parameters.nextCursor === 'string' ? parameters.nextCursor : null;
+    if (cursor) {
+      return {
+        effectiveMessage: `${prior.message}. ${input.message}`,
+        forcedOperationId: 'HOME_EVENT_RADAR_FEED',
+        sourceExecutionId: prior.id,
+        continuationCursor: cursor,
+        suppliedInput: null,
+        isFilterRefinement: false,
+      };
+    }
+  }
+
   // Maintenance collection paging updates the same stable result rather
   // than adding a second live list. The exact section and direction remain
   // structured launch context owned by the declared UI control; this

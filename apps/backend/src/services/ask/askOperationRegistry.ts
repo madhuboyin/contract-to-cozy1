@@ -59,6 +59,18 @@ export type AskOperationId =
   | 'DOCUMENT_LOOKUP'
   | 'PROPERTY_SUMMARY'
   | 'INTELLIGENCE_ENVELOPE_QUERY'
+  // ASK_COZY_INLINE_WORKSPACE_FRD Phase 1 cross-cutting, capability-card audit
+  // (Appendix D), second reference journey (2026-09-22). Reads
+  // radarQueryService.listFeed/getDetail directly -- the SAME canonical read
+  // the traditional Home Event Radar page itself calls (via /radar/events,
+  // /radar/events/:matchId) -- deliberately NOT a reuse of
+  // INTELLIGENCE_ENVELOPE_QUERY, which the FRD explicitly flags as not proof
+  // of this specific workflow (wrong item set, filters, and grouping: a
+  // cross-domain normalized envelope read, not this property's own radar
+  // feed). Read-only: state transitions (save/dismiss/acted-on), structured
+  // feedback, and task-candidate/creation writes are a deliberately
+  // separate, unscoped follow-up.
+  | 'HOME_EVENT_RADAR_FEED'
   | 'HOME_ACTIONS'
   | 'OPERATIONAL_WORK_UPDATE'
   | 'INSPECTION_FINDINGS'
@@ -310,6 +322,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   DOCUMENT_LOOKUP: definition('DOCUMENT_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'documents.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   PROPERTY_SUMMARY: definition('PROPERTY_SUMMARY', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property.summary', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   INTELLIGENCE_ENVELOPE_QUERY: definition('INTELLIGENCE_ENVELOPE_QUERY', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'intelligence-envelope.query', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
+  HOME_EVENT_RADAR_FEED: definition('HOME_EVENT_RADAR_FEED', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-event-radar.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   // Phase 9B (FRD §17/§21.2) adds PRIORITY_LIST as an additive, versioned
   // explainable annotation of this same operation's existing feed read --
   // deliberately not a new operation, so Ask never presents two ranked
@@ -661,6 +674,13 @@ const homeActionsPattern = /\b(?:what should i do next|what should i do before c
 // component reads normalized derived intelligence. Detail/history/inventory
 // verbs remain owned by INVENTORY_LOOKUP below.
 const scopedEnvelopeObservationPattern = /\b(?:what do you know about|what intelligence (?:do you have|is available) (?:about|for)|show (?:derived|registered) intelligence (?:about|for))\b.{0,45}\b(?:my |the )?(?:roof|roofing|foundation|exterior|interior|site|lot|grounds)\b/i;
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 1 cross-cutting, capability-card audit
+// (Appendix D), second reference journey. Deliberately checked ahead of
+// scopedEnvelopeObservationPattern below (this is more specific: an explicit
+// "home event radar"/"radar feed" phrasing, or a monitored-events-near-me
+// question) so a genuine radar-feed request doesn't fall through to the
+// broader cross-domain envelope reader.
+const homeEventRadarFeedPattern = /\b(?:home event radar|radar feed|radar matches?|monitored (?:home )?events?)\b|\bwhat(?:'s| is)\s+(?:happening|going on)\s+(?:near|around)\s+(?:my|this|our)\s+(?:home|property|house)\b|\b(?:severe weather|storm|weather alerts?)\s+(?:near|around)\s+(?:my|this|our)\s+(?:home|property|house)\b/i;
 // Ask Intelligence FRD Phase 9A ("What changed?", §16). Deliberately excludes
 // any message mentioning "decision" (checked at the call site) -- a phrase
 // like "what changed about this decision" is a Decision Thread continuity
@@ -926,6 +946,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (ownershipCostsPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('OWNERSHIP_COSTS', 0.97);
+  }
+  if (homeEventRadarFeedPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOME_EVENT_RADAR_FEED', 0.96);
   }
   if (scopedEnvelopeObservationPattern.test(message)) {
     return resolved('INTELLIGENCE_ENVELOPE_QUERY', 0.96);
