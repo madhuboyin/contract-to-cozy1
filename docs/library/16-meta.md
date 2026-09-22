@@ -14,8 +14,8 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-| 🟠 C14 | [Documentation](../README.md) |  | 2026-09-17 | 33 |
+| 🟠 C14 | [Documentation](../README.md) |  | 2026-09-19 | 33 |
 
 ## Flag details for this area
 
-- 🟠 **README.md** - Lists api/, deployment/, development/ (contain only .gitkeep) and omits audit/, audit-gemini/, audits/, acquisition/, personalization/, wiki/, and the root Pass docs.
+- 🟠 **README.md** - Lists api/, deployment/, development/ as documentation areas though they contain only .gitkeep; calls stale feature-data-flow-pass2.md canonical and calls the wiki current, despite their documented snapshot limits.

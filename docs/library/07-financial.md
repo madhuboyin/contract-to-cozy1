@@ -9,7 +9,7 @@
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
 |  | [Property Tax Center — Functional Requirements Document](../functional/PROPERTY_TAX_CENTER_FRD.md) | Implemented | 2026-07-28 | 364 |
-|  | [Home Reserve / Sinking Fund Planner — Functional Requirements Document](../functional/HOME_RESERVE_FUND_PLANNER_FRD.md) |  | 2026-07-07 | 512 |
+| 🟠 C20 | [Home Reserve / Sinking Fund Planner — Functional Requirements Document](../functional/HOME_RESERVE_FUND_PLANNER_FRD.md) |  | 2026-07-07 | 512 |
 | 🟡 | [CLAIMS_ASSISTANCE_PRD.md](../functional/CLAIMS_ASSISTANCE_PRD.md) |  | 2026-01-07 | 471 |
 
 ## ADR (decision) (1)
@@ -40,7 +40,7 @@
 |  | [Mortgage Refinance Radar Capability Audit and Implementation Plan](../product/MORTGAGE_REFINANCE_RADAR_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implemented; controlled external-alert rollout gated \| | 2026-08-01 | 928 |
 | 🟠 C9 | [Hidden Savings and Benefits Capability Audit and Implementation Plan](../product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan | 2026-07-29 | 2557 |
 | 🟠 C9 | [Capital Decision Planning Capability Audit and Implementation Plan](../product/CAPITAL_DECISION_PLANNING_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan | 2026-07-28 | 2621 |
-|  | [Coverage and Premium Optimization Capability Audit and Implementation Plan](../product/COVERAGE_AND_PREMIUM_OPTIMIZATION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implementation complete; real-user launch remains gated | 2026-07-28 | 2468 |
+| 🟠 C21 | [Coverage and Premium Optimization Capability Audit and Implementation Plan](../product/COVERAGE_AND_PREMIUM_OPTIMIZATION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implementation complete; real-user launch remains gated | 2026-07-28 | 2468 |
 |  | [Ownership Cost Intelligence Capability Audit and Implementation Plan](../product/OWNERSHIP_COST_INTELLIGENCE_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Technical implementation complete through Slice 9; real-user launch remains fail | 2026-07-28 | 2206 |
 |  | [Ownership Cost Intelligence Slice 9 Launch Evidence](../product/OWNERSHIP_COST_SLICE_9_LAUNCH_EVIDENCE.md) |  | 2026-07-28 | 67 |
 |  | [Property Tax and Tax Appeal Capability Audit and Implementation Plan](../product/PROPERTY_TAX_AND_TAX_APPEAL_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implemented — Slices 0–9 complete July 28, 2026 | 2026-07-28 | 1876 |
@@ -72,5 +72,7 @@
 ## Flag details for this area
 
 - 🟠 **functional/HIDDEN_ASSET_FINDER.md** - Route exists in code but many cited frontend/worker files do not (14/24 and 3/8): implementation moved or partial. Verify before relying on file-level detail.
+- 🟠 **functional/HOME_RESERVE_FUND_PLANNER_FRD.md** - Core reserve-fund route, page and schema exist, but three cited paths are missing (including the by-design workers Prisma path); verify file-level architecture before implementation.
 - 🟠 **product/CAPITAL_DECISION_PLANNING_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md** - Status "Recommended implementation plan" never advanced. Project memory says Home Continuity is fully on main (not re-verified in code here); sibling audits with the same header (Tax, Coverage, Ownership Cost) were updated to "Implemented".
+- 🟠 **product/COVERAGE_AND_PREMIUM_OPTIMIZATION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md** - Claims implementation complete but four cited code paths no longer exist. Outcome requirements may still govern; file-level implementation map is stale.
 - 🟠 **product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md** - Status "Recommended implementation plan" never advanced. Project memory says Home Continuity is fully on main (not re-verified in code here); sibling audits with the same header (Tax, Coverage, Ownership Cost) were updated to "Implemented".

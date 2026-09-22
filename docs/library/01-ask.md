@@ -31,7 +31,7 @@
 |  | [Ask Cozy — Target Product & Architecture (Stage 2)](../architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md) |  | 2026-09-17 | 846 |
 |  | [C2C Intelligence & Agentic Evolution Architecture (Stage 3)](../architecture/C2C_INTELLIGENCE_AGENTIC_EVOLUTION_ARCHITECTURE.md) | Approved target architecture — implementation in progress; owner inputs remain p | 2026-08-31 | 1659 |
 |  | [AI Home Concierge Ask — Manual Certification Living Addendum](../product/AI_HOME_CONCIERGE_ASK_MANUAL_CERTIFICATION_ADDENDUM.md) | v1.7 · Living document | 2026-08-16 | 359 |
-|  | [AI Features - Implementation Summary](../functional/AI_CARDS_SUMMARY_UPDATED.md) |  | 2026-07-28 | 506 |
+| 🟠 C18 | [AI Features - Implementation Summary](../functional/AI_CARDS_SUMMARY_UPDATED.md) |  | 2026-07-28 | 506 |
 | 🟡 | [AI_HOME_DECISION_TOOLS.md](../functional/AI_HOME_DECISION_TOOLS.md) |  | 2026-02-16 | 613 |
 | 🟡 | [Functional Requirements Document (FRD)](../functional/AI_ROOM_SCAN.md) |  | 2026-01-28 | 649 |
 | 🔴 C1 | [AI Features - Implementation Summary](../functional/AI_CARDS_SUMMARY.md) |  | 2026-01-03 | 325 |
@@ -69,6 +69,7 @@
 ## Flag details for this area
 
 - 🔴 **functional/AI_CARDS_SUMMARY.md** - Superseded by AI_CARDS_SUMMARY_UPDATED.md (says 4 AI features; updated doc says 11). No banner on the old file.
+- 🟠 **functional/AI_CARDS_SUMMARY_UPDATED.md** - Not a current feature inventory: still lists Climate Risk Predictor as a working AI feature, but climateRisk.routes.ts returns 410 CLIMATE_RISK_RETIRED.
 - 🟠 **product/AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md** - Frontmatter version 1.3 / Aug 11, file touched Aug 29 (version likely not bumped); status "Proposed"; amends Ask Redo v1.6, which itself says "in progress".
 - 🟠 **product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md** - Aug "AI Home Concierge Ask" family vs Sep "Ask Cozy" family: no doc states that one supersedes the other.
 - 🟠 **product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md** - Status says "implementation is not claimed", yet seven architecture/ASK_COZY_PHASE*_VERIFICATION/REVERIFICATION docs (Sep 16-18) report Complete.

@@ -48,7 +48,7 @@
 |  | [01 — Codebase Assessment](../personalization/01-codebase-assessment.md) |  | 2026-07-14 | 128 |
 |  | [Phase 3 implementation audit — initial greenfield slice](../personalization/phase3-implementation-audit.md) |  | 2026-07-14 | 42 |
 |  | [Phase 4 implementation audit — initial greenfield slice](../personalization/phase4-implementation-audit.md) |  | 2026-07-14 | 48 |
-|  | [Codebase Evidence Index](../personalization/codebase-evidence.md) |  | 2026-07-13 | 223 |
+| 🟠 C19 | [Codebase Evidence Index](../personalization/codebase-evidence.md) |  | 2026-07-13 | 223 |
 
 ## Status / phase record (2)
 
@@ -66,3 +66,4 @@
 ## Flag details for this area
 
 - 🟠 **personalization/08-personalization-frd.md** - Status "Proposed; implementation not authorized" but modules/personalization exists in code and README says internal validation is live.
+- 🟠 **personalization/codebase-evidence.md** - Six cited code paths are gone, including orchestration.routes.ts and ActionCenter.tsx; use as discovery-time evidence, not current architecture.

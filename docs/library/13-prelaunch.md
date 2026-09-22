@@ -82,10 +82,10 @@
 
 - 🟠 **audit-gemini/90-day-roadmap-audit.md** - One of ~7 overlapping Apr 18-20 pre-launch plans (audit/ + audit-gemini/); no index says which is canonical. Pre-launch framing is out of date (W7 real-user cutover runbook exists, Jul 2026).
 - 🟠 **audit-gemini/strategic-transformation-plan.md** - One of ~7 overlapping Apr 18-20 pre-launch plans (audit/ + audit-gemini/); no index says which is canonical. Pre-launch framing is out of date (W7 real-user cutover runbook exists, Jul 2026).
-- 🔴 **audit/contracttocozy-90-day-execution-plan-2026-04-18.md** - v1 of a doc that has a v2 sibling; neither declares which governs.
+- 🔴 **audit/contracttocozy-90-day-execution-plan-2026-04-18.md** - The v2 sibling explicitly supersedes this v1 in its header. Retain only if historical comparison is needed.
 - 🟠 **audit/contracttocozy-90-day-execution-plan-v2-2026-04-18.md** - One of ~7 overlapping Apr 18-20 pre-launch plans (audit/ + audit-gemini/); no index says which is canonical. Pre-launch framing is out of date (W7 real-user cutover runbook exists, Jul 2026).
 - 🟠 **audit/contracttocozy-implementation-plan-2026-04-18.md** - One of ~7 overlapping Apr 18-20 pre-launch plans (audit/ + audit-gemini/); no index says which is canonical. Pre-launch framing is out of date (W7 real-user cutover runbook exists, Jul 2026).
 - 🟠 **audit/contracttocozy-pre-launch-execution-plan-2026-04-18.md** - One of ~7 overlapping Apr 18-20 pre-launch plans (audit/ + audit-gemini/); no index says which is canonical. Pre-launch framing is out of date (W7 real-user cutover runbook exists, Jul 2026).
 - 🟠 **audit/contracttocozy-pre-launch-hardening-plan-2026-04-18.md** - One of ~7 overlapping Apr 18-20 pre-launch plans (audit/ + audit-gemini/); no index says which is canonical. Pre-launch framing is out of date (W7 real-user cutover runbook exists, Jul 2026).
-- 🔴 **audit/contracttocozy-strategic-audit-2026-04-18.md** - v1 of a doc that has a v2 sibling; neither declares which governs.
+- 🔴 **audit/contracttocozy-strategic-audit-2026-04-18.md** - The v2 sibling explicitly supersedes this v1 in its header. Retain only if historical comparison is needed.
 - 🟠 **audit/contracttocozy-strategic-audit-v2-2026-04-18.md** - One of ~7 overlapping Apr 18-20 pre-launch plans (audit/ + audit-gemini/); no index says which is canonical. Pre-launch framing is out of date (W7 real-user cutover runbook exists, Jul 2026).

@@ -123,6 +123,7 @@ def flag(paths_, level, fid, note):
     for x in paths_: F[x] = (level, fid, note)
 
 flag(['functional/AI_CARDS_SUMMARY.md'], 'RED', 'C1', 'Superseded by AI_CARDS_SUMMARY_UPDATED.md (says 4 AI features; updated doc says 11). No banner on the old file.')
+flag(['functional/AI_CARDS_SUMMARY_UPDATED.md'], 'ORANGE', 'C18', 'Not a current feature inventory: still lists Climate Risk Predictor as a working AI feature, but climateRisk.routes.ts returns 410 CLIMATE_RISK_RETIRED.')
 flag(['functional/SMART_HOME_INTEGRATION_HUB.md'], 'RED', 'C2', 'Superseded by SMART_HOME_IOT_INTEGRATION_FRD.md (stated in that FRD, not in this file). 28/33 cited code paths do not exist.')
 flag(['functional/SMART_HOME_IOT_INTEGRATION_FRD.md'], 'ORANGE', 'C2', 'No status line; 18/27 cited code paths (smartHome routes/services) do not exist and no smart-home route/page found in code - appears unimplemented.')
 flag(['functional/GUIDANCE_ENGINE_FRD_Updated.md'], 'RED', 'C3', 'Named "Updated" but is v1.0 "Ready for Implementation" (Mar 31), a different feature (resolution concierge) from GUIDANCE_ENGINE_FRD v2.1. `initiatedByUser` exists in code -> status is stale, and the name misleads.')
@@ -131,6 +132,7 @@ flag(['functional/HOME_EVENT_RADAR_FRD.md'], 'ORANGE', 'C4', 'Status still "Prop
 flag(['personalization/08-personalization-frd.md'], 'ORANGE', 'C5', 'Status "Proposed; implementation not authorized" but modules/personalization exists in code and README says internal validation is live.')
 flag(['personalization/04-target-architecture.md'], 'YELLOW', 'C5', 'Titled "Current Target Architecture" - README says larger target sections are long-term reference, not commitments.')
 flag(['personalization/adr-0001-personalization-module-foundation.md', 'personalization/adr-0002-phase1-foundation-migration-steps-1-3.md'], 'YELLOW', 'C5', 'Self-declared Superseded (retained as history). Do not implement from these.')
+flag(['personalization/codebase-evidence.md'], 'ORANGE', 'C19', 'Six cited code paths are gone, including orchestration.routes.ts and ActionCenter.tsx; use as discovery-time evidence, not current architecture.')
 flag(['product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md'], 'ORANGE', 'C6', 'Status says "implementation is not claimed", yet seven architecture/ASK_COZY_PHASE*_VERIFICATION/REVERIFICATION docs (Sep 16-18) report Complete.')
 flag(['product/AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md'], 'ORANGE', 'C6', 'Frontmatter version 1.3 / Aug 11, file touched Aug 29 (version likely not bumped); status "Proposed"; amends Ask Redo v1.6, which itself says "in progress".')
 flag(['product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md'], 'ORANGE', 'C6', 'Aug "AI Home Concierge Ask" family vs Sep "Ask Cozy" family: no doc states that one supersedes the other.')
@@ -138,13 +140,15 @@ flag(['property-context/PROPERTY_CONTEXT_FRD.md', 'property-context/PROPERTY_CON
 flag(['property-context/PROPERTY_INTELLIGENCE_PHASE1_RECOMMENDATION.md'], 'ORANGE', 'C7', '"Not yet approved" (Jul 26) but functional/PROPERTY_INTELLIGENCE_*, NYC_ZAP and PROPERTY_BRIEF (Jul 30-31) look like its follow-through.')
 flag(['product/CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md'], 'ORANGE', 'C8', 'Status "Proposed" while its plan says "Implementation in progress"; 4/6 cited paths under frontend/src/features/tools/ no longer exist.')
 flag(['product/HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md', 'product/HOME_OPERATIONS_AND_ACTION_MANAGEMENT_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md', 'product/PROPERTY_INTELLIGENCE_AND_BRIEFINGS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md', 'product/RENOVATION_COMPLIANCE_AND_EXECUTION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md', 'product/CAPITAL_DECISION_PLANNING_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md', 'product/HIDDEN_SAVINGS_AND_BENEFITS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md'], 'ORANGE', 'C9', 'Status "Recommended implementation plan" never advanced. Project memory says Home Continuity is fully on main (not re-verified in code here); sibling audits with the same header (Tax, Coverage, Ownership Cost) were updated to "Implemented".')
-flag(['audit/contracttocozy-90-day-execution-plan-2026-04-18.md', 'audit/contracttocozy-strategic-audit-2026-04-18.md'], 'RED', 'C10', 'v1 of a doc that has a v2 sibling; neither declares which governs.')
+flag(['audit/contracttocozy-90-day-execution-plan-2026-04-18.md', 'audit/contracttocozy-strategic-audit-2026-04-18.md'], 'RED', 'C10', 'The v2 sibling explicitly supersedes this v1 in its header. Retain only if historical comparison is needed.')
 flag(['audit/contracttocozy-90-day-execution-plan-v2-2026-04-18.md', 'audit/contracttocozy-strategic-audit-v2-2026-04-18.md', 'audit/contracttocozy-implementation-plan-2026-04-18.md', 'audit/contracttocozy-pre-launch-execution-plan-2026-04-18.md', 'audit/contracttocozy-pre-launch-hardening-plan-2026-04-18.md', 'audit-gemini/90-day-roadmap-audit.md', 'audit-gemini/strategic-transformation-plan.md'], 'ORANGE', 'C10', 'One of ~7 overlapping Apr 18-20 pre-launch plans (audit/ + audit-gemini/); no index says which is canonical. Pre-launch framing is out of date (W7 real-user cutover runbook exists, Jul 2026).')
 flag(['functional/SEASONAL_FEATURE_SESSION_PROMPT.md'], 'RED', 'C11', 'A session prompt, not a spec; untouched since Jan 3. Cites deleted checklistItem controller/component.')
 flag(['functional/SEASONAL_MAINTENANCE_HANDOFF.md'], 'ORANGE', 'C11', 'Body predates the deprecated ChecklistItem -> PropertyMaintenanceTask consolidation; 3 cited files deleted. Header notes "canonical Home integration implemented; historic..."')
 flag(['functional/EXHAUSTIVE_SYSTEM_AUDIT.md', 'functional/FINAL_IMPLEMENTATION_PLAN.md', 'functional/PROPERTY_ENHANCEMENT_ANALYSIS.md', 'functional/CORRECTED_USER_HOMEOWNER_ANALYSIS.md', 'functional/SERVICE_CATEGORY_CONFIG_ANALYSIS.md', 'functional/RISK_ASSESSMENT_COMPREHENSIVE_DOCS.md'], 'YELLOW', 'C12', 'Jan 3 2026 one-off analysis; never updated. Cites pages that no longer exist ((dashboard)/checklist, /maintenance, /action-center, HomeBuyerDashboard). "CORRECTED_" implies an earlier wrong version that is not in the repo.')
 flag(['functional/Testing_Property_Onboarding.md'], 'ORANGE', 'C13', 'PROPERTY_SETUP_CURRENT_STATE_AUDIT (line ~599) states parts of this checklist are stale vs current code (redirect behaviour).')
-flag(['README.md'], 'ORANGE', 'C14', 'Lists api/, deployment/, development/ (contain only .gitkeep) and omits audit/, audit-gemini/, audits/, acquisition/, personalization/, wiki/, and the root Pass docs.')
+flag(['README.md'], 'ORANGE', 'C14', 'Lists api/, deployment/, development/ as documentation areas though they contain only .gitkeep; calls stale feature-data-flow-pass2.md canonical and calls the wiki current, despite their documented snapshot limits.')
+flag(['functional/HOME_RESERVE_FUND_PLANNER_FRD.md'], 'ORANGE', 'C20', 'Core reserve-fund route, page and schema exist, but three cited paths are missing (including the by-design workers Prisma path); verify file-level architecture before implementation.')
+flag(['product/COVERAGE_AND_PREMIUM_OPTIMIZATION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md'], 'ORANGE', 'C21', 'Claims implementation complete but four cited code paths no longer exist. Outcome requirements may still govern; file-level implementation map is stale.')
 flag(['functional/HOME_RISK_REPLAY.md'], 'ORANGE', 'C15', 'Top banner (2026-07-30) says the feature is now "Past Hazard Exposure"; the 1,194-line body still describes the old design and all 4 cited worker provider files are gone. Banner-only reconciliation.')
 flag(['functional/MATERIAL_SPEC_REGISTRY.md', 'functional/HIDDEN_ASSET_FINDER.md'], 'ORANGE', 'C15', 'Route exists in code but many cited frontend/worker files do not (14/24 and 3/8): implementation moved or partial. Verify before relying on file-level detail.')
 flag(['product/SALE_READINESS_VALUE_MAXIMIZATION_IMPLEMENTATION_PLAN.md'], 'ORANGE', 'C16', 'Status "Design fully resolved" (Aug 6) - project memory says it is fully implemented; 6/19 cited sellerPrep paths no longer exist.')
@@ -186,9 +190,13 @@ def cite(r):
 # ---------- CSV ----------
 with open(OUT + 'catalog.csv', 'w', newline='') as f:
     w = csv.writer(f)
-    w.writerow(['path', 'domain', 'type', 'title', 'status', 'version', 'lines', 'first_commit', 'last_commit', 'code_refs', 'dead_refs', 'flag', 'flag_id', 'flag_note'])
+    w.writerow(['path', 'domain', 'type', 'title', 'status', 'version', 'lines', 'first_commit', 'last_commit', 'code_refs', 'dead_refs', 'flag', 'flag_id', 'flag_note', 'review_basis'])
     for r in rows:
-        w.writerow([r['path'], D[r['domain']], r['type'], r['title'], r['status'], r['ver'], r['lines'], r['first'], r['last'], r['refs'], r['dead'], r['level'], r['fid'], r['note']])
+        basis = ('targeted cross-document and/or code-path review' if r['fid'].startswith('C') else
+                 'git-date heuristic only' if r['fid'] == 'H' else
+                 'wiki snapshot; selected paths rechecked' if r['fid'] == 'W' else
+                 'inventory, metadata and cited-path checks only')
+        w.writerow([r['path'], D[r['domain']], r['type'], r['title'], r['status'], r['ver'], r['lines'], r['first'], r['last'], r['refs'], r['dead'], r['level'], r['fid'], r['note'], basis])
 
 # ---------- domain pages ----------
 fn = {k: '%02d-%s.md' % (i + 1, k) for i, k in enumerate(D)}
@@ -268,8 +276,10 @@ L = ['# Documentation Library', '',
  '| I want to... | Go to |', '|---|---|',
  '| Find docs about a feature/area | the area table below |',
  '| Find all runbooks / all ADRs / all FRDs | [BY-TYPE.md](BY-TYPE.md) |',
+ '| Review FRD authority and unresolved requirement families | [REQUIREMENTS_REVIEW.md](REQUIREMENTS_REVIEW.md) |',
  '| Know whether a doc is stale or conflicts with another | [FLAGS.md](FLAGS.md) |',
- '| Grep/filter by anything (status, date, dead-code refs) | [`catalog.csv`](catalog.csv) |',
+ '| Find documents that may be deleted | [FLAGS.md — Deletion candidates](FLAGS.md#deletion-candidates) |',
+ '| Grep/filter by anything (status, date, dead-code refs, review basis) | [`catalog.csv`](catalog.csv) |',
  '| Find a code-path starting point | [`../wiki/`](../wiki/README.md), then verify against current code |', '',
  'Quick searches from the repo root:', '', '```bash',
  'grep -i "smart home" docs/library/catalog.csv                      # locate a doc',
@@ -281,17 +291,18 @@ for k, name in D.items():
     L.append('| [%s](%s) | %d | %d | %d | %d | %s |' % (name, fn[k], c[k], fl[k]['RED'], fl[k]['ORANGE'], fl[k]['YELLOW'], guide[k]))
 L += ['', '## Which doc wins? (reading order when several overlap)', '',
  '| Topic | Read first | Then | Treat as history |', '|---|---|---|---|',
- '| Ask Cozy | `product/ASK_COZY_INLINE_WORKSPACE_FRD.md` (v1.7, states it governs completion target) | Interaction Model FRD, Cross-Domain Rollout FRD, `architecture/ASK_COZY_PHASE*` verification docs | Aug `AI_HOME_CONCIERGE_ASK_*` family unless you need addendum detail (lineage undeclared - see C6) |',
+ '| Ask Cozy | `product/ASK_COZY_INLINE_WORKSPACE_FRD.md` (check its current version; states it governs the completion target) | Interaction Model FRD, Cross-Domain Rollout FRD, `architecture/ASK_COZY_PHASE*` verification docs | Aug `AI_HOME_CONCIERGE_ASK_*` family unless you need addendum detail (lineage undeclared - see C6) |',
  '| Guidance Engine | `functional/GUIDANCE_ENGINE_FRD.md` (v2.1 living) | `GUIDANCE_ENGINE_FRD_Updated.md` for the resolution-journey feature | gap-analysis / phased plan (Mar 29) |',
  '| Personalization | `personalization/README.md` (states current strategy) | `08` FRD only for long-term intent | ADR-0001/0002 (superseded) |',
  '| Home Event Radar | `functional/HOME_EVENT_RADAR.md` (current state) | FRD + Implementation Plan + ADRs | - |',
  '| Property Context | `property-context/PROPERTY_CONTEXT_FRD.md` + phase completion audits | JIT FRD + slice docs | - |',
  '| Smart Home | `SMART_HOME_IOT_INTEGRATION_FRD.md` (unbuilt) | - | `SMART_HOME_INTEGRATION_HUB.md` |',
- '| AI feature cards | `AI_CARDS_SUMMARY_UPDATED.md` | - | `AI_CARDS_SUMMARY.md` |',
+ '| AI feature cards | Current feature routes and the relevant feature FRDs | `AI_CARDS_SUMMARY_UPDATED.md` for July 2026 history only (see C18) | `AI_CARDS_SUMMARY.md` (superseded) |',
  '| Pre-launch strategy | none - all Apr 2026 | `product/ContractToCozy_W7_Launch_Cutover_Runbook.md` for launch | all of `audit/`, `audit-gemini/` |', '',
  'These are recommendations from the flag review, not decisions recorded in the source docs.', '',
  '## Maintaining this library', '',
- 'Rebuild after docs change: `python3 docs/library/tools/build_library.py` (regenerates every file in this folder except `tools/`).',
+ 'Rebuild after docs change: `python3 docs/library/tools/build_library.py` (regenerates the catalog, area pages, BY-TYPE.md, FLAGS.md, and README.md; REQUIREMENTS_REVIEW.md is a manual audit note).',
+ 'The `review_basis` column distinguishes targeted findings from metadata-only checks. A blank flag means no issue was detected by those checks, not that every requirement was validated.',
  'Flags are manual: edit the `flag(...)` calls in `tools/build_library.py` and the prose in `tools/flags_head.md`, then rebuild. Bump `TODAY` in the script when you re-baseline.']
 open(OUT + 'README.md', 'w').write('\n'.join(L) + '\n')
 print(len(rows), 'docs;', dict(collections.Counter(r['level'] for r in rows)))

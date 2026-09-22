@@ -31,7 +31,7 @@ Most recently changed first; showing area.
 |  | [Contract-to-Cozy ADMIN Platform — Functional Requirements Document](../functional/ADMIN_MODULE_FRD.md) | Admin | 2026-07-18 |
 | 🟠 | [Property Context Platform — Catalog, Operational Configuration, and Editorial Governance F](../property-context/PROPERTY_CONTEXT_CATALOG_GOVERNANCE_FRD.md) | Property Context & Property Setup | 2026-07-17 |
 | 🟠 | [08 — Functional Requirements Document: Personalization Engine](../personalization/08-personalization-frd.md) | Personalization Engine | 2026-07-14 |
-|  | [Home Reserve / Sinking Fund Planner — Functional Requirements Document](../functional/HOME_RESERVE_FUND_PLANNER_FRD.md) | Coverage | 2026-07-07 |
+| 🟠 | [Home Reserve / Sinking Fund Planner — Functional Requirements Document](../functional/HOME_RESERVE_FUND_PLANNER_FRD.md) | Coverage | 2026-07-07 |
 |  | [Provider Trust & Compliance Verification — Functional Requirements Document](../functional/PROVIDER_TRUST_COMPLIANCE_FRD.md) | Providers | 2026-07-07 |
 | 🟠 | [Smart Home / IoT Sensor Integration — Functional Requirements Document](../functional/SMART_HOME_IOT_INTEGRATION_FRD.md) | Home Records | 2026-07-07 |
 | 🔴 | [GUIDANCE_ENGINE_FRD_Updated.md](../functional/GUIDANCE_ENGINE_FRD_Updated.md) | Guidance | 2026-03-31 |
@@ -83,17 +83,17 @@ Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+| 🟡 | [Introduction](../wiki/00-introduction.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
+| 🟡 | [Guidance, AI Concierge & Personalization](../wiki/features/03-guidance-ai-concierge-and-personalization.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
+| 🟡 | [Home Events, Environment & Community](../wiki/features/06-home-events-environment-and-community.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
 |  | [Ask Cozy — Target Product & Architecture (Stage 2)](../architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md) | Ask Cozy | 2026-09-17 |
 |  | [Worker Jobs — Feature Documentation](../functional/WORKER_JOBS.md) | Admin | 2026-09-09 |
 | 🟡 | [Onboarding, Auth & Property Setup](../wiki/features/01-onboarding-and-property-setup.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-09 |
 |  | [C2C Intelligence & Agentic Evolution Architecture (Stage 3)](../architecture/C2C_INTELLIGENCE_AGENTIC_EVOLUTION_ARCHITECTURE.md) | Ask Cozy | 2026-08-31 |
-| 🟡 | [Introduction](../wiki/00-introduction.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 | 🟡 | [Getting Started](../wiki/01-getting-started.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 | 🟡 | [Architecture & Data Model](../wiki/02-architecture-and-data-model.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-| 🟡 | [Guidance, AI Concierge & Personalization](../wiki/features/03-guidance-ai-concierge-and-personalization.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 | 🟡 | [Coverage, Risk & Financial Tools](../wiki/features/04-coverage-risk-and-financial-tools.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 | 🟡 | [Execution, Providers & Services](../wiki/features/05-marketplace-providers-and-services.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
-| 🟡 | [Home Events, Environment & Community](../wiki/features/06-home-events-environment-and-community.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 | 🟡 | [Sale, Buyer & Life Transitions](../wiki/features/07-sale-buyer-and-life-transitions.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 | 🟡 | [Admin, Analytics & Platform Operations](../wiki/features/08-admin-analytics-and-platform-operations.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 |  | [AI Home Concierge Ask — Manual Certification Living Addendum](../product/AI_HOME_CONCIERGE_ASK_MANUAL_CERTIFICATION_ADDENDUM.md) | Ask Cozy | 2026-08-16 |
@@ -109,7 +109,7 @@ Most recently changed first; showing area.
 |  | [Property Intelligence Legacy Retirement](../functional/PROPERTY_INTELLIGENCE_LEGACY_RETIREMENT.md) | Property Intelligence | 2026-07-30 |
 |  | [Property Intelligence Unified Experience](../functional/PROPERTY_INTELLIGENCE_UNIFIED_EXPERIENCE.md) | Property Intelligence | 2026-07-30 |
 |  | [Renovation Workspace and Requirements Advisor](../functional/HOME_RENOVATION_RISK_ADVISOR.md) | Providers | 2026-07-29 |
-|  | [AI Features - Implementation Summary](../functional/AI_CARDS_SUMMARY_UPDATED.md) | Ask Cozy | 2026-07-28 |
+| 🟠 | [AI Features - Implementation Summary](../functional/AI_CARDS_SUMMARY_UPDATED.md) | Ask Cozy | 2026-07-28 |
 | 🟠 | [Hidden Asset Finder](../functional/HIDDEN_ASSET_FINDER.md) | Coverage | 2026-07-28 |
 |  | [Contract-to-Cozy](../functional/HOME_DIGITAL_TWIN.md) | Home Records | 2026-07-28 |
 |  | [Home Tools — Functional Requirements Document (FRD)](../functional/HOME_TOOLS.md) | Home Records | 2026-07-28 |
@@ -188,7 +188,7 @@ Most recently changed first; showing area.
 |  | [Guidance Engine Homeowner CTA Audit FRD](../functional/GUIDANCE_ENGINE_HOMEOWNER_CTA_AUDIT_FRD.md) | Guidance | 2026-07-28 |
 |  | [Capability Outcome and Experience Audit Framework](../product/CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md) | Product Framework & Capability Platform | 2026-07-28 |
 | 🟠 | [Capital Decision Planning Capability Audit and Implementation Plan](../product/CAPITAL_DECISION_PLANNING_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-28 |
-|  | [Coverage and Premium Optimization Capability Audit and Implementation Plan](../product/COVERAGE_AND_PREMIUM_OPTIMIZATION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-28 |
+| 🟠 | [Coverage and Premium Optimization Capability Audit and Implementation Plan](../product/COVERAGE_AND_PREMIUM_OPTIMIZATION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-28 |
 |  | [Home Digital Twin Capability Audit and Implementation Plan](../product/HOME_DIGITAL_TWIN_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Home Records | 2026-07-28 |
 |  | [Ownership Cost Intelligence Capability Audit and Implementation Plan](../product/OWNERSHIP_COST_INTELLIGENCE_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Coverage | 2026-07-28 |
 |  | [Ownership Cost Intelligence Slice 9 Launch Evidence](../product/OWNERSHIP_COST_SLICE_9_LAUNCH_EVIDENCE.md) | Coverage | 2026-07-28 |
@@ -207,7 +207,7 @@ Most recently changed first; showing area.
 |  | [01 — Codebase Assessment](../personalization/01-codebase-assessment.md) | Personalization Engine | 2026-07-14 |
 |  | [Phase 3 implementation audit — initial greenfield slice](../personalization/phase3-implementation-audit.md) | Personalization Engine | 2026-07-14 |
 |  | [Phase 4 implementation audit — initial greenfield slice](../personalization/phase4-implementation-audit.md) | Personalization Engine | 2026-07-14 |
-|  | [Codebase Evidence Index](../personalization/codebase-evidence.md) | Personalization Engine | 2026-07-13 |
+| 🟠 | [Codebase Evidence Index](../personalization/codebase-evidence.md) | Personalization Engine | 2026-07-13 |
 | 🟡 | [J Checklist Implementation Plan (Partial + Missing Items)](../audit-gemini/j-partial-missing-implementation-plan.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-20 |
 | 🟡 | [Sprint 2 Empty-State Audit](../audit-gemini/sprint2-empty-state-audit.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-20 |
 | 🟡 | [Sprint 3 External User Testing Report](../audit-gemini/sprint3-external-user-testing-report.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-20 |
@@ -264,14 +264,14 @@ Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+| 🟡 | [Contract to Cozy — Wiki](../wiki/README.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
+| 🟠 | [Documentation](../README.md) | Meta & Methodology | 2026-09-19 |
 |  | [Ask Cozy Inline Workspace — Session Handoff](../architecture/ASK_COZY_INLINE_WORKSPACE_SESSION_HANDOFF.md) | Ask Cozy | 2026-09-18 |
-| 🟠 | [Documentation](../README.md) | Meta & Methodology | 2026-09-17 |
 | 🟡 | [Home Health, Inventory & Maintenance](../wiki/features/02-home-health-inventory-and-maintenance.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-09 |
 |  | [Product Framework Phase 2 — Unified Home and Action System](../product/phase2/README.md) | Product Framework & Capability Platform | 2026-08-31 |
 |  | [Home Intelligence Phase 0 — Registry and Ownership Report](../product/HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md) | Guidance | 2026-08-25 |
 |  | [Home Intelligence Phase 1 — Source Parity Status](../product/HOME_INTELLIGENCE_PHASE1_SOURCE_PARITY_STATUS.md) | Guidance | 2026-08-25 |
 |  | [Current Capability Inventory](../product/capability-discovery/current-capability-inventory.md) | Product Framework & Capability Platform | 2026-08-25 |
-| 🟡 | [Contract to Cozy — Wiki](../wiki/README.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-08-22 |
 |  | [Decision Platform — Phase 7A (P0 Contract Closure)](../product/decision-platform/README.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [Decision Platform — Metrics Dictionary and Zero-Tolerance Gates](../product/decision-platform/metrics-dictionary.md) | Product Framework & Capability Platform | 2026-08-13 |
 |  | [Decision Platform — Retention, Erasure, and Export Policy](../product/decision-platform/policy-retention-erasure-export.md) | Product Framework & Capability Platform | 2026-08-13 |
