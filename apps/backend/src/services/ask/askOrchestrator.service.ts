@@ -4116,9 +4116,25 @@ export function isCapitalTimelineAnalysisStale(
   return storedContextVersion !== currentContextVersion;
 }
 
-async function capitalReservePlanResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+// Home Capital Timeline "re-run with a different horizon" write (FRD Appendix D
+// planning/refinement follow-up): the traditional page's ONLY real
+// homeowner-facing "different assumptions" lever is this 5yr/10yr toggle
+// (CapitalTimelineClient.tsx's `([5, 10] as const)` -- confirmed no other
+// horizon and no homeowner-editable rate/assumption-set control exists
+// anywhere in the app). Parsed the same way propertyTaxAppealReadinessResult
+// parses `ground` from free text, and exported for direct unit testing per
+// this file's own isCapitalTimelineAnalysisStale/parseRefinanceScenarioEdit
+// convention.
+export function parseCapitalTimelineHorizonRequest(message: string): 5 | 10 | null {
+  if (/\b5[\s-]*year/i.test(message)) return 5;
+  if (/\b10[\s-]*year/i.test(message)) return 10;
+  return null;
+}
+
+async function capitalReservePlanResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/capital-timeline`;
   const reserveHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/reserve-fund`;
+  const requestedHorizon = parseCapitalTimelineHorizonRequest(message);
   const [access, capitalContext, reserveContext, property, inventoryCount, capitalTimelineFinancialContext] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     evaluateFeatureContext(propertyId, userId, { featureKey: 'CAPITAL_TIMELINE', operationKey: 'RUN_TIMELINE' }),
@@ -4149,8 +4165,18 @@ async function capitalReservePlanResult(userId: string, propertyId: string): Pro
   // matches the current one -- the same "digest mismatch -> recompute"
   // pattern already used by sellHoldRentDecisionFamilyAdapter's selectThread.
   const isStale = isCapitalTimelineAnalysisStale(analysis, capitalTimelineFinancialContext.contextVersion);
-  if ((!analysis || isStale) && property && inventoryCount > 0) {
-    analysis = await homeCapitalTimelineService.runTimeline(propertyId, property.homeownerProfileId, 10, { createdByUserId: userId, propertyContextVersion: capitalContext.contextVersion, awaitReserveFundSync: true });
+  // Horizon re-run: an explicit "5-year"/"10-year" request that doesn't match
+  // the currently stored horizon also forces a recompute, same as staleness --
+  // otherwise a homeowner asking for a different horizon would silently keep
+  // seeing the old one.
+  const horizonMismatch = requestedHorizon != null && analysis?.horizonYears !== requestedHorizon;
+  if ((!analysis || isStale || horizonMismatch) && property && inventoryCount > 0) {
+    // Carry the stored run's assumption set forward, as the traditional page's
+    // doRun does (CapitalTimelineClient.tsx defaults to activeAssumptionSetId)
+    // -- without it resolveForTool falls back to canonical default rates and a
+    // horizon switch would silently discard the homeowner's assumptions.
+    const priorAssumptionSetId = typeof analysis?.inputsSnapshot?.assumptionSetId === 'string' ? analysis.inputsSnapshot.assumptionSetId : undefined;
+    analysis = await homeCapitalTimelineService.runTimeline(propertyId, property.homeownerProfileId, requestedHorizon ?? analysis?.horizonYears ?? 10, { assumptionSetId: priorAssumptionSetId, createdByUserId: userId, propertyContextVersion: capitalContext.contextVersion, awaitReserveFundSync: true });
   }
   const fund: any = await homeReserveFundService.getSummary(propertyId);
   const lineItems: any[] = await homeReserveFundService.listLineItems(propertyId, { status: 'ACTIVE' });
@@ -4166,7 +4192,14 @@ async function capitalReservePlanResult(userId: string, propertyId: string): Pro
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'capital-reserve-summary', title: `${upcoming.length} upcoming capital event${upcoming.length === 1 ? '' : 's'} are in the current plan`,
     body: `The modeled cost range for the displayed ${analysis.horizonYears ?? 10}-year horizon is ${money(totalLow / 100)}–${money(totalHigh / 100)}. The canonical reserve plan currently suggests ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month and records a ${money((fund.currentShortfallCents ?? 0) / 100)} shortfall.`,
-    tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open capital timeline', href, style: 'PRIMARY' }, { id: 'open-reserve', label: 'Open reserve fund', href: reserveHref, style: 'SECONDARY' }],
+    tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT', actions: [
+      { id: 'open-timeline', label: 'Open capital timeline', href, style: 'PRIMARY' }, { id: 'open-reserve', label: 'Open reserve fund', href: reserveHref, style: 'SECONDARY' },
+      // Horizon re-run (FRD Appendix D planning/refinement follow-up): re-invokes this same CAPITAL_RESERVE_PLAN
+      // operation with an explicit horizon in the message, mirroring the traditional page's own 5yr/10yr toggle --
+      // only offers the horizon NOT currently shown, same as a two-state toggle rather than two redundant buttons.
+      ...(analysis.horizonYears !== 5 ? [{ id: 'rerun-horizon-5', label: 'Show 5-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 5-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
+      ...(analysis.horizonYears !== 10 ? [{ id: 'rerun-horizon-10', label: 'Show 10-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 10-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
+    ],
   }, { type: 'TABLE', id: 'capital-timeline-table', title: 'Upcoming capital windows', description: 'Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes.', columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Planning window' }, { key: 'cost', label: 'Estimated range' }, { key: 'confidence', label: 'Confidence' }], rows: upcoming.map((item) => ({ id: item.id, values: { item: item.inventoryItem?.name ?? String(item.category).toLowerCase().replace(/_/g, ' '), window: `${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`, cost: item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null ? 'Not available' : `${money(item.estimatedCostMinCents / 100)}–${money(item.estimatedCostMaxCents / 100)}`, confidence: String(item.confidence).toLowerCase() } })), totalCount: items.length, actions: items.length > upcoming.length ? [{ id: 'open-timeline-table', label: 'Open capital timeline', href, style: 'SECONDARY' }] : [] },
   // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: entityType routes these
   // through ReserveAllocationResultList (GroupedListBlock.tsx) instead of the generic href-only renderer, opening
@@ -9118,7 +9151,7 @@ registerCapabilityHandler('guidance.journey.create', async (envelope) => guidanc
 registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteComparisonCreateResult(envelope.propertyId!, envelope.message));
 registerCapabilityHandler('quote-comparison.review', async (envelope) => quoteComparisonReviewResult(envelope.propertyId!));
 registerCapabilityHandler('home-deadline.monitor', async (envelope) => homeDeadlineMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('capital-reserve.plan', async (envelope) => capitalReservePlanResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('capital-reserve.plan', async (envelope) => capitalReservePlanResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('property-tax.appeal-readiness', async (envelope) => propertyTaxAppealReadinessResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('renovation-permit.readiness', async (envelope) => renovationPermitReadinessResult(envelope.propertyId!, envelope.message));
 registerCapabilityHandler('major-event.entry', async (envelope) => majorEventEntryResult(envelope.userId, envelope.propertyId!, envelope.message));

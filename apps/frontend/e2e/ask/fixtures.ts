@@ -118,18 +118,25 @@ function propertySummaryTimelineExecution() {
 // reserve-allocations (first slice, a GROUPED_LIST) and capital-timeline-table (the TABLE-block row-click-to-detail
 // platform capability, second slice). The real response also has an EVIDENCE block
 // (askOrchestrator.service.ts's capitalReservePlanResult), trimmed here since neither slice touches it.
-function capitalReservePlanExecution() {
+// horizonYears mirrors the real capitalReservePlanResult's own horizon re-run behavior (FRD Appendix D
+// planning/refinement follow-up): only the horizon NOT currently shown gets an action, matching a two-state
+// toggle rather than two redundant buttons.
+function capitalReservePlanExecution({ horizonYears = 10 as 5 | 10 } = {}) {
   return {
-    schemaVersion: '1.0', executionId: 'execution-capital-reserve-plan', sessionId: 'ask-acceptance-session',
+    // A distinct id for the 5-year re-run response (a real backend would mint a fresh executionId per turn too)
+    // so it appends as its own article instead of colliding with the initial 10-year response's.
+    schemaVersion: '1.0', executionId: horizonYears === 5 ? 'execution-capital-reserve-plan-5yr' : 'execution-capital-reserve-plan', sessionId: 'ask-acceptance-session',
     question: 'Create a capital reserve plan for future replacements.', status: 'ANSWERED',
     property: { id: propertyId, label: 'Acceptance Home' },
     operation: { id: 'CAPITAL_RESERVE_PLAN', version: '1.0', family: 'DECISION_ANALYSIS' }, contextVersion: 'capital-reserve-plan-v1',
     blocks: [{
       type: 'SUMMARY', id: 'capital-reserve-summary', title: '1 upcoming capital event is in the current plan',
-      body: 'The modeled cost range for the displayed 10-year horizon is $1,000–$1,400. The canonical reserve plan currently suggests $25 per month and records a $0 shortfall.',
+      body: `The modeled cost range for the displayed ${horizonYears}-year horizon is $1,000–$1,400. The canonical reserve plan currently suggests $25 per month and records a $0 shortfall.`,
       tone: 'DEFAULT', actions: [
         { id: 'open-timeline', label: 'Open capital timeline', href: `/dashboard/properties/${propertyId}/tools/capital-timeline`, style: 'PRIMARY' },
         { id: 'open-reserve', label: 'Open reserve fund', href: `/dashboard/properties/${propertyId}/tools/reserve-fund`, style: 'SECONDARY' },
+        ...(horizonYears !== 5 ? [{ id: 'rerun-horizon-5', label: 'Show 5-year horizon', interactionType: 'START_WORKFLOW', message: 'Show my capital reserve plan for a 5-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' }] : []),
+        ...(horizonYears !== 10 ? [{ id: 'rerun-horizon-10', label: 'Show 10-year horizon', interactionType: 'START_WORKFLOW', message: 'Show my capital reserve plan for a 10-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' }] : []),
       ],
     }, {
       // capital-timeline-table row-click-to-detail platform capability (FRD Appendix D): its own row (a
@@ -990,7 +997,11 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       return;
     }
     if (/capital reserve plan/i.test(body.message)) {
-      const response = capitalReservePlanExecution();
+      // Horizon re-run (FRD Appendix D planning/refinement follow-up): a homeowner clicking "Show 5-year
+      // horizon"/"Show 10-year horizon" re-sends this same operation with an explicit horizon in the message,
+      // mirroring capitalReservePlanResult's own parseCapitalTimelineHorizonRequest parsing.
+      const horizonYears = /5-year horizon/i.test(body.message) ? 5 : 10;
+      const response = capitalReservePlanExecution({ horizonYears });
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

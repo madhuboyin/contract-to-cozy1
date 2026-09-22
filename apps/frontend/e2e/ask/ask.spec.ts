@@ -824,6 +824,35 @@ test('Home Capital Timeline: a TABLE row opens canonical capital-window detail i
   await expect(response.getByRole('button', { name: 'Water heater' })).toBeVisible();
 });
 
+test('Home Capital Timeline: re-running with a different horizon dispatches the same operation and shows the new result inline (planning/refinement follow-up)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Create a capital reserve plan for future replacements.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const firstResponse = page.locator('#ask-execution-execution-capital-reserve-plan');
+  await expect(firstResponse.getByText(/10-year horizon/)).toBeVisible();
+  await expect(firstResponse.getByRole('button', { name: 'Show 5-year horizon' })).toBeVisible();
+  await expect(firstResponse.getByRole('button', { name: 'Show 10-year horizon' })).toHaveCount(0);
+
+  await firstResponse.getByRole('button', { name: 'Show 5-year horizon' }).click();
+
+  const secondResponse = page.locator('#ask-execution-execution-capital-reserve-plan-5yr');
+  await expect(secondResponse.getByText(/5-year horizon/)).toBeVisible();
+  // The re-run dispatches the SAME CAPITAL_RESERVE_PLAN operation (declared item-action identity, ASK-COZY's
+  // highest-priority routing source), not free-text reclassification -- asserted on the exact request body.
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Show my capital reserve plan for a 5-year horizon.',
+    launchContext: expect.objectContaining({ operationId: 'CAPITAL_RESERVE_PLAN' }),
+  }));
+  // The toggle now offers the OTHER horizon only, and the original 10-year response is left untouched in
+  // the transcript instead of being replaced.
+  await expect(secondResponse.getByRole('button', { name: 'Show 10-year horizon' })).toBeVisible();
+  await expect(secondResponse.getByRole('button', { name: 'Show 5-year horizon' })).toHaveCount(0);
+  await expect(firstResponse.getByText(/10-year horizon/)).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('Home Event Radar: a monitored event opens canonical detail inline, keeping the traditional Home Event Radar page as a secondary option', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

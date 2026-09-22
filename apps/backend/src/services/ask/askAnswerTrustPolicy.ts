@@ -74,7 +74,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
   QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'open-comparison']),
   HOME_DEADLINE_MONITOR: new Set(['open-task', 'open-maintenance', 'open-coverage', 'manage-reminder']),
-  CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'open-timeline', 'open-timeline-table', 'open-reserve']),
+  CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'open-timeline', 'open-timeline-table', 'open-reserve', 'rerun-horizon-5', 'rerun-horizon-10']),
   HOME_EVENT_RADAR_FEED: new Set(['open-radar']),
   PROPERTY_TAX_APPEAL_READINESS: new Set(['open-property-tax']),
   RENOVATION_PERMIT_READINESS: new Set(['start-renovation', 'open-permits', 'open-case']),
