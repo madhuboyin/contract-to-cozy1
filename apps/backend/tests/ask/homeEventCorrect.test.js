@@ -66,6 +66,13 @@ test('propose never writes; confirm writes only via updateHomeEvent with the ide
   assert.match(body('function homeEventFieldPatch(', 'function homeEventCorrectionBlocker('), /datePrecision: 'EXACT_DATE'/, 'a corrected date must not keep a coarser precision');
 });
 
+test('declared item-action messages and natural phrasing route to HOME_EVENT_CORRECT for the room and inventory item links', () => {
+  for (const message of ['Correct the room of this timeline event.', 'Correct the inventory item of this timeline event.']) {
+    assert.equal(routeOf(message), 'HOME_EVENT_CORRECT', message);
+  }
+  assert.notEqual(routeOf('What room is the roof replacement linked to?'), 'HOME_EVENT_CORRECT');
+});
+
 test('event correction actions are declared only for contributor-and-up on both event producers; edit handler registered', () => {
   assert.match(body('function homeEventCorrectionItemActions(', 'function homeEventCorrectionConfirmation('), /if \(!canManage\) return undefined;/);
   assert.equal((source.match(/actions: homeEventCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER\)/g) ?? []).length, 2);

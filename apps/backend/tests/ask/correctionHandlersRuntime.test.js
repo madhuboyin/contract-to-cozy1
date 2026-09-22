@@ -435,7 +435,7 @@ test('INVENTORY_ITEM_CORRECT confirm rejects a missing date, a stale version and
 
 // ───────────────────────────── HOME_EVENT_CORRECT ─────────────────────────────
 const eventVersion = sha('event-1:3');
-function eventModel({ current = { id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', occurredAt: new Date('2026-09-01T00:00:00.000Z'), summary: 'Full tear-off.', amount: '18500', type: 'IMPROVEMENT', importance: 'NORMAL' }, winner = null } = {}) {
+function eventModel({ current = { id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', occurredAt: new Date('2026-09-01T00:00:00.000Z'), summary: 'Full tear-off.', amount: '18500', type: 'IMPROVEMENT', importance: 'NORMAL', roomId: null, inventoryItemId: null }, winner = null } = {}) {
   models.homeEvent = { findFirst: async ({ where }) => (where.idempotencyKey ? winner : where.id === 'event-1' ? current : null), findMany: async () => [current] };
 }
 const eventParams = (field, value, version = eventVersion) => ({ homeEventCorrection: { eventId: 'event-1', field, value }, homeEventCorrectionContextVersion: version, confirmationVersion: 2 });
@@ -484,6 +484,86 @@ test('HOME_EVENT_CORRECT confirm lets the creator correct their own PRIVATE even
   await invoke('HOME_EVENT_CORRECT', eventParams('title', 'New title'));
   assert.equal(calls.updateHomeEvent.length, 1);
 });
+
+// ── HOME_EVENT_CORRECT extended: room and inventory item links ──
+const KITCHEN = { id: 'room-1', name: 'Kitchen' };
+const WATER_HEATER = { id: 'item-1', name: 'Water heater' };
+function linkModels({ rooms = [KITCHEN], items = [WATER_HEATER], roomExists = true, itemExists = true } = {}) {
+  models.inventoryRoom = { findMany: async () => rooms, findFirst: async () => (roomExists ? { id: KITCHEN.id } : null) };
+  models.inventoryItem = { findMany: async () => items, findFirst: async () => (itemExists ? { id: WATER_HEATER.id } : null) };
+}
+const linkParams = (field, value, version = eventVersion) => ({ homeEventCorrection: { eventId: 'event-1', field, value }, homeEventCorrectionContextVersion: version, confirmationVersion: 2 });
+
+test('HOME_EVENT_CORRECT confirm links a room/item through updateHomeEvent, and maps the "No room"/"No item" sentinel to null', async () => {
+  linkModels();
+  eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', roomId: null, inventoryItemId: null } });
+  await invoke('HOME_EVENT_CORRECT', linkParams('roomId', 'room-1'));
+  assert.deepEqual(calls.updateHomeEvent[0][2].roomId, 'room-1');
+  install(); linkModels();
+  eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', roomId: 'room-1', inventoryItemId: null } });
+  await invoke('HOME_EVENT_CORRECT', linkParams('roomId', 'NONE'));
+  assert.deepEqual(calls.updateHomeEvent[0][2].roomId, null, '"No room" unlinks rather than writing the sentinel string');
+  install(); linkModels();
+  eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', roomId: null, inventoryItemId: null } });
+  await invoke('HOME_EVENT_CORRECT', linkParams('inventoryItemId', 'item-1'));
+  assert.deepEqual(calls.updateHomeEvent[0][2].inventoryItemId, 'item-1');
+});
+
+test('HOME_EVENT_CORRECT confirm rejects a room/item id that is not in this property (a stale, deleted, or cross-property id), without writing', async () => {
+  linkModels({ roomExists: false });
+  eventModel();
+  assert.equal(await codeOf(invoke('HOME_EVENT_CORRECT', linkParams('roomId', 'someone-elses-room'))), 'ASK_INVALID_CONFIRMATION_EDIT');
+  install(); linkModels({ itemExists: false });
+  eventModel();
+  assert.equal(await codeOf(invoke('HOME_EVENT_CORRECT', linkParams('inventoryItemId', 'someone-elses-item'))), 'ASK_INVALID_CONFIRMATION_EDIT');
+  assert.equal(calls.updateHomeEvent.length, 0);
+});
+
+test('HOME_EVENT_CORRECT propose offers "No room"/"No item" plus the property\'s own rooms/items, pre-selecting the event\'s current link', async () => {
+  linkModels();
+  eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', roomId: 'room-1', inventoryItemId: null } });
+  const roomPrompt = await capabilityInvoke('HOME_EVENT_CORRECT', { userId: 'u1', propertyId: 'p1', message: 'Correct the room of this timeline event.', launchContext: { surface: 'ASK_WORKSPACE', entityType: 'HOME_EVENT', entityId: 'event-1', operationId: 'HOME_EVENT_CORRECT' } });
+  assert.deepEqual(roomPrompt.confirmation.editableFields[0].options.map((option) => option.value), ['NONE', 'room-1']);
+  assert.equal(roomPrompt.confirmation.editableFields[0].value, 'room-1', 'pre-selects the currently linked room');
+  assert.equal(roomPrompt.confirmation.fields.find((field) => field.label === 'Current value').value, 'Kitchen');
+  const itemPrompt = await capabilityInvoke('HOME_EVENT_CORRECT', { userId: 'u1', propertyId: 'p1', message: 'Correct the inventory item of this timeline event.', launchContext: { surface: 'ASK_WORKSPACE', entityType: 'HOME_EVENT', entityId: 'event-1', operationId: 'HOME_EVENT_CORRECT' } });
+  assert.equal(itemPrompt.confirmation.editableFields[0].value, 'NONE', 'no item linked yet, so "No item" is pre-selected');
+  assert.equal(itemPrompt.confirmation.fields.find((field) => field.label === 'Current value').value, 'Not recorded');
+  assert.equal(calls.updateHomeEvent.length, 0, 'proposing writes nothing');
+});
+
+test('HOME_EVENT_CORRECT edit re-validates a link value against live data and rebuilds a fresh option list (source-shape, like every other edit handler in this file)', () => {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const body = (startMarker, endMarker) => source.slice(source.indexOf(startMarker), source.indexOf(endMarker, source.indexOf(startMarker)));
+  const edit = body('async function editHomeEventCorrectConfirmation(', 'const EDIT_CONFIRMATION_HANDLERS');
+  assert.match(edit, /await homeEventCorrectionValueError\(execution\.propertyId!, existing\.data\.field, input\.edits\.value\)/, 'the edited value is re-validated against live data, not the stale proposal');
+  assert.match(edit, /HOME_EVENT_LINK_FIELDS\.has\(existing\.data\.field\)/, 'a link field fetches a fresh option list on every edit');
+  assert.match(edit, /homeEventLinkOptions\(execution\.propertyId!, existing\.data\.field as 'roomId' \| 'inventoryItemId'\)/);
+});
+
+test('the room/item existence check and the option list are both scoped to this property, not just any record with that id', () => {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const body = (startMarker, endMarker) => source.slice(source.indexOf(startMarker), source.indexOf(endMarker, source.indexOf(startMarker)));
+  const valueError = body('async function homeEventCorrectionValueError(', 'async function homeEventLinkOptions(');
+  assert.match(valueError, /prisma\.inventoryRoom\.findFirst\(\{ where: \{ id: value, propertyId \}/, 'a room id from another property must be rejected, not just any existing room id');
+  assert.match(valueError, /prisma\.inventoryItem\.findFirst\(\{ where: \{ id: value, propertyId, \.\.\.visibleInventoryItemWhere\(\) \}/, 'an item id from another property must be rejected, not just any existing item id');
+  const options = body('async function homeEventLinkOptions(', '// Why this event cannot take this correction, or null.');
+  assert.match(options, /prisma\.inventoryRoom\.findMany\(\{ where: \{ propertyId \}/, 'the room dropdown must only list this property\'s own rooms');
+  assert.match(options, /prisma\.inventoryItem\.findMany\(\{ where: \{ propertyId, \.\.\.visibleInventoryItemWhere\(\) \}/, 'the item dropdown must only list this property\'s own visible items');
+});
+
+test('room actions: routing reaches HOME_EVENT_CORRECT for the two link fields and stays a read for a bare question', () => {
+  const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+  const routeOf = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation.operationId;
+  assert.equal(routeOf('Correct the room of this timeline event.'), 'HOME_EVENT_CORRECT');
+  assert.equal(routeOf('Correct the inventory item of this timeline event.'), 'HOME_EVENT_CORRECT');
+  assert.notEqual(routeOf('What room is the roof replacement linked to?'), 'HOME_EVENT_CORRECT');
+});
+
 
 // ───────────────────────────── ADD A WARRANTY (user-initiated capture) ─────────────────────────────
 const addEnvelope = (launchContext) => ({ userId: 'u1', propertyId: 'p1', message: 'Add a warranty to my home record.', launchContext });

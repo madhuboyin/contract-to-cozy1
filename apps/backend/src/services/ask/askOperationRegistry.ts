@@ -573,7 +573,7 @@ const inventoryItemCorrectPattern = new RegExp(
 // Timeline event title/date correction (Phase 3 write slice 2). Requires an
 // explicit correction verb, title/date/name, and the words "timeline event"
 // or "home event" -- checked before the maintenance/inventory patterns.
-const homeEventCorrectPattern = /\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:title|date|name|summary|description|amount|cost|price|type|importance)\b.{0,40}\b(?:timeline|home)\s+event\b|\b(?:timeline|home)\s+event\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:title|date|name|summary|description|amount|cost|price|type|importance)\b/i;
+const homeEventCorrectPattern = /\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:title|date|name|summary|description|amount|cost|price|type|importance|room|inventory\s+item)\b.{0,40}\b(?:timeline|home)\s+event\b|\b(?:timeline|home)\s+event\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:title|date|name|summary|description|amount|cost|price|type|importance|room|inventory\s+item)\b/i;
 // Timeline event visibility (Phase 3 write slice 7): change/make/share/set + private/household/resale/visibility + event.
 const homeEventVisibilityPattern = /\b(?:change|make|set|share)\b.{0,40}\b(?:visibility|private|household|resale)\b.{0,40}\b(?:timeline|home)\s+event\b|\b(?:timeline|home)\s+event\b.{0,60}\b(?:change|make|set|share)\b.{0,30}\b(?:visibility|private|household|resale)\b|\b(?:change|make|set|share)\b.{0,40}\b(?:timeline|home)\s+event\b.{0,40}\b(?:visibility|private|household|resale)\b|\bwho\s+can\s+see\b.{0,60}\b(?:timeline|home)\s+event\b/i;
 // Warranty provider / expiry-date correction (Phase 3 write slice 3).

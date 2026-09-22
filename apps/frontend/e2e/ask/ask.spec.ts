@@ -388,6 +388,17 @@ test('a contributor changes a timeline event\'s visibility inline through a drop
   });
 });
 
+test('a contributor links a timeline event to a room inline through a dropdown, including unlinking with "No room"', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Recent verified home activity', recordButton: 'Roof replacement', detailText: 'The roof replacement is recorded with verified evidence.',
+    actionLabel: /^Correct room/, actionMessage: 'Correct the room of this timeline event.', entityType: 'HOME_EVENT', entityId: 'event-property-summary',
+    disclosure: true, select: true,
+    confirmationTitle: 'Correct the room of "Roof replacement"?', fieldLabel: 'Corrected room', newValue: 'room-property-summary', shownValue: 'Kitchen', confirmLabel: 'Save room',
+    consentText: /I authorize this correction to the shared home timeline/, receiptTitle: 'Home timeline event corrected',
+  });
+});
+
 test('a contributor adds a timeline event inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

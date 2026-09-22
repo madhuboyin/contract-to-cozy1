@@ -25,6 +25,8 @@ const READS = [
   'What type of event was the roof replacement?', 'How much did the roof replacement cost?', 'What is the summary of my last repair?', 'How important is the roof event?',
   'What is the policy number on my home warranty?', 'How much does my home warranty cost?', 'What does my HVAC warranty cover?', 'When did my warranty start?',
   'What type of warranty do I have?', 'Show the coverage details for my furnace warranty',
+  // read questions about an event's room/item link that must stay reads
+  'What room is the roof replacement linked to?', 'Which room is the roof event in?', 'What item is this timeline event about?', 'Is this event linked to my water heater?',
   // read questions about visibility that must stay reads
   'Who can see my home timeline?', 'Which events are private?', 'What is the visibility of the roof replacement event?', 'Show my home timeline', 'Which events are shared in my resale pack?',
   'Make my property private', 'Change my privacy settings',
@@ -51,6 +53,7 @@ const WRITES = [
   ['Correct the policy number of this warranty.', 'WARRANTY_CORRECT'], ['Correct the cost of this warranty.', 'WARRANTY_CORRECT'],
   ['Correct the coverage details of this warranty.', 'WARRANTY_CORRECT'],
   ['Change the visibility of this timeline event.', 'HOME_EVENT_VISIBILITY'], ['Make this timeline event private', 'HOME_EVENT_VISIBILITY'], ['Share this timeline event in resale summaries', 'HOME_EVENT_VISIBILITY'], ['Who can see this timeline event?', 'HOME_EVENT_VISIBILITY'],
+  ['Correct the room of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the inventory item of this timeline event.', 'HOME_EVENT_CORRECT'], ['Change the room for this timeline event to the kitchen', 'HOME_EVENT_CORRECT'],
   ['Rename this room.', 'ROOM_RENAME'], ['Can you rename the spare room to office', 'ROOM_RENAME'],
   ['Change the type of this room.', 'ROOM_RENAME'], ['Change the floor level of this room.', 'ROOM_RENAME'], ['Correct the room type of the office', 'ROOM_RENAME'], ['Change the floor level of the guest room', 'ROOM_RENAME'],
 ];

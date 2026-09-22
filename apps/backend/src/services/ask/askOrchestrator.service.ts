@@ -116,6 +116,7 @@ import { capabilityCardLaunch } from './askCapabilityCardLaunch';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
 import { isWaterHeaterInventoryName } from '../repairReplaceEligibility';
+import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import { inferMajorApplianceType, formatMajorApplianceType, PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX } from '../majorAppliance.util';
 import { getFinancialContextDecisions } from '../financialContext/context';
 import { getProfile, upsertProfile } from '../financing.service';
@@ -8262,25 +8263,37 @@ const HOME_EVENT_IMPORTANCE_OPTIONS: readonly CorrectionOption[] = [
   { label: 'Low', value: 'LOW' }, { label: 'Normal', value: 'NORMAL' }, { label: 'High', value: 'HIGH' }, { label: 'Highlight', value: 'HIGHLIGHT' },
 ];
 type HomeEventCorrectionMeta = CorrectionFieldSpec & { action: string; message: string };
-const HOME_EVENT_CORRECTION_FIELDS: Record<'title' | 'occurredAt' | 'summary' | 'amount' | 'type' | 'importance', HomeEventCorrectionMeta> = {
+const HOME_EVENT_CORRECTION_FIELDS: Record<'title' | 'occurredAt' | 'summary' | 'amount' | 'type' | 'importance' | 'roomId' | 'inventoryItemId', HomeEventCorrectionMeta> = {
   title: { label: 'title', action: 'Correct title', message: 'Correct the title of this timeline event.', kind: 'TEXT', min: 3, max: 140 },
   occurredAt: { label: 'date', action: 'Correct date', message: 'Correct the date of this timeline event.', kind: 'DATE' },
   summary: { label: 'summary', action: 'Correct summary', message: 'Correct the summary of this timeline event.', kind: 'TEXTAREA', max: 500 },
   amount: { label: 'amount', action: 'Correct amount', message: 'Correct the amount of this timeline event.', kind: 'MONEY' },
   type: { label: 'type', action: 'Correct type', message: 'Correct the type of this timeline event.', kind: 'SELECT', options: HOME_EVENT_TYPE_OPTIONS },
   importance: { label: 'importance', action: 'Correct importance', message: 'Correct the importance of this timeline event.', kind: 'SELECT', options: HOME_EVENT_IMPORTANCE_OPTIONS },
+  // The two link fields below have no static option list -- homeEventLinkOptions builds it from the property's own
+  // rooms/items at propose and edit time, and homeEventCorrectionConfirmation substitutes it in as `dynamicOptions`.
+  // A raw id would mean nothing to a homeowner, so unlike every other field these are never message-extracted from
+  // free text; the confirmation card's dropdown is the only way to choose a value.
+  roomId: { label: 'room', action: 'Correct room', message: 'Correct the room of this timeline event.', kind: 'SELECT', options: [] },
+  inventoryItemId: { label: 'inventory item', action: 'Correct inventory item', message: 'Correct the inventory item of this timeline event.', kind: 'SELECT', options: [] },
 };
+// Sentinel written into the SELECT dropdown to mean "no room" / "no item" (parallel to INVENTORY_ITEM_CREATE's
+// INVENTORY_NO_ROOM_VALUE) -- an editable field's value is always a non-empty string, never JSON null.
+const HOME_EVENT_LINK_NONE_VALUE = 'NONE';
+const HOME_EVENT_LINK_FIELDS = new Set<HomeEventCorrectionField>(['roomId', 'inventoryItemId']);
 type HomeEventCorrectionField = keyof typeof HOME_EVENT_CORRECTION_FIELDS;
 
 const HomeEventCorrectionInputSchema = z.object({
   eventId: z.string().trim().min(1).max(160),
-  field: z.enum(['title', 'occurredAt', 'summary', 'amount', 'type', 'importance']),
+  field: z.enum(['title', 'occurredAt', 'summary', 'amount', 'type', 'importance', 'roomId', 'inventoryItemId']),
   value: z.string().max(2000).nullable(),
 }).strict();
 
 // "amount"/"cost"/"price" are checked before "type" and "date" only to keep the parse order explicit; the
 // fields do not overlap in practice.
 function homeEventCorrectionField(message: string): HomeEventCorrectionField | null {
+  if (/\binventory\s+item\b/i.test(message)) return 'inventoryItemId';
+  if (/\broom\b/i.test(message)) return 'roomId';
   if (/\b(?:amount|cost|price)\b/i.test(message)) return 'amount';
   if (/\b(?:summary|description)\b/i.test(message)) return 'summary';
   if (/\bimportance\b/i.test(message)) return 'importance';
@@ -8290,7 +8303,17 @@ function homeEventCorrectionField(message: string): HomeEventCorrectionField | n
   return null;
 }
 
-function homeEventCorrectionValueError(field: HomeEventCorrectionField, value: unknown): string | null {
+// Async (unlike every other correction's value check) because the two link fields must be re-verified against live,
+// property-scoped data -- a static option list cannot tell a stale or cross-property id from a real one.
+async function homeEventCorrectionValueError(propertyId: string, field: HomeEventCorrectionField, value: unknown): Promise<string | null> {
+  if (field === 'roomId' || field === 'inventoryItemId') {
+    if (value === HOME_EVENT_LINK_NONE_VALUE) return null;
+    if (typeof value !== 'string' || !value.trim()) return field === 'roomId' ? 'Choose a room, or "No room".' : 'Choose an item, or "No item".';
+    const found = field === 'roomId'
+      ? await prisma.inventoryRoom.findFirst({ where: { id: value, propertyId }, select: { id: true } })
+      : await prisma.inventoryItem.findFirst({ where: { id: value, propertyId, ...visibleInventoryItemWhere() }, select: { id: true } });
+    return found ? null : (field === 'roomId' ? 'That room is not in this home. Choose a recorded room, or "No room".' : 'That item is not in this home. Choose a recorded item, or "No item".');
+  }
   return correctionValueError(HOME_EVENT_CORRECTION_FIELDS[field], value);
 }
 
@@ -8306,7 +8329,19 @@ function homeEventFieldCurrent(event: object, field: HomeEventCorrectionField): 
 function homeEventFieldPatch(field: HomeEventCorrectionField, normalized: string): Record<string, unknown> {
   if (field === 'occurredAt') return { occurredAt: `${normalized}T00:00:00.000Z`, datePrecision: 'EXACT_DATE' };
   if (field === 'amount') return { amount: Number(normalized) };
+  if (HOME_EVENT_LINK_FIELDS.has(field)) return { [field]: normalized === HOME_EVENT_LINK_NONE_VALUE ? null : normalized };
   return { [field]: normalized };
+}
+
+// The property's own rooms (or visible, non-deleted inventory items), as SELECT options for a link field, with a
+// leading "No room"/"No item" entry -- capped like every other inline room/item picker in this file.
+async function homeEventLinkOptions(propertyId: string, field: 'roomId' | 'inventoryItemId'): Promise<CorrectionOption[]> {
+  if (field === 'roomId') {
+    const rooms = await prisma.inventoryRoom.findMany({ where: { propertyId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: 50, select: { id: true, name: true } });
+    return [{ label: 'No room', value: HOME_EVENT_LINK_NONE_VALUE }, ...rooms.map((room) => ({ label: room.name, value: room.id }))];
+  }
+  const items = await prisma.inventoryItem.findMany({ where: { propertyId, ...visibleInventoryItemWhere() }, orderBy: { name: 'asc' }, take: 50, select: { id: true, name: true } });
+  return [{ label: 'No item', value: HOME_EVENT_LINK_NONE_VALUE }, ...items.map((item) => ({ label: item.name, value: item.id }))];
 }
 
 // Why this event cannot take this correction, or null.
@@ -8336,8 +8371,10 @@ function homeEventCorrectionItemActions(canManage: boolean) {
   }];
 }
 
-function homeEventCorrectionConfirmation(event: { id: string; title: string }, field: HomeEventCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
-  const meta = HOME_EVENT_CORRECTION_FIELDS[field];
+function homeEventCorrectionConfirmation(event: { id: string; title: string }, field: HomeEventCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date, dynamicOptions?: readonly CorrectionOption[]) {
+  // A link field's options come from the property's live rooms/items, not a static list; substituting them into
+  // `meta` lets the "Current value" display and the editable field's own options share the exact same lookup.
+  const meta = dynamicOptions ? { ...HOME_EVENT_CORRECTION_FIELDS[field], options: dynamicOptions } : HOME_EVENT_CORRECTION_FIELDS[field];
   return {
     confirmationId: `home-event-correct-${event.id}-${version}`, version, title: `Correct the ${meta.label} of "${event.title}"?`,
     description: 'This records a new revision on the canonical home timeline; the original is preserved as history. An evidence-verified event returns to pending confirmation until it is verified again.',
@@ -8357,7 +8394,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
   const events = await prisma.homeEvent.findMany({
     where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
-    select: { id: true, title: true, revision: true, occurredAt: true, datePrecision: true, summary: true, amount: true, type: true, importance: true },
+    select: { id: true, title: true, revision: true, occurredAt: true, datePrecision: true, summary: true, amount: true, type: true, importance: true, roomId: true, inventoryItemId: true },
   });
   const selected = exactEntityMatch(events, message, launchContext);
   if (!selected) {
@@ -8379,8 +8416,8 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
   if (!field) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'HOME_EVENT_CORRECTION_FIELD_REQUIRED',
-      ...durableFreeTextClarification('HOME_EVENT_CORRECT', `Which detail of "${selected.title}" should change? Ask can correct its title, date, summary, amount, type, or importance.`),
-      blocks: [{ type: 'SUMMARY', id: 'home-event-correct-field', title: 'Which detail should change?', body: 'Say title, date, summary, amount, type, or importance. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      ...durableFreeTextClarification('HOME_EVENT_CORRECT', `Which detail of "${selected.title}" should change? Ask can correct its title, date, summary, amount, type, importance, room, or inventory item.`),
+      blocks: [{ type: 'SUMMARY', id: 'home-event-correct-field', title: 'Which detail should change?', body: 'Say title, date, summary, amount, type, importance, room, or inventory item. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [`Correct the title of the timeline event ${selected.title}`, `Correct the date of the timeline event ${selected.title}`],
     };
   }
@@ -8393,8 +8430,12 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
     };
   }
   const current = homeEventFieldCurrent(selected, field);
+  const isLinkField = HOME_EVENT_LINK_FIELDS.has(field);
+  const dynamicOptions = isLinkField ? await homeEventLinkOptions(propertyId, field as 'roomId' | 'inventoryItemId') : undefined;
   const stated = field === 'occurredAt' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
-  const proposed = stated && isValidDateEditInput(stated) ? stated : current;
+  // A link field always pre-selects its current value (or "No room"/"No item") rather than extracting one from free
+  // text -- a raw id typed into a message would mean nothing, and the dropdown is the only supported way to choose one.
+  const proposed = isLinkField ? (current ?? HOME_EVENT_LINK_NONE_VALUE) : (stated && isValidDateEditInput(stated) ? stated : current);
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const contextVersion = homeEventContextVersion(selected);
   const input = HomeEventCorrectionInputSchema.parse({ eventId: selected.id, field, value: proposed });
@@ -8405,7 +8446,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
     blocks: [{ type: 'SUMMARY', id: 'home-event-correct-review', title: `Review this ${HOME_EVENT_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
-    confirmation: homeEventCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt),
+    confirmation: homeEventCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt, dynamicOptions),
     suggestions: [],
   };
 }
@@ -13248,7 +13289,7 @@ async function confirmHomeEventCorrect(ctx: ConfirmCapabilityContext): Promise<C
   const candidate = HomeEventCorrectionInputSchema.safeParse(parameters.homeEventCorrection);
   if (!candidate.success) throw Object.assign(new Error('The timeline correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const { eventId, field, value } = candidate.data;
-  const invalid = homeEventCorrectionValueError(field, value);
+  const invalid = await homeEventCorrectionValueError(execution.propertyId!, field, value);
   if (invalid || typeof value !== 'string') throw Object.assign(new Error(invalid ?? 'Enter the corrected value before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
   const normalized = correctionNormalized(HOME_EVENT_CORRECTION_FIELDS[field], value);
   // updateHomeEvent has no idempotency of its own and supersedes every time:
@@ -13271,7 +13312,7 @@ async function confirmHomeEventCorrect(ctx: ConfirmCapabilityContext): Promise<C
   if (already) return finish(already);
   const current = await prisma.homeEvent.findFirst({
     where: { id: eventId, propertyId: execution.propertyId, isCurrent: true, deletedAt: null },
-    select: { id: true, title: true, revision: true, visibility: true, createdById: true, datePrecision: true, type: true },
+    select: { id: true, title: true, revision: true, visibility: true, createdById: true, datePrecision: true, type: true, roomId: true, inventoryItemId: true },
   });
   if (!current || (current.visibility === 'PRIVATE' && current.createdById !== userId)) {
     throw Object.assign(new Error('This timeline event is no longer available. It may have been corrected or removed.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
@@ -15185,16 +15226,17 @@ async function editHomeEventCorrectConfirmation(
 ): Promise<AskExecutionResponse> {
   const existing = HomeEventCorrectionInputSchema.safeParse(parameters.homeEventCorrection);
   if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
-  const invalidEdit = homeEventCorrectionValueError(existing.data.field, input.edits.value);
+  const invalidEdit = await homeEventCorrectionValueError(execution.propertyId!, existing.data.field, input.edits.value);
   if (invalidEdit) throw Object.assign(new Error(invalidEdit), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-  const event = await prisma.homeEvent.findFirst({ where: { id: existing.data.eventId, propertyId: execution.propertyId!, isCurrent: true, deletedAt: null }, select: { id: true, title: true, occurredAt: true, summary: true, amount: true, type: true, importance: true } });
+  const event = await prisma.homeEvent.findFirst({ where: { id: existing.data.eventId, propertyId: execution.propertyId!, isCurrent: true, deletedAt: null }, select: { id: true, title: true, occurredAt: true, summary: true, amount: true, type: true, importance: true, roomId: true, inventoryItemId: true } });
   if (!event) throw Object.assign(new Error('The selected timeline event is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   const cleaned = correctionNormalized(HOME_EVENT_CORRECTION_FIELDS[existing.data.field], input.edits.value);
   const updatedInput = HomeEventCorrectionInputSchema.parse({ ...existing.data, value: cleaned });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const current = homeEventFieldCurrent(event, existing.data.field);
-  const newConfirmation = homeEventCorrectionConfirmation(event, existing.data.field, current, cleaned, nextVersion, expiresAt);
+  const dynamicOptions = HOME_EVENT_LINK_FIELDS.has(existing.data.field) ? await homeEventLinkOptions(execution.propertyId!, existing.data.field as 'roomId' | 'inventoryItemId') : undefined;
+  const newConfirmation = homeEventCorrectionConfirmation(event, existing.data.field, current, cleaned, nextVersion, expiresAt, dynamicOptions);
   const reviewBlock = { type: 'SUMMARY' as const, id: 'home-event-correct-review', title: `Review this ${HOME_EVENT_CORRECTION_FIELDS[existing.data.field].label} correction`, body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT' as const, actions: [] };
   const editWrite = await prisma.askExecution.updateMany({
     where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
