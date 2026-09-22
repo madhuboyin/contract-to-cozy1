@@ -95,6 +95,18 @@ function propertySummaryTimelineExecution() {
         meta: ['Insurance certificate', 'Uploaded Sep 10, 2026'], status: 'VERIFIED', href: null,
       }] }],
       actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/documents?propertyId=${propertyId}`, style: 'SECONDARY' }],
+    }, {
+      // Read-only, like Documents: no per-member mutation operation exists, so no item declares actions.
+      // 'member-departed' is deliberately absent from the household/members canonical mock below -- it exists
+      // only in this list, exercising the "no longer a member" data-absence state (never an HTTP 404, unlike
+      // every other entity's not-found path -- see HouseholdMemberDetail's own comment on this).
+      type: 'GROUPED_LIST', id: 'property-household', title: 'Household access', filters: [],
+      description: 'Select a household member to inspect their current canonical role without leaving Ask Cozy.',
+      sections: [{ id: 'household', title: 'Household members', count: 2, items: [
+        { id: 'member-property-summary', title: 'Jordan Reyes', description: null, entityType: 'HOUSEHOLD_MEMBER', href: null, status: 'PRIMARY OWNER', meta: ['Owner', 'Joined Jun 1, 2025'] },
+        { id: 'member-departed', title: 'Alex Departed', description: null, entityType: 'HOUSEHOLD_MEMBER', href: null, status: null, meta: ['Contributor', 'Joined Feb 3, 2024'] },
+      ] }],
+      actions: [{ id: 'open-household', label: 'Open household access', href: `/dashboard/properties/${propertyId}/household`, style: 'SECONDARY' }],
     }],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: false, homeRecord: true, retryResponse: false }, suggestions: [],
@@ -652,6 +664,14 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     propertyId, warrantyId: null, policyId: null, verificationStatus: 'VERIFIED', verifiedAt: '2026-09-11T00:00:00.000Z',
     createdAt: '2026-09-10T00:00:00.000Z', updatedAt: '2026-09-11T00:00:00.000Z', fileSignedUrl: null,
   } } }));
+  // No single-member GET exists on the real backend either -- HouseholdMemberDetail re-fetches the whole list
+  // and finds its own id. 'member-departed' (declared in the property-household fixture block above) is
+  // deliberately NOT in this array, so opening it exercises the data-absence "no longer a member" state.
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/household/members`, (route) => fulfill(route, { success: true, data: { members: [{
+    id: 'member-property-summary', propertyId, userId: 'user-jordan', role: 'OWNER', isPrimaryOwner: true, displayName: 'Jordan Reyes',
+    joinedAt: '2025-06-01T00:00:00.000Z', createdAt: '2025-06-01T00:00:00.000Z', updatedAt: '2025-06-01T00:00:00.000Z',
+    user: { id: 'user-jordan', firstName: 'Jordan', lastName: 'Reyes', email: 'jordan@example.com' },
+  }] } }));
   await page.route(`${apiOrigin}/api/ask/pending*`, (route) => {
     const pendingExecution = {
       ...execution('refrigerator'), executionId: 'execution-pending-maintenance', sessionId: 'session-pending-maintenance',

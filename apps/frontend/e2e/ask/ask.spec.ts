@@ -632,6 +632,44 @@ test('Property Summary documents open canonical detail inline with the full Docu
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Property Summary household members open canonical detail inline with the full household collection secondary', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Household access', exact: true }) });
+  await expect(response.getByRole('link', { name: 'Jordan Reyes' })).toHaveCount(0);
+  await expect(response.getByRole('button', { name: 'Jordan Reyes' })).toBeVisible();
+  await expect(response.getByRole('link', { name: /Open household access/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/household\\?backTo=`));
+
+  // No per-member correction action exists (read-only, like Documents) -- the canonical re-fetch re-derives
+  // role/email/primary-owner/joined from the household/members list endpoint, not from the list item's own fields.
+  await response.getByRole('button', { name: 'Jordan Reyes' }).click();
+  // exact: true -- the list item's own meta ("Owner · Joined Jun 1, 2025") also contains the substring "Owner",
+  // so a loose match resolves to two elements; the detail's <dd> is the only node whose full text is "Owner".
+  await expect(response.getByText('Owner', { exact: true })).toBeVisible();
+  await expect(response.getByText('jordan@example.com')).toBeVisible();
+  await expect(response.getByText('Yes', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('a departed household member shows a distinct "no longer a member" state, not an access-loss redaction', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Household access', exact: true }) });
+  // 'Alex Departed' is in the list fixture but absent from the household/members canonical mock -- the household
+  // endpoint has no per-member 404, so this is a data-absence check, not an HTTP error (unlike every other entity).
+  await response.getByRole('button', { name: 'Alex Departed' }).click();
+  await expect(response.getByText('No longer a household member')).toBeVisible();
+  await expect(response.getByText('This person is no longer part of this household.')).toBeVisible();
+  // The rest of the Ask result -- other collections, the conversation -- stays intact; this is not a whole-result redaction.
+  await expect(page.getByRole('heading', { name: 'Here is the current Living Home Record for Acceptance Home' })).toBeVisible();
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
