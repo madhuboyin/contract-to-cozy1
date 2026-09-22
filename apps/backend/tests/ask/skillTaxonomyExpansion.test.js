@@ -38,6 +38,7 @@ const TAXONOMY = Object.freeze({
   'document-promotion': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
   documents: ['DOCUMENT_LOOKUP'],
   'query-envelope': ['INTELLIGENCE_ENVELOPE_QUERY'],
+  'home-event-radar': ['HOME_EVENT_RADAR_FEED'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though
@@ -47,13 +48,21 @@ const TAXONOMY = Object.freeze({
 // skill.manifest' (unrelated to this addition, predates this phase), which
 // this test's own "skills/${skillId}" check would otherwise flag as a
 // forbidden per-Skill coupling.
+// 'home-event-radar' (capability-card audit, a different feature/session
+// entirely, not part of this taxonomy-expansion phase) is also deliberately
+// excluded: this list's per-skill check regex-matches the skill id's
+// uppercased constant form (HOME_EVENT_RADAR) as a raw substring against
+// askOrchestrator.service.ts's full text, and HOME_EVENT_RADAR_FEED (the
+// real operation id, referenced legitimately throughout that file) itself
+// contains that exact substring -- adding this skill here would fail on a
+// false-positive substring match, not a real per-Skill routing branch.
 const EXPANDED_SKILLS = Object.freeze([
   'capital-planning', 'coverage', 'household', 'ownership-cost', 'property-tax',
   'quote-comparison', 'renovation', 'savings', 'sell-hold-rent', 'seller-preparation',
   'seller-prep', 'buyer-closing', 'incident-claim', 'home-operations', 'documents',
 ]);
 
-test('all twenty-two representative Skills own the intended canonical operations', () => {
+test('all twenty-three representative Skills own the intended canonical operations', () => {
   assert.deepEqual(new Set(Object.keys(SKILL_DEFINITIONS)), new Set(Object.keys(TAXONOMY)));
   for (const [skillId, operations] of Object.entries(TAXONOMY)) {
     const skill = SKILL_DEFINITIONS[skillId];

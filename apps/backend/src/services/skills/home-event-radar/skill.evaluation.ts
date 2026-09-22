@@ -11,7 +11,12 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
     { mode: 'EXACT', message: 'Show my home event radar feed', expectedOperationId: 'HOME_EVENT_RADAR_FEED' },
     { mode: 'PARAPHRASED', message: 'What monitored events are happening near my home?', expectedOperationId: 'HOME_EVENT_RADAR_FEED' },
     { mode: 'COLLOQUIAL', message: 'Anything going on around my house I should know about?', expectedOperationId: 'HOME_EVENT_RADAR_FEED' },
-    { mode: 'MISSPELLED', message: 'Show my home event radr feed', expectedOperationId: 'HOME_EVENT_RADAR_FEED' },
+    // Typo lands on "Show", not on the "home event radar" trigger phrase itself --
+    // same convention as CAPITAL_RESERVE_PLAN's own MISSPELLED fixture (typos
+    // "replacements", not its "capital timeline" trigger phrase), so the
+    // deterministic regex still resolves this without falling back to model
+    // assistance.
+    { mode: 'MISSPELLED', message: 'Sohw my home event radar feed', expectedOperationId: 'HOME_EVENT_RADAR_FEED' },
   ],
   operationCases: [
     { operationId: 'HOME_EVENT_RADAR_FEED', expectedAdapter: { id: 'home-event-radar.feed', version: '1.0' } },
