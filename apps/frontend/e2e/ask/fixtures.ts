@@ -248,6 +248,33 @@ function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ve
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved and built 2026-09-22). Must match
+// EVIDENCE_ATTACH_MESSAGE in HomeEventResultList.tsx and askOrchestrator.service.ts exactly. Unlike every other
+// correction here, editableFields is always [] -- the file was already picked and uploaded client-side before
+// this execution exists, so there is nothing left to edit on the confirmation card, only review and consent.
+function evidenceAttachConfirmation(version: number, documentName: string) {
+  return {
+    confirmationId: `evidence-attach-event-property-summary-${version}`, version, title: 'Attach this document as evidence?',
+    description: 'You are attaching a document you just uploaded to this home timeline entry. No change is saved until you confirm.',
+    fields: [{ label: 'Document', value: documentName }, { label: 'Attach to', value: 'Roof replacement' }],
+    editableFields: [], confirmLabel: 'Attach document', consentText: 'I confirm this document is evidence for this home record entry.',
+    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+  };
+}
+
+function evidenceAttachExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', version: number, documentName: string, sessionId?: string) {
+  const base = propertySummaryTimelineExecution();
+  return {
+    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-evidence-attach', question: 'Attach evidence to this home timeline entry.', status,
+    operation: { id: 'CAPTURE_EVIDENCE_CONFIRM', version: '1.0', family: 'COMMAND' }, contextVersion: 'evidence-attach-v1',
+    blocks: status === 'COMPLETED'
+      ? [{ type: 'SUMMARY', id: 'evidence-attached-link-1', title: 'Attached to your home timeline', tone: 'POSITIVE', body: `${documentName} is now attached as evidence on your home timeline.`, actions: [] }]
+      : [{ type: 'SUMMARY', id: 'evidence-attach-review', title: 'Attach this document to "Roof replacement"?', body: 'Nothing has been saved yet. Review, then confirm.', tone: 'DEFAULT', actions: [] }],
+    confirmation: status === 'COMPLETED' ? null : evidenceAttachConfirmation(version, documentName),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 // Phase 3 write-slice acceptance: confirmation -> edit -> confirm for the
 // inventory (DATE), warranty (DATE) and room (TEXT) corrections. Shapes mirror
 // the real server's confirmation cards.
@@ -708,6 +735,11 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     propertyId, warrantyId: null, policyId: null, verificationStatus: 'VERIFIED', verifiedAt: '2026-09-11T00:00:00.000Z',
     createdAt: '2026-09-10T00:00:00.000Z', updatedAt: '2026-09-11T00:00:00.000Z', fileSignedUrl: null,
   } } }));
+  // Evidence upload design (approved and built 2026-09-22): the byte-upload half. Deliberately not /analyze --
+  // no AI analysis, no Magic Scan quota. Returns just enough identity for AttachEvidenceControl to dispatch with.
+  await page.route(`${apiOrigin}/api/documents/property/${propertyId}/evidence-upload`, (route) => fulfill(route, { success: true, data: { document: {
+    id: 'document-evidence-fixture', name: 'invoice.pdf', mimeType: 'application/pdf', fileSize: 10240,
+  } } }));
   // No single-member GET exists on the real backend either -- HouseholdMemberDetail re-fetches the whole list
   // and finds its own id. 'member-departed' (declared in the property-household fixture block above) is
   // deliberately NOT in this array, so opening it exercises the data-absence "no longer a member" state.
@@ -857,6 +889,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: response }, 201);
       return;
     }
+    if (/attach evidence to this home timeline entry/i.test(body.message)) {
+      const response = evidenceAttachExecution('NEEDS_CONFIRMATION', 1, 'invoice.pdf', body.sessionId as string | undefined);
+      if (body.sessionId) correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
     if (/summary of my home record/i.test(body.message)) {
       const response = propertySummaryTimelineExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
@@ -985,6 +1023,14 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     const body = route.request().postDataJSON() as Record<string, unknown>;
     correctionConfirmBodies.push(body);
     await fulfill(route, { success: true, data: eventCorrectionExecution('COMPLETED', 2, 'Roof replacement (full tear-off)', correctionSessionId) });
+  });
+  // No confirm/edit route -- evidenceAttachConfirmation's editableFields is always [], so the frontend never
+  // offers an Edit control and never calls the edit endpoint for this execution.
+  await page.route(`${apiOrigin}/api/ask/executions/execution-evidence-attach/confirm`, async (route) => {
+    assertAuthenticated(route.request());
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    correctionConfirmBodies.push(body);
+    await fulfill(route, { success: true, data: evidenceAttachExecution('COMPLETED', 2, 'invoice.pdf', correctionSessionId) });
   });
   // Registered after the generic captures route above so it takes precedence for this execution only.
   await page.route(`${apiOrigin}/api/ask/executions/execution-warranty-add/captures`, async (route) => {

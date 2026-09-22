@@ -725,6 +725,66 @@ test('an ambiguous inventory question opens the matching item inline instead of 
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('a contributor attaches evidence to a timeline event inline: the file uploads out of band, then Ask confirms and shows the receipt', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
+  await response.getByRole('button', { name: 'Roof replacement' }).click();
+  await expect(response.getByText('The roof replacement is recorded with verified evidence.')).toBeVisible();
+
+  // Attach evidence is its own control, not folded behind "Correct a detail" like the other declared actions --
+  // visible immediately once the event has any declared action at all. Tag-scoped, not getByRole('button', ...):
+  // a hidden <input type="file"> also carries an implicit "button" ARIA role in Chromium, so a role-only query
+  // matches both it and the real <button>.
+  await expect(response.locator('button', { hasText: 'Attach evidence' })).toBeVisible();
+
+  // No native file dialog in a headless run: set the file directly on the underlying (visually hidden) input.
+  await response.getByLabel('Attach evidence file for Roof replacement').setInputFiles({
+    name: 'invoice.pdf', mimeType: 'application/pdf', buffer: Buffer.from('fixture invoice bytes'),
+  });
+
+  // The upload completes out of band (POST .../evidence-upload, mocked), THEN Ask is asked to attach the
+  // resulting documentId to the exact event identity -- never a raw file, never message-extracted.
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Attach evidence to this home timeline entry.'
+    && (body.launchContext as { entityType?: string; entityId?: string; documentId?: string } | undefined)?.entityType === 'HOME_EVENT'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'event-property-summary'
+    && (body.launchContext as { documentId?: string } | undefined)?.documentId === 'document-evidence-fixture')).toBe(true);
+
+  await expect(page.getByText('Attach this document as evidence?')).toBeVisible();
+  await expect(page.getByRole('definition').filter({ hasText: 'invoice.pdf' })).toBeVisible();
+  await expect(page.getByRole('definition').filter({ hasText: 'Roof replacement' })).toBeVisible();
+  // No editable fields at all -- nothing left to edit once the file is already uploaded, only review and consent.
+  await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+
+  await page.getByLabel(/I confirm this document is evidence for this home record entry/).check();
+  await page.getByRole('button', { name: 'Attach document' }).click();
+
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
+  await expect(page.getByText('Attached to your home timeline')).toBeVisible();
+  await expect(page.getByText('invoice.pdf is now attached as evidence on your home timeline.')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('attaching evidence rejects an unsupported file type before ever calling the upload endpoint', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
+  await response.getByRole('button', { name: 'Roof replacement' }).click();
+  await response.getByLabel('Attach evidence file for Roof replacement').setInputFiles({
+    name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('plain text'),
+  });
+
+  await expect(response.getByRole('alert')).toHaveText('Choose a JPEG, PNG, WEBP, or PDF file.');
+  // Client-side rejection: never dispatched to Ask at all, unlike the accepted-file scenario above.
+  expect(api.executionBodies.some((body) => body.message === 'Attach evidence to this home timeline entry.')).toBe(false);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
