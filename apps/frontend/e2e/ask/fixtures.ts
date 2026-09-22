@@ -114,6 +114,31 @@ function propertySummaryTimelineExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: INVENTORY_LOOKUP's own disambiguation shape (askOrchestrator.service.ts's
+// 'inventory-entity-selection' block) when a free-text question matches more than one item. Routed through the
+// same InventoryResultList as 'inventory-results' (IW-PRIN-002) -- selecting an ambiguous match opens inline
+// canonical detail instead of implicitly ejecting to /inventory before the homeowner confirmed which item they meant.
+function inventoryDisambiguationExecution() {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-inventory-disambiguation', sessionId: 'ask-acceptance-session',
+    question: 'Tell me about my smoke detector.', status: 'NEEDS_ENTITY',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'INVENTORY_LOOKUP', version: '1.0', family: 'STATUS_SUMMARY' }, contextVersion: 'inventory-disambiguation-v1',
+    blocks: [{
+      type: 'GROUPED_LIST', id: 'inventory-entity-selection', title: 'Which inventory item do you mean?', filters: [],
+      description: 'More than one Living Home Record matches this question. Open the intended item, or ask again using its room, brand, or model.',
+      sections: [{ id: 'matches', title: 'Matching records', count: 2, items: [
+        { id: 'item-smoke-kitchen', title: 'Kitchen smoke detector', entityType: 'INVENTORY_ITEM', description: 'Kidde brand', meta: ['Kitchen', 'safety', 'Updated Sep 5, 2026'], status: 'GOOD', href: null },
+        { id: 'item-smoke-hallway', title: 'Hallway smoke detector', entityType: 'INVENTORY_ITEM', description: 'First Alert brand', meta: ['Hallway', 'safety', 'Updated Aug 20, 2026'], status: 'GOOD', href: null },
+      ] }],
+      actions: [],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: true, homeRecord: false, retryResponse: false },
+    suggestions: ['Open home inventory'], createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z',
+  };
+}
+
 // Phase 3 write-slice acceptance: the same Property Summary timeline result,
 // but with the contributor-only "Correct title" item action declared, as the
 // server does for CONTRIBUTOR/OWNER (a VIEWER's result carries no actions).
@@ -609,7 +634,7 @@ export async function installAskContext(context: BrowserContext) {
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
@@ -631,11 +656,30 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       estimatedCost: 250, actualCost: null, serviceCategory: 'HVAC', serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null,
       seasonalChecklistItemId: null, actionKey: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-17T00:00:00.000Z', completedAt: null,
     } }));
-  await page.route(`${apiOrigin}/api/properties/${propertyId}/inventory/items/item-property-summary`, (route) => fulfill(route, { success: true, data: { item: {
-    id: 'item-property-summary', propertyId, roomId: null, warrantyId: null, insurancePolicyId: null, name: 'Water heater', category: 'PLUMBING', condition: 'GOOD',
-    brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z', lastServicedOn: null,
-    purchaseCostCents: 85000, replacementCostCents: 120000, currency: 'USD', notes: 'Tank-style, in basement utility closet.', tags: [], sourceHash: null,
-    coverageNotRequired: false, isVerified: true, documents: [], warranty: null, createdAt: '2022-01-15T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
+  // inventoryDetailNotFound/inventoryDetailAccessLost: both are 404s that share the same HTTP status --
+  // InventoryItemDetail distinguishes them by the response body's error code (ITEM_NOT_FOUND), not status alone.
+  // See InventoryResultList.tsx's own errorCode comment.
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/inventory/items/item-property-summary`, (route) => options.inventoryDetailNotFound
+    ? fulfill(route, { success: false, error: { code: 'ITEM_NOT_FOUND', message: 'Inventory item not found.' } }, 404)
+    : options.inventoryDetailAccessLost
+      ? fulfill(route, { success: false, error: { code: 'PROPERTY_ACCESS_DENIED', message: 'Property not found or access denied.' } }, 404)
+      : fulfill(route, { success: true, data: { item: {
+        id: 'item-property-summary', propertyId, roomId: null, warrantyId: null, insurancePolicyId: null, name: 'Water heater', category: 'PLUMBING', condition: 'GOOD',
+        brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z', lastServicedOn: null,
+        purchaseCostCents: 85000, replacementCostCents: 120000, currency: 'USD', notes: 'Tank-style, in basement utility closet.', tags: [], sourceHash: null,
+        coverageNotRequired: false, isVerified: true, documents: [], warranty: null, createdAt: '2022-01-15T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
+      } } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/inventory/items/item-smoke-kitchen`, (route) => fulfill(route, { success: true, data: { item: {
+    id: 'item-smoke-kitchen', propertyId, roomId: null, warrantyId: null, insurancePolicyId: null, name: 'Kitchen smoke detector', category: 'SAFETY', condition: 'GOOD',
+    brand: 'Kidde', model: 'PI2010', serialNo: 'SN-SMOKE-1', installedOn: '2024-03-01T00:00:00.000Z', purchasedOn: '2024-03-01T00:00:00.000Z', lastServicedOn: null,
+    purchaseCostCents: 2500, replacementCostCents: 2500, currency: 'USD', notes: 'Ceiling-mounted, above the range.', tags: [], sourceHash: null,
+    coverageNotRequired: true, isVerified: true, documents: [], warranty: null, createdAt: '2024-03-01T00:00:00.000Z', updatedAt: '2026-09-05T00:00:00.000Z',
+  } } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/inventory/items/item-smoke-hallway`, (route) => fulfill(route, { success: true, data: { item: {
+    id: 'item-smoke-hallway', propertyId, roomId: null, warrantyId: null, insurancePolicyId: null, name: 'Hallway smoke detector', category: 'SAFETY', condition: 'GOOD',
+    brand: 'First Alert', model: 'SC7010B', serialNo: 'SN-SMOKE-2', installedOn: '2024-03-01T00:00:00.000Z', purchasedOn: '2024-03-01T00:00:00.000Z', lastServicedOn: null,
+    purchaseCostCents: 3200, replacementCostCents: 3200, currency: 'USD', notes: 'Combination smoke/CO alarm outside the bedrooms.', tags: [], sourceHash: null,
+    coverageNotRequired: true, isVerified: true, documents: [], warranty: null, createdAt: '2024-03-01T00:00:00.000Z', updatedAt: '2026-08-20T00:00:00.000Z',
   } } }));
   await page.route(`${apiOrigin}/api/properties/${propertyId}/warranties`, (route) => fulfill(route, { success: true, data: { warranties: [{
     id: 'warranty-property-summary', homeownerProfileId: 'profile-0', propertyId, inventoryItemId: null, category: 'HOME_WARRANTY_PLAN', providerName: 'Acme Home Warranty',
@@ -780,6 +824,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/correctable summary of my home record/i.test(body.message)) {
       const response = correctableSummaryExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/smoke detector/i.test(body.message)) {
+      const response = inventoryDisambiguationExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

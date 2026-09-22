@@ -670,6 +670,61 @@ test('a departed household member shows a distinct "no longer a member" state, n
   await expect(page.getByRole('heading', { name: 'Here is the current Living Home Record for Acceptance Home' })).toBeVisible();
 });
 
+test('inventory item detail: item-not-found is scoped to the detail panel, distinct from an access-loss redaction', async ({ page }) => {
+  // Both are 404s with the same HTTP status -- InventoryItemDetail distinguishes them by the response body's
+  // error code (ITEM_NOT_FOUND), not status alone. See InventoryResultList.tsx's own errorCode comment.
+  await installAskApi(page, { inventoryDetailNotFound: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory', exact: true }) });
+  await response.getByRole('button', { name: 'Water heater' }).click();
+  await expect(response.getByText('Item no longer exists')).toBeVisible();
+  await expect(response.getByText('This item was removed after the Ask result was created.')).toBeVisible();
+  // Scoped to this one detail panel -- the rest of the result, including other collections, stays intact.
+  await expect(page.getByRole('heading', { name: 'Rooms', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('inventory item detail access loss (a different 404 error code) redacts the whole result, not just the detail panel', async ({ page }) => {
+  await installAskApi(page, { inventoryDetailAccessLost: true });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-property-summary');
+  await response.getByRole('button', { name: 'Water heater' }).click();
+
+  await expect(response).toHaveAttribute('role', 'alert');
+  await expect(response.getByRole('heading', { name: 'Result unavailable' })).toBeVisible();
+  await expect(response).toContainText('Access to this result is no longer available.');
+  // The whole result is redacted -- unlike ITEM_NOT_FOUND above, other collections in the same result disappear too.
+  await expect(response.getByRole('heading', { name: 'Rooms', exact: true })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('an ambiguous inventory question opens the matching item inline instead of ejecting to /inventory before it is confirmed', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Tell me about my smoke detector.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Which inventory item do you mean?', exact: true }) });
+  await expect(response.getByText('Kitchen smoke detector')).toBeVisible();
+  await expect(response.getByText('Hallway smoke detector')).toBeVisible();
+  await expect(response.getByRole('link', { name: 'Kitchen smoke detector' })).toHaveCount(0);
+
+  // IW-PRIN-002: selecting an ambiguous match opens inline canonical detail (same InventoryResultList as
+  // inventory-results), not an implicit navigation to /inventory before the homeowner confirmed which item they meant.
+  await response.getByRole('button', { name: 'Kitchen smoke detector' }).click();
+  // exact: true -- the list item's own description ("Kidde brand") also contains the substring "Kidde";
+  // the detail's <dd> is the only node whose full text is "Kidde".
+  await expect(response.getByText('Kidde', { exact: true })).toBeVisible();
+  await expect(response.getByText('Ceiling-mounted, above the range.')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
