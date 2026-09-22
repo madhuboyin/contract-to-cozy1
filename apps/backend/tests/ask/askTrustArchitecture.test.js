@@ -63,6 +63,10 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'INVENTORY_ITEM_CREATE',
     'PROPERTY_CONTEXT_AREA_CAPTURE',
     'HOME_EVENT_VISIBILITY',
+    // Home Event Radar writes (FRD v1.40): reached only from the declared actions on a monitored event.
+    'HOME_EVENT_RADAR_STATE',
+    'HOME_EVENT_RADAR_MARK_DONE',
+    'HOME_EVENT_RADAR_FEEDBACK',
   ]));
   const candidates = retrieveAskOperationCandidates("I'm thinking about selling next year", { topK: 100 });
   assert.equal(candidates.some((candidate) => internalOperations.includes(candidate.operationId)), false);

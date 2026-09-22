@@ -38,7 +38,7 @@ const TAXONOMY = Object.freeze({
   'document-promotion': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
   documents: ['DOCUMENT_LOOKUP'],
   'query-envelope': ['INTELLIGENCE_ENVELOPE_QUERY'],
-  'home-event-radar': ['HOME_EVENT_RADAR_FEED'],
+  'home-event-radar': ['HOME_EVENT_RADAR_FEED', 'HOME_EVENT_RADAR_STATE', 'HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_FEEDBACK'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

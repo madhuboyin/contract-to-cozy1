@@ -15,7 +15,7 @@
 //
 // rollClass priority when an operation has more than one true fact about it
 // (boundary safety class, domain-command confirmation gate, non-routability):
-// BOUNDARY_RESPONSE > CONFIRMED_MUTATION > INTERNAL_CAPTURE > everything else.
+// BOUNDARY_RESPONSE > CONFIRMED_MUTATION > DIRECT_MUTATION > INTERNAL_CAPTURE > everything else.
 // Confirmation-gated takes priority over non-routable because the propose/
 // confirm-split CAPTURE_* operations are both non-routable AND
 // confirmation-gated -- their real product behavior is the confirmed
@@ -37,6 +37,14 @@ import type { AskOperationId } from './askOperationRegistry';
 import { ASK_OPERATION_DEFINITIONS } from './askOperationRegistry';
 import { ASK_DOMAIN_COMMAND_REGISTRY } from './askDomainCommandRegistry';
 
+// Operations that write without a confirmation card (IW-CONF-001 exceptions recorded in
+// ASK_COZY_INLINE_WORKSPACE_FRD.md). Kept explicit: nothing in the operation registry distinguishes a
+// homeowner-clicked direct write from SELL_HOLD_RENT_GOAL_CAPTURE-style internal capture (both are
+// non-routable COMMANDs with no domain command).
+export const ASK_DIRECT_MUTATION_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
+  'HOME_EVENT_RADAR_STATE',
+]);
+
 export type AskInteractionClass =
   | 'READ_RESULT'
   | 'FILTER_REFINEMENT'
@@ -47,6 +55,9 @@ export type AskInteractionClass =
   | 'NAVIGATION_HANDOFF'
   | 'PROACTIVE_INSIGHT'
   | 'INTERNAL_CAPTURE'
+  // A homeowner-clicked write that runs without a confirmation card. Allowed only for an operation listed in
+  // ASK_DIRECT_MUTATION_OPERATION_IDS, each of which must be a recorded IW-CONF-001 exception in the FRD.
+  | 'DIRECT_MUTATION'
   | 'BOUNDARY_RESPONSE';
 
 export type AskRolloutTrack =
@@ -322,6 +333,51 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     idempotency: { status: 'TRACED', notes: 'N/A -- pure read; radarQueryService.getDetail has no upsert/state-mutation side effect, confirmed by reading it in full (unlike the older /radar/matches/:matchId route, which auto-marks a match "seen" on first view -- this operation deliberately does not touch that route).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
     handoff: { status: 'TRACED', notes: 'One real destination href, /dashboard/properties/:id/tools/home-event-radar, with ?matchId= for the exact match when opening from a list item -- the same deep-link query contract (parseRadarDeepLinkState) the traditional page itself reads.' },
+  },
+  HOME_EVENT_RADAR_STATE: {
+    track: 'Protection and claims',
+    rollClass: 'DIRECT_MUTATION',
+    canonicalOwner: 'home-event-radar.state',
+    roleFloor: 'VIEWER',
+    messageRoutable: false,
+    confirmationCapable: false,
+    correctionModes: [],
+    note: 'Home Event Radar writes (FRD v1.40), reached only from the declared actions on a monitored event\'s inline detail (non-routable, ASK_INTERNAL_OPERATION_IDS). Save / unsave / dismiss / restore write the caller\'s own per-user PropertyRadarState through radarInteractionService.updateState, with no confirmation card -- a recorded IW-CONF-001 exception (per-user, reversible, no property-level effect; the traditional page does the same in one click). A save or dismiss on an event already marked done is REFUSED rather than silently undoing "done", since leaving acted_on triggers the property radar risk reconciliation, which is the confirmed HOME_EVENT_RADAR_MARK_DONE path\'s job.',
+    uiSurface: { status: 'TRACED', notes: 'Declared on HOME_EVENT_RADAR_FEED items; RadarEventDetail shows only the actions valid for the live canonical userState. Receipt is a WORKFLOW_PROGRESS block.' },
+    freshnessSource: { status: 'TRACED', notes: 'Re-reads the live userState via radarQueryService.getDetail immediately before writing; the transition is validated against it, not the (possibly stale) feed row.' },
+    idempotency: { status: 'TRACED', notes: 'A request whose target equals the live state returns an "already" receipt with no write (updateState is itself a no-op for an unchanged state).' },
+    reconciliation: { status: 'TRACED', notes: 'GAP, same as most confirmed ops: the source feed row is not refreshed (capability handler results cannot carry refreshedExecutions). Mitigated because RadarEventDetail re-fetches the canonical detail on open and chooses its actions from that live state.' },
+    handoff: { status: 'TRACED', notes: 'Receipt links to /tools/home-event-radar?matchId= for the exact event.' },
+  },
+  HOME_EVENT_RADAR_MARK_DONE: {
+    track: 'Protection and claims',
+    rollClass: 'CONFIRMED_MUTATION',
+    canonicalOwner: 'home-event-radar.mark-done',
+    roleFloor: 'CONTRIBUTOR',
+    messageRoutable: false,
+    confirmationCapable: true,
+    correctionModes: ['REOPEN'],
+    note: 'Home Event Radar writes (FRD v1.40), reached only from the declared actions on a monitored event\'s inline detail (non-routable, ASK_INTERNAL_OPERATION_IDS). Marks the caller\'s state acted_on, which requests the property radar risk reconciliation (mitigation_changed) -- hence confirmation. CONTRIBUTOR floor is stricter than the traditional route (no role floor): domain commands have no VIEWER floor.',
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer: SUMMARY (review) + no-field confirmation card, WORKFLOW_PROGRESS receipt.' },
+    freshnessSource: { status: 'TRACED', notes: 'radarStateContextVersion = sha256(matchId:userState) at propose; confirm re-reads and conflicts if the state moved.' },
+    idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; an event already acted_on returns an "already done" receipt with no write.' },
+    reconciliation: { status: 'TRACED', notes: 'reconcileAskExecutionSideEffects refreshes the source feed execution after the write.' },
+    handoff: { status: 'TRACED', notes: 'Receipt links to /tools/home-event-radar?matchId=.' },
+  },
+  HOME_EVENT_RADAR_FEEDBACK: {
+    track: 'Protection and claims',
+    rollClass: 'CONFIRMED_MUTATION',
+    canonicalOwner: 'home-event-radar.feedback',
+    roleFloor: 'CONTRIBUTOR',
+    messageRoutable: false,
+    confirmationCapable: true,
+    correctionModes: ['EDIT'],
+    note: 'Home Event Radar writes (FRD v1.40), reached only from the declared actions on a monitored event\'s inline detail (non-routable, ASK_INTERNAL_OPERATION_IDS). Records one feedback reason (the traditional page\'s five: wrong location, not relevant, duplicate, stale, something else) and an optional comment (max 500) through radarInteractionService.submitFeedback, replacing any earlier feedback from this user. CONTRIBUTOR floor, same reason as MARK_DONE.',
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer: SUMMARY (review) + SELECT and TEXTAREA editable confirmation, WORKFLOW_PROGRESS receipt.' },
+    freshnessSource: { status: 'TRACED', notes: 'Confirm re-checks the match still exists for this property; feedback is an upsert with no version to conflict on.' },
+    idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; the canonical write is an upsert keyed by (match, user).' },
+    reconciliation: { status: 'TRACED', notes: 'reconcileAskExecutionSideEffects refreshes the source feed execution after the write.' },
+    handoff: { status: 'TRACED', notes: 'Receipt links to /tools/home-event-radar?matchId=.' },
   },
   CAPTURE_EVENT_CONFIRM: {
     track: 'Records and capture',
@@ -1059,6 +1115,9 @@ export function validateAskInteractionCoverageMatrix(): string[] {
     const hasCommand = Object.values(ASK_DOMAIN_COMMAND_REGISTRY).some((c) => c.operationId === operationId);
     if (entry.confirmationCapable !== hasCommand) issues.push(`${operationId}: confirmationCapable=${entry.confirmationCapable} no longer matches domain command registry (has entry: ${hasCommand})`);
     if (hasCommand && entry.rollClass !== 'CONFIRMED_MUTATION') issues.push(`${operationId}: has a domain command but rollClass is "${entry.rollClass}", not CONFIRMED_MUTATION`);
+    const isDirect = ASK_DIRECT_MUTATION_OPERATION_IDS.has(operationId);
+    if (isDirect && hasCommand) issues.push(`${operationId}: listed as a direct mutation but also has a domain command`);
+    if (isDirect !== (entry.rollClass === 'DIRECT_MUTATION')) issues.push(`${operationId}: rollClass "${entry.rollClass}" does not match ASK_DIRECT_MUTATION_OPERATION_IDS membership (${isDirect})`);
   }
   return issues;
 }

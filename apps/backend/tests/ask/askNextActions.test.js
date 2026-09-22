@@ -20,7 +20,9 @@ test('every registered capability has an explicit card boundary; only reviewed e
     assert.ok(card.inlineBoundary);
     if (card.inlineLaunch) assert.equal(card.inlineLaunch.interactionType, 'CONVERSATION_CONTINUE');
   }
-  assert.equal(capabilityCardLaunch('home-event-radar').inlineLaunch, null);
+  // home-event-radar launches inline since the capability-card audit's second reference journey (c6c062f2, which
+  // left this assertion stale); capital-timeline still does not.
+  assert.equal(capabilityCardLaunch('home-event-radar').inlineLaunch.operationId, 'HOME_EVENT_RADAR_FEED');
   assert.equal(capabilityCardLaunch('capital-timeline').inlineLaunch, null);
   assert.equal(capabilityCardLaunch('maintenance').inlineLaunch.operationId, 'MAINTENANCE_STATUS');
 });

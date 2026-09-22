@@ -35,7 +35,7 @@ function canonicalDetail(overrides: Partial<RadarCanonicalDetail> = {}): RadarCa
     id: 'match-0', propertyMatchId: 'match-0', eventId: 'event-0', eventType: 'SEVERE_THUNDERSTORM_WARNING',
     sourceFamily: 'weather', title: 'severe thunderstorm warning', summary: 'A severe thunderstorm warning is in effect for this area.',
     severity: 'high', impact: 'moderate', confidence: 'high', priorityBand: 'high', priorityScore: 0.82,
-    matchLifecycleStatus: 'active', sourceFreshnessStatus: 'fresh', sourceFreshnessReason: null,
+    matchLifecycleStatus: 'now', sourceFreshnessStatus: 'fresh', sourceFreshnessReason: null,
     isSourceStale: false, isMaterialUpdate: false, lifecycleStatus: 'active',
     effectiveAt: '2026-09-22T12:00:00.000Z', expiresAt: '2026-09-22T18:00:00.000Z',
     sourceName: 'National Weather Service', provider: 'NOAA', userState: 'new',
@@ -145,4 +145,85 @@ test('a monitored event leaving the refreshed result clears selection without ch
   next.blocks = [{ ...block, sections: [{ ...block.sections[0], count: 0, items: block.sections[0].items.filter((item) => item.id !== 'match-0') }] }];
   rerender(<List response={next} />);
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'home-event-radar-feed-result')).detailTaskId).toBeNull();
+});
+
+// ── FRD v1.40: filter chips + per-user writes ──
+const ALL_ACTIONS = [
+  { id: 'radar-save', label: 'Save', message: 'Save this monitored event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_RADAR_STATE' },
+  { id: 'radar-unsave', label: 'Remove from saved', message: 'Remove this monitored event from saved.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_RADAR_STATE' },
+  { id: 'radar-dismiss', label: 'Dismiss', message: 'Dismiss this monitored event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_RADAR_STATE' },
+  { id: 'radar-restore', label: 'Restore', message: 'Restore this dismissed monitored event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_RADAR_STATE' },
+  { id: 'radar-mark-done', label: 'Mark done', message: 'Mark this monitored event as done.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_RADAR_MARK_DONE' },
+  { id: 'radar-feedback', label: 'Send feedback', message: 'Send feedback on this monitored event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_RADAR_FEEDBACK' },
+];
+const writableBlock: typeof block = {
+  ...block,
+  filters: [
+    { id: 'radar-lifecycle-all', label: 'Any time', message: 'Show my home event radar feed.', active: true },
+    { id: 'radar-lifecycle-now', label: 'Happening now', message: 'Show my home event radar feed happening now.', active: false },
+  ],
+  sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], actions: ALL_ACTIONS }] }],
+};
+
+async function openWritable(userState: RadarCanonicalDetail['userState'], onAction = jest.fn(), disabled = false) {
+  mockedGetRadarEventDetail.mockResolvedValueOnce(canonicalDetail({ userState }));
+  render(<RadarEventResultList block={writableBlock} propertyId="home" disabled={disabled} onAction={onAction} onFilter={() => {}} onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} />);
+  fireEvent.click(screen.getByRole('button', { name: 'severe thunderstorm warning' }));
+  await waitFor(() => expect(screen.getByText(/heavy rain and possible hail/)).toBeInTheDocument());
+  return onAction;
+}
+const shownActions = () => Array.from(document.querySelectorAll('[data-radar-action]')).map((node) => node.getAttribute('data-radar-action'));
+
+test('detail shows only the actions valid for the LIVE canonical state, not the (possibly stale) feed row', async () => {
+  await openWritable('new');
+  expect(shownActions()).toEqual(['radar-save', 'radar-dismiss', 'radar-mark-done', 'radar-feedback']);
+});
+
+test('a saved event offers Remove from saved; a dismissed event offers Restore', async () => {
+  await openWritable('saved');
+  expect(shownActions()).toEqual(['radar-unsave', 'radar-dismiss', 'radar-mark-done', 'radar-feedback']);
+});
+
+test('a dismissed event offers Restore instead of Dismiss', async () => {
+  await openWritable('dismissed');
+  expect(shownActions()).toEqual(['radar-save', 'radar-restore', 'radar-mark-done', 'radar-feedback']);
+});
+
+test('a done event hides Save, Dismiss and Mark done and says where to change it', async () => {
+  await openWritable('acted_on');
+  expect(shownActions()).toEqual(['radar-feedback']);
+  expect(screen.getByText(/You marked this event done/)).toBeInTheDocument();
+});
+
+test('clicking an action dispatches the exact entity, canned message and pinned operation', async () => {
+  const onAction = await openWritable('new');
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(onAction).toHaveBeenCalledWith('RADAR_MATCH', 'match-0', 'Save this monitored event.', 'HOME_EVENT_RADAR_STATE', 'MUTATE_RECORD');
+});
+
+test('actions are disabled while another Ask turn is running', async () => {
+  await openWritable('new', jest.fn(), true);
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+});
+
+test('filter chips send their own message; the active chip is pressed and disabled', () => {
+  const onFilter = jest.fn();
+  render(<RadarEventResultList block={writableBlock} propertyId="home" onFilter={onFilter} onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} />);
+  expect(screen.getByRole('button', { name: 'Any time' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Any time' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Happening now' }));
+  expect(onFilter).toHaveBeenCalledWith('Show my home event radar feed happening now.');
+});
+
+test('the registry wires filter clicks and item actions through to the radar list', async () => {
+  const onFilterClick = jest.fn();
+  const onItemAction = jest.fn();
+  mockedGetRadarEventDetail.mockResolvedValueOnce(canonicalDetail({ userState: 'new' }));
+  render(<BlockView block={writableBlock} executionId="execution" propertyId="home" itemActionsDisabled={false} onItemAction={onItemAction} onFilterClick={onFilterClick} onCollectionPage={() => {}} onAccessLost={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Happening now' }));
+  expect(onFilterClick).toHaveBeenCalledWith('Show my home event radar feed happening now.');
+  fireEvent.click(screen.getByRole('button', { name: 'severe thunderstorm warning' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+  expect(onItemAction).toHaveBeenCalledWith('RADAR_MATCH', 'match-0', 'Dismiss this monitored event.', 'HOME_EVENT_RADAR_STATE', 'MUTATE_RECORD');
 });

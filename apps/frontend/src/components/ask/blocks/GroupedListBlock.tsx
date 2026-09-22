@@ -184,7 +184,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // radarQueryService.getDetail read (a genuine per-match GET, unlike the
   // reserve-allocations/warranty/household list-scan exception above).
   if (block.id === 'home-event-radar-feed') {
-    return <RadarEventResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
+    return <RadarEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

@@ -110,6 +110,9 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   // known, and the records exist in every mode — keep the framing neutral.
   definePolicy('INTELLIGENCE_ENVELOPE_QUERY', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_EVENT_RADAR_FEED', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('HOME_EVENT_RADAR_STATE', ALL_MODES),
+  definePolicy('HOME_EVENT_RADAR_MARK_DONE', ALL_MODES),
+  definePolicy('HOME_EVENT_RADAR_FEEDBACK', ALL_MODES),
   definePolicy('HOME_CHANGE_SUMMARY', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_ACTIONS', ALL_MODES),
   definePolicy('OPERATIONAL_WORK_UPDATE', ALL_MODES),

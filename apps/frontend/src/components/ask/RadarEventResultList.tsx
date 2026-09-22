@@ -2,7 +2,7 @@
 
 import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
-import type { AskPresentationBlock } from '@/features/ask/types';
+import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,26 @@ import type { RadarCanonicalDetail } from '@/types';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
+type ItemAction = NonNullable<Item['actions']>[number];
+type OnAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+
+// FRD v1.40: the feed declares every action the member's role allows; only the ones valid for the event's LIVE
+// canonical state (re-fetched on open) are shown, mirroring the traditional page's own toggles -- Save/Remove from
+// saved, Dismiss/Restore, Mark done (one-way). Save and Dismiss are hidden on a done event because the server
+// refuses them there (leaving "done" would re-trigger the property risk recheck without confirmation).
+export function radarActionsForLiveState(actions: ItemAction[], userState: string | null | undefined): ItemAction[] {
+  const state = userState ?? 'new';
+  return actions.filter((action) => {
+    switch (action.id) {
+      case 'radar-save': return state !== 'saved' && state !== 'acted_on';
+      case 'radar-unsave': return state === 'saved';
+      case 'radar-dismiss': return state !== 'dismissed' && state !== 'acted_on';
+      case 'radar-restore': return state === 'dismissed';
+      case 'radar-mark-done': return state !== 'acted_on';
+      default: return true;
+    }
+  });
+}
 
 function errorStatus(error: unknown): number | null {
   return error && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
@@ -49,10 +69,12 @@ function formatDate(value: string | null | undefined): string {
 // state-mutation side effect (confirmed by reading radarQueryService.getDetail
 // in full -- unlike the older /radar/matches/:matchId route, which
 // auto-marks a match "seen").
-function RadarEventDetail({ matchId, expectedPropertyId, fallbackItem, onAccessLost, onClose }: {
+function RadarEventDetail({ matchId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose }: {
   matchId: string;
   expectedPropertyId?: string;
   fallbackItem: Item;
+  disabled?: boolean;
+  onAction?: OnAction;
   onAccessLost: () => void;
   onClose: () => void;
 }) {
@@ -146,6 +168,15 @@ function RadarEventDetail({ matchId, expectedPropertyId, fallbackItem, onAccessL
             Related guidance: <a href={detail.relatedGuidance.href} className="font-semibold text-teal-800 underline-offset-4 hover:underline">{detail.relatedGuidance.currentStep?.label ?? 'Continue'}</a>
           </p>
         )}
+        {(() => {
+          const actions = onAction ? radarActionsForLiveState(fallbackItem.actions ?? [], detail.userState) : [];
+          return <>
+            {detail.userState === 'acted_on' && <p className="mt-4 text-sm text-slate-600">You marked this event done. To change that, use Home Event Radar.</p>}
+            {actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{actions.map((action) => <button key={action.id} type="button" disabled={disabled} data-radar-action={action.id}
+              className={cn('min-h-10 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-700 text-white' : 'border border-slate-200 bg-white text-slate-800')}
+              onClick={() => onAction?.(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}</div>}
+          </>;
+        })()}
         <p className="mt-3 text-xs text-slate-500">Current canonical Home Event Radar record.</p>
       </>}
     </aside>
@@ -155,12 +186,14 @@ function RadarEventDetail({ matchId, expectedPropertyId, fallbackItem, onAccessL
 // Second bespoke GROUPED_LIST exception in the capability-card audit arc
 // (after ReserveAllocationResultList): renders the home-event-radar-feed
 // block (HOME_EVENT_RADAR_FEED operation) with canonical inline detail.
-// Read-only -- no item actions -- state transitions (save/dismiss/
-// acted-on), structured feedback, and task-candidate/creation writes are a
-// deliberately separate, unscoped follow-up (see memory).
-export function RadarEventResultList({ block, propertyId, onAccessLost, link }: {
+// FRD v1.40 added filter chips and the per-user writes (item actions shown in
+// the detail); task create-or-link is still out of scope.
+export function RadarEventResultList({ block, propertyId, disabled, onFilter, onAction, onAccessLost, link }: {
   block: Block;
   propertyId?: string;
+  disabled?: boolean;
+  onFilter?: (message: string) => void;
+  onAction?: OnAction;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
@@ -183,6 +216,10 @@ export function RadarEventResultList({ block, propertyId, onAccessLost, link }: 
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {onFilter && block.filters.length > 0 && <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter monitored events">
+        {block.filters.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active}
+          onClick={() => onFilter(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
+      </div>}
     </div>
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>
@@ -202,7 +239,7 @@ export function RadarEventResultList({ block, propertyId, onAccessLost, link }: 
       </ul>
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more monitored events are available through the full Home Event Radar feed.</p>}
     </div>)}
-    {detailMatchId && detailItem && <RadarEventDetail key={detailMatchId} matchId={detailMatchId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />}
+    {detailMatchId && detailItem && <RadarEventDetail key={detailMatchId} matchId={detailMatchId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
     <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
   </section>;
 }

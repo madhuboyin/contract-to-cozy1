@@ -15,11 +15,13 @@ const { ASK_DOMAIN_COMMAND_REGISTRY } = require('../../src/services/ask/askDomai
 const {
   ASK_INTERACTION_COVERAGE_MATRIX,
   validateAskInteractionCoverageMatrix,
+  ASK_DIRECT_MUTATION_OPERATION_IDS,
 } = require('../../src/services/ask/askInteractionCoverageMatrix.ts');
 
 test('every one of the 86 Ask operations has a coverage-matrix entry with no registry drift', () => {
   const operationIds = Object.keys(ASK_OPERATION_DEFINITIONS);
-  assert.equal(operationIds.length, 86);
+  // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
+  assert.equal(operationIds.length, 89);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -56,7 +58,8 @@ test('a non-message-routable (internal) operation is classified INTERNAL_CAPTURE
   for (const [operationId, def] of Object.entries(ASK_OPERATION_DEFINITIONS)) {
     if (!def.messageRoutable) {
       const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
-      const expected = entry.confirmationCapable ? 'CONFIRMED_MUTATION' : 'INTERNAL_CAPTURE';
+      // A recorded IW-CONF-001 direct write (ASK_DIRECT_MUTATION_OPERATION_IDS) is DIRECT_MUTATION instead.
+      const expected = entry.confirmationCapable ? 'CONFIRMED_MUTATION' : ASK_DIRECT_MUTATION_OPERATION_IDS.has(operationId) ? 'DIRECT_MUTATION' : 'INTERNAL_CAPTURE';
       assert.equal(entry.rollClass, expected, `${operationId}: expected ${expected}`);
     }
   }
@@ -107,6 +110,7 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE',
   'OPERATIONAL_WORK_UPDATE', 'INSPECTION_FINDING_UPDATE', 'HOME_DEADLINE_MONITOR',
   'HOME_EVENT_RADAR_FEED',
+  'HOME_EVENT_RADAR_STATE', 'HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_FEEDBACK',
 ]);
 // Phase 0 Stage 2 is now complete: every one of the 77 registered operations
 // has been traced. This assertion is the actual completion signal -- if a
@@ -119,13 +123,14 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 86);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 89);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
 test('Stage 2 fields are TRACED with real notes only for operations actually traced this pass; every other operation stays honestly PENDING', () => {
   const operationIds = Object.keys(ASK_INTERACTION_COVERAGE_MATRIX);
-  assert.equal(operationIds.length, 86);
+  // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
+  assert.equal(operationIds.length, 89);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

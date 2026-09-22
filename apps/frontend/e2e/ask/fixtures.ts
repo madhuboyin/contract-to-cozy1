@@ -165,20 +165,58 @@ function capitalReservePlanExecution({ horizonYears = 10 as 5 | 10 } = {}) {
 // Capability-card audit (FRD Appendix D), second reference journey. Real
 // response also groups by every sourceFamily the feed returns; trimmed to
 // one section here since that's all this slice's scenario exercises.
-function homeEventRadarFeedExecution() {
+// FRD v1.40: filter chips + the per-user write actions the real homeEventRadarFeedResult declares (the inline
+// detail shows the ones valid for the live state). `happeningNow` is the chip-refined variant, with a distinct
+// executionId so it appends as its own article.
+const RADAR_ITEM_ACTIONS = [
+  { id: 'radar-save', label: 'Save', message: 'Save this monitored event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_STATE' },
+  { id: 'radar-unsave', label: 'Remove from saved', message: 'Remove this monitored event from saved.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_STATE' },
+  { id: 'radar-dismiss', label: 'Dismiss', message: 'Dismiss this monitored event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_STATE' },
+  { id: 'radar-restore', label: 'Restore', message: 'Restore this dismissed monitored event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_STATE' },
+  { id: 'radar-mark-done', label: 'Mark done', message: 'Mark this monitored event as done.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_MARK_DONE' },
+  { id: 'radar-feedback', label: 'Send feedback', message: 'Send feedback on this monitored event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_FEEDBACK' },
+];
+function radarFilterChips(happeningNow: boolean) {
+  return [
+    { id: 'radar-lifecycle-all', label: 'Any time', message: 'Show my home event radar feed.', active: !happeningNow },
+    { id: 'radar-lifecycle-now', label: 'Happening now', message: 'Show my home event radar feed happening now.', active: happeningNow },
+    { id: 'radar-family-all', label: 'All sources', message: `Show my home event radar feed${happeningNow ? ' happening now' : ''}.`, active: true },
+    { id: 'radar-family-weather', label: 'Weather', message: `Show my home event radar feed for weather events${happeningNow ? ' happening now' : ''}.`, active: false },
+    { id: 'radar-hide-dismissed', label: 'Hide dismissed', message: `Show my home event radar feed${happeningNow ? ' happening now' : ''}.`, active: true },
+    { id: 'radar-include-dismissed', label: 'Include dismissed', message: `Show my home event radar feed${happeningNow ? ' happening now' : ''}, including dismissed.`, active: false },
+  ];
+}
+function radarStateReceiptExecution(sessionId?: string) {
   return {
-    schemaVersion: '1.0', executionId: 'execution-home-event-radar-feed', sessionId: 'ask-acceptance-session',
-    question: 'Show my home event radar feed.', status: 'ANSWERED',
+    schemaVersion: '1.0', executionId: 'execution-radar-state-save', sessionId: sessionId ?? 'ask-acceptance-session',
+    question: 'Save this monitored event.', status: 'COMPLETED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'HOME_EVENT_RADAR_STATE', version: '1.0', family: 'COMMAND' }, contextVersion: null,
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: 'radar-state-match-property-summary', title: 'Event saved', status: 'COMPLETED',
+      description: 'This changes Home Event Radar for you only; other household members keep their own view.',
+      details: [{ label: 'Event', value: 'severe thunderstorm warning' }, { label: 'Previous state', value: 'New' }, { label: 'Current state', value: 'Saved' }],
+      actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: `/dashboard/properties/${propertyId}/tools/home-event-radar?matchId=match-property-summary`, style: 'SECONDARY' }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    suggestions: ['Show my home event radar feed'], createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z',
+  };
+}
+function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
+  return {
+    schemaVersion: '1.0', executionId: happeningNow ? 'execution-home-event-radar-feed-now' : 'execution-home-event-radar-feed', sessionId: 'ask-acceptance-session',
+    question: happeningNow ? 'Show my home event radar feed happening now.' : 'Show my home event radar feed.', status: 'ANSWERED',
     property: { id: propertyId, label: 'Acceptance Home' },
     operation: { id: 'HOME_EVENT_RADAR_FEED', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
     blocks: [{
       type: 'SUMMARY', id: 'home-event-radar-summary', title: 'Monitored home events',
       body: '1 monitored event from Home Event Radar.', tone: 'DEFAULT', actions: [],
     }, {
-      type: 'GROUPED_LIST', id: 'home-event-radar-feed', title: 'Home Event Radar feed', filters: [],
-      description: 'This is the same canonical feed the Home Event Radar page reads, grouped by source.',
+      type: 'GROUPED_LIST', id: 'home-event-radar-feed', title: 'Home Event Radar feed', filters: radarFilterChips(happeningNow),
+      description: 'This is the same canonical feed the Home Event Radar page reads, grouped by source. Dismissed events are hidden.',
       sections: [{ id: 'radar-weather', title: 'Weather', count: 1, items: [
-        { id: 'match-property-summary', title: 'severe thunderstorm warning', entityType: 'RADAR_MATCH', description: 'A severe thunderstorm warning is in effect for this area.', meta: ['high', 'National Weather Service'], status: 'new', href: `/dashboard/properties/${propertyId}/tools/home-event-radar?matchId=match-property-summary` },
+        { id: 'match-property-summary', title: 'severe thunderstorm warning', entityType: 'RADAR_MATCH', description: 'A severe thunderstorm warning is in effect for this area.', meta: ['high', 'National Weather Service'], status: 'new', href: `/dashboard/properties/${propertyId}/tools/home-event-radar?matchId=match-property-summary`, actions: RADAR_ITEM_ACTIONS },
       ] }],
       actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: `/dashboard/properties/${propertyId}/tools/home-event-radar`, style: 'SECONDARY' }],
     }],
@@ -1006,8 +1044,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: response }, 201);
       return;
     }
+    if (body.message === 'Save this monitored event.') {
+      await fulfill(route, { success: true, data: radarStateReceiptExecution(body.sessionId as string | undefined) }, 201);
+      return;
+    }
     if (/home event radar feed/i.test(body.message)) {
-      const response = homeEventRadarFeedExecution();
+      const response = homeEventRadarFeedExecution({ happeningNow: /happening now/i.test(body.message) });
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

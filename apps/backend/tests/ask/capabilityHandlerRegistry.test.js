@@ -27,7 +27,8 @@ test('every one of the 86 Ask operations resolves to a registered capability han
   // §13; FRD §31) + CAPTURE_EVIDENCE_CONFIRM (Phase 2 external review,
   // §8/§4.2; FRD §23) + HOME_EVENT_RADAR_FEED (capability-card audit,
   // Appendix D, second reference journey, 2026-09-22).
-  assert.equal(operationIds.length, 86);
+  // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
+  assert.equal(operationIds.length, 89);
   assert.deepEqual(validateCapabilityHandlerRegistry(), []);
 });
 

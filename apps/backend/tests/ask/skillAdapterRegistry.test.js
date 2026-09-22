@@ -20,7 +20,9 @@ test('every represented Skill operation resolves to one registered immutable ada
   assert.deepEqual(validateSkillDefinitions(), []);
   // 67 before the Inline Workspace Phase 3 write slices, + inventory.item-correct, home-event.correct,
   // warranty.correct, room.rename, room.create, inventory.create, property-context.area-capture and home-event.visibility (each a MUTATION_PREPARATION adapter under the property-record skill).
-  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 75);
+  // + home-event-radar.feed (c6c062f2, which left this count stale at 75) + home-event-radar.state/mark-done/feedback
+  // (FRD v1.40, MUTATION_PREPARATION adapters under the home-event-radar skill).
+  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 79);
   for (const skill of Object.values(SKILL_DEFINITIONS)) {
     for (const operation of skill.operations) {
       const reference = skill.allowedAdapters.find((candidate) => candidate.id === getSkillAdapterForOperation(operation.operationId).id);

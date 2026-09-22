@@ -71,6 +71,13 @@ export type AskOperationId =
   // feedback, and task-candidate/creation writes are a deliberately
   // separate, unscoped follow-up.
   | 'HOME_EVENT_RADAR_FEED'
+  // Home Event Radar writes (capability-card audit follow-up, FRD v1.40). Split by consequence per product
+  // decision: STATE is a one-click direct write (save/unsave/dismiss/restore -- the caller's own per-user,
+  // reversible state with no property-level effect); MARK_DONE (triggers the property's radar risk
+  // reconciliation) and FEEDBACK (a reason + comment form) go through review -> confirm -> receipt.
+  | 'HOME_EVENT_RADAR_STATE'
+  | 'HOME_EVENT_RADAR_MARK_DONE'
+  | 'HOME_EVENT_RADAR_FEEDBACK'
   | 'HOME_ACTIONS'
   | 'OPERATIONAL_WORK_UPDATE'
   | 'INSPECTION_FINDINGS'
@@ -247,6 +254,10 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'INVENTORY_ITEM_CREATE',
   // Reached only by the declared "Fill in the missing details" action on a Property Summary completeness row.
   'PROPERTY_CONTEXT_AREA_CAPTURE',
+  // Reached only by the declared actions on a Home Event Radar event's inline detail.
+  'HOME_EVENT_RADAR_STATE',
+  'HOME_EVENT_RADAR_MARK_DONE',
+  'HOME_EVENT_RADAR_FEEDBACK',
 ]);
 
 export function isAskMessageRoutableOperation(operationId: AskOperationId): boolean {
@@ -323,6 +334,11 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   PROPERTY_SUMMARY: definition('PROPERTY_SUMMARY', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property.summary', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   INTELLIGENCE_ENVELOPE_QUERY: definition('INTELLIGENCE_ENVELOPE_QUERY', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'intelligence-envelope.query', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   HOME_EVENT_RADAR_FEED: definition('HOME_EVENT_RADAR_FEED', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-event-radar.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
+  // VIEWER: the traditional PATCH /radar/events/:matchId/state has no role floor -- this is the caller's own state.
+  HOME_EVENT_RADAR_STATE: definition('HOME_EVENT_RADAR_STATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-event-radar.state', ['WORKFLOW_PROGRESS', 'BOUNDARY']),
+  // CONTRIBUTOR: domain commands have no VIEWER floor, so Ask is stricter than the traditional routes here (FRD v1.40).
+  HOME_EVENT_RADAR_MARK_DONE: definition('HOME_EVENT_RADAR_MARK_DONE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event-radar.mark-done', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  HOME_EVENT_RADAR_FEEDBACK: definition('HOME_EVENT_RADAR_FEEDBACK', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event-radar.feedback', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // Phase 9B (FRD §17/§21.2) adds PRIORITY_LIST as an additive, versioned
   // explainable annotation of this same operation's existing feed read --
   // deliberately not a new operation, so Ask never presents two ranked

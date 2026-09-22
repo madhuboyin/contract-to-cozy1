@@ -20,6 +20,9 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   operationCases: [
     { operationId: 'HOME_EVENT_RADAR_FEED', expectedAdapter: { id: 'home-event-radar.feed', version: '1.0' } },
+    { operationId: 'HOME_EVENT_RADAR_STATE', expectedAdapter: { id: 'home-event-radar.state', version: '1.0' } },
+    { operationId: 'HOME_EVENT_RADAR_MARK_DONE', expectedAdapter: { id: 'home-event-radar.mark-done', version: '1.0' } },
+    { operationId: 'HOME_EVENT_RADAR_FEEDBACK', expectedAdapter: { id: 'home-event-radar.feedback', version: '1.0' } },
   ],
   ambiguityCases: [
     {
@@ -30,6 +33,9 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   policyCases: [
     { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_FEED', allowed: true },
+    { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_STATE', allowed: true },
+    { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_MARK_DONE', allowed: true },
+    { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_FEEDBACK', allowed: true },
   ],
   contextCases: [
     { state: 'KNOWN', expectedBehavior: 'READY' },
@@ -59,6 +65,9 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   expectedAdapters: [
     { id: 'home-event-radar.feed', version: '1.0' },
+    { id: 'home-event-radar.state', version: '1.0' },
+    { id: 'home-event-radar.mark-done', version: '1.0' },
+    { id: 'home-event-radar.feedback', version: '1.0' },
   ],
   prohibitedAdapters: [
     'intelligence-envelope.query',
@@ -70,6 +79,8 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedStatuses: [
     'ANSWERED',
     'READY_WITH_LIMITATIONS',
+    'NEEDS_CONFIRMATION',
+    'COMPLETED',
   ],
   expectedBlockTypes: [
     'SUMMARY',
@@ -77,9 +88,13 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
     'EVIDENCE',
     'EMPTY_STATE',
     'BOUNDARY',
+    'WORKFLOW_PROGRESS',
   ],
   expectedCanonicalCalls: [
     { id: 'home-event-radar.feed', version: '1.0' },
+    { id: 'home-event-radar.state', version: '1.0' },
+    { id: 'home-event-radar.mark-done', version: '1.0' },
+    { id: 'home-event-radar.feedback', version: '1.0' },
   ],
   prohibitedCanonicalCalls: [
     'intelligence-envelope.query',

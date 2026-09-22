@@ -46,6 +46,10 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   // Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
   // FRD §23's UPLOAD_EVIDENCE resolution).
   'CAPTURE_EVIDENCE_CONFIRM',
+  // Home Event Radar writes (FRD v1.40). The third, HOME_EVENT_RADAR_STATE, is deliberately NOT a domain command:
+  // it is a direct write (per-user, reversible, no property-level effect) under a recorded FRD exception.
+  'HOME_EVENT_RADAR_MARK_DONE',
+  'HOME_EVENT_RADAR_FEEDBACK',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -148,6 +152,10 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   // the closest real "edit" is removing/re-attaching a document via the
   // traditional property record UI, outside Ask entirely.
   CAPTURE_EVIDENCE_CONFIRM: command('CAPTURE_EVIDENCE_CONFIRM', 'CAPTURE_EVIDENCE_CONFIRM', 'capture.evidence.confirm', 'CONTRIBUTOR', 'HOME_EVENT_EVIDENCE', ['EDIT'], { title: 'Evidence not attached', body: 'No document was attached as evidence to the home timeline event.', suggestion: 'Show my home timeline' }),
+  // REOPEN: moving an event off "done" is left to the traditional page (its Save/Dismiss do it); Ask's direct
+  // state write refuses a done event rather than silently undoing it.
+  HOME_EVENT_RADAR_MARK_DONE: command('HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_MARK_DONE', 'home-event-radar.mark-done', 'CONTRIBUTOR', 'PROPERTY_RADAR_STATE', ['REOPEN'], { title: 'Event not marked done', body: 'The event and this property\'s radar risk were not changed.', suggestion: 'Show my home event radar feed' }),
+  HOME_EVENT_RADAR_FEEDBACK: command('HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_FEEDBACK', 'home-event-radar.feedback', 'CONTRIBUTOR', 'PROPERTY_RADAR_FEEDBACK', ['EDIT'], { title: 'Feedback not sent', body: 'No feedback was recorded for this event.', suggestion: 'Show my home event radar feed' }),
 });
 
 const BY_OPERATION = new Map(Object.values(ASK_DOMAIN_COMMAND_REGISTRY).map((definition) => [definition.operationId, definition]));

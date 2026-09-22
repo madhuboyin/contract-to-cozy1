@@ -869,6 +869,38 @@ test('Home Event Radar: a monitored event opens canonical detail inline, keeping
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Home Event Radar: filter chips re-ask with their own message, and Save writes the exact event directly with a receipt (FRD v1.40)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home event radar feed.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const feed = page.locator('#ask-execution-execution-home-event-radar-feed');
+  await expect(feed.getByRole('button', { name: 'Any time' })).toHaveAttribute('aria-pressed', 'true');
+  await feed.getByRole('button', { name: 'Happening now' }).click();
+  await expect.poll(() => api.executionBodies.at(-1)?.message).toBe('Show my home event radar feed happening now.');
+  const refined = page.locator('#ask-execution-execution-home-event-radar-feed-now');
+  await expect(refined.getByRole('button', { name: 'Happening now' })).toHaveAttribute('aria-pressed', 'true');
+
+  // Actions appear only in the detail, chosen from the LIVE canonical state (userState 'new' in the detail route).
+  await expect(refined.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+  await refined.getByRole('button', { name: 'severe thunderstorm warning' }).click();
+  await expect(refined.getByText('This storm cell tracks over your recorded property location.')).toBeVisible();
+  await expect(refined.getByRole('button', { name: 'Remove from saved' })).toHaveCount(0);
+  await expect(refined.getByRole('button', { name: 'Restore' })).toHaveCount(0);
+  await expect(refined.getByRole('button', { name: 'Mark done' })).toBeVisible();
+
+  await refined.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Save this monitored event.',
+    launchContext: expect.objectContaining({ entityType: 'RADAR_MATCH', entityId: 'match-property-summary', operationId: 'HOME_EVENT_RADAR_STATE' }),
+  }));
+  const receipt = page.locator('#ask-execution-execution-radar-state-save');
+  await expect(receipt.getByText('Event saved')).toBeVisible();
+  await expect(receipt.getByText('for you only')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

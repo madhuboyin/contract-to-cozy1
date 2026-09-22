@@ -135,6 +135,9 @@ import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../inventory.service
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import { queryIntelligenceEnvelope } from '../intelligenceEnvelope';
 import { radarQueryService } from '../../modules/homeEventRadar/services/radarQuery.service';
+import { radarInteractionService } from '../../modules/homeEventRadar/services/radarInteraction.service';
+import { RADAR_FEEDBACK_COMMENT_MAX_LENGTH } from '../../modules/homeEventRadar/domain/radarInteraction';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../analytics';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
 // C2C Intelligence & Agentic Evolution Phase 3 / PR 12b (architecture §8 task 2,
 // §22): Ask engagement with a delivered HVAC repair-or-replace Home Action is
@@ -7647,13 +7650,59 @@ const RADAR_FEED_STATE_COPY: Record<string, { title: string; body: string }> = {
 // intelligenceEnvelopeQueryResult above), which the FRD explicitly flags as
 // not proof of this specific workflow: wrong item set (cross-domain
 // normalized envelope items, not radar matches), wrong filters, wrong
-// grouping. Read-only first slice: state transitions (save/dismiss/
-// acted-on), structured feedback, and task-candidate/creation writes, and
-// filter chips (the canonical endpoint supports lifecycle/sourceFamily/
-// severity/impact/confidence/state/attention filters -- none surfaced here)
-// are all a deliberately separate, unscoped follow-up.
-async function homeEventRadarFeedResult(userId: string, propertyId: string, cursor?: string | null): Promise<AskOperationResult> {
-  const page = await radarQueryService.listFeed(propertyId, userId, { limit: 20, ...(cursor ? { cursor } : {}) }) as {
+// grouping. FRD v1.40 added filter chips (below) and the per-user writes
+// (HOME_EVENT_RADAR_STATE / MARK_DONE / FEEDBACK, declared as item actions);
+// task create-or-link remains out of scope.
+// Feed filters (FRD v1.40), mirroring the traditional page's own three controls: lifecycle view (now / upcoming /
+// recently ended), source family, and show-dismissed. Filter chips re-send a self-contained message that routes back
+// here and is re-parsed, so "Show more" paging (which prefixes the prior message) keeps the same filters -- and the
+// canonical cursor is itself bound to the filter key, so a mismatch could never page silently.
+export type RadarFeedLifecycleFilter = 'now' | 'upcoming' | 'recently_ended';
+export type RadarFeedFamilyFilter = 'weather' | 'air_quality' | 'disaster' | 'utility' | 'tax' | 'insurance';
+export interface RadarFeedFilterState { lifecycle: RadarFeedLifecycleFilter | null; sourceFamily: RadarFeedFamilyFilter | null; includeDismissed: boolean }
+const RADAR_LIFECYCLE_PHRASE: Record<RadarFeedLifecycleFilter, string> = { now: 'happening now', upcoming: 'that are upcoming', recently_ended: 'that recently ended' };
+const RADAR_LIFECYCLE_CHIP: Record<RadarFeedLifecycleFilter, string> = { now: 'Happening now', upcoming: 'Upcoming', recently_ended: 'Recently ended' };
+const RADAR_FAMILY_PHRASE: Record<RadarFeedFamilyFilter, string> = { weather: 'weather', air_quality: 'air quality', disaster: 'disaster', utility: 'utility', tax: 'tax', insurance: 'insurance' };
+
+export function parseRadarFeedFilters(message: string): RadarFeedFilterState {
+  const lifecycle: RadarFeedLifecycleFilter | null = /\bhappening now\b/i.test(message) ? 'now'
+    : /\brecently ended\b/i.test(message) ? 'recently_ended'
+      : /\bupcoming\b/i.test(message) ? 'upcoming' : null;
+  // "<family> events" only, so a routing phrase like "severe weather near my home" does not silently narrow the feed.
+  const familyMatch = /\b(weather|air quality|disaster|utility|tax|insurance) events\b/i.exec(message);
+  const sourceFamily = familyMatch ? (Object.keys(RADAR_FAMILY_PHRASE) as RadarFeedFamilyFilter[]).find((key) => RADAR_FAMILY_PHRASE[key] === familyMatch[1].toLowerCase()) ?? null : null;
+  return { lifecycle, sourceFamily, includeDismissed: /\bincluding dismissed\b/i.test(message) };
+}
+
+export function radarFeedFilterMessage(state: RadarFeedFilterState): string {
+  return `Show my home event radar feed${state.sourceFamily ? ` for ${RADAR_FAMILY_PHRASE[state.sourceFamily]} events` : ''}${state.lifecycle ? ` ${RADAR_LIFECYCLE_PHRASE[state.lifecycle]}` : ''}${state.includeDismissed ? ', including dismissed' : ''}.`;
+}
+
+function radarFeedFilterChips(state: RadarFeedFilterState, presentFamilies: string[]) {
+  const chip = (id: string, label: string, next: RadarFeedFilterState, active: boolean) => ({ id, label, message: radarFeedFilterMessage(next), active });
+  const families = [...new Set([...presentFamilies, ...(state.sourceFamily ? [state.sourceFamily] : [])])]
+    .filter((family): family is RadarFeedFamilyFilter => family in RADAR_FAMILY_PHRASE).sort();
+  return [
+    chip('radar-lifecycle-all', 'Any time', { ...state, lifecycle: null }, state.lifecycle === null),
+    ...(Object.keys(RADAR_LIFECYCLE_CHIP) as RadarFeedLifecycleFilter[]).map((lifecycle) => chip(`radar-lifecycle-${lifecycle}`, RADAR_LIFECYCLE_CHIP[lifecycle], { ...state, lifecycle }, state.lifecycle === lifecycle)),
+    chip('radar-family-all', 'All sources', { ...state, sourceFamily: null }, state.sourceFamily === null),
+    ...families.map((family) => chip(`radar-family-${family}`, RADAR_SOURCE_FAMILY_LABEL[family] ?? family, { ...state, sourceFamily: family }, state.sourceFamily === family)),
+    chip('radar-hide-dismissed', 'Hide dismissed', { ...state, includeDismissed: false }, !state.includeDismissed),
+    chip('radar-include-dismissed', 'Include dismissed', { ...state, includeDismissed: true }, state.includeDismissed),
+  ];
+}
+
+async function homeEventRadarFeedResult(userId: string, propertyId: string, message: string, cursor?: string | null): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const filters = parseRadarFeedFilters(message);
+  const page = await radarQueryService.listFeed(propertyId, userId, {
+    limit: 20,
+    ...(cursor ? { cursor } : {}),
+    ...(filters.lifecycle ? { lifecycle: [filters.lifecycle] } : {}),
+    ...(filters.sourceFamily ? { sourceFamily: [filters.sourceFamily] } : {}),
+    // Same default as the traditional page: dismissed events are hidden unless asked for.
+    ...(filters.includeDismissed ? {} : { state: ['new', 'seen', 'saved', 'acted_on'] }),
+  } as Parameters<typeof radarQueryService.listFeed>[2]) as {
     items: Array<Record<string, any>>;
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
     totalCount: number;
@@ -7661,9 +7710,10 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, curs
     asOf: string;
   };
   const items = page.items ?? [];
-  const radarHref = (matchId?: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-event-radar${matchId ? `?matchId=${encodeURIComponent(matchId)}` : ''}`;
+  const radarHref = (matchId?: string) => radarEventHref(propertyId, matchId);
+  const narrowed = filters.lifecycle !== null || filters.sourceFamily !== null;
 
-  if (!items.length) {
+  if (!items.length && !narrowed) {
     const copy = RADAR_FEED_STATE_COPY[page.feedState] ?? RADAR_FEED_STATE_COPY.UNCOVERED;
     return {
       status: 'ANSWERED',
@@ -7671,8 +7721,11 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, curs
         type: 'EMPTY_STATE',
         id: 'home-event-radar-empty',
         title: copy.title,
-        body: copy.body,
-        actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' }],
+        body: filters.includeDismissed ? copy.body : `${copy.body} Dismissed events are hidden.`,
+        actions: [
+          ...(filters.includeDismissed ? [] : [{ id: 'radar-include-dismissed', label: 'Include dismissed events', interactionType: 'START_WORKFLOW' as const, message: radarFeedFilterMessage({ ...filters, includeDismissed: true }), operationId: 'HOME_EVENT_RADAR_FEED', style: 'SECONDARY' as const }]),
+          { id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' },
+        ],
       }],
       suggestions: [],
     };
@@ -7685,19 +7738,23 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, curs
     existing.push(item);
     grouped.set(family, existing);
   }
+  const itemActions = radarEventItemActions(access.role);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'home-event-radar-summary',
     title: 'Monitored home events',
-    body: `${items.length} monitored event${items.length === 1 ? '' : 's'} from Home Event Radar${page.totalCount > items.length ? ` (${page.totalCount} total)` : ''}.`,
+    body: items.length
+      ? `${items.length} monitored event${items.length === 1 ? '' : 's'} from Home Event Radar${page.totalCount > items.length ? ` (${page.totalCount} total)` : ''}.`
+      : 'No monitored events match these filters.',
     tone: items.some((item) => item.isSourceStale) ? 'CAUTION' : 'DEFAULT',
     actions: [],
   }, {
-    type: 'GROUPED_LIST', filters: [],
+    type: 'GROUPED_LIST',
+    filters: radarFeedFilterChips(filters, [...grouped.keys()]),
     id: 'home-event-radar-feed',
     title: 'Home Event Radar feed',
-    description: 'This is the same canonical feed the Home Event Radar page reads, grouped by source.',
-    sections: [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([family, sectionItems]) => ({
+    description: `This is the same canonical feed the Home Event Radar page reads, grouped by source.${filters.includeDismissed ? '' : ' Dismissed events are hidden.'}`,
+    sections: items.length ? [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([family, sectionItems]) => ({
       id: `radar-${family}`,
       title: RADAR_SOURCE_FAMILY_LABEL[family] ?? family,
       count: sectionItems.length,
@@ -7709,8 +7766,9 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, curs
         status: item.userState ? String(item.userState) : null,
         href: radarHref(String(item.id)),
         entityType: 'RADAR_MATCH',
+        actions: itemActions,
       })),
-    })),
+    })) : [{ id: 'radar-no-match', title: 'No matching events', count: 0, items: [] }],
     actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' }],
   }];
   const degraded = page.feedState === 'PARTIAL_COVERAGE' || page.feedState === 'DEGRADED' || page.feedState === 'UNCOVERED';
@@ -7732,6 +7790,351 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, curs
     suggestions: page.pageInfo?.hasNextPage ? ['Show more monitored events'] : [],
     parameters: page.pageInfo?.hasNextPage ? { nextCursor: page.pageInfo.endCursor } : undefined,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Home Event Radar writes (ASK_COZY_INLINE_WORKSPACE_FRD v1.40, capability-card
+// audit follow-up). Split by consequence, per product decision:
+// - HOME_EVENT_RADAR_STATE: save / unsave / dismiss / restore, a one-click
+//   direct write (recorded IW-CONF-001 exception: the caller's own per-user,
+//   reversible state with no property-level effect).
+// - HOME_EVENT_RADAR_MARK_DONE: confirmed, because acted_on requests the
+//   property's radar risk reconciliation (radarInteractionService.updateState's
+//   mitigation_changed branch).
+// - HOME_EVENT_RADAR_FEEDBACK: confirmed, a reason + optional comment form.
+// All three are non-routable and reached only from the declared item actions
+// on a HOME_EVENT_RADAR_FEED event. Task create-or-link remains out of scope.
+// ---------------------------------------------------------------------------
+export const RADAR_STATE_MESSAGES = {
+  save: 'Save this monitored event.',
+  unsave: 'Remove this monitored event from saved.',
+  dismiss: 'Dismiss this monitored event.',
+  restore: 'Restore this dismissed monitored event.',
+} as const;
+export type RadarStateRequest = keyof typeof RADAR_STATE_MESSAGES;
+export const RADAR_MARK_DONE_MESSAGE = 'Mark this monitored event as done.';
+export const RADAR_FEEDBACK_MESSAGE = 'Send feedback on this monitored event.';
+
+const RADAR_USER_STATE_LABEL: Record<string, string> = { new: 'New', seen: 'Seen', saved: 'Saved', dismissed: 'Dismissed', acted_on: 'Done' };
+// The traditional page's own five reasons (RadarDetailSheet.tsx FEEDBACK_OPTIONS); 'helpful' exists in the
+// canonical enum but is not offered there, so it is not offered here either.
+const RADAR_FEEDBACK_OPTIONS: readonly CorrectionOption[] = [
+  { label: 'Wrong location', value: 'wrong_location' },
+  { label: 'Not relevant to my home', value: 'not_relevant' },
+  { label: 'Duplicate event', value: 'duplicate' },
+  { label: 'Information is stale', value: 'stale' },
+  { label: 'Something else', value: 'other' },
+];
+const RadarFeedbackInputSchema = z.object({
+  matchId: z.string().trim().min(1).max(160),
+  feedbackType: z.enum(['wrong_location', 'not_relevant', 'duplicate', 'stale', 'other']).nullable(),
+  comment: z.string().trim().max(RADAR_FEEDBACK_COMMENT_MAX_LENGTH).nullable(),
+}).strict();
+
+function radarEventHref(propertyId: string, matchId?: string): string {
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-event-radar${matchId ? `?matchId=${encodeURIComponent(matchId)}` : ''}`;
+}
+
+// Every action a member of this role may take on a feed event. The inline detail (RadarEventDetail) shows only the
+// ones valid for the event's LIVE canonical userState, so the feed row itself never needs refreshing to stay correct.
+export function radarEventItemActions(role: HouseholdRole) {
+  const action = (id: string, label: string, message: string, operationId: string, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({ id, label, message, style, interactionType: 'MUTATE_RECORD' as const, operationId });
+  return [
+    action('radar-save', 'Save', RADAR_STATE_MESSAGES.save, 'HOME_EVENT_RADAR_STATE'),
+    action('radar-unsave', 'Remove from saved', RADAR_STATE_MESSAGES.unsave, 'HOME_EVENT_RADAR_STATE'),
+    action('radar-dismiss', 'Dismiss', RADAR_STATE_MESSAGES.dismiss, 'HOME_EVENT_RADAR_STATE'),
+    action('radar-restore', 'Restore', RADAR_STATE_MESSAGES.restore, 'HOME_EVENT_RADAR_STATE'),
+    // Domain commands have no VIEWER floor, so these two are contributor-and-up (stricter than the traditional page).
+    ...(role !== HouseholdRole.VIEWER ? [
+      action('radar-mark-done', 'Mark done', RADAR_MARK_DONE_MESSAGE, 'HOME_EVENT_RADAR_MARK_DONE', 'PRIMARY'),
+      action('radar-feedback', 'Send feedback', RADAR_FEEDBACK_MESSAGE, 'HOME_EVENT_RADAR_FEEDBACK'),
+    ] : []),
+  ];
+}
+
+// Pure: the state a request moves to from the LIVE state, or why it is refused. A done (acted_on) event is refused:
+// on the traditional page Save/Dismiss would silently undo "done" and re-trigger the property risk reconciliation,
+// which is exactly the material change the confirmed MARK_DONE path exists for.
+export function radarStateTransition(request: RadarStateRequest, current: string): { target: 'saved' | 'seen' | 'dismissed'; alreadyApplied: boolean } | { refused: string } {
+  if (current === 'acted_on') return { refused: 'This event is marked done. Saving or dismissing it here would undo that, so use Home Event Radar to change it.' };
+  switch (request) {
+    case 'save': return { target: 'saved', alreadyApplied: current === 'saved' };
+    case 'unsave': return { target: 'seen', alreadyApplied: current !== 'saved' };
+    case 'dismiss': return { target: 'dismissed', alreadyApplied: current === 'dismissed' };
+    case 'restore': return { target: 'seen', alreadyApplied: current !== 'dismissed' };
+  }
+}
+
+export function radarStateContextVersion(matchId: string, userState: string): string {
+  return createHash('sha256').update(`${matchId}:${userState}`).digest('hex');
+}
+
+function radarLaunchMatchId(launchContext?: CreateAskExecutionRequest['launchContext']): string | null {
+  return launchContext?.entityType === 'RADAR_MATCH' && launchContext.entityId ? launchContext.entityId : null;
+}
+
+function radarWriteBoundary(propertyId: string, title: string, body: string, status: AskOperationResult['status'] = 'BLOCKED'): AskOperationResult {
+  return {
+    status,
+    reasonCode: 'HOME_EVENT_RADAR_WRITE_NOT_AVAILABLE',
+    blocks: [{ type: 'BOUNDARY', id: 'radar-write-boundary', title, body, severity: 'INFO', suggestions: ['Show my home event radar feed'] }],
+    suggestions: ['Show my home event radar feed'],
+  };
+}
+
+// Canonical re-read of one match for this user; null when it no longer exists for this property.
+async function loadRadarMatchForWrite(propertyId: string, matchId: string, userId: string): Promise<Record<string, any> | null> {
+  try {
+    return await radarQueryService.getDetail(propertyId, matchId, userId) as Record<string, any>;
+  } catch (error) {
+    if (error instanceof APIError && error.code === 'RADAR_MATCH_NOT_FOUND') return null;
+    throw error;
+  }
+}
+
+const RADAR_EVENT_GONE = { title: 'Event no longer available', body: 'This monitored event was removed or is no longer matched to this home. Nothing was changed.' };
+const RADAR_WRITE_NEEDS_EVENT = { title: 'Choose the event in Home Event Radar', body: 'Open the event from your Home Event Radar feed and use its actions there. Nothing was changed.' };
+
+export async function homeEventRadarStateResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const request = (Object.keys(RADAR_STATE_MESSAGES) as RadarStateRequest[]).find((key) => RADAR_STATE_MESSAGES[key] === message.trim());
+  const matchId = radarLaunchMatchId(launchContext);
+  // Declared-action-only start (write rule 3): only a click on the declared action writes. An ASK_REFRESH re-run,
+  // or anything without the pinned operation, the canned message and the event, writes nothing.
+  const declared = launchContext?.operationId === 'HOME_EVENT_RADAR_STATE' && launchContext.surface !== 'ASK_REFRESH';
+  if (!request || !matchId || !declared) return radarWriteBoundary(propertyId, RADAR_WRITE_NEEDS_EVENT.title, RADAR_WRITE_NEEDS_EVENT.body, 'NOT_APPLICABLE');
+  const detail = await loadRadarMatchForWrite(propertyId, matchId, userId);
+  if (!detail) return radarWriteBoundary(propertyId, RADAR_EVENT_GONE.title, RADAR_EVENT_GONE.body);
+  const current = String(detail.userState ?? 'new');
+  const transition = radarStateTransition(request, current);
+  if ('refused' in transition) return radarWriteBoundary(propertyId, 'Event is marked done', transition.refused);
+  if (!transition.alreadyApplied) {
+    await radarInteractionService.updateState(propertyId, matchId, userId, transition.target);
+    // Same analytics the traditional PATCH /state controller emits (write rule 2); its guidance-journey completion
+    // only runs when a guidanceJourneyId is supplied, which Ask never has.
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED, userId, propertyId, moduleKey: AnalyticsModule.RISK, featureKey: AnalyticsFeature.HOME_EVENT_RADAR,
+      metadataJson: { actionType: 'update_match_state', matchId, state: transition.target, surface: 'ASK' },
+    });
+  }
+  const title = transition.alreadyApplied
+    ? ({ save: 'Already saved', unsave: 'Not saved', dismiss: 'Already dismissed', restore: 'Not dismissed' } as const)[request]
+    : ({ save: 'Event saved', unsave: 'Removed from saved', dismiss: 'Event dismissed', restore: 'Event restored' } as const)[request];
+  return {
+    status: 'COMPLETED',
+    reasonCode: transition.alreadyApplied ? 'HOME_EVENT_RADAR_STATE_ALREADY_SET' : 'HOME_EVENT_RADAR_STATE_CHANGED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `radar-state-${matchId}`, title, status: 'COMPLETED',
+      description: 'This changes Home Event Radar for you only; other household members keep their own view.',
+      details: [
+        { label: 'Event', value: String(detail.title ?? 'Monitored event') },
+        { label: 'Previous state', value: RADAR_USER_STATE_LABEL[current] ?? current },
+        { label: 'Current state', value: transition.alreadyApplied ? RADAR_USER_STATE_LABEL[current] ?? current : RADAR_USER_STATE_LABEL[transition.target] },
+      ],
+      actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }],
+    }],
+    suggestions: ['Show my home event radar feed'],
+  };
+}
+
+function radarMarkDoneConfirmation(detail: Record<string, any>, version: number, expiresAt: Date) {
+  return {
+    confirmationId: `radar-mark-done-${detail.propertyMatchId}-${version}`, version,
+    title: `Mark "${detail.title}" as done?`,
+    description: 'Home Event Radar will treat this event as handled for you and recheck this home\'s radar risk to reflect it.',
+    fields: [{ label: 'Event', value: String(detail.title) }, { label: 'Current state', value: RADAR_USER_STATE_LABEL[String(detail.userState ?? 'new')] ?? String(detail.userState) }],
+    editableFields: [],
+    confirmLabel: 'Mark done',
+    consentText: 'I have handled this event and want Home Event Radar to recheck this home\'s risk.',
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
+async function homeEventRadarMarkDoneResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const matchId = radarLaunchMatchId(launchContext);
+  const declared = launchContext?.operationId === 'HOME_EVENT_RADAR_MARK_DONE' && launchContext.surface !== 'ASK_REFRESH' && message.trim() === RADAR_MARK_DONE_MESSAGE;
+  if (!matchId || !declared) return radarWriteBoundary(propertyId, RADAR_WRITE_NEEDS_EVENT.title, RADAR_WRITE_NEEDS_EVENT.body, 'NOT_APPLICABLE');
+  const detail = await loadRadarMatchForWrite(propertyId, matchId, userId);
+  if (!detail) return radarWriteBoundary(propertyId, RADAR_EVENT_GONE.title, RADAR_EVENT_GONE.body);
+  const current = String(detail.userState ?? 'new');
+  if (current === 'acted_on') {
+    return {
+      status: 'COMPLETED', reasonCode: 'HOME_EVENT_RADAR_ALREADY_DONE',
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `radar-mark-done-${matchId}`, title: 'Already marked done', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Event', value: String(detail.title) }], actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }] }],
+      suggestions: ['Show my home event radar feed'],
+    };
+  }
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_RADAR_MARK_DONE_CONFIRMATION_REQUIRED', contextVersion: radarStateContextVersion(matchId, current),
+    parameters: {
+      radarMatchId: matchId, radarStateContextVersion: radarStateContextVersion(matchId, current), sourceExecutionId: launchContext?.sourceExecutionId ?? null,
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'radar-mark-done-review', title: `Review marking ${detail.title} as done`, body: 'Nothing has changed yet. Confirm to mark this event done.', tone: 'DEFAULT', actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }] }],
+    confirmation: radarMarkDoneConfirmation(detail, 1, expiresAt),
+    suggestions: [],
+  };
+}
+
+function radarFeedbackConfirmation(detail: Record<string, any>, input: z.infer<typeof RadarFeedbackInputSchema>, version: number, expiresAt: Date) {
+  return {
+    confirmationId: `radar-feedback-${input.matchId}-${version}`, version,
+    title: `Send feedback on "${detail.title}"?`,
+    description: 'Feedback helps Home Event Radar match events to this home. It replaces any feedback you sent on this event before.',
+    fields: [{ label: 'Event', value: String(detail.title) }],
+    editableFields: [
+      { key: 'feedbackType', label: 'Reason', type: 'SELECT' as const, value: input.feedbackType ?? '', options: [...RADAR_FEEDBACK_OPTIONS] },
+      { key: 'comment', label: `Comment (optional, up to ${RADAR_FEEDBACK_COMMENT_MAX_LENGTH} characters)`, type: 'TEXTAREA' as const, value: input.comment ?? '' },
+    ],
+    confirmLabel: 'Send feedback',
+    consentText: 'I want to send this feedback to Home Event Radar.',
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
+const RADAR_FEEDBACK_REVIEW_BODY = 'Nothing has been sent yet. Choose a reason, add a comment if you like, then confirm.';
+
+async function homeEventRadarFeedbackResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const matchId = radarLaunchMatchId(launchContext);
+  const declared = launchContext?.operationId === 'HOME_EVENT_RADAR_FEEDBACK' && launchContext.surface !== 'ASK_REFRESH' && message.trim() === RADAR_FEEDBACK_MESSAGE;
+  if (!matchId || !declared) return radarWriteBoundary(propertyId, RADAR_WRITE_NEEDS_EVENT.title, RADAR_WRITE_NEEDS_EVENT.body, 'NOT_APPLICABLE');
+  const detail = await loadRadarMatchForWrite(propertyId, matchId, userId);
+  if (!detail) return radarWriteBoundary(propertyId, RADAR_EVENT_GONE.title, RADAR_EVENT_GONE.body);
+  const existingType = detail.userFeedback?.feedbackType;
+  const input = RadarFeedbackInputSchema.parse({
+    matchId,
+    feedbackType: RADAR_FEEDBACK_OPTIONS.some((option) => option.value === existingType) ? existingType : null,
+    comment: null,
+  });
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_RADAR_FEEDBACK_CONFIRMATION_REQUIRED',
+    parameters: { radarFeedback: input, sourceExecutionId: launchContext?.sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'radar-feedback-review', title: `Feedback on ${detail.title}`, body: RADAR_FEEDBACK_REVIEW_BODY, tone: 'DEFAULT', actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }] }],
+    confirmation: radarFeedbackConfirmation(detail, input, 1, expiresAt),
+    suggestions: [],
+  };
+}
+
+registerCapabilityHandler('home-event-radar.state', async (envelope) => homeEventRadarStateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('home-event-radar.mark-done', async (envelope) => homeEventRadarMarkDoneResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('home-event-radar.feedback', async (envelope) => homeEventRadarFeedbackResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+
+function radarConfirmError(message: string, code: string): Error {
+  return Object.assign(new Error(message), { code });
+}
+
+async function radarWriteReceipt(ctx: ConfirmCapabilityContext, matchId: string, block: Extract<AskPresentationBlock, { type: 'WORKFLOW_PROGRESS' }>, reasonCode: string, artifactType: string): Promise<ConfirmCapabilityResult> {
+  const result: AskOperationResult = { status: 'COMPLETED', reasonCode, blocks: [block], suggestions: ['Show my home event radar feed'] };
+  const refresh = await reconcileAskExecutionSideEffects(ctx.userId, ctx.execution, ctx.parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({ type: 'LIMITATION', id: `radar-refresh-failed-${matchId}`, severity: 'CAUTION', title: 'Saved; view could not refresh', body: 'This was saved to Home Event Radar. The feed you were viewing could not refresh automatically -- ask "Show my home event radar feed" to see its current state.' });
+  }
+  return { result, artifactType, artifactId: matchId, refreshedExecutions: refresh.refreshedExecutions };
+}
+
+async function confirmHomeEventRadarMarkDone(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access } = ctx;
+  if (access.role === HouseholdRole.VIEWER) throw radarConfirmError('A contributor or owner is required to mark radar events done in Ask.', 'ASK_PERMISSION_REQUIRED');
+  const matchId = typeof parameters.radarMatchId === 'string' ? parameters.radarMatchId : null;
+  if (!matchId) throw radarConfirmError('The event selection is invalid.', 'ASK_CONFIRMATION_NOT_ACTIVE');
+  const detail = await loadRadarMatchForWrite(execution.propertyId!, matchId, userId);
+  if (!detail) throw radarConfirmError('This monitored event is no longer available.', 'ASK_CONTEXT_VERSION_CONFLICT');
+  const current = String(detail.userState ?? 'new');
+  const alreadyApplied = current === 'acted_on';
+  if (!alreadyApplied) {
+    if (parameters.radarStateContextVersion !== radarStateContextVersion(matchId, current)) {
+      throw radarConfirmError('This event changed while confirmation was open. Review it and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+    }
+    await radarInteractionService.updateState(execution.propertyId!, matchId, userId, 'acted_on');
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.ACTION_COMPLETED, userId, propertyId: execution.propertyId!, moduleKey: AnalyticsModule.RISK, featureKey: AnalyticsFeature.HOME_EVENT_RADAR,
+      metadataJson: { actionType: 'update_match_state', matchId, state: 'acted_on', surface: 'ASK' },
+    });
+  }
+  return radarWriteReceipt(ctx, matchId, {
+    type: 'WORKFLOW_PROGRESS', id: `radar-mark-done-${matchId}`, title: alreadyApplied ? 'Already marked done' : 'Marked done', status: 'COMPLETED',
+    description: alreadyApplied ? 'Nothing was changed.' : 'Home Event Radar will recheck this home\'s radar risk to reflect it.',
+    details: [{ label: 'Event', value: String(detail.title) }, { label: 'Previous state', value: alreadyApplied ? 'Already done' : RADAR_USER_STATE_LABEL[current] ?? current }],
+    actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(execution.propertyId!, matchId), style: 'SECONDARY' }],
+  }, alreadyApplied ? 'HOME_EVENT_RADAR_ALREADY_DONE' : 'HOME_EVENT_RADAR_MARKED_DONE', 'PROPERTY_RADAR_STATE');
+}
+
+async function confirmHomeEventRadarFeedback(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access } = ctx;
+  if (access.role === HouseholdRole.VIEWER) throw radarConfirmError('A contributor or owner is required to send radar feedback in Ask.', 'ASK_PERMISSION_REQUIRED');
+  const candidate = RadarFeedbackInputSchema.safeParse(parameters.radarFeedback);
+  if (!candidate.success) throw radarConfirmError('The feedback to send is invalid.', 'ASK_CONFIRMATION_NOT_ACTIVE');
+  const { matchId, feedbackType, comment } = candidate.data;
+  if (!feedbackType) throw radarConfirmError('Choose a reason before sending feedback.', 'ASK_INVALID_CONFIRMATION_EDIT');
+  const detail = await loadRadarMatchForWrite(execution.propertyId!, matchId, userId);
+  if (!detail) throw radarConfirmError('This monitored event is no longer available.', 'ASK_CONTEXT_VERSION_CONFLICT');
+  await radarInteractionService.submitFeedback(execution.propertyId!, matchId, userId, feedbackType, comment || null);
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.ACTION_COMPLETED, userId, propertyId: execution.propertyId!, moduleKey: AnalyticsModule.RISK, featureKey: AnalyticsFeature.HOME_EVENT_RADAR,
+    metadataJson: { actionType: 'submit_match_feedback', matchId, feedbackType, hasComment: Boolean(comment), surface: 'ASK' },
+  });
+  return radarWriteReceipt(ctx, matchId, {
+    type: 'WORKFLOW_PROGRESS', id: `radar-feedback-${matchId}`, title: 'Feedback sent', status: 'COMPLETED',
+    description: 'Thanks. Home Event Radar recorded your feedback on this event.',
+    details: [
+      { label: 'Event', value: String(detail.title) },
+      { label: 'Reason', value: RADAR_FEEDBACK_OPTIONS.find((option) => option.value === feedbackType)?.label ?? feedbackType },
+      ...(comment ? [{ label: 'Comment', value: comment }] : []),
+    ],
+    actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(execution.propertyId!, matchId), style: 'SECONDARY' }],
+  }, 'HOME_EVENT_RADAR_FEEDBACK_SENT', 'PROPERTY_RADAR_FEEDBACK');
+}
+
+registerConfirmCapabilityHandler('home-event-radar.mark-done', confirmHomeEventRadarMarkDone);
+registerConfirmCapabilityHandler('home-event-radar.feedback', confirmHomeEventRadarFeedback);
+
+export async function editHomeEventRadarFeedbackConfirmation(
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+  userId: string,
+): Promise<AskExecutionResponse> {
+  const existing = RadarFeedbackInputSchema.safeParse(parameters.radarFeedback);
+  if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
+  const unknownField = Object.keys(input.edits).find((key) => key !== 'feedbackType' && key !== 'comment');
+  if (unknownField) throw Object.assign(new Error('Only the reason and comment can be edited.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const next = { ...existing.data };
+  if (input.edits.feedbackType !== undefined) {
+    const type = RadarFeedbackInputSchema.shape.feedbackType.safeParse(input.edits.feedbackType);
+    if (!type.success || type.data === null) throw Object.assign(new Error('Choose one of the listed reasons.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+    next.feedbackType = type.data;
+  }
+  if (input.edits.comment !== undefined) {
+    if (input.edits.comment.trim().length > RADAR_FEEDBACK_COMMENT_MAX_LENGTH) throw Object.assign(new Error(`Keep the comment to ${RADAR_FEEDBACK_COMMENT_MAX_LENGTH} characters or fewer.`), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+    next.comment = input.edits.comment.trim() || null;
+  }
+  const updatedInput = RadarFeedbackInputSchema.parse(next);
+  const detail = await loadRadarMatchForWrite(execution.propertyId!, updatedInput.matchId, userId);
+  if (!detail) throw Object.assign(new Error('This monitored event is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  const nextVersion = input.confirmationVersion + 1;
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const newConfirmation = radarFeedbackConfirmation(detail, updatedInput, nextVersion, expiresAt);
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'radar-feedback-review', title: `Feedback on ${detail.title}`, body: RADAR_FEEDBACK_REVIEW_BODY, tone: 'DEFAULT' as const, actions: [] };
+  const editWrite = await prisma.askExecution.updateMany({
+    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
+    data: {
+      parametersJson: asInputJson({ ...parameters, radarFeedback: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+        ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),
+      }),
+    },
+  });
+  if (editWrite.count !== 1) throw Object.assign(new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  await prisma.askExecutionEvent.create({
+    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+  });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 
 // C2C Intelligence & Agentic Evolution Phase 3 / PR 12b. Routes an Ask "help me
@@ -8196,7 +8599,7 @@ registerCapabilityHandler('ownership.costs', async (envelope) => ownershipCostsR
 registerCapabilityHandler('inventory.lookup', async (envelope) => inventoryLookupResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('property.summary', async (envelope) => propertySummaryResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('intelligence-envelope.query', async (envelope) => intelligenceEnvelopeQueryResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor, envelope.suppliedInput as RadarEnvelopeQuerySuppliedInput | undefined));
-registerCapabilityHandler('home-event-radar.feed', async (envelope) => homeEventRadarFeedResult(envelope.userId, envelope.propertyId!, envelope.continuationCursor));
+registerCapabilityHandler('home-event-radar.feed', async (envelope) => homeEventRadarFeedResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor));
 registerCapabilityHandler('home-actions.feed', async (envelope) => homeActionsResult(
   envelope.userId,
   envelope.propertyId!,
@@ -15679,6 +16082,7 @@ const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
   INVENTORY_ITEM_CORRECT: editInventoryItemCorrectConfirmation,
   HOME_EVENT_CORRECT: editHomeEventCorrectConfirmation,
   HOME_EVENT_VISIBILITY: editHomeEventVisibilityConfirmation,
+  HOME_EVENT_RADAR_FEEDBACK: editHomeEventRadarFeedbackConfirmation,
   WARRANTY_CORRECT: editWarrantyCorrectConfirmation,
   ROOM_RENAME: editRoomRenameConfirmation,
   BUYER_TASK_UPDATE: editBuyerTaskUpdateConfirmation,

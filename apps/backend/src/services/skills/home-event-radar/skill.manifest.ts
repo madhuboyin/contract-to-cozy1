@@ -14,6 +14,11 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 // (save/dismiss/acted-on), structured feedback, and task-candidate/creation
 // writes are a deliberately separate, unscoped follow-up -- this skill has
 // exactly one operation.
+//
+// FRD v1.40 (2026-09-22) added the per-user writes: HOME_EVENT_RADAR_STATE (direct save/unsave/dismiss/restore),
+// HOME_EVENT_RADAR_MARK_DONE and HOME_EVENT_RADAR_FEEDBACK (both confirmed). Task create-or-link is still
+// out of scope.
+const HOME_EVENT_RADAR_WRITE_OPERATIONS = ['HOME_EVENT_RADAR_STATE', 'HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_FEEDBACK'] as const;
 export const HOME_EVENT_RADAR_SKILL = Object.freeze({
   id: 'home-event-radar',
   version: '1.0.0',
@@ -31,30 +36,41 @@ export const HOME_EVENT_RADAR_SKILL = Object.freeze({
     // feed by operating mode (never gate on it) -- same convention as
     // query-envelope and capital-planning's own optional journey provider.
     optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
-  }],
+  }, ...HOME_EVENT_RADAR_WRITE_OPERATIONS.map((operationId) => ({
+    operationId,
+    version: '1.0',
+    requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+    optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
+  }))],
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
-  allowedAdapters: [{ id: 'home-event-radar.feed', version: '1.0' }],
+  allowedAdapters: [
+    { id: 'home-event-radar.feed', version: '1.0' },
+    { id: 'home-event-radar.state', version: '1.0' },
+    { id: 'home-event-radar.mark-done', version: '1.0' },
+    { id: 'home-event-radar.feedback', version: '1.0' },
+  ],
   allowedExternalConnectors: [],
   consumerPolicy: [
-    { consumer: 'ASK', operations: ['HOME_EVENT_RADAR_FEED'] },
+    { consumer: 'ASK', operations: ['HOME_EVENT_RADAR_FEED', ...HOME_EVENT_RADAR_WRITE_OPERATIONS] },
   ],
-  autonomyLevel: 1,
+  autonomyLevel: 2,
   riskPolicy: {
-    effects: ['READ'],
+    effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',
     riskDomains: ['HOME_SAFETY'],
-    reversibility: 'REVERSIBLE',
+    reversibility: 'PARTIALLY_REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
   // Not added to askOperationRegistry.ts's CAPABILITY_CONTINUITY_OPERATIONS
   // set -- same as INTELLIGENCE_ENVELOPE_QUERY, not CAPITAL_RESERVE_PLAN --
   // so no CAPABILITY_LIST block here, matching query-envelope's own list.
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
     { type: 'OPERATION_CONTRACT', id: 'HOME_EVENT_RADAR_FEED', version: '1.0', required: true },
+    ...HOME_EVENT_RADAR_WRITE_OPERATIONS.map((id) => ({ type: 'OPERATION_CONTRACT' as const, id, version: '1.0', required: true })),
   ],
   contextBudget: {
     maxFacts: 50,
