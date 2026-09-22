@@ -377,6 +377,17 @@ test('a contributor changes a room floor level inline through the TEXT field', a
   });
 });
 
+test('a contributor changes a timeline event\'s visibility inline through a dropdown', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Recent verified home activity', recordButton: 'Roof replacement', detailText: 'The roof replacement is recorded with verified evidence.',
+    actionLabel: /^Change visibility/, actionMessage: 'Change the visibility of this timeline event.', entityType: 'HOME_EVENT', entityId: 'event-property-summary',
+    disclosure: true, select: true,
+    confirmationTitle: 'Change who can see "Roof replacement"?', fieldLabel: 'New visibility', newValue: 'RESALE_PACK', shownValue: 'Resale pack', confirmLabel: 'Save visibility',
+    consentText: /I authorize this visibility change to the shared home timeline/, receiptTitle: 'Visibility changed',
+  });
+});
+
 test('a contributor adds a timeline event inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

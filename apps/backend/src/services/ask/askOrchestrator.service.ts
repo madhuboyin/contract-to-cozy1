@@ -8322,10 +8322,18 @@ function homeEventContextVersion(event: { id: string; revision: number }): strin
 
 function homeEventCorrectionItemActions(canManage: boolean) {
   if (!canManage) return undefined;
-  return (Object.keys(HOME_EVENT_CORRECTION_FIELDS) as HomeEventCorrectionField[]).map((field) => ({
+  const fields = (Object.keys(HOME_EVENT_CORRECTION_FIELDS) as HomeEventCorrectionField[]).map((field) => ({
     id: `correct-${field}`, label: HOME_EVENT_CORRECTION_FIELDS[field].action, message: HOME_EVENT_CORRECTION_FIELDS[field].message,
     style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT',
   }));
+  // Whether this contributor may go on to choose PRIVATE, or move a PRIVATE event to something else, is re-checked
+  // against live data (createdById) in homeEventVisibilityResult/confirmHomeEventVisibility -- the action itself is
+  // offered to any contributor exactly like the other event corrections, since a PRIVATE event a non-creator cannot
+  // even see never reaches this list in the first place.
+  return [...fields, {
+    id: 'correct-visibility', label: 'Change visibility', message: HOME_EVENT_VISIBILITY_MESSAGE,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_VISIBILITY',
+  }];
 }
 
 function homeEventCorrectionConfirmation(event: { id: string; title: string }, field: HomeEventCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
@@ -8403,6 +8411,89 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
 }
 
 registerCapabilityHandler('home-event.correct', async (envelope) => homeEventCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+
+// Phase 3 write slice 7: change who can see a HomeEvent (PRIVATE / HOUSEHOLD / RESALE_PACK). Written in place through the
+// existing setVisibility writer -- unlike HOME_EVENT_CORRECT this does not supersede the event with a new revision, so the
+// event id and every other field are untouched. STRICTER than the traditional PATCH route (any contributor, no ownership
+// check): a change TO or FROM PRIVATE is creator-only, matching the read-side rule that a PRIVATE event is visible only to
+// its creator (ensureHomeEventVisible below; every event query elsewhere in this file applies the same OR filter).
+export const HOME_EVENT_VISIBILITY_MESSAGE = 'Change the visibility of this timeline event.';
+const HOME_EVENT_VISIBILITY_OPTIONS: readonly CorrectionOption[] = [
+  { label: 'Private (only you)', value: 'PRIVATE' },
+  { label: 'Household (everyone with access to this home)', value: 'HOUSEHOLD' },
+  { label: 'Resale pack (also shared in resale summaries for buyers and listing agents)', value: 'RESALE_PACK' },
+];
+const HOME_EVENT_VISIBILITY_LABELS: Record<string, string> = {
+  PRIVATE: 'Private (only you)', HOUSEHOLD: 'Household (everyone with access to this home)', RESALE_PACK: 'Resale pack (shared with buyers and listing agents)',
+};
+const HomeEventVisibilityInputSchema = z.object({
+  eventId: z.string().trim().min(1).max(160),
+  value: z.enum(['PRIVATE', 'HOUSEHOLD', 'RESALE_PACK']).nullable(),
+}).strict();
+
+// Homeowner-facing reason this contributor cannot set this value on this event, or null. `current` is the event's
+// visibility as recorded now (re-read at confirm, not trusted from the proposal).
+function homeEventVisibilityBlocker(userId: string, createdById: string | null, current: string, proposed: string | null): string | null {
+  const changesPrivacy = proposed !== null && (current === 'PRIVATE' || proposed === 'PRIVATE') && current !== proposed;
+  if (changesPrivacy && createdById !== userId) return 'Only the person who added this event can change it to or from private.';
+  return null;
+}
+
+function homeEventVisibilityConfirmation(event: { id: string; title: string }, current: string, proposed: string | null, version: number, expiresAt: Date) {
+  return {
+    confirmationId: `home-event-visibility-${event.id}-${version}`, version, title: `Change who can see "${event.title}"?`,
+    description: 'This changes the timeline event in place; it does not create a new revision.',
+    fields: [{ label: 'Event', value: event.title }, { label: 'Current visibility', value: HOME_EVENT_VISIBILITY_LABELS[current] ?? current }],
+    editableFields: [{ key: 'value', label: 'New visibility', type: 'SELECT' as const, value: proposed ?? '', options: [...HOME_EVENT_VISIBILITY_OPTIONS] }],
+    confirmLabel: 'Save visibility',
+    consentText: proposed === 'RESALE_PACK'
+      ? 'I authorize sharing this event with buyers and listing agents in resale summaries.'
+      : 'I authorize this visibility change to the shared home timeline.',
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
+async function homeEventVisibilityResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
+  const events = await prisma.homeEvent.findMany({
+    where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
+    select: { id: true, title: true, revision: true, visibility: true, createdById: true, occurredAt: true },
+  });
+  const selected = exactEntityMatch(events, message, launchContext);
+  if (!selected) {
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HOME_EVENT_TARGET_REQUIRED',
+      ...durableFreeTextClarification('HOME_EVENT_VISIBILITY', 'Which timeline event should Ask change the visibility of? Use its exact title.'),
+      blocks: [{
+        type: 'GROUPED_LIST', filters: [], id: 'home-event-selection', title: 'Choose the event to change',
+        description: 'Use the exact event title in your next message; nothing has changed.',
+        sections: [{ id: 'events', title: 'Timeline events', count: events.length, items: events.slice(0, 20).map((event) => ({
+          id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
+        })) }],
+        actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }],
+      }],
+      suggestions: events.slice(0, 3).map((event) => `Change the visibility of the timeline event ${event.title}`),
+    };
+  }
+  const proposed = selected.visibility;
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const contextVersion = homeEventContextVersion(selected);
+  const input = HomeEventVisibilityInputSchema.parse({ eventId: selected.id, value: proposed });
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_VISIBILITY_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      homeEventVisibility: input, homeEventVisibilityContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'home-event-visibility-review', title: `Review who can see ${selected.title}`, body: 'No shared-home record has changed yet. Choose the visibility, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
+    confirmation: homeEventVisibilityConfirmation(selected, selected.visibility, proposed, 1, expiresAt),
+    suggestions: [],
+  };
+}
+
+registerCapabilityHandler('home-event.visibility', async (envelope) => homeEventVisibilityResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
 // Phase 3 write slice 3: provider / expiry-date correction on a Warranty.
 // OWNER-ONLY: a Warranty belongs to one member's homeownerProfile and the
@@ -13212,6 +13303,48 @@ async function confirmHomeEventCorrect(ctx: ConfirmCapabilityContext): Promise<C
 }
 registerConfirmCapabilityHandler('home-event.correct', confirmHomeEventCorrect);
 
+async function confirmHomeEventVisibility(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const candidate = HomeEventVisibilityInputSchema.safeParse(parameters.homeEventVisibility);
+  if (!candidate.success || candidate.data.value === null) throw Object.assign(new Error('The visibility to save is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const { eventId, value: proposed } = candidate.data;
+  const current = await prisma.homeEvent.findFirst({
+    where: { id: eventId, propertyId: execution.propertyId, isCurrent: true, deletedAt: null },
+    select: { id: true, title: true, revision: true, visibility: true, createdById: true },
+  });
+  if (!current || (current.visibility === 'PRIVATE' && current.createdById !== userId)) {
+    throw Object.assign(new Error('This timeline event is no longer available. It may have been corrected or removed.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  }
+  const alreadyApplied = current.visibility === proposed;
+  if (!alreadyApplied) {
+    const blocker = homeEventVisibilityBlocker(userId, current.createdById, current.visibility, proposed);
+    if (blocker) throw Object.assign(new Error(blocker), { code: 'ASK_PERMISSION_REQUIRED' });
+    if (parameters.homeEventVisibilityContextVersion !== homeEventContextVersion(current)) {
+      throw Object.assign(new Error('This timeline event changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    }
+    await homeEventsServiceForCapture.setVisibility({ propertyId: execution.propertyId!, eventId: current.id, visibility: proposed });
+  }
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'HOME_EVENT_VISIBILITY_CHANGED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `home-event-visibility-${current.id}`, title: alreadyApplied ? 'Visibility already set' : 'Visibility changed', status: 'COMPLETED',
+      description: 'The canonical timeline event was updated in place.',
+      details: [{ label: 'Event', value: current.title }, { label: 'Previous visibility', value: alreadyApplied ? 'Already set' : HOME_EVENT_VISIBILITY_LABELS[current.visibility] ?? current.visibility }, { label: 'New visibility', value: HOME_EVENT_VISIBILITY_LABELS[proposed] ?? proposed }],
+      actions: [{ id: 'open-timeline', label: 'Open home timeline', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/timeline`, style: 'PRIMARY' }],
+    }],
+    suggestions: ['Show my home timeline'],
+  };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'LIMITATION', id: `home-event-visibility-refresh-failed-${current.id}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+      body: 'This visibility change was saved to the canonical timeline event. The result you were viewing could not refresh automatically -- ask "Show my home timeline" to see its current state.',
+    });
+  }
+  return { result, artifactType: 'HOME_EVENT', artifactId: current.id, refreshedExecutions: refresh.refreshedExecutions };
+}
+registerConfirmCapabilityHandler('home-event.visibility', confirmHomeEventVisibility);
+
 async function confirmWarrantyCorrect(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
   const candidate = WarrantyCorrectionInputSchema.safeParse(parameters.warrantyCorrection);
@@ -15081,6 +15214,43 @@ async function editHomeEventCorrectConfirmation(
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 
+async function editHomeEventVisibilityConfirmation(
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+  userId: string,
+): Promise<AskExecutionResponse> {
+  const existing = HomeEventVisibilityInputSchema.safeParse(parameters.homeEventVisibility);
+  if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
+  const event = await prisma.homeEvent.findFirst({ where: { id: existing.data.eventId, propertyId: execution.propertyId!, isCurrent: true, deletedAt: null }, select: { id: true, title: true, visibility: true, createdById: true } });
+  if (!event) throw Object.assign(new Error('The selected timeline event is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  const proposed = HomeEventVisibilityInputSchema.shape.value.safeParse(input.edits.value);
+  if (!proposed.success || proposed.data === null) throw Object.assign(new Error('Choose Private, Household, or Resale pack.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const blocker = homeEventVisibilityBlocker(userId, event.createdById, event.visibility, proposed.data);
+  if (blocker) throw Object.assign(new Error(blocker), { code: 'ASK_PERMISSION_REQUIRED' });
+  const updatedInput = HomeEventVisibilityInputSchema.parse({ ...existing.data, value: proposed.data });
+  const nextVersion = input.confirmationVersion + 1;
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const newConfirmation = homeEventVisibilityConfirmation(event, event.visibility, proposed.data, nextVersion, expiresAt);
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'home-event-visibility-review', title: `Review who can see ${event.title}`, body: 'No shared-home record has changed yet. Choose the visibility, then confirm.', tone: 'DEFAULT' as const, actions: [] };
+  const editWrite = await prisma.askExecution.updateMany({
+    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
+    data: {
+      parametersJson: asInputJson({ ...parameters, homeEventVisibility: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+        ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),
+      }),
+    },
+  });
+  if (editWrite.count !== 1) throw Object.assign(new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  await prisma.askExecutionEvent.create({
+    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+  });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
 async function editWarrantyCorrectConfirmation(
   execution: AskExecution,
   parameters: Record<string, unknown>,
@@ -15168,6 +15338,7 @@ const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
   MAINTENANCE_TASK_UPDATE: editMaintenanceTaskUpdateConfirmation,
   INVENTORY_ITEM_CORRECT: editInventoryItemCorrectConfirmation,
   HOME_EVENT_CORRECT: editHomeEventCorrectConfirmation,
+  HOME_EVENT_VISIBILITY: editHomeEventVisibilityConfirmation,
   WARRANTY_CORRECT: editWarrantyCorrectConfirmation,
   ROOM_RENAME: editRoomRenameConfirmation,
   BUYER_TASK_UPDATE: editBuyerTaskUpdateConfirmation,

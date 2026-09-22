@@ -97,6 +97,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('INVENTORY_LOOKUP', ALL_MODES),
   definePolicy('INVENTORY_ITEM_CORRECT', ALL_MODES),
   definePolicy('HOME_EVENT_CORRECT', ALL_MODES),
+  definePolicy('HOME_EVENT_VISIBILITY', ALL_MODES),
   definePolicy('WARRANTY_CORRECT', ALL_MODES),
   definePolicy('ROOM_RENAME', ALL_MODES),
   definePolicy('ROOM_CREATE', ALL_MODES),

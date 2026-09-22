@@ -12,7 +12,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 require('../../src/services/ask/askOrchestrator.service.ts');
-const { roomCreateResult, inventoryItemCreateResult, roomRenameItemActions } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { roomCreateResult, inventoryItemCreateResult, roomRenameItemActions, HOME_EVENT_VISIBILITY_MESSAGE } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
 const { InventoryService } = require('../../src/services/inventory.service.ts');
@@ -35,6 +35,7 @@ const originals = {
   updateItem: InventoryService.prototype.updateItem,
   updateHomeEvent: HomeEventsService.prototype.updateHomeEvent,
   createHomeEvent: HomeEventsService.prototype.createHomeEvent,
+  setVisibility: HomeEventsService.prototype.setVisibility,
   updateWarranty: homeManagement.updateWarranty,
   markCoverage: coverageAnalysis.markCoverageAnalysisStale,
   markRisk: riskPremium.markRiskPremiumOptimizerStale,
@@ -50,7 +51,7 @@ let models;
 let accessRole = 'CONTRIBUTOR';
 
 function install() {
-  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [], createHomeEvent: [], createRoom: [], createItem: [] };
+  calls = { updateRoom: [], updateItem: [], updateHomeEvent: [], updateWarranty: [], markers: [], captureWarranty: [], createHomeEvent: [], createRoom: [], createItem: [], setVisibility: [] };
   accessRole = 'CONTRIBUTOR';
   models = {};
   prismaModule.prisma = new Proxy({}, {
@@ -71,6 +72,7 @@ function install() {
   InventoryService.prototype.createRoom = async function (...args) { calls.createRoom.push(args); return { id: 'room-new', name: args[1].name }; };
   HomeEventsService.prototype.updateHomeEvent = async function (...args) { calls.updateHomeEvent.push(args); return { id: 'event-2', title: args[2].title ?? 'Roof replacement' }; };
   HomeEventsService.prototype.createHomeEvent = async function (...args) { calls.createHomeEvent.push(args); return { id: 'event-new', title: args[0].body.title }; };
+  HomeEventsService.prototype.setVisibility = async function (...args) { calls.setVisibility.push(args); };
   homeManagement.updateWarranty = async (...args) => { calls.updateWarranty.push(args); return {}; };
   coverageAnalysis.markCoverageAnalysisStale = async () => { calls.markers.push('coverage'); };
   riskPremium.markRiskPremiumOptimizerStale = async () => { calls.markers.push('risk'); };
@@ -91,6 +93,7 @@ function restore() {
   InventoryService.prototype.updateItem = originals.updateItem;
   HomeEventsService.prototype.updateHomeEvent = originals.updateHomeEvent;
   HomeEventsService.prototype.createHomeEvent = originals.createHomeEvent;
+  HomeEventsService.prototype.setVisibility = originals.setVisibility;
   homeManagement.updateWarranty = originals.updateWarranty;
   coverageAnalysis.markCoverageAnalysisStale = originals.markCoverage;
   riskPremium.markRiskPremiumOptimizerStale = originals.markRisk;
@@ -270,6 +273,80 @@ test('room actions: a contributor gets rename, type and floor level (all pinned 
   assert.ok(actions.every((action) => action.operationId === 'ROOM_RENAME' && action.interactionType === 'MUTATE_RECORD'));
   assert.ok(actions.length <= 3, 'more than three would fold behind the disclosure');
   assert.equal(roomRenameItemActions(false), undefined);
+});
+
+// ───────────────────────────── HOME_EVENT_VISIBILITY ─────────────────────────────
+const visibilityParams = (value, version = eventVersion, eventId = 'event-1') => ({ homeEventVisibility: { eventId, value }, homeEventVisibilityContextVersion: version, confirmationVersion: 2 });
+
+test('HOME_EVENT_VISIBILITY confirm writes through setVisibility in place (no supersede) and repeats nothing else', async () => {
+  eventModel();
+  const { result, artifactType, artifactId } = await invoke('HOME_EVENT_VISIBILITY', visibilityParams('RESALE_PACK'));
+  assert.deepEqual(calls.setVisibility, [[{ propertyId: 'p1', eventId: 'event-1', visibility: 'RESALE_PACK' }]]);
+  assert.equal(calls.updateHomeEvent.length, 0, 'visibility never supersedes the event');
+  assert.equal(result.reasonCode, 'HOME_EVENT_VISIBILITY_CHANGED');
+  assert.equal(result.blocks[0].title, 'Visibility changed');
+  assert.deepEqual([artifactType, artifactId], ['HOME_EVENT', 'event-1'], 'the id is unchanged, unlike a superseding correction');
+});
+
+test('HOME_EVENT_VISIBILITY confirm treats the same value as already applied, with no write', async () => {
+  eventModel();
+  const { result } = await invoke('HOME_EVENT_VISIBILITY', visibilityParams('HOUSEHOLD'));
+  assert.equal(calls.setVisibility.length, 0);
+  assert.equal(result.blocks[0].title, 'Visibility already set');
+});
+
+test('HOME_EVENT_VISIBILITY confirm: any contributor may move between HOUSEHOLD and RESALE_PACK, but only the creator may change to or from PRIVATE', async () => {
+  eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE' } });
+  await invoke('HOME_EVENT_VISIBILITY', visibilityParams('RESALE_PACK'));
+  assert.equal(calls.setVisibility.length, 1, 'a non-creator may move between non-private levels');
+  install(); eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE' } });
+  assert.equal(await codeOf(invoke('HOME_EVENT_VISIBILITY', visibilityParams('PRIVATE'))), 'ASK_PERMISSION_REQUIRED', 'a non-creator cannot make it private');
+  assert.equal(calls.setVisibility.length, 0);
+  install(); eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'PRIVATE', createdById: 'u1', datePrecision: 'EXACT_DATE' } });
+  await invoke('HOME_EVENT_VISIBILITY', visibilityParams('HOUSEHOLD'));
+  assert.equal(calls.setVisibility.length, 1, 'the creator may move their own private event out of private');
+});
+
+test('HOME_EVENT_VISIBILITY confirm blocks a stale revision, someone else\'s private event, and an invalid value; nothing is written', async () => {
+  eventModel();
+  assert.equal(await codeOf(invoke('HOME_EVENT_VISIBILITY', visibilityParams('RESALE_PACK', sha('event-1:2')))), 'ASK_CONTEXT_VERSION_CONFLICT');
+  install(); eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'PRIVATE', createdById: 'u9', datePrecision: 'EXACT_DATE' } });
+  assert.equal(await codeOf(invoke('HOME_EVENT_VISIBILITY', visibilityParams('HOUSEHOLD'))), 'ASK_CONTEXT_VERSION_CONFLICT', 'a non-creator cannot even target someone else\'s private event');
+  install(); eventModel();
+  for (const bad of [{ homeEventVisibility: { eventId: 'event-1', value: null }, homeEventVisibilityContextVersion: eventVersion, confirmationVersion: 2 }, { homeEventVisibility: { eventId: 'event-1', value: 'SHARE_LINK' }, homeEventVisibilityContextVersion: eventVersion, confirmationVersion: 2 }, { homeEventVisibility: { eventId: 'event-1' }, homeEventVisibilityContextVersion: eventVersion, confirmationVersion: 2 }]) {
+    assert.equal(await codeOf(confirmCapabilityInvoke('HOME_EVENT_VISIBILITY', { userId: 'u1', execution: execution('HOME_EVENT_VISIBILITY'), parameters: bad, access: { role: 'CONTRIBUTOR' }, command: getAskDomainCommandByOperation('HOME_EVENT_VISIBILITY') })), 'ASK_CONFIRMATION_NOT_ACTIVE', JSON.stringify(bad));
+  }
+  assert.equal(calls.setVisibility.length, 0);
+});
+
+const proposeVisibility = async (message = HOME_EVENT_VISIBILITY_MESSAGE, entityId = 'event-1') => {
+  eventModel();
+  return capabilityInvoke('HOME_EVENT_VISIBILITY', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'HOME_EVENT', entityId, operationId: 'HOME_EVENT_VISIBILITY' } });
+};
+
+test('HOME_EVENT_VISIBILITY propose starts from the event\'s current visibility, offers all three levels, and writes nothing', async () => {
+  const result = await proposeVisibility();
+  assert.equal(result.status, 'NEEDS_CONFIRMATION');
+  assert.equal(result.confirmation.editableFields[0].value, 'HOUSEHOLD');
+  assert.deepEqual(result.confirmation.editableFields[0].options.map((option) => option.value), ['PRIVATE', 'HOUSEHOLD', 'RESALE_PACK']);
+  assert.equal(result.confirmation.fields.find((field) => field.label === 'Current visibility').value, 'Household (everyone with access to this home)');
+  assert.equal(calls.setVisibility.length, 0);
+});
+
+test('HOME_EVENT_VISIBILITY: the resale-pack consent line names buyers and listing agents; other values use the plain consent line', async () => {
+  const householdPrompt = await proposeVisibility();
+  assert.match(householdPrompt.confirmation.consentText, /I authorize this visibility change to the shared home timeline/);
+  eventModel({ current: { id: 'event-1', title: 'Roof', revision: 3, visibility: 'RESALE_PACK', createdById: 'u9', datePrecision: 'EXACT_DATE' } });
+  const resalePrompt = await capabilityInvoke('HOME_EVENT_VISIBILITY', { userId: 'u1', propertyId: 'p1', message: HOME_EVENT_VISIBILITY_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'HOME_EVENT', entityId: 'event-1', operationId: 'HOME_EVENT_VISIBILITY' } });
+  assert.match(resalePrompt.confirmation.consentText, /buyers and listing agents/);
+});
+
+test('HOME_EVENT_VISIBILITY: a read question about who can see an event does not route here, and PRIVATE events are excluded from the disambiguation list for a non-creator', async () => {
+  models.homeEvent = { findMany: async () => [{ id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', occurredAt: new Date('2026-09-01T00:00:00.000Z') }] };
+  const noEntity = await capabilityInvoke('HOME_EVENT_VISIBILITY', { userId: 'u1', propertyId: 'p1', message: HOME_EVENT_VISIBILITY_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE' } });
+  assert.equal(noEntity.reasonCode, 'HOME_EVENT_TARGET_REQUIRED');
+  // The query itself is the exclusion; a PRIVATE row belonging to someone else must not appear in the disambiguation list.
+  assert.equal(noEntity.blocks[0].sections[0].items.length, 1);
 });
 
 // ───────────────────────────── WARRANTY_CORRECT ─────────────────────────────

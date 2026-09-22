@@ -30,6 +30,7 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'SELLER_PREP_ITEM_DECISION',
   'INVENTORY_ITEM_CORRECT',
   'HOME_EVENT_CORRECT',
+  'HOME_EVENT_VISIBILITY',
   'WARRANTY_CORRECT',
   'ROOM_RENAME',
   'ROOM_CREATE',
@@ -118,6 +119,7 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   ROOM_RENAME: command('ROOM_RENAME', 'ROOM_RENAME', 'room.rename', 'CONTRIBUTOR', 'INVENTORY_ROOM', ['EDIT', 'STOP'], { title: 'Room not renamed', body: 'The room was not changed.', suggestion: 'Show my rooms' }),
   WARRANTY_CORRECT: command('WARRANTY_CORRECT', 'WARRANTY_CORRECT', 'warranty.correct', 'CONTRIBUTOR', 'WARRANTY', ['EDIT', 'STOP'], { title: 'Warranty not changed', body: 'The warranty record was not changed.', suggestion: 'Show my warranties' }),
   HOME_EVENT_CORRECT: command('HOME_EVENT_CORRECT', 'HOME_EVENT_CORRECT', 'home-event.correct', 'CONTRIBUTOR', 'HOME_EVENT', ['EDIT', 'STOP'], { title: 'Timeline event not changed', body: 'The home timeline event was not changed.', suggestion: 'Show my home timeline' }),
+  HOME_EVENT_VISIBILITY: command('HOME_EVENT_VISIBILITY', 'HOME_EVENT_VISIBILITY', 'home-event.visibility', 'CONTRIBUTOR', 'HOME_EVENT', ['EDIT', 'STOP'], { title: 'Visibility not changed', body: 'Who can see the timeline event was not changed.', suggestion: 'Show my home timeline' }),
   INVENTORY_ITEM_CORRECT: command('INVENTORY_ITEM_CORRECT', 'INVENTORY_ITEM_CORRECT', 'inventory.item-correct', 'CONTRIBUTOR', 'INVENTORY_ITEM', ['EDIT', 'STOP'], { title: 'Inventory record not changed', body: 'The inventory item was not changed.', suggestion: 'Show my home inventory' }),
   SELLER_PREP_ITEM_DECISION: command('SELLER_PREP_ITEM_DECISION', 'SELLER_PREP_ITEM_DECISION', 'seller-prep.item-decision', 'CONTRIBUTOR', 'SALE_READINESS_ITEM', ['REOPEN'], { title: 'Checklist item not changed', body: 'The seller-prep checklist item was not changed.', suggestion: 'Check my sale readiness' }),
   // Ask Cozy Stage 3, Phase 2 (implementation plan §8/§4.1; FRD §19/§20).

@@ -197,6 +197,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PROPERTY_CONTEXT_AREA_CAPTURE: 'Each missing home detail is reviewed and then saved to your home record after your confirmation.',
   WARRANTY_CORRECT: 'The selected warranty has a corrected provider name or expiry date after your confirmation.',
   HOME_EVENT_CORRECT: 'The timeline event correction is reviewed before it is recorded as a new revision.',
+  HOME_EVENT_VISIBILITY: 'Who can see the timeline event is reviewed and then changed after your confirmation.',
   INVENTORY_ITEM_CORRECT: 'The inventory item date is reviewed before it is corrected on the shared home record.',
   SELLER_PREP_ITEM_DECISION: 'The checklist item decision is reviewed before it is applied to the shared seller-prep checklist.',
   MAJOR_EVENT_ENTRY: 'Preparing the home to go on the market begins with records, repairs, and disclosure readiness.',

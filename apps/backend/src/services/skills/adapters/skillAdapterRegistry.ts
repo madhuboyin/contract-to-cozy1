@@ -63,6 +63,7 @@ const DEFINITIONS = [
   adapter('room.rename', 'InventoryService', 'ROOM_RENAME', 'MUTATION_PREPARATION'),
   adapter('warranty.correct', 'HomeManagementService', 'WARRANTY_CORRECT', 'MUTATION_PREPARATION'),
   adapter('home-event.correct', 'HomeEventsService', 'HOME_EVENT_CORRECT', 'MUTATION_PREPARATION'),
+  adapter('home-event.visibility', 'HomeEventsService', 'HOME_EVENT_VISIBILITY', 'MUTATION_PREPARATION'),
   adapter('inventory.item-correct', 'InventoryService', 'INVENTORY_ITEM_CORRECT', 'MUTATION_PREPARATION'),
   adapter('seller-prep.item-decision', 'PropertySaleCaseService', 'SELLER_PREP_ITEM_DECISION', 'MUTATION_PREPARATION'),
   adapter('household.invitation', 'Household Membership Service', 'HOUSEHOLD_INVITATION', 'MUTATION_PREPARATION'),

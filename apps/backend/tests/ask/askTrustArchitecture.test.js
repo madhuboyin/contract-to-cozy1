@@ -62,6 +62,7 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'ROOM_CREATE',
     'INVENTORY_ITEM_CREATE',
     'PROPERTY_CONTEXT_AREA_CAPTURE',
+    'HOME_EVENT_VISIBILITY',
   ]));
   const candidates = retrieveAskOperationCandidates("I'm thinking about selling next year", { topK: 100 });
   assert.equal(candidates.some((candidate) => internalOperations.includes(candidate.operationId)), false);
