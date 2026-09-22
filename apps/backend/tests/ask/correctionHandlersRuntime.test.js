@@ -406,6 +406,7 @@ function itemModel({ installedOn = new Date('2022-01-15T00:00:00.000Z'), missing
   const row = {
     id: 'item-1', propertyId: 'p1', name: 'Water heater', installedOn, purchasedOn: null, lastServicedOn: null, updatedAt: itemUpdatedAt,
     condition: 'GOOD', brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', purchaseCostCents: 85000, replacementCostCents: null, notes: 'Basement utility closet.',
+    category: 'PLUMBING', roomId: null,
     ...overrides,
   };
   models.inventoryItem = { findFirst: async () => (missing ? null : row), findUniqueOrThrow: async () => row };
@@ -715,8 +716,116 @@ test('INVENTORY_ITEM_CORRECT receipt shows money and condition in readable form'
   assert.deepEqual([cd['Previous value'], cd['New value']], ['Good', 'Poor']);
 });
 
+// ── INVENTORY_ITEM_CORRECT extended: room and category ──
+const ITEM_KITCHEN = { id: 'room-9', name: 'Kitchen' };
+function itemLinkModels({ rooms = [ITEM_KITCHEN], roomExists = true } = {}) {
+  models.inventoryRoom = { findMany: async () => rooms, findFirst: async () => (roomExists ? { id: ITEM_KITCHEN.id } : null) };
+}
+
+test('INVENTORY_ITEM_CORRECT confirm links a room through updateItem, and maps the "No room" sentinel to null', async () => {
+  itemLinkModels();
+  itemModel({ category: 'FURNITURE', roomId: null });
+  await invoke('INVENTORY_ITEM_CORRECT', itemParams('room-9', itemVersion, 'roomId'));
+  assert.deepEqual(calls.updateItem[0][2], { roomId: 'room-9' });
+  install(); itemLinkModels();
+  itemModel({ category: 'PLUMBING', roomId: 'room-9' });
+  await invoke('INVENTORY_ITEM_CORRECT', itemParams('NONE', itemVersion, 'roomId'));
+  assert.deepEqual(calls.updateItem[0][2], { roomId: null }, '"No room" unlinks rather than writing the sentinel string (PLUMBING does not require a room)');
+});
+
+test('INVENTORY_ITEM_CORRECT confirm rejects a room id that is not in this property, without writing', async () => {
+  itemLinkModels({ roomExists: false });
+  itemModel({ category: 'FURNITURE', roomId: null });
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CORRECT', itemParams('someone-elses-room', itemVersion, 'roomId'))), 'ASK_INVALID_CONFIRMATION_EDIT');
+  assert.equal(calls.updateItem.length, 0);
+});
+
+test('INVENTORY_ITEM_CORRECT confirm rejects a category that requires a room when the item has none, and rejects APPLIANCE for a water heater name even when a room is already set, without writing (the writer\'s own combined rules)', async () => {
+  itemLinkModels();
+  itemModel({ name: 'Water heater', category: 'PLUMBING', roomId: null });
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CORRECT', itemParams('FURNITURE', itemVersion, 'category'))), 'ASK_INVALID_CONFIRMATION_EDIT', 'FURNITURE requires a room, and this item has none');
+  // A room is already set here so the ROOM_REQUIRED rule alone cannot explain a refusal -- only the water-heater-name rule can.
+  install(); itemLinkModels();
+  itemModel({ name: 'Water heater', category: 'PLUMBING', roomId: 'room-9' });
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CORRECT', itemParams('APPLIANCE', itemVersion, 'category'))), 'ASK_INVALID_CONFIRMATION_EDIT', 'a water heater name cannot take the APPLIANCE category even with a room already set');
+  install(); itemLinkModels({ roomExists: false });
+  itemModel({ name: 'Sofa', category: 'FURNITURE', roomId: 'room-9' });
+  assert.equal(await codeOf(invoke('INVENTORY_ITEM_CORRECT', itemParams('NONE', itemVersion, 'roomId'))), 'ASK_INVALID_CONFIRMATION_EDIT', 'unlinking the room of a FURNITURE item that still requires one is refused');
+  assert.equal(calls.updateItem.length, 0);
+});
+
+test('INVENTORY_ITEM_CORRECT confirm allows a category change that keeps the item\'s existing room, and a category that drops the room requirement', async () => {
+  itemLinkModels();
+  itemModel({ name: 'Cabinet', category: 'FURNITURE', roomId: 'room-9' });
+  await invoke('INVENTORY_ITEM_CORRECT', itemParams('ELECTRONICS', itemVersion, 'category'));
+  assert.deepEqual(calls.updateItem[0][2], { category: 'ELECTRONICS' });
+  install(); itemLinkModels();
+  itemModel({ name: 'Furnace', category: 'HVAC', roomId: null });
+  await invoke('INVENTORY_ITEM_CORRECT', itemParams('PLUMBING', itemVersion, 'category'));
+  assert.deepEqual(calls.updateItem[0][2], { category: 'PLUMBING' }, 'PLUMBING does not require a room, unlike HVAC\'s neighbours');
+});
+
+test('INVENTORY_ITEM_CORRECT propose offers "No room" plus the property\'s own rooms for the room field, and every category for the category field', async () => {
+  itemLinkModels();
+  const withItem = async (message) => {
+    const original = InventoryService.prototype.listItems;
+    InventoryService.prototype.listItems = async () => [{ ...proposeItem, category: 'HVAC', roomId: 'room-9' }];
+    try {
+      return await capabilityInvoke('INVENTORY_ITEM_CORRECT', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ITEM', entityId: 'item-1', operationId: 'INVENTORY_ITEM_CORRECT' } });
+    } finally { InventoryService.prototype.listItems = original; }
+  };
+  const roomPrompt = await withItem('Correct the room of this inventory item.');
+  assert.deepEqual(roomPrompt.confirmation.editableFields[0].options.map((option) => option.value), ['NONE', 'room-9']);
+  assert.equal(roomPrompt.confirmation.editableFields[0].value, 'room-9', 'pre-selects the currently linked room');
+  const categoryPrompt = await withItem('Correct the category of this inventory item.');
+  assert.equal(categoryPrompt.confirmation.editableFields[0].options.length, 14);
+  assert.equal(categoryPrompt.confirmation.editableFields[0].value, 'HVAC');
+  assert.equal(calls.updateItem.length, 0, 'proposing writes nothing');
+});
+
+test('INVENTORY_ITEM_CORRECT edit re-validates a room value against live data (source-shape, like every other edit handler in this file)', () => {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const body = (startMarker, endMarker) => {
+    const start = source.indexOf(startMarker);
+    assert.ok(start > 0, `${startMarker} not found`);
+    const end = source.indexOf(endMarker, start);
+    assert.ok(end > start, `${endMarker} not found after ${startMarker}`);
+    return source.slice(start, end);
+  };
+  const edit = body('async function editInventoryItemCorrectConfirmation(', 'const EDIT_CONFIRMATION_HANDLERS');
+  assert.match(edit, /await inventoryFieldValueError\(execution\.propertyId!, existing\.data\.field, input\.edits\.value\)/, 'the edited value is re-validated against live data, not the stale proposal');
+  assert.match(edit, /inventoryCorrectionCombinedBlocker\(item, existing\.data\.field, valueEdit\)/, 'a category/room edit is re-checked against the writer\'s own combined rules');
+});
+
+test('the room existence check and the option list for INVENTORY_ITEM_CORRECT are both scoped to this property', () => {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const body = (startMarker, endMarker) => {
+    const start = source.indexOf(startMarker);
+    assert.ok(start > 0, `${startMarker} not found`);
+    const end = source.indexOf(endMarker, start);
+    assert.ok(end > start, `${endMarker} not found after ${startMarker}`);
+    return source.slice(start, end);
+  };
+  const valueError = body('async function inventoryFieldValueError(', 'async function inventoryRoomLinkOptions(');
+  assert.match(valueError, /prisma\.inventoryRoom\.findFirst\(\{ where: \{ id: value, propertyId \}/, 'a room id from another property must be rejected, not just any existing room id');
+  const options = body('async function inventoryRoomLinkOptions(', '// Why this item cannot take this category/room correction');
+  assert.match(options, /prisma\.inventoryRoom\.findMany\(\{ where: \{ propertyId \}/, 'the room dropdown must only list this property\'s own rooms');
+});
+
+test('inventory item actions: routing reaches INVENTORY_ITEM_CORRECT for room and category, and stays a read for a bare question', () => {
+  const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
+  const routeOf = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation.operationId;
+  assert.equal(routeOf('Correct the room of this inventory item.'), 'INVENTORY_ITEM_CORRECT');
+  assert.equal(routeOf('Correct the category of this inventory item.'), 'INVENTORY_ITEM_CORRECT');
+  assert.notEqual(routeOf('What room is my dishwasher in?'), 'INVENTORY_ITEM_CORRECT');
+});
+
 // ── Inventory propose: each field kind builds the right editable field on the confirmation card ──
-const proposeItem = { id: 'item-1', name: 'Water heater', category: 'PLUMBING', condition: 'GOOD', room: null, installedOn: new Date('2022-01-15T00:00:00.000Z'), purchasedOn: null, lastServicedOn: null, brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', purchaseCostCents: 85000, replacementCostCents: null, notes: 'Basement utility closet.', updatedAt: itemUpdatedAt };
+const proposeItem = { id: 'item-1', name: 'Water heater', category: 'PLUMBING', condition: 'GOOD', room: null, roomId: null, installedOn: new Date('2022-01-15T00:00:00.000Z'), purchasedOn: null, lastServicedOn: null, brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', purchaseCostCents: 85000, replacementCostCents: null, notes: 'Basement utility closet.', updatedAt: itemUpdatedAt };
 const proposeInventory = async (message) => {
   const original = InventoryService.prototype.listItems;
   InventoryService.prototype.listItems = async () => [proposeItem];

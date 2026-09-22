@@ -65,6 +65,13 @@ test('confirm rejects a missing/invalid date and edit path validates through the
   assert.equal(isValidDateEditInput('not-a-date'), false);
 });
 
+test('declared item-action messages and natural phrasing route to INVENTORY_ITEM_CORRECT for the room and category fields', () => {
+  for (const message of ['Correct the room of this inventory item.', 'Correct the category of this inventory item.']) {
+    assert.equal(routeOf(message), 'INVENTORY_ITEM_CORRECT', message);
+  }
+  assert.notEqual(routeOf('What room is my dishwasher in?'), 'INVENTORY_ITEM_CORRECT');
+});
+
 test('correction item actions are only declared for contributor-and-up on all three inventory producers', () => {
   const helper = body('function inventoryCorrectionItemActions(', 'function inventoryCorrectionConfirmation(');
   assert.match(helper, /if \(!canManage\) return undefined;/);

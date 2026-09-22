@@ -399,6 +399,17 @@ test('a contributor links a timeline event to a room inline through a dropdown, 
   });
 });
 
+test('a contributor links an inventory item to a room inline through a dropdown', async ({ page }) => {
+  const api = await installAskApi(page);
+  await correctionFlow(page, api, {
+    block: 'Systems and inventory', recordButton: 'Water heater', detailText: 'Tank-style, in basement utility closet.',
+    actionLabel: /^Correct room/, actionMessage: 'Correct the room of this inventory item.', entityType: 'INVENTORY_ITEM', entityId: 'item-property-summary',
+    disclosure: true, select: true,
+    confirmationTitle: 'Correct room for Water heater?', fieldLabel: 'Corrected room', newValue: 'room-property-summary', shownValue: 'Kitchen', confirmLabel: 'Save room',
+    consentText: /I authorize this correction to the shared home inventory record/, receiptTitle: 'Inventory record updated',
+  });
+});
+
 test('a contributor adds a timeline event inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
