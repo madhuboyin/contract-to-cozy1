@@ -13,6 +13,7 @@ import { MaintenanceResultList } from '../MaintenanceResultList';
 import { ClaimResultList } from '../ClaimResultList';
 import { InspectionFindingResultList } from '../InspectionFindingResultList';
 import { SellerPrepItemResultList } from '../SellerPrepItemResultList';
+import { BuyerTaskResultList } from '../BuyerTaskResultList';
 import { RadarEventResultList } from '../RadarEventResultList';
 import { ReserveAllocationResultList } from '../ReserveAllocationResultList';
 import { RoomResultList } from '../RoomResultList';
@@ -190,18 +191,23 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
     return <RadarEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  // Claims capability-card slice (FRD v1.42): claim rows open the canonical claim inline, with its legal status
-  // changes as declared CLAIM_TRANSITION actions; incident rows keep their link.
-  // Inspection-hub capability-card slice (FRD v1.43): findings open inline, re-read through their report.
+  // Buyer-closing capability-card slice (FRD v1.46): blocking tasks open inline, with Mark complete while open.
+  if (block.id === 'buyer-deadlines-list') {
+    return <BuyerTaskResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
   // Seller-prep capability-card slice (FRD v1.44): checklist items open inline, re-read from the sale case.
   if (block.id === 'seller-prep-open-items') {
     return <SellerPrepItemResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
+  // Inspection-hub capability-card slice (FRD v1.43): findings open inline, re-read through their report.
   if (block.id === 'inspection-findings') {
     return <InspectionFindingResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
+  // Claims capability-card slice (FRD v1.42): claim rows open the canonical claim inline, with its legal status
+  // changes as declared CLAIM_TRANSITION actions; incident rows keep their link.
   if (block.id === 'incident-claim-list') {
     return <ClaimResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;

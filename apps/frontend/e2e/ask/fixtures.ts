@@ -365,6 +365,34 @@ function refinanceMonitorAnalysisExecution(sessionId?: string) {
     createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', suggestions: [],
   };
 }
+// FRD v1.46 buyer-closing slice: BUYER_DEADLINES with a blocking task, and a BUYER_TASK_COMPLETE review.
+function buyerDeadlinesExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
+  const common = {
+    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', property: { id: propertyId, label: 'Acceptance Home' },
+    skill: null, skillHandoff: null, captureRequests: [], clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', suggestions: [],
+  };
+  const planHref = `/dashboard/properties/${propertyId}/buyer-plan`;
+  if (stage === 'LIST') {
+    return { ...common, executionId: 'execution-buyer-deadlines', question: 'What is due before closing?', status: 'READY_WITH_LIMITATIONS', confirmation: null,
+      operation: { id: 'BUYER_DEADLINES', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: 'buyer-context-v1',
+      blocks: [{ type: 'GROUPED_LIST', id: 'buyer-deadlines-list', title: 'Deadlines and blockers', description: 'From the canonical Buyer Plan.', actions: [],
+        filters: [{ id: 'all', label: 'All', message: 'Now show all blocking deadlines', active: true }],
+        sections: [
+          { id: 'milestones', title: 'Upcoming milestones', count: 1, items: [{ id: 'milestone-closing', title: 'Closing', description: null, meta: ['Due Oct 30, 2026'], status: 'NOT_STARTED', href: planHref }] },
+          { id: 'blockers', title: 'Blocking before closing', count: 1, items: [{ id: 'task-appraisal', title: 'Order the appraisal', description: null, meta: ['Now'], status: 'PENDING',
+            href: `${planHref}?taskId=task-appraisal`, entityType: 'BUYER_TASK',
+            actions: [{ id: 'buyer-task-complete', label: 'Mark complete', message: 'Mark this Buyer Plan task complete.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'BUYER_TASK_COMPLETE' }] }] },
+        ] }] };
+  }
+  return { ...common, executionId: 'execution-buyer-task-complete', question: 'Mark this Buyer Plan task complete.', status: 'NEEDS_CONFIRMATION',
+    operation: { id: 'BUYER_TASK_COMPLETE', version: '1.0', family: 'COMMAND' }, contextVersion: 'buyer-task-v1',
+    blocks: [{ type: 'SUMMARY', id: 'buyer-task-complete-review', title: 'Review completion for Order the appraisal', body: 'No status has changed yet.', tone: 'DEFAULT', actions: [] }],
+    confirmation: { confirmationId: 'buyer-task-complete-task-appraisal-1', version: 1, title: 'Mark this Buyer Plan task complete?', description: 'This records completion in the canonical Buyer Plan and updates closing readiness.',
+      fields: [{ label: 'Task', value: 'Order the appraisal' }, { label: 'Current status', value: 'in progress' }, { label: 'Completion method', value: 'User attestation' }], editableFields: [],
+      confirmLabel: 'Mark complete', consentText: 'I confirm this task was completed and authorize updating the shared Buyer Plan.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+}
 function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
   return {
     schemaVersion: '1.0', executionId: happeningNow ? 'execution-home-event-radar-feed-now' : 'execution-home-event-radar-feed', sessionId: 'ask-acceptance-session',
@@ -1011,6 +1039,11 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     },
     assumptionSetId: null, nextAction: null,
   } }));
+  // The live task is already in progress (the list said pending); it is still open, so Mark complete is offered.
+  await page.route(`${apiOrigin}/api/home-buyer-tasks/properties/${propertyId}/tasks/task-appraisal`, (route) => fulfill(route, { success: true, data: {
+    id: 'task-appraisal', title: 'Order the appraisal', description: 'Your lender orders the appraisal once the loan is in process.', status: 'IN_PROGRESS', applicability: 'APPLICABLE',
+    priority: 'NOW', phase: 'DUE_DILIGENCE', blocking: true, required: true, statusReason: null, notes: null, dueAt: '2026-10-10T00:00:00.000Z', estimatedCostCents: 60000,
+  } }));
   let monitorStatus = 'ACTIVE';
   await page.route(`${apiOrigin}/api/ask/monitors/monitor-30`, async (route) => {
     if (route.request().method() === 'PATCH') {
@@ -1234,6 +1267,14 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       const response = capitalReservePlanExecution({ horizonYears });
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (body.message === 'What is due before closing?') {
+      await fulfill(route, { success: true, data: buyerDeadlinesExecution('LIST', body.sessionId as string | undefined) }, 201);
+      return;
+    }
+    if (body.message === 'Mark this Buyer Plan task complete.') {
+      await fulfill(route, { success: true, data: buyerDeadlinesExecution('REVIEW', body.sessionId as string | undefined) }, 201);
       return;
     }
     if (body.message === 'Is refinancing worth reviewing now?') {

@@ -102,7 +102,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HVAC_DECISION_START: new Set(['open-inventory']),
   HVAC_DECISION_CONTINUE: new Set(['open-inventory']),
   BUYER_PLAN_STATUS: new Set(['open-next-buyer-task', 'open-buyer-plan', 'open-home']),
-  BUYER_DEADLINES: new Set(['open-buyer-plan', 'open-home']),
+  // FRD v1.46: + the blocking-task item action; the inline task detail shows it only while the live task is open.
+  BUYER_DEADLINES: new Set(['open-buyer-plan', 'open-home', 'buyer-task-complete']),
   BUYER_DOCUMENT_READINESS: new Set(['open-documents', 'open-home']),
   BUYER_INSPECTION_REVIEW: new Set(['open-inspection-hub', 'open-home']),
   BUYER_TASK_COMPLETE: new Set(['open-buyer-plan', 'open-task']),

@@ -5561,6 +5561,33 @@ export function buildBuyerDeadlinesViewState(
   };
 }
 
+// Buyer-closing capability-card slice (FRD v1.46). The confirmed BUYER_TASK_COMPLETE, declared on each blocking-task
+// row of the deadlines list; the inline detail (BuyerTaskResultList) shows it only while the LIVE task is open.
+// buyerTaskCompleteResult targets the launched task by id (launchContext.entityId), never by the message text.
+export const BUYER_TASK_ITEM_ACTIONS = [
+  { id: 'buyer-task-complete', label: 'Mark complete', message: 'Mark this Buyer Plan task complete.', operationId: 'BUYER_TASK_COMPLETE' },
+] as const;
+
+export function buyerTaskItemActions(role: HouseholdRole) {
+  if (role === HouseholdRole.VIEWER) return [];
+  return BUYER_TASK_ITEM_ACTIONS.map(({ id, label, message, operationId }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId }));
+}
+
+// A blocking-task row of the deadlines list: the task's identity, a link to it on the Buyer Plan, and the declared
+// task actions (empty for viewers).
+export function buyerDeadlineTaskRow(
+  task: { id: string; title: string; description: string | null; priority: string; status: string; dueAt: Date | string | null },
+  planHref: string,
+  actions: ReturnType<typeof buyerTaskItemActions>,
+) {
+  return {
+    id: task.id, title: task.title, description: task.description,
+    meta: [task.priority === 'NOW' ? 'Now' : task.priority, humanDate(task.dueAt ? new Date(task.dueAt) : null) ? `Due ${humanDate(new Date(task.dueAt!))}` : null].filter((value): value is string => Boolean(value)),
+    status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
+    entityType: 'BUYER_TASK', actions,
+  };
+}
+
 async function buyerDeadlinesResult(userId: string, propertyId: string, message: string, priorViewState: AskViewState | null | undefined): Promise<AskOperationResult> {
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s deadlines right now.');
@@ -5588,6 +5615,7 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
   const { matching: matchingMilestones, unmapped: unmappedMilestones } = selectBuyerDeadlineMilestones(overview, laneFilter);
   const milestonesTitle = activeMilestoneLane ? `${activeMilestoneLane.label} milestones` : 'Upcoming milestones';
   const blockerTasks = activeLane ? activeLane.items : overview.blockers;
+  const taskActions = buyerTaskItemActions((await ensurePropertyAccess(userId, propertyId)).role);
   const blockerTotal = activeLane ? activeLane.total : overview.blockers.length;
   const blockersTitle = activeLane ? `${activeLane.label} blocking tasks` : 'Blocking before closing';
   const sections = [];
@@ -5614,11 +5642,7 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
   if (blockerTotal) {
     sections.push({
       id: 'blockers', title: blockersTitle, count: blockerTotal,
-      items: blockerTasks.map((task) => ({
-        id: task.id, title: task.title, description: task.description,
-        meta: [task.priority === 'NOW' ? 'Now' : task.priority, humanDate(task.dueAt ? new Date(task.dueAt) : null) ? `Due ${humanDate(new Date(task.dueAt!))}` : null].filter((value): value is string => Boolean(value)),
-        status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
-      })),
+      items: blockerTasks.map((task) => buyerDeadlineTaskRow(task, planHref, taskActions)),
     });
   }
   const viewState = buildBuyerDeadlinesViewState(priorViewState, laneFilter);
@@ -5737,7 +5761,7 @@ function buyerTaskVersion(task: { id: string; status: HomeBuyerTaskStatus; userE
   return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, userEditedAt: task.userEditedAt })).digest('hex');
 }
 
-async function buyerTaskCompleteResult(userId: string, propertyId: string, message: string, sourceExecutionId?: string | null): Promise<AskOperationResult> {
+async function buyerTaskCompleteResult(userId: string, propertyId: string, message: string, sourceExecutionId?: string | null, launchedTaskId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const planHref = buyerPlanHref(propertyId);
   if (access.role === HouseholdRole.VIEWER) {
@@ -5765,7 +5789,22 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
       suggestions: ['What should I do next for this purchase?'],
     };
   }
-  const matched = maintenanceCompletionMatch(message, openTasks) ?? (openTasks.length === 1 ? openTasks[0] : null);
+  // FRD v1.46: a row action names its task by id. It must never fall through to text matching or to "the only open
+  // task", which would propose completing a different task than the one clicked.
+  if (launchedTaskId && !openTasks.some((task) => task.id === launchedTaskId)) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'BUYER_TASK_NO_LONGER_OPEN',
+      blocks: [{
+        type: 'SUMMARY', id: 'buyer-task-complete-not-open', title: 'This Buyer Plan task is no longer open',
+        body: 'It was completed, marked not needed, or removed after this list was shown. Nothing was changed.',
+        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['What is due before closing?'],
+    };
+  }
+  const matched = launchedTaskId
+    ? openTasks.find((task) => task.id === launchedTaskId)!
+    : maintenanceCompletionMatch(message, openTasks) ?? (openTasks.length === 1 ? openTasks[0] : null);
   if (!matched) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'BUYER_TASK_SELECTION_REQUIRED',
@@ -10282,7 +10321,8 @@ registerCapabilityHandler('buyer.deadlines', async (envelope) => {
 });
 registerCapabilityHandler('buyer.document-readiness', async (envelope) => buyerDocumentReadinessResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('buyer.inspection-review', async (envelope) => buyerInspectionReviewResult(envelope.userId, envelope.propertyId!));
-registerCapabilityHandler('buyer.task.complete', async (envelope) => buyerTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext?.sourceExecutionId ?? null));
+registerCapabilityHandler('buyer.task.complete', async (envelope) => buyerTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext?.sourceExecutionId ?? null,
+  envelope.launchContext?.entityType === 'BUYER_TASK' ? envelope.launchContext.entityId ?? null : null));
 registerCapabilityHandler('buyer.task.create', async (envelope) => buyerTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('buyer.task.update', async (envelope) => buyerTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('buyer.move-status', async (envelope) => buyerMoveStatusResult(envelope.userId, envelope.propertyId!));

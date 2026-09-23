@@ -26,6 +26,9 @@ const INLINE_ENTRY_READS = {
   // Fourth candidate slice (FRD v1.45): the refinance analysis, which now also shows the homeowner's own rate monitors
   // with their pause / resume / stop. It has no item list, so there is no inline detail.
   'mortgage-refinance-radar': { operationId: 'REFINANCE_ANALYSIS', message: 'Is refinancing worth reviewing now?' },
+  // Fifth candidate slice (FRD v1.46), first cut of buyer-closing: the deadlines list, with blocking tasks opening inline
+  // and the existing confirmed BUYER_TASK_COMPLETE as a declared action.
+  'buyer-closing': { operationId: 'BUYER_DEADLINES', message: 'What is due before closing?' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

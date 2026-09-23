@@ -1024,6 +1024,28 @@ test('Refinance: the analysis shows the homeowner’s rate monitor, and Pause wo
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Buyer closing: a blocking task opens inline from the Buyer Plan and Mark complete proposes that exact task (FRD v1.46)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What is due before closing?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const list = page.locator('#ask-execution-execution-buyer-deadlines');
+  await expect(list.getByRole('link', { name: 'Closing' })).toBeVisible();
+  await list.getByRole('button', { name: 'Order the appraisal' }).click();
+  await expect(list.getByText('Your lender orders the appraisal once the loan is in process.')).toBeVisible();
+  await expect(list.getByText('In progress')).toBeVisible();
+  await expect(list.getByRole('link', { name: /Open in the Buyer Plan/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/buyer-plan\\?taskId=task-appraisal`));
+  await list.getByRole('button', { name: 'Mark complete' }).click();
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Mark this Buyer Plan task complete.',
+    launchContext: expect.objectContaining({ entityType: 'BUYER_TASK', entityId: 'task-appraisal', operationId: 'BUYER_TASK_COMPLETE', sourceExecutionId: 'execution-buyer-deadlines' }),
+  }));
+  const review = page.locator('#ask-execution-execution-buyer-task-complete');
+  await expect(review.getByText('Mark this Buyer Plan task complete?').first()).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
