@@ -34,6 +34,8 @@ const INLINE_ENTRY_READS = {
   // shortfall and allocations but not its contributions; the readiness answer covers one renovation case.
   'reserve-fund': { operationId: 'CAPITAL_RESERVE_PLAN', message: 'How is my reserve fund doing?' },
   'home-renovation-risk-advisor': { operationId: 'RENOVATION_PERMIT_READINESS', message: 'Is my renovation ready to start?' },
+  // FRD v1.48: backed by a new operation reading the same BreakEvenService the Break-Even page reads.
+  'break-even': { operationId: 'BREAK_EVEN_ANALYSIS', message: 'Show my home break-even analysis' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

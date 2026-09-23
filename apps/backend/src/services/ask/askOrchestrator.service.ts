@@ -171,6 +171,7 @@ import { markRiskPremiumOptimizerStale } from '../riskPremiumOptimizer.service';
 import { markDoNothingRunsStale } from '../doNothingSimulator.service';
 import { ReplaceRepairService } from '../replaceRepairAnalysis.service';
 import { homeReserveFundService } from '../homeReserveFund.service';
+import { BreakEvenService, type BreakEvenDTO } from '../breakEven.service';
 import { HomeCapitalTimelineService } from '../homeCapitalTimeline.service';
 import { propertyTaxAppealReadinessService } from '../propertyTax/propertyTaxAppealReadiness.service';
 import { listRenovationCases } from '../renovationCase.service';
@@ -7083,6 +7084,92 @@ export function refinanceMonitorBlock(monitor: RefinanceRateMonitorDTO, title: s
 // they can be paused, resumed or stopped from Ask (and from the alert email, which continues into this analysis).
 // Before this, a monitor was reachable only from the conversation that created it. A failed monitor read does not
 // fail the analysis.
+// Break-even capability-card slice (FRD v1.48): the first new operation for a capability the Appendix D audit found
+// with no Ask operation. Reads BreakEvenService.compute, the same call the Break-Even page's route makes, for the
+// 5- or 10-year horizon the page offers (default 10, as the service). The page's assumption overrides are not exposed.
+const breakEvenService = new BreakEvenService();
+
+export function breakEvenHorizonYears(message: string): 5 | 10 {
+  return /\b(?:5|five)[- ]?years?\b/i.test(message) ? 5 : 10;
+}
+
+export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string): AskOperationResult {
+  const years = dto.input.years;
+  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/break-even`;
+  const { breakEven, rollup, sensitivity } = dto;
+  const yearLabel = (index: number | null) => index == null ? `Not within ${years} years` : `Year ${index}`;
+  const title = breakEven.status === 'ALREADY_BREAKEVEN'
+    ? 'This home has already broken even'
+    : breakEven.status === 'PROJECTED'
+      ? `Projected to break even in ${breakEven.breakEvenCalendarYear} (year ${breakEven.breakEvenYearIndex} of ${years})`
+      : `Not projected to break even within ${years} years`;
+  const body = breakEven.status === 'NOT_REACHED'
+    ? `Over ${years} years, projected ownership costs of ${money(rollup.cumulativeExpensesAtHorizon)} stay ahead of projected appreciation of ${money(rollup.cumulativeAppreciationAtHorizon)}, a net of ${money(rollup.netAtHorizon)}.`
+    : `Over ${years} years, projected appreciation of ${money(rollup.cumulativeAppreciationAtHorizon)} against ownership costs of ${money(rollup.cumulativeExpensesAtHorizon)} leaves a net of ${money(rollup.netAtHorizon)}. Across the conservative-to-optimistic range: ${sensitivity.rangeLabel}.`;
+  // The service's own disclosures, e.g. the labeled $350,000 fallback it uses when no purchase price is recorded.
+  const notes = dto.meta.notes.filter((note) => note.trim());
+  const limited = notes.length > 0 || dto.meta.confidence === 'LOW';
+  const otherYears = years === 10 ? 5 : 10;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'break-even-summary', title, body: `${body} Confidence: ${dto.meta.confidence.toLowerCase()}.`,
+    tone: breakEven.status === 'NOT_REACHED' ? 'CAUTION' : 'DEFAULT',
+    actions: [
+      { id: 'open-break-even', label: 'Open Break-Even', href: pageHref, style: 'PRIMARY' },
+      { id: `rerun-break-even-${otherYears}`, label: `Show ${otherYears}-year horizon`, interactionType: 'START_WORKFLOW' as const, message: `Show my home break-even analysis for a ${otherYears}-year horizon.`, operationId: 'BREAK_EVEN_ANALYSIS', style: 'SECONDARY' as const },
+    ],
+  }];
+  if (notes.length) {
+    blocks.push({ type: 'LIMITATION', id: 'break-even-limitations', title: 'What this projection is missing', body: notes.join(' '), severity: 'CAUTION' });
+  }
+  blocks.push({
+    type: 'TABLE', id: 'break-even-sensitivity', title: 'Break-even range',
+    description: `Conservative, base and optimistic assumptions over ${years} years.`,
+    columns: [{ key: 'scenario', label: 'Scenario' }, { key: 'breakEven', label: 'Breaks even' }, { key: 'net', label: `Net at year ${years}` }],
+    rows: (['conservative', 'base', 'optimistic'] as const).map((key) => ({
+      id: `break-even-${key}`,
+      values: { scenario: key.charAt(0).toUpperCase() + key.slice(1), breakEven: yearLabel(sensitivity[key].breakEvenYearIndex), net: money(sensitivity[key].netAtHorizon) },
+    })),
+    actions: [],
+  }, {
+    type: 'TABLE', id: 'break-even-projection', title: 'Year-by-year projection',
+    description: 'Cumulative ownership costs against cumulative projected appreciation.',
+    columns: [{ key: 'year', label: 'Year' }, { key: 'expenses', label: 'Cumulative costs' }, { key: 'appreciation', label: 'Cumulative appreciation' }, { key: 'net', label: 'Net' }],
+    rows: dto.projection.map((row) => ({
+      id: `break-even-year-${row.year}`,
+      values: { year: String(row.year), expenses: money(row.cumulativeExpenses), appreciation: money(row.cumulativeAppreciationGain), net: money(row.netCumulative) },
+    })),
+    actions: [],
+  });
+  if (dto.drivers.length) {
+    blocks.push({
+      type: 'TABLE', id: 'break-even-drivers', title: 'What drives the result',
+      columns: [{ key: 'factor', label: 'Factor' }, { key: 'impact', label: 'Impact' }, { key: 'explanation', label: 'Why' }],
+      rows: dto.drivers.map((driver, index) => ({ id: `break-even-driver-${index + 1}`, values: { factor: driver.factor, impact: driver.impact.toLowerCase(), explanation: driver.explanation } })),
+      actions: [],
+    });
+  }
+  blocks.push({
+    type: 'EVIDENCE', id: 'break-even-evidence', title: 'Sources used',
+    items: dto.meta.dataSources.map((source) => ({ label: source, source: 'Break-Even', observedAt: dto.meta.generatedAt })),
+  }, {
+    type: 'BOUNDARY', id: 'break-even-boundary', title: 'Planning projection, not an appraisal or financial advice',
+    body: 'Appreciation and cost growth are modeled assumptions. Actual value, taxes, insurance, maintenance and selling costs will differ; an appraisal or a professional can tell you what the home is worth today.',
+    severity: 'INFO', suggestions: [],
+  });
+  return {
+    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: `BREAK_EVEN_${breakEven.status}`,
+    contextVersion: dto.ownershipCostContext.calculationFingerprint,
+    blocks,
+    suggestions: ['Should I sell, hold, or rent this home?', 'What does this home cost me each year?'],
+  };
+}
+
+async function breakEvenAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const dto = await breakEvenService.compute(propertyId, { years: breakEvenHorizonYears(message) }, userId);
+  return breakEvenAnalysisFromDto(dto, propertyId);
+}
+
 async function refinanceAnalysisWithMonitorsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const result = await refinanceAnalysisResult(userId, propertyId, message);
   const monitors = await listRefinanceRateMonitors(userId, propertyId).catch((error) => {
@@ -9349,6 +9436,7 @@ registerCapabilityHandler('inventory.replacement', async (envelope) => replaceme
 registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisWithMonitorsResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRateMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('break-even.analysis', async (envelope) => breakEvenAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 

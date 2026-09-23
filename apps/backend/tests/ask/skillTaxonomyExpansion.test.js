@@ -39,6 +39,8 @@ const TAXONOMY = Object.freeze({
   documents: ['DOCUMENT_LOOKUP'],
   'query-envelope': ['INTELLIGENCE_ENVELOPE_QUERY'],
   'home-event-radar': ['HOME_EVENT_RADAR_FEED', 'HOME_EVENT_RADAR_STATE', 'HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES'],
+  // FRD v1.48 (capability-card audit, not this taxonomy-expansion phase).
+  'break-even': ['BREAK_EVEN_ANALYSIS'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

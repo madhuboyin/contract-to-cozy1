@@ -47,6 +47,8 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'inspection-hub': ['INSPECTION_FINDINGS', 'INSPECTION_FINDING_UPDATE'],
   // FRD v1.44: was listed below as having no Ask operation, although both seller-prep operations exist.
   'seller-prep': ['SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION'],
+  // FRD v1.48: the first new operation for a capability that had none.
+  'break-even': ['BREAK_EVEN_ANALYSIS'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
@@ -62,7 +64,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
  * Ask-reachable.
  */
 const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
-  'break-even', 'diy', 'hoa-compliance', 'home-digital-twin', 'home-digital-will',
+  'diy', 'hoa-compliance', 'home-digital-twin', 'home-digital-will',
   'home-habit-coach', 'home-risk-replay', 'home-briefing',
   'neighborhood-change-radar', 'permits',
   'plant-advisor', 'project-tracker', 'service-price-radar', 'status-board',

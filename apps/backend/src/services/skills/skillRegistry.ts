@@ -22,6 +22,7 @@ import { QUOTE_COMPARISON_SKILL } from './quote-comparison';
 import { RENOVATION_SKILL } from './renovation';
 import { SAVINGS_SKILL } from './savings';
 import { SELL_HOLD_RENT_SKILL } from './sell-hold-rent';
+import { BREAK_EVEN_SKILL } from './break-even';
 import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { SELLER_PREP_SKILL } from './seller-prep';
 import { BUYER_CLOSING_SKILL } from './buyer-closing';
@@ -65,6 +66,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   renovation: RENOVATION_SKILL,
   savings: SAVINGS_SKILL,
   'sell-hold-rent': SELL_HOLD_RENT_SKILL,
+  'break-even': BREAK_EVEN_SKILL,
   'seller-preparation': SELLER_PREPARATION_SKILL,
   'seller-prep': SELLER_PREP_SKILL,
   'buyer-closing': BUYER_CLOSING_SKILL,

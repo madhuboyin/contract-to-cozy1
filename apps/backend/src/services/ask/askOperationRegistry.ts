@@ -92,6 +92,7 @@ export type AskOperationId =
   | 'REFINANCE_ANALYSIS'
   | 'REFINANCE_RATE_MONITOR'
   | 'SELL_HOLD_RENT_ANALYSIS'
+  | 'BREAK_EVEN_ANALYSIS'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -378,6 +379,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // thread's progress via a read-only selectThread lookup. This operation still
   // never creates or resumes a thread itself -- rollClass in the Phase 0 coverage
   // matrix stays READ_RESULT, not WORKFLOW_CONTINUATION.
+  // Capability-card audit (FRD v1.48): the first genuinely new operation for a capability Appendix D found with no
+  // Ask operation. Reads BreakEvenService.compute, the same call GET /properties/:id/tools/break-even makes.
+  BREAK_EVEN_ANALYSIS: definition('BREAK_EVEN_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'break-even.analysis', ['SUMMARY', 'TABLE', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   SELL_HOLD_RENT_ANALYSIS: definition('SELL_HOLD_RENT_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'sale-case.analysis', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY', 'DECISION_PROGRESS', 'WHY_NOW']),
   // IW-FRESH-003 fix: BOUNDARY added to HOUSEHOLD_INVITATION, GUIDANCE_JOURNEY_CREATE,
   // and QUOTE_COMPARISON_CREATE so each one's new reconciliation-failure
@@ -770,6 +774,10 @@ const hvacDecisionOutcomeUnlinkPattern = new RegExp(
 );
 const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*refinanc(?:e|ing)|should i refinanc(?:e|ing)|is refinanc(?:ing|e) (?:now )?(?:worth|good|right)|ideal (?:interest )?rate.*refinanc(?:e|ing)|what rate.*refinanc(?:e|ing)|refinanc(?:e|ing).*(?:worth it|make sense|good option))\b/i;
 const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
+// Ownership break-even: when appreciation catches up with cumulative ownership costs. Break-even in another sense
+// (a refinance, a solar or energy upgrade, a renovation or a replacement) belongs to those tools, not this one.
+const breakEvenAnalysisPattern = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership of)\b.{0,40}\bpays? off\b|\b(?:owning|ownership|home|house)\b.{0,40}\b(?:pay|pays|paid) for itself\b/i;
+const breakEvenOtherSensePattern = /\b(?:refinanc\w*|mortgage rate|loan estimate|solar|panels?|heat pump|insulation|upgrade|renovat\w*|remodel\w*|project|appliance|replace\w*|quote)\b/i;
 const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b/i;
 const householdInvitationPattern = /\b(?:invite|add|share (?:my|the) home with)\b.{0,50}\b(?:wife|husband|spouse|partner|family member|household member|someone|person)\b|\bhousehold\b.{0,40}\b(?:invite|invitation|add (?:a )?member)\b/i;
 const explicitCapabilityPattern = /\b(?:tool|something (?:available|to help)|anything (?:available|to help)|what can help|do you have|feature available)\b/i;
@@ -967,6 +975,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('DOCUMENT_LOOKUP', 0.95);
   }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
+  if (breakEvenAnalysisPattern.test(message) && !breakEvenOtherSensePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('BREAK_EVEN_ANALYSIS', 0.96);
+  }
   if (savingsOpportunitiesPattern.test(message)) {
     return resolved('SAVINGS_OPPORTUNITIES', 0.97);
   }

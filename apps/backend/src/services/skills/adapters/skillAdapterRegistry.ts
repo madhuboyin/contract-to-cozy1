@@ -56,6 +56,7 @@ const DEFINITIONS = [
   adapter('savings.opportunities', 'Savings and Benefits Intelligence', 'SAVINGS_OPPORTUNITIES'),
   adapter('ownership.costs', 'Ownership Cost Intelligence', 'OWNERSHIP_COSTS'),
   adapter('sale-case.analysis', 'Seller Preparation Decision Service', 'SELL_HOLD_RENT_ANALYSIS'),
+  adapter('break-even.analysis', 'Break-Even (BreakEvenService)', 'BREAK_EVEN_ANALYSIS'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),
   adapter('inventory.create', 'InventoryService', 'INVENTORY_ITEM_CREATE', 'MUTATION_PREPARATION'),

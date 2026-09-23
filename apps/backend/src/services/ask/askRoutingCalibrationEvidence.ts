@@ -27,13 +27,13 @@ const ROWS: readonly ObservationTuple[] = [
   ['005-expected', '005', 'COVERAGE_GAPS', .7519, true], ['005-competitor', '005', 'INVENTORY_LOOKUP', .4333, false],
   ['006-expected', '006', 'INCIDENT_CLAIM_STATUS', .1065, true], ['006-competitor', '006', 'HVAC_DECISION_CONTINUE', .1622, false],
   ['007-expected', '007', 'SAVINGS_OPPORTUNITIES', .6503, true], ['007-competitor', '007', 'OWNERSHIP_COSTS', .4618, false],
-  ['008-expected', '008', 'OWNERSHIP_COSTS', .6832, true], ['008-competitor', '008', 'BUYER_COST_READINESS', .4801, false],
+  ['008-expected', '008', 'OWNERSHIP_COSTS', .6832, true], ['008-competitor', '008', 'BREAK_EVEN_ANALYSIS', .4805, false],
   ['009-expected', '009', 'INVENTORY_LOOKUP', .7246, true], ['009-competitor', '009', 'BUYER_CONTRACT_TIMELINE', .4796, false],
   ['010-expected', '010', 'PROPERTY_SUMMARY', .6215, true], ['010-competitor', '010', 'MAINTENANCE_TASK_COMPLETE', .445, false],
   ['011-expected', '011', 'HOME_ACTIONS', .7333, true], ['011-competitor', '011', 'BUYER_PLAN_STATUS', .5872, false],
   ['012-expected', '012', 'CAPABILITY_DISCOVERY', .7095, true], ['012-competitor', '012', 'HOUSEHOLD_INVITATION', .5232, false],
   ['013-expected', '013', 'REPLACEMENT_GUIDANCE', .718, true], ['013-competitor', '013', 'HVAC_DECISION_START', .6671, false],
-  ['014-expected', '014', 'REFINANCE_ANALYSIS', .6936, true], ['014-competitor', '014', 'HOME_ACTIONS', .4651, false],
+  ['014-expected', '014', 'REFINANCE_ANALYSIS', .6936, true], ['014-competitor', '014', 'BREAK_EVEN_ANALYSIS', .496, false],
   ['015-expected', '015', 'REFINANCE_RATE_MONITOR', .6678, true], ['015-competitor', '015', 'HOME_DEADLINE_MONITOR', .3509, false],
   ['016-expected', '016', 'SELL_HOLD_RENT_ANALYSIS', .5358, true], ['016-competitor', '016', 'INSPECTION_FINDINGS', .4609, false],
   ['017-expected', '017', 'HOUSEHOLD_INVITATION', .6546, true], ['017-competitor', '017', 'QUOTE_COMPARISON_CREATE', .0979, false],
@@ -94,6 +94,9 @@ const ROWS: readonly ObservationTuple[] = [
   ['071-expected', '071', 'SELLER_PREP_CHECKLIST', .8358, true], ['071-competitor', '071', 'PROPERTY_TAX_APPEAL_READINESS', .7613, false],
   ['072-expected', '072', 'SELLER_PREP_ITEM_DECISION', .1505, true], ['072-competitor', '072', 'SELLER_PREP_CHECKLIST', .221, false],
   ['073-expected', '073', 'HOME_EVENT_RADAR_FEED', .1058, true], ['073-competitor', '073', 'OUT_OF_SCOPE_BOUNDARY', .1611, false],
+  // FRD v1.48: fixture 074 (BREAK_EVEN_ANALYSIS). Adding that operation also made it the strongest competitor on 008 and
+  // 014, still well below each expected operation; both rows were re-derived from the retriever, not hand-edited.
+  ['074-expected', '074', 'BREAK_EVEN_ANALYSIS', .7128, true], ['074-competitor', '074', 'COVERAGE_GAPS', .5743, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(
