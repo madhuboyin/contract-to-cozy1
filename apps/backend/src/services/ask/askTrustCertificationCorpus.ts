@@ -100,6 +100,7 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   // Capability-card audit, first new operation for a capability with none (FRD v1.48). Appended at the END, as above.
   { operationId: 'BREAK_EVEN_ANALYSIS', message: 'How many years until this house has paid for itself, counting what it has gained in value?', category: 'PARAPHRASE' },
   { operationId: 'NEIGHBORHOOD_CHANGE_FEED', message: 'Has the city approved any new development close to our place?', category: 'COLLOQUIAL' },
+  { operationId: 'PAST_HAZARD_EXPOSURE', message: 'What kind of storms or floods has this house seen over the years?', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -195,6 +196,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   SELL_HOLD_RENT_ANALYSIS: 'The recorded assumptions currently favor becoming a landlord and renting over putting the house on the market.',
   BREAK_EVEN_ANALYSIS: 'This home is projected to break even in year six, when appreciation catches up with cumulative ownership costs.',
   NEIGHBORHOOD_CHANGE_FEED: 'The city approved one new development close to this home; it is listed with its possible relevance and the geography it matched.',
+  PAST_HAZARD_EXPOSURE: 'This house has seen two storms and one flood over the years, according to the reviewed hazard records matched to it.',
   HOUSEHOLD_INVITATION: 'Your partner can be invited to this household after you confirm the role.',
   GUIDANCE_JOURNEY_CREATE: 'A guided project plan can be started with the first governed step.',
   QUOTE_COMPARISON_CREATE: 'A new contractor-bid comparison workspace is ready to create.',

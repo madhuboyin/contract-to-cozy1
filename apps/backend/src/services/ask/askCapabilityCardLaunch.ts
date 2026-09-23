@@ -38,6 +38,8 @@ const INLINE_ENTRY_READS = {
   'break-even': { operationId: 'BREAK_EVEN_ANALYSIS', message: 'Show my home break-even analysis' },
   // FRD v1.49: backed by a new operation reading the same getAroundYourHome the Around Your Home page reads.
   'neighborhood-change-radar': { operationId: 'NEIGHBORHOOD_CHANGE_FEED', message: "What's changing around my home?" },
+  // FRD v1.50: backed by a new operation reading the same getPastHazardExposure the Home Risk Replay page reads.
+  'home-risk-replay': { operationId: 'PAST_HAZARD_EXPOSURE', message: 'Show my home risk replay' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

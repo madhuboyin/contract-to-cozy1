@@ -13,13 +13,19 @@ const REVIEWED_COVERAGE_FLAGS: Record<CoverageCapability, string> = {
  * live source and its coverage contract have been explicitly enabled.
  * Development and test environments remain available for fixtures and QA.
  */
+// The same decision the middleware makes, for callers that read the gated data outside an Express route (Ask's
+// PAST_HAZARD_EXPOSURE, FRD v1.50), so the two can never disagree.
+export function isReviewedIntelligenceCoverageAvailable(capability: CoverageCapability): boolean {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const reviewedCoverageEnabled = process.env[REVIEWED_COVERAGE_FLAGS[capability]] === 'true';
+  return !isProduction || reviewedCoverageEnabled;
+}
+
 export function requireReviewedIntelligenceCoverage(capability: CoverageCapability) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const flag = REVIEWED_COVERAGE_FLAGS[capability];
-    const isProduction = process.env.NODE_ENV === 'production';
-    const reviewedCoverageEnabled = process.env[flag] === 'true';
 
-    if (!isProduction || reviewedCoverageEnabled) {
+    if (isReviewedIntelligenceCoverageAvailable(capability)) {
       next();
       return;
     }

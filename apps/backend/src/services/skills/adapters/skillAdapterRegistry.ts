@@ -58,6 +58,7 @@ const DEFINITIONS = [
   adapter('sale-case.analysis', 'Seller Preparation Decision Service', 'SELL_HOLD_RENT_ANALYSIS'),
   adapter('break-even.analysis', 'Break-Even (BreakEvenService)', 'BREAK_EVEN_ANALYSIS'),
   adapter('neighborhood-change.feed', 'Around Your Home (aroundYourHome.service)', 'NEIGHBORHOOD_CHANGE_FEED'),
+  adapter('home-risk-replay.exposure', 'Home Risk Replay (pastHazardExposure.service)', 'PAST_HAZARD_EXPOSURE'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),
   adapter('inventory.create', 'InventoryService', 'INVENTORY_ITEM_CREATE', 'MUTATION_PREPARATION'),

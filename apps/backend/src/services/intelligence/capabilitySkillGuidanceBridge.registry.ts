@@ -50,6 +50,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   // FRD v1.48: the first new operation for a capability that had none.
   'break-even': ['BREAK_EVEN_ANALYSIS'],
   'neighborhood-change-radar': ['NEIGHBORHOOD_CHANGE_FEED'],
+  'home-risk-replay': ['PAST_HAZARD_EXPOSURE'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
@@ -66,7 +67,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
  */
 const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
   'diy', 'hoa-compliance', 'home-digital-twin', 'home-digital-will',
-  'home-habit-coach', 'home-risk-replay', 'home-briefing',
+  'home-habit-coach', 'home-briefing',
   'permits',
   'plant-advisor', 'project-tracker', 'service-price-radar', 'status-board',
 ];

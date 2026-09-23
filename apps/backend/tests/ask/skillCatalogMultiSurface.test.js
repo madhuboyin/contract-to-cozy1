@@ -21,7 +21,7 @@ function catalogSkill(consumer, skillId, controls = {}) {
 }
 
 test('the full representative taxonomy is registered and validates without semantic conflicts', () => {
-  assert.equal(Object.keys(SKILL_DEFINITIONS).length, 25);
+  assert.equal(Object.keys(SKILL_DEFINITIONS).length, 26);
   assert.deepEqual(validateSkillDefinitions(), []);
   assert.equal(getSkillForOperation('PROPERTY_SUMMARY').id, 'property-record');
   assert.equal(getSkillForOperation('INVENTORY_LOOKUP').id, 'property-record');

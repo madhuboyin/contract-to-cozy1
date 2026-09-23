@@ -42,6 +42,7 @@ const TAXONOMY = Object.freeze({
   // FRD v1.48 (capability-card audit, not this taxonomy-expansion phase).
   'break-even': ['BREAK_EVEN_ANALYSIS'],
   'neighborhood-change-radar': ['NEIGHBORHOOD_CHANGE_FEED'],
+  'home-risk-replay': ['PAST_HAZARD_EXPOSURE'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though
