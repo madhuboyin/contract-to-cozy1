@@ -97,6 +97,8 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.48: fixture 074 (BREAK_EVEN_ANALYSIS). Adding that operation also made it the strongest competitor on 008 and
   // 014, still well below each expected operation; both rows were re-derived from the retriever, not hand-edited.
   ['074-expected', '074', 'BREAK_EVEN_ANALYSIS', .7128, true], ['074-competitor', '074', 'COVERAGE_GAPS', .5743, false],
+  // FRD v1.49: fixture 075 (NEIGHBORHOOD_CHANGE_FEED), re-derived from the retriever; no existing row changed.
+  ['075-expected', '075', 'NEIGHBORHOOD_CHANGE_FEED', .2809, true], ['075-competitor', '075', 'INCIDENT_CLAIM_STATUS', .2396, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

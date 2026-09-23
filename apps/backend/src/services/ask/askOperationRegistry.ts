@@ -93,6 +93,7 @@ export type AskOperationId =
   | 'REFINANCE_RATE_MONITOR'
   | 'SELL_HOLD_RENT_ANALYSIS'
   | 'BREAK_EVEN_ANALYSIS'
+  | 'NEIGHBORHOOD_CHANGE_FEED'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -381,6 +382,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // matrix stays READ_RESULT, not WORKFLOW_CONTINUATION.
   // Capability-card audit (FRD v1.48): the first genuinely new operation for a capability Appendix D found with no
   // Ask operation. Reads BreakEvenService.compute, the same call GET /properties/:id/tools/break-even makes.
+  // FRD v1.49: reads getAroundYourHome, the same call GET /properties/:id/around-your-home (Around Your Home) makes.
+  NEIGHBORHOOD_CHANGE_FEED: definition('NEIGHBORHOOD_CHANGE_FEED', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'neighborhood-change.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   BREAK_EVEN_ANALYSIS: definition('BREAK_EVEN_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'break-even.analysis', ['SUMMARY', 'TABLE', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   SELL_HOLD_RENT_ANALYSIS: definition('SELL_HOLD_RENT_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'sale-case.analysis', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY', 'DECISION_PROGRESS', 'WHY_NOW']),
   // IW-FRESH-003 fix: BOUNDARY added to HOUSEHOLD_INVITATION, GUIDANCE_JOURNEY_CREATE,
@@ -776,6 +779,17 @@ const refinanceAnalysisPattern = /\b(is (?:it )?(?:a )?good (?:time|option).*ref
 const refinanceMonitorPattern = /\b(?:notify|alert|let me know|monitor|tell me).*(?:mortgage |refinanc(?:e|ing) )?rates?.*(?:below|under|drop|reach)|\brates?.*(?:below|under|drop|reach).*(?:notify|alert|let me know|monitor|tell me)\b/i;
 // Ownership break-even: when appreciation catches up with cumulative ownership costs. Break-even in another sense
 // (a refinance, a solar or energy upgrade, a renovation or a replacement) belongs to those tools, not this one.
+// Reviewed local changes around the home (planning, development, zoning, infrastructure, land use, flood maps,
+// schools). Weather and hazard events near the home stay with the Home Event Radar ("what is happening near my home"),
+// and changes inside the home stay with the home change summary.
+const neighborhoodChangePlace = String.raw`(?:my|our|this|the)\s+(?:home|house|property|place|street|block|neighbou?rhood|address)`;
+const neighborhoodChangePattern = new RegExp([
+  String.raw`\baround your home\b`,
+  String.raw`\b(?:construction|development|developments|zoning|rezoning|land use|road ?work|infrastructure|planning (?:application|case)s?|building permits?|permits? (?:filed|issued|applied for)|school (?:zone|boundar(?:y|ies))|flood (?:map|zone) changes?)\b.{0,40}\b(?:near|around|by|close to|next to)\b.{0,15}\b` + neighborhoodChangePlace + String.raw`\b`,
+  String.raw`\b(?:what(?:'s| is)|anything)\s+changing\s+(?:around|near)\s+` + neighborhoodChangePlace + String.raw`\b`,
+  String.raw`\bchanges?\s+(?:around|near)\s+` + neighborhoodChangePlace + String.raw`\b`,
+  String.raw`\bchanges?\s+in\s+(?:my|our|this|the)\s+(?:neighbou?rhood|area|street|block)\b`,
+].join('|'), 'i');
 const breakEvenAnalysisPattern = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership of)\b.{0,40}\bpays? off\b|\b(?:owning|ownership|home|house)\b.{0,40}\b(?:pay|pays|paid) for itself\b/i;
 const breakEvenOtherSensePattern = /\b(?:refinanc\w*|mortgage rate|loan estimate|solar|panels?|heat pump|insulation|upgrade|renovat\w*|remodel\w*|project|appliance|replace\w*|quote)\b/i;
 const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b/i;
@@ -975,6 +989,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('DOCUMENT_LOOKUP', 0.95);
   }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
+  if (neighborhoodChangePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('NEIGHBORHOOD_CHANGE_FEED', 0.96);
+  }
   if (breakEvenAnalysisPattern.test(message) && !breakEvenOtherSensePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('BREAK_EVEN_ANALYSIS', 0.96);
   }

@@ -36,6 +36,8 @@ const INLINE_ENTRY_READS = {
   'home-renovation-risk-advisor': { operationId: 'RENOVATION_PERMIT_READINESS', message: 'Is my renovation ready to start?' },
   // FRD v1.48: backed by a new operation reading the same BreakEvenService the Break-Even page reads.
   'break-even': { operationId: 'BREAK_EVEN_ANALYSIS', message: 'Show my home break-even analysis' },
+  // FRD v1.49: backed by a new operation reading the same getAroundYourHome the Around Your Home page reads.
+  'neighborhood-change-radar': { operationId: 'NEIGHBORHOOD_CHANGE_FEED', message: "What's changing around my home?" },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

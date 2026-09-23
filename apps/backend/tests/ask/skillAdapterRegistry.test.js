@@ -23,7 +23,7 @@ test('every represented Skill operation resolves to one registered immutable ada
   // + home-event-radar.feed (c6c062f2, which left this count stale at 75) + home-event-radar.state/mark-done/feedback
   // (FRD v1.40, MUTATION_PREPARATION adapters under the home-event-radar skill).
   // + home-event-radar.task/preferences (FRD v1.41).
-  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 82);
+  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 83);
   for (const skill of Object.values(SKILL_DEFINITIONS)) {
     for (const operation of skill.operations) {
       const reference = skill.allowedAdapters.find((candidate) => candidate.id === getSkillAdapterForOperation(operation.operationId).id);
