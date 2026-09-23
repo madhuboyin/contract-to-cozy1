@@ -76,8 +76,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_ACTIONS: new Set(['open-home', 'open-home-actions']),
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),
   REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace']),
-  REFINANCE_ANALYSIS: new Set(['review-financing', 'open-radar', 'open-profile']),
-  REFINANCE_RATE_MONITOR: new Set(['open-radar', 'edit-monitor', 'pause-monitor', 'stop-monitor']),
+  // FRD v1.45: the analysis also shows the homeowner's own rate monitors (MONITOR renders its own pause/resume/stop).
+  REFINANCE_ANALYSIS: new Set(['review-financing', 'open-radar', 'open-profile', 'edit-monitor']),
+  REFINANCE_RATE_MONITOR: new Set(['open-radar', 'edit-monitor']),
   SELL_HOLD_RENT_ANALYSIS: new Set(['open-sell-hold-rent']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.

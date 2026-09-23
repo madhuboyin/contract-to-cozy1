@@ -349,6 +349,22 @@ function sellerPrepExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
       fields: [{ label: 'Item', value: 'Paint the front door' }, { label: 'Decision', value: 'unpursue' }], editableFields: [],
       confirmLabel: 'Unpursue item', consentText: 'I authorize this update to the shared seller-prep checklist.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
 }
+// FRD v1.45 mortgage-refinance-radar slice: REFINANCE_ANALYSIS now also shows the homeowner's own rate monitor.
+function refinanceMonitorAnalysisExecution(sessionId?: string) {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-refinance-monitor-analysis', sessionId: sessionId ?? 'ask-acceptance-session', question: 'Is refinancing worth reviewing now?',
+    status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'REFINANCE_ANALYSIS', version: '1.0', family: 'DECISION_ANALYSIS' }, contextVersion: 'refinance-context-v1',
+    blocks: [
+      { type: 'SUMMARY', id: 'refinance-analysis-summary', title: 'Current conditions do not meet the radar’s actionable threshold', body: 'Your recorded rate is close to the governed benchmark.', tone: 'DEFAULT', actions: [] },
+      { type: 'MONITOR', id: 'rate-monitor-monitor-30', monitorId: 'monitor-30', title: 'Your mortgage-rate monitor', status: 'ACTIVE', threshold: '5.500% or lower', product: '30-year fixed national benchmark',
+        channel: 'Email plus in-app', cadence: 'IMMEDIATE', quietHours: null, sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
+        actions: [{ id: 'edit-monitor', label: 'Alert delivery settings', href: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar#refinance-evidence-settings`, style: 'SECONDARY' }] },
+    ],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', suggestions: [],
+  };
+}
 function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
   return {
     schemaVersion: '1.0', executionId: happeningNow ? 'execution-home-event-radar-feed-now' : 'execution-home-event-radar-feed', sessionId: 'ask-acceptance-session',
@@ -929,6 +945,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   let correctionSessionId: string | undefined;
   const warrantyAddCaptureBodies: Array<Record<string, unknown>> = [];
   const addCaptureBodies: Array<Record<string, unknown>> = [];
+  const monitorPatchBodies: Array<Record<string, unknown>> = [];
   let captureAttempts = 0;
   let pendingDismissed = false;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
@@ -994,6 +1011,15 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     },
     assumptionSetId: null, nextAction: null,
   } }));
+  let monitorStatus = 'ACTIVE';
+  await page.route(`${apiOrigin}/api/ask/monitors/monitor-30`, async (route) => {
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      monitorPatchBodies.push(body);
+      monitorStatus = body.action === 'PAUSE' ? 'PAUSED' : body.action === 'STOP' ? 'STOPPED' : 'ACTIVE';
+    }
+    await fulfill(route, { success: true, data: { id: 'monitor-30', status: monitorStatus } });
+  });
   // The live item is already being pursued (someone pursued it after the list was read), so Stop pursuing is offered.
   await page.route(`${apiOrigin}/api/properties/${propertyId}/sale-case`, (route) => fulfill(route, { success: true, data: {
     propertyId, saleIntentConfirmed: true, canCreate: false, saleCase: { id: 'case-1' }, transitions: [],
@@ -1208,6 +1234,10 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       const response = capitalReservePlanExecution({ horizonYears });
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (body.message === 'Is refinancing worth reviewing now?') {
+      await fulfill(route, { success: true, data: refinanceMonitorAnalysisExecution(body.sessionId as string | undefined) }, 201);
       return;
     }
     if (body.message === 'Check my sale readiness') {
@@ -1462,7 +1492,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, captureAttempts: () => captureAttempts };
+  return { captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

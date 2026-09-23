@@ -23,6 +23,9 @@ const INLINE_ENTRY_READS = {
   // Third candidate slice (FRD v1.44): the sale readiness checklist, with inline item detail and the existing confirmed
   // SELLER_PREP_ITEM_DECISION (pursue / stop pursuing / disclose and waive / reopen) as declared actions.
   'seller-prep': { operationId: 'SELLER_PREP_CHECKLIST', message: 'Check my sale readiness' },
+  // Fourth candidate slice (FRD v1.45): the refinance analysis, which now also shows the homeowner's own rate monitors
+  // with their pause / resume / stop. It has no item list, so there is no inline detail.
+  'mortgage-refinance-radar': { operationId: 'REFINANCE_ANALYSIS', message: 'Is refinancing worth reviewing now?' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

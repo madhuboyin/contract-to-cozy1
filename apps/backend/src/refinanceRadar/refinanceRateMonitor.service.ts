@@ -106,6 +106,17 @@ export async function getRefinanceRateMonitor(userId: string, monitorId: string)
   return toDTO(monitor);
 }
 
+// The caller's monitors for one property that can still notify or be resumed (ACTIVE, PAUSED). Monitors are per user;
+// the caller has already been checked for property access. FRD v1.45: before this, a monitor was reachable only from
+// the Ask conversation that created it, so once that was gone it could not be paused or stopped anywhere.
+export async function listRefinanceRateMonitors(userId: string, propertyId: string) {
+  const monitors = await prisma.refinanceRateMonitor.findMany({
+    where: { userId, propertyId, status: { in: [RefinanceRateMonitorStatus.ACTIVE, RefinanceRateMonitorStatus.PAUSED] } },
+    orderBy: { product: 'asc' },
+  });
+  return monitors.map(toDTO);
+}
+
 // §17.2 requires monitors to "respect ... cooldown, deduplication, and
 // materiality rules." Snapshots arrive weekly (see workerJobRegistry.ts);
 // deduplicating only against the exact previous snapshot id meant a

@@ -1008,6 +1008,22 @@ test('Seller prep: a checklist item opens inline from the sale case, live state 
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Refinance: the analysis shows the homeowner’s rate monitor, and Pause works inline (FRD v1.45)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Is refinancing worth reviewing now?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const answer = page.locator('#ask-execution-execution-refinance-monitor-analysis');
+  await expect(answer.getByText('Your mortgage-rate monitor')).toBeVisible();
+  await expect(answer.getByText('5.500% or lower')).toBeVisible();
+  await expect(answer.getByRole('link', { name: /Alert delivery settings/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar\\?.*#refinance-evidence-settings$`));
+  await answer.getByRole('button', { name: 'Pause' }).click();
+  await expect(answer.getByRole('button', { name: 'Resume' })).toBeVisible();
+  expect(api.monitorPatchBodies).toEqual([{ action: 'PAUSE' }]);
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

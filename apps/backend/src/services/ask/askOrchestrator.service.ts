@@ -123,7 +123,7 @@ import { getProfile, upsertProfile } from '../financing.service';
 import { RefinanceRadarService } from '../../refinanceRadar/refinanceRadar.service';
 import { MortgageRateService } from '../../refinanceRadar/engine/mortgageRate.service';
 import { getRefinanceAlertPreference } from '../../refinanceRadar/refinanceAlertPreference.service';
-import { createOrUpdateRefinanceRateMonitor } from '../../refinanceRadar/refinanceRateMonitor.service';
+import { createOrUpdateRefinanceRateMonitor, listRefinanceRateMonitors, type RefinanceRateMonitorDTO } from '../../refinanceRadar/refinanceRateMonitor.service';
 import { HouseholdService } from '../household.service';
 import { HomeSavingsService } from '../homeSavings.service';
 import { HiddenAssetService } from '../hiddenAssets.service';
@@ -7020,6 +7020,42 @@ export function parseRefinanceScenarioEdit(message: string): { targetRatePct: nu
   return { targetRatePct, targetTerm };
 }
 
+// Mortgage-refinance-radar capability-card slice (FRD v1.45). The MONITOR block both the monitor confirmation and the
+// refinance analysis show. MonitorBlock renders its own Pause / Resume / Stop (PATCH /api/ask/monitors/:id), so the
+// block carries only the delivery-settings link. The earlier "Pause" and "Stop" links added ?monitorAction=, which no
+// page reads, and "Edit settings" pointed at ?section=alerts, which the radar page does not read either; the radar page
+// has no monitor controls, only the alert delivery preferences in its settings section.
+export function refinanceMonitorBlock(monitor: RefinanceRateMonitorDTO, title: string): AskPresentationBlock {
+  return {
+    type: 'MONITOR', id: `rate-monitor-${monitor.id}`, monitorId: monitor.id,
+    title, status: monitor.status,
+    threshold: `${monitor.thresholdPct.toFixed(3)}% or lower`,
+    product: monitor.product === 'FIXED_15_YEAR' ? '15-year fixed national benchmark' : '30-year fixed national benchmark',
+    channel: 'Email plus in-app', cadence: monitor.cadence,
+    quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
+    sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
+    actions: [{ id: 'edit-monitor', label: 'Alert delivery settings', href: `/dashboard/properties/${encodeURIComponent(monitor.propertyId)}/tools/mortgage-refinance-radar#refinance-evidence-settings`, style: 'SECONDARY' }],
+  };
+}
+
+// FRD v1.45: the refinance analysis also shows the homeowner's own ACTIVE or PAUSED rate monitors for this home, so
+// they can be paused, resumed or stopped from Ask (and from the alert email, which continues into this analysis).
+// Before this, a monitor was reachable only from the conversation that created it. A failed monitor read does not
+// fail the analysis.
+async function refinanceAnalysisWithMonitorsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const result = await refinanceAnalysisResult(userId, propertyId, message);
+  const monitors = await listRefinanceRateMonitors(userId, propertyId).catch((error) => {
+    logger.warn({ err: error, propertyId }, '[ask] refinance monitor read failed; analysis returned without it');
+    return [];
+  });
+  if (!monitors.length) return result;
+  // A neutral title: MonitorBlock shows the live status and updates it after an inline pause / resume / stop.
+  const monitorBlocks = monitors.map((monitor) => refinanceMonitorBlock(monitor, 'Your mortgage-rate monitor'));
+  const boundaryIndex = result.blocks.findIndex((block) => block.type === 'BOUNDARY');
+  const blocks = boundaryIndex < 0 ? [...result.blocks, ...monitorBlocks] : [...result.blocks.slice(0, boundaryIndex), ...monitorBlocks, ...result.blocks.slice(boundaryIndex)];
+  return { ...result, blocks };
+}
+
 async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const [profile, financialContext, marketSnapshot] = await Promise.all([
     getProfile(propertyId),
@@ -9269,7 +9305,7 @@ registerCapabilityHandler('inventory.replacement', async (envelope) => replaceme
   envelope.launchContext?.entityType === 'INVENTORY_ITEM' ? envelope.launchContext.entityId : null,
   envelope.executionId,
 ));
-registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisWithMonitorsResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRateMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
@@ -14575,23 +14611,9 @@ async function confirmRefinanceRateMonitor(ctx: ConfirmCapabilityContext): Promi
       quietEnd: typeof parameters.quietEnd === 'string' ? parameters.quietEnd : null,
       timezone: typeof parameters.timezone === 'string' ? parameters.timezone : 'UTC',
     });
-    const radarHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/mortgage-refinance-radar?section=alerts`;
     result = {
       status: 'COMPLETED', reasonCode: 'RATE_MONITOR_ACTIVE',
-      blocks: [{
-        type: 'MONITOR', id: `rate-monitor-${monitor.id}`, monitorId: monitor.id,
-        title: 'Mortgage-rate monitor is active', status: monitor.status,
-        threshold: `${monitor.thresholdPct.toFixed(3)}% or lower`,
-        product: monitor.product === 'FIXED_15_YEAR' ? '15-year fixed national benchmark' : '30-year fixed national benchmark',
-        channel: 'Email plus in-app', cadence: monitor.cadence,
-        quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
-        sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
-        actions: [
-          { id: 'edit-monitor', label: 'Edit settings', href: radarHref, style: 'PRIMARY' },
-          { id: 'pause-monitor', label: 'Pause', href: `${radarHref}&monitorAction=pause`, style: 'SECONDARY' },
-          { id: 'stop-monitor', label: 'Stop', href: `${radarHref}&monitorAction=stop`, style: 'QUIET' },
-        ],
-      }],
+      blocks: [refinanceMonitorBlock(monitor, 'Mortgage-rate monitor started')],
       confirmation: null, suggestions: ['Is refinancing worth reviewing now?'],
     };
     artifactType = 'REFINANCE_RATE_MONITOR';
