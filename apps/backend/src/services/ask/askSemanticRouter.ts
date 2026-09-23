@@ -5,7 +5,7 @@ import {
   requireCertifiedAskLanguage,
   type AskLanguageCode,
 } from './askLanguageRegistry';
-import { askEmbeddingCosine, askEmbeddingIndexVersion, askSemanticConceptSimilarity, embedAskSemanticText, type AskSemanticEmbedding } from './askSemanticEmbedding';
+import { askEmbeddingCosine, askEmbeddingIndexVersion, askSemanticConcepts, askSemanticConceptSetSimilarity, embedAskSemanticText, type AskSemanticEmbedding } from './askSemanticEmbedding';
 import { calibrateAskRoutingConfidence, type AskRetrievalPath } from './askRoutingCalibration';
 import { requiredAskTargetEntity, resolveAskEntityState, type AskEntityResolutionResult } from './askEntityResolution';
 
@@ -193,6 +193,42 @@ function operationEmbeddingIndex(language: AskLanguageCode): IndexedOperationDoc
   return index;
 }
 
+// Each operation's lexical features (tokens, trigrams, normalized form, concepts), built once per semantic index version
+// like the embedding index above. Every one is a pure function of the document text, so scores are identical to
+// computing them per call; this only removes repeated work from every routed message (FRD v1.52: routing p95 had
+// reached its 100 ms objective, and each new operation added to it).
+interface LexicalOperationDocuments {
+  documentTokens: Set<string>;
+  documents: Array<{ uniqueTokens: string[]; trigrams: Set<string>; normalized: string; concepts: Set<string> }>;
+  hardNegativeTrigrams: Array<Set<string>>;
+}
+
+const lexicalIndexCache = new Map<string, Map<AskOperationId, LexicalOperationDocuments>>();
+
+function operationLexicalIndex(language: AskLanguageCode): Map<AskOperationId, LexicalOperationDocuments> {
+  const version = askOperationSemanticIndexVersion(language);
+  const existing = lexicalIndexCache.get(version);
+  if (existing) return existing;
+  const index = new Map<AskOperationId, LexicalOperationDocuments>();
+  for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
+    if (!definition.messageRoutable || !definition.semantic.supportedLanguages.includes(language)) continue;
+    const semantic = definition.semantic.languagePacks[language]!;
+    const documents = [semantic.intentDescription, ...semantic.supportedJobs, ...semantic.positiveExamples];
+    index.set(definition.operationId, {
+      documentTokens: new Set(documents.flatMap((document) => tokens(document, language))),
+      documents: documents.map((document) => ({
+        uniqueTokens: [...new Set(tokens(document, language))],
+        trigrams: trigrams(document, language),
+        normalized: normalizeAskMessage(document, language).normalized,
+        concepts: new Set(askSemanticConcepts(document)),
+      })),
+      hardNegativeTrigrams: semantic.hardNegativeExamples.map((example) => trigrams(example, language)),
+    });
+  }
+  lexicalIndexCache.set(version, index);
+  return index;
+}
+
 export function retrieveAskOperationCandidates(message: string, options: {
   eligibleOperationIds?: Iterable<AskOperationId>;
   topK?: number;
@@ -212,20 +248,23 @@ export function retrieveAskOperationCandidates(message: string, options: {
     ? new Map(operationEmbeddingIndex(language).map((entry) => [entry.operationId, entry]))
     : new Map<AskOperationId, IndexedOperationDocuments>();
   const eligible = options.eligibleOperationIds ? new Set(options.eligibleOperationIds) : null;
+  const lexicalIndex = operationLexicalIndex(language);
+  const queryTrigrams = trigrams(message, language);
+  const queryNormalized = normalizeAskMessage(message, language).normalized;
+  const queryConcepts = new Set(askSemanticConcepts(message));
   return Object.values(ASK_OPERATION_DEFINITIONS)
     .filter((definition) => definition.messageRoutable)
     .filter((definition) => !eligible || eligible.has(definition.operationId))
     .filter((definition) => definition.semantic.supportedLanguages.includes(language))
     .map((definition): AskSemanticCandidate => {
       const semantic = definition.semantic.languagePacks[language]!;
-      const documents = [semantic.intentDescription, ...semantic.supportedJobs, ...semantic.positiveExamples];
-      const documentTokens = new Set(documents.flatMap((document) => tokens(document, language)));
+      const { documentTokens, documents, hardNegativeTrigrams } = lexicalIndex.get(definition.operationId)!;
       const overlap = [...querySet].filter((token) => documentTokens.has(token)).length;
-      const lexical = Math.max(...documents.map((document) => softLexicalSimilarity(queryTokens, [...new Set(tokens(document, language))])));
-      const phrase = Math.max(...documents.map((document) => dice(trigrams(message, language), trigrams(document, language))));
-      const concept = Math.max(...documents.map((document) => askSemanticConceptSimilarity(message, document)));
-      const negative = Math.max(...semantic.hardNegativeExamples.map((example) => dice(trigrams(message, language), trigrams(example, language))));
-      const exactConcept = documents.some((document) => normalizeAskMessage(document, language).normalized === normalizeAskMessage(message, language).normalized);
+      const lexical = Math.max(...documents.map((document) => softLexicalSimilarity(queryTokens, document.uniqueTokens)));
+      const phrase = Math.max(...documents.map((document) => dice(queryTrigrams, document.trigrams)));
+      const concept = Math.max(...documents.map((document) => askSemanticConceptSetSimilarity(queryConcepts, document.concepts)));
+      const negative = Math.max(...hardNegativeTrigrams.map((example) => dice(queryTrigrams, example)));
+      const exactConcept = documents.some((document) => document.normalized === queryNormalized);
       const indexed = embeddingIndex.get(definition.operationId);
       const embedding = queryEmbedding && indexed
         ? Math.max(...indexed.documentEmbeddings.map((document) => askEmbeddingCosine(queryEmbedding, document)))

@@ -63,8 +63,11 @@ export function askSemanticConcepts(normalized: string): string[] {
 }
 
 export function askSemanticConceptSimilarity(left: string, right: string): number {
-  const leftConcepts = new Set(askSemanticConcepts(left));
-  const rightConcepts = new Set(askSemanticConcepts(right));
+  return askSemanticConceptSetSimilarity(new Set(askSemanticConcepts(left)), new Set(askSemanticConcepts(right)));
+}
+
+// The same measure over concept sets built once (the semantic router precomputes each document's set).
+export function askSemanticConceptSetSimilarity(leftConcepts: ReadonlySet<string>, rightConcepts: ReadonlySet<string>): number {
   if (!leftConcepts.size || !rightConcepts.size) return 0;
   const leftWeight = leftConcepts.size;
   const rightWeight = rightConcepts.size;
