@@ -142,6 +142,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('BREAK_EVEN_ANALYSIS', OWNER_LIFECYCLE_MODES),
   definePolicy('NEIGHBORHOOD_CHANGE_FEED', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PAST_HAZARD_EXPOSURE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('HOME_STATUS_BOARD', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOUSEHOLD_INVITATION', OWNER_LIFECYCLE_MODES),
   definePolicy('QUOTE_COMPARISON_CREATE', ALL_MODES),
   definePolicy('QUOTE_COMPARISON_REVIEW', ALL_MODES),

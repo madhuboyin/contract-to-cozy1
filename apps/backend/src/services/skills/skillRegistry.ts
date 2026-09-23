@@ -25,6 +25,7 @@ import { SELL_HOLD_RENT_SKILL } from './sell-hold-rent';
 import { BREAK_EVEN_SKILL } from './break-even';
 import { NEIGHBORHOOD_CHANGE_RADAR_SKILL } from './neighborhood-change-radar';
 import { HOME_RISK_REPLAY_SKILL } from './home-risk-replay';
+import { STATUS_BOARD_SKILL } from './status-board';
 import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { SELLER_PREP_SKILL } from './seller-prep';
 import { BUYER_CLOSING_SKILL } from './buyer-closing';
@@ -71,6 +72,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'break-even': BREAK_EVEN_SKILL,
   'neighborhood-change-radar': NEIGHBORHOOD_CHANGE_RADAR_SKILL,
   'home-risk-replay': HOME_RISK_REPLAY_SKILL,
+  'status-board': STATUS_BOARD_SKILL,
   'seller-preparation': SELLER_PREPARATION_SKILL,
   'seller-prep': SELLER_PREP_SKILL,
   'buyer-closing': BUYER_CLOSING_SKILL,

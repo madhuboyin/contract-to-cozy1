@@ -40,6 +40,8 @@ const INLINE_ENTRY_READS = {
   'neighborhood-change-radar': { operationId: 'NEIGHBORHOOD_CHANGE_FEED', message: "What's changing around my home?" },
   // FRD v1.50: backed by a new operation reading the same getPastHazardExposure the Home Risk Replay page reads.
   'home-risk-replay': { operationId: 'PAST_HAZARD_EXPOSURE', message: 'Show my home risk replay' },
+  // FRD v1.51: backed by a new operation reading the same listBoard the Status Board page reads.
+  'status-board': { operationId: 'HOME_STATUS_BOARD', message: 'Show my status board' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

@@ -43,6 +43,7 @@ const TAXONOMY = Object.freeze({
   'break-even': ['BREAK_EVEN_ANALYSIS'],
   'neighborhood-change-radar': ['NEIGHBORHOOD_CHANGE_FEED'],
   'home-risk-replay': ['PAST_HAZARD_EXPOSURE'],
+  'status-board': ['HOME_STATUS_BOARD'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

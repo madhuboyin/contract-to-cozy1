@@ -174,6 +174,8 @@ import { homeReserveFundService } from '../homeReserveFund.service';
 import { BreakEvenService, type BreakEvenDTO } from '../breakEven.service';
 import { getAroundYourHome } from '../../propertyIntelligence/aroundYourHome.service';
 import { getPastHazardExposure } from '../../propertyIntelligence/pastHazardExposure.service';
+import { listBoard } from '../homeStatusBoard.service';
+import { listBoardQuerySchema } from '../../validators/homeStatusBoard.validators';
 import { isReviewedIntelligenceCoverageAvailable } from '../../middleware/intelligenceCoverage.middleware';
 import { HomeCapitalTimelineService } from '../homeCapitalTimeline.service';
 import { propertyTaxAppealReadinessService } from '../propertyTax/propertyTaxAppealReadiness.service';
@@ -7325,6 +7327,83 @@ export function pastHazardExposureFromView(view: PastHazardView, propertyId: str
   };
 }
 
+// Status Board capability-card slice (FRD v1.51): the fourth new operation for a capability with none. Reads listBoard,
+// the same call the page's route makes, for the first 100 visible items (the route's maximum page). Like the route,
+// listBoard first creates missing board rows and recomputes stale derived statuses. Read-only.
+type StatusBoardView = Awaited<ReturnType<typeof listBoard>>;
+const STATUS_BOARD_CONDITIONS = [
+  { key: 'ACTION_NEEDED', title: 'Needs action' },
+  { key: 'MONITOR', title: 'Monitor' },
+  { key: 'GOOD', title: 'In good shape' },
+] as const;
+export const STATUS_BOARD_ASK_LIMIT = 100;
+
+export function statusBoardFromView(view: StatusBoardView, propertyId: string): AskOperationResult {
+  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/status-board`;
+  const items: any[] = view.items ?? [];
+  const total: number = view.pagination?.total ?? items.length;
+  const count = (condition: string) => items.filter((item) => item.condition === condition).length;
+  const needsDate = items.filter((item) => item.needsInstallDateForPrediction).length;
+  const truncated = total > items.length;
+  const limitations = [
+    ...(truncated ? [`Showing the first ${items.length} of ${total} items, pinned and most urgent first; the rest are on the Status Board.`] : []),
+    ...(needsDate ? [`${needsDate} item${needsDate === 1 ? ' needs' : 's need'} an install or purchase date before ${needsDate === 1 ? 'its' : 'their'} condition can be predicted.`] : []),
+  ];
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'status-board-summary',
+    title: total
+      ? `${count('ACTION_NEEDED')} need action, ${count('MONITOR')} to monitor, ${count('GOOD')} in good shape`
+      : 'Nothing is on the Status Board yet',
+    body: total
+      ? `Across ${total} recorded appliance${total === 1 ? '' : 's'} and system${total === 1 ? '' : 's'}${truncated ? ` (counts cover the ${items.length} shown)` : ''}.`
+      : 'The Status Board tracks appliances and systems recorded in Inventory. Add them there to see their condition here.',
+    tone: count('ACTION_NEEDED') ? 'CAUTION' : 'DEFAULT',
+    actions: [{ id: 'open-status-board', label: 'Open Status Board', href: pageHref, style: 'PRIMARY' }],
+  }];
+  if (limitations.length) blocks.push({ type: 'LIMITATION', id: 'status-board-limits', title: 'What this does not cover', body: limitations.join(' '), severity: 'INFO' });
+  const sections = STATUS_BOARD_CONDITIONS.map(({ key, title }) => {
+    const rows = items.filter((item) => item.condition === key);
+    return {
+      id: `status-board-${key.toLowerCase().replace(/_/g, '-')}`, title, count: rows.length,
+      items: rows.slice(0, 25).map((item) => ({
+        id: item.id,
+        title: item.displayName || readableCode(item.category),
+        description: (item.computedReasons ?? []).filter((reason: any) => reason?.code !== 'ALL_CLEAR' && reason?.detail).map((reason: any) => reason.detail).join('; ') || null,
+        meta: [
+          readableCode(item.recommendation),
+          readableCode(item.category),
+          ...(item.ageYears != null ? [`${item.ageYears} yr old`] : []),
+          ...(item.warrantyStatus ? [`Warranty: ${readableCode(item.warrantyStatus)}`] : []),
+          ...(item.pendingMaintenance ? [`${item.pendingMaintenance} open maintenance task${item.pendingMaintenance === 1 ? '' : 's'}`] : []),
+          ...(item.room?.name ? [item.room.name] : []),
+          ...(item.isPinned ? ['Pinned'] : []),
+        ],
+        status: String(item.condition),
+        href: item.deepLinks?.viewItem ?? pageHref,
+      })),
+    };
+  }).filter((section) => section.count > 0);
+  if (sections.length) {
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Appliances and systems by condition', description: 'Each with why, from age, warranty and maintenance records.', sections, actions: [] });
+  }
+  blocks.push({
+    type: 'BOUNDARY', id: 'status-board-boundary', title: 'Estimated condition, not an inspection',
+    body: 'Condition is estimated from recorded age, expected life, warranty and maintenance. It cannot see wear, leaks or damage; a professional inspection can.',
+    severity: 'INFO', suggestions: [],
+  });
+  return {
+    status: limitations.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    reasonCode: total ? (count('ACTION_NEEDED') ? 'STATUS_BOARD_ACTION_NEEDED' : 'STATUS_BOARD_REVIEWED') : 'STATUS_BOARD_EMPTY',
+    blocks,
+    suggestions: ['What maintenance is due?', 'Should I repair or replace my oldest appliance?'],
+  };
+}
+
+async function homeStatusBoardResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const view = await listBoard(propertyId, listBoardQuerySchema.parse({ limit: String(STATUS_BOARD_ASK_LIMIT) }), userId);
+  return statusBoardFromView(view, propertyId);
+}
+
 async function pastHazardExposureResult(propertyId: string): Promise<AskOperationResult> {
   // The page's route answers 503 REVIEWED_SOURCE_COVERAGE_REQUIRED in this case; Ask says the same, never an all-clear.
   if (!isReviewedIntelligenceCoverageAvailable('HOME_RISK_REPLAY')) {
@@ -9615,6 +9694,7 @@ registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRent
 registerCapabilityHandler('break-even.analysis', async (envelope) => breakEvenAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('neighborhood-change.feed', async (envelope) => neighborhoodChangeFeedResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('home-risk-replay.exposure', async (envelope) => pastHazardExposureResult(envelope.propertyId!));
+registerCapabilityHandler('status-board.read', async (envelope) => homeStatusBoardResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 

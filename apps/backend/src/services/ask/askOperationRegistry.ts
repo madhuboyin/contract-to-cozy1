@@ -95,6 +95,7 @@ export type AskOperationId =
   | 'BREAK_EVEN_ANALYSIS'
   | 'NEIGHBORHOOD_CHANGE_FEED'
   | 'PAST_HAZARD_EXPOSURE'
+  | 'HOME_STATUS_BOARD'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -386,6 +387,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // FRD v1.49: reads getAroundYourHome, the same call GET /properties/:id/around-your-home (Around Your Home) makes.
   // FRD v1.50: reads getPastHazardExposure, the same call GET /properties/:id/past-hazard-exposure (Home Risk Replay)
   // makes, behind the same reviewed-coverage production gate.
+  // FRD v1.51: reads listBoard, the same call GET /properties/:id/status-board (Status Board) makes.
+  HOME_STATUS_BOARD: definition('HOME_STATUS_BOARD', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'status-board.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PAST_HAZARD_EXPOSURE: definition('PAST_HAZARD_EXPOSURE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-risk-replay.exposure', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   NEIGHBORHOOD_CHANGE_FEED: definition('NEIGHBORHOOD_CHANGE_FEED', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'neighborhood-change.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   BREAK_EVEN_ANALYSIS: definition('BREAK_EVEN_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'break-even.analysis', ['SUMMARY', 'TABLE', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
@@ -796,6 +799,9 @@ const neighborhoodChangePattern = new RegExp([
 ].join('|'), 'i');
 // A home's past hazard exposure and long-term hazard context (Home Risk Replay). Current weather near the home stays
 // with the Home Event Radar; reporting damage or filing a claim stays with incidents and claims.
+// The condition of the home's recorded items (Status Board). Maintenance due, what to do next, replacement decisions
+// and coverage stay with their own operations.
+const homeStatusBoardPattern = /\bstatus board\b|\b(?:condition|health|state) of (?:my|our|the) (?:appliances|systems|home systems|equipment|home items)\b|\bwhich (?:of (?:my|our) )?(?:appliances|systems|home systems|equipment)\b.{0,30}\b(?:need (?:attention|action)|should i (?:monitor|watch)|are in (?:good|bad|poor) (?:shape|condition))\b|\bhow are (?:my|our) (?:appliances|systems|home systems) (?:doing|holding up)\b/i;
 const pastHazardExposurePattern = /\b(?:home )?risk replay\b|\bpast (?:hazards?|storms?|floods?|flooding|wildfires?|disasters?|hazard exposure)\b|\b(?:has|have|did)\s+(?:my|this|our|the)\s+(?:home|house|property)\s+(?:ever\s+)?(?:been|gone)\s+(?:hit|affected|flooded|exposed|through)\b|\b(?:hazards?|disasters?|storms?|floods?|wildfires?|hurricanes?)\b.{0,30}\b(?:has|have)\b.{0,20}\b(?:home|house|property)\b.{0,15}\b(?:been|seen|faced)\b|\bin (?:a|the) flood zone\b/i;
 const pastHazardOtherIntentPattern = /\b(?:claim|file|filing|insurance|insurer|policy|coverage|report(?:ing)? (?:the )?damage)\b/i;
 const breakEvenAnalysisPattern = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership of)\b.{0,40}\bpays? off\b|\b(?:owning|ownership|home|house)\b.{0,40}\b(?:pay|pays|paid) for itself\b/i;
@@ -997,6 +1003,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('DOCUMENT_LOOKUP', 0.95);
   }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
+  if (homeStatusBoardPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOME_STATUS_BOARD', 0.96);
+  }
   if (pastHazardExposurePattern.test(message) && !pastHazardOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PAST_HAZARD_EXPOSURE', 0.96);
   }
