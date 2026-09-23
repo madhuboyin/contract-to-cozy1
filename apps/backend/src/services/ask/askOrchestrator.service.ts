@@ -3559,8 +3559,28 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
   return { status: 'NEEDS_CONFIRMATION', reasonCode: 'OPERATIONAL_WORK_CONFIRMATION_REQUIRED', contextVersion, parameters: { operationalWorkItemId: selected.id, operationalWorkAction: action, operationalWorkUntil: ['DEFER', 'SNOOZE'].includes(action) ? until.toISOString() : null, operationalWorkObservedResult: observedResult, operationalWorkContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'operational-work-review', title: `Review ${action.toLowerCase()} action`, body: action === 'SNOOZE' ? `Reminders will be suppressed until ${humanDate(until)} without changing the work state or due date.` : action === 'DEFER' ? `The work will move to deferred until ${humanDate(until)}.` : action === 'COMPLETE' ? 'The linked canonical maintenance task and Operational Work outcome will be completed together using the observed result shown below.' : 'The proposed work will become accepted homeowner work.', tone: 'CAUTION', actions: [{ id: 'open-work', label: 'Manage action', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `operational-work-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} ${selected.title}?`, description: 'Ask will recheck the current work state before applying this governed command.', fields: [{ label: 'Work', value: selected.title }, { label: 'Current state', value: String(selected.state).toLowerCase().replace(/_/g, ' ') }, { label: 'Action', value: action.toLowerCase() }, ...(observedResultLabel ? [{ label: 'Observed result', value: observedResultLabel }] : [])], editableFields: [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} work`, consentText: action === 'COMPLETE' ? 'I authorize this update to the shared Operational Work record and confirm the observed result shown above is accurate.' : 'I authorize this update to the shared Operational Work record.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
 }
 
+// Claims capability-card slice (FRD v1.42). Every legal status change a claim can take, as declared item actions on
+// each claim row. The inline claim detail (ClaimResultList) shows only the ones legal from the claim's LIVE status,
+// re-fetched on open, and each routes to the existing confirmed CLAIM_TRANSITION with the claim as launchContext.
+// nextClaimStatus parses each message back to exactly its own status.
+export const CLAIM_TRANSITION_ACTIONS = [
+  { id: 'claim-start', label: 'Mark in progress', message: 'Mark this claim as in progress.', status: 'IN_PROGRESS' },
+  { id: 'claim-submit', label: 'Mark submitted', message: 'Submit this claim.', status: 'SUBMITTED' },
+  { id: 'claim-under-review', label: 'Mark under review', message: 'Move this claim to under review.', status: 'UNDER_REVIEW' },
+  { id: 'claim-approve', label: 'Mark approved', message: 'Mark this claim approved.', status: 'APPROVED' },
+  { id: 'claim-deny', label: 'Mark denied', message: 'Mark this claim denied.', status: 'DENIED' },
+  { id: 'claim-close', label: 'Close claim', message: 'Close this claim.', status: 'CLOSED' },
+] as const;
+
+export function claimItemActions(role: HouseholdRole) {
+  // CLAIM_TRANSITION is a CONTRIBUTOR domain command; viewers get read-only detail.
+  if (role === HouseholdRole.VIEWER) return [];
+  return CLAIM_TRANSITION_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'CLAIM_TRANSITION' }));
+}
+
 async function incidentClaimStatusResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const claimActions = claimItemActions(access.role);
   const claimFocus = /\bclaims?\b/i.test(message) && !/\bincidents?\b/i.test(message);
   const incidentFocus = /\bincidents?\b/i.test(message) && !/\bclaims?\b/i.test(message);
   const [incidents, claims] = await Promise.all([
@@ -3590,7 +3610,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
   const activeClaims = claims.filter((claim) => openClaimStatuses.includes(claim.status));
   const closedClaims = claims.filter((claim) => !openClaimStatuses.includes(claim.status));
 
-  type Section = { id: string; title: string; count: number; items: Array<{ id: string; title: string; description: string | null; meta: string[]; status: string | null; href: string | null }> };
+  type Section = { id: string; title: string; count: number; items: Array<{ id: string; title: string; description: string | null; meta: string[]; status: string | null; href: string | null; entityType?: string; actions?: ReturnType<typeof claimItemActions> }> };
   const sections: Section[] = [];
   if (!claimFocus) {
     sections.push({
@@ -3620,6 +3640,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
         description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
         meta: [humanizeEnum(claim.status), humanDate(claim.openedAt) ? `Opened ${humanDate(claim.openedAt)}` : null].filter((value): value is string => Boolean(value)),
         status: claim.status, href: `${claimsHref}/${encodeURIComponent(claim.id)}`,
+        entityType: 'CLAIM', actions: claimActions,
       })),
     });
     if (closedClaims.length) sections.push({
@@ -3629,6 +3650,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
         description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
         meta: [humanizeEnum(claim.status), humanDate(claim.closedAt) ? `Closed ${humanDate(claim.closedAt)}` : null].filter((value): value is string => Boolean(value)),
         status: claim.status, href: `${claimsHref}/${encodeURIComponent(claim.id)}`,
+        entityType: 'CLAIM', actions: claimActions,
       })),
     });
   }
@@ -12651,7 +12673,16 @@ async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<Co
     if (!claim) throw Object.assign(new Error('The selected claim is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
     const currentVersion = createHash('sha256').update(`${claim.id}:${claim.status}:${claim.updatedAt.toISOString()}`).digest('hex');
     if (parameters.claimContextVersion !== currentVersion && claim.status !== nextStatus) throw Object.assign(new Error(claimConflictDescription(claim)), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-    const updated = claim.status === nextStatus ? await ClaimsService.getClaim(execution.propertyId, claim.id) : await ClaimsService.updateClaim(execution.propertyId, claim.id, userId, { status: nextStatus as ClaimStatus });
+    let updated: { status: string; title: string };
+    try {
+      updated = claim.status === nextStatus ? await ClaimsService.getClaim(execution.propertyId, claim.id) : await ClaimsService.updateClaim(execution.propertyId, claim.id, userId, { status: nextStatus as ClaimStatus });
+    } catch (error) {
+      // The same checklist gate the traditional Claims page reports (ClaimQuickActions): name what blocks submitting.
+      const blocked = error as { code?: string; details?: { blocking?: Array<{ title: string; missingDocs?: number }> } };
+      if (blocked?.code !== 'CLAIM_SUBMIT_BLOCKED') throw error;
+      const items = (blocked.details?.blocking ?? []).slice(0, 3).map((item) => item.missingDocs ? `${item.title} (missing ${item.missingDocs} document${item.missingDocs === 1 ? '' : 's'})` : `${item.title} (not done)`);
+      throw Object.assign(new Error(`This claim cannot be submitted yet. Finish its checklist first${items.length ? `: ${items.join('; ')}` : ''}. Nothing was changed.`), { code: 'CLAIM_SUBMIT_BLOCKED' });
+    }
     artifactType = 'CLAIM'; artifactId = claim.id;
     result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['Show my open claims'] };
     // P05 fix: see confirmClaimFile's identical fix above -- same missing

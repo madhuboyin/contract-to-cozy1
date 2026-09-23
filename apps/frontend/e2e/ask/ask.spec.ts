@@ -939,6 +939,28 @@ test('Home Event Radar: "Plan this action" sends the recommended action\'s code,
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Claims: a claim opens canonical detail inline and a legal status change pins the exact claim and CLAIM_TRANSITION (FRD v1.42)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my claims');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const list = page.locator('#ask-execution-execution-claims');
+  await expect(list.getByRole('link', { name: 'Kitchen leak' })).toHaveCount(0);
+  await list.getByRole('button', { name: 'Kitchen leak' }).click();
+  await expect(list.getByText('Water under the kitchen sink damaged the cabinet floor.')).toBeVisible();
+  // A draft claim may start, submit or close -- never approve or deny.
+  await expect(list.locator('[data-claim-action]')).toHaveCount(3);
+  await expect(list.getByRole('button', { name: 'Mark approved' })).toHaveCount(0);
+  await list.getByRole('button', { name: 'Mark submitted' }).click();
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Submit this claim.',
+    launchContext: expect.objectContaining({ entityType: 'CLAIM', entityId: 'claim-kitchen-leak', operationId: 'CLAIM_TRANSITION', sourceExecutionId: 'execution-claims' }),
+  }));
+  await expect(page.locator('#ask-execution-execution-claim-transition').getByText('Change Kitchen leak to submitted?').first()).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

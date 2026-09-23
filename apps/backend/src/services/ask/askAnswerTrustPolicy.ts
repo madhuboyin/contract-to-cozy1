@@ -51,7 +51,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   MAINTENANCE_TASK_COMPLETE: new Set(['open-maintenance', 'open-task']),
   MAINTENANCE_TASK_UPDATE: new Set(['open-maintenance', 'open-task']),
   COVERAGE_GAPS: new Set(['open-coverage']),
-  INCIDENT_CLAIM_STATUS: new Set(['open-incidents', 'open-claims']),
+  // + the claim transition item actions (FRD v1.42); the inline claim detail shows only those legal from the live status.
+  INCIDENT_CLAIM_STATUS: new Set(['open-incidents', 'open-claims', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
   SAVINGS_OPPORTUNITIES: new Set(['open-savings', 'review-all-savings']),
   OWNERSHIP_COSTS: new Set(['open-ownership-costs']),
   INVENTORY_LOOKUP: new Set(['add-inventory', 'search-inventory', 'open-inventory', 'add-inventory-item']),

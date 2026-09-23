@@ -250,6 +250,39 @@ function radarTaskExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?:
     actions: [{ id: 'open-task', label: 'Open task', href: '/dashboard/maintenance?taskId=task-radar-1', style: 'PRIMARY' }, { id: 'open-radar', label: 'Open in Home Event Radar', href: radarHref, style: 'SECONDARY' }],
   }] };
 }
+// FRD v1.42 claims capability-card slice: INCIDENT_CLAIM_STATUS's claims-only view and a CLAIM_TRANSITION review.
+const CLAIM_ITEM_ACTIONS = [
+  ['claim-start', 'Mark in progress', 'Mark this claim as in progress.'],
+  ['claim-submit', 'Mark submitted', 'Submit this claim.'],
+  ['claim-under-review', 'Mark under review', 'Move this claim to under review.'],
+  ['claim-approve', 'Mark approved', 'Mark this claim approved.'],
+  ['claim-deny', 'Mark denied', 'Mark this claim denied.'],
+  ['claim-close', 'Close claim', 'Close this claim.'],
+].map(([id, label, message]) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'CLAIM_TRANSITION' }));
+function claimsExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
+  const common = {
+    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', property: { id: propertyId, label: 'Acceptance Home' },
+    skill: null, skillHandoff: null, captureRequests: [], clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z',
+  };
+  const claimHref = `/dashboard/properties/${propertyId}/claims/claim-kitchen-leak`;
+  if (stage === 'LIST') {
+    return { ...common, executionId: 'execution-claims', question: 'Show my claims', status: 'ANSWERED', confirmation: null, suggestions: [],
+      operation: { id: 'INCIDENT_CLAIM_STATUS', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
+      blocks: [
+        { type: 'SUMMARY', id: 'incident-claim-summary', title: '1 active item needs attention', body: '0 recorded incidents and 1 recorded claim are on file for this home.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open claims', href: `/dashboard/properties/${propertyId}/claims`, style: 'PRIMARY' }] },
+        { type: 'GROUPED_LIST', filters: [], id: 'incident-claim-list', title: 'Claims', actions: [], sections: [{ id: 'active-claims', title: 'Open claims', count: 1, items: [
+          { id: 'claim-kitchen-leak', title: 'Kitchen leak', description: 'Acme Insurance · water damage', meta: ['draft'], status: 'DRAFT', href: claimHref, entityType: 'CLAIM', actions: CLAIM_ITEM_ACTIONS },
+        ] }] },
+      ] };
+  }
+  const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+  return { ...common, executionId: 'execution-claim-transition', question: 'Submit this claim.', status: 'NEEDS_CONFIRMATION', suggestions: [],
+    operation: { id: 'CLAIM_TRANSITION', version: '1.0', family: 'COMMAND' }, contextVersion: 'claim-context-v1',
+    blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle.', tone: 'DEFAULT', actions: [] }],
+    confirmation: { confirmationId: 'claim-transition-claim-kitchen-leak-1', version: 1, title: 'Change Kitchen leak to submitted?', description: 'This changes the shared claim record.', fields: [{ label: 'From', value: 'draft' }, { label: 'To', value: 'submitted' }], editableFields: [], confirmLabel: 'Change status', consentText: 'I authorize this claim status change.', expiresAt } };
+}
 function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
   return {
     schemaVersion: '1.0', executionId: happeningNow ? 'execution-home-event-radar-feed-now' : 'execution-home-event-radar-feed', sessionId: 'ask-acceptance-session',
@@ -895,6 +928,11 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     },
     assumptionSetId: null, nextAction: null,
   } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/claims/claim-kitchen-leak`, (route) => fulfill(route, { success: true, data: {
+    id: 'claim-kitchen-leak', propertyId, title: 'Kitchen leak', description: 'Water under the kitchen sink damaged the cabinet floor.', type: 'WATER_DAMAGE', status: 'DRAFT',
+    providerName: 'Acme Insurance', claimNumber: null, incidentAt: '2026-09-01T00:00:00.000Z', submittedAt: null, estimatedLossAmount: '2500', deductibleAmount: '1000', settlementAmount: null,
+    createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z', checklistItems: [], timelineEvents: [], documents: [], checklistCompletionPct: 0,
+  } }));
   // radarQueryService.getDetail has a real single-match GET (unlike reserve-fund/warranty/household above) --
   // its own genuine 404 (RADAR_MATCH_NOT_FOUND) is real, not a list-scan data-absence state.
   await page.route(`${apiOrigin}/api/properties/${propertyId}/radar/events/match-property-summary`, (route) => fulfill(route, { success: true, data: {
@@ -1089,6 +1127,14 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       const response = capitalReservePlanExecution({ horizonYears });
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (body.message === 'Show my claims') {
+      await fulfill(route, { success: true, data: claimsExecution('LIST', body.sessionId as string | undefined) }, 201);
+      return;
+    }
+    if (body.message === 'Submit this claim.') {
+      await fulfill(route, { success: true, data: claimsExecution('REVIEW', body.sessionId as string | undefined) }, 201);
       return;
     }
     if (body.message === 'Plan this recommended action from a monitored event.') {

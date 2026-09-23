@@ -14,6 +14,9 @@ const INLINE_ENTRY_READS = {
   // INTELLIGENCE_ENVELOPE_QUERY, which the audit already flagged as not
   // proof of this specific workflow.
   'home-event-radar': { operationId: 'HOME_EVENT_RADAR_FEED', message: 'Show my home event radar feed' },
+  // Capability-card audit, first candidate slice (FRD v1.42): the claims-only view of INCIDENT_CLAIM_STATUS, with
+  // inline claim detail and the existing confirmed CLAIM_TRANSITION as declared actions.
+  claims: { operationId: 'INCIDENT_CLAIM_STATUS', message: 'Show my claims' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {
