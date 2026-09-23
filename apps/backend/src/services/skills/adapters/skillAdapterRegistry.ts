@@ -74,6 +74,8 @@ const DEFINITIONS = [
   adapter('home-event-radar.state', 'Home Event Radar (radarInteractionService)', 'HOME_EVENT_RADAR_STATE', 'MUTATION_PREPARATION'),
   adapter('home-event-radar.mark-done', 'Home Event Radar (radarInteractionService)', 'HOME_EVENT_RADAR_MARK_DONE', 'MUTATION_PREPARATION'),
   adapter('home-event-radar.feedback', 'Home Event Radar (radarInteractionService)', 'HOME_EVENT_RADAR_FEEDBACK', 'MUTATION_PREPARATION'),
+  adapter('home-event-radar.task', 'Home Event Radar (radarTaskIntegrationService)', 'HOME_EVENT_RADAR_TASK', 'MUTATION_PREPARATION'),
+  adapter('home-event-radar.preferences', 'Home Event Radar (radarNotificationPreferenceService)', 'HOME_EVENT_RADAR_PREFERENCES', 'MUTATION_PREPARATION'),
   adapter('property-tax.appeal-readiness', 'Property Tax Intelligence', 'PROPERTY_TAX_APPEAL_READINESS'),
   adapter('renovation-permit.readiness', 'Renovation Readiness Service', 'RENOVATION_PERMIT_READINESS'),
   adapter('major-event.entry', 'Major Event Navigation', 'MAJOR_EVENT_ENTRY'),

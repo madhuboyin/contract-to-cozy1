@@ -36,7 +36,8 @@ test('every Ask operation has a complete governed definition', () => {
   // write slice) + HOME_EVENT_CORRECT (write slice 2) + WARRANTY_CORRECT (write slice 3) + ROOM_RENAME (write slice 4) + ROOM_CREATE (add slice) + INVENTORY_ITEM_CREATE (add slice 4) + PROPERTY_CONTEXT_AREA_CAPTURE (add slice 5) + HOME_EVENT_VISIBILITY (write slice 7)
   // + HOME_EVENT_RADAR_FEED (capability-card audit, Appendix D, second reference journey, 2026-09-22).
   // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 89);
+  // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41, 2026-09-22).
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 91);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -56,7 +57,8 @@ test('every material Ask command has governed confirmation, authorization, cance
   // + SELLER_PREP_ITEM_DECISION (Phase 7 write-path slice, §13; FRD §31)
   // + CAPTURE_EVIDENCE_CONFIRM (Phase 2 external review, §8/§4.2; FRD §23).
   // + HOME_EVENT_RADAR_MARK_DONE/FEEDBACK (FRD v1.40; HOME_EVENT_RADAR_STATE is a direct write, not a command).
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 40);
+  // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 42);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);

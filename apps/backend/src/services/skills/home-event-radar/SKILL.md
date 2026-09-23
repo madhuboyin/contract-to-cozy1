@@ -28,6 +28,11 @@ Read the canonical feed of monitored home events (weather, air quality, disaster
 
 Operations remain owned by their registered canonical services and may be reached only through the adapters declared in the machine manifest. Context access is limited to declared providers. Peer Skill execution is prohibited; handoffs return to Ask for normal routing and authorization.
 
-Read-only first slice: state transitions (save/dismiss/acted-on), structured feedback, and task-candidate/creation writes are a deliberately separate, unscoped follow-up. This Skill has exactly one operation.
+The first slice was read-only. Writes were added later, each reached only from a declared action on the feed and never routed from a free-text message:
+
+- `HOME_EVENT_RADAR_STATE` (FRD v1.40): save, remove from saved, dismiss, restore. A direct write under FRD exception HER-EXC-01.
+- `HOME_EVENT_RADAR_MARK_DONE` and `HOME_EVENT_RADAR_FEEDBACK` (FRD v1.40): confirmed, CONTRIBUTOR floor.
+- `HOME_EVENT_RADAR_TASK` (FRD v1.41): add a task, set a reminder, or link an existing open task for one recommended action, through `radarTaskIntegrationService.createOrLink`. Form, review, confirm. CONTRIBUTOR, the same floor as the traditional route.
+- `HOME_EVENT_RADAR_PREFERENCES` (FRD v1.41): the caller's notification settings for this home, through `radarNotificationPreferenceService.update`. Form, review, confirm. CONTRIBUTOR, stricter than the traditional route.
 
 This document provides semantic guidance only. The machine manifest, operation registry, consumer policy, adapters, providers, and canonical services control execution.

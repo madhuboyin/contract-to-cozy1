@@ -16,9 +16,9 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 // exactly one operation.
 //
 // FRD v1.40 (2026-09-22) added the per-user writes: HOME_EVENT_RADAR_STATE (direct save/unsave/dismiss/restore),
-// HOME_EVENT_RADAR_MARK_DONE and HOME_EVENT_RADAR_FEEDBACK (both confirmed). Task create-or-link is still
-// out of scope.
-const HOME_EVENT_RADAR_WRITE_OPERATIONS = ['HOME_EVENT_RADAR_STATE', 'HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_FEEDBACK'] as const;
+// HOME_EVENT_RADAR_MARK_DONE and HOME_EVENT_RADAR_FEEDBACK (both confirmed). FRD v1.41 added task create-or-link
+// (HOME_EVENT_RADAR_TASK) and notification settings (HOME_EVENT_RADAR_PREFERENCES), both form -> review -> confirm.
+const HOME_EVENT_RADAR_WRITE_OPERATIONS = ['HOME_EVENT_RADAR_STATE', 'HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES'] as const;
 export const HOME_EVENT_RADAR_SKILL = Object.freeze({
   id: 'home-event-radar',
   version: '1.0.0',
@@ -49,6 +49,8 @@ export const HOME_EVENT_RADAR_SKILL = Object.freeze({
     { id: 'home-event-radar.state', version: '1.0' },
     { id: 'home-event-radar.mark-done', version: '1.0' },
     { id: 'home-event-radar.feedback', version: '1.0' },
+    { id: 'home-event-radar.task', version: '1.0' },
+    { id: 'home-event-radar.preferences', version: '1.0' },
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [

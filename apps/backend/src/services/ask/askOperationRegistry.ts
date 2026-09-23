@@ -78,6 +78,9 @@ export type AskOperationId =
   | 'HOME_EVENT_RADAR_STATE'
   | 'HOME_EVENT_RADAR_MARK_DONE'
   | 'HOME_EVENT_RADAR_FEEDBACK'
+  // Home Event Radar task create-or-link and notification settings (FRD v1.41): both form -> review -> confirm.
+  | 'HOME_EVENT_RADAR_TASK'
+  | 'HOME_EVENT_RADAR_PREFERENCES'
   | 'HOME_ACTIONS'
   | 'OPERATIONAL_WORK_UPDATE'
   | 'INSPECTION_FINDINGS'
@@ -258,6 +261,9 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'HOME_EVENT_RADAR_STATE',
   'HOME_EVENT_RADAR_MARK_DONE',
   'HOME_EVENT_RADAR_FEEDBACK',
+  // Reached only by "Plan this action" on an event's recommended action, and "Notification settings" on the feed.
+  'HOME_EVENT_RADAR_TASK',
+  'HOME_EVENT_RADAR_PREFERENCES',
 ]);
 
 export function isAskMessageRoutableOperation(operationId: AskOperationId): boolean {
@@ -339,6 +345,10 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // CONTRIBUTOR: domain commands have no VIEWER floor, so Ask is stricter than the traditional routes here (FRD v1.40).
   HOME_EVENT_RADAR_MARK_DONE: definition('HOME_EVENT_RADAR_MARK_DONE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event-radar.mark-done', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   HOME_EVENT_RADAR_FEEDBACK: definition('HOME_EVENT_RADAR_FEEDBACK', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event-radar.feedback', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  // CONTRIBUTOR: the same floor as the traditional POST .../actions/:actionCode/task route (FRD v1.41).
+  HOME_EVENT_RADAR_TASK: definition('HOME_EVENT_RADAR_TASK', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event-radar.task', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  // CONTRIBUTOR: stricter than the traditional PUT /radar/preferences (no role floor), because domain commands have no VIEWER floor.
+  HOME_EVENT_RADAR_PREFERENCES: definition('HOME_EVENT_RADAR_PREFERENCES', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event-radar.preferences', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // Phase 9B (FRD §17/§21.2) adds PRIORITY_LIST as an additive, versioned
   // explainable annotation of this same operation's existing feed read --
   // deliberately not a new operation, so Ask never presents two ranked

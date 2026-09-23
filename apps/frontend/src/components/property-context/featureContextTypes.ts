@@ -12,6 +12,8 @@ export type ScalarCaptureInputSchema =
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
   | { type: 'INTEGER' | 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'SHORT_TEXT'; maxLength: number }
+  // A 24-hour HH:mm wall-clock time (Home Event Radar quiet hours and task due time, FRD v1.41).
+  | { type: 'TIME' }
   | { type: 'APPROXIMATE_DATE'; allowedPrecisions?: CaptureDatePrecision[]; allowFuture?: boolean };
 
 export type CaptureDatePrecision = 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';

@@ -150,7 +150,8 @@ test('feed items carry every role-allowed action; viewers get the four direct st
   feedPage = { ...feedPage, items: [feedItem('match-1')], totalCount: 1, feedState: 'ACTIVE' };
   const contributor = await capabilityInvoke('HOME_EVENT_RADAR_FEED', { userId: 'u1', propertyId: 'p1', message: 'Show my home event radar feed' });
   const ids = (result) => result.blocks.find((block) => block.id === 'home-event-radar-feed').sections[0].items[0].actions.map((action) => action.id);
-  assert.deepEqual(ids(contributor), ['radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback']);
+  // + radar-plan-task (FRD v1.41), rendered per recommended action rather than as its own button.
+  assert.deepEqual(ids(contributor), ['radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task']);
   accessRole = 'VIEWER';
   const viewer = await capabilityInvoke('HOME_EVENT_RADAR_FEED', { userId: 'u1', propertyId: 'p1', message: 'Show my home event radar feed' });
   assert.deepEqual(ids(viewer), ['radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore']);

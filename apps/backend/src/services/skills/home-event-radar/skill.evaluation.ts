@@ -23,6 +23,8 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
     { operationId: 'HOME_EVENT_RADAR_STATE', expectedAdapter: { id: 'home-event-radar.state', version: '1.0' } },
     { operationId: 'HOME_EVENT_RADAR_MARK_DONE', expectedAdapter: { id: 'home-event-radar.mark-done', version: '1.0' } },
     { operationId: 'HOME_EVENT_RADAR_FEEDBACK', expectedAdapter: { id: 'home-event-radar.feedback', version: '1.0' } },
+    { operationId: 'HOME_EVENT_RADAR_TASK', expectedAdapter: { id: 'home-event-radar.task', version: '1.0' } },
+    { operationId: 'HOME_EVENT_RADAR_PREFERENCES', expectedAdapter: { id: 'home-event-radar.preferences', version: '1.0' } },
   ],
   ambiguityCases: [
     {
@@ -36,6 +38,8 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
     { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_STATE', allowed: true },
     { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_MARK_DONE', allowed: true },
     { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_FEEDBACK', allowed: true },
+    { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_TASK', allowed: true },
+    { consumer: 'ASK', operationId: 'HOME_EVENT_RADAR_PREFERENCES', allowed: true },
   ],
   contextCases: [
     { state: 'KNOWN', expectedBehavior: 'READY' },
@@ -68,6 +72,8 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
     { id: 'home-event-radar.state', version: '1.0' },
     { id: 'home-event-radar.mark-done', version: '1.0' },
     { id: 'home-event-radar.feedback', version: '1.0' },
+    { id: 'home-event-radar.task', version: '1.0' },
+    { id: 'home-event-radar.preferences', version: '1.0' },
   ],
   prohibitedAdapters: [
     'intelligence-envelope.query',
@@ -79,6 +85,7 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedStatuses: [
     'ANSWERED',
     'READY_WITH_LIMITATIONS',
+    'NEEDS_CONTEXT',
     'NEEDS_CONFIRMATION',
     'COMPLETED',
   ],
@@ -95,6 +102,8 @@ export const HOME_EVENT_RADAR_SKILL_EVALUATION = deepFreezeSkillPackage({
     { id: 'home-event-radar.state', version: '1.0' },
     { id: 'home-event-radar.mark-done', version: '1.0' },
     { id: 'home-event-radar.feedback', version: '1.0' },
+    { id: 'home-event-radar.task', version: '1.0' },
+    { id: 'home-event-radar.preferences', version: '1.0' },
   ],
   prohibitedCanonicalCalls: [
     'intelligence-envelope.query',

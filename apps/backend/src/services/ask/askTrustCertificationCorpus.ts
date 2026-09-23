@@ -209,6 +209,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   HOME_EVENT_RADAR_STATE: 'The selected monitored event is saved for you only; nobody else in the household sees the change.',
   HOME_EVENT_RADAR_MARK_DONE: 'The selected monitored event is marked done after confirmation, and the property radar risk is rechecked.',
   HOME_EVENT_RADAR_FEEDBACK: 'Your feedback that the selected monitored event is not relevant is recorded after confirmation.',
+  HOME_EVENT_RADAR_TASK: 'A maintenance task for the selected radar action is added to your list after confirmation.',
+  HOME_EVENT_RADAR_PREFERENCES: 'Your Home Event Radar notification settings are saved after confirmation.',
   INVENTORY_ITEM_CORRECT: 'The inventory item date is reviewed before it is corrected on the shared home record.',
   SELLER_PREP_ITEM_DECISION: 'The checklist item decision is reviewed before it is applied to the shared seller-prep checklist.',
   MAJOR_EVENT_ENTRY: 'Preparing the home to go on the market begins with records, repairs, and disclosure readiness.',

@@ -50,6 +50,9 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   // it is a direct write (per-user, reversible, no property-level effect) under a recorded FRD exception.
   'HOME_EVENT_RADAR_MARK_DONE',
   'HOME_EVENT_RADAR_FEEDBACK',
+  // Home Event Radar task create-or-link and notification settings (FRD v1.41).
+  'HOME_EVENT_RADAR_TASK',
+  'HOME_EVENT_RADAR_PREFERENCES',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -155,6 +158,9 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   // REOPEN: moving an event off "done" is left to the traditional page (its Save/Dismiss do it); Ask's direct
   // state write refuses a done event rather than silently undoing it.
   HOME_EVENT_RADAR_MARK_DONE: command('HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_MARK_DONE', 'home-event-radar.mark-done', 'CONTRIBUTOR', 'PROPERTY_RADAR_STATE', ['REOPEN'], { title: 'Event not marked done', body: 'The event and this property\'s radar risk were not changed.', suggestion: 'Show my home event radar feed' }),
+  // EDIT: the created or linked task is corrected in Maintenance. There is no unlink (the traditional page has none).
+  HOME_EVENT_RADAR_TASK: command('HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_TASK', 'home-event-radar.task', 'CONTRIBUTOR', 'PROPERTY_RADAR_TASK_LINK', ['EDIT'], { title: 'Nothing planned', body: 'No maintenance task was added or linked.', suggestion: 'Show my home event radar feed' }),
+  HOME_EVENT_RADAR_PREFERENCES: command('HOME_EVENT_RADAR_PREFERENCES', 'HOME_EVENT_RADAR_PREFERENCES', 'home-event-radar.preferences', 'CONTRIBUTOR', 'PROPERTY_RADAR_NOTIFICATION_PREFERENCE', ['EDIT'], { title: 'Settings not saved', body: 'Your Home Event Radar notification settings were not changed.', suggestion: 'Show my home event radar feed' }),
   HOME_EVENT_RADAR_FEEDBACK: command('HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_FEEDBACK', 'home-event-radar.feedback', 'CONTRIBUTOR', 'PROPERTY_RADAR_FEEDBACK', ['EDIT'], { title: 'Feedback not sent', body: 'No feedback was recorded for this event.', suggestion: 'Show my home event radar feed' }),
 });
 

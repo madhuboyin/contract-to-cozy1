@@ -113,6 +113,8 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('HOME_EVENT_RADAR_STATE', ALL_MODES),
   definePolicy('HOME_EVENT_RADAR_MARK_DONE', ALL_MODES),
   definePolicy('HOME_EVENT_RADAR_FEEDBACK', ALL_MODES),
+  definePolicy('HOME_EVENT_RADAR_TASK', ALL_MODES),
+  definePolicy('HOME_EVENT_RADAR_PREFERENCES', ALL_MODES),
   definePolicy('HOME_CHANGE_SUMMARY', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_ACTIONS', ALL_MODES),
   definePolicy('OPERATIONAL_WORK_UPDATE', ALL_MODES),

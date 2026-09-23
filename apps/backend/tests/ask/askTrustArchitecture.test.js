@@ -67,6 +67,9 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'HOME_EVENT_RADAR_STATE',
     'HOME_EVENT_RADAR_MARK_DONE',
     'HOME_EVENT_RADAR_FEEDBACK',
+    // Home Event Radar task create-or-link and notification settings (FRD v1.41).
+    'HOME_EVENT_RADAR_TASK',
+    'HOME_EVENT_RADAR_PREFERENCES',
   ]));
   const candidates = retrieveAskOperationCandidates("I'm thinking about selling next year", { topK: 100 });
   assert.equal(candidates.some((candidate) => internalOperations.includes(candidate.operationId)), false);

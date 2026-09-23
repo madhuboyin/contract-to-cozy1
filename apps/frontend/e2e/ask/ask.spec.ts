@@ -901,6 +901,44 @@ test('Home Event Radar: filter chips re-ask with their own message, and Save wri
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Home Event Radar: "Plan this action" sends the recommended action\'s code, then form -> review -> receipt (FRD v1.41)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home event radar feed.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const feed = page.locator('#ask-execution-execution-home-event-radar-feed');
+  await feed.getByRole('button', { name: 'severe thunderstorm warning' }).click();
+  await expect(feed.getByText('This storm cell tracks over your recorded property location.')).toBeVisible();
+  // Planning is per recommended action, never a button in the event's own action row.
+  await expect(feed.locator('[data-radar-action="radar-plan-task"]')).toHaveCount(0);
+  await feed.getByRole('button', { name: 'Plan this action: Secure outdoor furniture and loose items' }).click();
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Plan this recommended action from a monitored event.',
+    launchContext: expect.objectContaining({ entityType: 'RADAR_MATCH', entityId: 'match-property-summary', operationId: 'HOME_EVENT_RADAR_TASK', actionId: 'SECURE_OUTDOOR_ITEMS', sourceExecutionId: 'execution-home-event-radar-feed' }),
+  }));
+
+  const task = page.locator('#ask-execution-execution-radar-task');
+  await expect(task.getByText('Nothing has been added yet', { exact: false })).toBeVisible();
+  await task.getByRole('button', { name: 'Set a reminder', exact: true }).click();
+  await task.getByLabel('Due date value').fill('2026-09-30');
+  await task.getByLabel('Due time', { exact: true }).fill('07:30');
+  await task.getByRole('button', { name: 'Alex Kim', exact: true }).click();
+  await task.getByRole('button', { name: 'Continue to review' }).click();
+  await expect.poll(() => api.addCaptureBodies).toEqual([expect.objectContaining({
+    requirementId: 'radar-task-inputs', captureKey: 'HOME_EVENT_RADAR_TASK_INPUTS', expectedContextVersion: 'radar-task-context-v1',
+    answer: expect.objectContaining({ operation: 'create_reminder', dueDate: { precision: 'EXACT_DATE', value: '2026-09-30' }, dueTime: '07:30', assigneeUserId: 'user-alex' }),
+  })]);
+
+  await expect(task.getByText('Set a reminder for "Secure outdoor furniture and loose items"?').first()).toBeVisible();
+  await task.getByLabel(/I authorize adding this to the shared maintenance list/).check();
+  await task.getByRole('button', { name: 'Set reminder', exact: true }).click();
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
+  await expect(task.getByText('Reminder set')).toBeVisible();
+  await expect(task.getByRole('link', { name: /Open task/ })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

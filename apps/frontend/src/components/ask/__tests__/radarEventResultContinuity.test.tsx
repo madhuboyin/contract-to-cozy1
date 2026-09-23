@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BlockView } from '../blocks/registry';
 import { RadarEventResultList } from '../RadarEventResultList';
+import { AskBlockActionContext } from '../blocks/context';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
@@ -226,4 +227,56 @@ test('the registry wires filter clicks and item actions through to the radar lis
   await waitFor(() => expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument());
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
   expect(onItemAction).toHaveBeenCalledWith('RADAR_MATCH', 'match-0', 'Dismiss this monitored event.', 'HOME_EVENT_RADAR_STATE', 'MUTATE_RECORD');
+});
+
+// ── FRD v1.41: task create-or-link and notification settings ──
+const PLAN_ACTION = { id: 'radar-plan-task', label: 'Plan this action', message: 'Plan this recommended action from a monitored event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_RADAR_TASK' };
+const plannableAction = (overrides: Partial<RadarCanonicalDetail['recommendedActions'][number]> = {}) => ({
+  ...canonicalDetail().recommendedActions[0], supportedTaskOperations: ['create_task', 'create_reminder'] as RadarCanonicalDetail['recommendedActions'][number]['supportedTaskOperations'], ...overrides,
+});
+
+async function openPlannable(detail: Partial<RadarCanonicalDetail>, actions = [...ALL_ACTIONS, PLAN_ACTION], onAction = jest.fn()) {
+  mockedGetRadarEventDetail.mockResolvedValueOnce(canonicalDetail({ userState: 'new', ...detail }));
+  const planBlock: typeof block = { ...writableBlock, sections: [{ ...writableBlock.sections[0], items: [{ ...writableBlock.sections[0].items[0], actions }] }] };
+  render(<RadarEventResultList block={planBlock} propertyId="home" onAction={onAction} onFilter={() => {}} onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} />);
+  fireEvent.click(screen.getByRole('button', { name: 'severe thunderstorm warning' }));
+  await waitFor(() => expect(screen.getByText(/heavy rain and possible hail/)).toBeInTheDocument());
+  return onAction;
+}
+
+test('"Plan this action" appears on each plannable recommended action (not in the event action row) and sends that action\'s code', async () => {
+  const onAction = await openPlannable({ recommendedActions: [plannableAction()] });
+  expect(shownActions()).not.toContain('radar-plan-task');
+  fireEvent.click(screen.getByRole('button', { name: 'Plan this action: Secure outdoor furniture and loose items' }));
+  expect(onAction).toHaveBeenCalledWith('RADAR_MATCH', 'match-0', 'Plan this recommended action from a monitored event.', 'HOME_EVENT_RADAR_TASK', 'MUTATE_RECORD', undefined, 'SECURE_OUTDOOR_ITEMS');
+});
+
+test('no plan button for an action without task operations, or when the member\'s role was not given the plan action', async () => {
+  await openPlannable({ recommendedActions: [plannableAction({ supportedTaskOperations: [] })] });
+  expect(document.querySelector('[data-radar-plan-action]')).toBeNull();
+});
+
+test('a viewer (no declared plan action) sees no plan button even on a plannable action', async () => {
+  await openPlannable({ recommendedActions: [plannableAction()] }, ALL_ACTIONS);
+  expect(document.querySelector('[data-radar-plan-action]')).toBeNull();
+});
+
+test('an action that already has a task shows the linked task instead of a plan button', async () => {
+  await openPlannable({ recommendedActions: [plannableAction({ taskLink: {
+    id: 'link-1', actionCode: 'SECURE_OUTDOOR_ITEMS', operation: 'create_reminder', dueAt: null, dueDateSource: null,
+    task: { id: 'task-1', title: 'Reminder: Secure outdoor items', status: 'PENDING', nextDueDate: null, assignedToUserId: null, href: '/dashboard/maintenance?taskId=task-1' },
+    createdAt: '2026-09-22T00:00:00.000Z', updatedAt: '2026-09-22T00:00:00.000Z',
+  } })] });
+  expect(document.querySelector('[data-radar-plan-action]')).toBeNull();
+  expect(screen.getByRole('link', { name: 'Reminder set: Reminder: Secure outdoor items' })).toHaveAttribute('href', '/dashboard/maintenance?taskId=task-1');
+});
+
+test('the feed-level "Notification settings" action starts its pinned workflow', () => {
+  const invoke = jest.fn();
+  const settings = { id: 'radar-notification-settings', label: 'Notification settings', interactionType: 'START_WORKFLOW' as const, message: 'Change my Home Event Radar notification settings.', operationId: 'HOME_EVENT_RADAR_PREFERENCES', style: 'SECONDARY' as const };
+  render(<AskBlockActionContext.Provider value={{ invoke, disabled: false }}>
+    <RadarEventResultList block={{ ...writableBlock, actions: [settings, ...writableBlock.actions] }} propertyId="home" onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} />
+  </AskBlockActionContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Notification settings' }));
+  expect(invoke).toHaveBeenCalledWith(settings);
 });

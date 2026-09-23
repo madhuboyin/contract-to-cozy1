@@ -175,6 +175,8 @@ const RADAR_ITEM_ACTIONS = [
   { id: 'radar-restore', label: 'Restore', message: 'Restore this dismissed monitored event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_STATE' },
   { id: 'radar-mark-done', label: 'Mark done', message: 'Mark this monitored event as done.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_MARK_DONE' },
   { id: 'radar-feedback', label: 'Send feedback', message: 'Send feedback on this monitored event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_FEEDBACK' },
+  // FRD v1.41: rendered once per plannable recommended action in the detail, not as its own button.
+  { id: 'radar-plan-task', label: 'Plan this action', message: 'Plan this recommended action from a monitored event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_RADAR_TASK' },
 ];
 function radarFilterChips(happeningNow: boolean) {
   return [
@@ -202,6 +204,51 @@ function radarStateReceiptExecution(sessionId?: string) {
     correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
     suggestions: ['Show my home event radar feed'], createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z',
   };
+}
+// FRD v1.41 "Plan this action": form -> review -> receipt. Shapes mirror radarTaskFormResult / confirmHomeEventRadarTask.
+function radarTaskExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer: Record<string, unknown> = {}) {
+  const captureRequest = (requirementId: string, current: Record<string, unknown>) => ({
+    requirementId, captureKey: 'HOME_EVENT_RADAR_TASK_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: 'Plan this action', question: 'How would you like to plan "Secure outdoor furniture and loose items"?', helpText: 'You will review everything before a task is added or linked.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'operation', label: 'What to do', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Add a maintenance task', value: 'create_task' }, { label: 'Set a reminder', value: 'create_reminder' }] } },
+      { key: 'dueDate', label: 'Due date', required: false, when: { fieldKey: 'operation', operator: 'NOT_EQUALS', value: 'link_existing_task' }, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
+      { key: 'dueTime', label: 'Due time', required: false, when: { fieldKey: 'operation', operator: 'NOT_EQUALS', value: 'link_existing_task' }, inputSchema: { type: 'TIME' } },
+      { key: 'assigneeUserId', label: 'Assign to', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Unassigned', value: 'UNASSIGNED' }, { label: 'Alex Kim', value: 'user-alex' }] } },
+    ] },
+    currentAnswer: current, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this task; nothing is added or linked until you confirm', confirmationText: null,
+    expectedContextVersion: 'radar-task-context-v1',
+  });
+  const common = {
+    schemaVersion: '1.0', executionId: 'execution-radar-task', sessionId: sessionId ?? 'ask-acceptance-session',
+    question: 'Plan this recommended action from a monitored event.', property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'HOME_EVENT_RADAR_TASK', version: '1.0', family: 'COMMAND' }, contextVersion: 'radar-task-context-v1',
+    skill: null, skillHandoff: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    suggestions: [], createdAt: '2026-09-22T12:00:00.000Z', updatedAt: new Date().toISOString(),
+  };
+  const radarHref = `/dashboard/properties/${propertyId}/tools/home-event-radar?matchId=match-property-summary`;
+  if (stage === 'FORM') {
+    return { ...common, status: 'NEEDS_CONTEXT', confirmation: null,
+      captureRequests: [captureRequest('radar-task-inputs', { operation: null, maintenanceTaskId: null, dueDate: null, dueTime: null, assigneeUserId: 'UNASSIGNED' })],
+      blocks: [{ type: 'SUMMARY', id: 'radar-task-input', title: 'Plan "Secure outdoor furniture and loose items"', body: 'For severe thunderstorm warning. Nothing has been added yet. Choose how to plan it, then review before anything is saved.', tone: 'DEFAULT', actions: [] }] };
+  }
+  if (stage === 'CONFIRMATION') {
+    return { ...common, status: 'NEEDS_CONFIRMATION', captureRequests: [captureRequest('radar-task-inputs-entered', answer)],
+      blocks: [{ type: 'SUMMARY', id: 'radar-task-review', title: 'Review planning "Secure outdoor furniture and loose items"', body: 'You entered these details. Nothing is added or linked until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: 'radar-task-match-property-summary-SECURE_OUTDOOR_ITEMS-1', version: 1, title: 'Set a reminder for "Secure outdoor furniture and loose items"?',
+        description: 'This adds a task to your maintenance list through the same service Home Event Radar uses, linked to this recommended action.',
+        fields: [{ label: 'Event', value: 'severe thunderstorm warning' }, { label: 'What happens', value: 'Set a reminder' }, { label: 'Task title', value: 'Reminder: Secure outdoor furniture and loose items' }, { label: 'Due', value: 'Sep 30, 2026, 7:30 AM' }, { label: 'Assigned to', value: 'Alex Kim' }],
+        editableFields: [], confirmLabel: 'Set reminder', consentText: 'I authorize adding this to the shared maintenance list for this home.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      } };
+  }
+  return { ...common, status: 'COMPLETED', captureRequests: [], confirmation: null, blocks: [{
+    type: 'WORKFLOW_PROGRESS', id: 'radar-task-match-property-summary-SECURE_OUTDOOR_ITEMS', title: 'Reminder set', status: 'COMPLETED',
+    description: 'It is on your maintenance list and linked to this Home Event Radar action.',
+    details: [{ label: 'Task', value: 'Reminder: Secure outdoor furniture and loose items' }],
+    actions: [{ id: 'open-task', label: 'Open task', href: '/dashboard/maintenance?taskId=task-radar-1', style: 'PRIMARY' }, { id: 'open-radar', label: 'Open in Home Event Radar', href: radarHref, style: 'SECONDARY' }],
+  }] };
 }
 function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
   return {
@@ -865,7 +912,7 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     recommendedActions: [{
       code: 'SECURE_OUTDOOR_ITEMS', label: 'Secure outdoor furniture and loose items', priority: 'high',
       registryVersion: 'radar-actions-v1', completionEvidence: 'user_attestation', safetyClassification: 'property_protection',
-      targetCapability: null, supportedTaskOperations: [], taskLink: null,
+      targetCapability: null, supportedTaskOperations: ['create_task', 'create_reminder'], taskLink: null,
       destination: { kind: 'informational', purpose: null, label: null, href: null },
     }],
     compoundInsights: [], canonicalUrl: null, observedAt: '2026-09-22T11:00:00.000Z',
@@ -1042,6 +1089,11 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       const response = capitalReservePlanExecution({ horizonYears });
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (body.message === 'Plan this recommended action from a monitored event.') {
+      if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: radarTaskExecution('FORM', body.sessionId as string | undefined) }, 201);
       return;
     }
     if (body.message === 'Save this monitored event.') {
@@ -1231,6 +1283,17 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     assertAuthenticated(route.request());
     correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
     await fulfill(route, { success: true, data: warrantyAddExecution('DONE', correctionSessionId) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-radar-task/captures`, async (route) => {
+    assertAuthenticated(route.request());
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    addCaptureBodies.push(body);
+    await fulfill(route, { success: true, data: radarTaskExecution('CONFIRMATION', correctionSessionId, body.answer as Record<string, unknown>) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-radar-task/confirm`, async (route) => {
+    assertAuthenticated(route.request());
+    correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfill(route, { success: true, data: radarTaskExecution('DONE', correctionSessionId) });
   });
   for (const addKind of ['event', 'room', 'item', 'area'] as const) {
     await page.route(`${apiOrigin}/api/ask/executions/execution-${addKind}-add/captures`, async (route) => {

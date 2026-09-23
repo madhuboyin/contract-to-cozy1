@@ -1064,7 +1064,7 @@ function ExecutionCard({
   // REMIND_LATER once their domain policy lands; NAVIGATE once item
   // actions carry an href), it surfaces here instead of silently no-oping.
   const [itemActionIssue, setItemActionIssue] = useState<string | null>(null);
-  const dispatchItemAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => {
+  const dispatchItemAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string) => {
     setItemActionIssue(null);
     const dispatch = resolveItemActionDispatch(interactionType);
     if (dispatch.kind === 'ASK_WITH_ENTITY_CONTEXT') {
@@ -1084,6 +1084,8 @@ function ExecutionCard({
         // Evidence upload design (approved 2026-09-22): undefined for every action except HomeEventResultList's
         // "Attach evidence" control, which already uploaded the file and resolved this id before calling here.
         documentId,
+        // FRD v1.41: undefined except for RadarEventDetail's "Plan this action" (the recommended action's code).
+        actionId,
       });
     } else if (dispatch.kind === 'ASK_FILTER_ONLY') {
       void ask(message, undefined, { sourceExecutionId: execution.executionId });

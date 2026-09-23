@@ -137,6 +137,12 @@ import { queryIntelligenceEnvelope } from '../intelligenceEnvelope';
 import { radarQueryService } from '../../modules/homeEventRadar/services/radarQuery.service';
 import { radarInteractionService } from '../../modules/homeEventRadar/services/radarInteraction.service';
 import { RADAR_FEEDBACK_COMMENT_MAX_LENGTH } from '../../modules/homeEventRadar/domain/radarInteraction';
+import { radarTaskIntegrationService } from '../../modules/homeEventRadar/services/radarTaskIntegration.service';
+import { radarNotificationPreferenceService } from '../../modules/homeEventRadar/services/radarNotificationPreference.service';
+import { RADAR_ACTION_CODES, type RadarActionTaskOperation } from '../../modules/homeEventRadar/domain/radarActionRegistry';
+import { deriveRadarTaskDueDate, RadarTaskDueDateError } from '../../modules/homeEventRadar/domain/radarTaskDueDate';
+import type { RadarNotificationPreferenceProjection } from '../../modules/homeEventRadar/domain/radarNotificationPreferences';
+import { updateRadarNotificationPreferencesBodySchema } from '../../validators/homeEventRadar.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../analytics';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
 // C2C Intelligence & Agentic Evolution Phase 3 / PR 12b (architecture §8 task 2,
@@ -7652,7 +7658,8 @@ const RADAR_FEED_STATE_COPY: Record<string, { title: string; body: string }> = {
 // normalized envelope items, not radar matches), wrong filters, wrong
 // grouping. FRD v1.40 added filter chips (below) and the per-user writes
 // (HOME_EVENT_RADAR_STATE / MARK_DONE / FEEDBACK, declared as item actions);
-// task create-or-link remains out of scope.
+// FRD v1.41 added task create-or-link (item action) and notification
+// settings (feed action).
 // Feed filters (FRD v1.40), mirroring the traditional page's own three controls: lifecycle view (now / upcoming /
 // recently ended), source family, and show-dismissed. Filter chips re-send a self-contained message that routes back
 // here and is re-parsed, so "Show more" paging (which prefixes the prior message) keeps the same filters -- and the
@@ -7724,6 +7731,7 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
         body: filters.includeDismissed ? copy.body : `${copy.body} Dismissed events are hidden.`,
         actions: [
           ...(filters.includeDismissed ? [] : [{ id: 'radar-include-dismissed', label: 'Include dismissed events', interactionType: 'START_WORKFLOW' as const, message: radarFeedFilterMessage({ ...filters, includeDismissed: true }), operationId: 'HOME_EVENT_RADAR_FEED', style: 'SECONDARY' as const }]),
+          ...radarFeedBlockActions(access.role),
           { id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' },
         ],
       }],
@@ -7769,7 +7777,7 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
         actions: itemActions,
       })),
     })) : [{ id: 'radar-no-match', title: 'No matching events', count: 0, items: [] }],
-    actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' }],
+    actions: [...radarFeedBlockActions(access.role), { id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' }],
   }];
   const degraded = page.feedState === 'PARTIAL_COVERAGE' || page.feedState === 'DEGRADED' || page.feedState === 'UNCOVERED';
   if (degraded) {
@@ -7803,7 +7811,9 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
 //   mitigation_changed branch).
 // - HOME_EVENT_RADAR_FEEDBACK: confirmed, a reason + optional comment form.
 // All three are non-routable and reached only from the declared item actions
-// on a HOME_EVENT_RADAR_FEED event. Task create-or-link remains out of scope.
+// on a HOME_EVENT_RADAR_FEED event. FRD v1.41 added task create-or-link
+// (HOME_EVENT_RADAR_TASK) and notification settings
+// (HOME_EVENT_RADAR_PREFERENCES), both form -> review -> confirm; see below.
 // ---------------------------------------------------------------------------
 export const RADAR_STATE_MESSAGES = {
   save: 'Save this monitored event.',
@@ -7814,6 +7824,8 @@ export const RADAR_STATE_MESSAGES = {
 export type RadarStateRequest = keyof typeof RADAR_STATE_MESSAGES;
 export const RADAR_MARK_DONE_MESSAGE = 'Mark this monitored event as done.';
 export const RADAR_FEEDBACK_MESSAGE = 'Send feedback on this monitored event.';
+export const RADAR_TASK_MESSAGE = 'Plan this recommended action from a monitored event.';
+export const RADAR_PREFERENCES_MESSAGE = 'Change my Home Event Radar notification settings.';
 
 const RADAR_USER_STATE_LABEL: Record<string, string> = { new: 'New', seen: 'Seen', saved: 'Saved', dismissed: 'Dismissed', acted_on: 'Done' };
 // The traditional page's own five reasons (RadarDetailSheet.tsx FEEDBACK_OPTIONS); 'helpful' exists in the
@@ -7848,8 +7860,19 @@ export function radarEventItemActions(role: HouseholdRole) {
     ...(role !== HouseholdRole.VIEWER ? [
       action('radar-mark-done', 'Mark done', RADAR_MARK_DONE_MESSAGE, 'HOME_EVENT_RADAR_MARK_DONE', 'PRIMARY'),
       action('radar-feedback', 'Send feedback', RADAR_FEEDBACK_MESSAGE, 'HOME_EVENT_RADAR_FEEDBACK'),
+      // Not a button of its own: RadarEventDetail renders it once per recommended action that supports task planning,
+      // and sends that action's code as launchContext.actionId (FRD v1.41).
+      action('radar-plan-task', 'Plan this action', RADAR_TASK_MESSAGE, 'HOME_EVENT_RADAR_TASK'),
     ] : []),
   ];
+}
+
+// Feed-level actions (FRD v1.41). Notification settings are per-user and per-property, like the traditional page's
+// "Radar notifications" card, so they sit on the feed rather than on an event.
+function radarFeedBlockActions(role: HouseholdRole) {
+  return role !== HouseholdRole.VIEWER
+    ? [{ id: 'radar-notification-settings', label: 'Notification settings', interactionType: 'START_WORKFLOW' as const, message: RADAR_PREFERENCES_MESSAGE, operationId: 'HOME_EVENT_RADAR_PREFERENCES', style: 'SECONDARY' as const }]
+    : [];
 }
 
 // Pure: the state a request moves to from the LIVE state, or why it is refused. A done (acted_on) event is refused:
@@ -8136,6 +8159,468 @@ export async function editHomeEventRadarFeedbackConfirmation(
   const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
+
+// ---------------------------------------------------------------------------
+// Home Event Radar task create-or-link and notification settings
+// (ASK_COZY_INLINE_WORKSPACE_FRD v1.41). Both go form -> review -> confirm, the same shape as "Add a room": the
+// traditional controls are forms (RadarDetailSheet's "Plan this action" controls and the "Radar notifications"
+// card), and the shared confirmation card allows only three editable fields, so the form is an inline capture and
+// the confirmation card shows what was entered.
+// ---------------------------------------------------------------------------
+const RADAR_TASK_CAPTURE_KEY = 'HOME_EVENT_RADAR_TASK_INPUTS';
+const RADAR_PREFERENCES_CAPTURE_KEY = 'HOME_EVENT_RADAR_PREFERENCES_INPUTS';
+const RADAR_UNASSIGNED = 'UNASSIGNED';
+const RADAR_DEFAULT_DUE_TIME = '09:00';
+const RADAR_CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const RADAR_TASK_OPERATION_LABEL: Record<RadarActionTaskOperation, string> = {
+  create_task: 'Add a maintenance task',
+  create_reminder: 'Set a reminder',
+  link_existing_task: 'Link an existing task',
+};
+
+const RadarTaskTargetSchema = z.object({ matchId: z.string().trim().min(1).max(160), actionCode: z.enum(RADAR_ACTION_CODES) }).strict();
+type RadarTaskTarget = z.infer<typeof RadarTaskTargetSchema>;
+// The inline form's answer. dueDate is the shared APPROXIMATE_DATE value ({ precision, value }), limited to an exact date.
+const RadarTaskAnswerSchema = z.object({
+  operation: z.enum(['create_task', 'create_reminder', 'link_existing_task']),
+  maintenanceTaskId: z.string().trim().max(128).nullish(),
+  dueDate: z.object({ precision: z.literal('EXACT_DATE'), value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).nullish(),
+  dueTime: z.string().regex(RADAR_CLOCK_TIME).nullish().or(z.literal('')),
+  assigneeUserId: z.string().trim().min(1).max(128).nullish(),
+});
+type RadarTaskAnswer = z.infer<typeof RadarTaskAnswerSchema>;
+// What confirming sends to radarTaskIntegrationService.createOrLink (the traditional POST body, plus its target).
+const RadarTaskInputSchema = z.object({
+  matchId: z.string().trim().min(1).max(160),
+  actionCode: z.enum(RADAR_ACTION_CODES),
+  operation: z.enum(['create_task', 'create_reminder', 'link_existing_task']),
+  maintenanceTaskId: z.string().trim().min(1).max(128).nullable(),
+  dueAt: z.string().datetime({ offset: true }).nullable(),
+  assigneeUserId: z.string().trim().min(1).max(128).nullable(),
+}).strict();
+
+// A wall-clock date and time in `timeZone` as a UTC instant. Two passes so a DST change between the guess and the
+// answer still lands on the right offset.
+export function radarZonedWallClockToUtc(date: string, time: string, timeZone: string): Date {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
+  const wallClock = Date.UTC(year, month - 1, day, hours, minutes);
+  const offsetAt = (instant: number) => {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(instant));
+    const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((candidate) => candidate.type === type)?.value ?? 0);
+    return Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second')) - instant;
+  };
+  const first = wallClock - offsetAt(wallClock);
+  return new Date(wallClock - offsetAt(first));
+}
+
+function radarDateTimeLabel(value: Date | string, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(new Date(value));
+}
+
+const radarTaskContextVersion = (target: RadarTaskTarget): string => createHash('sha256').update(`radar-task:${target.matchId}:${target.actionCode}`).digest('hex');
+
+// The form kept beside a review card gets its own requirementId: the inline card is keyed by it and holds one
+// idempotency key per mount, so reusing the id would make a changed resubmission an idempotency conflict.
+function radarCaptureRequirementId(base: string, entered: unknown): string {
+  return entered === undefined ? base : `${base}-${createHash('sha256').update(JSON.stringify(entered)).digest('hex').slice(0, 12)}`;
+}
+
+function radarCaptureError(message: string, code = 'ASK_CAPTURE_VALIDATION_ERROR'): Error {
+  return Object.assign(new Error(message), { code });
+}
+
+async function radarHouseholdMemberOptions(propertyId: string): Promise<Array<{ label: string; value: string }>> {
+  const members = await prisma.householdMember.findMany({
+    where: { propertyId },
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    orderBy: [{ isPrimaryOwner: 'desc' }, { joinedAt: 'asc' }],
+  });
+  // Same label as the traditional assignee picker: display name, then first and last name, then email.
+  return members.map((member) => ({
+    label: member.displayName || `${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim() || member.user.email,
+    value: member.userId,
+  }));
+}
+
+function radarTaskCaptureRequest(
+  contextVersion: string,
+  actionLabel: string,
+  operations: RadarActionTaskOperation[],
+  candidates: Array<{ id: string; title: string }>,
+  members: Array<{ label: string; value: string }>,
+  entered?: RadarTaskAnswer,
+): AskCaptureRequest {
+  const creates = operations.some((operation) => operation !== 'link_existing_task');
+  return {
+    requirementId: radarCaptureRequirementId('radar-task-inputs', entered), captureKey: RADAR_TASK_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: 'Plan this action', question: `How would you like to plan "${actionLabel}"?`,
+    helpText: 'You will review everything before a task is added or linked.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'operation', label: 'What to do', required: true, inputSchema: { type: 'SINGLE_SELECT', options: operations.map((operation) => ({ label: RADAR_TASK_OPERATION_LABEL[operation], value: operation })) } },
+      ...(operations.includes('link_existing_task') ? [{ key: 'maintenanceTaskId', label: 'Existing maintenance task', required: true, when: { fieldKey: 'operation', operator: 'EQUALS' as const, value: 'link_existing_task' }, inputSchema: { type: 'SINGLE_SELECT' as const, options: candidates.map((task) => ({ label: task.title, value: task.id })) } }] : []),
+      ...(creates ? [
+        { key: 'dueDate', label: 'Due date', helpText: 'Optional. Leave it empty and Home Event Radar uses the event timing when it safely can.', required: false, when: { fieldKey: 'operation', operator: 'NOT_EQUALS' as const, value: 'link_existing_task' }, inputSchema: { type: 'APPROXIMATE_DATE' as const, allowedPrecisions: ['EXACT_DATE' as const], allowFuture: true } },
+        { key: 'dueTime', label: 'Due time', helpText: `Optional, in your home's timezone. Defaults to ${RADAR_DEFAULT_DUE_TIME} when you choose a date.`, required: false, when: { fieldKey: 'operation', operator: 'NOT_EQUALS' as const, value: 'link_existing_task' }, inputSchema: { type: 'TIME' as const } },
+      ] : []),
+      { key: 'assigneeUserId', label: 'Assign to', helpText: 'Optional.', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Unassigned', value: RADAR_UNASSIGNED }, ...members] } },
+    ] },
+    currentAnswer: {
+      operation: entered?.operation ?? (operations.length === 1 ? operations[0] : null),
+      maintenanceTaskId: entered?.maintenanceTaskId ?? null,
+      dueDate: entered?.dueDate ?? null,
+      dueTime: entered?.dueTime ?? null,
+      assigneeUserId: entered?.assigneeUserId ?? RADAR_UNASSIGNED,
+    },
+    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this task; nothing is added or linked until you confirm', confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
+
+type RadarRecommendedAction = {
+  code: string;
+  label: string;
+  priority: 'high' | 'medium' | 'low';
+  supportedTaskOperations: RadarActionTaskOperation[];
+  taskLink: { operation: string; task: { id: string; title: string; href: string; nextDueDate: string | null } } | null;
+};
+
+function radarTaskAlreadyPlanned(propertyId: string, matchId: string, eventTitle: string, action: RadarRecommendedAction): AskOperationResult {
+  const link = action.taskLink!;
+  return {
+    status: 'COMPLETED', reasonCode: 'HOME_EVENT_RADAR_TASK_ALREADY_LINKED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `radar-task-${matchId}-${action.code}`, title: 'Already planned', status: 'COMPLETED',
+      description: 'This recommended action already has a maintenance task. Nothing was changed.',
+      details: [{ label: 'Event', value: eventTitle }, { label: 'Recommended action', value: action.label }, { label: 'Task', value: link.task.title }],
+      actions: [{ id: 'open-task', label: 'Open task', href: link.task.href, style: 'PRIMARY' }, { id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }],
+    }],
+    suggestions: ['Show my home event radar feed'],
+  };
+}
+
+// Builds the form, or, with an answer, the review card. Shared by the declared start and the capture submission.
+export async function radarTaskFormResult(userId: string, propertyId: string, target: RadarTaskTarget, answer: RadarTaskAnswer | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  const detail = await loadRadarMatchForWrite(propertyId, target.matchId, userId);
+  if (!detail) return radarWriteBoundary(propertyId, RADAR_EVENT_GONE.title, RADAR_EVENT_GONE.body);
+  const action = ((detail.recommendedActions ?? []) as RadarRecommendedAction[]).find((candidate) => candidate.code === target.actionCode);
+  if (!action) return radarWriteBoundary(propertyId, 'Action no longer recommended', 'Home Event Radar no longer recommends this action for the event. Nothing was changed.');
+  const eventTitle = String(detail.title ?? 'Monitored event');
+  if (action.taskLink) return radarTaskAlreadyPlanned(propertyId, target.matchId, eventTitle, action);
+  // Linking needs at least one open task, exactly as the traditional control shows "No active maintenance tasks".
+  const candidates = action.supportedTaskOperations.includes('link_existing_task')
+    ? await radarTaskIntegrationService.listCandidateTasks(propertyId, target.matchId, target.actionCode) as Array<{ id: string; title: string }>
+    : [];
+  const operations = action.supportedTaskOperations.filter((operation) => operation !== 'link_existing_task' || candidates.length > 0);
+  if (!operations.length) {
+    return radarWriteBoundary(propertyId, 'This action cannot be planned here', action.supportedTaskOperations.length
+      ? 'The only option for this action is linking an existing task, and there are no open maintenance tasks to link. Nothing was changed.'
+      : 'Home Event Radar does not offer a task or reminder for this action. Nothing was changed.');
+  }
+  const members = await radarHouseholdMemberOptions(propertyId);
+  const contextVersion = radarTaskContextVersion(target);
+  const openRadar = { id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, target.matchId), style: 'SECONDARY' as const };
+  const capture = radarTaskCaptureRequest(contextVersion, action.label, operations, candidates, members, answer);
+  if (!answer) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'HOME_EVENT_RADAR_TASK_INPUT_REQUIRED', contextVersion,
+      parameters: { radarTaskTarget: target, sourceExecutionId },
+      blocks: [{ type: 'SUMMARY', id: 'radar-task-input', title: `Plan "${action.label}"`, body: `For ${eventTitle}. Nothing has been added yet. Choose how to plan it, then review before anything is saved.`, tone: 'DEFAULT', actions: [openRadar] }],
+      captureRequests: [capture], suggestions: [],
+    };
+  }
+
+  // Validate the answer against the same rules createOrLink applies, so a problem shows on the form, not at confirm.
+  if (!operations.includes(answer.operation)) throw radarCaptureError('That option is not available for this action.');
+  const linking = answer.operation === 'link_existing_task';
+  const maintenanceTaskId = linking ? answer.maintenanceTaskId || null : null;
+  if (linking && !candidates.some((task) => task.id === maintenanceTaskId)) throw radarCaptureError('Choose one of the listed maintenance tasks to link.');
+  const assigneeUserId = answer.assigneeUserId && answer.assigneeUserId !== RADAR_UNASSIGNED ? answer.assigneeUserId : null;
+  if (assigneeUserId && !members.some((member) => member.value === assigneeUserId)) throw radarCaptureError('Choose a household member, or leave the task unassigned.');
+  const timeZone = getAskPropertyTimezone();
+  const requestedDate = linking ? null : answer.dueDate?.value ?? null;
+  if (!linking && !requestedDate && answer.dueTime) throw radarCaptureError('Choose a due date to go with the due time.');
+  const dueAt = requestedDate ? radarZonedWallClockToUtc(requestedDate, answer.dueTime || RADAR_DEFAULT_DUE_TIME, timeZone).toISOString() : null;
+  let due: ReturnType<typeof deriveRadarTaskDueDate>;
+  try {
+    due = deriveRadarTaskDueDate({
+      now: new Date(), operation: answer.operation, priority: action.priority,
+      effectiveAt: detail.effectiveAt ?? null, expiresAt: detail.expiresAt ?? null, requestedDueAt: dueAt,
+    });
+  } catch (error) {
+    if (error instanceof RadarTaskDueDateError) throw radarCaptureError(error.message);
+    throw error;
+  }
+  const input = RadarTaskInputSchema.parse({ matchId: target.matchId, actionCode: target.actionCode, operation: answer.operation, maintenanceTaskId, dueAt, assigneeUserId });
+  const linkedTask = linking ? candidates.find((task) => task.id === maintenanceTaskId) : null;
+  const dueLabel = linking
+    ? 'Kept from the existing task'
+    : due ? `${radarDateTimeLabel(due.dueAt, timeZone)}${due.source === 'user_provided' ? '' : ' (from the event timing)'}` : 'No due date';
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_RADAR_TASK_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { radarTaskTarget: target, radarTask: input, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'radar-task-review', title: `Review planning "${action.label}"`, body: 'You entered these details. Nothing is added or linked until you confirm.', tone: 'DEFAULT', actions: [openRadar] }],
+    confirmation: {
+      confirmationId: `radar-task-${target.matchId}-${target.actionCode}-1`, version: 1,
+      title: linking ? `Link "${linkedTask?.title}" to this action?` : answer.operation === 'create_reminder' ? `Set a reminder for "${action.label}"?` : `Add "${action.label}" as a maintenance task?`,
+      description: linking
+        ? 'The existing maintenance task is linked to this recommended action, the same as linking it from Home Event Radar.'
+        : 'This adds a task to your maintenance list through the same service Home Event Radar uses, linked to this recommended action.',
+      fields: [
+        { label: 'Event', value: eventTitle },
+        { label: 'Recommended action', value: action.label },
+        { label: 'What happens', value: RADAR_TASK_OPERATION_LABEL[answer.operation] },
+        ...(linking ? [{ label: 'Task', value: linkedTask?.title ?? '' }] : [{ label: 'Task title', value: answer.operation === 'create_reminder' ? `Reminder: ${action.label}` : action.label }]),
+        { label: 'Due', value: dueLabel },
+        { label: 'Assigned to', value: assigneeUserId ? members.find((member) => member.value === assigneeUserId)?.label ?? 'Household member' : 'Unassigned' },
+      ],
+      editableFields: [], confirmLabel: linking ? 'Link task' : answer.operation === 'create_reminder' ? 'Set reminder' : 'Add task',
+      consentText: 'I authorize adding this to the shared maintenance list for this home.', expiresAt: expiresAt.toISOString(),
+    },
+    // Kept so the entry can be changed and resubmitted before confirming.
+    captureRequests: [capture],
+    suggestions: [],
+  };
+}
+
+async function homeEventRadarTaskResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const matchId = radarLaunchMatchId(launchContext);
+  const actionCode = RADAR_ACTION_CODES.find((code) => code === launchContext?.actionId) ?? null;
+  // Declared-action-only start: a click on "Plan this action" carries the event, the action code and the pinned
+  // operation. An ASK_REFRESH re-run of an open form, or a bare message, starts nothing.
+  const declared = launchContext?.operationId === 'HOME_EVENT_RADAR_TASK' && launchContext.surface !== 'ASK_REFRESH' && message.trim() === RADAR_TASK_MESSAGE;
+  if (!matchId || !actionCode || !declared) return radarWriteBoundary(propertyId, RADAR_WRITE_NEEDS_EVENT.title, RADAR_WRITE_NEEDS_EVENT.body, 'NOT_APPLICABLE');
+  if (access.role === HouseholdRole.VIEWER) return radarWriteBoundary(propertyId, 'A contributor or owner can plan radar actions', 'Your role can view Home Event Radar but not add or link maintenance tasks. Nothing was changed.');
+  return radarTaskFormResult(userId, propertyId, { matchId, actionCode }, undefined, launchContext?.sourceExecutionId ?? null);
+}
+
+registerCapabilityHandler('home-event-radar.task', async (envelope) => homeEventRadarTaskResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+
+// Errors createOrLink can raise after review, and how Ask reports them. Anything else is unexpected and rethrown.
+const RADAR_TASK_CONFIRM_ERRORS: Record<string, string> = {
+  RADAR_MATCH_NOT_FOUND: 'ASK_CONTEXT_VERSION_CONFLICT',
+  RADAR_ACTION_NOT_AVAILABLE: 'ASK_CONTEXT_VERSION_CONFLICT',
+  RADAR_TASK_OPERATION_UNAVAILABLE: 'ASK_CONTEXT_VERSION_CONFLICT',
+  RADAR_MAINTENANCE_TASK_NOT_FOUND: 'ASK_CONTEXT_VERSION_CONFLICT',
+  RADAR_ASSIGNEE_NOT_IN_HOUSEHOLD: 'ASK_CONTEXT_VERSION_CONFLICT',
+  RADAR_DUE_DATE_INVALID: 'ASK_INVALID_CONFIRMATION_EDIT',
+  RADAR_REMINDER_DUE_DATE_REQUIRED: 'ASK_INVALID_CONFIRMATION_EDIT',
+};
+
+async function confirmHomeEventRadarTask(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access } = ctx;
+  if (access.role === HouseholdRole.VIEWER) throw radarConfirmError('A contributor or owner is required to plan radar actions.', 'ASK_PERMISSION_REQUIRED');
+  const candidate = RadarTaskInputSchema.safeParse(parameters.radarTask);
+  if (!candidate.success) throw radarConfirmError('The task to add or link is invalid.', 'ASK_CONFIRMATION_NOT_ACTIVE');
+  const { matchId, actionCode, operation, maintenanceTaskId, dueAt, assigneeUserId } = candidate.data;
+  const propertyId = execution.propertyId!;
+  let outcome: { link: Record<string, any>; deduped: boolean };
+  try {
+    outcome = await radarTaskIntegrationService.createOrLink(propertyId, matchId, actionCode, userId, { operation, maintenanceTaskId, dueAt, assigneeUserId });
+  } catch (error) {
+    const mapped = error instanceof APIError && error.code ? RADAR_TASK_CONFIRM_ERRORS[error.code] : undefined;
+    if (mapped) throw radarConfirmError(`${(error as Error).message.replace(/\.$/, '')}. Review it and try again.`, mapped);
+    throw error;
+  }
+  const task = outcome.link.task as { id: string; title: string; href: string; nextDueDate: string | null };
+  // Same analytics the traditional POST .../task controller emits.
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.ACTION_COMPLETED, userId, propertyId, moduleKey: AnalyticsModule.RISK, featureKey: AnalyticsFeature.HOME_EVENT_RADAR,
+    metadataJson: { actionType: operation, matchId, actionCode, maintenanceTaskId: task.id, deduped: outcome.deduped, surface: 'ASK' },
+  });
+  const title = outcome.deduped ? 'Already planned' : ({ create_task: 'Task added', create_reminder: 'Reminder set', link_existing_task: 'Task linked' } as const)[operation];
+  return radarWriteReceipt(ctx, matchId, {
+    type: 'WORKFLOW_PROGRESS', id: `radar-task-${matchId}-${actionCode}`, title, status: 'COMPLETED',
+    description: outcome.deduped
+      ? 'This recommended action already had a maintenance task, so nothing new was added.'
+      : 'It is on your maintenance list and linked to this Home Event Radar action.',
+    details: [
+      { label: 'Task', value: task.title },
+      ...(task.nextDueDate ? [{ label: 'Due', value: radarDateTimeLabel(task.nextDueDate, getAskPropertyTimezone()) }] : []),
+    ],
+    actions: [{ id: 'open-task', label: 'Open task', href: task.href, style: 'PRIMARY' }, { id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }],
+  }, outcome.deduped ? 'HOME_EVENT_RADAR_TASK_ALREADY_LINKED' : 'HOME_EVENT_RADAR_TASK_LINKED', 'PROPERTY_RADAR_TASK_LINK');
+}
+
+registerConfirmCapabilityHandler('home-event-radar.task', confirmHomeEventRadarTask);
+
+// Notification settings. The option labels are the traditional "Radar notifications" card's own.
+const RADAR_CATEGORY_OPTIONS = [
+  { value: 'weather', label: 'Weather' }, { value: 'air_quality', label: 'Air quality' }, { value: 'disaster', label: 'Emergency and disaster' },
+  { value: 'utility', label: 'Utilities' }, { value: 'tax', label: 'Property tax' }, { value: 'insurance', label: 'Insurance' }, { value: 'other', label: 'Other property events' },
+];
+const RADAR_CHANNEL_OPTIONS = [{ value: 'in_app', label: 'In-app' }, { value: 'email', label: 'Email' }, { value: 'push', label: 'Push' }];
+const RADAR_SEVERITY_OPTIONS = [
+  { value: 'info', label: 'Informational or higher' }, { value: 'low', label: 'Low or higher' }, { value: 'moderate', label: 'Moderate or higher' },
+  { value: 'high', label: 'High or higher' }, { value: 'severe', label: 'Severe or higher' }, { value: 'extreme', label: 'Extreme only' },
+];
+const RADAR_IMPACT_OPTIONS = [
+  { value: 'none', label: 'Any property impact' }, { value: 'low', label: 'Low or higher' }, { value: 'moderate', label: 'Moderate or higher' },
+  { value: 'high', label: 'High or higher' }, { value: 'critical', label: 'Critical only' },
+];
+const RADAR_DELIVERY_OPTIONS = [{ value: 'immediate', label: 'Immediate' }, { value: 'digest', label: 'Digest' }];
+type RadarPreferencesBody = z.infer<typeof updateRadarNotificationPreferencesBodySchema>;
+const RadarPreferencesAnswerSchema = z.object({
+  isEnabled: z.boolean(),
+  enabledCategories: z.array(z.string()),
+  channels: z.array(z.string()),
+  minimumSeverity: z.string(),
+  minimumImpact: z.string(),
+  deliveryMode: z.string(),
+  criticalSafetyOverrideEnabled: z.boolean(),
+  quietHoursEnabled: z.boolean(),
+  quietHoursStart: z.string().nullish(),
+  quietHoursEnd: z.string().nullish(),
+  timezone: z.string(),
+});
+
+// The canonical row's identity and last save; the default projection (never saved) is its own version.
+export function radarPreferencesContextVersion(current: Pick<RadarNotificationPreferenceProjection, 'propertyId' | 'userId' | 'persisted' | 'updatedAt'>): string {
+  return createHash('sha256').update(`radar-preferences:${current.propertyId}:${current.userId}:${current.persisted}:${current.updatedAt ?? ''}`).digest('hex');
+}
+
+function radarPreferencesAnswer(value: RadarPreferencesBody | RadarNotificationPreferenceProjection): z.infer<typeof RadarPreferencesAnswerSchema> {
+  return {
+    isEnabled: value.isEnabled, enabledCategories: [...value.enabledCategories], channels: [...value.channels],
+    minimumSeverity: value.minimumSeverity, minimumImpact: value.minimumImpact, deliveryMode: value.deliveryMode,
+    criticalSafetyOverrideEnabled: value.criticalSafetyOverrideEnabled,
+    quietHoursEnabled: Boolean(value.quietHours), quietHoursStart: value.quietHours?.start ?? '22:00', quietHoursEnd: value.quietHours?.end ?? '07:00',
+    timezone: value.timezone,
+  };
+}
+
+function radarPreferencesCaptureRequest(contextVersion: string, values: z.infer<typeof RadarPreferencesAnswerSchema>, reviewed = false): AskCaptureRequest {
+  const quietHoursOn = { fieldKey: 'quietHoursEnabled', operator: 'EQUALS' as const, value: true };
+  return {
+    requirementId: radarCaptureRequirementId('radar-preferences-inputs', reviewed ? values : undefined), captureKey: RADAR_PREFERENCES_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'KNOWN',
+    title: 'Radar notifications', question: 'Choose what reaches you, when, and through which channels.',
+    helpText: 'These settings are yours only; other household members keep their own. You will review them before they are saved.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'isEnabled', label: 'Notify me about matching property events', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'On', falseLabel: 'Off' } },
+      { key: 'enabledCategories', label: 'Categories', helpText: 'Choose at least one.', required: true, inputSchema: { type: 'MULTI_SELECT', options: RADAR_CATEGORY_OPTIONS } },
+      { key: 'channels', label: 'Channels', helpText: 'Choose at least one.', required: true, inputSchema: { type: 'MULTI_SELECT', options: RADAR_CHANNEL_OPTIONS } },
+      { key: 'minimumSeverity', label: 'Minimum event severity', required: true, inputSchema: { type: 'SINGLE_SELECT', options: RADAR_SEVERITY_OPTIONS } },
+      { key: 'minimumImpact', label: 'Minimum property impact', required: true, inputSchema: { type: 'SINGLE_SELECT', options: RADAR_IMPACT_OPTIONS } },
+      { key: 'deliveryMode', label: 'Delivery timing', helpText: 'Immediate sends each eligible event when policy permits. Digest groups eligible non-urgent events into a summary.', required: true, inputSchema: { type: 'SINGLE_SELECT', options: RADAR_DELIVERY_OPTIONS } },
+      { key: 'quietHoursEnabled', label: 'Quiet hours', helpText: 'Pause eligible notifications during local quiet hours.', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'On', falseLabel: 'Off' } },
+      { key: 'quietHoursStart', label: 'Quiet hours start', required: true, when: quietHoursOn, inputSchema: { type: 'TIME' } },
+      { key: 'quietHoursEnd', label: 'Quiet hours end', required: true, when: quietHoursOn, inputSchema: { type: 'TIME' } },
+      { key: 'criticalSafetyOverrideEnabled', label: 'Verified extreme safety alerts during quiet hours', helpText: 'Applies only to reviewed, observed, immediate official alerts with verified confidence and high property impact.', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Allow', falseLabel: 'Do not allow' } },
+      { key: 'timezone', label: 'Timezone', helpText: 'An IANA timezone, such as America/New_York.', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 100 } },
+    ] },
+    currentAnswer: values,
+    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare your settings; nothing is saved until you confirm', confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
+
+// The form answer as the traditional PUT body, validated by the traditional route's own schema.
+export function radarPreferencesBodyFromAnswer(answer: unknown): RadarPreferencesBody {
+  const parsed = RadarPreferencesAnswerSchema.safeParse(answer);
+  if (!parsed.success) throw radarCaptureError('Answer every notification setting before reviewing.');
+  const value = parsed.data;
+  const body = updateRadarNotificationPreferencesBodySchema.safeParse({
+    isEnabled: value.isEnabled, enabledCategories: value.enabledCategories, channels: value.channels,
+    minimumSeverity: value.minimumSeverity, minimumImpact: value.minimumImpact, deliveryMode: value.deliveryMode,
+    criticalSafetyOverrideEnabled: value.criticalSafetyOverrideEnabled,
+    quietHours: value.quietHoursEnabled ? { start: value.quietHoursStart ?? '', end: value.quietHoursEnd ?? '' } : null,
+    timezone: value.timezone,
+  });
+  if (!body.success) {
+    const field = String(body.error.issues[0]?.path[0] ?? '');
+    const messages: Record<string, string> = {
+      enabledCategories: 'Choose at least one category.',
+      channels: 'Choose at least one channel.',
+      quietHours: 'Quiet hours need a 24-hour start and end time that are different from each other.',
+      timezone: 'Enter a valid IANA timezone, such as America/New_York.',
+    };
+    throw radarCaptureError(messages[field] ?? 'Check the notification settings and try again.');
+  }
+  return body.data;
+}
+
+function radarPreferenceLabels(body: RadarPreferencesBody) {
+  const pick = (options: Array<{ value: string; label: string }>, value: string) => options.find((option) => option.value === value)?.label ?? value;
+  return [
+    { key: 'isEnabled', label: 'Notifications', value: body.isEnabled ? 'On' : 'Off' },
+    { key: 'enabledCategories', label: 'Categories', value: body.enabledCategories.map((value) => pick(RADAR_CATEGORY_OPTIONS, value)).join(', ') },
+    { key: 'channels', label: 'Channels', value: body.channels.map((value) => pick(RADAR_CHANNEL_OPTIONS, value)).join(', ') },
+    { key: 'minimumSeverity', label: 'Minimum severity', value: pick(RADAR_SEVERITY_OPTIONS, body.minimumSeverity) },
+    { key: 'minimumImpact', label: 'Minimum impact', value: pick(RADAR_IMPACT_OPTIONS, body.minimumImpact) },
+    { key: 'deliveryMode', label: 'Delivery', value: pick(RADAR_DELIVERY_OPTIONS, body.deliveryMode) },
+    { key: 'quietHours', label: 'Quiet hours', value: body.quietHours ? `${body.quietHours.start} to ${body.quietHours.end}` : 'Off' },
+    { key: 'criticalSafetyOverrideEnabled', label: 'Extreme safety alerts in quiet hours', value: body.criticalSafetyOverrideEnabled ? 'Allowed' : 'Not allowed' },
+    { key: 'timezone', label: 'Timezone', value: body.timezone },
+  ];
+}
+
+export async function radarPreferencesFormResult(userId: string, propertyId: string, body: RadarPreferencesBody | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  const current = await radarNotificationPreferenceService.get(propertyId, userId);
+  const contextVersion = radarPreferencesContextVersion(current);
+  const openRadar = { id: 'open-radar', label: 'Open Home Event Radar', href: radarEventHref(propertyId), style: 'SECONDARY' as const };
+  if (!body) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'HOME_EVENT_RADAR_PREFERENCES_INPUT_REQUIRED', contextVersion,
+      parameters: { sourceExecutionId },
+      blocks: [{ type: 'SUMMARY', id: 'radar-preferences-input', title: 'Radar notification settings', body: `${current.persisted ? 'These are your current settings.' : 'You have not changed these yet, so these are the defaults.'} Change what you like, then review before anything is saved.`, tone: 'DEFAULT', actions: [openRadar] }],
+      captureRequests: [radarPreferencesCaptureRequest(contextVersion, radarPreferencesAnswer(current))], suggestions: [],
+    };
+  }
+  const before = radarPreferenceLabels({ ...current, quietHours: current.quietHours });
+  const after = radarPreferenceLabels(body);
+  const changed = after.filter((row, index) => row.value !== before[index].value).map((row) => row.label);
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_RADAR_PREFERENCES_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { radarPreferences: body, radarPreferencesContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'radar-preferences-review', title: 'Review your notification settings', body: changed.length ? `Changing: ${changed.join(', ')}. Nothing is saved until you confirm.` : 'These match your current settings. Confirming saves them as they are.', tone: 'DEFAULT', actions: [openRadar] }],
+    confirmation: {
+      confirmationId: `radar-preferences-${contextVersion.slice(0, 12)}-1`, version: 1,
+      title: 'Save these notification settings?',
+      description: 'They apply to Home Event Radar notifications for this home, for you only.',
+      fields: after.map(({ label, value }) => ({ label, value })),
+      editableFields: [], confirmLabel: 'Save settings',
+      consentText: 'I want Home Event Radar to use these notification settings for me.', expiresAt: expiresAt.toISOString(),
+    },
+    captureRequests: [radarPreferencesCaptureRequest(contextVersion, radarPreferencesAnswer(body), true)],
+    suggestions: [],
+  };
+}
+
+async function homeEventRadarPreferencesResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const declared = launchContext?.operationId === 'HOME_EVENT_RADAR_PREFERENCES' && launchContext.surface !== 'ASK_REFRESH' && message.trim() === RADAR_PREFERENCES_MESSAGE;
+  if (!declared) return radarWriteBoundary(propertyId, 'Open notification settings from your radar feed', 'Use "Notification settings" on your Home Event Radar feed to change them here. Nothing was changed.', 'NOT_APPLICABLE');
+  // Domain commands have no VIEWER floor, so this is stricter than the traditional page (FRD v1.41).
+  if (access.role === HouseholdRole.VIEWER) return radarWriteBoundary(propertyId, 'Change these in Home Event Radar', 'In Ask, a contributor or owner can change radar notification settings. You can still change yours on the Home Event Radar page. Nothing was changed.');
+  return radarPreferencesFormResult(userId, propertyId, undefined, launchContext?.sourceExecutionId ?? null);
+}
+
+registerCapabilityHandler('home-event-radar.preferences', async (envelope) => homeEventRadarPreferencesResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+
+async function confirmHomeEventRadarPreferences(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access } = ctx;
+  if (access.role === HouseholdRole.VIEWER) throw radarConfirmError('A contributor or owner is required to change radar notification settings in Ask.', 'ASK_PERMISSION_REQUIRED');
+  const body = updateRadarNotificationPreferencesBodySchema.safeParse(parameters.radarPreferences);
+  if (!body.success) throw radarConfirmError('The settings to save are invalid.', 'ASK_CONFIRMATION_NOT_ACTIVE');
+  const propertyId = execution.propertyId!;
+  const current = await radarNotificationPreferenceService.get(propertyId, userId);
+  if (parameters.radarPreferencesContextVersion !== radarPreferencesContextVersion(current)) {
+    throw radarConfirmError('Your notification settings changed while this was open. Review them and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+  }
+  const saved = await radarNotificationPreferenceService.update(propertyId, userId, body.data);
+  // The traditional PUT /radar/preferences controller emits no analytics, so neither does this.
+  return radarWriteReceipt(ctx, 'preferences', {
+    type: 'WORKFLOW_PROGRESS', id: 'radar-preferences-saved', title: 'Notification settings saved', status: 'COMPLETED',
+    description: 'Home Event Radar uses these for your notifications about this home. Other household members keep their own.',
+    details: radarPreferenceLabels(body.data).map(({ label, value }) => ({ label, value })),
+    actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: radarEventHref(propertyId), style: 'SECONDARY' }],
+  }, 'HOME_EVENT_RADAR_PREFERENCES_SAVED', 'PROPERTY_RADAR_NOTIFICATION_PREFERENCE').then((result) => ({ ...result, artifactId: `${saved.propertyId}:${saved.userId}` }));
+}
+
+registerConfirmCapabilityHandler('home-event-radar.preferences', confirmHomeEventRadarPreferences);
 
 // C2C Intelligence & Agentic Evolution Phase 3 / PR 12b. Routes an Ask "help me
 // decide / why / walk me through" question that references an already-delivered
@@ -11298,7 +11783,9 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     // an already-successful submission -- the execution row already
     // reflects that success, so return it directly instead of re-executing
     // anything.
-    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM') {
+    // The Home Event Radar forms (FRD v1.41) are the same: their canned message is only honored with its declared
+    // launchContext, which a replay does not have, so re-executing would replace the review card with a boundary.
+    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES') {
       askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
       return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
     }
@@ -11321,7 +11808,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -11606,6 +12093,37 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryRoom';
+  } else if (execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES') {
+    const isTask = execution.operationId === 'HOME_EVENT_RADAR_TASK';
+    if (input.captureKey !== (isTask ? RADAR_TASK_CAPTURE_KEY : RADAR_PREFERENCES_CAPTURE_KEY)) {
+      throw radarCaptureError('This Home Event Radar form is no longer active.', 'ASK_CAPTURE_NOT_ACTIVE');
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      throw radarCaptureError(isTask ? 'A contributor or owner is required to plan radar actions.' : 'A contributor or owner is required to change radar notification settings in Ask.', 'ASK_PERMISSION_REQUIRED');
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const sourceExecutionId = typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null;
+    if (isTask) {
+      const target = RadarTaskTargetSchema.safeParse(storedParameters.radarTaskTarget);
+      if (!target.success) throw radarCaptureError('This Home Event Radar form is no longer active.', 'ASK_CAPTURE_NOT_ACTIVE');
+      const currentVersion = radarTaskContextVersion(target.data);
+      if (currentVersion !== input.expectedContextVersion) throw radarCaptureError('This form is out of date. Start again from "Plan this action".', 'ASK_CONTEXT_VERSION_CONFLICT');
+      const answer = RadarTaskAnswerSchema.safeParse(input.answer);
+      if (!answer.success) throw radarCaptureError('Choose what to do; a due date must be a date and a due time a 24-hour HH:mm time.');
+      result = await radarTaskFormResult(userId, execution.propertyId, target.data, answer.data, sourceExecutionId);
+      capturedContextVersion = currentVersion;
+      canonicalOwner = 'PropertyRadarTaskLink';
+    } else {
+      const currentVersion = radarPreferencesContextVersion(await radarNotificationPreferenceService.get(execution.propertyId, userId));
+      if (currentVersion !== input.expectedContextVersion) throw radarCaptureError('Your notification settings changed while this form was open. Start again from "Notification settings".', 'ASK_CONTEXT_VERSION_CONFLICT');
+      result = await radarPreferencesFormResult(userId, execution.propertyId, radarPreferencesBodyFromAnswer(input.answer), sourceExecutionId);
+      capturedContextVersion = currentVersion;
+      canonicalOwner = 'PropertyRadarNotificationPreference';
+    }
+    captureId = input.idempotencyKey;
   } else if (execution.operationId === 'INVENTORY_ITEM_CREATE') {
     if (input.captureKey !== INVENTORY_CREATE_CAPTURE_KEY) {
       const error = new Error('This inventory capture is no longer active.');

@@ -128,6 +128,8 @@ export type ScalarCaptureInputSchema =
   | { type: 'INTEGER'; min?: number; max?: number; unit?: string }
   | { type: 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'SHORT_TEXT'; maxLength: number }
+  // A 24-hour HH:mm wall-clock time (Home Event Radar quiet hours and task due time, FRD v1.41).
+  | { type: 'TIME' }
   | { type: 'APPROXIMATE_DATE'; allowedPrecisions?: CaptureDatePrecision[]; allowFuture?: boolean };
 
 export interface CaptureFieldCondition {

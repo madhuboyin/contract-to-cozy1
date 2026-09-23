@@ -85,6 +85,9 @@ function validateInputValue(schema: ScalarCaptureInputSchema, value: unknown, al
   if (schema.type === 'SHORT_TEXT' && (typeof value !== 'string' || !value.trim() || value.length > schema.maxLength)) {
     throw new Error('Expected a valid short text answer.');
   }
+  if (schema.type === 'TIME' && (typeof value !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value))) {
+    throw new Error('Expected a 24-hour HH:mm time.');
+  }
   if (schema.type === 'APPROXIMATE_DATE') {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected a date with precision.');
     const candidate = value as { precision?: string; value?: string; rangeEnd?: string };

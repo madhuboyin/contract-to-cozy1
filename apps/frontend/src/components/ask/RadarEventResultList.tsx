@@ -12,7 +12,7 @@ import type { RadarCanonicalDetail } from '@/types';
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
 type ItemAction = NonNullable<Item['actions']>[number];
-type OnAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+type OnAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string) => void;
 
 // FRD v1.40: the feed declares every action the member's role allows; only the ones valid for the event's LIVE
 // canonical state (re-fetched on open) are shown, mirroring the traditional page's own toggles -- Save/Remove from
@@ -27,6 +27,8 @@ export function radarActionsForLiveState(actions: ItemAction[], userState: strin
       case 'radar-dismiss': return state !== 'dismissed' && state !== 'acted_on';
       case 'radar-restore': return state === 'dismissed';
       case 'radar-mark-done': return state !== 'acted_on';
+      // Rendered per recommended action instead (see RadarRecommendedActions), never as a button of its own.
+      case 'radar-plan-task': return false;
       default: return true;
     }
   });
@@ -57,6 +59,38 @@ function formatDate(value: string | null | undefined): string {
   if (!value) return 'Not recorded';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString();
+}
+
+// FRD v1.41: each recommended action shows its linked task (the same "Open <task>" link as the traditional sheet)
+// or, when the member may plan it and the action supports a task, "Plan this action", which sends the action's
+// code as launchContext.actionId. Which operations are offered is decided server-side from the live action.
+function RadarRecommendedActions({ actions, planAction, disabled, onPlan }: {
+  actions: RadarCanonicalDetail['recommendedActions'];
+  planAction?: ItemAction;
+  disabled?: boolean;
+  onPlan: (planAction: ItemAction, code: string) => void;
+}) {
+  return (
+    <div className="mt-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recommended</p>
+      <ul className="mt-2 space-y-2">
+        {actions.slice(0, 8).map((action) => (
+          <li key={action.code} className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
+            <span>{action.label}</span>
+            {action.taskLink
+              ? <a href={action.taskLink.task.href} data-radar-task-link={action.code} className="text-xs font-semibold text-teal-800 underline-offset-4 hover:underline">
+                {action.taskLink.operation === 'create_reminder' ? 'Reminder set' : 'Task linked'}: {action.taskLink.task.title}
+              </a>
+              : planAction && action.supportedTaskOperations.length > 0
+                ? <button type="button" disabled={disabled} data-radar-plan-action={action.code} onClick={() => onPlan(planAction, action.code)}
+                  aria-label={`Plan this action: ${action.label}`}
+                  className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-50">{planAction.label}</button>
+                : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 1 cross-cutting, capability-card audit
@@ -149,14 +183,8 @@ function RadarEventDetail({ matchId, expectedPropertyId, fallbackItem, disabled,
         </dl>
         {detail.matchExplanation?.homeownerExplanation && <p className="mt-3 text-sm leading-6 text-slate-700">{detail.matchExplanation.homeownerExplanation}</p>}
         {detail.recommendedActions.length > 0 && (
-          <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recommended</p>
-            <ul className="mt-2 space-y-1.5">
-              {detail.recommendedActions.slice(0, 8).map((action) => (
-                <li key={action.code} className="text-sm text-slate-700">{action.label}</li>
-              ))}
-            </ul>
-          </div>
+          <RadarRecommendedActions actions={detail.recommendedActions} planAction={onAction ? fallbackItem.actions?.find((action) => action.id === 'radar-plan-task') : undefined}
+            disabled={disabled} onPlan={(planAction, code) => onAction?.(fallbackItem.entityType, fallbackItem.id, planAction.message, planAction.operationId, planAction.interactionType, undefined, code)} />
         )}
         {detail.relatedIncident && (
           <p className="mt-3 text-sm text-slate-700">
@@ -187,7 +215,8 @@ function RadarEventDetail({ matchId, expectedPropertyId, fallbackItem, disabled,
 // (after ReserveAllocationResultList): renders the home-event-radar-feed
 // block (HOME_EVENT_RADAR_FEED operation) with canonical inline detail.
 // FRD v1.40 added filter chips and the per-user writes (item actions shown in
-// the detail); task create-or-link is still out of scope.
+// the detail); FRD v1.41 added task create-or-link (per recommended action) and
+// notification settings (a feed-level START_WORKFLOW action, rendered below).
 export function RadarEventResultList({ block, propertyId, disabled, onFilter, onAction, onAccessLost, link }: {
   block: Block;
   propertyId?: string;

@@ -13,7 +13,7 @@ const { validateConfirmCapabilityHandlerRegistry } = require('../../src/services
 // validateConfirmCapabilityHandlerRegistry.
 require('../../src/services/ask/askOrchestrator.service.ts');
 
-test('every one of the 40 confirmation-required Ask commands resolves to a registered confirm capability handler', () => {
+test('every one of the 42 confirmation-required Ask commands resolves to a registered confirm capability handler', () => {
   const commandIds = Object.keys(ASK_DOMAIN_COMMAND_REGISTRY);
   // 25 from Phase 2's original if/else-chain migration + CAPTURE_FACT_CONFIRM/
   // CAPTURE_EVENT_CONFIRM (this revision; implementation plan §8; FRD §19/§20)
@@ -21,7 +21,8 @@ test('every one of the 40 confirmation-required Ask commands resolves to a regis
   // + SELLER_PREP_ITEM_DECISION (Phase 7 write-path slice, §13; FRD §31)
   // + CAPTURE_EVIDENCE_CONFIRM (Phase 2 external review, §8/§4.2; FRD §23).
   // + HOME_EVENT_RADAR_MARK_DONE/FEEDBACK (FRD v1.40).
-  assert.equal(commandIds.length, 40);
+  // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
+  assert.equal(commandIds.length, 42);
   assert.deepEqual(validateConfirmCapabilityHandlerRegistry(), []);
 });
 
