@@ -52,6 +52,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'neighborhood-change-radar': ['NEIGHBORHOOD_CHANGE_FEED'],
   'home-risk-replay': ['PAST_HAZARD_EXPOSURE'],
   'status-board': ['HOME_STATUS_BOARD'],
+  'home-habit-coach': ['HOME_HABITS'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
@@ -68,7 +69,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
  */
 const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
   'diy', 'hoa-compliance', 'home-digital-twin', 'home-digital-will',
-  'home-habit-coach', 'home-briefing',
+  'home-briefing',
   'permits',
   'plant-advisor', 'project-tracker', 'service-price-radar',
 ];

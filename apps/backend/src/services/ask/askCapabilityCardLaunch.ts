@@ -42,6 +42,8 @@ const INLINE_ENTRY_READS = {
   'home-risk-replay': { operationId: 'PAST_HAZARD_EXPOSURE', message: 'Show my home risk replay' },
   // FRD v1.51: backed by a new operation reading the same listBoard the Status Board page reads.
   'status-board': { operationId: 'HOME_STATUS_BOARD', message: 'Show my status board' },
+  // FRD v1.53: backed by a new operation reading the same listActiveHabits the Home Habit Coach page reads.
+  'home-habit-coach': { operationId: 'HOME_HABITS', message: 'Show my home habits' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

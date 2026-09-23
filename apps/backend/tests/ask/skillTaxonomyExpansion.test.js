@@ -44,6 +44,7 @@ const TAXONOMY = Object.freeze({
   'neighborhood-change-radar': ['NEIGHBORHOOD_CHANGE_FEED'],
   'home-risk-replay': ['PAST_HAZARD_EXPOSURE'],
   'status-board': ['HOME_STATUS_BOARD'],
+  'home-habit-coach': ['HOME_HABITS'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

@@ -106,6 +106,10 @@ const ROWS: readonly ObservationTuple[] = [
   // ("How are my home systems holding up these days?") put a 0.637 wrong-operation competitor into the READ curve and
   // pulled an unrelated misspelled fixture under the execution floor, so it was replaced.
   ['077-expected', '077', 'HOME_STATUS_BOARD', .5044, true], ['077-competitor', '077', 'INVENTORY_LOOKUP', .23, false],
+  // FRD v1.53: fixture 078 (HOME_HABITS), re-derived from the retriever; no existing row changed. Two first choices with a
+  // weak (< 0.29) wrong-operation competitor pooled with other fixtures' low competitors in the READ curve and pulled
+  // "Show my inspecion findings" under the execution floor; this pair leaves that fixture's confidence unchanged.
+  ['078-expected', '078', 'HOME_HABITS', .8183, true], ['078-competitor', '078', 'CAPITAL_RESERVE_PLAN', .6673, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(
