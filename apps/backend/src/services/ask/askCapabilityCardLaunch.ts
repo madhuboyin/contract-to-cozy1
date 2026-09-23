@@ -29,6 +29,11 @@ const INLINE_ENTRY_READS = {
   // Fifth candidate slice (FRD v1.46), first cut of buyer-closing: the deadlines list, with blocking tasks opening inline
   // and the existing confirmed BUYER_TASK_COMPLETE as a declared action.
   'buyer-closing': { operationId: 'BUYER_DEADLINES', message: 'What is due before closing?' },
+  // FRD v1.47: two capabilities the Appendix D audit listed as having no Ask operation, whose page reads the same
+  // canonical source as an existing one. Both are partial (see the FRD row): the reserve plan shows the fund's
+  // shortfall and allocations but not its contributions; the readiness answer covers one renovation case.
+  'reserve-fund': { operationId: 'CAPITAL_RESERVE_PLAN', message: 'How is my reserve fund doing?' },
+  'home-renovation-risk-advisor': { operationId: 'RENOVATION_PERMIT_READINESS', message: 'Is my renovation ready to start?' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

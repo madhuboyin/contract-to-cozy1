@@ -89,7 +89,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
   QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'open-comparison']),
   HOME_DEADLINE_MONITOR: new Set(['open-task', 'open-maintenance', 'open-coverage', 'manage-reminder']),
-  CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'open-timeline', 'open-timeline-table', 'open-reserve', 'rerun-horizon-5', 'rerun-horizon-10']),
+  // FRD v1.47: + open-reserve-fund, the reserve-allocations list's own link, which was always stripped.
+  CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'open-timeline', 'open-timeline-table', 'open-reserve', 'open-reserve-fund', 'rerun-horizon-5', 'rerun-horizon-10']),
   // Item actions on the feed's events (FRD v1.40); the inline detail shows the ones valid for the live state.
   HOME_EVENT_RADAR_FEED: new Set(['open-radar', 'radar-include-dismissed', 'radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task', 'radar-notification-settings']),
   HOME_EVENT_RADAR_STATE: new Set(['open-radar']),

@@ -4383,7 +4383,9 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
 
 async function renovationPermitReadinessResult(propertyId: string, message: string): Promise<AskOperationResult> {
   const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/projects`;
+  // FRD v1.47: renovation cases live on /renovations (the Renovations page reads the same cases and readiness). Both
+  // links pointed at /projects, whose list page reads neither a case nor ?renovationCaseId=.
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/renovations`;
   const permitsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/permits`;
   if (!cases.length) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
@@ -4397,7 +4399,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   const items: any[] = readiness.items ?? [];
   const blockers = items.filter((item) => item.isBlocking && item.status !== 'SATISFIED');
   const open = items.filter((item) => item.status !== 'SATISFIED');
-  const caseHref = `${href}?renovationCaseId=${encodeURIComponent(selected.id)}`;
+  const caseHref = `${href}/${encodeURIComponent(selected.id)}/readiness`;
   const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-case', label: 'Open renovation case', href: caseHref, style: 'PRIMARY' }, { id: 'open-permits', label: 'Open Permit Tracker', href: permitsHref, style: 'SECONDARY' }] }];
   if (items.length) blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'renovation-readiness-items', title: 'Readiness checklist', description: 'Blocking state is owned by the canonical renovation scope, requirement, compliance, quote, schedule, and evidence records.', sections: [{ id: 'blocking', title: 'Blocking', count: blockers.length, items: blockers.slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction, item.evidenceRequired].filter(Boolean), status: item.status, href: caseHref })) }, { id: 'other-open', title: 'Other open items', count: Math.max(0, open.length - blockers.length), items: open.filter((item) => !item.isBlocking).slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction].filter(Boolean), status: item.status, href: caseHref })) }].filter((section) => section.count > 0), actions: [] });
   blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });
