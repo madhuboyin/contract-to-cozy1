@@ -3328,20 +3328,42 @@ async function incidentContinuationResult(propertyId: string): Promise<AskOperat
   ], suggestions: ['File a water damage claim', 'What is the status of my open claim?'] };
 }
 
-async function inspectionFindingsResult(propertyId: string): Promise<AskOperationResult> {
+// Inspection-hub capability-card slice (FRD v1.43). The three confirmed INSPECTION_FINDING_UPDATE actions, declared on
+// each finding row; the inline detail (InspectionFindingResultList) shows only those the finding's LIVE state allows.
+// inspectionFindingAction parses each message back to exactly its own action.
+export const INSPECTION_FINDING_ACTIONS = [
+  { id: 'finding-accept', label: 'Accept as work', message: 'Accept this inspection finding as work.', action: 'ACCEPT' },
+  { id: 'finding-dismiss', label: 'Dismiss', message: 'Dismiss this inspection finding.', action: 'DISMISS' },
+  { id: 'finding-resolve', label: 'Mark resolved', message: 'Mark this inspection finding resolved.', action: 'RESOLVE' },
+] as const;
+
+export function inspectionFindingItemActions(role: HouseholdRole) {
+  if (role === HouseholdRole.VIEWER) return [];
+  return INSPECTION_FINDING_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INSPECTION_FINDING_UPDATE' }));
+}
+
+// The traditional hub pages. There is no /inspection route; earlier Ask links pointed there and were broken.
+export function inspectionHubHref(propertyId: string, finding?: { id: string; reportId: string }): string {
+  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}/inspection-hub`;
+  return finding ? `${base}/${encodeURIComponent(finding.reportId)}?findingId=${encodeURIComponent(finding.id)}` : `${base}/open-items`;
+}
+
+async function inspectionFindingsResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
   const findings = await prisma.inspectionFinding.findMany({
     where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } },
     orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }], take: 50,
     include: { report: { select: { inspectionDate: true, inspectorName: true } } },
   });
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/inspection`;
+  const href = inspectionHubHref(propertyId);
+  const findingActions = inspectionFindingItemActions(access.role);
   if (findings.length === 0) return {
     status: 'ANSWERED', reasonCode: 'NO_OPEN_INSPECTION_FINDINGS',
     blocks: [{ type: 'EMPTY_STATE', id: 'inspection-findings-empty', title: 'No open confirmed inspection findings', body: 'Ask found no unresolved findings from a homeowner-confirmed inspection report.', actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'PRIMARY' }] }], suggestions: [],
   };
   return {
     status: 'ANSWERED', reasonCode: 'INSPECTION_FINDINGS_FOUND',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-findings', title: 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Use the exact system or finding id to accept, dismiss, or resolve one.', sections: [{ id: 'open', title: 'Needs review', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-findings', title: 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Open a finding to accept it as work, dismiss it, or mark it resolved.', sections: [{ id: 'open', title: 'Needs review', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href: inspectionHubHref(propertyId, finding), entityType: 'INSPECTION_FINDING', parentId: finding.reportId, actions: findingActions })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }],
     suggestions: findings.slice(0, 2).map((finding) => `Accept ${finding.homeSystem} finding ${finding.id} as work`),
   };
 }
@@ -3353,11 +3375,95 @@ function inspectionFindingAction(message: string): 'ACCEPT' | 'DISMISS' | 'RESOL
   return null;
 }
 
+// Resolving asks what the traditional "Mark as Resolved" dialog asks: how it was resolved (the same five methods,
+// defaulting to contractor work), optional notes and an optional cost. FRD v1.43: Ask previously wrote the method
+// 'HOMEOWNER_CONFIRMED', which is not an InspectionResolutionMethod value, so every Ask resolve would have been
+// rejected by the database.
+const INSPECTION_RESOLUTION_METHOD_OPTIONS: readonly CorrectionOption[] = [
+  { label: 'Contractor work', value: 'CONTRACTOR_WORK' },
+  { label: 'DIY repair', value: 'DIY' },
+  { label: 'Seller repair', value: 'SELLER_REPAIR' },
+  { label: 'Credited at closing', value: 'CREDITED_AT_CLOSING' },
+  { label: 'Dismissed / not applicable', value: 'DISMISSED' },
+];
+export const InspectionResolutionSchema = z.object({
+  method: z.enum(['CONTRACTOR_WORK', 'DIY', 'SELLER_REPAIR', 'CREDITED_AT_CLOSING', 'DISMISSED']),
+  notes: z.string().trim().min(1).max(1000).nullable(),
+  costCents: z.number().int().min(0).max(1_000_000_000).nullable(),
+}).strict();
+type InspectionResolution = z.infer<typeof InspectionResolutionSchema>;
+const INSPECTION_RESOLUTION_DEFAULT: InspectionResolution = { method: 'CONTRACTOR_WORK', notes: null, costCents: null };
+
+function inspectionResolutionEditableFields(resolution: InspectionResolution) {
+  return [
+    { key: 'method', label: 'How was this resolved?', type: 'SELECT' as const, value: resolution.method, options: [...INSPECTION_RESOLUTION_METHOD_OPTIONS] },
+    { key: 'notes', label: 'Notes (optional)', type: 'TEXTAREA' as const, value: resolution.notes ?? '' },
+    { key: 'costCents', label: 'Cost in dollars (optional)', type: 'MONEY' as const, value: resolution.costCents === null ? '' : (resolution.costCents / 100).toFixed(2) },
+  ];
+}
+
+export async function editInspectionFindingResolveConfirmation(
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+  userId: string,
+): Promise<AskExecutionResponse> {
+  void userId;
+  const existing = InspectionResolutionSchema.safeParse(parameters.inspectionResolution);
+  if (parameters.inspectionFindingAction !== 'RESOLVE' || !existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
+  const unknownField = Object.keys(input.edits).find((key) => !['method', 'notes', 'costCents'].includes(key));
+  if (unknownField) throw Object.assign(new Error('Only the resolution method, notes and cost can be edited.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const next: InspectionResolution = { ...existing.data };
+  if (input.edits.method !== undefined) {
+    const method = InspectionResolutionSchema.shape.method.safeParse(input.edits.method.trim());
+    if (!method.success) throw Object.assign(new Error('Choose one of the listed resolution methods.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+    next.method = method.data;
+  }
+  if (input.edits.notes !== undefined) {
+    if (input.edits.notes.trim().length > 1000) throw Object.assign(new Error('Keep the notes to 1000 characters or fewer.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+    next.notes = input.edits.notes.trim() || null;
+  }
+  if (input.edits.costCents !== undefined) {
+    const text = input.edits.costCents.trim();
+    if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(text)) throw Object.assign(new Error('Enter an amount in dollars, such as 850 or 850.50.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+    next.costCents = Math.round(Number(text) * 100);
+  }
+  const resolution = InspectionResolutionSchema.parse(next);
+  const findingId = typeof parameters.inspectionFindingId === 'string' ? parameters.inspectionFindingId : '';
+  const finding = await prisma.inspectionFinding.findFirst({ where: { id: findingId, propertyId: execution.propertyId! }, select: { id: true, homeSystem: true, severity: true, inspectorDescription: true } });
+  if (!finding) throw Object.assign(new Error('This inspection finding is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  const nextVersion = input.confirmationVersion + 1;
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const newConfirmation = {
+    confirmationId: `inspection-finding-${finding.id}-${nextVersion}`, version: nextVersion, title: 'Resolve this finding?', description: finding.inspectorDescription,
+    fields: [{ label: 'System', value: finding.homeSystem }, { label: 'Severity', value: String(finding.severity).toLowerCase() }, { label: 'Action', value: 'resolve' }],
+    editableFields: inspectionResolutionEditableFields(resolution), confirmLabel: 'Resolve finding',
+    consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString(),
+  };
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'inspection-finding-review', title: 'Review resolve action', body: 'Resolving records how this finding was handled on the canonical inspection record.', tone: 'CAUTION' as const, actions: [] };
+  const editWrite = await prisma.askExecution.updateMany({
+    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
+    data: {
+      parametersJson: asInputJson({ ...parameters, inspectionResolution: resolution, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+        ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),
+      }),
+    },
+  });
+  if (editWrite.count !== 1) throw Object.assign(new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  await prisma.askExecutionEvent.create({
+    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+  });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
 async function inspectionFindingUpdateResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   const findings = await prisma.inspectionFinding.findMany({ where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } }, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, reportId: true, homeSystem: true, inspectorDescription: true, severity: true, status: true, workDisposition: true, updatedAt: true } });
   const selected = exactEntityMatch(findings.map((finding) => ({ ...finding, title: `${finding.homeSystem}: ${finding.inspectorDescription}` })), message, launchContext);
   const action = inspectionFindingAction(message);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/inspection`;
+  const href = selected ? inspectionHubHref(propertyId, selected) : inspectionHubHref(propertyId);
   if (!selected || !action) return {
     status: 'NEEDS_ENTITY', reasonCode: 'INSPECTION_FINDING_TARGET_REQUIRED',
     blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-finding-targets', title: 'Choose a finding and action', description: 'Use the finding id or exact system/description and say accept, dismiss, or resolve.', sections: [{ id: 'findings', title: 'Open confirmed findings', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: String(finding.severity).toLowerCase(), meta: [], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }], suggestions: [],
@@ -3366,9 +3472,9 @@ async function inspectionFindingUpdateResult(propertyId: string, message: string
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { inspectionFindingId: selected.id, inspectionReportId: selected.reportId, inspectionFindingAction: action, inspectionFindingContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    parameters: { inspectionFindingId: selected.id, inspectionReportId: selected.reportId, inspectionFindingAction: action, inspectionFindingContextVersion: contextVersion, ...(action === 'RESOLVE' ? { inspectionResolution: INSPECTION_RESOLUTION_DEFAULT } : {}), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'inspection-finding-review', title: `Review ${action.toLowerCase()} action`, body: action === 'ACCEPT' ? 'Accepting creates or reuses canonical Operational Work and routes it to the appropriate maintenance, guidance, or project workflow.' : action === 'DISMISS' ? 'Dismissing marks this canonical finding not active and reconciles linked work.' : 'Resolving records a homeowner-confirmed outcome on this canonical finding.', tone: 'CAUTION', actions: [{ id: 'open-finding', label: 'Review in Inspection Hub', href, style: 'SECONDARY' }] }],
-    confirmation: { confirmationId: `inspection-finding-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} this finding?`, description: selected.inspectorDescription, fields: [{ label: 'System', value: selected.homeSystem }, { label: 'Severity', value: String(selected.severity).toLowerCase() }, { label: 'Action', value: action.toLowerCase() }], editableFields: [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} finding`, consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString() }, suggestions: [],
+    confirmation: { confirmationId: `inspection-finding-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} this finding?`, description: selected.inspectorDescription, fields: [{ label: 'System', value: selected.homeSystem }, { label: 'Severity', value: String(selected.severity).toLowerCase() }, { label: 'Action', value: action.toLowerCase() }], editableFields: action === 'RESOLVE' ? inspectionResolutionEditableFields(INSPECTION_RESOLUTION_DEFAULT) : [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} finding`, consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
 
@@ -9116,7 +9222,7 @@ registerCapabilityHandler('home-actions.feed', async (envelope) => homeActionsRe
     : null,
 ));
 registerCapabilityHandler('home-operations.update', async (envelope) => operationalWorkUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
-registerCapabilityHandler('inspection-findings.review', async (envelope) => inspectionFindingsResult(envelope.propertyId!));
+registerCapabilityHandler('inspection-findings.review', async (envelope) => inspectionFindingsResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('inspection-findings.update', async (envelope) => inspectionFindingUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
 registerCapabilityHandler('document-promotion.review', async (envelope) => documentPromotionReviewResult(envelope.propertyId!));
 registerCapabilityHandler('document-promotion.confirm', async (envelope) => documentPromotionConfirmResult(envelope.propertyId!, envelope.message, envelope.launchContext));
@@ -12715,7 +12821,16 @@ async function confirmInspectionFindingUpdate(ctx: ConfirmCapabilityContext): Pr
     if (!alreadyApplied) {
       if (action === 'ACCEPT') await acceptFindingAsWork(finding.id, reportId, execution.propertyId, userId);
       else if (action === 'DISMISS') await dismissFinding(finding.id, reportId, execution.propertyId, 'Dismissed through Ask after homeowner confirmation.', userId);
-      else await resolveFinding(finding.id, execution.propertyId, { resolutionMethod: 'HOMEOWNER_CONFIRMED', resolutionNotes: 'Resolved through Ask after homeowner confirmation.' });
+      else {
+        // Older proposals (before FRD v1.43) carry no resolution; they get the traditional dialog's default method.
+        const resolution = InspectionResolutionSchema.safeParse(parameters.inspectionResolution ?? INSPECTION_RESOLUTION_DEFAULT);
+        if (!resolution.success) throw Object.assign(new Error('The resolution details are invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+        await resolveFinding(finding.id, execution.propertyId, {
+          resolutionMethod: resolution.data.method,
+          ...(resolution.data.notes ? { resolutionNotes: resolution.data.notes } : {}),
+          ...(resolution.data.costCents !== null ? { resolutionCostCents: resolution.data.costCents } : {}),
+        });
+      }
     }
     artifactType = 'INSPECTION_FINDING'; artifactId = finding.id;
     const findingReasonCode = action === 'ACCEPT' ? 'INSPECTION_FINDING_ACCEPTED' : action === 'DISMISS' ? 'INSPECTION_FINDING_DISMISSED' : 'INSPECTION_FINDING_RESOLVED';
@@ -16632,6 +16747,7 @@ const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
   HOME_EVENT_CORRECT: editHomeEventCorrectConfirmation,
   HOME_EVENT_VISIBILITY: editHomeEventVisibilityConfirmation,
   HOME_EVENT_RADAR_FEEDBACK: editHomeEventRadarFeedbackConfirmation,
+  INSPECTION_FINDING_UPDATE: editInspectionFindingResolveConfirmation,
   WARRANTY_CORRECT: editWarrantyCorrectConfirmation,
   ROOM_RENAME: editRoomRenameConfirmation,
   BUYER_TASK_UPDATE: editBuyerTaskUpdateConfirmation,

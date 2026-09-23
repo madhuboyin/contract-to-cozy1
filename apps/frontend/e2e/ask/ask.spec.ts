@@ -961,6 +961,30 @@ test('Claims: a claim opens canonical detail inline and a legal status change pi
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Inspection hub: a finding opens inline through its report, live state picks the actions, and Resolve asks how it was resolved (FRD v1.43)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my open inspection findings');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const list = page.locator('#ask-execution-execution-inspection-findings');
+  await list.getByRole('button', { name: 'ROOF: Missing shingles on the north slope' }).click();
+  await expect(list.getByText('Several shingles are missing on the north slope.')).toBeVisible();
+  // The live finding is already accepted as work, so "Accept as work" is not offered.
+  await expect(list.locator('[data-finding-action]')).toHaveCount(2);
+  await expect(list.getByRole('button', { name: 'Accept as work' })).toHaveCount(0);
+  await expect(list.getByRole('link', { name: /Open the report/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/inspection-hub/report-roof\\?findingId=finding-roof`));
+  await list.getByRole('button', { name: 'Mark resolved' }).click();
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Mark this inspection finding resolved.',
+    launchContext: expect.objectContaining({ entityType: 'INSPECTION_FINDING', entityId: 'finding-roof', operationId: 'INSPECTION_FINDING_UPDATE', sourceExecutionId: 'execution-inspection-findings' }),
+  }));
+  const review = page.locator('#ask-execution-execution-finding-resolve');
+  await expect(review.getByText('Resolve this finding?').first()).toBeVisible();
+  await expect(review.getByText('How was this resolved?').first()).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

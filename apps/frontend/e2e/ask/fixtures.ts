@@ -283,6 +283,41 @@ function claimsExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
     blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: 'claim-transition-claim-kitchen-leak-1', version: 1, title: 'Change Kitchen leak to submitted?', description: 'This changes the shared claim record.', fields: [{ label: 'From', value: 'draft' }, { label: 'To', value: 'submitted' }], editableFields: [], confirmLabel: 'Change status', consentText: 'I authorize this claim status change.', expiresAt } };
 }
+// FRD v1.43 inspection-hub capability-card slice: INSPECTION_FINDINGS and an INSPECTION_FINDING_UPDATE resolve review.
+const FINDING_ITEM_ACTIONS = [
+  ['finding-accept', 'Accept as work', 'Accept this inspection finding as work.'],
+  ['finding-dismiss', 'Dismiss', 'Dismiss this inspection finding.'],
+  ['finding-resolve', 'Mark resolved', 'Mark this inspection finding resolved.'],
+].map(([id, label, message]) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'INSPECTION_FINDING_UPDATE' }));
+function inspectionExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
+  const common = {
+    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', property: { id: propertyId, label: 'Acceptance Home' },
+    skill: null, skillHandoff: null, captureRequests: [], clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', suggestions: [],
+  };
+  if (stage === 'LIST') {
+    return { ...common, executionId: 'execution-inspection-findings', question: 'Show my open inspection findings', status: 'ANSWERED', confirmation: null,
+      operation: { id: 'INSPECTION_FINDINGS', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
+      blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-findings', title: 'Open inspection findings', description: 'These findings come only from confirmed inspection reports.',
+        actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${propertyId}/inspection-hub/open-items`, style: 'SECONDARY' }],
+        sections: [{ id: 'open', title: 'Needs review', count: 1, items: [{
+          id: 'finding-roof', title: 'ROOF: Missing shingles on the north slope', description: 'major · Pat', meta: ['Disposition: pending review'], status: 'OPEN',
+          href: `/dashboard/properties/${propertyId}/inspection-hub/report-roof?findingId=finding-roof`, entityType: 'INSPECTION_FINDING', parentId: 'report-roof', actions: FINDING_ITEM_ACTIONS,
+        }] }] }] };
+  }
+  return { ...common, executionId: 'execution-finding-resolve', question: 'Mark this inspection finding resolved.', status: 'NEEDS_CONFIRMATION',
+    operation: { id: 'INSPECTION_FINDING_UPDATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'finding-context-v1',
+    blocks: [{ type: 'SUMMARY', id: 'inspection-finding-review', title: 'Review resolve action', body: 'Resolving records how this finding was handled.', tone: 'CAUTION', actions: [] }],
+    confirmation: { confirmationId: 'inspection-finding-finding-roof-1', version: 1, title: 'Resolve this finding?', description: 'Missing shingles on the north slope',
+      fields: [{ label: 'System', value: 'ROOF' }, { label: 'Severity', value: 'major' }, { label: 'Action', value: 'resolve' }],
+      editableFields: [
+        { key: 'method', label: 'How was this resolved?', type: 'SELECT', value: 'CONTRACTOR_WORK', options: [{ label: 'Contractor work', value: 'CONTRACTOR_WORK' }, { label: 'DIY repair', value: 'DIY' }, { label: 'Seller repair', value: 'SELLER_REPAIR' }, { label: 'Credited at closing', value: 'CREDITED_AT_CLOSING' }, { label: 'Dismissed / not applicable', value: 'DISMISSED' }] },
+        { key: 'notes', label: 'Notes (optional)', type: 'TEXTAREA', value: '' },
+        { key: 'costCents', label: 'Cost in dollars (optional)', type: 'MONEY', value: '' },
+      ],
+      confirmLabel: 'Resolve finding', consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+}
 function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
   return {
     schemaVersion: '1.0', executionId: happeningNow ? 'execution-home-event-radar-feed-now' : 'execution-home-event-radar-feed', sessionId: 'ask-acceptance-session',
@@ -928,6 +963,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     },
     assumptionSetId: null, nextAction: null,
   } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/inspection-hub/reports/report-roof/findings`, (route) => fulfill(route, { success: true, data: { findings: [{
+    id: 'finding-roof', reportId: 'report-roof', propertyId, homeSystem: 'ROOF', location: 'North slope', conditionRating: 'POOR', severity: 'MAJOR',
+    inspectorDescription: 'Several shingles are missing on the north slope.', inspectorRecommendation: 'Replace the missing shingles.', aiInterpretation: '',
+    estimatedCostCentsLow: 30000, estimatedCostCentsHigh: 60000, extractionConfidence: 'HIGH', status: 'OPEN', workDisposition: 'ACCEPTED',
+    photoKeys: [], createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z',
+  }] } }));
   await page.route(`${apiOrigin}/api/properties/${propertyId}/claims/claim-kitchen-leak`, (route) => fulfill(route, { success: true, data: {
     id: 'claim-kitchen-leak', propertyId, title: 'Kitchen leak', description: 'Water under the kitchen sink damaged the cabinet floor.', type: 'WATER_DAMAGE', status: 'DRAFT',
     providerName: 'Acme Insurance', claimNumber: null, incidentAt: '2026-09-01T00:00:00.000Z', submittedAt: null, estimatedLossAmount: '2500', deductibleAmount: '1000', settlementAmount: null,
@@ -1127,6 +1168,14 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       const response = capitalReservePlanExecution({ horizonYears });
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (body.message === 'Show my open inspection findings') {
+      await fulfill(route, { success: true, data: inspectionExecution('LIST', body.sessionId as string | undefined) }, 201);
+      return;
+    }
+    if (body.message === 'Mark this inspection finding resolved.') {
+      await fulfill(route, { success: true, data: inspectionExecution('REVIEW', body.sessionId as string | undefined) }, 201);
       return;
     }
     if (body.message === 'Show my claims') {

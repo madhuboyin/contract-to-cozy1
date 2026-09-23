@@ -17,6 +17,9 @@ const INLINE_ENTRY_READS = {
   // Capability-card audit, first candidate slice (FRD v1.42): the claims-only view of INCIDENT_CLAIM_STATUS, with
   // inline claim detail and the existing confirmed CLAIM_TRANSITION as declared actions.
   claims: { operationId: 'INCIDENT_CLAIM_STATUS', message: 'Show my claims' },
+  // Second candidate slice (FRD v1.43): open inspection findings, with inline finding detail and the existing
+  // confirmed INSPECTION_FINDING_UPDATE (accept as work / dismiss / resolve) as declared actions.
+  'inspection-hub': { operationId: 'INSPECTION_FINDINGS', message: 'Show my open inspection findings' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

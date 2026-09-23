@@ -11,6 +11,7 @@ import { HouseholdResultList } from '../HouseholdResultList';
 import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
 import { ClaimResultList } from '../ClaimResultList';
+import { InspectionFindingResultList } from '../InspectionFindingResultList';
 import { RadarEventResultList } from '../RadarEventResultList';
 import { ReserveAllocationResultList } from '../ReserveAllocationResultList';
 import { RoomResultList } from '../RoomResultList';
@@ -190,6 +191,11 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   }
   // Claims capability-card slice (FRD v1.42): claim rows open the canonical claim inline, with its legal status
   // changes as declared CLAIM_TRANSITION actions; incident rows keep their link.
+  // Inspection-hub capability-card slice (FRD v1.43): findings open inline, re-read through their report.
+  if (block.id === 'inspection-findings') {
+    return <InspectionFindingResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
   if (block.id === 'incident-claim-list') {
     return <ClaimResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;

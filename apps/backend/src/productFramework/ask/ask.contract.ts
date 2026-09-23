@@ -119,6 +119,9 @@ const GroupedListItemSchema = z.object({
   status: z.string().nullable().optional(),
   href: z.string().nullable().optional(),
   entityType: z.string().trim().min(1).max(60).nullable().optional(),
+  // The entity's parent record, when the inline detail must re-read it through its parent (an inspection finding is
+  // read through its report). Additive; FRD v1.43.
+  parentId: z.string().trim().min(1).max(160).nullable().optional(),
   // Additive for existing grouped-list producers: actionable rows opt in;
   // historical/non-actionable rows remain valid without emitting an empty list.
   actions: z.array(GroupedListItemActionSchema).max(12).optional(),

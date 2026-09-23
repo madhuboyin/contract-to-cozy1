@@ -52,6 +52,10 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   MAINTENANCE_TASK_UPDATE: new Set(['open-maintenance', 'open-task']),
   COVERAGE_GAPS: new Set(['open-coverage']),
   // + the claim transition item actions (FRD v1.42); the inline claim detail shows only those legal from the live status.
+  // FRD v1.43: INSPECTION_FINDINGS had no entry, so even its "Open Inspection Hub" link was stripped; the finding
+  // actions are shown in the inline detail only when the live state allows them.
+  INSPECTION_FINDINGS: new Set(['open-inspection', 'finding-accept', 'finding-dismiss', 'finding-resolve']),
+  INSPECTION_FINDING_UPDATE: new Set(['open-inspection', 'open-finding']),
   INCIDENT_CLAIM_STATUS: new Set(['open-incidents', 'open-claims', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
   SAVINGS_OPPORTUNITIES: new Set(['open-savings', 'review-all-savings']),
   OWNERSHIP_COSTS: new Set(['open-ownership-costs']),
