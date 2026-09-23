@@ -20,6 +20,9 @@ const INLINE_ENTRY_READS = {
   // Second candidate slice (FRD v1.43): open inspection findings, with inline finding detail and the existing
   // confirmed INSPECTION_FINDING_UPDATE (accept as work / dismiss / resolve) as declared actions.
   'inspection-hub': { operationId: 'INSPECTION_FINDINGS', message: 'Show my open inspection findings' },
+  // Third candidate slice (FRD v1.44): the sale readiness checklist, with inline item detail and the existing confirmed
+  // SELLER_PREP_ITEM_DECISION (pursue / stop pursuing / disclose and waive / reopen) as declared actions.
+  'seller-prep': { operationId: 'SELLER_PREP_CHECKLIST', message: 'Check my sale readiness' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

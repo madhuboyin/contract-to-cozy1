@@ -318,6 +318,37 @@ function inspectionExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
       ],
       confirmLabel: 'Resolve finding', consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
 }
+// FRD v1.44 seller-prep capability-card slice: SELLER_PREP_CHECKLIST and a SELLER_PREP_ITEM_DECISION review.
+const SALE_ITEM_ACTIONS = [
+  ['sale-item-pursue', 'Pursue before listing', 'Pursue this seller-prep checklist item.'],
+  ['sale-item-unpursue', 'Stop pursuing', 'Stop pursuing this seller-prep checklist item.'],
+  ['sale-item-waive', 'Disclose and waive', 'Waive this seller-prep checklist item.'],
+  ['sale-item-reopen', 'Reopen', 'Reopen this seller-prep checklist item.'],
+].map(([id, label, message]) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'SELLER_PREP_ITEM_DECISION' }));
+function sellerPrepExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
+  const common = {
+    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', property: { id: propertyId, label: 'Acceptance Home' },
+    skill: null, skillHandoff: null, captureRequests: [], clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', suggestions: [],
+  };
+  if (stage === 'LIST') {
+    return { ...common, executionId: 'execution-seller-prep', question: 'Check my sale readiness', status: 'ANSWERED', confirmation: null,
+      operation: { id: 'SELLER_PREP_CHECKLIST', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
+      blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'seller-prep-open-items', title: 'Open items', description: 'Repairs, records, and presentation work recommended before listing, grouped by category.',
+        actions: [],
+        sections: [{ id: 'seller-prep-presentation', title: 'Presentation', count: 1, items: [{
+          id: 'item-door', title: 'Paint the front door', description: null, meta: ['$200–$400 estimated'], status: 'OPEN',
+          href: `/dashboard/properties/${propertyId}/tools/sale-case?focusItemId=item-door`, entityType: 'SALE_READINESS_ITEM', actions: SALE_ITEM_ACTIONS,
+        }] }] }] };
+  }
+  return { ...common, executionId: 'execution-sale-item-unpursue', question: 'Stop pursuing this seller-prep checklist item.', status: 'NEEDS_CONFIRMATION',
+    operation: { id: 'SELLER_PREP_ITEM_DECISION', version: '1.0', family: 'COMMAND' }, contextVersion: 'sale-item-context-v1',
+    blocks: [{ type: 'SUMMARY', id: 'seller-prep-item-review', title: 'Review unpursue decision', body: 'Removing your pursue commitment returns this item to open, undecided.', tone: 'CAUTION', actions: [] }],
+    confirmation: { confirmationId: 'seller-prep-item-item-door-1', version: 1, title: 'Unpursue "Paint the front door"?', description: 'Paint the front door',
+      fields: [{ label: 'Item', value: 'Paint the front door' }, { label: 'Decision', value: 'unpursue' }], editableFields: [],
+      confirmLabel: 'Unpursue item', consentText: 'I authorize this update to the shared seller-prep checklist.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+}
 function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
   return {
     schemaVersion: '1.0', executionId: happeningNow ? 'execution-home-event-radar-feed-now' : 'execution-home-event-radar-feed', sessionId: 'ask-acceptance-session',
@@ -963,6 +994,15 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     },
     assumptionSetId: null, nextAction: null,
   } }));
+  // The live item is already being pursued (someone pursued it after the list was read), so Stop pursuing is offered.
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/sale-case`, (route) => fulfill(route, { success: true, data: {
+    propertyId, saleIntentConfirmed: true, canCreate: false, saleCase: { id: 'case-1' }, transitions: [],
+    readinessItems: [{
+      id: 'item-door', saleCaseId: 'case-1', sourceEntityType: 'PRESENTATION', sourceEntityId: 'front-door', category: 'PRESENTATION', requirementClass: 'OPTIONAL_IMPROVEMENT',
+      status: 'PURSUING', title: 'Paint the front door', detail: 'A fresh front door is a low-cost first impression.', dueAt: null, canonicalWorkItemId: null, resolvedAt: null,
+      waivedAt: null, waivedReason: null, estimatedCostMinCents: 20000, estimatedCostMaxCents: 40000, estimatedValueAddMinCents: null, estimatedValueAddMaxCents: null, recommendedForBudget: true,
+    }],
+  } }));
   await page.route(`${apiOrigin}/api/properties/${propertyId}/inspection-hub/reports/report-roof/findings`, (route) => fulfill(route, { success: true, data: { findings: [{
     id: 'finding-roof', reportId: 'report-roof', propertyId, homeSystem: 'ROOF', location: 'North slope', conditionRating: 'POOR', severity: 'MAJOR',
     inspectorDescription: 'Several shingles are missing on the north slope.', inspectorRecommendation: 'Replace the missing shingles.', aiInterpretation: '',
@@ -1168,6 +1208,14 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       const response = capitalReservePlanExecution({ horizonYears });
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (body.message === 'Check my sale readiness') {
+      await fulfill(route, { success: true, data: sellerPrepExecution('LIST', body.sessionId as string | undefined) }, 201);
+      return;
+    }
+    if (body.message === 'Stop pursuing this seller-prep checklist item.') {
+      await fulfill(route, { success: true, data: sellerPrepExecution('REVIEW', body.sessionId as string | undefined) }, 201);
       return;
     }
     if (body.message === 'Show my open inspection findings') {

@@ -45,6 +45,8 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   claims: ['INCIDENT_CLAIM_STATUS', 'CLAIM_FILE', 'CLAIM_TRANSITION'],
   emergency: ['INCIDENT_CONTINUATION'],
   'inspection-hub': ['INSPECTION_FINDINGS', 'INSPECTION_FINDING_UPDATE'],
+  // FRD v1.44: was listed below as having no Ask operation, although both seller-prep operations exist.
+  'seller-prep': ['SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
@@ -63,7 +65,7 @@ const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
   'break-even', 'diy', 'hoa-compliance', 'home-digital-twin', 'home-digital-will',
   'home-habit-coach', 'home-risk-replay', 'home-briefing',
   'neighborhood-change-radar', 'permits',
-  'plant-advisor', 'project-tracker', 'seller-prep', 'service-price-radar', 'status-board',
+  'plant-advisor', 'project-tracker', 'service-price-radar', 'status-board',
 ];
 
 const PHASE6_METADATA: Readonly<Record<string, Pick<CapabilitySkillGuidanceBridgeEntry,

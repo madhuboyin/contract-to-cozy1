@@ -985,6 +985,29 @@ test('Inspection hub: a finding opens inline through its report, live state pick
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Seller prep: a checklist item opens inline from the sale case, live state picks the decision, and it proposes a confirmed change (FRD v1.44)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Check my sale readiness');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const list = page.locator('#ask-execution-execution-seller-prep');
+  await list.getByRole('button', { name: 'Paint the front door' }).click();
+  await expect(list.getByText('A fresh front door is a low-cost first impression.')).toBeVisible();
+  // The list said OPEN, but the live item is already pursued, so only "Stop pursuing" is offered.
+  await expect(list.locator('[data-sale-item-action]')).toHaveCount(1);
+  await expect(list.getByRole('button', { name: 'Pursue before listing' })).toHaveCount(0);
+  await expect(list.getByRole('link', { name: /Open in the checklist/ })).toHaveAttribute('href', new RegExp(`^/dashboard/properties/${propertyId}/tools/sale-case\\?focusItemId=item-door`));
+  await list.getByRole('button', { name: 'Stop pursuing' }).click();
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Stop pursuing this seller-prep checklist item.',
+    launchContext: expect.objectContaining({ entityType: 'SALE_READINESS_ITEM', entityId: 'item-door', operationId: 'SELLER_PREP_ITEM_DECISION', sourceExecutionId: 'execution-seller-prep' }),
+  }));
+  const review = page.locator('#ask-execution-execution-sale-item-unpursue');
+  await expect(review.getByText('Unpursue "Paint the front door"?').first()).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
 test('personalized attention exposes one conversational action', async ({ page }) => {
   const api = await installAskApi(page, { noDecision: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

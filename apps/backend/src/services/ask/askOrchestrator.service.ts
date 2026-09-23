@@ -6749,6 +6749,28 @@ function sellerPrepCostRangeMeta(item: { estimatedCostMinCents: number | null; e
   return [`${min}–${money(item.estimatedCostMaxCents / 100)} estimated`];
 }
 
+// Seller-prep capability-card slice (FRD v1.44). The four confirmed SELLER_PREP_ITEM_DECISION decisions, declared on
+// each checklist row; the inline detail (SellerPrepItemResultList) shows only those the traditional sale-case page
+// offers for the item's LIVE state. sellerPrepItemAction parses each message back to exactly its own decision.
+export const SELLER_PREP_ITEM_ACTIONS = [
+  { id: 'sale-item-pursue', label: 'Pursue before listing', message: 'Pursue this seller-prep checklist item.', action: 'PURSUE' },
+  { id: 'sale-item-unpursue', label: 'Stop pursuing', message: 'Stop pursuing this seller-prep checklist item.', action: 'UNPURSUE' },
+  { id: 'sale-item-waive', label: 'Disclose and waive', message: 'Waive this seller-prep checklist item.', action: 'WAIVE' },
+  { id: 'sale-item-reopen', label: 'Reopen', message: 'Reopen this seller-prep checklist item.', action: 'REOPEN' },
+] as const;
+
+export function sellerPrepItemActions(role: HouseholdRole) {
+  if (role === HouseholdRole.VIEWER) return [];
+  return SELLER_PREP_ITEM_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'SELLER_PREP_ITEM_DECISION' }));
+}
+
+// The readiness checklist lives on the sale-case page (it scrolls to and highlights ?focusItemId=). /seller-prep is the
+// capability's entry page, which reads a different overview; FRD v1.44 moved checklist links off it.
+export function saleCaseHref(propertyId: string, itemId?: string): string {
+  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sale-case`;
+  return itemId ? `${base}?focusItemId=${encodeURIComponent(itemId)}` : base;
+}
+
 async function sellerPrepChecklistResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/seller-prep`;
   const overview = await PropertySaleCaseService.getCase(userId, propertyId);
@@ -6771,9 +6793,13 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     };
   }
 
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const itemActions = sellerPrepItemActions(access.role);
+  const checklistHref = saleCaseHref(propertyId);
   const openItems = overview.readinessItems.filter((item) => item.status === 'OPEN');
   const pursuingItems = overview.readinessItems.filter((item) => item.status === 'PURSUING');
-  const waivedCount = overview.readinessItems.filter((item) => item.status === 'WAIVED').length;
+  const waivedItems = overview.readinessItems.filter((item) => item.status === 'WAIVED');
+  const waivedCount = waivedItems.length;
 
   const grouped = new Map<string, typeof openItems>();
   for (const item of openItems) {
@@ -6781,6 +6807,16 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     existing.push(item);
     grouped.set(item.category, existing);
   }
+  const row = (item: typeof openItems[number]) => ({
+    id: item.id,
+    title: item.title,
+    description: item.detail ?? null,
+    meta: sellerPrepCostRangeMeta(item),
+    status: item.status,
+    href: saleCaseHref(propertyId, item.id),
+    entityType: 'SALE_READINESS_ITEM',
+    actions: itemActions,
+  });
 
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
@@ -6790,28 +6826,27 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
       ? `${openItems.length} open item${openItems.length === 1 ? '' : 's'}${pursuingItems.length ? `, ${pursuingItems.length} already in progress` : ''}${waivedCount ? `, ${waivedCount} waived` : ''}.`
       : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
     tone: 'DEFAULT',
-    actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+    actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: checklistHref, style: 'SECONDARY' }],
   }];
 
-  if (openItems.length) {
+  // FRD v1.44: items being pursued and items disclosed-and-waived are listed too (the traditional page shows both),
+  // so their Stop pursuing / Reopen decisions are reachable inline.
+  if (openItems.length || pursuingItems.length || waivedItems.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [],
       id: 'seller-prep-open-items',
-      title: 'Open items',
-      description: 'Repairs, records, and presentation work recommended before listing, grouped by category.',
-      sections: [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([category, items]) => ({
-        id: `seller-prep-${category.toLowerCase()}`,
-        title: SALE_READINESS_CATEGORY_LABELS[category] ?? category,
-        count: items.length,
-        items: items.slice(0, 20).map((item) => ({
-          id: item.id,
-          title: item.title,
-          description: item.detail ?? null,
-          meta: sellerPrepCostRangeMeta(item),
-          status: item.status,
-          href,
+      title: openItems.length ? 'Open items' : 'Checklist items',
+      description: 'Repairs, records, and presentation work recommended before listing, grouped by category. Open an item to see it and decide on it.',
+      sections: [
+        ...[...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([category, items]) => ({
+          id: `seller-prep-${category.toLowerCase()}`,
+          title: SALE_READINESS_CATEGORY_LABELS[category] ?? category,
+          count: items.length,
+          items: items.slice(0, 20).map(row),
         })),
-      })),
+        ...(pursuingItems.length ? [{ id: 'seller-prep-pursuing', title: 'Pursuing before listing', count: pursuingItems.length, items: pursuingItems.slice(0, 20).map(row) }] : []),
+        ...(waivedItems.length ? [{ id: 'seller-prep-waived', title: 'Disclosed, not addressed', count: waivedItems.length, items: waivedItems.slice(0, 20).map(row) }] : []),
+      ],
       actions: [],
     });
   }
@@ -6907,9 +6942,9 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
           id: 'items',
           title: 'Checklist items',
           count: decidable.length,
-          items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: item.detail ?? null, meta: [], status: item.status, href })),
+          items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: item.detail ?? null, meta: [], status: item.status, href: saleCaseHref(propertyId, item.id) })),
         }],
-        actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+        actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: saleCaseHref(propertyId), style: 'SECONDARY' }],
       }],
       suggestions: [],
     };
@@ -6937,7 +6972,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
       title: `Review ${action.toLowerCase()} decision`,
       body: SELLER_PREP_ITEM_ACTION_COPY[action],
       tone: 'CAUTION',
-      actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+      actions: [{ id: 'open-seller-prep', label: 'Review in the checklist', href: saleCaseHref(propertyId, selected.id), style: 'SECONDARY' }],
     }],
     confirmation: {
       confirmationId: `seller-prep-item-${selected.id}-1`,
@@ -12887,7 +12922,7 @@ async function confirmSellerPrepItemDecision(ctx: ConfirmCapabilityContext): Pro
       status: 'COMPLETED',
       description: 'The shared seller-prep checklist was updated.',
       details: [{ label: 'Item', value: item.title }, { label: 'Decision', value: String(action).toLowerCase() }],
-      actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/seller-prep`, style: 'PRIMARY' }],
+      actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: saleCaseHref(execution.propertyId, item.id), style: 'PRIMARY' }],
     }],
     suggestions: ['Check my sale readiness'],
   };
