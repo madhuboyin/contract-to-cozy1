@@ -318,6 +318,32 @@ function inspectionExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
       ],
       confirmLabel: 'Resolve finding', consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
 }
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.75): the findings answer as the real producer now sends it to a
+// contributor -- a card deck whose Accept/Dismiss decisions are collected and proposed together -- and that batch's
+// single review. The breaker finding's live read reuses the report-roof findings route below.
+function inspectionDeckExecution(stage: 'LIST' | 'BATCH_REVIEW', sessionId?: string) {
+  const base = inspectionExecution('LIST', sessionId);
+  const finding = (id: string, title: string, extra: Record<string, unknown>) => ({
+    id, title, description: null, meta: [], status: 'OPEN', href: `/dashboard/properties/${propertyId}/inspection-hub/report-roof?findingId=${id}`,
+    entityType: 'INSPECTION_FINDING', parentId: 'report-roof', actions: FINDING_ITEM_ACTIONS, timingLabel: 'Inspected Sep 12, 2026', ...extra,
+  });
+  if (stage === 'LIST') {
+    return { ...base, executionId: 'execution-inspection-deck', question: 'Go through my inspection findings',
+      blocks: [{ ...base.blocks[0], presentation: { pattern: 'DECK', swipeRightActionId: 'finding-accept', swipeLeftActionId: 'finding-dismiss',
+        batch: { operationId: 'INSPECTION_FINDING_UPDATE', entityType: 'INSPECTION_FINDING', actionIds: ['finding-accept', 'finding-dismiss'], message: 'Review my inspection finding decisions.' } },
+      sections: [{ id: 'open', title: 'Needs review', count: 3, items: [
+        finding('finding-roof', 'ROOF: Missing shingles on the north slope', { tone: 'CAUTION', badgeLabel: 'Major', amountLabel: 'Est. $300–$600' }),
+        finding('finding-breaker', 'ELECTRICAL: Double-tapped breaker', { tone: 'CRITICAL', badgeLabel: 'Safety', amountLabel: 'Est. $150–$300' }),
+        finding('finding-crack', 'STRUCTURE: Hairline crack in the garage slab', { badgeLabel: 'Monitor' }),
+      ] }] }] };
+  }
+  return { ...base, executionId: 'execution-inspection-batch', question: 'Review my inspection finding decisions.', status: 'NEEDS_CONFIRMATION',
+    operation: { id: 'INSPECTION_FINDING_UPDATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'finding-batch-v1',
+    blocks: [{ type: 'SUMMARY', id: 'inspection-finding-batch-review', title: 'Review 2 findings', body: 'Accepting as work creates or reuses tracked work for 1 finding. Dismissing closes 1 finding without work. Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }],
+    confirmation: { confirmationId: 'inspection-finding-batch-1', version: 1, title: 'Confirm 2 findings?', description: 'These changes are saved to the canonical inspection record, one finding at a time.',
+      fields: [{ label: 'Accept as work', value: '1 finding' }, { label: 'Dismiss', value: '1 finding' }], editableFields: [], confirmLabel: 'Confirm 2 changes',
+      consentText: 'I have reviewed these inspection finding decisions and want them saved.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } };
+}
 // FRD v1.44 seller-prep capability-card slice: SELLER_PREP_CHECKLIST and a SELLER_PREP_ITEM_DECISION review.
 const SALE_ITEM_ACTIONS = [
   ['sale-item-pursue', 'Pursue before listing', 'Pursue this seller-prep checklist item.'],
@@ -1314,6 +1340,14 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (body.message === 'Stop pursuing this seller-prep checklist item.') {
       await fulfill(route, { success: true, data: sellerPrepExecution('REVIEW', body.sessionId as string | undefined) }, 201);
+      return;
+    }
+    if (body.message === 'Go through my inspection findings') {
+      await fulfill(route, { success: true, data: inspectionDeckExecution('LIST', body.sessionId as string | undefined) }, 201);
+      return;
+    }
+    if (body.message === 'Review my inspection finding decisions.') {
+      await fulfill(route, { success: true, data: inspectionDeckExecution('BATCH_REVIEW', body.sessionId as string | undefined) }, 201);
       return;
     }
     if (body.message === 'Show my open inspection findings') {

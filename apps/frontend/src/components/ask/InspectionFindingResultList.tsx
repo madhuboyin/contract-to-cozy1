@@ -7,6 +7,9 @@ import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import type { InspectionFinding } from '@/types';
 import { cn } from '@/lib/utils';
+import type { AskBatchDecision, AskDeckBatch } from '@/features/ask/types';
+import { CardDeckView } from './patterns/CardDeckView';
+import { DetailSheetFrame } from './patterns/PatternParts';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -136,13 +139,20 @@ function FindingDetail({ item, expectedPropertyId, disabled, onAction, onAccessL
 }
 
 // Renders INSPECTION_FINDINGS's inspection-findings block (FRD v1.43).
-export function InspectionFindingResultList({ block, propertyId, disabled, onAction, onAccessLost, link }: {
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-015, FRD v1.75): the server-declared card deck. Its cards carry each
+// finding's allowed actions; Accept as work and Dismiss are collected and confirmed together. Details opens the same
+// live-record detail in the drawer or bottom sheet, read-only there so every decision goes through the deck.
+export type InspectionFindingDeck = { swipeRightActionId: string | null; swipeLeftActionId: string | null; batch: AskDeckBatch | null; onBatch?: (decisions: AskBatchDecision[]) => void };
+
+export function InspectionFindingResultList({ block, propertyId, disabled, onAction, onAccessLost, link, deck = null, onChooseLayout }: {
   block: Block;
   propertyId?: string;
   disabled?: boolean;
   onAction?: OnAction;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
+  deck?: InspectionFindingDeck | null;
+  onChooseLayout?: (layout: 'LIST' | 'DECK') => void;
 }) {
   const controls = useContext(ResultViewContext);
   const [localDetailId, setLocalDetailId] = useState<string | null>(null);
@@ -159,10 +169,33 @@ export function InspectionFindingResultList({ block, propertyId, disabled, onAct
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-finding-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
 
+  const layoutSwitch = onChooseLayout && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+    {(['DECK', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={(deck ? 'DECK' : 'LIST') === option} onClick={() => onChooseLayout(option)}
+      className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', (deck ? 'DECK' : 'LIST') === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'DECK' ? 'One at a time' : 'List'}</button>)}
+  </div>;
+  const footer = <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : null)}</div>;
+
+  if (deck && onAction) {
+    return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-display-pattern="deck">
+      <div className="border-b border-slate-100 p-4">
+        <h3 className="font-semibold text-slate-950">{block.title}</h3>
+        {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+        {layoutSwitch}
+      </div>
+      <CardDeckView items={block.sections.flatMap((section) => section.items)} swipeRightActionId={deck.swipeRightActionId} swipeLeftActionId={deck.swipeLeftActionId}
+        batch={deck.batch} onBatch={deck.onBatch} onItemAction={onAction} disabled={Boolean(disabled)} onOpenDetail={openDetail} />
+      <DetailSheetFrame open={Boolean(detailId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Finding detail: ${detailItem.title}` : 'Finding detail'}>
+        {detailId && detailItem && <FindingDetail key={detailId} item={detailItem} expectedPropertyId={propertyId} disabled={disabled} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
+      </DetailSheetFrame>
+      {footer}
+    </section>;
+  }
+
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {layoutSwitch}
     </div>
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>
@@ -175,6 +208,6 @@ export function InspectionFindingResultList({ block, propertyId, disabled, onAct
       </ul>
     </div>)}
     {detailId && detailItem && <FindingDetail key={detailId} item={detailItem} expectedPropertyId={propertyId} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : null)}</div>
+    {footer}
   </section>;
 }

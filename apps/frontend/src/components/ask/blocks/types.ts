@@ -1,4 +1,4 @@
-import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
+import type { AskBatchDecision, AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.3: the block registry (./registry.tsx)
 // registers one renderer per validated `AskPresentationBlock['type']`
@@ -17,6 +17,9 @@ export type AskBlockRendererProps<TBlock extends AskPresentationBlock = AskPrese
   // actionId (optional 7th param) exists only for RadarEventDetail's "Plan this action" (FRD v1.41): the
   // recommended action's code, sent as launchContext.actionId.
   onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string) => void;
+  // IW-PRES-015 (FRD v1.75): sends a card deck's collected decisions as one request, which returns one confirmation.
+  // Optional: where a renderer is used without it, a deck that declares a batch falls back to the plain list.
+  onBatchItemAction?: (batch: { operationId: string; entityType: string; message: string; decisions: AskBatchDecision[] }) => void;
   itemActionsDisabled: boolean;
   onFilterClick: (message: string) => void;
   onCollectionPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void;

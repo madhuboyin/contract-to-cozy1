@@ -985,6 +985,65 @@ test('Inspection hub: a finding opens inline through its report, live state pick
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Inspection deck: decisions are made card by card, nothing is sent until the end, and one confirmation covers them (FRD v1.75)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Go through my inspection findings');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const deck = page.locator('#ask-execution-execution-inspection-deck');
+  await expect(deck.getByText('1 of 3')).toBeVisible();
+  await deck.getByRole('button', { name: 'Details' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Finding detail: ROOF: Missing shingles on the north slope' });
+  await expect(sheet.getByText('Several shingles are missing on the north slope.')).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Mark resolved' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await deck.getByRole('button', { name: 'Accept as work' }).click();
+  await deck.getByRole('group', { name: /Double-tapped breaker, 2 of 3/ }).press('ArrowLeft');
+  await deck.getByRole('button', { name: 'Skip for now' }).click();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  await expect(deck.locator('[data-ask-deck-review="Accept as work"]')).toContainText('ROOF: Missing shingles on the north slope');
+  await expect(deck.locator('[data-ask-deck-review="Dismiss"]')).toContainText('ELECTRICAL: Double-tapped breaker');
+  await deck.getByRole('button', { name: 'Review and confirm 2 changes' }).click();
+
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Review my inspection finding decisions.',
+    launchContext: expect.objectContaining({
+      operationId: 'INSPECTION_FINDING_UPDATE', entityType: 'INSPECTION_FINDING', sourceExecutionId: 'execution-inspection-deck',
+      batchDecisions: [{ entityId: 'finding-roof', actionId: 'finding-accept' }, { entityId: 'finding-breaker', actionId: 'finding-dismiss' }],
+    }),
+  }));
+  expect(api.executionBodies).toHaveLength(2);
+  const review = page.locator('#ask-execution-execution-inspection-batch');
+  await expect(review.getByText('Confirm 2 findings?').first()).toBeVisible();
+  await expect(review.getByRole('button', { name: 'Confirm 2 changes' })).toBeVisible();
+  await expect(deck.getByText('Sent for your confirmation below. Nothing changes until you confirm.')).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('Inspection deck on a phone: the card fits the screen and Details opens as a bottom sheet (FRD v1.75)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Go through my inspection findings');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const deck = page.locator('#ask-execution-execution-inspection-deck');
+  const card = deck.getByRole('group', { name: /Missing shingles on the north slope, 1 of 3/ });
+  await expect(card).toBeVisible();
+  const cardBox = await card.boundingBox();
+  expect(cardBox && cardBox.x + cardBox.width).toBeLessThanOrEqual(390);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await deck.getByRole('button', { name: 'Details' }).click();
+  const sheet = page.getByRole('dialog', { name: /Finding detail/ });
+  await expect(sheet.getByText('Several shingles are missing on the north slope.')).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
+});
+
 test('Seller prep: a checklist item opens inline from the sale case, live state picks the decision, and it proposes a confirmed change (FRD v1.44)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

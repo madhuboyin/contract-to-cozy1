@@ -64,8 +64,11 @@ export interface AskGroupedListItem {
 }
 export type AskGroupedListPresentation =
   | { pattern: 'SHELVES' }
-  | { pattern: 'DECK'; swipeRightActionId?: string | null; swipeLeftActionId?: string | null }
+  | { pattern: 'DECK'; swipeRightActionId?: string | null; swipeLeftActionId?: string | null; batch?: AskDeckBatch | null }
   | { pattern: 'ROOM_MAP' };
+export interface AskBatchDecision { entityId: string; actionId: string }
+// IW-PRES-015: decisions made with these item actions are collected in the deck and sent together, for one confirmation.
+export interface AskDeckBatch { operationId: string; entityType: string; actionIds: string[]; message: string }
 export interface AskComparisonBadge { label: string; basis: string; policyCode: string }
 
 export type AskPresentationBlock =
@@ -291,6 +294,8 @@ export interface CreateAskExecutionPayload {
     // already uploaded via POST /api/documents/property/:propertyId/evidence-upload, carried the same way
     // entityId carries an existing record's id.
     documentId?: string | null;
+    // IW-PRES-015 (FRD v1.75): a card deck's collected decisions, sent together for one confirmation.
+    batchDecisions?: AskBatchDecision[] | null;
   };
 }
 // Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" — a dedicated
@@ -387,6 +392,7 @@ export interface AskCapabilityPrompt {
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22): mirrors
     // CreateAskExecutionPayload.launchContext.documentId, above.
     documentId?: string;
+    batchDecisions?: AskBatchDecision[];
   };
 }
 

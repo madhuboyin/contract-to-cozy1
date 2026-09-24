@@ -156,7 +156,11 @@ const HOME_EVENT_DETAIL_BLOCK_IDS = new Set(['inventory-history', 'property-rece
 export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const controls = useContext(ResultViewContext);
   const preference = controls?.view.groupedListModes[props.block.id] ?? 'AUTO';
-  const decision = resolveGroupedListPattern(props.block, preference);
+  const resolved = resolveGroupedListPattern(props.block, preference);
+  // IW-PRES-015 (FRD v1.75): a deck that collects decisions needs the batch sender; where a renderer has none, the
+  // plain list is used rather than sending the collected decisions one by one.
+  const batchUnavailable = resolved.pattern === 'DECK' && Boolean(resolved.batch) && !props.onBatchItemAction;
+  const decision = batchUnavailable ? { pattern: null, offersChoice: false, reason: 'NO_PATTERN' as const } : resolved;
   const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
     ...view, groupedListModes: { ...view.groupedListModes, [props.block.id]: mode },
   }));
@@ -170,14 +174,26 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       layout={decision.pattern === 'SHELVES' ? 'SHELVES' : 'LIST'}
       onChooseLayout={declaresShelves && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
   }
+  if (props.block.id === 'inspection-findings') {
+    const { block, propertyId, itemActionsDisabled, onItemAction, onAccessLost, onBatchItemAction } = props;
+    const declaresDeck = block.presentation?.pattern === 'DECK';
+    return <InspectionFindingResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
+      deck={decision.pattern === 'DECK' ? {
+        swipeRightActionId: decision.swipeRightActionId, swipeLeftActionId: decision.swipeLeftActionId, batch: decision.batch,
+        onBatch: decision.batch && onBatchItemAction ? (decisions) => onBatchItemAction({ operationId: decision.batch!.operationId, entityType: decision.batch!.entityType, message: decision.batch!.message, decisions }) : undefined,
+      } : null}
+      onChooseLayout={declaresDeck && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
+  }
   if (decision.pattern) {
-    const { block, itemActionsDisabled, onFilterClick, onItemAction } = props;
+    const { block, itemActionsDisabled, onFilterClick, onItemAction, onBatchItemAction } = props;
     return (
       <PatternFrame title={block.title} description={block.description} pattern={decision.pattern.toLowerCase()} patternLabel={PATTERN_LABELS[decision.pattern]}
         onChooseList={controls ? () => setPreference('LIST') : undefined} filters={block.filters} onFilterClick={onFilterClick}
         disabled={itemActionsDisabled} actions={block.actions}>
         {decision.pattern === 'SHELVES' && <ShelvesView sections={block.sections} moreAction={block.actions[0]} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
-        {decision.pattern === 'DECK' && <CardDeckView items={groupedListItems(block)} swipeRightActionId={decision.swipeRightActionId} swipeLeftActionId={decision.swipeLeftActionId} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
+        {decision.pattern === 'DECK' && <CardDeckView items={groupedListItems(block)} swipeRightActionId={decision.swipeRightActionId} swipeLeftActionId={decision.swipeLeftActionId} onItemAction={onItemAction} disabled={itemActionsDisabled}
+          batch={decision.batch} onBatch={decision.batch && onBatchItemAction ? (decisions) => onBatchItemAction({ operationId: decision.batch!.operationId, entityType: decision.batch!.entityType, message: decision.batch!.message, decisions }) : undefined} />}
         {decision.pattern === 'ROOM_MAP' && <RoomMapView items={groupedListItems(block)} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
       </PatternFrame>
     );
@@ -249,10 +265,6 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // Inspection-hub capability-card slice (FRD v1.43): findings open inline, re-read through their report.
-  if (block.id === 'inspection-findings') {
-    return <InspectionFindingResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
-      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
-  }
   // Claims capability-card slice (FRD v1.42): claim rows open the canonical claim inline, with its legal status
   // changes as declared CLAIM_TRANSITION actions; incident rows keep their link.
   if (block.id === 'incident-claim-list') {

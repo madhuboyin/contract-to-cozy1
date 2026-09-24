@@ -154,6 +154,15 @@ const GroupedListPresentationSchema = z.discriminatedUnion('pattern', [
     // Item action ids a right or left swipe performs. Each must be declared on every item, or swiping is off.
     swipeRightActionId: z.string().trim().min(1).max(120).nullable().optional(),
     swipeLeftActionId: z.string().trim().min(1).max(120).nullable().optional(),
+    // IW-PRES-015 (FRD v1.75): decisions using these item actions are collected in the deck and sent together, as one
+    // request to `operationId` carrying `launchContext.batchDecisions`, which returns ONE confirmation for all of
+    // them. Any other declared item action is still sent on its own. Nothing is written until that confirmation.
+    batch: z.object({
+      operationId: z.string().trim().min(1).max(120),
+      entityType: z.string().trim().min(1).max(60),
+      actionIds: z.array(z.string().trim().min(1).max(120)).min(1).max(3),
+      message: z.string().trim().min(1).max(300),
+    }).nullable().optional(),
   }),
   z.object({ pattern: z.literal('ROOM_MAP') }),
 ]);
@@ -812,6 +821,12 @@ export const CreateAskExecutionRequestSchema = z.object({
     // property before building any confirmation -- like operationId, a
     // routing hint, never a bypass of that re-check.
     documentId: z.string().trim().max(160).nullable().optional(),
+    // IW-PRES-015 (FRD v1.75): the decisions a card deck collected, sent together for one confirmation. Only ever
+    // honored by an operation that declared a deck batch; each entity and action is re-checked on the server.
+    batchDecisions: z.array(z.object({
+      entityId: z.string().trim().min(1).max(160),
+      actionId: z.string().trim().min(1).max(160),
+    })).min(1).max(30).nullable().optional(),
   }).optional(),
 }).strict();
 

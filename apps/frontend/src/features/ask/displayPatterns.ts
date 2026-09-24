@@ -1,4 +1,4 @@
-import type { AskComparisonBadge, AskGroupedListItem, AskPresentationBlock } from './types';
+import type { AskComparisonBadge, AskDeckBatch, AskGroupedListItem, AskPresentationBlock } from './types';
 import type { GroupedListPresentationPreference } from './adaptivePresentation';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-013–022, FRD v1.72). Deterministic choice of a shared display
@@ -15,7 +15,7 @@ export type GroupedListPattern = 'SHELVES' | 'DECK' | 'ROOM_MAP';
 export type GroupedListPatternDecision =
   | { pattern: null; offersChoice: boolean; reason: 'NO_PATTERN' | 'NO_ITEMS' | 'ITEMS_WITHOUT_ACTIONS' | 'TOO_MANY_FOR_DECK' | 'HOMEOWNER_CHOSE_LIST' }
   | { pattern: 'SHELVES' | 'ROOM_MAP'; offersChoice: true; reason: 'DECLARED' }
-  | { pattern: 'DECK'; offersChoice: true; reason: 'DECLARED'; swipeRightActionId: string | null; swipeLeftActionId: string | null };
+  | { pattern: 'DECK'; offersChoice: true; reason: 'DECLARED'; swipeRightActionId: string | null; swipeLeftActionId: string | null; batch: AskDeckBatch | null };
 
 /** A deck shows one card at a time, so it is only offered for a bounded set a homeowner can work through. */
 export const DECK_MAX_ITEMS = 30;
@@ -47,6 +47,7 @@ export function resolveGroupedListPattern(block: GroupedListBlock, preference: G
       pattern: 'DECK', offersChoice: true, reason: 'DECLARED',
       swipeRightActionId: swipeActionFor(items, declared.swipeRightActionId),
       swipeLeftActionId: swipeActionFor(items, declared.swipeLeftActionId),
+      batch: declared.batch ?? null,
     };
   }
   return { pattern: declared.pattern, offersChoice: true, reason: 'DECLARED' };

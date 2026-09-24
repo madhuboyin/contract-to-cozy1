@@ -153,7 +153,8 @@ describe('card deck', () => {
     expect(onItemAction).toHaveBeenCalledTimes(1);
     expect(screen.getByText('3 of 3')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(screen.getByText('Already sent: skipped for now')).toBeInTheDocument();
+    // A skipped card says so; nothing was sent for it.
+    expect(screen.getByText('Skipped for now')).toBeInTheDocument();
   });
 
   test('arrow keys perform the declared swipe actions, and the end shows what was sent', async () => {
