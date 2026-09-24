@@ -15,6 +15,7 @@ import {
   type AskPendingWorkItem,
   type AskRecentSessionPage,
   type AskRecentSessionSummary,
+  type AskSessionUpdateRequest,
   type AskPresentationBlock,
   type CreateAskExecutionRequest,
   type ContinueAskExecution,
@@ -19024,7 +19025,7 @@ export async function getAskSession(userId: string, sessionId: string): Promise<
   return visibleExecutions.map((execution) => mapPersistedExecution(execution, execution.propertyId ? labels.get(execution.propertyId) ?? null : null));
 }
 
-export async function getRecentAskSessions(userId: string, propertyId: string | null, cursorValue?: string, searchQuery?: string): Promise<AskRecentSessionPage> {
+export async function getRecentAskSessions(userId: string, propertyId: string | null, cursorValue?: string, searchQuery?: string, view: 'RECENT' | 'ARCHIVED' = 'RECENT'): Promise<AskRecentSessionPage> {
   if (propertyId) await ensurePropertyAccess(userId, propertyId);
   const accessibleProperties = propertyId ? null : await prisma.property.findMany({
     where: askHistoryAccessiblePropertyWhere(userId),
@@ -19033,36 +19034,46 @@ export async function getRecentAskSessions(userId: string, propertyId: string | 
   const cursor = cursorValue ? decodeAskSessionHistoryCursor(cursorValue) : null;
   if (cursorValue && !cursor) throw Object.assign(new Error('Invalid conversation history cursor.'), { code: 'ASK_INVALID_CURSOR' });
   const now = new Date();
-  const bounds = { userId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, cursor, searchQuery };
-  const where = propertyId
-    ? askSessionHistoryWhere({ ...bounds, propertyId })
-    : askSessionHistoryWhere({ ...bounds, accessiblePropertyIds: accessibleProperties!.map((property) => property.id) });
+  const bounds = { userId, now, retentionDays: readAskOperationalControls().rawConversationRetentionDays, searchQuery };
+  const scope = propertyId ? { propertyId } : { accessiblePropertyIds: accessibleProperties!.map((property) => property.id) };
+  const whereFor = (list: 'RECENT' | 'PINNED' | 'ARCHIVED', pageCursor: typeof cursor) => askSessionHistoryWhere({ ...bounds, ...scope, cursor: pageCursor, list } as Parameters<typeof askSessionHistoryWhere>[0]);
+  const select = {
+    id: true,
+    propertyId: true,
+    title: true,
+    lastActiveAt: true,
+    titleSetByUserAt: true,
+    pinnedAt: true,
+    archivedAt: true,
+    _count: { select: { executions: { where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } } },
+    executions: {
+      where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      orderBy: [{ createdAt: 'desc' as const }, { id: 'desc' as const }],
+      take: 1,
+      select: { id: true, message: true, status: true },
+    },
+  } satisfies Prisma.AskSessionSelect;
   const sessions = await prisma.askSession.findMany({
-    where,
+    where: whereFor(view === 'ARCHIVED' ? 'ARCHIVED' : 'RECENT', cursor),
     orderBy: [{ lastActiveAt: 'desc' }, { id: 'desc' }],
     take: ASK_SESSION_HISTORY_PAGE_SIZE + 1,
-    select: {
-      id: true,
-      propertyId: true,
-      title: true,
-      lastActiveAt: true,
-      _count: { select: { executions: { where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } } },
-      executions: {
-        where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 1,
-        select: { id: true, message: true, status: true },
-      },
-    },
+    select,
   });
+  // IW-HIST-003: pinned conversations form their own stable group, sent once with the first page of the recent list.
+  const includePinned = view === 'RECENT' && !cursor && !searchQuery;
+  const pinnedSessions = includePinned ? await prisma.askSession.findMany({
+    where: whereFor('PINNED', null),
+    orderBy: [{ pinnedAt: 'desc' }, { id: 'desc' }],
+    take: ASK_SESSION_HISTORY_PAGE_SIZE,
+    select,
+  }) : [];
   const selectedProperty = propertyId ? await propertySummary(propertyId) : null;
-  if (propertyId && !selectedProperty) return { items: [], nextCursor: null };
+  if (propertyId && !selectedProperty) return { items: [], nextCursor: null, ...(includePinned ? { pinned: [] } : {}) };
   const labels = new Map<string, { id: string; label: string }>(
     propertyId && selectedProperty ? [[propertyId, selectedProperty]]
       : accessibleProperties!.map((property) => [property.id, { id: property.id, label: propertyLabel(property) }]),
   );
-  const page = sessions.slice(0, ASK_SESSION_HISTORY_PAGE_SIZE);
-  const items: AskRecentSessionSummary[] = page.flatMap((session) => {
+  const summarize = (rows: typeof sessions): AskRecentSessionSummary[] => rows.flatMap((session) => {
     const latest = session.executions[0];
     const property = session.propertyId ? labels.get(session.propertyId) : null;
     if (!latest || !property) return [];
@@ -19075,11 +19086,47 @@ export async function getRecentAskSessions(userId: string, propertyId: string | 
       latestExecutionId: latest.id,
       executionCount: session._count.executions,
       lastActiveAt: session.lastActiveAt.toISOString(),
+      pinned: Boolean(session.pinnedAt),
+      archived: Boolean(session.archivedAt),
+      titleSetByUser: Boolean(session.titleSetByUserAt),
     }];
   });
+  const page = sessions.slice(0, ASK_SESSION_HISTORY_PAGE_SIZE);
   const last = page.at(-1);
-  return { items, nextCursor: sessions.length > ASK_SESSION_HISTORY_PAGE_SIZE && last
-    ? encodeAskSessionHistoryCursor({ lastActiveAt: last.lastActiveAt, id: last.id }) : null };
+  return {
+    items: summarize(page),
+    nextCursor: sessions.length > ASK_SESSION_HISTORY_PAGE_SIZE && last
+      ? encodeAskSessionHistoryCursor({ lastActiveAt: last.lastActiveAt, id: last.id }) : null,
+    ...(includePinned ? { pinned: summarize(pinnedSessions) } : {}),
+  };
+}
+
+// IW-HIST-009..011 (session lifecycle controls): rename, pin/unpin and archive/restore one of the homeowner's own
+// conversations. The session must belong to the user, still be retained, and (for a property-scoped session) its home
+// must still be accessible -- a conversation whose home access was revoked is reported as not found rather than
+// letting its title be edited or confirmed to exist (IW-HIST-006). None of these touches retention (expiresAt),
+// lastActiveAt, executions or any home record. Archiving also unpins, so a restored conversation returns to the
+// ordinary recent list.
+export async function updateAskSessionForUser(userId: string, sessionId: string, change: AskSessionUpdateRequest): Promise<{ sessionId: string; title: string | null; pinned: boolean; archived: boolean; titleSetByUser: boolean }> {
+  const notFound = () => Object.assign(new Error('Ask session not found.'), { code: 'ASK_SESSION_NOT_FOUND' });
+  const now = new Date();
+  const session = await prisma.askSession.findFirst({
+    where: { id: sessionId, userId, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+    select: { id: true, propertyId: true },
+  });
+  if (!session) throw notFound();
+  if (session.propertyId && !(await resolvePropertyAccess(userId, session.propertyId))) throw notFound();
+  const data: Prisma.AskSessionUpdateInput = 'title' in change
+    ? { title: change.title, titleSetByUserAt: now }
+    : 'pinned' in change
+      ? { pinnedAt: change.pinned ? now : null }
+      : change.archived ? { archivedAt: now, pinnedAt: null } : { archivedAt: null };
+  const updated = await prisma.askSession.update({
+    where: { id: session.id },
+    data,
+    select: { id: true, title: true, pinnedAt: true, archivedAt: true, titleSetByUserAt: true },
+  });
+  return { sessionId: updated.id, title: updated.title, pinned: Boolean(updated.pinnedAt), archived: Boolean(updated.archivedAt), titleSetByUser: Boolean(updated.titleSetByUserAt) };
 }
 
 export async function getAskExecution(userId: string, executionId: string): Promise<AskExecutionResponse> {

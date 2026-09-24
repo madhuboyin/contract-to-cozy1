@@ -38,6 +38,9 @@ export function askSessionHistoryWhere(input: {
   retentionDays: number;
   cursor: AskSessionHistoryCursor | null;
   searchQuery?: string;
+  // IW-HIST-003/011: RECENT (default) excludes archived and pinned conversations (pinned have their own group);
+  // PINNED lists only pinned, unarchived ones; ARCHIVED lists only archived ones. Search spans every unarchived one.
+  list?: 'RECENT' | 'PINNED' | 'ARCHIVED';
 } & ({ propertyId: string; accessiblePropertyIds?: never } | { propertyId?: never; accessiblePropertyIds: string[] })): Prisma.AskSessionWhereInput {
   const retentionWindowMs = input.retentionDays * 24 * 60 * 60 * 1000;
   const retainedSince = new Date(input.now.getTime() - retentionWindowMs);
@@ -56,10 +59,13 @@ export function askSessionHistoryWhere(input: {
       ...liveExecution,
     } } },
   ] } : null;
+  const list = input.list ?? 'RECENT';
   return {
     userId: input.userId,
     propertyId: allHomes ? { in: input.accessiblePropertyIds } : input.propertyId,
     lastActiveAt: { gte: retainedSince },
+    archivedAt: list === 'ARCHIVED' ? { not: null } : null,
+    ...(list === 'PINNED' ? { pinnedAt: { not: null } } : list === 'RECENT' && !input.searchQuery ? { pinnedAt: null } : {}),
     OR: [{ expiresAt: null }, { expiresAt: { gt: input.now } }],
     executions: allHomes
       ? { some: liveExecution, every: { propertyId: { in: input.accessiblePropertyIds } } }

@@ -1,8 +1,8 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { AskSessionSearchRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema } from '../productFramework/ask/ask.contract';
-import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
+import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema } from '../productFramework/ask/ask.contract';
+import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import {
   PropertyContextCaptureValidationError,
@@ -253,7 +253,10 @@ export async function getAskRecentSessions(req: AuthRequest, res: Response, next
     if (propertyId && !propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required for recent Ask sessions.' } });
     const cursor = z.string().min(1).max(512).optional().safeParse(req.query.cursor);
     if (!cursor.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation history cursor is invalid.' } });
-    return res.status(200).json({ success: true, data: await getRecentAskSessions(userId, propertyId?.data ?? null, cursor.data) });
+    // IW-HIST-011: the explicit archived view.
+    const view = z.enum(['recent', 'archived']).optional().safeParse(req.query.view);
+    if (!view.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation history view is invalid.' } });
+    return res.status(200).json({ success: true, data: await getRecentAskSessions(userId, propertyId?.data ?? null, cursor.data, undefined, view.data === 'archived' ? 'ARCHIVED' : 'RECENT') });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
@@ -359,6 +362,22 @@ export async function postHomeActionUsefulnessFeedback(req: AuthRequest, res: Re
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
+    return next(error);
+  }
+}
+
+// IW-HIST-009..011, IW-HIST-014: rename, pin/unpin or archive/restore one conversation from the rail's session menu.
+export async function patchAskSession(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const sessionId = z.string().trim().min(1).max(160).safeParse(req.params.sessionId);
+    const input = AskSessionUpdateRequestSchema.safeParse(req.body);
+    if (!sessionId.success || !input.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'The conversation change is invalid.' } });
+    return res.status(200).json({ success: true, data: await updateAskSessionForUser(userId, sessionId.data, input.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_SESSION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Conversation not found or access was removed.' } });
     return next(error);
   }
 }

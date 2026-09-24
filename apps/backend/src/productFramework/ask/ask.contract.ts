@@ -877,12 +877,27 @@ export const AskRecentSessionSummarySchema = z.object({
   latestExecutionId: z.string(),
   executionCount: z.number().int().positive(),
   lastActiveAt: z.string().datetime(),
+  // IW-HIST-009..011: lifecycle state the history rail's session menu reads.
+  pinned: z.boolean(),
+  archived: z.boolean(),
+  titleSetByUser: z.boolean(),
 });
 
 export const AskRecentSessionPageSchema = z.object({
   items: z.array(AskRecentSessionSummarySchema),
   nextCursor: z.string().nullable(),
+  // IW-HIST-003: pinned conversations in their own stable group, returned with the first page of the recent list only
+  // (not with search results, the archived view, or later pages). Items never repeat pinned conversations.
+  pinned: z.array(AskRecentSessionSummarySchema).optional(),
 });
+
+// IW-HIST-009..011, IW-HIST-014: one session-menu change at a time from the rail. A title is the homeowner's own; an
+// empty title is rejected rather than treated as "reset".
+export const AskSessionUpdateRequestSchema = z.union([
+  z.object({ title: z.string().trim().min(1).max(120) }).strict(),
+  z.object({ pinned: z.boolean() }).strict(),
+  z.object({ archived: z.boolean() }).strict(),
+]);
 
 const AskSessionSearchBaseSchema = z.object({
   query: z.string().trim().min(1).max(120),
@@ -911,5 +926,6 @@ export type ResolveAskExecutionProperty = z.infer<typeof ResolveAskExecutionProp
 export type AskPendingWorkItem = z.infer<typeof AskPendingWorkItemSchema>;
 export type AskRecentSessionSummary = z.infer<typeof AskRecentSessionSummarySchema>;
 export type AskRecentSessionPage = z.infer<typeof AskRecentSessionPageSchema>;
+export type AskSessionUpdateRequest = z.infer<typeof AskSessionUpdateRequestSchema>;
 export type SubmitAskClarification = z.infer<typeof SubmitAskClarificationSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;

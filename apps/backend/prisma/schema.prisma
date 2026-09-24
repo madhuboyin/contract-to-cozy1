@@ -8000,12 +8000,19 @@ model AskSession {
   // and a stale/orphaned value here can never cause incorrect behavior
   // since nothing treats it as authoritative.
   activeDecisionThreadId String?
+  // ASK_COZY_INLINE_WORKSPACE_FRD IW-HIST-009..011 (session lifecycle controls). titleSetByUserAt marks a homeowner-authored
+  // title, which automatic titling must never overwrite. pinnedAt only changes navigation order; archivedAt moves the
+  // conversation to the archived view. Neither changes retention (expiresAt), authorization or any home record.
+  titleSetByUserAt DateTime?
+  pinnedAt         DateTime?
+  archivedAt       DateTime?
 
   user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   property   Property?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   executions AskExecution[]
 
   @@index([userId, lastActiveAt])
+  @@index([userId, archivedAt, pinnedAt])
   @@index([propertyId, lastActiveAt])
   @@map("ask_sessions")
 }

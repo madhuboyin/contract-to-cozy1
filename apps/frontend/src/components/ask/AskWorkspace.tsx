@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, MutableRefObject, Ref, useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskConfirmationEditableField, AskExecutionResponse, AskFeaturedPrompt, AskItemActionInteractionType, AskPendingWorkItem, AskRecentSessionSummary, ConciergeHomeView } from '@/features/ask/types';
+import type { AskAction, AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, AskCaptureRequest, AskClarification, AskConfirmation, AskConfirmationEditableField, AskExecutionResponse, AskFeaturedPrompt, AskItemActionInteractionType, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange, ConciergeHomeView } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -18,6 +18,7 @@ import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import { resolveConciergeLandingSpotlight, visibleConciergeFeaturedPrompts } from '@/features/ask/conciergeLandingPolicy';
 import { resolveItemActionDispatch } from '@/features/ask/interactionDispatch';
 import { ResultRevalidationBoundary } from './ResultRevalidationBoundary';
+import { ConversationSessionRow } from './ConversationSessionRow';
 import { hasResponseContext, ResponseContextContent, ResponseContextSummary } from './EvidenceContextPanel';
 import { AskActionReturnContext, AskBlockActionContext, AskContextLink } from './blocks/context';
 import { BlockView } from './blocks/registry';
@@ -916,8 +917,16 @@ function recentSessionStatus(status: AskRecentSessionSummary['latestStatus']): s
   return status.toLowerCase().replace(/_/g, ' ');
 }
 
-export function ConversationHistoryNav({ items, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel }: {
+export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel }: {
   items: AskRecentSessionSummary[];
+  // IW-HIST-003/011 (FRD v1.71): the pinned group (recent view only) and the explicit archived view.
+  pinnedItems?: AskRecentSessionSummary[];
+  view?: 'RECENT' | 'ARCHIVED';
+  onViewChange?: (view: 'RECENT' | 'ARCHIVED') => void;
+  // IW-HIST-009..012, IW-HIST-014: the per-conversation session menu. Resolve false to keep the row's editor open.
+  onSessionChange?: (session: AskRecentSessionSummary, change: AskSessionChange) => Promise<boolean>;
+  onSessionDelete?: (session: AskRecentSessionSummary) => Promise<boolean>;
+  busySessionId?: string | null;
   activeSessionId: string;
   loading: boolean;
   loadingMore: boolean;
@@ -946,13 +955,18 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
     const timer = window.setInterval(refresh, 60_000);
     return () => window.clearInterval(timer);
   }, []);
-  const grouped = items.reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
+  const archivedView = view === 'ARCHIVED';
+  const searching = Boolean(query.trim());
+  const showPinned = !archivedView && !searching && pinnedItems.length > 0;
+  const pinnedIds = new Set(showPinned ? pinnedItems.map((session) => session.sessionId) : []);
+  const periodGroups = items.filter((session) => !pinnedIds.has(session.sessionId)).reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
     const label = askHistoryGroupLabel(session.lastActiveAt, calendar);
     const group = groups.find((candidate) => candidate.label === label);
     if (group) group.items.push(session);
     else groups.push({ label, items: [session] });
     return groups;
   }, []);
+  const grouped = [...(showPinned ? [{ label: 'Pinned', items: pinnedItems }] : []), ...periodGroups];
   return (
     <nav className="flex min-h-0 flex-1 flex-col" aria-label="Ask Cozy conversations">
       <div className="mb-4 flex items-center gap-2 px-1">
@@ -966,42 +980,45 @@ export function ConversationHistoryNav({ items, activeSessionId, loading, loadin
         <button type="button" aria-pressed={scope === 'THIS_HOME'} disabled={!selectedHomeAvailable} onClick={() => onScopeChange('THIS_HOME')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold disabled:opacity-50', scope === 'THIS_HOME' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>This home</button>
         <button type="button" aria-pressed={scope === 'ALL_HOMES'} onClick={() => onScopeChange('ALL_HOMES')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold', scope === 'ALL_HOMES' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>All homes</button>
       </div>
-      <label className="relative mt-4 block">
+      {archivedView ? (
+        <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-slate-100 px-3 py-2">
+          <p className="text-xs font-semibold text-slate-700">Archived conversations</p>
+          <button type="button" onClick={() => onViewChange?.('RECENT')} className="min-h-8 rounded-lg px-2 text-xs font-semibold text-teal-800 hover:bg-white">Back to recent</button>
+        </div>
+      ) : <label className="relative mt-4 block">
         <span className="sr-only">Search conversation titles and questions for {scope === 'ALL_HOMES' ? 'all homes' : 'this home'}</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
         <input value={query} onChange={(event) => onQueryChange(event.target.value)} maxLength={120} placeholder="Search conversations" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
-      </label>
+      </label>}
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
         {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
-        {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
+        {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{archivedView ? 'Loading archived conversations…' : query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
         {grouped.length === 0 && !loading ? (
-          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversations match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
+          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{archivedView ? issue ? 'Archived conversations are unavailable right now.' : 'No archived conversations.' : query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversations match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
         ) : grouped.map((group) => (
           <section key={group.label} className="mb-5" aria-labelledby={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`}>
             <h3 id={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`} className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.label}</h3>
             <ul className="mt-1 space-y-1">
-              {group.items.map((session) => {
-                const active = session.sessionId === activeSessionId;
-                return <li key={session.sessionId}>
-                  <button
-                    type="button"
-                    aria-current={active ? 'page' : undefined}
+              {group.items.map((session) => (
+                <li key={session.sessionId}>
+                  <ConversationSessionRow
+                    session={session}
+                    active={session.sessionId === activeSessionId}
+                    status={openingId === session.sessionId ? 'Opening…' : recentSessionStatus(session.latestStatus)}
                     disabled={Boolean(openingId)}
-                    onClick={() => onOpen(session)}
-                    className={cn('w-full rounded-xl px-3 py-2.5 text-left transition disabled:opacity-60', active ? 'bg-teal-50 text-teal-950 ring-1 ring-inset ring-teal-200' : 'text-slate-700 hover:bg-white hover:text-slate-950')}
-                  >
-                    <span className="block truncate text-sm font-semibold">{session.title}</span>
-                    <span className="mt-1 flex items-center justify-between gap-2 text-[11px] text-slate-500">
-                      <span className="truncate">{session.property.label}</span>
-                      <span className="shrink-0">{openingId === session.sessionId ? 'Opening…' : recentSessionStatus(session.latestStatus)}</span>
-                    </span>
-                  </button>
-                </li>;
-              })}
+                    busy={busySessionId === session.sessionId}
+                    archivedView={archivedView}
+                    onOpen={() => onOpen(session)}
+                    onChange={onSessionChange ? (change) => onSessionChange(session, change) : undefined}
+                    onDelete={onSessionDelete ? () => onSessionDelete(session) : undefined}
+                  />
+                </li>
+              ))}
             </ul>
           </section>
         ))}
         {hasMore && <button type="button" onClick={onLoadMore} disabled={loading || loadingMore} className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 disabled:opacity-60">{loadingMore ? 'Loading older conversations…' : 'Load older conversations'}</button>}
+        {onViewChange && !archivedView && !searching && <button type="button" onClick={() => onViewChange('ARCHIVED')} className="mt-3 flex min-h-9 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-white hover:text-slate-800"><Archive className="h-3.5 w-3.5" aria-hidden="true" />Archived conversations</button>}
       </div>
       <div className="border-t border-slate-200 pt-3">
         {backHref && <Link href={backHref} className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"><ArrowLeft className="h-4 w-4" />{backLabel || 'Back to Home'}</Link>}
@@ -1255,6 +1272,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [searchIssue, setSearchIssue] = useState<string | null>(null);
   const [openingRecentSessionId, setOpeningRecentSessionId] = useState<string | null>(null);
   const [recentSessionsEpoch, setRecentSessionsEpoch] = useState(0);
+  // IW-HIST-003/009..012 (FRD v1.71): the pinned group, the archived view, and the conversation a session-menu change is
+  // in flight for.
+  const [historyView, setHistoryView] = useState<'RECENT' | 'ARCHIVED'>('RECENT');
+  const [pinnedSessions, setPinnedSessions] = useState<AskRecentSessionSummary[]>([]);
+  const [sessionActionId, setSessionActionId] = useState<string | null>(null);
+  const [sessionActionIssue, setSessionActionIssue] = useState<string | null>(null);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [contextExecutionId, setContextExecutionId] = useState<string | null>(null);
   const contextHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -1288,6 +1311,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const appliedInitialQuestionRef = useRef('');
   const redactHistoryAccessLoss = useCallback((propertyId: string) => {
     setRecentSessions([]);
+    setPinnedSessions([]);
     setRecentSessionsNextCursor(null);
     setRecentSessionsIssue('Access to this home changed. Its conversations are no longer shown.');
     setSearchSessions([]);
@@ -1412,10 +1436,11 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     if (propertyMismatch || (effectiveHistoryScope === 'THIS_HOME' && !selectedPropertyId)) return;
     const controller = new AbortController();
     const requestEpoch = ++historyRequestEpochRef.current;
-    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId]);
+    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId, historyView]);
     const apiScope = effectiveHistoryScope === 'ALL_HOMES' ? { allHomes: true as const } : { propertyId: selectedPropertyId! };
     if (historyPropertyRef.current !== scopeKey) {
       setRecentSessions([]);
+      setPinnedSessions([]);
       setRecentSessionsNextCursor(null);
       setSearchSessions([]);
       setSearchNextCursor(null);
@@ -1426,12 +1451,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setRecentSessionsLoading(true);
     setRecentSessionsLoadingMore(false);
     setRecentSessionsIssue(null);
-    api.getRecentAskSessions(apiScope, { signal: controller.signal })
+    api.getRecentAskSessions(apiScope, { signal: controller.signal, archived: historyView === 'ARCHIVED' })
       .then((response) => {
         if (!response.success || !response.data) throw new Error(response.message || 'Could not refresh conversations.');
         if (controller.signal.aborted || historyRequestEpochRef.current !== requestEpoch) return;
         const items = response.data.items;
         setRecentSessions(Array.isArray(items) ? items : []);
+        setPinnedSessions(historyView === 'RECENT' && Array.isArray(response.data.pinned) ? response.data.pinned : []);
         setRecentSessionsNextCursor(response.data.nextCursor ?? null);
       })
       .catch((caught) => {
@@ -1447,7 +1473,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       })
       .finally(() => { if (!controller.signal.aborted) setRecentSessionsLoading(false); });
     return () => controller.abort();
-  }, [selectedPropertyId, effectiveHistoryScope, propertyMismatch, availabilityEpoch, recentSessionsEpoch, redactHistoryAccessLoss]);
+  }, [selectedPropertyId, effectiveHistoryScope, historyView, propertyMismatch, availabilityEpoch, recentSessionsEpoch, redactHistoryAccessLoss]);
 
   useEffect(() => {
     if (!historySearchTerm || propertyMismatch || (effectiveHistoryScope === 'THIS_HOME' && !selectedPropertyId)) {
@@ -1491,12 +1517,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const loadMoreRecentSessions = async () => {
     if ((effectiveHistoryScope === 'THIS_HOME' && !selectedPropertyId) || !recentSessionsNextCursor || recentSessionsLoading || recentSessionsLoadingMore) return;
     const requestEpoch = historyRequestEpochRef.current;
-    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId]);
+    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId, historyView]);
     const apiScope = effectiveHistoryScope === 'ALL_HOMES' ? { allHomes: true as const } : { propertyId: selectedPropertyId! };
     setRecentSessionsLoadingMore(true);
     setRecentSessionsIssue(null);
     try {
-      const response = await api.getRecentAskSessions(apiScope, { cursor: recentSessionsNextCursor });
+      const response = await api.getRecentAskSessions(apiScope, { cursor: recentSessionsNextCursor, archived: historyView === 'ARCHIVED' });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not load older conversations.');
       if (historyRequestEpochRef.current !== requestEpoch || historyPropertyRef.current !== scopeKey) return;
       setRecentSessions((current) => {
@@ -1521,7 +1547,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const loadMoreSearchSessions = async () => {
     if ((effectiveHistoryScope === 'THIS_HOME' && !selectedPropertyId) || !historySearchTerm || !searchNextCursor || searchLoading || searchLoadingMore) return;
     const requestEpoch = searchRequestEpochRef.current;
-    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId]);
+    const scopeKey = JSON.stringify([effectiveHistoryScope, selectedPropertyId, historyView]);
     const apiScope = effectiveHistoryScope === 'ALL_HOMES' ? { allHomes: true as const } : { propertyId: selectedPropertyId! };
     setSearchLoadingMore(true);
     setSearchIssue(null);
@@ -1755,6 +1781,69 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     } finally { setLoading(false); }
   };
 
+  // IW-HIST-009..011 (FRD v1.71): rename, pin/unpin, archive/restore from the session menu. A rename updates the loaded
+  // rows in place; pin and archive move the conversation between groups, so the lists are reloaded.
+  const changeHistorySession = async (session: AskRecentSessionSummary, change: AskSessionChange): Promise<boolean> => {
+    if (sessionActionId) return false;
+    setSessionActionId(session.sessionId);
+    setSessionActionIssue(null);
+    try {
+      const response = await api.updateAskSession(session.sessionId, change);
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not update that conversation.');
+      const updated = response.data;
+      const apply = (items: AskRecentSessionSummary[]) => items.map((item) => item.sessionId === updated.sessionId
+        ? { ...item, title: updated.title?.trim() || item.title, pinned: updated.pinned, archived: updated.archived, titleSetByUser: updated.titleSetByUser }
+        : item);
+      setRecentSessions(apply);
+      setPinnedSessions(apply);
+      setSearchSessions(apply);
+      if (!('title' in change)) setRecentSessionsEpoch((current) => current + 1);
+      return true;
+    } catch (caught) {
+      const gone = askFailureCode(caught) === 'ASK_SESSION_NOT_FOUND';
+      setSessionActionIssue(gone ? 'That conversation is no longer available. Nothing was changed.' : 'Could not update that conversation. Nothing was changed.');
+      if (gone) setRecentSessionsEpoch((current) => current + 1);
+      if (askServiceIsPaused(caught)) setServiceUnavailable(true);
+      return false;
+    } finally {
+      setSessionActionId(null);
+    }
+  };
+
+  // IW-HIST-012: delete one conversation after the row's own confirmation. Home records, tasks and other artifacts made
+  // through Ask are untouched (the backend deletes only the session, its executions and their feedback). Deleting the
+  // open conversation starts a fresh one, as clearing it does.
+  const deleteHistorySession = async (session: AskRecentSessionSummary): Promise<boolean> => {
+    if (sessionActionId) return false;
+    setSessionActionId(session.sessionId);
+    setSessionActionIssue(null);
+    try {
+      const response = await api.deleteAskSession(session.sessionId);
+      if (!response.success) throw new Error(response.message || 'Could not delete that conversation.');
+      clearResultViews(window.sessionStorage, session.sessionId);
+      window.localStorage.removeItem(draftStorageKey(session.property.id, session.sessionId));
+      const remove = (items: AskRecentSessionSummary[]) => items.filter((item) => item.sessionId !== session.sessionId);
+      setRecentSessions(remove);
+      setPinnedSessions(remove);
+      setSearchSessions(remove);
+      if (session.sessionId === activeSessionRef.current) {
+        const nextSession = newId();
+        activeSessionRef.current = nextSession;
+        activeSessionPropertyRef.current = selectedPropertyId;
+        setSessionId(nextSession); setExecutions([]); setConfirmClear(false); setJustUpdatedExecutionId(null);
+        if (mode === 'page') updateAskLocation({ propertyId: selectedPropertyId }, 'replace');
+      }
+      setRecentSessionsEpoch((current) => current + 1);
+      return true;
+    } catch (caught) {
+      setSessionActionIssue('Could not delete that conversation. It is still here.');
+      if (askServiceIsPaused(caught)) setServiceUnavailable(true);
+      return false;
+    } finally {
+      setSessionActionId(null);
+    }
+  };
+
   const startNewSession = () => {
     if (loading) return;
     const nextSession = newId();
@@ -1981,6 +2070,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
   const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId && (effectiveHistoryScope === 'ALL_HOMES' || item.property.id === selectedPropertyId));
   const latestExecution = executions.at(-1);
+  const knownActiveSession = [...pinnedSessions, ...recentSessions, ...searchSessions].find((item) => item.sessionId === sessionId);
   const activeConversation = executions.length > 0 && latestExecution && latestExecution.property?.id === selectedPropertyId && !deniedProperties.current.has(`${sessionId}:${latestExecution.property?.id}`) ? {
     sessionId,
     title: executions[0].question,
@@ -1989,16 +2079,26 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     latestExecutionId: latestExecution.executionId,
     executionCount: executions.length,
     lastActiveAt: latestExecution.updatedAt,
+    // The rail's loaded row for this conversation carries its lifecycle state and any homeowner-authored title.
+    pinned: knownActiveSession?.pinned ?? false,
+    archived: knownActiveSession?.archived ?? false,
+    titleSetByUser: knownActiveSession?.titleSetByUser ?? false,
+    ...(knownActiveSession?.titleSetByUser ? { title: knownActiveSession.title } : {}),
   } satisfies AskRecentSessionSummary : null;
   const historySearchActive = Boolean(historySearchInput.trim());
   const historySearchPending = historySearchActive && historySearchInput.trim() !== historySearchTerm;
+  const inHistoryScope = (item: AskRecentSessionSummary) => effectiveHistoryScope === 'ALL_HOMES' || item.property.id === selectedPropertyId;
+  // The open conversation leads the recent list unless it lives in the pinned group or the archive.
+  const activeLeadsRecent = activeConversation && !activeConversation.pinned && !activeConversation.archived;
   const historySessions = historySearchActive
-    ? historySearchPending ? [] : searchSessions.filter((item) => effectiveHistoryScope === 'ALL_HOMES' || item.property.id === selectedPropertyId)
-    : effectiveHistoryScope === 'ALL_HOMES' ? recentSessions : activeConversation ? [activeConversation, ...visibleRecentSessions] : visibleRecentSessions;
+    ? historySearchPending ? [] : searchSessions.filter(inHistoryScope)
+    : historyView === 'ARCHIVED' ? recentSessions.filter(inHistoryScope)
+      : effectiveHistoryScope === 'ALL_HOMES' ? recentSessions : activeLeadsRecent ? [activeConversation, ...visibleRecentSessions] : visibleRecentSessions;
+  const historyPinnedSessions = historyView === 'RECENT' ? pinnedSessions.filter(inHistoryScope) : [];
   const historyRailLoading = historySearchActive ? historySearchPending || searchLoading : recentSessionsLoading;
   const historyRailLoadingMore = historySearchActive ? searchLoadingMore : recentSessionsLoadingMore;
   const historyRailHasMore = historySearchActive ? !historySearchPending && Boolean(searchNextCursor) : Boolean(recentSessionsNextCursor);
-  const historyRailIssue = historySearchActive ? searchIssue : recentSessionsIssue;
+  const historyRailIssue = sessionActionIssue ?? (historySearchActive ? searchIssue : recentSessionsIssue);
   const loadMoreHistory = historySearchActive ? loadMoreSearchSessions : loadMoreRecentSessions;
   const personalizedFeaturedPrompts = concierge.view ? visibleConciergeFeaturedPrompts(concierge.view) : [];
   const usingFallbackPrompts = personalizedFeaturedPrompts.length === 0;
@@ -2056,7 +2156,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               <SheetDescription>Start something new or continue a conversation from an accessible home.</SheetDescription>
             </SheetHeader>
             <div className="mt-5 min-h-0 flex-1">
-              <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
+              <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
             </div>
           </SheetContent>
         </Sheet>
@@ -2078,7 +2178,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
           <aside className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
-            <ConversationHistoryNav items={historySessions} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
+            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
           </aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col">

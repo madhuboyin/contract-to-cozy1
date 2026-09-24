@@ -1074,9 +1074,10 @@ class APIClient {
   async getAskSession(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
     return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, options);
   }
-  async getRecentAskSessions(scope: { propertyId: string } | { allHomes: true }, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
+  async getRecentAskSessions(scope: { propertyId: string } | { allHomes: true }, options: { cursor?: string; signal?: AbortSignal; archived?: boolean } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
     const query = new URLSearchParams('allHomes' in scope ? { scope: 'all' } : { propertyId: scope.propertyId });
     if (options.cursor) query.set('cursor', options.cursor);
+    if (options.archived) query.set('view', 'archived');
     return this.request(`/api/ask/sessions/recent?${query.toString()}`, { signal: options.signal });
   }
   async searchAskSessions(scope: { propertyId: string } | { allHomes: true }, query: string, options: { cursor?: string; signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecentSessionPage>> {
@@ -1124,6 +1125,10 @@ class APIClient {
   }
   async submitHomeActionUsefulnessFeedback(executionId: string, homeActionId: string, payload: { rating: 'USEFUL' | 'NOT_USEFUL'; comment?: string }): Promise<APIResponse<{ id: string; rating: 'USEFUL' | 'NOT_USEFUL' }>> {
     return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/priority-list/${encodeURIComponent(homeActionId)}/feedback`, { method: 'POST', body: payload });
+  }
+  // IW-HIST-009..011: rename, pin/unpin or archive/restore one conversation.
+  async updateAskSession(sessionId: string, change: import('@/features/ask/types').AskSessionChange): Promise<APIResponse<{ sessionId: string; title: string | null; pinned: boolean; archived: boolean; titleSetByUser: boolean }>> {
+    return this.request(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, { method: 'PATCH', body: change });
   }
   async deleteAskSession(sessionId: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });

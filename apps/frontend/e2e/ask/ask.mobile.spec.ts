@@ -23,7 +23,7 @@ test('mobile conversation history opens as a drawer and restores a recent sessio
   const drawer = page.getByRole('dialog', { name: 'Ask Cozy conversations' });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByPlaceholder('Search conversations')).toBeVisible();
-  await drawer.getByRole('button', { name: /When should I replace my refrigerator\?/ }).click();
+  await drawer.getByRole('button', { name: /^When should I replace my refrigerator\?/ }).click();
 
   await expect(drawer).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();

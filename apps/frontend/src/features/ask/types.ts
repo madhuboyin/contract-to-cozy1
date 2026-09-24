@@ -148,12 +148,20 @@ export interface AskRecentSessionSummary {
   latestExecutionId: string;
   executionCount: number;
   lastActiveAt: string;
+  // IW-HIST-009..011: lifecycle state for the rail's session menu.
+  pinned: boolean;
+  archived: boolean;
+  titleSetByUser: boolean;
 }
 
 export interface AskRecentSessionPage {
   items: AskRecentSessionSummary[];
   nextCursor: string | null;
+  // IW-HIST-003: the pinned group, sent with the first page of the recent list only.
+  pinned?: AskRecentSessionSummary[];
 }
+
+export type AskSessionChange = { title: string } | { pinned: boolean } | { archived: boolean };
 
 export interface AskClarification {
   version: number;

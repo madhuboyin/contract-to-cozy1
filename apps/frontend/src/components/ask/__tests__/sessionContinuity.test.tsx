@@ -10,6 +10,9 @@ const recent: AskRecentSessionSummary = {
   latestExecutionId: 'execution-one',
   executionCount: 2,
   lastActiveAt: new Date().toISOString(),
+  pinned: false,
+  archived: false,
+  titleSetByUser: false,
 };
 
 test('composer drafts are isolated by conversation and property', () => {

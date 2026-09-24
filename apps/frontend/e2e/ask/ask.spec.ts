@@ -54,18 +54,18 @@ test('new conversation returns to a fresh surface and recent sessions can be res
   await expect(page.getByRole('complementary', { name: 'Conversation history' })).toHaveCount(1);
   await expect(conversationNav.getByText('Your home assistant')).toBeVisible();
   await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
-  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ })).toBeVisible();
 
-  await conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ }).click();
+  await conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ }).click();
   await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();
   await expect(page).toHaveURL(/sessionId=recent-session-1/);
-  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toHaveAttribute('aria-current', 'page');
+  await expect(conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ })).toHaveAttribute('aria-current', 'page');
 
   await conversationNav.getByRole('button', { name: 'New Ask Cozy session' }).click();
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toHaveCount(0);
   await expect(page).not.toHaveURL(/sessionId=/);
-  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ })).toBeVisible();
 
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();
@@ -86,12 +86,12 @@ test('conversation switching restores each session draft without copying it to a
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
   const composer = page.getByPlaceholder('Ask anything about your home…');
 
-  await conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ }).click();
+  await conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ }).click();
   await composer.fill('Compare the repair estimates first');
   await conversationNav.getByRole('button', { name: 'New Ask Cozy session' }).click();
   await expect(composer).toHaveValue('');
   await composer.fill('Plan the next project');
-  await conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ }).click();
+  await conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ }).click();
   await expect(composer).toHaveValue('Compare the repair estimates first');
 });
 
@@ -99,10 +99,10 @@ test('conversation rail loads an older page without replacing the already loaded
   await installAskApi(page, { recentSessions: true, recentSessionsPages: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
-  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ })).toBeVisible();
   await conversationNav.getByRole('button', { name: 'Load older conversations' }).click();
-  await expect(conversationNav.getByRole('button', { name: /Older roof project/ })).toBeVisible();
-  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /^Older roof project/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ })).toBeVisible();
   await expect(conversationNav.getByRole('button', { name: 'Load older conversations' })).toHaveCount(0);
 });
 
@@ -116,8 +116,8 @@ test('conversation search finds a question beyond the title without putting it i
   expect(request.method()).toBe('POST');
   expect(request.postDataJSON()).toMatchObject({ propertyId, query: 'flashing' });
   expect(request.url()).not.toContain('flashing');
-  await expect(conversationNav.getByRole('button', { name: /Older roof project/ })).toBeVisible();
-  await expect(conversationNav.getByRole('button', { name: /When should I replace my refrigerator\?/ })).toHaveCount(0);
+  await expect(conversationNav.getByRole('button', { name: /^Older roof project/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ })).toHaveCount(0);
 });
 
 test('conversation rail switches to authorized all-home history and keeps property labels visible', async ({ page }) => {
@@ -125,13 +125,13 @@ test('conversation rail switches to authorized all-home history and keeps proper
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
   await conversationNav.getByRole('button', { name: 'All homes' }).click();
-  await expect(conversationNav.getByRole('button', { name: /Boiler replacement options.*Second Home/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /^Boiler replacement options.*Second Home/ })).toBeVisible();
   const searchRequest = page.waitForRequest((request) => request.url().endsWith('/api/ask/sessions/search'));
   await conversationNav.getByPlaceholder('Search conversations').fill('boiler');
   const request = await searchRequest;
   expect(request.postDataJSON()).toMatchObject({ scope: 'ALL_HOMES', query: 'boiler' });
   expect(request.url()).not.toContain('boiler');
-  await expect(conversationNav.getByRole('button', { name: /Boiler replacement options.*Second Home/ })).toBeVisible();
+  await expect(conversationNav.getByRole('button', { name: /^Boiler replacement options.*Second Home/ })).toBeVisible();
 });
 
 test('pending Ask actions stay compact and can be dismissed before execution', async ({ page }) => {
