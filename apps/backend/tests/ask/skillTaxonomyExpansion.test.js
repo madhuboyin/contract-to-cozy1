@@ -45,6 +45,7 @@ const TAXONOMY = Object.freeze({
   'home-risk-replay': ['PAST_HAZARD_EXPOSURE'],
   'status-board': ['HOME_STATUS_BOARD'],
   'home-habit-coach': ['HOME_HABITS'],
+  'home-digital-will': ['HOME_DIGITAL_WILL'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

@@ -177,6 +177,7 @@ import { getPastHazardExposure } from '../../propertyIntelligence/pastHazardExpo
 import { listBoard } from '../homeStatusBoard.service';
 import { listBoardQuerySchema } from '../../validators/homeStatusBoard.validators';
 import { HomeHabitCoachService } from '../homeHabitCoach/homeHabitCoachService';
+import { HomeDigitalWillService, evaluateHomeDigitalWillHandoffReadiness } from '../homeDigitalWill.service';
 import { isReviewedIntelligenceCoverageAvailable } from '../../middleware/intelligenceCoverage.middleware';
 import { HomeCapitalTimelineService } from '../homeCapitalTimeline.service';
 import { propertyTaxAppealReadinessService } from '../propertyTax/propertyTaxAppealReadiness.service';
@@ -7481,6 +7482,106 @@ async function homeHabitsResult(propertyId: string): Promise<AskOperationResult>
   return homeHabitsFromView(view, propertyId);
 }
 
+// Home Digital Will (Home Continuity Plan) capability-card slice (FRD v1.54): the sixth new operation for a capability
+// with none. Reads HomeDigitalWillService.getByProperty, the same call the page's route makes, behind the same
+// CONTRIBUTOR floor. Entries can hold access notes (gate codes, key locations) and Ask keeps its answers in the
+// conversation, so the answer lists entry titles only -- never entry content or summaries -- and trusted contacts by
+// name and role, without email, phone or notes. The details stay on the page. Read-only.
+type DigitalWillView = Awaited<ReturnType<HomeDigitalWillService['getByProperty']>>;
+const DIGITAL_WILL_MISSING_LABELS: Record<string, string> = {
+  'emergency-instruction': 'Add an emergency instruction.',
+  'primary-trusted-contact': 'Choose a primary trusted contact.',
+  'primary-contact-method': 'Add an email or phone number for the primary contact.',
+};
+
+export function digitalWillFromView(will: DigitalWillView, propertyId: string): AskOperationResult {
+  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-digital-will`;
+  const boundary: AskPresentationBlock = {
+    type: 'BOUNDARY', id: 'digital-will-boundary', title: 'A home knowledge plan, not a legal will',
+    body: 'The Home Continuity Plan records how this home runs so someone else can take over. It is not a legal will or estate document. Entry details and contact information stay on the plan itself and are not repeated here.',
+    severity: 'INFO', suggestions: [],
+  };
+  if (!will) {
+    return {
+      status: 'ANSWERED', reasonCode: 'DIGITAL_WILL_NOT_STARTED',
+      blocks: [{
+        type: 'SUMMARY', id: 'digital-will-summary', title: 'No Home Continuity Plan yet',
+        body: 'A Home Continuity Plan records emergency instructions, key contacts, utilities and how the home runs, for whoever needs to take over. Open it to start one.',
+        tone: 'DEFAULT',
+        actions: [{ id: 'open-home-digital-will', label: 'Open Home Continuity Plan', href: pageHref, style: 'PRIMARY' }],
+      }, boundary],
+      suggestions: ['What home records do I have?'],
+    };
+  }
+  const handoff = evaluateHomeDigitalWillHandoffReadiness(will);
+  const enabled = will.sections.filter((section) => section.isEnabled);
+  const entryCount = enabled.reduce((sum, section) => sum + section.entries.length, 0);
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'digital-will-summary',
+    title: `${will.title || 'Home Continuity Plan'}: ${readableCode(will.readiness)}, ${will.completionPercent ?? 0}% complete`,
+    body: [
+      `${will.status === 'ACTIVE' ? 'Published' : readableCode(will.status).replace(/^./, (c) => c.toUpperCase())}, with ${entryCount} entr${entryCount === 1 ? 'y' : 'ies'} across ${enabled.length} section${enabled.length === 1 ? '' : 's'} and ${will.trustedContacts.length} trusted contact${will.trustedContacts.length === 1 ? '' : 's'}.`,
+      will.lastReviewedAt ? `Last reviewed ${humanDate(new Date(will.lastReviewedAt))}.` : 'Not reviewed yet.',
+    ].join(' '),
+    tone: handoff.state === 'READY' ? 'DEFAULT' : 'CAUTION',
+    actions: [{ id: 'open-home-digital-will', label: 'Open Home Continuity Plan', href: pageHref, style: 'PRIMARY' }],
+  }];
+  if (handoff.state !== 'READY') {
+    blocks.push({
+      type: 'LIMITATION', id: 'digital-will-handoff', title: 'Not ready to hand off yet',
+      body: handoff.missingRequirements.map((code) => DIGITAL_WILL_MISSING_LABELS[code] ?? readableCode(code)).join(' '),
+      severity: 'CAUTION',
+    });
+  }
+  const sections = [
+    ...enabled.filter((section) => section.entries.length).map((section) => ({
+      id: `digital-will-section-${section.id}`, title: section.title || readableCode(section.type), count: section.entries.length,
+      items: section.entries.map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        description: null,
+        meta: [
+          readableCode(entry.entryType),
+          ...(entry.priority === 'HIGH' || entry.priority === 'CRITICAL' ? [`${readableCode(entry.priority)} priority`] : []),
+          ...(entry.isEmergency ? ['Emergency'] : []),
+          ...(entry.isPinned ? ['Pinned'] : []),
+        ],
+        status: String(entry.priority),
+        href: pageHref,
+      })),
+    })),
+    ...(will.trustedContacts.length ? [{
+      id: 'digital-will-contacts', title: 'Trusted contacts', count: will.trustedContacts.length,
+      items: will.trustedContacts.map((contact) => ({
+        id: contact.id,
+        title: contact.name,
+        description: null,
+        meta: [
+          readableCode(contact.role),
+          `${readableCode(contact.accessLevel)} access`,
+          ...(contact.isPrimary ? ['Primary'] : []),
+        ],
+        status: contact.isPrimary ? 'PRIMARY' : 'CONTACT',
+        href: pageHref,
+      })),
+    }] : []),
+  ];
+  if (sections.length) {
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'digital-will-items', title: 'What the plan holds', description: 'Entry titles by section and who can see the plan. Details are on the plan.', sections, actions: [] });
+  }
+  blocks.push(boundary);
+  return {
+    status: 'ANSWERED',
+    reasonCode: handoff.state === 'READY' ? 'DIGITAL_WILL_READY' : 'DIGITAL_WILL_NEEDS_CONTEXT',
+    blocks,
+    suggestions: ['What home records do I have?', 'What maintenance is due?'],
+  };
+}
+
+async function digitalWillResult(propertyId: string): Promise<AskOperationResult> {
+  return digitalWillFromView(await new HomeDigitalWillService().getByProperty(propertyId), propertyId);
+}
+
 async function pastHazardExposureResult(propertyId: string): Promise<AskOperationResult> {
   // The page's route answers 503 REVIEWED_SOURCE_COVERAGE_REQUIRED in this case; Ask says the same, never an all-clear.
   if (!isReviewedIntelligenceCoverageAvailable('HOME_RISK_REPLAY')) {
@@ -9773,6 +9874,7 @@ registerCapabilityHandler('neighborhood-change.feed', async (envelope) => neighb
 registerCapabilityHandler('home-risk-replay.exposure', async (envelope) => pastHazardExposureResult(envelope.propertyId!));
 registerCapabilityHandler('status-board.read', async (envelope) => homeStatusBoardResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('home-habits.read', async (envelope) => homeHabitsResult(envelope.propertyId!));
+registerCapabilityHandler('home-digital-will.read', async (envelope) => digitalWillResult(envelope.propertyId!));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 

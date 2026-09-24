@@ -61,6 +61,7 @@ const DEFINITIONS = [
   adapter('home-risk-replay.exposure', 'Home Risk Replay (pastHazardExposure.service)', 'PAST_HAZARD_EXPOSURE'),
   adapter('status-board.read', 'Status Board (homeStatusBoard.service)', 'HOME_STATUS_BOARD'),
   adapter('home-habits.read', 'Home Habit Coach (HomeHabitCoachService)', 'HOME_HABITS'),
+  adapter('home-digital-will.read', 'Home Continuity Plan (HomeDigitalWillService)', 'HOME_DIGITAL_WILL'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),
   adapter('inventory.create', 'InventoryService', 'INVENTORY_ITEM_CREATE', 'MUTATION_PREPARATION'),

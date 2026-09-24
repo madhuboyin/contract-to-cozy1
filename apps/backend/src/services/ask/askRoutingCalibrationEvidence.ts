@@ -110,6 +110,9 @@ const ROWS: readonly ObservationTuple[] = [
   // weak (< 0.29) wrong-operation competitor pooled with other fixtures' low competitors in the READ curve and pulled
   // "Show my inspecion findings" under the execution floor; this pair leaves that fixture's confidence unchanged.
   ['078-expected', '078', 'HOME_HABITS', .8183, true], ['078-competitor', '078', 'CAPITAL_RESERVE_PLAN', .6673, false],
+  // FRD v1.54: fixture 079 (HOME_DIGITAL_WILL), re-derived from the retriever; no existing row changed. Candidate pairs
+  // were tested against every Skill routing case first; this one leaves "Show my inspecion findings" unchanged at 0.4322.
+  ['079-expected', '079', 'HOME_DIGITAL_WILL', .8264, true], ['079-competitor', '079', 'SELLER_PREP_CHECKLIST', .6408, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

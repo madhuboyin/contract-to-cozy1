@@ -103,6 +103,7 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'PAST_HAZARD_EXPOSURE', message: 'What kind of storms or floods has this house seen over the years?', category: 'COLLOQUIAL' },
   { operationId: 'HOME_STATUS_BOARD', message: 'Which of our appliances need attention soon?', category: 'COLLOQUIAL' },
   { operationId: 'HOME_HABITS', message: 'Show me the habits the coach picked for our house', category: 'PARAPHRASE' },
+  { operationId: 'HOME_DIGITAL_WILL', message: 'Is our home plan ready if we are away and someone takes over?', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -200,6 +201,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEIGHBORHOOD_CHANGE_FEED: 'The city approved one new development close to this home; it is listed with its possible relevance and the geography it matched.',
   PAST_HAZARD_EXPOSURE: 'This house has seen two storms and one flood over the years, according to the reviewed hazard records matched to it.',
   HOME_STATUS_BOARD: 'One of your appliances needs attention soon; two others are worth monitoring and the rest are in good shape.',
+  HOME_DIGITAL_WILL: 'Your home plan is not ready yet for someone to take over while you are away; it still needs a primary trusted contact.',
   HOME_HABITS: 'The coach is recommending three small habits for your home, each with how often to do it and why.',
   HOUSEHOLD_INVITATION: 'Your partner can be invited to this household after you confirm the role.',
   GUIDANCE_JOURNEY_CREATE: 'A guided project plan can be started with the first governed step.',

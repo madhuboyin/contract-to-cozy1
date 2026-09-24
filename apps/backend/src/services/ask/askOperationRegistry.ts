@@ -97,6 +97,7 @@ export type AskOperationId =
   | 'PAST_HAZARD_EXPOSURE'
   | 'HOME_STATUS_BOARD'
   | 'HOME_HABITS'
+  | 'HOME_DIGITAL_WILL'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -390,6 +391,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // makes, behind the same reviewed-coverage production gate.
   // FRD v1.51: reads listBoard, the same call GET /properties/:id/status-board (Status Board) makes.
   // FRD v1.53: reads listActiveHabits, the same call GET /properties/:id/home-habits (Home Habit Coach) makes.
+  // FRD v1.54: reads getByProperty, the same call GET /properties/:id/home-digital-will (Home Continuity Plan) makes,
+  // behind the same CONTRIBUTOR floor.
+  HOME_DIGITAL_WILL: definition('HOME_DIGITAL_WILL', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-digital-will.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_HABITS: definition('HOME_HABITS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-habits.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_STATUS_BOARD: definition('HOME_STATUS_BOARD', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'status-board.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PAST_HAZARD_EXPOSURE: definition('PAST_HAZARD_EXPOSURE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-risk-replay.exposure', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
@@ -806,6 +810,9 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The household's Home Continuity Plan (Home Digital Will). A legal will or estate plan is not this.
+const homeDigitalWillPattern = /\b(?:home )?continuity plan\b|\bdigital will\b|\bhome (?:handoff|hand-off|hand off) plan\b|\btrusted contacts?\b.{0,30}\b(?:home|house|plan)\b|\b(?:if|when) (?:someone|somebody|anyone) (?:else )?(?:takes? over|has to take over|needs to run)\b.{0,30}\b(?:home|house|place)\b/i;
+const homeDigitalWillOtherIntentPattern = /\b(?:estate|probate|attorney|lawyer|legal will|last will|testament|inherit(?:ance)?)\b/i;
 const homeHabitsPattern = /\bhabit coach\b|\bhome[- ]care habits?\b|\bhome habits?\b|\bhabits?\b.{0,40}\b(?:home|house|property|place)\b|\b(?:home|house|property)\b.{0,40}\bhabits?\b/i;
 const homeStatusBoardPattern = /\bstatus board\b|\b(?:condition|health|state) of (?:my|our|the) (?:appliances|systems|home systems|equipment|home items)\b|\bwhich (?:of (?:my|our) )?(?:appliances|systems|home systems|equipment)\b.{0,30}\b(?:need (?:attention|action)|should i (?:monitor|watch)|are in (?:good|bad|poor) (?:shape|condition))\b|\bhow are (?:my|our) (?:appliances|systems|home systems) (?:doing|holding up)\b/i;
 const pastHazardExposurePattern = /\b(?:home )?risk replay\b|\bpast (?:hazards?|storms?|floods?|flooding|wildfires?|disasters?|hazard exposure)\b|\b(?:has|have|did)\s+(?:my|this|our|the)\s+(?:home|house|property)\s+(?:ever\s+)?(?:been|gone)\s+(?:hit|affected|flooded|exposed|through)\b|\b(?:hazards?|disasters?|storms?|floods?|wildfires?|hurricanes?)\b.{0,30}\b(?:has|have)\b.{0,20}\b(?:home|house|property)\b.{0,15}\b(?:been|seen|faced)\b|\bin (?:a|the) flood zone\b/i;
@@ -1009,6 +1016,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('DOCUMENT_LOOKUP', 0.95);
   }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
+  if (homeDigitalWillPattern.test(message) && !homeDigitalWillOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOME_DIGITAL_WILL', 0.96);
+  }
   if (homeHabitsPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_HABITS', 0.96);
   }

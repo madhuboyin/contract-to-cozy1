@@ -44,6 +44,8 @@ const INLINE_ENTRY_READS = {
   'status-board': { operationId: 'HOME_STATUS_BOARD', message: 'Show my status board' },
   // FRD v1.53: backed by a new operation reading the same listActiveHabits the Home Habit Coach page reads.
   'home-habit-coach': { operationId: 'HOME_HABITS', message: 'Show my home habits' },
+  // FRD v1.54: backed by a new operation reading the same getByProperty the Home Continuity Plan page reads.
+  'home-digital-will': { operationId: 'HOME_DIGITAL_WILL', message: 'Show my home continuity plan' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {
