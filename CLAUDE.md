@@ -39,7 +39,17 @@ npm test                                          # All tests
 node --test tests/unit/decisionEngine.test.js    # Single unit test
 node --test tests/integration/<file>.test.js     # Single integration test
 node --test tests/unit/*.test.js                  # All unit tests
+npm run test:ask:chunked                          # Full tests/ask suite, low memory (~3 min)
+npm run test:chunked                              # Every backend test, low memory
+npm run typecheck                                 # tsc --noEmit (the chunked runner skips type-checking)
 ```
+
+For the full Ask suite (or any large set of files), use the chunked runner, not `node --test` on every file.
+`node --test` runs one process per file, up to CPUs − 1 at once, and ts-node type-checks the codebase inside each
+one (~3.8 GB per file measured), which exhausts memory. `scripts/run-tests-chunked.js` runs sorted files in chunks
+(default 12, 2 in parallel) in transpile-only mode (~0.9 GB per file), writes a log per chunk, and exits non-zero
+on any failure. Rerun one chunk with `--only=N`, resume with `--from=N`, list chunks with `--list`, and keep ts-node
+type-checking with `--typecheck-in-tests`. Always run `npm run typecheck` as well before pushing.
 
 ## Database (Prisma)
 
