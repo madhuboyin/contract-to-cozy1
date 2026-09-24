@@ -39,6 +39,7 @@ import { MATERIAL_SPECS_SKILL } from './material-specs';
 import { PROPERTY_BRIEF_SKILL } from './property-brief';
 import { GUIDANCE_OVERVIEW_SKILL } from './guidance-overview';
 import { HOA_COMPLIANCE_SKILL } from './hoa-compliance';
+import { PRICE_FINALIZATION_SKILL } from './price-finalization';
 import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { SELLER_PREP_SKILL } from './seller-prep';
 import { BUYER_CLOSING_SKILL } from './buyer-closing';
@@ -99,6 +100,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'property-brief': PROPERTY_BRIEF_SKILL,
   'guidance-overview': GUIDANCE_OVERVIEW_SKILL,
   'hoa-compliance': HOA_COMPLIANCE_SKILL,
+  'price-finalization': PRICE_FINALIZATION_SKILL,
   'seller-preparation': SELLER_PREPARATION_SKILL,
   'seller-prep': SELLER_PREP_SKILL,
   'buyer-closing': BUYER_CLOSING_SKILL,

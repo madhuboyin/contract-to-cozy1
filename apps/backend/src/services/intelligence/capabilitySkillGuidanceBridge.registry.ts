@@ -31,6 +31,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'sell-hold-rent': ['SELL_HOLD_RENT_ANALYSIS'],
   'guidance-overview': ['GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CREATE'],
   'hoa-compliance': ['HOA_COMPLIANCE_STATUS'],
+  'price-finalization': ['PRICE_FINALIZATIONS_LIST'],
   'quote-comparison': ['QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW'],
   'capital-timeline': ['CAPITAL_RESERVE_PLAN'],
   'home-event-radar': ['HOME_EVENT_RADAR_FEED'],

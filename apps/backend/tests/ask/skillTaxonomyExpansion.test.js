@@ -57,6 +57,7 @@ const TAXONOMY = Object.freeze({
   'property-brief': ['PROPERTY_BRIEFS_LIST'],
   'guidance-overview': ['GUIDANCE_JOURNEYS_LIST'],
   'hoa-compliance': ['HOA_COMPLIANCE_STATUS'],
+  'price-finalization': ['PRICE_FINALIZATIONS_LIST'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

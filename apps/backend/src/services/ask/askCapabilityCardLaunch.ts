@@ -72,6 +72,8 @@ const INLINE_ENTRY_READS = {
   'guidance-overview': { operationId: 'GUIDANCE_JOURNEYS_LIST', message: 'Show my guided journeys' },
   // FRD v1.66: backed by a new operation reading the HOA page's association, approval records and violations.
   'hoa-compliance': { operationId: 'HOA_COMPLIANCE_STATUS', message: 'Show my HOA records' },
+  // FRD v1.67: backed by a new operation reading the Price Finalization page's saved records (listForProperty).
+  'price-finalization': { operationId: 'PRICE_FINALIZATIONS_LIST', message: 'Show my price finalizations' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

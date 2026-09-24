@@ -109,6 +109,7 @@ export type AskOperationId =
   | 'PROPERTY_BRIEFS_LIST'
   | 'GUIDANCE_JOURNEYS_LIST'
   | 'HOA_COMPLIANCE_STATUS'
+  | 'PRICE_FINALIZATIONS_LIST'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -414,6 +415,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // admits any household member, but listChecks only admits the property's primary homeowner profile.
   // FRD v1.61: reads listHomeEvents, the call GET /properties/:id/home-events makes for the Home Timeline page.
   // FRD v1.62: reads listSpecs, the call GET /properties/:id/materials makes for the Material Specs page.
+  // FRD v1.67: reads listForProperty, the call GET /properties/:id/price-finalizations makes for the Price Finalization
+  // page. OWNER floor: the route admits any household member, but the service only admits the primary homeowner profile.
+  PRICE_FINALIZATIONS_LIST: definition('PRICE_FINALIZATIONS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'price-finalization.records', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   // FRD v1.66: reads getAssociation, listApprovalRecords and listViolations, the three GETs the HOA Compliance page makes.
   HOA_COMPLIANCE_STATUS: definition('HOA_COMPLIANCE_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'hoa-compliance.status', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   // FRD v1.65: reads getPropertyGuidance, the call GET /properties/:id/guidance makes for the Guidance Overview page.
@@ -845,6 +849,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The prices and terms recorded in Price Finalization ("what price did we agree with the plumber?"). Comparing quotes,
+// checking a price and negotiating stay with their own operations; finalizing, saving or booking is not this read.
+const priceFinalizationsPattern = /\bprice finali[sz]ations?\b|\bfinali[sz]ed (?:prices?|terms|quotes?)\b|\baccepted (?:prices?|terms|quotes?)\b|\bwhat (?:price|terms?)\b.{0,40}\b(?:agree(?:d)?|accept(?:ed)?|settle(?:d)?|lock(?:ed)? in)\b/i;
+const priceFinalizationsOtherIntentPattern = /\b(?:finali[sz]e|create|save|add|new|book|edit|update|change|negotiate|should|compare|check)\b/i;
 // The HOA records on the HOA Compliance page: the association and dues, approval requests and violations. Whether work
 // needs approval (renovation readiness), HOA items at closing (buyer), and reporting or updating a record are not this read.
 const hoaCompliancePattern = /\bhoa (?:compliance|records?|approvals?|approval requests?|violations?|dues|fines?|status)\b|\b(?:my|our|the) (?:hoa|homeowners'? association)(?:'s)?\b.{0,40}\b(?:approv\w*|violations?|dues|fines?|records?|say|said|status)\b|\bhoa\b.{0,40}\b(?:approved|denied|violation notice|cure deadline)\b/i;
@@ -1063,6 +1071,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_RESERVE_PLAN', 0.97);
+  }
+  if (priceFinalizationsPattern.test(message) && !priceFinalizationsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('PRICE_FINALIZATIONS_LIST', 0.96);
   }
   if (hoaCompliancePattern.test(message) && !hoaComplianceOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOA_COMPLIANCE_STATUS', 0.96);
