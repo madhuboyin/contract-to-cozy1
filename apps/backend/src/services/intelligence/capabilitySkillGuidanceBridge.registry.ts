@@ -60,6 +60,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   diy: ['DIY_PROJECTS'],
   'project-tracker': ['PROJECT_TRACKER_PROJECTS'],
   'service-price-radar': ['SERVICE_PRICE_CHECKS'],
+  'home-timeline': ['HOME_TIMELINE_EVENTS'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 

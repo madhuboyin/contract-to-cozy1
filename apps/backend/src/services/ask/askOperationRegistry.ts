@@ -104,6 +104,7 @@ export type AskOperationId =
   | 'DIY_PROJECTS'
   | 'PROJECT_TRACKER_PROJECTS'
   | 'SERVICE_PRICE_CHECKS'
+  | 'HOME_TIMELINE_EVENTS'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -407,6 +408,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // FRD v1.59: reads listProjects, the call GET /properties/:id/projects makes for the Project Tracker page.
   // FRD v1.60: reads listChecks, the call GET /properties/:id/service-price-radar/checks makes. OWNER floor: the route
   // admits any household member, but listChecks only admits the property's primary homeowner profile.
+  // FRD v1.61: reads listHomeEvents, the call GET /properties/:id/home-events makes for the Home Timeline page.
+  HOME_TIMELINE_EVENTS: definition('HOME_TIMELINE_EVENTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-timeline.events', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   SERVICE_PRICE_CHECKS: definition('SERVICE_PRICE_CHECKS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'service-price-radar.checks', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PROJECT_TRACKER_PROJECTS: definition('PROJECT_TRACKER_PROJECTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'project-tracker.projects', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   DIY_PROJECTS: definition('DIY_PROJECTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'diy.projects', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -830,6 +833,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The whole-home history on the Home Timeline. Recent changes are HOME_CHANGE_SUMMARY, past hazards are
+// PAST_HAZARD_EXPOSURE, one item's history is INVENTORY_LOOKUP, and logging or correcting an event is a write.
+const homeTimelinePattern = /\bhome timeline\b|\b(?:my|our|the) (?:home|house|property)(?:'s)? (?:timeline|history)\b|\btimeline (?:of|for) (?:my|our|the) (?:home|house|property)\b|\bhistory of (?:my|our|the|this) (?:home|house|property)\b/i;
+const homeTimelineOtherIntentPattern = /\b(?:hazards?|floods?|storms?|wildfires?|hurricanes?|log|add|record|correct|fix|change|edit|export|recap)\b/i;
 // The household's past Service Price Radar quote checks. Checking a new quote is the page's write; comparing several
 // quotes is QUOTE_COMPARISON_*.
 const servicePriceChecksPattern = /\bservice price radar\b|\bprice radar\b|\b(?:my|our|past|previous|recent) (?:quote|price) checks?\b|\bquote checks?\b/i;
@@ -1069,6 +1076,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
   if (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('DIY_PROJECTS', 0.96);
+  }
+  if (homeTimelinePattern.test(message) && !homeTimelineOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOME_TIMELINE_EVENTS', 0.96);
   }
   if (servicePriceChecksPattern.test(message) && !servicePriceChecksOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('SERVICE_PRICE_CHECKS', 0.96);

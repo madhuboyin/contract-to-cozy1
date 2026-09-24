@@ -8187,6 +8187,111 @@ async function servicePriceChecksResult(propertyId: string, userId: string): Pro
   }
 }
 
+// Home Timeline capability-card slice (FRD v1.61): the thirteenth new operation for a capability with none. Reads
+// HomeEventsService.listHomeEvents with the page's default limit (80), the call GET /properties/:id/home-events makes
+// for the Timeline page (signals stay out of the default view, as on the page). One difference, on purpose: the page
+// shows every current event, including another member's PRIVATE ones; Ask applies the privacy rule its other home-event
+// reads use (a PRIVATE event only for the person who recorded it). Dates keep the recorded precision (month, year,
+// range, unknown) rather than inventing a day. Read-only: logging, correcting, confirming, evidence and visibility stay
+// on the page or their own operations.
+export const HOME_TIMELINE_ASK_LIMIT = 80;
+type TimelineEventView = Awaited<ReturnType<HomeEventsService['listHomeEvents']>>['events'][number];
+const TIMELINE_LABEL = (value: string | null | undefined) => (value ? readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase()) : '');
+
+function timelineEventDate(event: TimelineEventView): string {
+  const occurred = new Date(event.occurredAt);
+  if (Number.isNaN(occurred.getTime())) return 'Date unknown';
+  const monthYear = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: getAskPropertyTimezone() });
+  const year = new Intl.DateTimeFormat('en-US', { year: 'numeric', timeZone: getAskPropertyTimezone() });
+  switch (event.datePrecision) {
+    case 'MONTH': return monthYear.format(occurred);
+    case 'YEAR': return year.format(occurred);
+    case 'RANGE': return event.dateRangeStart && event.dateRangeEnd
+      ? `${humanDate(new Date(event.dateRangeStart))} – ${humanDate(new Date(event.dateRangeEnd))}`
+      : `Around ${humanDate(occurred)}`;
+    case 'UNKNOWN': return 'Date unknown';
+    default: return humanDate(occurred) ?? 'Date unknown';
+  }
+}
+
+export function homeTimelineFromView(allEvents: readonly TimelineEventView[], propertyId: string, userId: string): AskOperationResult {
+  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
+  const openAction = { id: 'open-home-timeline', label: 'Open Home Timeline', href: pageHref, style: 'PRIMARY' as const };
+  const boundary: AskPresentationBlock = {
+    type: 'BOUNDARY', id: 'home-timeline-boundary', title: 'History as recorded',
+    body: 'Events are shown as they were recorded, with how well each is verified and how precise its date is. Unverified and inferred events have not been confirmed. Private events recorded by other household members are not shown.',
+    severity: 'INFO', suggestions: [],
+  };
+  const events = allEvents.filter((event) => event.visibility !== 'PRIVATE' || event.createdById === userId);
+  if (!events.length) {
+    return {
+      status: 'ANSWERED', reasonCode: 'HOME_TIMELINE_EMPTY',
+      blocks: [{
+        type: 'SUMMARY', id: 'home-timeline-summary', title: 'No events on the timeline yet',
+        body: 'The Home Timeline keeps a history of what happened to this home: repairs, improvements, purchases, inspections and claims. Open it to log an event.',
+        tone: 'DEFAULT', actions: [openAction],
+      }, boundary],
+      suggestions: ['What changed at my home recently?'],
+    };
+  }
+  const verified = events.filter((event) => event.verificationStatus === 'EVIDENCE_VERIFIED' || event.verificationStatus === 'HOMEOWNER_CONFIRMED').length;
+  const disputed = events.filter((event) => event.verificationStatus === 'DISPUTED').length;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'home-timeline-summary',
+    title: `${events.length} event${events.length === 1 ? '' : 's'} on the home timeline`,
+    body: [
+      `${verified} confirmed or verified by evidence.`,
+      disputed ? `${disputed} ${disputed === 1 ? 'is' : 'are'} disputed.` : null,
+      `Most recent: ${events[0].title} (${timelineEventDate(events[0])}).`,
+    ].filter(Boolean).join(' '),
+    tone: disputed ? 'CAUTION' : 'DEFAULT',
+    actions: [openAction],
+  }];
+  if (allEvents.length >= HOME_TIMELINE_ASK_LIMIT) {
+    blocks.push({
+      type: 'LIMITATION', id: 'home-timeline-limit', title: `Showing the ${HOME_TIMELINE_ASK_LIMIT} most recent events`,
+      body: 'Older history is on the Home Timeline page, which can filter by date and event type.', severity: 'INFO',
+    });
+  }
+  const byYear = new Map<string, TimelineEventView[]>();
+  for (const event of events) {
+    const occurred = new Date(event.occurredAt);
+    const key = event.datePrecision === 'UNKNOWN' || Number.isNaN(occurred.getTime()) ? 'Date unknown' : new Intl.DateTimeFormat('en-US', { year: 'numeric', timeZone: getAskPropertyTimezone() }).format(occurred);
+    byYear.set(key, [...(byYear.get(key) ?? []), event]);
+  }
+  blocks.push({
+    type: 'GROUPED_LIST', filters: [], id: 'home-timeline-events', title: 'Home timeline', description: 'Newest first, by year. Open an event on the timeline for its evidence and revisions.',
+    sections: [...byYear.entries()].map(([year, rows]) => ({
+      id: `home-timeline-${year.replace(/\s+/g, '-').toLowerCase()}`, title: year, count: rows.length,
+      items: rows.map((event) => {
+        const synthetic = Boolean((event.meta as { synthetic?: boolean } | null)?.synthetic);
+        return {
+          id: event.id,
+          title: event.title,
+          description: event.summary ?? null,
+          meta: [
+            timelineEventDate(event),
+            TIMELINE_LABEL(event.type),
+            ...(event.subtype && event.subtype !== event.type ? [TIMELINE_LABEL(event.subtype)] : []),
+            ...(event.importance === 'HIGHLIGHT' ? ['Highlight'] : []),
+            ...(event.visibility === 'PRIVATE' ? ['Private'] : []),
+          ],
+          status: TIMELINE_LABEL(event.verificationStatus),
+          href: synthetic ? pageHref : `${pageHref}?eventId=${encodeURIComponent(event.id)}`,
+        };
+      }),
+    })),
+    actions: [],
+  });
+  blocks.push(boundary);
+  return { status: 'ANSWERED', reasonCode: 'HOME_TIMELINE_READY', blocks, suggestions: ['What changed at my home recently?'] };
+}
+
+async function homeTimelineResult(propertyId: string, userId: string): Promise<AskOperationResult> {
+  const { events } = await new HomeEventsService().listHomeEvents(propertyId, { limit: HOME_TIMELINE_ASK_LIMIT });
+  return homeTimelineFromView(events, propertyId, userId);
+}
+
 async function pastHazardExposureResult(propertyId: string): Promise<AskOperationResult> {
   // The page's route answers 503 REVIEWED_SOURCE_COVERAGE_REQUIRED in this case; Ask says the same, never an all-clear.
   if (!isReviewedIntelligenceCoverageAvailable('HOME_RISK_REPLAY')) {
@@ -10486,6 +10591,7 @@ registerCapabilityHandler('home-digital-twin.scenarios', async (envelope) => hom
 registerCapabilityHandler('diy.projects', async (envelope) => diyProjectsResult(envelope.propertyId!));
 registerCapabilityHandler('project-tracker.projects', async (envelope) => trackedProjectsResult(envelope.propertyId!));
 registerCapabilityHandler('service-price-radar.checks', async (envelope) => servicePriceChecksResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('home-timeline.events', async (envelope) => homeTimelineResult(envelope.propertyId!, envelope.userId));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 

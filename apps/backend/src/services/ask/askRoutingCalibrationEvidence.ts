@@ -136,6 +136,11 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.60: fixture 085 (SERVICE_PRICE_CHECKS), re-derived from the retriever; no existing row changed. Candidate pairs
   // were swept against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4558).
   ['085-expected', '085', 'SERVICE_PRICE_CHECKS', .3656, true], ['085-competitor', '085', 'QUOTE_COMPARISON_REVIEW', .2843, false],
+  // FRD v1.61: fixture 086 (HOME_TIMELINE_EVENTS), re-derived from the retriever; no existing row changed (first-draft
+  // positives sharing frames with fixtures 009, 018, 067, 075, 076 and 078 and a query-envelope routing case were reworded
+  // until none moved). Candidate pairs were swept against every Skill routing case; this one keeps them resolved
+  // ("Show my inspecion findings" 0.445).
+  ['086-expected', '086', 'HOME_TIMELINE_EVENTS', .7155, true], ['086-competitor', '086', 'HOME_HABITS', .6711, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(
