@@ -880,6 +880,61 @@ function quoteWorkspaceOutputExecution() {
   };
 }
 
+// IW-PRES-016 (FRD v1.76): the quote review as a comparison strip, three quotes still in play.
+function quoteReviewStripExecution() {
+  const href = `/dashboard/properties/${propertyId}/tools/quote-comparison?serviceCategory=ROOFING`;
+  const quote = (id: string, label: string, value: number, extra: Record<string, unknown> = {}) => ({
+    id, label, summary: null, amount: { value, currency: 'USD' },
+    attributes: [
+      { label: 'Price', value: `USD ${value.toLocaleString('en-US')}`, tone: 'DEFAULT' },
+      { label: 'Readiness', value: 'Comparison ready', tone: 'POSITIVE' },
+      { label: 'Scope', value: 'Tear off and replace 30 squares of asphalt shingles', tone: 'DEFAULT' },
+      { label: 'Warranty', value: '10-year workmanship', tone: 'DEFAULT' },
+      { label: 'Freshness', value: 'Quoted Sep 14, 2026', tone: 'DEFAULT' },
+      { label: 'Missing facts', value: 'None', tone: 'DEFAULT' },
+    ],
+    actions: [], ...extra,
+  });
+  const summit = quote('quote-summit', 'Summit Roofing', 9800);
+  summit.attributes[0] = { ...summit.attributes[0], leading: true } as typeof summit.attributes[number];
+  return {
+    schemaVersion: '1.0', executionId: 'execution-quote-review-strip', sessionId: 'ask-acceptance-session',
+    question: 'Compare my roofing quotes', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'QUOTE_COMPARISON_REVIEW', version: '1.0', family: 'DECISION_ANALYSIS' }, contextVersion: '2026-09-24T12:00:00.000Z',
+    blocks: [{
+      type: 'SUMMARY', id: 'quote-review-summary', title: '3 proposals are ready for a scope-aligned review', tone: 'DEFAULT',
+      body: 'The confirmed proposals share the same category, work type, location, and itemized scope. Recorded prices range from $9,800 to $12,400.',
+      actions: [{ id: 'open-comparison', label: 'Open quote comparison', href, style: 'PRIMARY' }],
+    }, {
+      type: 'COMPARISON', id: 'quote-review-table', title: 'Recorded proposals',
+      description: 'Ask preserves the canonical readiness state and does not select a provider. 1 rejected quote is not shown; open the quote comparison to see it.',
+      options: [
+        quote('quote-acme', 'Acme Roofing', 12400),
+        { ...summit, badges: [{ label: 'Lowest price', policyCode: 'QUOTE_LOWEST_PRICE_SCOPE_ALIGNED', basis: 'The lowest recorded total among the comparison-ready proposals, which cover the same confirmed scope. It is not a recommendation: check exclusions, warranty and payment terms.' }] },
+        quote('quote-ridge', 'Ridge Line Roofing', 11000, { attributes: [
+          { label: 'Price', value: 'USD 11,000', tone: 'DEFAULT' },
+          { label: 'Readiness', value: 'Comparison ready', tone: 'POSITIVE' },
+          { label: 'Scope', value: 'Tear off and replace 30 squares of asphalt shingles', tone: 'DEFAULT' },
+          { label: 'Warranty', value: 'Not recorded', tone: 'DEFAULT' },
+          { label: 'Freshness', value: 'Expired Sep 23, 2026', tone: 'CAUTION' },
+          { label: 'Missing facts', value: 'None', tone: 'DEFAULT' },
+        ] }),
+      ],
+      actions: [],
+    }, {
+      type: 'GROUPED_LIST', id: 'quote-review-gaps', title: 'Comparison controls', description: 'Resolve scope or fact gaps in the canonical workspace before making a decision.', filters: [], actions: [],
+      sections: [{ id: 'controls', title: 'Aligned comparison', count: 1, items: [{ id: 'quote-reason-0', title: 'The confirmed proposals share the same category, work type, location, and itemized scope.', description: null, meta: [], status: 'COMPARABLE', href }] }],
+    }, {
+      type: 'BOUNDARY', id: 'quote-review-boundary', title: 'Comparison support—not provider endorsement', severity: 'INFO', suggestions: [],
+      body: 'Verify scope, credentials, insurance, references, permits, warranties, payment milestones, and final terms. Ask does not accept a quote, rank provider trust, or guarantee workmanship.',
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: ['What makes these quotes incomparable?'],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
 function relatedRecordsExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-related-records', sessionId: 'ask-acceptance-session',
@@ -1453,6 +1508,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/show the task output/i.test(body.message)) {
       const response = maintenanceOutputExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/compare my roofing quotes/i.test(body.message)) {
+      const response = quoteReviewStripExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

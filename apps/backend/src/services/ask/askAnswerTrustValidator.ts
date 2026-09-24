@@ -71,6 +71,17 @@ function authoredPresentationText(block: AskPresentationBlock): string {
   if (block.type === 'PROGRESS') {
     return [block.title, block.description, block.basis, ...block.metrics.map((metric) => metric.label)].filter(Boolean).join(' ');
   }
+  // Comparison options name canonical records (provider names, recorded scope and terms); only Ask's own copy is
+  // checked: titles, attribute labels and declared badges.
+  if (block.type === 'COMPARISON') {
+    return [
+      block.title, block.description,
+      ...block.options.flatMap((option) => [
+        ...option.attributes.map((attribute) => attribute.label),
+        ...[option.badge, ...(option.badges ?? [])].flatMap((badge) => (badge ? [badge.label, badge.basis] : [])),
+      ]),
+    ].filter(Boolean).join(' ');
+  }
   if (block.type === 'EVIDENCE') return block.title;
   if (block.type === 'OUTPUT_ARTIFACTS' || block.type === 'RELATED_RECORDS') return block.title;
   if (block.type === 'TABLE') {

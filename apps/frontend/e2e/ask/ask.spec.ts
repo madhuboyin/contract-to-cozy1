@@ -1230,6 +1230,60 @@ test('on a phone, maintenance shelves scroll sideways and the task opens as a bo
   await expect(sheet).toBeHidden();
 });
 
+test('quote review shows a comparison strip with a declared Lowest price badge, and a Table view marks only the declared lead (FRD v1.76)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare my roofing quotes');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-quote-review-strip');
+  const strip = response.getByRole('list', { name: 'Recorded proposals options' });
+  await expect(strip).toHaveAttribute('data-comparison-presentation', 'strip');
+  await expect(strip.getByRole('listitem')).toHaveCount(3);
+  await expect(response.getByText('1 rejected quote is not shown', { exact: false })).toBeVisible();
+  const summit = strip.getByRole('listitem', { name: /Summit Roofing/ });
+  await expect(summit.getByText('Lowest price')).toHaveAttribute('data-badge-policy', 'QUOTE_LOWEST_PRICE_SCOPE_ALIGNED');
+  await expect(summit.getByRole('img', { name: '79% of the highest price of these options' })).toBeVisible();
+  await summit.getByText('Why this label').click();
+  await expect(summit.getByText(/It is not a recommendation/)).toBeVisible();
+  await expect(strip.getByRole('listitem', { name: /Acme Roofing/ }).getByRole('img', { name: 'Highest price of these options' })).toBeVisible();
+  await expect(response.getByText('Option 1 of 3.', { exact: false })).toBeVisible();
+
+  await response.getByRole('button', { name: 'Table', exact: true }).click();
+  const table = response.getByRole('table', { name: 'Recorded proposals' });
+  await expect(table).toBeVisible();
+  await expect(table.getByRole('columnheader')).toHaveText(['Acme Roofing', 'Summit Roofing', 'Ridge Line Roofing']);
+  await expect(table.locator('[data-leading="true"]')).toHaveCount(1);
+  await expect(table.locator('[data-leading="true"]')).toContainText('USD 9,800');
+  await expect(table.getByText('Expired Sep 23, 2026')).toBeVisible();
+  await expect(response.getByRole('heading', { name: 'Comparison controls' })).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, quote cards stack within the screen and the table scrolls inside its own box (FRD v1.76)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare my roofing quotes');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-quote-review-strip');
+  const cards = response.getByRole('list', { name: 'Recorded proposals options' }).getByRole('listitem');
+  await expect(cards).toHaveCount(3);
+  for (const card of await cards.all()) {
+    const box = await card.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  await expect(response.getByRole('button', { name: 'Card strip' })).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await response.getByRole('button', { name: 'Table', exact: true }).click();
+  const scroller = response.locator('[data-comparison-presentation="table"]');
+  await expect(scroller.getByRole('table', { name: 'Recorded proposals' })).toBeVisible();
+  expect(await scroller.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
   await installAskApi(page, { maintenanceDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

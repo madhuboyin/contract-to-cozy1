@@ -84,6 +84,7 @@ export const QUOTE_COMPARISON_SKILL = Object.freeze({
     "CAPABILITY_LIST",
     "GROUPED_LIST",
     "TABLE",
+    "COMPARISON",
     "EVIDENCE",
     "OUTPUT_ARTIFACTS",
     "BOUNDARY"

@@ -54,9 +54,13 @@ test('renders bounded options, declared badge provenance and option-scoped actio
 });
 
 test('two options use a non-carousel grid while an explicit choice controls larger sets', () => {
-  expect(resolveAdaptiveComparisonPresentation({ ...block, options: block.options.slice(0, 2) }, 'AUTO')).toEqual({ layout: 'GRID', offersChoice: false, reason: 'SMALL_SET' });
-  expect(resolveAdaptiveComparisonPresentation(block, 'AUTO')).toEqual({ layout: 'STRIP', offersChoice: true, reason: 'BOUNDED_ALTERNATIVES' });
-  expect(resolveAdaptiveComparisonPresentation(block, 'GRID')).toEqual({ layout: 'GRID', offersChoice: true, reason: 'USER_CHOICE' });
+  const pair = { ...block, options: block.options.slice(0, 2) };
+  expect(resolveAdaptiveComparisonPresentation(pair, 'AUTO')).toEqual({ layout: 'GRID', choices: ['GRID', 'TABLE'], reason: 'SMALL_SET' });
+  // A strip choice saved on a larger result never turns a pair into a carousel; the table is still offered.
+  expect(resolveAdaptiveComparisonPresentation(pair, 'STRIP')).toEqual({ layout: 'GRID', choices: ['GRID', 'TABLE'], reason: 'SMALL_SET' });
+  expect(resolveAdaptiveComparisonPresentation(pair, 'TABLE')).toEqual({ layout: 'TABLE', choices: ['GRID', 'TABLE'], reason: 'USER_CHOICE' });
+  expect(resolveAdaptiveComparisonPresentation(block, 'AUTO')).toEqual({ layout: 'STRIP', choices: ['AUTO', 'STRIP', 'GRID', 'TABLE'], reason: 'BOUNDED_ALTERNATIVES' });
+  expect(resolveAdaptiveComparisonPresentation(block, 'GRID')).toEqual({ layout: 'GRID', choices: ['AUTO', 'STRIP', 'GRID', 'TABLE'], reason: 'USER_CHOICE' });
 });
 
 test('offers a persisted non-carousel path without issuing another response', async () => {

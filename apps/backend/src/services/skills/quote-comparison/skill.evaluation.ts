@@ -161,6 +161,7 @@ export const QUOTE_COMPARISON_SKILL_EVALUATION = deepFreezeSkillPackage({
     "CAPABILITY_LIST",
     "GROUPED_LIST",
     "TABLE",
+    "COMPARISON",
     "EVIDENCE",
     "OUTPUT_ARTIFACTS",
     "BOUNDARY"

@@ -7,7 +7,7 @@ export type ResultView = {
   expandedRows: string[];
   visibleCounts: Record<string, number>;
   presentationModes: Record<string, 'AUTO' | 'TABLE' | 'CARDS'>;
-  comparisonLayouts: Record<string, 'AUTO' | 'STRIP' | 'GRID'>;
+  comparisonLayouts: Record<string, 'AUTO' | 'STRIP' | 'GRID' | 'TABLE'>;
   groupedListModes: Record<string, 'AUTO' | 'LIST' | 'CARDS'>;
   scrollOffset: number | null;
 };
@@ -32,7 +32,7 @@ export function readResultView(storage: Storage, key: string): ResultView {
         .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'TABLE', 'CARDS'].includes(String(mode)))
         .slice(0, 50)) as ResultView['presentationModes'],
       comparisonLayouts: Object.fromEntries(Object.entries(value.comparisonLayouts ?? {})
-        .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'STRIP', 'GRID'].includes(String(mode)))
+        .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'STRIP', 'GRID', 'TABLE'].includes(String(mode)))
         .slice(0, 50)) as ResultView['comparisonLayouts'],
       groupedListModes: Object.fromEntries(Object.entries(value.groupedListModes ?? {})
         .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'LIST', 'CARDS'].includes(String(mode)))

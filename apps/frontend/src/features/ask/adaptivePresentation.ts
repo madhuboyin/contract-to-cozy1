@@ -34,22 +34,41 @@ export function resolveAdaptiveTablePresentation(block: TableBlock, preference: 
   return { mode: 'RESPONSIVE', offersChoice: true, reason: 'RESPONSIVE_DEFAULT' };
 }
 
-export type ComparisonPresentationPreference = 'AUTO' | 'STRIP' | 'GRID';
+export type ComparisonPresentationPreference = 'AUTO' | 'STRIP' | 'GRID' | 'TABLE';
 export type AdaptiveComparisonDecision = {
-  layout: 'STRIP' | 'GRID';
-  offersChoice: boolean;
+  layout: 'STRIP' | 'GRID' | 'TABLE';
+  /** The layouts offered in the switch, in order. */
+  choices: ComparisonPresentationPreference[];
   reason: 'USER_CHOICE' | 'SMALL_SET' | 'BOUNDED_ALTERNATIVES';
 };
 
 /** Two options fit side by side; a larger bounded set gets a navigable strip.
- * A saved homeowner choice wins when both registered layouts are useful. */
+ * IW-PRES-016 (FRD v1.76): every comparison also offers a Table view of the same options.
+ * A saved homeowner choice wins when that layout is offered. */
 export function resolveAdaptiveComparisonPresentation(
   block: ComparisonBlock,
   preference: ComparisonPresentationPreference,
 ): AdaptiveComparisonDecision {
-  if (block.options.length <= 2) return { layout: 'GRID', offersChoice: false, reason: 'SMALL_SET' };
-  if (preference !== 'AUTO') return { layout: preference, offersChoice: true, reason: 'USER_CHOICE' };
-  return { layout: 'STRIP', offersChoice: true, reason: 'BOUNDED_ALTERNATIVES' };
+  if (block.options.length <= 2) {
+    const choices: ComparisonPresentationPreference[] = ['GRID', 'TABLE'];
+    return preference === 'TABLE'
+      ? { layout: 'TABLE', choices, reason: 'USER_CHOICE' }
+      : { layout: 'GRID', choices, reason: 'SMALL_SET' };
+  }
+  const choices: ComparisonPresentationPreference[] = ['AUTO', 'STRIP', 'GRID', 'TABLE'];
+  if (preference !== 'AUTO') return { layout: preference, choices, reason: 'USER_CHOICE' };
+  return { layout: 'STRIP', choices, reason: 'BOUNDED_ALTERNATIVES' };
+}
+
+/** Price bars are drawn only when every option declares an amount in one currency and the highest is above zero;
+ * each width is the option's share of the highest amount. Returns null otherwise. */
+export function comparisonPriceShares(block: ComparisonBlock): number[] | null {
+  const amounts = block.options.map((option) => option.amount ?? null);
+  if (amounts.some((amount) => !amount)) return null;
+  if (new Set(amounts.map((amount) => amount!.currency)).size !== 1) return null;
+  const max = Math.max(...amounts.map((amount) => amount!.value));
+  if (!(max > 0)) return null;
+  return amounts.map((amount) => amount!.value / max);
 }
 
 export type GroupedListPresentation = 'COMPACT_LIST' | 'CARDS';

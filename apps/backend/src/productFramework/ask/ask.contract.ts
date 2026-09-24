@@ -426,7 +426,11 @@ const ComparisonBlockSchema = z.object({
     // IW-PRES-016 (FRD v1.72): an option may lead on several declared things ("Lowest price", "Soonest start").
     // `badge` stays for existing producers; a renderer shows `badges` when present.
     badges: z.array(ComparisonBadgeSchema).max(3).optional(),
-    attributes: z.array(z.object({ label: z.string(), value: z.string(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT') })).max(12),
+    // IW-PRES-016 (FRD v1.76): the recorded price as a number, so a renderer can draw a relative bar without parsing
+    // display text. Bars are drawn only when every option declares one in the same currency.
+    amount: z.object({ value: z.number().finite().min(0), currency: z.string().trim().regex(/^[A-Z]{3}$/) }).nullable().optional(),
+    // `leading` is server-declared (it follows a declared badge policy); the table view marks it, never infers it.
+    attributes: z.array(z.object({ label: z.string(), value: z.string(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT'), leading: z.boolean().optional() })).max(12),
     actions: z.array(AskActionSchema).max(2).default([]),
   })).min(2).max(4),
   actions: z.array(AskActionSchema).max(3).default([]),
