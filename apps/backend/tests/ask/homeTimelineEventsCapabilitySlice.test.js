@@ -83,7 +83,7 @@ test('the real list query is the page\'s (current, not deleted, newest first) an
 test('dated events go on the timeline track at their recorded precision, with categories, verification and links; undated events are listed under it (FRD v1.77)', () => {
   const result = homeTimelineFromView(events(), 'p1', 'u1');
   assert.equal(result.blocks[0].title, '5 events on the home timeline');
-  assert.equal(result.blocks[0].body, '2 confirmed or verified by evidence. 1 is disputed. Most recent: Kitchen remodel (Jun 15, 2024).');
+  assert.equal(result.blocks[0].body, '2 confirmed or verified by evidence. 1 is disputed. Most recent event: Jun 15, 2024.');
   assert.equal(result.blocks[0].tone, 'CAUTION');
   assert.deepEqual(result.blocks.map((block) => `${block.type}:${block.id}`), ['SUMMARY:home-timeline-summary', 'TIMELINE:home-timeline-events', 'GROUPED_LIST:home-timeline-undated', 'BOUNDARY:home-timeline-boundary']);
   const track = result.blocks.find((block) => block.id === 'home-timeline-events');
@@ -194,11 +194,10 @@ test('the full answer checker, with answer relevance on, keeps the timeline answ
 });
 
 test('an event title that looks like a code is a record value, not Ask copy, and the timeline survives the checker (FRD v1.77)', () => {
-  // The code-like event is the older one: the summary's "Most recent: …" line quotes the newest title and is checked as
-  // Ask copy, a separate pre-existing gap recorded in the FRD (v1.77), not what this test covers.
-  const raw = homeTimelineFromView([event('b', { title: 'Roof check' }), event('a', { title: 'HVAC_FILTER_CHANGE', occurredAt: new Date('2022-05-01T12:00:00.000Z') })], 'p1', 'u1');
+  // The newest event is the code-like one: the summary names only its date, never its title (FRD v1.81).
+  const raw = homeTimelineFromView([event('b', { title: 'HVAC_FILTER_CHANGE' }), event('a', { title: 'Roof check', occurredAt: new Date('2022-05-01T12:00:00.000Z') })], 'p1', 'u1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-timeline.events', operationId: 'HOME_TIMELINE_EVENTS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated, trust } = validateAskAnswerTrust({ question: 'Show my home timeline', operationId: 'HOME_TIMELINE_EVENTS', result, propertyId: 'p1' });
   assert.equal(validated.status, 'ANSWERED', JSON.stringify(trust.reasonCodes));
-  assert.deepEqual(validated.blocks.find((block) => block.id === 'home-timeline-events').items.map((item) => item.label), ['Roof check', 'HVAC_FILTER_CHANGE']);
+  assert.deepEqual(validated.blocks.find((block) => block.id === 'home-timeline-events').items.map((item) => item.label), ['HVAC_FILTER_CHANGE', 'Roof check']);
 });

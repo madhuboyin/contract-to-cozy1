@@ -949,7 +949,7 @@ function homeTimelineTrackExecution() {
     operation: { id: 'HOME_TIMELINE_EVENTS', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
     blocks: [{
       type: 'SUMMARY', id: 'home-timeline-summary', title: '6 events on the home timeline', tone: 'DEFAULT',
-      body: '3 confirmed or verified by evidence. Most recent: Kitchen remodel (Jun 15, 2024).',
+      body: '3 confirmed or verified by evidence. Most recent event: Jun 15, 2024.',
       actions: [{ id: 'open-home-timeline', label: 'Open Home Timeline', href: page, style: 'PRIMARY' }],
     }, {
       type: 'TIMELINE', id: 'home-timeline-events', title: 'Home timeline',

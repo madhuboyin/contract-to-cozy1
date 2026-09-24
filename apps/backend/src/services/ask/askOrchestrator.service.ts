@@ -8613,7 +8613,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
     body: [
       `${verified} confirmed or verified by evidence.`,
       disputed ? `${disputed} ${disputed === 1 ? 'is' : 'are'} disputed.` : null,
-      `Most recent: ${events[0].title} (${timelineEventDate(events[0])}).`,
+      `Most recent event: ${timelineEventDate(events[0])}.`,
     ].filter(Boolean).join(' '),
     tone: disputed ? 'CAUTION' : 'DEFAULT',
     actions: [openAction],
