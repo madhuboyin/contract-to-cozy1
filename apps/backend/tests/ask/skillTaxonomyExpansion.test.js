@@ -51,6 +51,7 @@ const TAXONOMY = Object.freeze({
   'home-digital-twin': ['HOME_UPGRADE_SCENARIOS'],
   diy: ['DIY_PROJECTS'],
   'project-tracker': ['PROJECT_TRACKER_PROJECTS'],
+  'service-price-radar': ['SERVICE_PRICE_CHECKS'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

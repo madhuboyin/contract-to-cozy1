@@ -109,6 +109,7 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'HOME_UPGRADE_SCENARIOS', message: 'How do our saved upgrade options compare on cost?', category: 'COLLOQUIAL' },
   { operationId: 'DIY_PROJECTS', message: 'Which of our DIY projects still have steps left?', category: 'COLLOQUIAL' },
   { operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Which of our contractor projects are still open?', category: 'COLLOQUIAL' },
+  { operationId: 'SERVICE_PRICE_CHECKS', message: 'What did the price radar say about our plumber quote?', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -212,6 +213,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   HOME_UPGRADE_SCENARIOS: 'Of your saved upgrade options, repairing the water heater costs about $400–$700 upfront, while replacing it with a heat pump model costs $2,800–$4,200 and pays back in about 6 years.',
   DIY_PROJECTS: 'Two of your DIY projects still have steps left: repainting the hallway is 3 of 5 steps done and re-caulking the tub is still in planning.',
   PROJECT_TRACKER_PROJECTS: 'Two contractor projects are still open: the kitchen remodel with Apex Builders is in progress with $12,000 of $40,000 remaining, and the roof replacement is still in planning.',
+  SERVICE_PRICE_CHECKS: 'The price radar found your $1,450 plumber quote for a water line repair above the expected $900 to $1,200 range.',
   HOME_HABITS: 'The coach is recommending three small habits for your home, each with how often to do it and why.',
   HOUSEHOLD_INVITATION: 'Your partner can be invited to this household after you confirm the role.',
   GUIDANCE_JOURNEY_CREATE: 'A guided project plan can be started with the first governed step.',

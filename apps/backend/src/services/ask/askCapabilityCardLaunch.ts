@@ -56,6 +56,8 @@ const INLINE_ENTRY_READS = {
   diy: { operationId: 'DIY_PROJECTS', message: 'Show my DIY projects' },
   // FRD v1.59: backed by a new operation reading the Project Tracker page's list (listProjects).
   'project-tracker': { operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my project tracker' },
+  // FRD v1.60: backed by a new operation reading the Service Price Radar page's recent checks (listChecks).
+  'service-price-radar': { operationId: 'SERVICE_PRICE_CHECKS', message: 'Show my service price radar' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

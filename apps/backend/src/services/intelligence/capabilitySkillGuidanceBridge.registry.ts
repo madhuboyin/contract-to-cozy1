@@ -59,6 +59,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'home-digital-twin': ['HOME_UPGRADE_SCENARIOS'],
   diy: ['DIY_PROJECTS'],
   'project-tracker': ['PROJECT_TRACKER_PROJECTS'],
+  'service-price-radar': ['SERVICE_PRICE_CHECKS'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
@@ -77,7 +78,6 @@ const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
   'hoa-compliance',
   'home-briefing',
   'permits',
-  'service-price-radar',
 ];
 
 const PHASE6_METADATA: Readonly<Record<string, Pick<CapabilitySkillGuidanceBridgeEntry,

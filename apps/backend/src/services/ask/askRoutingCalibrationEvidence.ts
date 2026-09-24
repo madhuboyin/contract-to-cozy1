@@ -133,6 +133,9 @@ const ROWS: readonly ObservationTuple[] = [
   // projects outranked RENOVATION_PERMIT_READINESS on fixture 024 and was reworded. Candidate pairs were swept against
   // every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4444).
   ['084-expected', '084', 'PROJECT_TRACKER_PROJECTS', .8039, true], ['084-competitor', '084', 'QUOTE_COMPARISON_REVIEW', .5647, false],
+  // FRD v1.60: fixture 085 (SERVICE_PRICE_CHECKS), re-derived from the retriever; no existing row changed. Candidate pairs
+  // were swept against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4558).
+  ['085-expected', '085', 'SERVICE_PRICE_CHECKS', .3656, true], ['085-competitor', '085', 'QUOTE_COMPARISON_REVIEW', .2843, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(
