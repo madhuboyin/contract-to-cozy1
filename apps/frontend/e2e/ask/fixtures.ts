@@ -1007,6 +1007,38 @@ function applianceLifespanExecution() {
   };
 }
 
+// IW-PRES-019 (FRD v1.79): the home record's rooms as a room map. Kitchen is the room whose live detail is mocked.
+function roomMapExecution() {
+  const rename = { id: 'rename-room', label: 'Rename room', message: 'Rename this room.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'ROOM_RENAME' };
+  const room = (id: string, title: string, floorLevel: number | null, countLabel: string, badgeLabel?: string) => ({
+    id, title, entityType: 'INVENTORY_ROOM', description: null, status: null, href: null, floorLevel, countLabel,
+    ...(badgeLabel ? { badgeLabel, tone: 'CAUTION' } : {}), meta: [title, countLabel, ...(badgeLabel ? [badgeLabel] : []), 'Updated Sep 1, 2026'], actions: [rename],
+  });
+  return {
+    schemaVersion: '1.0', executionId: 'execution-room-map', sessionId: 'ask-acceptance-session',
+    question: 'Show the rooms in my home record', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'PROPERTY_SUMMARY', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
+    blocks: [{
+      type: 'SUMMARY', id: 'property-summary', title: 'Acceptance Home', tone: 'DEFAULT', body: 'Five rooms are recorded.', actions: [],
+    }, {
+      type: 'GROUPED_LIST', id: 'property-rooms', title: 'Rooms', filters: [], presentation: { pattern: 'ROOM_MAP' },
+      description: 'Select a room to inspect its current canonical details without leaving Ask Cozy.',
+      sections: [{ id: 'rooms', title: 'Recorded rooms', count: 5, items: [
+        room('room-property-summary', 'Kitchen', 0, '8 items', '2 open tasks'),
+        room('room-den', 'Den', 0, '3 items'),
+        room('room-primary', 'Primary bedroom', 1, '5 items'),
+        room('room-office', 'Office', 1, '4 items', '1 open task'),
+        room('room-garage', 'Garage', null, '1 item'),
+      ] }],
+      actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${propertyId}/rooms`, style: 'SECONDARY' }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
 function relatedRecordsExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-related-records', sessionId: 'ask-acceptance-session',
@@ -1580,6 +1612,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/show the task output/i.test(body.message)) {
       const response = maintenanceOutputExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/^show the rooms in my home record/i.test(body.message)) {
+      const response = roomMapExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

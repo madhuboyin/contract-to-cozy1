@@ -61,6 +61,14 @@ export function comparisonBadges(option: ComparisonOption): AskComparisonBadge[]
   return option.badge ? [option.badge] : [];
 }
 
+/** Ask's floor convention (the room floor-level correction reads 0 as the ground floor, below zero as below ground). */
+export function floorLabel(floor: number): string {
+  if (floor === 0) return 'Ground floor';
+  if (floor === -1) return 'Basement';
+  if (floor < -1) return `Basement level ${-floor}`;
+  return `Floor ${floor}`;
+}
+
 /** IW-PRES-019: rooms grouped by stored floor level, lowest first; rooms with no floor level go last as "Other". */
 export function roomFloors(items: AskGroupedListItem[]): Array<{ key: string; label: string; items: AskGroupedListItem[] }> {
   const byFloor = new Map<number | null, AskGroupedListItem[]>();
@@ -69,7 +77,7 @@ export function roomFloors(items: AskGroupedListItem[]): Array<{ key: string; la
     byFloor.set(floor, [...(byFloor.get(floor) ?? []), item]);
   });
   const floors = Array.from(byFloor.keys()).filter((floor): floor is number => floor !== null).sort((a, b) => a - b);
-  const ordered = floors.map((floor) => ({ key: `floor-${floor}`, label: `Floor ${floor}`, items: byFloor.get(floor)! }));
+  const ordered = floors.map((floor) => ({ key: `floor-${floor}`, label: floorLabel(floor), items: byFloor.get(floor)! }));
   const other = byFloor.get(null);
   if (other) ordered.push({ key: 'floor-other', label: floors.length ? 'Other' : 'Rooms', items: other });
   return ordered;

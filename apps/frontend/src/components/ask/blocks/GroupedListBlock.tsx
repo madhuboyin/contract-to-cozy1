@@ -174,6 +174,15 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       layout={decision.pattern === 'SHELVES' ? 'SHELVES' : 'LIST'}
       onChooseLayout={declaresShelves && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
   }
+  // Rooms keep their own component in both layouts too, so the live room detail and its corrections stay (FRD v1.79).
+  if (props.block.id === 'property-rooms') {
+    const { block, propertyId, itemActionsDisabled, onItemAction, onAccessLost } = props;
+    const declaresMap = block.presentation?.pattern === 'ROOM_MAP';
+    return <RoomResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
+      layout={decision.pattern === 'ROOM_MAP' ? 'MAP' : 'LIST'}
+      onChooseLayout={declaresMap && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
+  }
   if (props.block.id === 'inspection-findings') {
     const { block, propertyId, itemActionsDisabled, onItemAction, onAccessLost, onBatchItemAction } = props;
     const declaresDeck = block.presentation?.pattern === 'DECK';

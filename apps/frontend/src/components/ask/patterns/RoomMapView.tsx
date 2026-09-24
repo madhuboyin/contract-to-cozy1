@@ -8,7 +8,8 @@ import { ItemDetailSheet, type ItemActionHandler } from './PatternParts';
 
 // IW-PRES-019 (FRD v1.72). Rooms as tiles, one floor at a time, grouped by the stored floor level. The grid is an
 // ordering, not a floor plan: tiles are all the same size and imply nothing about room sizes or positions.
-export function RoomMapView({ items, onItemAction, disabled }: { items: AskGroupedListItem[]; onItemAction: ItemActionHandler; disabled: boolean }) {
+// A domain list with its own live detail (Rooms, FRD v1.79) passes `onOpenRoom` and shows the detail itself.
+export function RoomMapView({ items, onItemAction, disabled, onOpenRoom }: { items: AskGroupedListItem[]; onItemAction: ItemActionHandler; disabled: boolean; onOpenRoom?: (item: AskGroupedListItem) => void }) {
   const floors = roomFloors(items);
   const [floorKey, setFloorKey] = useState(floors[0]?.key ?? '');
   const [openItem, setOpenItem] = useState<AskGroupedListItem | null>(null);
@@ -29,7 +30,7 @@ export function RoomMapView({ items, onItemAction, disabled }: { items: AskGroup
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label={`${floor.label}, ${floor.items.length} room${floor.items.length === 1 ? '' : 's'}`}>
         {floor.items.map((room) => (
           <li key={room.id}>
-            <button type="button" onClick={() => setOpenItem(room)} data-ask-room-tile={room.id}
+            <button type="button" onClick={() => (onOpenRoom ? onOpenRoom(room) : setOpenItem(room))} data-ask-room-tile={room.id} data-room-detail-trigger={room.id}
               className="flex min-h-[5.5rem] w-full flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-teal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600">
               <span className="text-sm font-semibold text-slate-950">{room.title}</span>
               {room.countLabel && <span className="text-xs text-slate-500">{room.countLabel}</span>}
@@ -38,7 +39,7 @@ export function RoomMapView({ items, onItemAction, disabled }: { items: AskGroup
           </li>
         ))}
       </ul>
-      <ItemDetailSheet item={openItem} open={Boolean(openItem)} onOpenChange={(open) => { if (!open) setOpenItem(null); }} onItemAction={onItemAction} disabled={disabled} />
+      {!onOpenRoom && <ItemDetailSheet item={openItem} open={Boolean(openItem)} onOpenChange={(open) => { if (!open) setOpenItem(null); }} onItemAction={onItemAction} disabled={disabled} />}
     </div>
   );
 }

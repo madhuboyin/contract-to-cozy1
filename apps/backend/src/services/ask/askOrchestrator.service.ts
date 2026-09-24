@@ -5168,17 +5168,31 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       });
     }
     if (rooms) {
+      // IW-PRES-019 (FRD v1.79): the rooms render as a room map by stored floor level, even when no floor is recorded
+      // (then with a hint); each room carries its recorded item count and open maintenance tasks.
+      const anyFloor = rooms.items.slice(0, 50).some((room) => typeof room.floorLevel === 'number');
+      const canManageRooms = access.role !== HouseholdRole.VIEWER;
       blocks.push({
         type: 'GROUPED_LIST', filters: [], id: 'property-rooms', title: 'Rooms',
-        description: rooms.count > 50
-          ? 'Showing the first 50 canonical room records. Open Rooms for the full collection.'
-          : 'Select a room to inspect its current canonical details without leaving Ask Cozy.',
+        description: [
+          rooms.count > 50
+            ? 'Showing the first 50 canonical room records. Open Rooms for the full collection.'
+            : 'Select a room to inspect its current canonical details without leaving Ask Cozy.',
+          rooms.items.length && !anyFloor ? `Floors aren't recorded yet${canManageRooms ? '; open a room to set its floor' : ''}.` : null,
+        ].filter(Boolean).join(' '),
+        presentation: { pattern: 'ROOM_MAP' },
         sections: [{
           id: 'rooms', title: 'Recorded rooms', count: rooms.count,
-          items: rooms.items.slice(0, 50).map((room) => ({
-            id: room.id, title: room.name, description: null, entityType: 'INVENTORY_ROOM', href: null, status: null, actions: roomRenameItemActions(access.role !== HouseholdRole.VIEWER),
-            meta: [readablePropertyValue(room.type), `Updated ${humanDate(room.updatedAt) ?? 'date unavailable'}`],
-          })),
+          items: rooms.items.slice(0, 50).map((room) => {
+            const facts = roomMapFacts(room._count);
+            return {
+              id: room.id, title: room.name, description: null, entityType: 'INVENTORY_ROOM', href: null, status: null, actions: roomRenameItemActions(access.role !== HouseholdRole.VIEWER),
+              floorLevel: typeof room.floorLevel === 'number' ? room.floorLevel : null,
+              countLabel: facts.countLabel,
+              ...(facts.badgeLabel ? { badgeLabel: facts.badgeLabel, tone: 'CAUTION' as const } : {}),
+              meta: [readablePropertyValue(room.type), facts.countLabel, ...(facts.badgeLabel ? [facts.badgeLabel] : []), `Updated ${humanDate(room.updatedAt) ?? 'date unavailable'}`],
+            };
+          }),
         }],
         actions: [
           ...(access.role !== HouseholdRole.VIEWER ? [{ id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW' as const, message: ROOM_ADD_MESSAGE, operationId: 'ROOM_CREATE', style: 'PRIMARY' as const }] : []),
@@ -8504,6 +8518,16 @@ const HOME_TIMELINE_CATEGORIES: Record<string, { id: string; label: string }> = 
   CLAIM: { id: 'claims', label: 'Claims' },
   PURCHASE: { id: 'purchases', label: 'Purchases and value' }, VALUE_UPDATE: { id: 'purchases', label: 'Purchases and value' },
 };
+// FRD v1.79: the room tile's facts, from the recorded item count and the open (pending or in-progress) maintenance tasks.
+export function roomMapFacts(counts: { items?: number; maintenanceTasks?: number } | null | undefined): { countLabel: string; badgeLabel: string | null } {
+  const items = counts?.items ?? 0;
+  const open = counts?.maintenanceTasks ?? 0;
+  return {
+    countLabel: `${items} item${items === 1 ? '' : 's'}`,
+    badgeLabel: open > 0 ? `${open} open task${open === 1 ? '' : 's'}` : null,
+  };
+}
+
 export function homeTimelineCategory(type: string | null | undefined): { id: string; label: string } {
   return HOME_TIMELINE_CATEGORIES[type ?? ''] ?? { id: 'records', label: 'Records and notes' };
 }

@@ -7,6 +7,8 @@ import type { AskItemActionInteractionType, AskPresentationBlock } from '@/featu
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
+import { DetailSheetFrame } from './patterns/PatternParts';
+import { RoomMapView } from './patterns/RoomMapView';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -113,13 +115,17 @@ function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onActi
   </aside>;
 }
 
-export function RoomResultList({ block, propertyId, disabled, onAction, onAccessLost, link }: {
+export function RoomResultList({ block, propertyId, disabled, onAction, onAccessLost, link, layout = 'LIST', onChooseLayout }: {
   block: Block;
   propertyId?: string;
   disabled?: boolean;
   onAction?: RoomItemActionHandler;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
+  // IW-PRES-019 / IW-PRES-022 (FRD v1.79): the server-declared room map, and the homeowner's switch between it and
+  // the list. Both open the same live room detail; the map shows it in the drawer or bottom sheet.
+  layout?: 'LIST' | 'MAP';
+  onChooseLayout?: (layout: 'LIST' | 'MAP') => void;
 }) {
   const controls = useContext(ResultViewContext);
   const [localDetailRoomId, setLocalDetailRoomId] = useState<string | null>(null);
@@ -136,12 +142,25 @@ export function RoomResultList({ block, propertyId, disabled, onAction, onAccess
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-room-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  const allRooms = block.sections.flatMap((section) => section.items);
+  const total = block.sections.reduce((sum, section) => sum + section.count, 0);
+  const roomDetail = (roomId: string, item: Item) => <RoomDetail key={roomId} roomId={roomId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />;
+
+  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-display-pattern={layout === 'MAP' ? 'room_map' : undefined}>
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {onChooseLayout && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+        {(['MAP', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={layout === option} onClick={() => onChooseLayout(option)}
+          className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'MAP' ? 'Room map' : 'List'}</button>)}
+      </div>}
     </div>
-    {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
+    {layout === 'MAP' && <div className="border-b border-slate-100">
+      {allRooms.length === 0 ? <p className="p-4 text-sm text-slate-500">No rooms are recorded yet.</p>
+        : <RoomMapView items={allRooms} disabled={Boolean(disabled)} onItemAction={(entityType, entityId, message, operationId, interactionType) => onAction?.(entityType, entityId, message, operationId, interactionType)} onOpenRoom={openDetail} />}
+      {total > allRooms.length && <p className="px-4 pb-4 text-sm text-slate-500">+{total - allRooms.length} more rooms are available through the full Rooms collection.</p>}
+    </div>}
+    {layout === 'LIST' && block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>
       {section.items.length === 0 && <p className="mt-2 text-sm text-slate-500">No rooms are recorded yet.</p>}
       <ul className="mt-3 space-y-3">
@@ -158,7 +177,10 @@ export function RoomResultList({ block, propertyId, disabled, onAction, onAccess
       </ul>
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more rooms are available through the full Rooms collection.</p>}
     </div>)}
-    {detailRoomId && detailItem && <RoomDetail key={detailRoomId} roomId={detailRoomId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
+    {layout === 'LIST' && detailRoomId && detailItem && roomDetail(detailRoomId, detailItem)}
+    {layout === 'MAP' && <DetailSheetFrame open={Boolean(detailRoomId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Room detail: ${detailItem.title}` : 'Room detail'}>
+      {detailRoomId && detailItem && roomDetail(detailRoomId, detailItem)}
+    </DetailSheetFrame>}
     <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
   </section>;
 }

@@ -46,7 +46,12 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
     settled(prisma.inventoryRoom.findMany({
       where: { propertyId },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, type: true, updatedAt: true },
+      // floorLevel and the two counts feed Ask's room map (FRD v1.79): recorded items, and maintenance tasks that are
+      // still open (pending or in progress, as Maintenance counts them). Additive for the property page.
+      select: {
+        id: true, name: true, type: true, updatedAt: true, floorLevel: true,
+        _count: { select: { items: true, maintenanceTasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } } } },
+      },
     })),
     settled(prisma.inventoryItem.findMany({
       where: { propertyId },
