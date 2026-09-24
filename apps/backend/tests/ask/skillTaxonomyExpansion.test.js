@@ -59,6 +59,8 @@ const TAXONOMY = Object.freeze({
   'hoa-compliance': ['HOA_COMPLIANCE_STATUS'],
   'price-finalization': ['PRICE_FINALIZATIONS_LIST'],
   'do-nothing-simulator': ['DO_NOTHING_SIMULATION'],
+  'appliance-oracle': ['APPLIANCE_FAILURE_RISK'],
+  'budget-planner': ['MAINTENANCE_BUDGET_FORECAST'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

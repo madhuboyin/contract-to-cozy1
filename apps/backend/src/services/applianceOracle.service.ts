@@ -59,6 +59,8 @@ interface OracleReport {
   };
   generatedAt: Date;
   propertyContext: { propertyId: string; contextVersion: string; decision: FeatureDecision };
+  // Appliances left out because no age is recorded (the prediction needs one). Additive; the page ignores it.
+  appliancesWithoutAge?: number;
 }
 
 const APPLIANCE_LIFESPAN_DATA = {
@@ -108,7 +110,10 @@ export class ApplianceOracleService {
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
 
-  async generateOracleReport(propertyId: string, userId: string): Promise<OracleReport> {
+  // includeRecommendations: false skips the per-appliance Gemini product recommendations and returns only the calculated
+  // failure risk (Ask, FRD v1.70). The page's route keeps the default.
+  async generateOracleReport(propertyId: string, userId: string, options: { includeRecommendations?: boolean } = {}): Promise<OracleReport> {
+    const includeRecommendations = options.includeRecommendations ?? true;
     const protectionContext = await getProtectionContextDecisions(propertyId, userId, 'APPLIANCE_ORACLE');
     // Get property with all appliance data
     const property = await prisma.property.findFirst({
@@ -152,11 +157,14 @@ export class ApplianceOracleService {
 
     // Analyze each appliance
     const predictions: ApplianceFailurePrediction[] = [];
+    let appliancesWithoutAge = 0;
 
     for (const asset of applianceInventory) {
-      const prediction = await this.analyzeSingleAppliance(asset, property);
+      const prediction = await this.analyzeSingleAppliance(asset, property, includeRecommendations);
       if (prediction) {
         predictions.push(prediction);
+      } else {
+        appliancesWithoutAge += 1;
       }
     }
 
@@ -197,12 +205,14 @@ export class ApplianceOracleService {
         contextVersion: protectionContext.contextVersion,
         decision: protectionContext.decisions.applianceOracle,
       },
+      appliancesWithoutAge,
     };
   }
 
   private async analyzeSingleAppliance(
     asset: any, 
-    property: any
+    property: any,
+    includeRecommendations = true,
   ): Promise<ApplianceFailurePrediction | null> {
     const applianceName = asset.assetType || asset.name || asset.type || 'Unknown';
     // Calculate age from installationYear if available
@@ -257,12 +267,9 @@ export class ApplianceOracleService {
     const replacementCost = this.getReplacementCost(applianceName);
 
     // Generate AI recommendations
-    const recommendations = await this.getAIRecommendations(
-      applianceName,
-      category,
-      replacementCost,
-      property
-    );
+    const recommendations = includeRecommendations
+      ? await this.getAIRecommendations(applianceName, category, replacementCost, property)
+      : [];
 
     // Maintenance impact
     const maintenanceImpact = this.getMaintenanceImpact(failureRisk, urgency);

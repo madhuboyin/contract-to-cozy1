@@ -74,6 +74,8 @@ const DEFINITIONS = [
   adapter('guidance-overview.journeys', 'Guidance Overview journeys (guidanceJourneyService)', 'GUIDANCE_JOURNEYS_LIST'),
   adapter('hoa-compliance.status', 'HOA Compliance records (HoaComplianceService)', 'HOA_COMPLIANCE_STATUS'),
   adapter('price-finalization.records', 'Price Finalization records (PriceFinalizationService)', 'PRICE_FINALIZATIONS_LIST'),
+  adapter('appliance-oracle.risk', 'Appliance Oracle failure risk without AI picks (ApplianceOracleService)', 'APPLIANCE_FAILURE_RISK'),
+  adapter('budget-planner.forecast', 'Budget Planner forecast without AI tips (BudgetForecasterService)', 'MAINTENANCE_BUDGET_FORECAST'),
   adapter('do-nothing-simulator.latest', 'Do-Nothing Simulator latest run and scenarios (DoNothingSimulatorService)', 'DO_NOTHING_SIMULATION'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),

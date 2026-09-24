@@ -22,7 +22,7 @@ test('every one of the 86 Ask operations has a coverage-matrix entry with no reg
   const operationIds = Object.keys(ASK_OPERATION_DEFINITIONS);
   // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
-  assert.equal(operationIds.length, 110);
+  assert.equal(operationIds.length, 112);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -133,6 +133,8 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'HOA_COMPLIANCE_STATUS',
   'PRICE_FINALIZATIONS_LIST',
   'DO_NOTHING_SIMULATION',
+  'APPLIANCE_FAILURE_RISK',
+  'MAINTENANCE_BUDGET_FORECAST',
 ]);
 // Phase 0 Stage 2 is now complete: every one of the 77 registered operations
 // has been traced. This assertion is the actual completion signal -- if a
@@ -145,7 +147,7 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 110);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 112);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
@@ -153,7 +155,7 @@ test('Stage 2 fields are TRACED with real notes only for operations actually tra
   const operationIds = Object.keys(ASK_INTERACTION_COVERAGE_MATRIX);
   // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
-  assert.equal(operationIds.length, 110);
+  assert.equal(operationIds.length, 112);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

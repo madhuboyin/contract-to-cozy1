@@ -76,7 +76,20 @@ const INLINE_ENTRY_READS = {
   'price-finalization': { operationId: 'PRICE_FINALIZATIONS_LIST', message: 'Show my price finalizations' },
   // FRD v1.68: backed by a new operation reading the Do-Nothing Simulator's latest run and saved scenarios.
   'do-nothing-simulator': { operationId: 'DO_NOTHING_SIMULATION', message: 'Show my do-nothing simulation' },
+  // FRD v1.70 (product option A): the calculated parts of two Gemini-backed tools, without the model call. The AI
+  // recommendations stay on each page behind a labelled link.
+  oracle: { operationId: 'APPLIANCE_FAILURE_RISK', message: 'Show my appliance oracle' },
+  budget: { operationId: 'MAINTENANCE_BUDGET_FORECAST', message: 'Show my budget planner' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
+
+// FRD v1.70 (product decision, option A): tools whose page runs a fresh AI analysis of something the user supplies and saves
+// nothing, so there is no record for Ask to read. They stay on their pages by design, and the card says so rather than
+// "not available yet".
+const PAGE_ONLY_AI_ANALYZERS: Readonly<Record<string, string>> = {
+  appreciation: 'Value Tracker runs a fresh AI value analysis from your purchase details on its own page.',
+  energy: 'Energy Audit runs an AI review of the utility bills you upload on its own page.',
+  'visual-inspector': 'Visual Inspector runs an AI review of the photos you upload on its own page.',
+};
 
 export function capabilityCardLaunch(capabilityId: string) {
   if (!canonicalCapabilityRegistry.getById(capabilityId)) throw new Error(`Unknown Ask capability: ${capabilityId}`);
@@ -85,5 +98,7 @@ export function capabilityCardLaunch(capabilityId: string) {
     if (!ASK_OPERATION_DEFINITIONS[entry.operationId]) throw new Error(`Unregistered Ask operation: ${entry.operationId}`);
     return { inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE' as const, operationId: entry.operationId, message: entry.message }, inlineBoundary: 'You can inspect current records here. Further tool actions may still require opening the full page.' };
   }
+  const pageOnly = PAGE_ONLY_AI_ANALYZERS[capabilityId];
+  if (pageOnly) return { inlineLaunch: null, inlineBoundary: pageOnly };
   return { inlineLaunch: null, inlineBoundary: 'This tool’s full journey is not available inside Ask Cozy yet.' };
 }

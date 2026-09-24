@@ -161,6 +161,8 @@ import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.servic
 import { hoaComplianceService } from '../hoaCompliance.service';
 import { priceFinalizationService } from '../priceFinalization.service';
 import { DoNothingSimulatorService } from '../doNothingSimulator.service';
+import { applianceOracleService } from '../applianceOracle.service';
+import { budgetForecasterService } from '../budgetForecaster.service';
 import { getProtectionContextDecisions } from '../protection/context';
 import { mapGuidanceJourney } from '../guidanceEngine/guidanceMapper';
 import { getOrCreateQuoteComparisonWorkspace, getQuoteComparisonWorkspace, getWorkspaceComparability } from '../quoteComparison.service';
@@ -8400,6 +8402,150 @@ async function materialSpecsResult(propertyId: string): Promise<AskOperationResu
   return materialSpecsFromView(await materialSpecService.listSpecs(propertyId, {}), propertyId);
 }
 
+// Appliance Oracle and Budget Planner (FRD v1.70, product decision option A for the Gemini-backed tools): Ask shows only
+// the calculated part of each page, with the services' Gemini recommendations switched off, and links to the page for the
+// AI picks. Both services only admit the primary homeowner profile (plain Errors, 500s on the pages); Ask uses the OWNER
+// floor and says who can see them. Oracle leaves out appliances with no recorded age and the page then reads "No
+// Appliance Data"; Ask says how many were left out. Budget assumes a 10-year-old home when the year built is missing;
+// Ask says so. Read-only.
+type OracleReportView = Awaited<ReturnType<typeof applianceOracleService.generateOracleReport>>;
+type BudgetForecastView = Awaited<ReturnType<typeof budgetForecasterService.generateBudgetForecast>>;
+const ORACLE_URGENCY_GROUPS = [['CRITICAL', 'Critical'], ['HIGH', 'High'], ['MEDIUM', 'Medium'], ['LOW', 'Low']] as const;
+const wholeDollars = (value: number) => `$${Math.round(value).toLocaleString('en-US')}`;
+
+export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
+  const pageHref = `/dashboard/oracle?propertyId=${encodeURIComponent(propertyId)}`;
+  const openAction = { id: 'open-appliance-oracle', label: 'Open Appliance Oracle for AI replacement picks', href: pageHref, style: 'PRIMARY' as const };
+  if (report === 'PRIMARY_OWNER_ONLY') {
+    return {
+      status: 'BLOCKED', reasonCode: 'APPLIANCE_ORACLE_PRIMARY_OWNER_ONLY',
+      blocks: [{ type: 'SUMMARY', id: 'appliance-oracle-summary', title: 'Only the home\'s primary owner can see the appliance oracle', body: 'Appliance Oracle is kept for the home\'s primary account holder, so it can\'t be shown here.', tone: 'CAUTION', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const boundary: AskPresentationBlock = {
+    type: 'BOUNDARY', id: 'appliance-oracle-boundary', title: 'An educational estimate by age',
+    body: `Risk comes from each appliance's age against a typical lifespan, not an inspection. ${report.meta.disclaimer}`,
+    severity: 'INFO', suggestions: [],
+  };
+  const skipped = report.appliancesWithoutAge ?? 0;
+  const skippedBlock: AskPresentationBlock | null = skipped
+    ? { type: 'LIMITATION', id: 'appliance-oracle-skipped', title: `${skipped} appliance${skipped === 1 ? '' : 's'} left out`, body: `${skipped === 1 ? 'It has' : 'They have'} no install year recorded, so no failure risk can be worked out. Add the install year in the inventory to include ${skipped === 1 ? 'it' : 'them'}.`, severity: 'INFO' }
+    : null;
+  if (!report.predictions.length) {
+    return {
+      status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_EMPTY',
+      blocks: [{
+        type: 'SUMMARY', id: 'appliance-oracle-summary', title: skipped ? 'No appliance ages recorded yet' : 'No appliances recorded yet',
+        body: 'Appliance Oracle estimates failure risk from each appliance\'s age. Add appliances with their install year to the inventory to see it.',
+        tone: 'DEFAULT', actions: [openAction],
+      }, ...(skippedBlock ? [skippedBlock] : []), boundary],
+      suggestions: ['Show my inventory'],
+    };
+  }
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'appliance-oracle-summary',
+    title: `${report.totalAppliances} appliance${report.totalAppliances === 1 ? '' : 's'} analysed`,
+    body: [
+      `${report.criticalCount} critical and ${report.highRiskCount} high risk.`,
+      report.criticalCount + report.highRiskCount ? `Replacing those would cost an estimated ${wholeDollars(report.estimatedTotalCost)}.` : null,
+      'Replacement model suggestions are on the Appliance Oracle page.',
+    ].filter(Boolean).join(' '),
+    tone: report.criticalCount + report.highRiskCount ? 'CAUTION' : 'DEFAULT',
+    actions: [openAction],
+  }];
+  if (skippedBlock) blocks.push(skippedBlock);
+  blocks.push({
+    type: 'GROUPED_LIST', filters: [], id: 'appliance-oracle-items', title: 'Failure risk by appliance',
+    description: 'Most urgent first, as on the page.',
+    sections: ORACLE_URGENCY_GROUPS
+      .map(([urgency, title]) => ({ urgency, title, items: report.predictions.filter((prediction) => prediction.urgency === urgency) }))
+      .filter((section) => section.items.length > 0)
+      .map((section) => ({
+        id: `appliance-oracle-${section.urgency.toLowerCase()}`, title: section.title, count: section.items.length,
+        items: section.items.map((prediction, index) => ({
+          id: `${section.urgency.toLowerCase()}-${index}`,
+          title: prediction.applianceName,
+          description: `${prediction.currentAge} years old of about ${prediction.expectedLife} expected · ${prediction.failureRisk}% failure risk`,
+          meta: [
+            prediction.remainingLife > 0 ? `About ${prediction.remainingLife} year${prediction.remainingLife === 1 ? '' : 's'} left, around ${new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: getAskPropertyTimezone() }).format(new Date(prediction.estimatedFailureDate))}` : 'Past its expected life',
+            `Replacement about ${wholeDollars(prediction.replacementCost)}`,
+            prediction.maintenanceImpact,
+          ],
+          status: section.title,
+        })),
+      })),
+    actions: [],
+  }, boundary);
+  return { status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_READY', blocks, suggestions: ['When should I replace my water heater?'] };
+}
+
+async function applianceFailureRiskResult(propertyId: string, userId: string): Promise<AskOperationResult> {
+  try {
+    return applianceFailureRiskFromView(await applianceOracleService.generateOracleReport(propertyId, userId, { includeRecommendations: false }), propertyId);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Property not found or access denied') return applianceFailureRiskFromView('PRIMARY_OWNER_ONLY', propertyId);
+    throw error;
+  }
+}
+
+export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
+  const pageHref = `/dashboard/budget?propertyId=${encodeURIComponent(propertyId)}`;
+  const openAction = { id: 'open-budget-planner', label: 'Open Budget Planner for AI tips', href: pageHref, style: 'PRIMARY' as const };
+  if (forecast === 'PRIMARY_OWNER_ONLY') {
+    return {
+      status: 'BLOCKED', reasonCode: 'BUDGET_PLANNER_PRIMARY_OWNER_ONLY',
+      blocks: [{ type: 'SUMMARY', id: 'budget-forecast-summary', title: 'Only the home\'s primary owner can see the budget planner', body: 'Budget Planner is kept for the home\'s primary account holder, so it can\'t be shown here.', tone: 'CAUTION', actions: [] }],
+      suggestions: [],
+    };
+  }
+  const busiest = [...forecast.monthlyForecasts].sort((a, b) => b.total - a.total)[0];
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'budget-forecast-summary',
+    title: `About ${wholeDollars(forecast.totalAnnualCost)} a year for upkeep`,
+    body: [
+      `That is about ${wholeDollars(forecast.monthlyAverage)} a month on average${busiest ? `, highest in ${busiest.month} (${wholeDollars(busiest.total)})` : ''}.`,
+      `Confidence ${forecast.confidenceLevel}%.`,
+      'Money-saving tips are on the Budget Planner page.',
+    ].join(' '),
+    tone: 'DEFAULT', actions: [openAction],
+  }];
+  if (forecast.yearBuiltAssumed) {
+    blocks.push({
+      type: 'LIMITATION', id: 'budget-forecast-assumed-age', title: 'Home age assumed',
+      body: 'The year built is not recorded, so the forecast assumed a 10-year-old home. Add the year built to the home\'s details for a closer estimate.',
+      severity: 'CAUTION',
+    });
+  }
+  blocks.push({
+    type: 'GROUPED_LIST', filters: [], id: 'budget-forecast-items', title: 'Where the upkeep budget goes',
+    description: 'By category, then month by month, as on the page.',
+    sections: [
+      { id: 'budget-forecast-categories', title: 'By category', count: forecast.categoryBreakdowns.length, items: forecast.categoryBreakdowns.map((category, index) => ({
+        id: `category-${index}`, title: category.category, description: `${wholeDollars(category.annualCost)} a year (${category.percentage}%)`, meta: category.items.slice(0, 4), status: `${category.percentage}%`,
+      })) },
+      { id: 'budget-forecast-months', title: 'By month', count: forecast.monthlyForecasts.length, items: forecast.monthlyForecasts.map((month) => ({
+        id: `month-${month.month.toLowerCase()}`, title: month.month, description: `${wholeDollars(month.total)}: routine ${wholeDollars(month.routine)}, preventive ${wholeDollars(month.preventive)}, unexpected ${wholeDollars(month.unexpected)}`, meta: month.tasks.slice(0, 3), status: wholeDollars(month.total),
+      })) },
+    ].filter((section) => section.count > 0),
+    actions: [],
+  }, {
+    type: 'BOUNDARY', id: 'budget-forecast-boundary', title: 'A typical-cost estimate, not your spending',
+    body: 'The forecast uses typical upkeep costs for this kind of home and its age, not what you have actually spent. Use it to set aside a buffer, and check real bills against it.',
+    severity: 'INFO', suggestions: [],
+  });
+  return { status: 'ANSWERED', reasonCode: 'BUDGET_FORECAST_READY', blocks, suggestions: ['What are my monthly ownership costs?'] };
+}
+
+async function maintenanceBudgetResult(propertyId: string, userId: string): Promise<AskOperationResult> {
+  try {
+    return maintenanceBudgetFromView(await budgetForecasterService.generateBudgetForecast(propertyId, userId, { includeRecommendations: false }), propertyId);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Property not found') return maintenanceBudgetFromView('PRIMARY_OWNER_ONLY', propertyId);
+    throw error;
+  }
+}
+
 // Do-Nothing Simulator capability-card slice (FRD v1.68): the nineteenth new operation for a capability with none (the
 // v1.47 "needs a product decision" label did not hold: runs and scenarios are stored and no model is called). Reads
 // DoNothingSimulatorService.getLatestRun and listScenarios with no filter, the two GETs the page makes on load (the
@@ -11281,6 +11427,8 @@ registerCapabilityHandler('guidance-overview.journeys', async (envelope) => guid
 registerCapabilityHandler('hoa-compliance.status', async (envelope) => hoaComplianceResult(envelope.propertyId!));
 registerCapabilityHandler('price-finalization.records', async (envelope) => priceFinalizationsResult(envelope.propertyId!, envelope.userId));
 registerCapabilityHandler('do-nothing-simulator.latest', async (envelope) => doNothingSimulationResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('appliance-oracle.risk', async (envelope) => applianceFailureRiskResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('budget-planner.forecast', async (envelope) => maintenanceBudgetResult(envelope.propertyId!, envelope.userId));
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('seller-prep.item-decision', async (envelope) => sellerPrepItemDecisionResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 

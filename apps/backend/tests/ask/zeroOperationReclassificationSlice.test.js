@@ -96,4 +96,17 @@ test('capabilities whose page reads different records than any Ask operation are
   // FRD v1.65 (product decision, option A): guidance-overview launches GUIDANCE_JOURNEYS_LIST, reading the page's own
   // getPropertyGuidance, not GUIDANCE_JOURNEY_CREATE, which the bridge also maps to it.
   assert.equal(capabilityCardLaunch('guidance-overview').inlineLaunch.operationId, 'GUIDANCE_JOURNEYS_LIST');
+  // FRD v1.66-v1.70: the v1.47 "needs a product decision" eight. Five now launch their own operation (Appliance Oracle
+  // and Budget Planner show only the calculated part); the three AI analyzers with nothing stored stay page-only by
+  // decision, and their cards say so instead of "not available yet".
+  assert.equal(capabilityCardLaunch('hoa-compliance').inlineLaunch.operationId, 'HOA_COMPLIANCE_STATUS');
+  assert.equal(capabilityCardLaunch('price-finalization').inlineLaunch.operationId, 'PRICE_FINALIZATIONS_LIST');
+  assert.equal(capabilityCardLaunch('do-nothing-simulator').inlineLaunch.operationId, 'DO_NOTHING_SIMULATION');
+  assert.equal(capabilityCardLaunch('oracle').inlineLaunch.operationId, 'APPLIANCE_FAILURE_RISK');
+  assert.equal(capabilityCardLaunch('budget').inlineLaunch.operationId, 'MAINTENANCE_BUDGET_FORECAST');
+  for (const capabilityId of ['appreciation', 'energy', 'visual-inspector']) {
+    const launch = capabilityCardLaunch(capabilityId);
+    assert.equal(launch.inlineLaunch, null, capabilityId);
+    assert.match(launch.inlineBoundary, /on its own page\.$/, capabilityId);
+  }
 });

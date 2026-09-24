@@ -111,6 +111,8 @@ export type AskOperationId =
   | 'HOA_COMPLIANCE_STATUS'
   | 'PRICE_FINALIZATIONS_LIST'
   | 'DO_NOTHING_SIMULATION'
+  | 'APPLIANCE_FAILURE_RISK'
+  | 'MAINTENANCE_BUDGET_FORECAST'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -416,6 +418,10 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // admits any household member, but listChecks only admits the property's primary homeowner profile.
   // FRD v1.61: reads listHomeEvents, the call GET /properties/:id/home-events makes for the Home Timeline page.
   // FRD v1.62: reads listSpecs, the call GET /properties/:id/materials makes for the Material Specs page.
+  // FRD v1.70 (product option A): the calculated parts of Appliance Oracle and Budget Planner, with the services' Gemini
+  // recommendations switched off. OWNER floor: both services only admit the primary homeowner profile.
+  APPLIANCE_FAILURE_RISK: definition('APPLIANCE_FAILURE_RISK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'appliance-oracle.risk', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  MAINTENANCE_BUDGET_FORECAST: definition('MAINTENANCE_BUDGET_FORECAST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'budget-planner.forecast', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   // FRD v1.68: reads getLatestRun and listScenarios, the two GETs the Do-Nothing Simulator page makes on load. OWNER floor:
   // the routes admit any household member, but the service only admits the primary homeowner profile.
   DO_NOTHING_SIMULATION: definition('DO_NOTHING_SIMULATION', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'do-nothing-simulator.latest', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -853,6 +859,14 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// Appliance Oracle's calculated failure risk by appliance age. When to replace one item is REPLACEMENT_GUIDANCE; which
+// model to buy stays on the page (Gemini recommendations).
+const applianceFailureRiskPattern = /\bappliance oracle\b|\b(?:appliance|system) (?:failure|breakdown) (?:risks?|forecast|predictions?)\b|\b(?:appliances?|systems?)\b.{0,40}\b(?:likely|about|going|expected) to (?:fail|break(?: down)?|die|wear out)\b|\bwhich (?:appliances?|systems?)\b.{0,40}\b(?:fail|break down)\b.{0,20}\b(?:next|first|soon)\b|\b(?:appliances?|systems?)\b.{0,40}\bpast (?:their|its) (?:expected )?(?:life|lifespan)\b|\b(?:appliances?|systems?)\b.{0,40}\b(?:closest|nearest) to (?:failing|failure|breaking(?: down)?)\b/i;
+const applianceFailureRiskOtherIntentPattern = /\b(?:buy|recommend\w*|brand|model|should|repair|fix|add|record|log)\b/i;
+// Budget Planner's calculated yearly and monthly upkeep forecast. Actual ownership costs are OWNERSHIP_COSTS; the
+// maintenance task forecast is MAINTENANCE_FORECAST.
+const maintenanceBudgetPattern = /\bbudget planner\b|\b(?:home |house )?(?:maintenance|upkeep|repair) budget\b|\bbudget forecast\b|\bhow much (?:should|do|will) (?:i|we) (?:need to )?(?:budget|set aside|save)\b.{0,50}\b(?:maintenance|upkeep|repairs?)\b/i;
+const maintenanceBudgetOtherIntentPattern = /\b(?:create|add|log|record|change|update|set up|renovation|remodel|closing|mortgage)\b/i;
 // The latest saved Do-Nothing Simulator run: what putting off home upkeep could cost. One item's repair-or-replace timing
 // is REPLACEMENT_GUIDANCE; running, saving or editing a simulation is not this read.
 const doNothingPattern = /\bdo[- ]nothing (?:simulat\w*|scenarios?|runs?|results?|analysis|report)\b|\bcost of (?:doing nothing|inaction|waiting)\b|\bwhat (?:happens|would happen|could happen) if (?:i|we) (?:do nothing|don'?t do anything|keep putting (?:it|things|everything) off)\b/i;
@@ -1079,6 +1093,12 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_RESERVE_PLAN', 0.97);
+  }
+  if (applianceFailureRiskPattern.test(message) && !applianceFailureRiskOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('APPLIANCE_FAILURE_RISK', 0.96);
+  }
+  if (maintenanceBudgetPattern.test(message) && !maintenanceBudgetOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('MAINTENANCE_BUDGET_FORECAST', 0.96);
   }
   if (doNothingPattern.test(message) && !doNothingOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('DO_NOTHING_SIMULATION', 0.96);

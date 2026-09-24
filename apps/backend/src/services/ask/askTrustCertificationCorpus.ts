@@ -117,6 +117,8 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'HOA_COMPLIANCE_STATUS', message: 'How much are our HOA dues?', category: 'COLLOQUIAL' },
   { operationId: 'PRICE_FINALIZATIONS_LIST', message: 'What price did we lock in with the electrician?', category: 'COLLOQUIAL' },
   { operationId: 'DO_NOTHING_SIMULATION', message: 'What would the cost of waiting a year be for our house?', category: 'COLLOQUIAL' },
+  { operationId: 'APPLIANCE_FAILURE_RISK', message: 'Which of our appliances are closest to failing?', category: 'COLLOQUIAL' },
+  { operationId: 'MAINTENANCE_BUDGET_FORECAST', message: 'What does the budget planner say we will spend on maintenance?', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -223,7 +225,10 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   SERVICE_PRICE_CHECKS: 'The price radar found your $1,450 plumber quote for a water line repair above the expected $900 to $1,200 range.',
   HOME_TIMELINE_EVENTS: 'Your home timeline records a kitchen remodel in 2024, verified by the contract, a home inspection in 2023, and the purchase of the house in 2021.',
   MATERIAL_SPECS_LIST: 'The dining room paint is Sherwin-Williams Alabaster (SW 7008), eggshell finish.',
-  DO_NOTHING_SIMULATION: 'Waiting a year on upkeep could cost your house an estimated $3,200 to $7,800 more, mostly from the aging roof and water heater.',
+  MAINTENANCE_BUDGET_FORECAST: 'The budget planner estimates about $3,400 a year on maintenance, around $280 a month, with October the most expensive month.',
+  APPLIANCE_FAILURE_RISK: 'The appliances closest to failing are the dishwasher, 12 years old with a 70% failure risk, and the refrigerator at 45%.',
+  // FRD v1.70: reworded when MAINTENANCE_BUDGET_FORECAST's "upkeep" wording started outscoring the v1.68 answer.
+  DO_NOTHING_SIMULATION: 'If you wait a year, the do-nothing simulation estimates it could cost your house $3,200 to $7,800 more, driven by the aging roof.',
   PRICE_FINALIZATIONS_LIST: 'The price you locked in with Bright Electric is $2,400 for the panel upgrade, down from a $2,800 quote, finalized on September 12.',
   HOA_COMPLIANCE_STATUS: 'Our HOA dues are $250 monthly to Maple Ridge HOA; the next dues payment is due November 1.',
   GUIDANCE_JOURNEYS_LIST: 'Two guided journeys are in progress with four steps left between them; the next step on the water heater is to compare replacement quotes.',

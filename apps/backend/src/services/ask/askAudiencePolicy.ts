@@ -158,6 +158,8 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('HOA_COMPLIANCE_STATUS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PRICE_FINALIZATIONS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('DO_NOTHING_SIMULATION', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('APPLIANCE_FAILURE_RISK', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('MAINTENANCE_BUDGET_FORECAST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOUSEHOLD_INVITATION', OWNER_LIFECYCLE_MODES),
   definePolicy('QUOTE_COMPARISON_CREATE', ALL_MODES),
   definePolicy('QUOTE_COMPARISON_REVIEW', ALL_MODES),

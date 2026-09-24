@@ -40,6 +40,8 @@ interface BudgetForecast {
   categoryBreakdowns: CategoryBreakdown[];
   recommendations: string[];
   generatedAt: Date;
+  // True when yearBuilt is not recorded and the forecast assumed a 10-year-old home. Additive; the page ignores it.
+  yearBuiltAssumed?: boolean;
 }
 
 // [REMOVED HARDCODED CONSTANTS: MONTHLY_BASE_COSTS and SEASONAL_TASKS]
@@ -55,7 +57,9 @@ export class BudgetForecasterService {
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
 
-  async generateBudgetForecast(propertyId: string, userId: string): Promise<BudgetForecast> {
+  // includeRecommendations: false skips the Gemini recommendations and returns only the calculated forecast (Ask, FRD
+  // v1.70). The page's route keeps the default.
+  async generateBudgetForecast(propertyId: string, userId: string, options: { includeRecommendations?: boolean } = {}): Promise<BudgetForecast> {
     const property = await prisma.property.findFirst({
       where: {
         id: propertyId,
@@ -98,7 +102,9 @@ export class BudgetForecasterService {
     const categoryBreakdowns = this.generateCategoryBreakdowns(property, totalAnnualCost);
 
     // Get AI recommendations
-    const recommendations = await this.getAIRecommendations(property, totalAnnualCost, propertyAge);
+    const recommendations = options.includeRecommendations ?? true
+      ? await this.getAIRecommendations(property, totalAnnualCost, propertyAge)
+      : [];
 
     // Confidence level (higher for more data)
     const inventoryItems = property.inventoryItems || [];
@@ -115,6 +121,7 @@ export class BudgetForecasterService {
       categoryBreakdowns,
       recommendations,
       generatedAt: new Date(),
+      yearBuiltAssumed: !property.yearBuilt,
     };
   }
 

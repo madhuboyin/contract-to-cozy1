@@ -24,10 +24,12 @@ const ROWS: readonly ObservationTuple[] = [
   ['002-expected', '002', 'MAINTENANCE_TASK_CREATE', .7252, true], ['002-competitor', '002', 'MAINTENANCE_STATUS', .6732, false],
   ['003-expected', '003', 'MAINTENANCE_TASK_COMPLETE', .1376, true], ['003-competitor', '003', 'MAINTENANCE_TASK_UPDATE', .1224, false],
   ['004-expected', '004', 'MAINTENANCE_TASK_UPDATE', .1899, true], ['004-competitor', '004', 'BUYER_TASK_UPDATE', .2814, false],
-  ['005-expected', '005', 'COVERAGE_GAPS', .7519, true], ['005-competitor', '005', 'INVENTORY_LOOKUP', .4333, false],
+  // FRD v1.70: 005's competitor re-derived to APPLIANCE_FAILURE_RISK (was INVENTORY_LOOKUP .4333); the shared word is intrinsic to both.
+  ['005-expected', '005', 'COVERAGE_GAPS', .7519, true], ['005-competitor', '005', 'APPLIANCE_FAILURE_RISK', .4353, false],
   ['006-expected', '006', 'INCIDENT_CLAIM_STATUS', .1065, true], ['006-competitor', '006', 'HVAC_DECISION_CONTINUE', .1622, false],
   ['007-expected', '007', 'SAVINGS_OPPORTUNITIES', .6503, true], ['007-competitor', '007', 'OWNERSHIP_COSTS', .4618, false],
-  ['008-expected', '008', 'OWNERSHIP_COSTS', .6832, true], ['008-competitor', '008', 'BREAK_EVEN_ANALYSIS', .4805, false],
+  // FRD v1.70: 008's competitor re-derived to MAINTENANCE_BUDGET_FORECAST (was BREAK_EVEN_ANALYSIS .4805); the shared word is intrinsic to both.
+  ['008-expected', '008', 'OWNERSHIP_COSTS', .6832, true], ['008-competitor', '008', 'MAINTENANCE_BUDGET_FORECAST', .5552, false],
   ['009-expected', '009', 'INVENTORY_LOOKUP', .7246, true], ['009-competitor', '009', 'BUYER_CONTRACT_TIMELINE', .4796, false],
   ['010-expected', '010', 'PROPERTY_SUMMARY', .6215, true], ['010-competitor', '010', 'MAINTENANCE_TASK_COMPLETE', .445, false],
   ['011-expected', '011', 'HOME_ACTIONS', .7333, true], ['011-competitor', '011', 'BUYER_PLAN_STATUS', .5872, false],
@@ -42,7 +44,8 @@ const ROWS: readonly ObservationTuple[] = [
   ['018-expected', '018', 'GUIDANCE_JOURNEY_CREATE', .8766, true], ['018-competitor', '018', 'GUIDANCE_JOURNEYS_LIST', .627, false],
   ['019-expected', '019', 'QUOTE_COMPARISON_CREATE', .6864, true], ['019-competitor', '019', 'CAPABILITY_DISCOVERY', .5254, false],
   ['020-expected', '020', 'QUOTE_COMPARISON_REVIEW', .7312, true], ['020-competitor', '020', 'QUOTE_COMPARISON_CREATE', .6039, false],
-  ['021-expected', '021', 'HOME_DEADLINE_MONITOR', .5747, true], ['021-competitor', '021', 'INVENTORY_LOOKUP', .4826, false],
+  // FRD v1.70: 021's competitor re-derived to APPLIANCE_FAILURE_RISK (was INVENTORY_LOOKUP .4826); the shared word is intrinsic to both.
+  ['021-expected', '021', 'HOME_DEADLINE_MONITOR', .5747, true], ['021-competitor', '021', 'APPLIANCE_FAILURE_RISK', .4888, false],
   ['022-expected', '022', 'CAPITAL_RESERVE_PLAN', .7763, true], ['022-competitor', '022', 'OWNERSHIP_COSTS', .6972, false],
   ['023-expected', '023', 'PROPERTY_TAX_APPEAL_READINESS', .2329, true], ['023-competitor', '023', 'DOCUMENT_LOOKUP', .1412, false],
   ['024-expected', '024', 'RENOVATION_PERMIT_READINESS', .4594, true], ['024-competitor', '024', 'SELLER_PREP_CHECKLIST', .1234, false],
@@ -146,7 +149,9 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.62: fixture 087 (MATERIAL_SPECS_LIST), re-derived from the retriever; no existing row changed (a first-draft
   // positive sharing the "...recorded for..." frame with fixtures 009 and 055 was reworded). Candidate pairs were swept
   // against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4557).
-  ['087-expected', '087', 'MATERIAL_SPECS_LIST', .3611, true], ['087-competitor', '087', 'OWNERSHIP_COSTS', .1221, false],
+  // FRD v1.70: 087's competitor re-derived to MAINTENANCE_BUDGET_FORECAST (was OWNERSHIP_COSTS .1221): both far below the
+  // expected score; the new op's cost wording edges past ownership costs.
+  ['087-expected', '087', 'MATERIAL_SPECS_LIST', .3611, true], ['087-competitor', '087', 'MAINTENANCE_BUDGET_FORECAST', .1368, false],
   // FRD v1.63: fixture 088 (PROPERTY_BRIEFS_LIST), re-derived from the retriever; no existing row changed (first-draft
   // positives sharing frames with fixtures 026, 078 and 084 were reworded). Candidate pairs were swept against every
   // Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4557).
@@ -165,6 +170,12 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.68: fixture 092 (DO_NOTHING_SIMULATION), re-derived from the retriever; no existing row changed. Of the swept
   // candidates, only this one kept every Skill routing case resolved ("Show my inspecion findings" 0.4549).
   ['092-expected', '092', 'DO_NOTHING_SIMULATION', .729, true], ['092-competitor', '092', 'OWNERSHIP_COSTS', .7036, false],
+  // FRD v1.70: fixture 093 (APPLIANCE_FAILURE_RISK), re-derived from the retriever; 005, 008, 021 and 087 re-derived (see
+  // their rows). The only swept candidate that kept every Skill routing case resolved ("Show my inspecion findings" 0.4481).
+  ['093-expected', '093', 'APPLIANCE_FAILURE_RISK', .2696, true], ['093-competitor', '093', 'HOME_STATUS_BOARD', .2623, false],
+  // FRD v1.70: fixture 094 (MAINTENANCE_BUDGET_FORECAST), re-derived from the retriever; swept against every Skill routing
+  // case ("Show my inspecion findings" 0.4481).
+  ['094-expected', '094', 'MAINTENANCE_BUDGET_FORECAST', .7284, true], ['094-competitor', '094', 'OWNERSHIP_COSTS', .5844, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

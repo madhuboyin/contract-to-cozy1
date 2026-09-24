@@ -33,6 +33,8 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'hoa-compliance': ['HOA_COMPLIANCE_STATUS'],
   'price-finalization': ['PRICE_FINALIZATIONS_LIST'],
   'do-nothing-simulator': ['DO_NOTHING_SIMULATION'],
+  oracle: ['APPLIANCE_FAILURE_RISK'],
+  budget: ['MAINTENANCE_BUDGET_FORECAST'],
   'quote-comparison': ['QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW'],
   'capital-timeline': ['CAPITAL_RESERVE_PLAN'],
   'home-event-radar': ['HOME_EVENT_RADAR_FEED'],
