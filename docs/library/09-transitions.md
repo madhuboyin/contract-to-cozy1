@@ -4,11 +4,16 @@
 
 4 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
 
-## Plan (2)
+## Requirements (FRD/PRD) (1)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
 |  | [Home Buyer Experience — Functional Requirements and Implementation Plan](../product/HOME_BUYER_FRD_AND_IMPLEMENTATION_PLAN.md) | v1.48 · Implementation in progress | 2026-08-21 | 4267 |
+
+## Plan (1)
+
+| | Document | Status (as written) | Last changed | Lines |
+|---|---|---|---|---|
 | 🟠 C16 | [Sale Readiness Value-Maximization Checklist — Implementation Plan](../product/SALE_READINESS_VALUE_MAXIMIZATION_IMPLEMENTATION_PLAN.md) | Design fully resolved 2026-08-06 (all 10 open questions in §8 closed). Ready for | 2026-08-06 | 523 |
 
 ## Feature reference (1)

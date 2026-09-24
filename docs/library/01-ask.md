@@ -4,11 +4,12 @@
 
 32 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
 
-## Requirements (FRD/PRD) (8)
+## Requirements (FRD/PRD) (9)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) | v1.60 · Approved product direction; implementation is partial and tracked by requirement | 2026-09-24 | 1052 |
+|  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) | v1.62 · Approved product direction; implementation is partial and tracked by requirement | 2026-09-24 | 1054 |
+| 🟠 C6 | [Ask Cozy — Cross-Domain Interaction Rollout FRD](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) | v1.1 · Proposed follow-on requirements; implementation is not claimed | 2026-09-17 | 735 |
 |  | [Ask Cozy — Interaction Model & UI FRD](../product/ASK_COZY_INTERACTION_MODEL_UI_FRD.md) | v1.2 · Maintenance interaction corrections implemented — see §29 for scope and verifica | 2026-09-17 | 661 |
 |  | [Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)](../product/ASK_COZY_MESSAGE_FIRST_FRD.md) |  | 2026-09-14 | 567 |
 | 🟠 C6 | [AI Home Concierge — Intelligence, Personalization, and Proactive Concierge](../product/AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md) | v1.6 · "Proposed — production implementation and real-user collection blocked on P0 app | 2026-08-29 | 1511 |
@@ -58,11 +59,10 @@
 |---|---|---|---|---|
 |  | [Ask Cozy Inline Workspace — Session Handoff](../architecture/ASK_COZY_INLINE_WORKSPACE_SESSION_HANDOFF.md) |  | 2026-09-18 | 115 |
 
-## Runbook / ops (3)
+## Runbook / ops (2)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-| 🟠 C6 | [Ask Cozy — Cross-Domain Interaction Rollout FRD](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) | v1.1 · Proposed follow-on requirements; implementation is not claimed | 2026-09-17 | 735 |
 |  | [AI request governance runbook](../operations/AI_REQUEST_GOVERNANCE_RUNBOOK.md) |  | 2026-08-25 | 16 |
 |  | [AI Home Concierge — Ask Operations and Governance](../operations/AI_HOME_CONCIERGE_ASK_OPERATIONS_AND_GOVERNANCE.md) | repository implementation baseline | 2026-08-13 | 267 |
 

@@ -4,19 +4,20 @@
 
 20 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
 
-## Requirements (FRD/PRD) (3)
+## Requirements (FRD/PRD) (5)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
 |  | [Home Action Health-Factor Copy FRD and Implementation Plan](../product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md) | v1.6 · Phase 1 shipped (`4d6bdfee`) · Phase 2 shipped (`81efe900`) · §12 decision-card  | 2026-09-02 | 877 |
+|  | [Home Intelligence Functional Completeness](../product/HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md) | v1.32 · "Approved for implementation planning" | 2026-08-30 | 1461 |
+|  | [Guidance Engine Homeowner CTA Audit FRD](../functional/GUIDANCE_ENGINE_HOMEOWNER_CTA_AUDIT_FRD.md) | v1.1 · Audit-only (no implementation changes) | 2026-07-28 | 260 |
 | 🟠 C3 | [Guidance Engine — Functional Requirements Document](../functional/GUIDANCE_ENGINE_FRD.md) | v2.1 · Living Document — reflects current implementation; resolved gaps removed as of v | 2026-07-27 | 998 |
 | 🔴 C3 | [GUIDANCE_ENGINE_FRD_Updated.md](../functional/GUIDANCE_ENGINE_FRD_Updated.md) | v1.0 · Ready for Implementation | 2026-03-31 | 94 |
 
-## Plan (3)
+## Plan (2)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Home Intelligence Functional Completeness](../product/HOME_INTELLIGENCE_FUNCTIONAL_COMPLETENESS_FRD_AND_IMPLEMENTATION_PLAN.md) | v1.32 · "Approved for implementation planning" | 2026-08-30 | 1461 |
 | 🟡 | [Guidance Overview — Inline Step Actions Plan](../functional/GUIDANCE_OVERVIEW_INLINE_PLAN.md) |  | 2026-04-10 | 182 |
 | 🟡 | [Guidance Engine — Phased Implementation Plan](../functional/guidance-engine-implementation-plan.md) |  | 2026-03-29 | 616 |
 
@@ -30,13 +31,12 @@
 | 🟡 | [INTELLIGENCE_LAYERS.md](../functional/INTELLIGENCE_LAYERS.md) |  | 2026-02-22 | 95 |
 | 🟡 | [DECISION_TRACE_LITE.md](../functional/DECISION_TRACE_LITE.md) |  | 2026-01-14 | 492 |
 
-## Audit / analysis (5)
+## Audit / analysis (4)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
 |  | [Home Operations & Action Management — Slice 0-8 Launch Review](../product/HOME_OPERATIONS_SLICE_0_8_LAUNCH_REVIEW.md) |  | 2026-07-30 | 40 |
 | 🟠 C9 | [Home Operations and Action Management Capability Audit and Implementation Plan](../product/HOME_OPERATIONS_AND_ACTION_MANAGEMENT_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan<br> | 2026-07-29 | 1582 |
-|  | [Guidance Engine Homeowner CTA Audit FRD](../functional/GUIDANCE_ENGINE_HOMEOWNER_CTA_AUDIT_FRD.md) | v1.1 · Audit-only (no implementation changes) | 2026-07-28 | 260 |
 | 🟡 | [Guidance Engine — Gap Analysis](../functional/guidance-engine-gap-analysis.md) |  | 2026-03-29 | 631 |
 | 🟡 | [Deterministic Next Steps Findings](../functional/DETERMINISTIC_NEXT_STEPS_FINDINGS.md) |  | 2026-03-24 | 242 |
 

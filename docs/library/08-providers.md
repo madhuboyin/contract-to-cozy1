@@ -4,12 +4,13 @@
 
 14 documents. Flag key: 🔴 conflicting/superseded · 🟠 status lags reality or cites missing code · 🟡 historical snapshot. Blank = no issue found (not proof it is current - check *Last changed*).
 
-## Requirements (FRD/PRD) (3)
+## Requirements (FRD/PRD) (4)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
 |  | [Provider Portfolio & Availability — Functional Requirements Document](../functional/PROVIDER_PORTFOLIO_AVAILABILITY_FRD.md) | Phase 1 (backend CRUD) and Phase 2 (frontend wiring, items 1-3) implemented.** S | 2026-08-21 | 301 |
 |  | [Provider Profile Management — Functional Requirements Document](../functional/PROVIDER_PROFILE_MANAGEMENT_FRD.md) |  | 2026-08-21 | 122 |
+|  | [Provider Reviews — Functional Requirements Document](../functional/PROVIDER_REVIEWS_FRD.md) |  | 2026-08-21 | 81 |
 |  | [Provider Trust & Compliance Verification — Functional Requirements Document](../functional/PROVIDER_TRUST_COMPLIANCE_FRD.md) |  | 2026-07-07 | 568 |
 
 ## Feature reference (5)
@@ -22,11 +23,10 @@
 | 🟡 | [Negotiation Shield](../functional/NEGOTIATION_SHIELD.md) |  | 2026-03-13 | 608 |
 | 🟡 C12 | [SERVICE_CATEGORY_CONFIG TABLE - COMPLETE IMPACT ANALYSIS](../functional/SERVICE_CATEGORY_CONFIG_ANALYSIS.md) |  | 2026-01-03 | 493 |
 
-## Audit / analysis (3)
+## Audit / analysis (2)
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
-|  | [Provider Reviews — Functional Requirements Document](../functional/PROVIDER_REVIEWS_FRD.md) |  | 2026-08-21 | 81 |
 | 🟠 C9 | [Renovation Compliance and Execution Capability Audit and Implementation Plan](../product/RENOVATION_COMPLIANCE_AND_EXECUTION_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Recommended implementation plan<br> | 2026-07-29 | 1697 |
 |  | [Service Price Radar Capability Audit and Implementation Plan](../product/SERVICE_PRICE_RADAR_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md) | Implemented; database reconciliation remains operator-owned | 2026-07-28 | 1450 |
 

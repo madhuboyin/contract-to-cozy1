@@ -122,10 +122,14 @@ def dtype(p, title, status):
     ext = lp.rsplit('.', 1)[-1]
     if ext in ('csv', 'json', 'docx', 'gitkeep'): return 'Data / asset'
     if 'adr' in re.split(r'[-_/ .]', lp) or lp.split('/')[-1].startswith('adr'): return 'ADR (decision)'
+    # A requirements document remains an FRD/PRD even when its scope includes
+    # rollout or governance. Those words describe the requirement domain; they
+    # do not turn the document into an operational runbook.
+    if re.search(r'frd|prd', lp): return 'Requirements (FRD/PRD)'
     if re.search(r'^operations/|runbook|backup|rollout|smoke|test_fixtures|cutover', lp): return 'Runbook / ops'
     if re.search(r'audit|gap|verification|review|assessment|findings|feasibility|evidence|reregistration|reverification', lp): return 'Audit / analysis'
     if re.search(r'implementation_plan|implementation-plan|roadmap|execution-plan|hardening-plan|_plan\.|-plan\.|plan-', lp): return 'Plan'
-    if re.search(r'frd|prd|requirements', lp): return 'Requirements (FRD/PRD)'
+    if 'requirements' in lp: return 'Requirements (FRD/PRD)'
     if re.search(r'handoff|session_prompt|completion|status|slice_|phase\d|readme|approval|registry|inventory|manifest|governance|policy|template|dictionary|disposition|gate|report', lp): return 'Status / phase record'
     if re.search(r'sprint|tracker|scorecard|route-audit|strategic|contract|one-pager|variants', lp): return 'Status / phase record'
     return 'Feature reference'
