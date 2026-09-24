@@ -64,6 +64,23 @@ export function ItemActionButtons({ item, actions, onItemAction, disabled, onDis
  * sheet on narrow ones. It never navigates away; a record link, when the server declared one, stays a secondary
  * choice at the bottom.
  */
+/** The drawer / bottom-sheet frame alone, for a domain that renders its own detail inside it. */
+export function DetailSheetFrame({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode }) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30" />
+        <Dialog.Content aria-describedby={undefined} data-ask-item-detail-sheet=""
+          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col overflow-y-auto rounded-t-2xl bg-white shadow-xl outline-none sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[30rem] sm:rounded-none sm:rounded-l-2xl">
+          <Dialog.Title className="sr-only">{title}</Dialog.Title>
+          <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />
+          {children}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 export function ItemDetailSheet({ item, open, onOpenChange, onItemAction, disabled, children }: {
   item: AskGroupedListItem | null;
   open: boolean;

@@ -1117,6 +1117,60 @@ test('maintenance task titles open canonical detail inline and keep traditional 
   await expect(response.getByRole('link', { name: /Open Maintenance/ })).toBeVisible();
 });
 
+test('maintenance answers lead with chips and show timing shelves whose cards open the live task in a side drawer', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance is pending?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-maintenance-shelves');
+  await expect(response.getByRole('list', { name: 'At a glance' })).toContainText('1 overdue');
+  await expect(response.getByRole('list', { name: 'Overdue, 1 task' })).toBeVisible();
+  await expect(response.getByRole('list', { name: 'Due in the next 30 days, 3 tasks' }).getByRole('listitem')).toHaveCount(3);
+  const card = response.getByRole('button', { name: /Service the heat pump/ });
+  await expect(card).toContainText('Was due Sep 20, 2026');
+  await card.click();
+
+  const drawer = page.getByRole('dialog', { name: 'Task detail: Service the heat pump' });
+  await expect(drawer.getByText('Annual preventive service for the recorded HVAC system.')).toBeVisible();
+  const box = await drawer.boundingBox();
+  expect(box && box.x + box.width).toBeGreaterThan(1430);
+  expect(box && box.x).toBeGreaterThan(900);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+  await expect(card).toBeFocused();
+
+  await response.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(response.getByRole('button', { name: 'Service the heat pump', exact: true })).toBeVisible();
+  await response.getByRole('button', { name: 'Shelves', exact: true }).click();
+  await expect(response.getByRole('list', { name: 'Overdue, 1 task' })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, maintenance shelves scroll sideways and the task opens as a bottom sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance is pending?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-maintenance-shelves');
+  const shelf = response.getByRole('list', { name: 'Due in the next 30 days, 3 tasks' });
+  await expect(shelf).toBeVisible();
+  expect(await shelf.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await response.getByRole('button', { name: /Service the heat pump/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Task detail: Service the heat pump' });
+  await expect(sheet.getByText('Annual preventive service for the recorded HVAC system.')).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
+  expect(box && box.width).toBeGreaterThan(380);
+  await sheet.getByRole('button', { name: 'Close task detail for Service the heat pump' }).click();
+  await expect(sheet).toBeHidden();
+});
+
 test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
   await installAskApi(page, { maintenanceDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

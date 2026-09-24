@@ -783,6 +783,33 @@ function maintenanceExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.74): the maintenance answer as the real producer now sends it -- answer
+// chips, timing groups and the declared shelves pattern. maintenance-task-1 reuses the mocked canonical task read.
+function maintenanceShelvesExecution() {
+  const base = maintenanceExecution();
+  const complete = { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_COMPLETE' };
+  const soon = (index: number) => ({
+    id: `maintenance-soon-${index}`, title: ['Flush the water heater', 'Clean the gutters', 'Test the sump pump'][index], description: null,
+    meta: ['Plumbing', `Due Oct ${index + 3}, 2026`, 'medium priority'], status: 'PENDING', entityType: 'MAINTENANCE_TASK', actions: [complete],
+    tone: 'CAUTION', timingLabel: `Due Oct ${index + 3}, 2026`, amountLabel: index === 1 ? 'Est. $180' : null,
+  });
+  return {
+    ...base, executionId: 'execution-maintenance-shelves', question: 'What maintenance is pending?',
+    viewState: { ...base.viewState, resultId: 'maintenance-shelves-result', dateScopePhrase: null },
+    blocks: [
+      { type: 'SUMMARY', id: 'maintenance-summary', title: '4 maintenance records match this request', body: '4 open, 0 completed, and 1 overdue task are recorded in the selected scope.', tone: 'CAUTION', actions: [],
+        chips: [{ label: '1 overdue', tone: 'CRITICAL' }, { label: '3 due in 30 days', tone: 'CAUTION' }, { label: '4 open', tone: 'DEFAULT' }] },
+      { ...base.blocks[1], presentation: { pattern: 'SHELVES' }, sections: [
+        { id: 'overdue', title: 'Overdue', count: 1, offset: 0, items: [{
+          ...(base.blocks[1] as { sections: Array<{ items: Array<Record<string, unknown>> }> }).sections[0].items[0],
+          tone: 'CRITICAL', timingLabel: 'Was due Sep 20, 2026', amountLabel: 'Est. $250',
+        }] },
+        { id: 'due-soon', title: 'Due in the next 30 days', count: 3, offset: 0, items: [0, 1, 2].map(soon) },
+      ] },
+    ],
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -1417,6 +1444,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
           currentAnswer: {}, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this task; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: 'context-v1',
         }],
       };
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/what maintenance is pending/i.test(body.message)) {
+      const response = maintenanceShelvesExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

@@ -7,6 +7,8 @@ import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
+import { DetailSheetFrame } from './patterns/PatternParts';
+import { HorizontalTrack, ShelfCard } from './patterns/ShelvesView';
 import type { PropertyMaintenanceTask } from '@/types';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -123,7 +125,11 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   );
 }
 
-export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, onAccessLost, link }: {
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.74): a shelf shows at most this many cards; the rest
+// of the section (and its server pages) are one tap away in the list view.
+export const MAINTENANCE_SHELF_CARD_LIMIT = 12;
+
+export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, onAccessLost, link, layout = 'LIST', onChooseLayout }: {
   block: Block;
   propertyId?: string;
   disabled: boolean;
@@ -132,6 +138,9 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
+  // IW-PRES-014 / IW-PRES-022: the server-declared shelves layout, and the homeowner's switch between it and the list.
+  layout?: 'LIST' | 'SHELVES';
+  onChooseLayout?: (layout: 'LIST' | 'SHELVES') => void;
 }) {
   const controls = useContext(ResultViewContext);
   const [localDetailTaskId, setLocalDetailTaskId] = useState<string | null>(null);
@@ -155,16 +164,40 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-maintenance-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  const taskDetail = (taskId: string, item: Item) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={closeDetail} />;
+
+  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-display-pattern={layout === 'SHELVES' ? 'shelves' : undefined}>
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {onChooseLayout && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+        {(['SHELVES', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={layout === option} onClick={() => onChooseLayout(option)}
+          className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'SHELVES' ? 'Shelves' : 'List'}</button>)}
+      </div>}
       <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Maintenance filters">
         {block.filters.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active}
           onClick={() => onFilter(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
       </div>
     </div>
-    {block.sections.map((section) => {
+    {layout === 'SHELVES' && block.sections.map((section) => {
+      const offset = section.offset ?? 0;
+      const shown = section.items.slice(0, MAINTENANCE_SHELF_CARD_LIMIT);
+      const partial = shown.length < section.count;
+      if (section.items.length === 0) {
+        return <div key={section.id} className="border-b border-slate-100 p-4"><h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{section.title}</h4><p className="mt-2 text-sm text-slate-500">No matching tasks.</p></div>;
+      }
+      return <div key={section.id} className="border-b border-slate-100 p-4" data-maintenance-shelf={section.id}>
+        <HorizontalTrack label={section.title} countLabel={partial ? `Showing ${offset ? `${offset + 1}–${offset + shown.length}` : shown.length} of ${section.count}` : `${section.count} task${section.count === 1 ? '' : 's'}`}>
+          {shown.map((item) => <ShelfCard key={item.id} item={item} disabled={disabled} selected={controls?.view.selectedTaskId === item.id}
+            triggerProps={{ 'data-ask-task-id': item.id, 'data-maintenance-detail-trigger': item.id, 'data-ask-detail-trigger': item.id, 'data-ask-detail-block': block.id }}
+            onOpen={() => openDetail(item)} />)}
+          {partial && onChooseLayout && <div role="listitem" className="flex w-32 shrink-0 snap-start">
+            <button type="button" onClick={() => onChooseLayout('LIST')} className="w-full rounded-xl border border-dashed border-slate-300 p-3 text-center text-xs font-semibold text-teal-700 hover:border-teal-400">See all {section.count} in the list</button>
+          </div>}
+        </HorizontalTrack>
+      </div>;
+    })}
+    {layout === 'LIST' && block.sections.map((section) => {
       const offset = section.offset ?? 0;
       const visible = controls?.view.visibleCounts[section.id] ?? 5;
       return <div key={section.id} className="border-b border-slate-100 p-4">
@@ -207,7 +240,10 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         </nav>}
       </div>;
     })}
-    {detailTaskId && detailItem && <MaintenanceTaskDetail key={detailTaskId} taskId={detailTaskId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(taskId) => setUnavailableTaskIds((current) => new Set(current).add(taskId))} onAccessLost={onAccessLost} onClose={closeDetail} />}
+    {layout === 'LIST' && detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
+    {layout === 'SHELVES' && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
+      {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
+    </DetailSheetFrame>}
     <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
   </section>;
 }

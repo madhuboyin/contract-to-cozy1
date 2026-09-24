@@ -1778,6 +1778,51 @@ export function mergeMaintenanceViewContinuation(
   return { effectiveMessage, isClearAllFilters };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.74): the unfiltered open-task view is split by timing
+// into Overdue / Due in the next 30 days / Later / No due date, so Maintenance can render as shelves (and the plain
+// list shows the same groups). Each group keeps the incoming order and is paged on its own like any other section.
+// A group with no tasks is left out; when there are no open tasks at all, the single "Pending and in progress"
+// section is kept so the result still says so.
+export function maintenanceOpenTimingGroups<T extends { nextDueDate: Date | null }>(
+  records: T[],
+  now: Date,
+  dueSoonBoundary: Date,
+): Array<{ id: string; title: string; records: T[] }> {
+  const groups = [
+    { id: 'overdue', title: 'Overdue', records: records.filter((task) => task.nextDueDate && task.nextDueDate < now) },
+    { id: 'due-soon', title: 'Due in the next 30 days', records: records.filter((task) => task.nextDueDate && task.nextDueDate >= now && task.nextDueDate <= dueSoonBoundary) },
+    { id: 'later', title: 'Later', records: records.filter((task) => task.nextDueDate && task.nextDueDate > dueSoonBoundary) },
+    { id: 'no-due-date', title: 'No due date', records: records.filter((task) => !task.nextDueDate) },
+  ].filter((group) => group.records.length > 0);
+  return groups.length ? groups : [{ id: 'open', title: 'Pending and in progress', records }];
+}
+
+// IW-PRES-014: the shelf-card facts for one maintenance record, taken from the same fields as its meta line. Overdue
+// is critical and due within 30 days is a caution; nothing else is coloured.
+export function maintenanceShelfFacts(input: {
+  kind: 'OPEN' | 'COMPLETED' | 'CANCELLED';
+  nextDueDate: Date | null;
+  lastCompletedDate: Date | null;
+  updatedAt: Date;
+  cost: string | null;
+  now: Date;
+  dueSoonBoundary: Date;
+  formatDate: (value: Date) => string;
+}): { tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL'; timingLabel: string; amountLabel: string | null } {
+  const { kind, nextDueDate, now } = input;
+  const overdue = kind === 'OPEN' && Boolean(nextDueDate && nextDueDate < now);
+  const dueSoon = kind === 'OPEN' && Boolean(nextDueDate && nextDueDate >= now && nextDueDate <= input.dueSoonBoundary);
+  const timingLabel = kind === 'COMPLETED'
+    ? input.lastCompletedDate ? `Done ${input.formatDate(input.lastCompletedDate)}` : 'Completion date not recorded'
+    : kind === 'CANCELLED' ? `Cancelled ${input.formatDate(input.updatedAt)}`
+      : nextDueDate ? `${overdue ? 'Was due' : 'Due'} ${input.formatDate(nextDueDate)}` : 'No due date';
+  return {
+    tone: overdue ? 'CRITICAL' : dueSoon ? 'CAUTION' : 'DEFAULT',
+    timingLabel,
+    amountLabel: input.cost ? `${kind === 'COMPLETED' ? 'Spent' : 'Est.'} ${input.cost}` : null,
+  };
+}
+
 export function resolveMaintenanceCollectionOffset(
   totalCount: number,
   currentOffset: number,
@@ -1921,17 +1966,21 @@ async function maintenanceResult(
           { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_UPDATE' },
         ] : []),
       ] : [],
+      ...maintenanceShelfFacts({
+        kind, nextDueDate: task.nextDueDate, lastCompletedDate: task.lastCompletedDate, updatedAt: task.updatedAt,
+        cost, now, dueSoonBoundary, formatDate: (value) => maintenanceDate(value, timeZone),
+      }),
     };
   };
 
   const requestedOffsets = viewIntent === 'PAGINATION' ? { ...(priorViewState?.collectionOffsets ?? {}) } : {};
   const normalizedOffsets: Record<string, number> = {};
   const sections = [
-    ...(showOpen ? [{
-      id: overdueOnly ? 'overdue' : dueSoonOnly || openTimeframe ? 'due' : 'open',
-      title: overdueOnly ? 'Overdue' : dueSoonOnly || openTimeframe ? `Due ${openTimeframe?.label ?? 'within 30 days'}` : 'Pending and in progress',
+    ...(showOpen ? (overdueOnly || dueSoonOnly || openTimeframe ? [{
+      id: overdueOnly ? 'overdue' : 'due',
+      title: overdueOnly ? 'Overdue' : `Due ${openTimeframe?.label ?? 'within 30 days'}`,
       records: filteredActive, kind: 'OPEN' as const,
-    }] : []),
+    }] : maintenanceOpenTimingGroups(filteredActive, now, dueSoonBoundary).map((group) => ({ ...group, kind: 'OPEN' as const }))) : []),
     ...(showCompleted ? [{ id: 'completed', title: `Completed${timeframe ? ` ${timeframe.label}` : ''}`, records: filteredCompleted, kind: 'COMPLETED' as const }] : []),
     ...(includeCancelled ? [{ id: 'cancelled', title: 'Cancelled', records: cancelled, kind: 'CANCELLED' as const }] : []),
   ].map((section) => {
@@ -1946,6 +1995,7 @@ async function maintenanceResult(
   const displayed = sections.reduce((sum, section) => sum + section.count, 0);
   const overdueCount = active.filter((task) => task.nextDueDate && task.nextDueDate < now).length;
   const unscheduledCount = active.filter((task) => !task.nextDueDate).length;
+  const dueSoonCount = active.filter((task) => task.nextDueDate && task.nextDueDate >= now && task.nextDueDate <= dueSoonBoundary).length;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'maintenance-summary',
     // External review [P2]: "No recorded maintenance tasks" and "tasks
@@ -1974,6 +2024,12 @@ async function maintenanceResult(
       // anymore.
       : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}`,
     tone: overdueCount ? 'CAUTION' : 'DEFAULT',
+    // IW-PRES-013: answer-first chips, from the same counts as the body above.
+    ...(!creationFocus && displayed ? { chips: [
+      { label: `${overdueCount} overdue`, tone: overdueCount ? 'CRITICAL' as const : 'DEFAULT' as const },
+      { label: `${dueSoonCount} due in 30 days`, tone: dueSoonCount ? 'CAUTION' as const : 'DEFAULT' as const },
+      { label: `${active.length} open`, tone: 'DEFAULT' as const },
+    ] } : {}),
     actions: creationFocus && canManage
       ? [
         { id: 'create-maintenance', label: 'Create maintenance task', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' },
@@ -2009,6 +2065,8 @@ async function maintenanceResult(
       ...(scopeTerms.length || timeframe || roomScope ? [{ id: 'clear-all', label: 'Clear all filters', message: 'Clear all filters and show all open maintenance tasks', active: false }] : []),
     ],
     id: 'maintenance-groups', title: 'Maintenance record',
+    // IW-PRES-014 / IW-PRES-022: Maintenance is the first shelves adopter (FRD v1.74).
+    presentation: { pattern: 'SHELVES' },
     // MAINT-003/MAINT-004: label every applied filter, including priority --
     // "urgent" here is the existing canonical interpretation (URGENT or HIGH
     // priority, not URGENT alone), so it is labeled accurately rather than

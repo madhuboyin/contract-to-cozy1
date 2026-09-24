@@ -55,12 +55,20 @@ export function shelfCountLabel(section: Section): string {
   return `${section.count} item${section.count === 1 ? '' : 's'}`;
 }
 
-export function ShelfCard({ item, onOpen }: { item: AskGroupedListItem; onOpen: () => void }) {
+// `triggerProps` lets a domain list keep the markers its detail and scroll restoration look for (for example
+// `data-ask-task-id` and `data-ask-detail-trigger`); `selected` marks the task follow-up questions refer to.
+export function ShelfCard({ item, onOpen, selected = false, disabled = false, triggerProps }: {
+  item: AskGroupedListItem;
+  onOpen: () => void;
+  selected?: boolean;
+  disabled?: boolean;
+  triggerProps?: Record<`data-${string}`, string>;
+}) {
   const tone = item.tone ?? 'DEFAULT';
   return (
     <div role="listitem" className="w-52 shrink-0 snap-start">
-    <button type="button" onClick={onOpen} data-ask-shelf-item={item.id}
-      className="relative flex h-full w-full flex-col gap-2 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 pl-4 text-left hover:border-teal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600">
+    <button type="button" onClick={onOpen} data-ask-shelf-item={item.id} disabled={disabled} aria-current={selected ? 'true' : undefined} {...triggerProps}
+      className={cn('relative flex h-full w-full flex-col gap-2 overflow-hidden rounded-xl border p-3 pl-4 text-left hover:border-teal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600 disabled:opacity-60', selected ? 'border-teal-600 bg-teal-50 ring-1 ring-teal-600' : 'border-slate-200 bg-white')}>
       <span className={cn('absolute inset-y-0 left-0 w-1', TONE_STRIPE[tone])} aria-hidden="true" />
       <span className="text-sm font-semibold leading-5 text-slate-950">{item.title}</span>
       {!item.timingLabel && !item.amountLabel && item.description && <span className="line-clamp-2 text-xs text-slate-600">{item.description}</span>}
