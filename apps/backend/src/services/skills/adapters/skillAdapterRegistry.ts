@@ -63,6 +63,7 @@ const DEFINITIONS = [
   adapter('home-habits.read', 'Home Habit Coach (HomeHabitCoachService)', 'HOME_HABITS'),
   adapter('home-digital-will.read', 'Home Continuity Plan (HomeDigitalWillService)', 'HOME_DIGITAL_WILL'),
   adapter('plant-advisor.care-outlook', 'Plant Advisor care outlook (PlantCarePlannerService)', 'PLANT_CARE_OUTLOOK'),
+  adapter('negotiation-shield.cases', 'Negotiation Shield cases (NegotiationShieldService)', 'NEGOTIATION_SHIELD_CASES'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),
   adapter('inventory.create', 'InventoryService', 'INVENTORY_ITEM_CREATE', 'MUTATION_PREPARATION'),

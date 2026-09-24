@@ -73,7 +73,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['051-expected', '051', 'BUYER_DISCLOSURE_FUNDS_READINESS', .9413, true], ['051-competitor', '051', 'HOME_CHANGE_SUMMARY', .6382, false],
   ['052-expected', '052', 'BUYER_CLOSING_DAY_READINESS', .5134, true], ['052-competitor', '052', 'BUYER_DEADLINES', .2162, false],
   ['053-expected', '053', 'BUYER_CONTRACT_TIMELINE', .4127, true], ['053-competitor', '053', 'BUYER_INSPECTION_REVIEW', .2243, false],
-  ['054-expected', '054', 'BUYER_NEGOTIATION_READINESS', .328, true], ['054-competitor', '054', 'BUYER_FINDING_DISPOSITION', .193, false],
+  ['054-expected', '054', 'BUYER_NEGOTIATION_READINESS', .328, true], ['054-competitor', '054', 'NEGOTIATION_SHIELD_CASES', .1948, false],
   ['055-expected', '055', 'BUYER_COST_READINESS', .7572, true], ['055-competitor', '055', 'BUYER_CONTRACT_TIMELINE', .486, false],
   ['056-expected', '056', 'BUYER_FINDING_DISPOSITION', .3368, true], ['056-competitor', '056', 'INSPECTION_FINDING_UPDATE', .2681, false],
   ['057-expected', '057', 'BUYER_LIFECYCLE_UPDATE', .2499, true], ['057-competitor', '057', 'UNSAFE_RESTRICTED_BOUNDARY', .5548, false],
@@ -117,6 +117,10 @@ const ROWS: readonly ObservationTuple[] = [
   // scores low in the retriever, and every candidate pair with a weak competitor pushed "Show my inspecion findings" to
   // clarification; this one, tested against every Skill routing case, keeps it resolved (0.4322 -> 0.4330).
   ['080-expected', '080', 'PLANT_CARE_OUTLOOK', .5057, true], ['080-competitor', '080', 'HOME_DIGITAL_WILL', .678, false],
+  // FRD v1.56: fixture 081 (NEGOTIATION_SHIELD_CASES), re-derived from the retriever. The new operation's records made it
+  // fixture 054's top competitor ("negotiation" is its key word), so 054's competitor row was re-derived too. Candidate
+  // pairs were swept against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4277).
+  ['081-expected', '081', 'NEGOTIATION_SHIELD_CASES', .2729, true], ['081-competitor', '081', 'HVAC_DECISION_CONTINUE', .2193, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

@@ -99,6 +99,7 @@ export type AskOperationId =
   | 'HOME_HABITS'
   | 'HOME_DIGITAL_WILL'
   | 'PLANT_CARE_OUTLOOK'
+  | 'NEGOTIATION_SHIELD_CASES'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -396,6 +397,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // behind the same CONTRIBUTOR floor.
   // FRD v1.55: reads getOutlook, the same call GET /properties/:id/plant-advisor/care-outlook (Plant Advisor's Care tab)
   // makes, including its weather, air-quality, drought and hardiness lookups.
+  // FRD v1.56: reads listCasesForProperty, the same call GET /properties/:id/negotiation-shield/cases makes.
+  NEGOTIATION_SHIELD_CASES: definition('NEGOTIATION_SHIELD_CASES', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'negotiation-shield.cases', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PLANT_CARE_OUTLOOK: definition('PLANT_CARE_OUTLOOK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'plant-advisor.care-outlook', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_DIGITAL_WILL: definition('HOME_DIGITAL_WILL', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-digital-will.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_HABITS: definition('HOME_HABITS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-habits.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -814,6 +817,12 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The household's Negotiation Shield reviews. Naming the tool always lands here; the generic phrasings step aside for a
+// purchase negotiation (BUYER_NEGOTIATION_READINESS, checked earlier) and for starting or comparing something new.
+const negotiationShieldNamedPattern = /\bnegotiation shield\b/i;
+const negotiationShieldCasesPattern = /\bnegotiation (?:reviews?|cases?)\b|\b(?:my|our) (?:open |saved |past )?negotiations\b/i;
+const negotiationShieldCreatePattern = /\b(?:start|create|new|add)\b/i;
+const negotiationShieldOtherIntentPattern = /\b(?:closing|purchase|seller|agent|start|new|compare)\b/i;
 // Care for the plants and garden zones the household tracks in Plant Advisor. Picking new plants for a room is the
 // page's recommendation flow, and "plant" as a verb or a power plant is not this.
 const plantCareOutlookPattern = /\bplant advisor\b|\bplant care\b|\b(?:my|our) (?:house ?|indoor |outdoor |potted )?plants\b|\bwater(?:ing)? (?:my|our|the) plants\b|\bgarden zones?\b|\b(?:my|our) garden\b/i;
@@ -974,6 +983,11 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (quoteComparisonCreatePattern.test(message)) {
     return resolved('QUOTE_COMPARISON_CREATE', 0.97);
   }
+  // Naming the tool wins over the quote-comparison phrasings below ("my negotiation shield case for the roof quote");
+  // starting a case is the page's write.
+  if (negotiationShieldNamedPattern.test(message) && !negotiationShieldCreatePattern.test(message)) {
+    return resolved('NEGOTIATION_SHIELD_CASES', 0.96);
+  }
   if (quoteComparisonReviewPattern.test(message) && !explicitCapabilityPattern.test(message) && !/\bcan you help me\b/i.test(message)) {
     return resolved('QUOTE_COMPARISON_REVIEW', 0.97);
   }
@@ -1024,6 +1038,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('DOCUMENT_LOOKUP', 0.95);
   }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
+  if (negotiationShieldCasesPattern.test(message) && !negotiationShieldOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('NEGOTIATION_SHIELD_CASES', 0.96);
+  }
   if (plantCareOutlookPattern.test(message) && !plantCareOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PLANT_CARE_OUTLOOK', 0.96);
   }

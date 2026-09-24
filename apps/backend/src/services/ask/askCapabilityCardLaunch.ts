@@ -48,6 +48,8 @@ const INLINE_ENTRY_READS = {
   'home-digital-will': { operationId: 'HOME_DIGITAL_WILL', message: 'Show my home continuity plan' },
   // FRD v1.55: backed by a new operation reading the same getOutlook Plant Advisor's Care tab reads.
   'plant-advisor': { operationId: 'PLANT_CARE_OUTLOOK', message: 'Show my plant care outlook' },
+  // FRD v1.56: backed by a new operation reading the same listCasesForProperty the Negotiation Shield case list reads.
+  'negotiation-shield': { operationId: 'NEGOTIATION_SHIELD_CASES', message: 'Show my negotiation shield cases' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

@@ -32,6 +32,7 @@ import { generateInsurancePremiumIncreaseAnalysis } from './negotiationShieldIns
 import { advanceServiceQuoteDecision } from './serviceQuoteDecisionJourney.service';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { listNegotiationShieldCasesForProperty, serializeNegotiationShieldCase } from './negotiationShieldCaseList';
 
 const PARSED_DOCUMENT_INPUT_ORIGIN = 'PARSED_DOCUMENT';
 
@@ -172,22 +173,7 @@ export class NegotiationShieldService {
   }
 
   private serializeCase(record: any): NegotiationShieldCaseSummaryDTO {
-    return {
-      id: String(record.id),
-      propertyId: String(record.propertyId),
-      createdByUserId: record.createdByUserId ?? null,
-      scenarioType: record.scenarioType,
-      status: record.status,
-      title: record.title,
-      description: record.description ?? null,
-      sourceType: record.sourceType,
-      perspective: record.perspective ?? 'HOMEOWNER',
-      analysisVersion: record.analysisVersion ?? null,
-      latestAnalysisAt: asIsoString(record.latestAnalysisAt),
-      quoteDecisionWorkspaceId: record.quoteDecisionWorkspaceId ?? null,
-      createdAt: asIsoString(record.createdAt) as string,
-      updatedAt: asIsoString(record.updatedAt) as string,
-    };
+    return serializeNegotiationShieldCase(record);
   }
 
   private serializeInput(record: any): NegotiationShieldInputDTO {
@@ -1214,12 +1200,7 @@ export class NegotiationShieldService {
   }
 
   async listCasesForProperty(propertyId: string): Promise<NegotiationShieldCaseSummaryDTO[]> {
-    const rows = await this.models.caseModel.findMany({
-      where: { propertyId },
-      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-    });
-
-    return rows.map((row: any) => this.serializeCase(row));
+    return listNegotiationShieldCasesForProperty(propertyId);
   }
 
   async getCaseDetail(propertyId: string, caseId: string): Promise<NegotiationShieldCaseDetailDTO> {

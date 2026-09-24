@@ -47,6 +47,7 @@ const TAXONOMY = Object.freeze({
   'home-habit-coach': ['HOME_HABITS'],
   'home-digital-will': ['HOME_DIGITAL_WILL'],
   'plant-advisor': ['PLANT_CARE_OUTLOOK'],
+  'negotiation-shield': ['NEGOTIATION_SHIELD_CASES'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

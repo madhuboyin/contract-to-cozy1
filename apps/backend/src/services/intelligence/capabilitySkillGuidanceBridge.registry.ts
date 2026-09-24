@@ -55,6 +55,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'home-habit-coach': ['HOME_HABITS'],
   'home-digital-will': ['HOME_DIGITAL_WILL'],
   'plant-advisor': ['PLANT_CARE_OUTLOOK'],
+  'negotiation-shield': ['NEGOTIATION_SHIELD_CASES'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
