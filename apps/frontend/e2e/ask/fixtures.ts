@@ -974,6 +974,39 @@ function homeTimelineTrackExecution() {
   };
 }
 
+// IW-PRES-018 (FRD v1.78): Appliance Oracle as lifespan bars, with one appliance missing its purchase date.
+function applianceLifespanExecution() {
+  const addDate = { id: 'correct-purchasedOn', label: 'Add purchase date', message: 'Correct the purchase date of this inventory item.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' };
+  return {
+    schemaVersion: '1.0', executionId: 'execution-appliance-lifespan', sessionId: 'ask-acceptance-session',
+    question: 'Show my appliance lifespans', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'APPLIANCE_FAILURE_RISK', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
+    blocks: [{
+      type: 'SUMMARY', id: 'appliance-oracle-summary', title: '3 appliances analysed', tone: 'CAUTION',
+      body: '1 critical and 0 high risk. Replacing those would cost an estimated $800. Replacement model suggestions are on the Appliance Oracle page.',
+      actions: [{ id: 'open-appliance-oracle', label: 'Open Appliance Oracle for AI replacement picks', href: `/dashboard/oracle?propertyId=${propertyId}`, style: 'PRIMARY' }],
+    }, {
+      type: 'LIFESPAN', id: 'appliance-oracle-items', title: 'Appliance lifespans',
+      description: 'Each bar shows the appliance\'s age against its typical life. The label is the Appliance Oracle\'s own failure-risk level.',
+      basis: 'An estimate from each appliance\'s purchase date and a typical lifespan for its type, not an inspection.',
+      items: [
+        { id: 'item-fridge', label: 'Refrigerator', ageYears: 4, typicalLifeYears: { min: 11, max: 15 }, status: 'WITHIN_RANGE', statusLabel: 'Low · 3% failure risk', entityType: 'INVENTORY_ITEM', meta: ['About 9 years left, around Sep 2035', 'Replacement about $1,800'] },
+        { id: 'item-dishwasher', label: 'Dishwasher', ageYears: 12, typicalLifeYears: { min: 8, max: 12 }, status: 'PAST_RANGE', statusLabel: 'Critical · 64% failure risk', entityType: 'INVENTORY_ITEM', meta: ['Past its expected life', 'Replacement about $800', 'Replace immediately to avoid emergency failure and higher costs'] },
+        { id: 'item-water-heater', label: 'Water heater', ageYears: 9, typicalLifeYears: { min: 8, max: 12 }, status: 'PLAN_AHEAD', statusLabel: 'Medium · 35% failure risk', entityType: 'INVENTORY_ITEM', meta: ['About 1 year left, around Sep 2027', 'Replacement about $1,500'] },
+      ],
+      missingAge: [{ id: 'item-dryer', label: 'Dryer', entityType: 'INVENTORY_ITEM', actions: [addDate] }],
+      missingAgeTitle: 'No purchase date yet for this appliance',
+    }, {
+      type: 'BOUNDARY', id: 'appliance-oracle-boundary', title: 'An educational estimate by age', severity: 'INFO', suggestions: [],
+      body: 'Risk comes from each appliance\'s age against a typical lifespan, not an inspection. Replacement costs are educational estimates.',
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: ['When should I replace my water heater?'],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
 function relatedRecordsExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-related-records', sessionId: 'ask-acceptance-session',
@@ -1547,6 +1580,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/show the task output/i.test(body.message)) {
       const response = maintenanceOutputExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/^show my appliance lifespans/i.test(body.message)) {
+      const response = applianceLifespanExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

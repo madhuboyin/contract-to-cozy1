@@ -66,7 +66,7 @@ function authoredPresentationText(block: AskPresentationBlock): string {
   // Lifespan and progress items name canonical records (appliance names, checklist step titles), which may resemble
   // an enum; only the copy Ask itself writes is checked.
   if (block.type === 'LIFESPAN') {
-    return [block.title, block.description, block.basis, ...block.items.map((item) => item.statusLabel)].filter(Boolean).join(' ');
+    return [block.title, block.description, block.basis, block.missingAgeTitle, ...block.items.map((item) => item.statusLabel)].filter(Boolean).join(' ');
   }
   if (block.type === 'PROGRESS') {
     return [block.title, block.description, block.basis, ...block.metrics.map((metric) => metric.label)].filter(Boolean).join(' ');

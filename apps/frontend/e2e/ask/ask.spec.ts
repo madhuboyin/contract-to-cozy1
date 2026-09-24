@@ -1335,6 +1335,48 @@ test('on a phone, the home timeline track scrolls sideways inside its box and th
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('appliance oracle answers as lifespan bars with the Oracle\'s labels, and Add purchase date asks to correct that appliance (FRD v1.78)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my appliance lifespans');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const block = page.locator('#ask-execution-execution-appliance-lifespan [data-display-pattern="lifespan"]');
+  await expect(block).toBeVisible();
+  const rows = block.locator('[data-ask-lifespan-item]');
+  await expect(rows).toHaveCount(3);
+  expect(await rows.evaluateAll((elements) => elements.map((element) => element.getAttribute('data-ask-lifespan-item')))).toEqual(['item-dishwasher', 'item-water-heater', 'item-fridge']);
+  const dishwasher = block.locator('[data-ask-lifespan-item="item-dishwasher"]');
+  await expect(dishwasher.getByText('Critical · 64% failure risk')).toBeVisible();
+  await expect(dishwasher.getByRole('img', { name: 'Dishwasher: 12 yrs old; typical life 8 to 12 years' })).toBeVisible();
+  await expect(dishwasher.getByText('Past its expected life · Replacement about $800', { exact: false })).toBeVisible();
+  await expect(block.getByText('No purchase date yet for this appliance')).toBeVisible();
+  await block.locator('[data-ask-lifespan-missing="item-dryer"]').getByRole('button', { name: /Add purchase date/ }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Correct the purchase date of this inventory item.'
+    && (body.launchContext as { entityType?: string } | undefined)?.entityType === 'INVENTORY_ITEM'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'item-dryer'
+    && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'INVENTORY_ITEM_CORRECT')).toBe(true);
+});
+
+test('on a phone, lifespan bars and their facts fit the screen with no sideways scroll (FRD v1.78)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my appliance lifespans');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const block = page.locator('#ask-execution-execution-appliance-lifespan [data-display-pattern="lifespan"]');
+  await expect(block.locator('[data-ask-lifespan-item]')).toHaveCount(3);
+  for (const row of await block.locator('[data-ask-lifespan-item]').all()) {
+    const box = await row.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+    await expect(row.locator('[data-ask-lifespan-meta]')).toBeVisible();
+  }
+  await expect(block.getByRole('button', { name: /Add purchase date/ })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
   await installAskApi(page, { maintenanceDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

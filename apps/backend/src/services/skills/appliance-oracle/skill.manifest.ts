@@ -33,7 +33,7 @@ export const APPLIANCE_ORACLE_SKILL = Object.freeze({
     reversibility: 'REVERSIBLE',
   },
   authorizationFloor: 'OWNER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'LIFESPAN', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

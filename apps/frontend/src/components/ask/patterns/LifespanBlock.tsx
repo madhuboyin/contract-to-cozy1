@@ -43,7 +43,8 @@ export const LifespanBlock: AskBlockRenderer<'LIFESPAN'> = ({ block, onItemActio
                 <span className="absolute top-0 h-5 w-1 -translate-x-1/2 rounded-full bg-slate-900" style={{ left: pct(item.ageYears) }} />
               </div>
               <span className={cn('justify-self-end whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold', STATUS_CHIP[item.status])}>{item.statusLabel}</span>
-              {(item.actions?.length ?? 0) > 0 && <ItemActionButtons className="order-4 col-span-2 sm:col-span-3" item={item} actions={item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
+              {(item.meta?.length ?? 0) > 0 && <p className="order-4 col-span-2 text-xs text-slate-600 sm:col-span-3" data-ask-lifespan-meta>{item.meta!.join(' · ')}</p>}
+              {(item.actions?.length ?? 0) > 0 && <ItemActionButtons className="order-5 col-span-2 sm:col-span-3" item={item} actions={item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
             </li>
           ))}
         </ul>
@@ -51,7 +52,7 @@ export const LifespanBlock: AskBlockRenderer<'LIFESPAN'> = ({ block, onItemActio
       {items.length > 0 && <div className="flex justify-between text-[11px] tabular-nums text-slate-400" aria-hidden="true"><span>0</span><span>{scale / 2} yrs</span><span>{scale} yrs</span></div>}
       {block.missingAge.length > 0 && (
         <div className="mt-4 space-y-2 rounded-xl border border-dashed border-teal-500 bg-teal-50/60 p-3">
-          <p className="text-sm font-semibold text-teal-900">No install year yet for {block.missingAge.length === 1 ? 'this item' : `these ${block.missingAge.length} items`}</p>
+          <p className="text-sm font-semibold text-teal-900">{block.missingAgeTitle ?? `No age recorded yet for ${block.missingAge.length === 1 ? 'this item' : `these ${block.missingAge.length} items`}`}</p>
           <ul className="space-y-2">
             {block.missingAge.map((item) => (
               <li key={item.id} className="flex flex-wrap items-center gap-2" data-ask-lifespan-missing={item.id}>

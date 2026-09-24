@@ -25,6 +25,10 @@ interface ApplianceFailurePrediction {
   replacementCost: number;
   recommendations: ApplianceRecommendation[];
   maintenanceImpact: string;
+  // Additive (Ask lifespan bars, FRD v1.78): the inventory item behind the prediction and the typical life range
+  // (average ± variance from the lifespan table). The page ignores them.
+  inventoryItemId?: string | null;
+  typicalLifeYears?: { min: number; max: number };
 }
 
 interface ApplianceRecommendation {
@@ -61,6 +65,8 @@ interface OracleReport {
   propertyContext: { propertyId: string; contextVersion: string; decision: FeatureDecision };
   // Appliances left out because no age is recorded (the prediction needs one). Additive; the page ignores it.
   appliancesWithoutAge?: number;
+  // Additive (FRD v1.78): which appliances those are, so Ask can offer to record the missing purchase date.
+  appliancesWithoutAgeItems?: Array<{ inventoryItemId: string | null; applianceName: string }>;
 }
 
 const APPLIANCE_LIFESPAN_DATA = {
@@ -158,6 +164,7 @@ export class ApplianceOracleService {
     // Analyze each appliance
     const predictions: ApplianceFailurePrediction[] = [];
     let appliancesWithoutAge = 0;
+    const appliancesWithoutAgeItems: Array<{ inventoryItemId: string | null; applianceName: string }> = [];
 
     for (const asset of applianceInventory) {
       const prediction = await this.analyzeSingleAppliance(asset, property, includeRecommendations);
@@ -165,6 +172,7 @@ export class ApplianceOracleService {
         predictions.push(prediction);
       } else {
         appliancesWithoutAge += 1;
+        appliancesWithoutAgeItems.push({ inventoryItemId: asset.id ?? null, applianceName: asset.assetType || 'Unknown' });
       }
     }
 
@@ -206,6 +214,7 @@ export class ApplianceOracleService {
         decision: protectionContext.decisions.applianceOracle,
       },
       appliancesWithoutAge,
+      appliancesWithoutAgeItems,
     };
   }
 
@@ -217,11 +226,13 @@ export class ApplianceOracleService {
     const applianceName = asset.assetType || asset.name || asset.type || 'Unknown';
     // Calculate age from installationYear if available
     const currentYear = new Date().getFullYear();
-    const age = asset.installationYear 
-      ? currentYear - asset.installationYear 
-      : (asset.age || 0);
+    // Only a missing date means "no age". An appliance bought this calendar year is age 0 and is analysed (FRD v1.78:
+    // it used to be skipped as if no date were recorded). A future year is treated as no usable age.
+    const age: number | null = asset.installationYear != null
+      ? currentYear - asset.installationYear
+      : (typeof asset.age === 'number' ? asset.age : null);
 
-    if (age === 0) return null; // Skip if no age data
+    if (age === null || age < 0) return null; // Skip if no age data
 
     // Get lifespan data
     const lifespanData = this.getLifespanData(applianceName);
@@ -286,6 +297,8 @@ export class ApplianceOracleService {
       replacementCost,
       recommendations,
       maintenanceImpact,
+      inventoryItemId: asset.id ?? null,
+      typicalLifeYears: { min: Math.max(0, expectedLife - lifespanData.variance), max: expectedLife + lifespanData.variance },
     };
   }
 

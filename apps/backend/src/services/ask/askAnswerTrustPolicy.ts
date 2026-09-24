@@ -122,7 +122,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOA_COMPLIANCE_STATUS: new Set(['open-hoa-compliance']),
   PRICE_FINALIZATIONS_LIST: new Set(['open-price-finalization']),
   DO_NOTHING_SIMULATION: new Set(['open-do-nothing-simulator']),
-  APPLIANCE_FAILURE_RISK: new Set(['open-appliance-oracle']),
+  // FRD v1.78: plus the inline "Add purchase date" capture on appliances with no age.
+  APPLIANCE_FAILURE_RISK: new Set(['open-appliance-oracle', 'correct-purchasedOn']),
   MAINTENANCE_BUDGET_FORECAST: new Set(['open-budget-planner']),
   // FRD v1.64: INCIDENT_CONTINUATION had no entry, so both of its links were stripped from every answer.
   INCIDENT_CONTINUATION: new Set(['open-claims', 'open-emergency-help']),

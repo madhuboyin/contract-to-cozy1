@@ -8711,8 +8711,37 @@ async function materialSpecsResult(propertyId: string): Promise<AskOperationResu
 // Ask says so. Read-only.
 type OracleReportView = Awaited<ReturnType<typeof applianceOracleService.generateOracleReport>>;
 type BudgetForecastView = Awaited<ReturnType<typeof budgetForecasterService.generateBudgetForecast>>;
-const ORACLE_URGENCY_GROUPS = [['CRITICAL', 'Critical'], ['HIGH', 'High'], ['MEDIUM', 'Medium'], ['LOW', 'Low']] as const;
 const wholeDollars = (value: number) => `$${Math.round(value).toLocaleString('en-US')}`;
+
+// "OVEN_RANGE" (the inventory's canonical appliance type) reads as "Oven range"; a recorded name is kept as written.
+export function oracleApplianceLabel(name: string): string {
+  return /^[A-Z0-9_]+$/.test(name) ? name.charAt(0) + name.slice(1).toLowerCase().replace(/_/g, ' ') : name;
+}
+
+// FRD v1.78 (homeowner decision): the bar's label and colour follow the Oracle's own risk level, so Ask never disagrees
+// with the page; the bar itself shows where the age sits in the typical range.
+const ORACLE_LIFESPAN_STATUS = {
+  CRITICAL: ['PAST_RANGE', 'Critical'], HIGH: ['PLAN_AHEAD', 'High'], MEDIUM: ['PLAN_AHEAD', 'Medium'], LOW: ['WITHIN_RANGE', 'Low'],
+} as const;
+
+export function oracleLifespanItem(prediction: OracleReportView['predictions'][number], index: number) {
+  const [status, level] = ORACLE_LIFESPAN_STATUS[prediction.urgency];
+  const range = prediction.typicalLifeYears ?? { min: prediction.expectedLife, max: prediction.expectedLife };
+  return {
+    id: prediction.inventoryItemId ?? `appliance-${index}`,
+    label: oracleApplianceLabel(prediction.applianceName),
+    ageYears: Math.min(200, Math.max(0, prediction.currentAge)),
+    typicalLifeYears: range,
+    status,
+    statusLabel: `${level} · ${prediction.failureRisk}% failure risk`,
+    ...(prediction.inventoryItemId ? { entityType: 'INVENTORY_ITEM' } : {}),
+    meta: [
+      prediction.remainingLife > 0 ? `About ${prediction.remainingLife} year${prediction.remainingLife === 1 ? '' : 's'} left, around ${new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: getAskPropertyTimezone() }).format(new Date(prediction.estimatedFailureDate))}` : 'Past its expected life',
+      `Replacement about ${wholeDollars(prediction.replacementCost)}`,
+      prediction.maintenanceImpact,
+    ].filter((value) => value.length <= 80),
+  };
+}
 
 export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
   const pageHref = `/dashboard/oracle?propertyId=${encodeURIComponent(propertyId)}`;
@@ -8730,17 +8759,34 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
     severity: 'INFO', suggestions: [],
   };
   const skipped = report.appliancesWithoutAge ?? 0;
-  const skippedBlock: AskPresentationBlock | null = skipped
-    ? { type: 'LIMITATION', id: 'appliance-oracle-skipped', title: `${skipped} appliance${skipped === 1 ? '' : 's'} left out`, body: `${skipped === 1 ? 'It has' : 'They have'} no install year recorded, so no failure risk can be worked out. Add the install year in the inventory to include ${skipped === 1 ? 'it' : 'them'}.`, severity: 'INFO' }
+  // IW-PRES-018 (FRD v1.78): appliances with no age are named with an inline "Add purchase date" capture (the Oracle
+  // reads age from the purchase date) through the existing inventory correction and its confirmation. A report that
+  // does not name them keeps the count-only notice.
+  const missing = (report.appliancesWithoutAgeItems ?? []).filter((item): item is { inventoryItemId: string; applianceName: string } => Boolean(item.inventoryItemId));
+  const skippedBlock: AskPresentationBlock | null = skipped && missing.length < skipped
+    ? { type: 'LIMITATION', id: 'appliance-oracle-skipped', title: `${skipped} appliance${skipped === 1 ? '' : 's'} left out`, body: `${skipped === 1 ? 'It has' : 'They have'} no purchase date recorded, so no failure risk can be worked out. Add the purchase date in the inventory to include ${skipped === 1 ? 'it' : 'them'}.`, severity: 'INFO' }
     : null;
+  const lifespan = (items: OracleReportView['predictions']): AskPresentationBlock => ({
+    type: 'LIFESPAN', id: 'appliance-oracle-items', title: 'Appliance lifespans',
+    description: 'Each bar shows the appliance\'s age against its typical life. The label is the Appliance Oracle\'s own failure-risk level.',
+    basis: 'An estimate from each appliance\'s purchase date and a typical lifespan for its type, not an inspection.',
+    items: items.slice(0, 50).map((prediction, index) => oracleLifespanItem(prediction, index)),
+    missingAge: missing.slice(0, 20).map((item) => ({
+      id: item.inventoryItemId, label: oracleApplianceLabel(item.applianceName), entityType: 'INVENTORY_ITEM',
+      actions: [{ id: 'correct-purchasedOn', label: 'Add purchase date', message: 'Correct the purchase date of this inventory item.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' }],
+    })),
+    missingAgeTitle: missing.length ? `No purchase date yet for ${missing.length === 1 ? 'this appliance' : `these ${missing.length} appliances`}` : null,
+  });
   if (!report.predictions.length) {
     return {
       status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'appliance-oracle-summary', title: skipped ? 'No appliance ages recorded yet' : 'No appliances recorded yet',
-        body: 'Appliance Oracle estimates failure risk from each appliance\'s age. Add appliances with their install year to the inventory to see it.',
+        body: skipped
+          ? 'Appliance Oracle estimates failure risk from each appliance\'s age. Add a purchase date below to include an appliance.'
+          : 'Appliance Oracle estimates failure risk from each appliance\'s age. Add appliances with their purchase date to the inventory to see it.',
         tone: 'DEFAULT', actions: [openAction],
-      }, ...(skippedBlock ? [skippedBlock] : []), boundary],
+      }, ...(missing.length ? [lifespan([])] : []), ...(skippedBlock ? [skippedBlock] : []), boundary],
       suggestions: ['Show my inventory'],
     };
   }
@@ -8756,28 +8802,7 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
     actions: [openAction],
   }];
   if (skippedBlock) blocks.push(skippedBlock);
-  blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'appliance-oracle-items', title: 'Failure risk by appliance',
-    description: 'Most urgent first, as on the page.',
-    sections: ORACLE_URGENCY_GROUPS
-      .map(([urgency, title]) => ({ urgency, title, items: report.predictions.filter((prediction) => prediction.urgency === urgency) }))
-      .filter((section) => section.items.length > 0)
-      .map((section) => ({
-        id: `appliance-oracle-${section.urgency.toLowerCase()}`, title: section.title, count: section.items.length,
-        items: section.items.map((prediction, index) => ({
-          id: `${section.urgency.toLowerCase()}-${index}`,
-          title: prediction.applianceName,
-          description: `${prediction.currentAge} years old of about ${prediction.expectedLife} expected · ${prediction.failureRisk}% failure risk`,
-          meta: [
-            prediction.remainingLife > 0 ? `About ${prediction.remainingLife} year${prediction.remainingLife === 1 ? '' : 's'} left, around ${new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: getAskPropertyTimezone() }).format(new Date(prediction.estimatedFailureDate))}` : 'Past its expected life',
-            `Replacement about ${wholeDollars(prediction.replacementCost)}`,
-            prediction.maintenanceImpact,
-          ],
-          status: section.title,
-        })),
-      })),
-    actions: [],
-  }, boundary);
+  blocks.push(lifespan(report.predictions), boundary);
   return { status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_READY', blocks, suggestions: ['When should I replace my water heater?'] };
 }
 

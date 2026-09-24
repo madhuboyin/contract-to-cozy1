@@ -395,6 +395,8 @@ const LifespanBlockSchema = z.object({
     statusLabel: z.string().trim().min(1).max(60),
     entityType: z.string().trim().min(1).max(60).nullable().optional(),
     actions: z.array(GroupedListItemActionSchema).max(4).optional(),
+    // FRD v1.78: short facts under the bar (for example a replacement cost), written by the server.
+    meta: z.array(z.string().trim().min(1).max(80)).max(4).optional(),
   })).max(50),
   missingAge: z.array(z.object({
     id: z.string(),
@@ -402,6 +404,8 @@ const LifespanBlockSchema = z.object({
     entityType: z.string().trim().min(1).max(60).nullable().optional(),
     actions: z.array(GroupedListItemActionSchema).max(4).optional(),
   })).max(20).default([]),
+  // FRD v1.78: the heading over `missingAge`, naming what is missing (for example "No purchase date yet").
+  missingAgeTitle: z.string().trim().min(1).max(120).nullable().optional(),
 });
 
 // IW-PRES-020 (FRD v1.72): checklist readiness as a ring. `percent` is the domain's own readiness figure and

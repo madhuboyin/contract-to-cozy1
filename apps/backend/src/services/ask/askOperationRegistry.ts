@@ -420,7 +420,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // FRD v1.62: reads listSpecs, the call GET /properties/:id/materials makes for the Material Specs page.
   // FRD v1.70 (product option A): the calculated parts of Appliance Oracle and Budget Planner, with the services' Gemini
   // recommendations switched off. OWNER floor: both services only admit the primary homeowner profile.
-  APPLIANCE_FAILURE_RISK: definition('APPLIANCE_FAILURE_RISK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'appliance-oracle.risk', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  APPLIANCE_FAILURE_RISK: definition('APPLIANCE_FAILURE_RISK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'appliance-oracle.risk', ['SUMMARY', 'LIFESPAN', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   MAINTENANCE_BUDGET_FORECAST: definition('MAINTENANCE_BUDGET_FORECAST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'budget-planner.forecast', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   // FRD v1.68: reads getLatestRun and listScenarios, the two GETs the Do-Nothing Simulator page makes on load. OWNER floor:
   // the routes admit any household member, but the service only admits the primary homeowner profile.
