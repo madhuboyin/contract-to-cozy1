@@ -30,6 +30,10 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   HOME_TIMELINE_EVENTS: new Set(['home-timeline-boundary']),
   MATERIAL_SPECS_LIST: new Set(['material-specs-boundary']),
   PROPERTY_BRIEFS_LIST: new Set(['property-briefs-boundary']),
+  GUIDANCE_JOURNEYS_LIST: new Set(['guidance-journeys-boundary']),
+  // FRD v1.64: the safety-first boundary was never declared, so the validator removed it and then withheld every
+  // INCIDENT_CONTINUATION answer for having no direct answer ("I couldn't verify this answer").
+  INCIDENT_CONTINUATION: new Set(['incident-continuation-boundary']),
   QUOTE_COMPARISON_REVIEW: new Set(['quote-review-boundary']),
   CAPITAL_RESERVE_PLAN: new Set(['capital-plan-boundary']),
   HOME_EVENT_RADAR_FEED: new Set(['home-event-radar-partial']),
@@ -109,6 +113,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   SERVICE_PRICE_CHECKS: new Set(['open-service-price-radar']),
   HOME_TIMELINE_EVENTS: new Set(['open-home-timeline']),
   MATERIAL_SPECS_LIST: new Set(['open-material-specs']),
+  GUIDANCE_JOURNEYS_LIST: new Set(['open-guidance-overview']),
+  // FRD v1.64: INCIDENT_CONTINUATION had no entry, so both of its links were stripped from every answer.
+  INCIDENT_CONTINUATION: new Set(['open-claims', 'open-emergency-help']),
   PROPERTY_BRIEFS_LIST: new Set(['open-property-brief']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.

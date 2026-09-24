@@ -107,6 +107,7 @@ export type AskOperationId =
   | 'HOME_TIMELINE_EVENTS'
   | 'MATERIAL_SPECS_LIST'
   | 'PROPERTY_BRIEFS_LIST'
+  | 'GUIDANCE_JOURNEYS_LIST'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -412,6 +413,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // admits any household member, but listChecks only admits the property's primary homeowner profile.
   // FRD v1.61: reads listHomeEvents, the call GET /properties/:id/home-events makes for the Home Timeline page.
   // FRD v1.62: reads listSpecs, the call GET /properties/:id/materials makes for the Material Specs page.
+  // FRD v1.65: reads getPropertyGuidance, the call GET /properties/:id/guidance makes for the Guidance Overview page.
+  GUIDANCE_JOURNEYS_LIST: definition('GUIDANCE_JOURNEYS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.journeys', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   // FRD v1.63: reads listPropertyBriefs, the call GET /properties/:id/property-briefs makes for the Property Brief page.
   PROPERTY_BRIEFS_LIST: definition('PROPERTY_BRIEFS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property-brief.briefs', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   MATERIAL_SPECS_LIST: definition('MATERIAL_SPECS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'material-specs.list', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -839,6 +842,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The guided journeys already under way on Guidance Overview. Starting one is GUIDANCE_JOURNEY_CREATE (checked earlier);
+// skipping, dismissing or completing a step is not this read.
+const guidanceJourneysPattern = /\bguidance overview\b|\b(?:guided|guidance) (?:journeys?|plans?)\b|\bstep-by-step plans?\b/i;
+const guidanceJourneysOtherIntentPattern = /\b(?:start|create|begin|new|dismiss|skip|complete|finish|cancel|stop|delete|remove)\b|\bmark\b/i;
 // The household's saved Property Briefs and their share links. Preparing, sharing, sending, revoking or refreshing a
 // brief is not this read, and a "brief summary" of the home is PROPERTY_SUMMARY's.
 const propertyBriefsPattern = /\bproperty briefs?\b|\b(?:my|our|saved|shared) (?:home |house )?briefs?\b|\bbrief(?:'s)? (?:share )?links?\b/i;
@@ -1090,6 +1097,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
   if (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('DIY_PROJECTS', 0.96);
+  }
+  if (guidanceJourneysPattern.test(message) && !guidanceJourneysOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('GUIDANCE_JOURNEYS_LIST', 0.96);
   }
   if (propertyBriefsPattern.test(message) && !propertyBriefsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PROPERTY_BRIEFS_LIST', 0.96);

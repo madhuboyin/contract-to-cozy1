@@ -64,6 +64,12 @@ const INLINE_ENTRY_READS = {
   'material-specs': { operationId: 'MATERIAL_SPECS_LIST', message: 'Show my material specs' },
   // FRD v1.63: backed by a new operation reading the Property Brief page's saved briefs (listPropertyBriefs).
   'property-brief': { operationId: 'PROPERTY_BRIEFS_LIST', message: 'Show my property briefs' },
+  // FRD v1.64 (product option A): Emergency Help launches the incident and claim follow-up read; the page's AI
+  // troubleshooter is a labelled handoff on that answer, not a model call inside Ask.
+  emergency: { operationId: 'INCIDENT_CONTINUATION', message: 'Follow up on a home emergency' },
+  // FRD v1.65 (product option A): backed by a new operation reading the Guidance Overview page's journeys
+  // (getPropertyGuidance).
+  'guidance-overview': { operationId: 'GUIDANCE_JOURNEYS_LIST', message: 'Show my guided journeys' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

@@ -37,7 +37,9 @@ const ROWS: readonly ObservationTuple[] = [
   ['015-expected', '015', 'REFINANCE_RATE_MONITOR', .6678, true], ['015-competitor', '015', 'HOME_DEADLINE_MONITOR', .3509, false],
   ['016-expected', '016', 'SELL_HOLD_RENT_ANALYSIS', .5358, true], ['016-competitor', '016', 'INSPECTION_FINDINGS', .4609, false],
   ['017-expected', '017', 'HOUSEHOLD_INVITATION', .6546, true], ['017-competitor', '017', 'QUOTE_COMPARISON_CREATE', .0979, false],
-  ['018-expected', '018', 'GUIDANCE_JOURNEY_CREATE', .8766, true], ['018-competitor', '018', 'INCIDENT_CONTINUATION', .1424, false],
+  // FRD v1.65: 018's competitor re-derived to GUIDANCE_JOURNEYS_LIST (was INCIDENT_CONTINUATION .1424). Starting and
+  // reviewing guided journeys share their intrinsic words, so no rewording removes it; the expected score is unchanged.
+  ['018-expected', '018', 'GUIDANCE_JOURNEY_CREATE', .8766, true], ['018-competitor', '018', 'GUIDANCE_JOURNEYS_LIST', .627, false],
   ['019-expected', '019', 'QUOTE_COMPARISON_CREATE', .6864, true], ['019-competitor', '019', 'CAPABILITY_DISCOVERY', .5254, false],
   ['020-expected', '020', 'QUOTE_COMPARISON_REVIEW', .7312, true], ['020-competitor', '020', 'QUOTE_COMPARISON_CREATE', .6039, false],
   ['021-expected', '021', 'HOME_DEADLINE_MONITOR', .5747, true], ['021-competitor', '021', 'INVENTORY_LOOKUP', .4826, false],
@@ -149,6 +151,10 @@ const ROWS: readonly ObservationTuple[] = [
   // positives sharing frames with fixtures 026, 078 and 084 were reworded). Candidate pairs were swept against every
   // Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4557).
   ['088-expected', '088', 'PROPERTY_BRIEFS_LIST', .8098, true], ['088-competitor', '088', 'HOUSEHOLD_INVITATION', .6665, false],
+  // FRD v1.65: fixture 089 (GUIDANCE_JOURNEYS_LIST), re-derived from the retriever. First-draft positives that became the
+  // competitor on fixtures 043 and 060 were reworded; 018's competitor was re-derived (see its row). Candidate pairs
+  // were swept against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4458).
+  ['089-expected', '089', 'GUIDANCE_JOURNEYS_LIST', .7408, true], ['089-competitor', '089', 'GUIDANCE_JOURNEY_CREATE', .659, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

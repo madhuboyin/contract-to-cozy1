@@ -76,7 +76,9 @@ test('reserve-fund and the renovation advisor launch inline, and their messages 
 });
 
 test('capabilities whose page reads different records than any Ask operation are not launched into a substitute', () => {
-  for (const capabilityId of ['emergency', 'guidance-overview']) {
+  // FRD v1.65: every capability the v1.47 re-audit held back now launches its own operation or, for emergency, the one
+  // the product decision chose. A capability added to that held-back set again belongs in this loop.
+  for (const capabilityId of []) {
     assert.equal(capabilityCardLaunch(capabilityId).inlineLaunch, null, capabilityId);
   }
   // FRD v1.61: home-timeline now launches HOME_TIMELINE_EVENTS, its own operation reading the page's own records
@@ -88,4 +90,10 @@ test('capabilities whose page reads different records than any Ask operation are
   // FRD v1.63: property-brief now launches PROPERTY_BRIEFS_LIST, its own operation reading the page's own records
   // (listPropertyBriefs), not the PROPERTY_SUMMARY/MAJOR_EVENT_ENTRY operations the bridge also maps to it.
   assert.equal(capabilityCardLaunch('property-brief').inlineLaunch.operationId, 'PROPERTY_BRIEFS_LIST');
+  // FRD v1.64 (product decision, option A): emergency launches INCIDENT_CONTINUATION. Its page is an AI chat with no
+  // records of its own; the answer carries a labelled handoff to it rather than substituting for it.
+  assert.equal(capabilityCardLaunch('emergency').inlineLaunch.operationId, 'INCIDENT_CONTINUATION');
+  // FRD v1.65 (product decision, option A): guidance-overview launches GUIDANCE_JOURNEYS_LIST, reading the page's own
+  // getPropertyGuidance, not GUIDANCE_JOURNEY_CREATE, which the bridge also maps to it.
+  assert.equal(capabilityCardLaunch('guidance-overview').inlineLaunch.operationId, 'GUIDANCE_JOURNEYS_LIST');
 });

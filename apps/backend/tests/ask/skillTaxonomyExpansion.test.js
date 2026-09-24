@@ -55,6 +55,7 @@ const TAXONOMY = Object.freeze({
   'home-timeline': ['HOME_TIMELINE_EVENTS'],
   'material-specs': ['MATERIAL_SPECS_LIST'],
   'property-brief': ['PROPERTY_BRIEFS_LIST'],
+  'guidance-overview': ['GUIDANCE_JOURNEYS_LIST'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

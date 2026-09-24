@@ -29,7 +29,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'replace-repair': ['REPLACEMENT_GUIDANCE'],
   'mortgage-refinance-radar': ['REFINANCE_ANALYSIS', 'REFINANCE_RATE_MONITOR'],
   'sell-hold-rent': ['SELL_HOLD_RENT_ANALYSIS'],
-  'guidance-overview': ['GUIDANCE_JOURNEY_CREATE'],
+  'guidance-overview': ['GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CREATE'],
   'quote-comparison': ['QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW'],
   'capital-timeline': ['CAPITAL_RESERVE_PLAN'],
   'home-event-radar': ['HOME_EVENT_RADAR_FEED'],
