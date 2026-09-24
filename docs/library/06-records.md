@@ -14,11 +14,11 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+| 🔴 C2 | [Smart Home Integration Hub](../functional/SMART_HOME_INTEGRATION_HUB.md) |  | 2026-09-24 | 1129 |
 |  | [Contract-to-Cozy](../functional/HOME_DIGITAL_TWIN.md) | P0–P2 implementation complete as of July 28, 2026. Section 7 | 2026-07-28 | 352 |
 |  | [Home Tools — Functional Requirements Document (FRD)](../functional/HOME_TOOLS.md) | v1.1 | 2026-07-28 | 632 |
 |  | [ROOMS_EXPERIENCE.md](../functional/ROOMS_EXPERIENCE.md) | Implemented (v1), extensible | 2026-07-23 | 430 |
 |  | [Household Collaboration Layer](../functional/HOUSEHOLD_COLLABORATION.md) |  | 2026-06-27 | 625 |
-| 🔴 C2 | [Smart Home Integration Hub](../functional/SMART_HOME_INTEGRATION_HUB.md) |  | 2026-06-27 | 1124 |
 | 🟡 | [Executive Summary — Home Timeline](../functional/ES_HOME_TIMELINE.md) |  | 2026-01-16 | 88 |
 | 🟡 | [Functional Requirements Document (FRD)](../functional/HOME_TIMELINE.md) |  | 2026-01-16 | 255 |
 
@@ -43,5 +43,5 @@
 - 🟠 **functional/MATERIAL_SPEC_REGISTRY.md** - Route exists in code but many cited frontend/worker files do not (14/24 and 3/8): implementation moved or partial. Verify before relying on file-level detail.
 - 🔴 **functional/SEASONAL_FEATURE_SESSION_PROMPT.md** - A session prompt, not a spec; untouched since Jan 3. Cites deleted checklistItem controller/component.
 - 🟠 **functional/SEASONAL_MAINTENANCE_HANDOFF.md** - Body predates the deprecated ChecklistItem -> PropertyMaintenanceTask consolidation; 3 cited files deleted. Header notes "canonical Home integration implemented; historic..."
-- 🔴 **functional/SMART_HOME_INTEGRATION_HUB.md** - Superseded by SMART_HOME_IOT_INTEGRATION_FRD.md (stated in that FRD, not in this file). 28/33 cited code paths do not exist.
+- 🔴 **functional/SMART_HOME_INTEGRATION_HUB.md** - Retired design draft; SMART_HOME_IOT_INTEGRATION_FRD.md explicitly supersedes its direct alert-to-Incident path. 28/33 cited code paths do not exist.
 - 🟠 **functional/SMART_HOME_IOT_INTEGRATION_FRD.md** - No status line; 18/27 cited code paths (smartHome routes/services) do not exist and no smart-home route/page found in code - appears unimplemented.

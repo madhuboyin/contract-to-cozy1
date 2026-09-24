@@ -8,7 +8,7 @@ Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
-|  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) | Ask Cozy | 2026-09-19 |
+|  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) | Ask Cozy | 2026-09-24 |
 |  | [Ask Cozy — Interaction Model & UI FRD](../product/ASK_COZY_INTERACTION_MODEL_UI_FRD.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)](../product/ASK_COZY_MESSAGE_FIRST_FRD.md) | Ask Cozy | 2026-09-14 |
 |  | [RentCast Property Setup Integration — Functional Requirements Document](../product/RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md) | Property Context & Property Setup | 2026-09-10 |
@@ -83,6 +83,8 @@ Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
+| 🔴 | [AI Features - Implementation Summary](../functional/AI_CARDS_SUMMARY.md) | Ask Cozy | 2026-09-24 |
+| 🔴 | [Smart Home Integration Hub](../functional/SMART_HOME_INTEGRATION_HUB.md) | Home Records | 2026-09-24 |
 | 🟡 | [Introduction](../wiki/00-introduction.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
 | 🟡 | [Guidance, AI Concierge & Personalization](../wiki/features/03-guidance-ai-concierge-and-personalization.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
 | 🟡 | [Home Events, Environment & Community](../wiki/features/06-home-events-environment-and-community.md) | Code-Grounded Wiki (existing docs/wiki) | 2026-09-22 |
@@ -128,7 +130,6 @@ Most recently changed first; showing area.
 |  | [DIY Project Center](../functional/DIY_PROJECT_CENTER.md) | Providers | 2026-06-27 |
 |  | [Home Improvement Financing Center](../functional/HOME_IMPROVEMENT_FINANCING.md) | Coverage | 2026-06-27 |
 |  | [Household Collaboration Layer](../functional/HOUSEHOLD_COLLABORATION.md) | Home Records | 2026-06-27 |
-| 🔴 | [Smart Home Integration Hub](../functional/SMART_HOME_INTEGRATION_HUB.md) | Home Records | 2026-06-27 |
 |  | [Dashboard — Next Best Move: Changes Reference](../dashboard-next-best-move-changes.md) | Guidance | 2026-05-04 |
 | 🟡 | [PASS 7 - CtC Unified Data Architecture Design (Grounded)](../ctc-unified-data-architecture-pass7.md) | Data Architecture (Pass 1-7) | 2026-03-27 |
 | 🟡 | [PASS 3 - Data Capture Mapping](../data-capture-mapping-pass3.md) | Data Architecture (Pass 1-7) | 2026-03-27 |
@@ -148,7 +149,6 @@ Most recently changed first; showing area.
 | 🟡 | [CLAIMS_ASSISTANCE.md](../functional/CLAIMS_ASSISTANCE.md) | Coverage | 2026-01-07 |
 |  | [PRD: P2.2 – Recall & Safety Alerts](../functional/RECALL_SAFETY_ALERTS.MD) | Property Intelligence | 2026-01-07 |
 | 🟡 | [Dashboard Statistics Cards - Data Flow Documentation](../functional/dashboard-stats-data-flow.md) | Data Architecture (Pass 1-7) | 2026-01-04 |
-| 🔴 | [AI Features - Implementation Summary](../functional/AI_CARDS_SUMMARY.md) | Ask Cozy | 2026-01-03 |
 | 🟡 | [CORRECTED ANALYSIS: User & HomeownerProfile Tables](../functional/CORRECTED_USER_HOMEOWNER_ANALYSIS.md) | Property Context & Property Setup | 2026-01-03 |
 | 🟡 | [🏡 Property Onboarding Enhancement - Complete Analysis](../functional/PROPERTY_ENHANCEMENT_ANALYSIS.md) | Property Context & Property Setup | 2026-01-03 |
 | 🟡 | [SERVICE_CATEGORY_CONFIG TABLE - COMPLETE IMPACT ANALYSIS](../functional/SERVICE_CATEGORY_CONFIG_ANALYSIS.md) | Providers | 2026-01-03 |
@@ -159,7 +159,9 @@ Most recently changed first; showing area.
 
 | | Document | Area | Last changed |
 |---|---|---|---|
-|  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 0 Coverage Audit](../architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md) | Ask Cozy | 2026-09-18 |
+| 🔴 | [ContractToCozy 90-Day Execution Plan](../audit/contracttocozy-90-day-execution-plan-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-09-24 |
+| 🔴 | [ContractToCozy (CtC) Strategic Product Audit](../audit/contracttocozy-strategic-audit-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-09-24 |
+|  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 0 Coverage Audit](../architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md) | Ask Cozy | 2026-09-22 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 1 Completed-Reference (Maintenance) Re-V](../architecture/ASK_COZY_PHASE1_COMPLETED_REFERENCE_REVERIFICATION.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Financial and Ownership Acceptance Scenario Ve](../architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy Cross-Domain Interaction Rollout — Phase 4 Sell/Hold/Rent Persistent-Decision UX ](../architecture/ASK_COZY_PHASE4_SELL_HOLD_RENT_UX_COMPLETION_VERIFICATION.md) | Ask Cozy | 2026-09-17 |
@@ -235,10 +237,8 @@ Most recently changed first; showing area.
 | 🟠 | [ContractToCozy — Pre-Launch Implementation Plan](../audit/contracttocozy-implementation-plan-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-19 |
 | 🟠 | [ContractToCozy Pre-Launch Execution Plan](../audit/contracttocozy-pre-launch-execution-plan-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-19 |
 | 🟠 | [ContractToCozy Pre-Launch Hardening Plan](../audit/contracttocozy-pre-launch-hardening-plan-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-19 |
-| 🔴 | [ContractToCozy (CtC) Strategic Product Audit](../audit/contracttocozy-strategic-audit-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-19 |
 | 🟠 | [ContractToCozy (CtC) Strategic Product Audit — v2](../audit/contracttocozy-strategic-audit-v2-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-19 |
 | 🟡 | [Sprint 1 — Gap Register](../audit/sprint1-gap-register-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-19 |
-| 🔴 | [ContractToCozy 90-Day Execution Plan](../audit/contracttocozy-90-day-execution-plan-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-18 |
 | 🟡 | [ContractToCozy Route Merge Map (Old -> Canonical)](../audit/contracttocozy-route-merge-map-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-18 |
 | 🟡 | [ContractToCozy Revised P0-Safe Merge Table (Drop-in Replacement)](../audit/contracttocozy-route-merge-map-p0-safe-2026-04-18.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-18 |
 | 🟡 | [Buyer-Readiness Trend Scorecard (Track 3)](../audits/ui-audit/scorecards/buyer-readiness-trend.v1.md) | Pre-Launch Audits & Strategy (Mar-Apr 20 | 2026-04-13 |

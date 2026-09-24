@@ -1,5 +1,11 @@
 # AI Features - Implementation Summary
 
+> **Retired historical snapshot.** Superseded as an inventory by
+> [AI_CARDS_SUMMARY_UPDATED.md](AI_CARDS_SUMMARY_UPDATED.md). That later summary is
+> also not a current implementation inventory: its Climate Risk Predictor entry
+> remains after the standalone route was retired. For enhancement work, use
+> `docs/library/AUTHORITY.md` and inspect current feature routes and contracts.
+
 ## 🎯 Overview
 
 4 AI-powered features built using Google Gemini API for Contract to Cozy platform.

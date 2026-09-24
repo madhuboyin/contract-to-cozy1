@@ -5,12 +5,16 @@ Run from anywhere:  python3 docs/library/tools/build_library.py
 Inputs: git history + document headers under docs/, tools/flags_head.md, and the
 manual FLAGS dict below (edit `flag(...)` calls when a flag is resolved or added).
 """
-import json, re, os, csv, collections, subprocess, glob
+import json, re, os, csv, collections, subprocess, glob, sys, tempfile
+from datetime import date
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 DOCS = os.path.join(ROOT, 'docs')
-OUT = os.path.join(DOCS, 'library') + '/'
-TODAY = '2026-09-22'  # snapshot date shown in FLAGS.md; update when re-baselining
+LIBRARY_OUT = os.path.join(DOCS, 'library') + '/'
+CHECK_MODE = '--check' in sys.argv[1:]
+CHECK_TEMP = tempfile.TemporaryDirectory(prefix='c2c-library-check-') if CHECK_MODE else None
+OUT = (CHECK_TEMP.name if CHECK_TEMP else LIBRARY_OUT) + '/'
+TODAY = '2026-09-24'  # snapshot date shown in FLAGS.md; update when re-baselining
 os.chdir(ROOT)
 
 def git_dates():
@@ -21,6 +25,16 @@ def git_dates():
         if ln.startswith('@'): cur = ln[1:]
         elif ln:
             last.setdefault(ln, cur); first[ln] = cur
+    # A rebuild normally happens before the documentation commit. Reflect the
+    # working-tree date now so the generated catalog does not become stale as
+    # soon as that commit lands. A clean post-commit rebuild yields the same date.
+    dirty = subprocess.check_output(['git', 'status', '--porcelain=v1', '--untracked-files=all', '--', 'docs'], text=True)
+    for ln in dirty.splitlines():
+        path = ln[3:]
+        if ' -> ' in path:
+            path = path.split(' -> ', 1)[1]
+        if path.startswith('docs/') and not path.startswith('docs/library/'):
+            last[path] = date.today().isoformat()
     return first, last
 
 def load_meta():
@@ -122,11 +136,11 @@ F = {}
 def flag(paths_, level, fid, note):
     for x in paths_: F[x] = (level, fid, note)
 
-flag(['functional/AI_CARDS_SUMMARY.md'], 'RED', 'C1', 'Superseded by AI_CARDS_SUMMARY_UPDATED.md (says 4 AI features; updated doc says 11). No banner on the old file.')
+flag(['functional/AI_CARDS_SUMMARY.md'], 'RED', 'C1', 'Retired historical four-card inventory; superseded by AI_CARDS_SUMMARY_UPDATED.md. The successor is also stale as a current inventory (C18).')
 flag(['functional/AI_CARDS_SUMMARY_UPDATED.md'], 'ORANGE', 'C18', 'Not a current feature inventory: still lists Climate Risk Predictor as a working AI feature, but climateRisk.routes.ts returns 410 CLIMATE_RISK_RETIRED.')
-flag(['functional/SMART_HOME_INTEGRATION_HUB.md'], 'RED', 'C2', 'Superseded by SMART_HOME_IOT_INTEGRATION_FRD.md (stated in that FRD, not in this file). 28/33 cited code paths do not exist.')
+flag(['functional/SMART_HOME_INTEGRATION_HUB.md'], 'RED', 'C2', 'Retired design draft; SMART_HOME_IOT_INTEGRATION_FRD.md explicitly supersedes its direct alert-to-Incident path. 28/33 cited code paths do not exist.')
 flag(['functional/SMART_HOME_IOT_INTEGRATION_FRD.md'], 'ORANGE', 'C2', 'No status line; 18/27 cited code paths (smartHome routes/services) do not exist and no smart-home route/page found in code - appears unimplemented.')
-flag(['functional/GUIDANCE_ENGINE_FRD_Updated.md'], 'RED', 'C3', 'Named "Updated" but is v1.0 "Ready for Implementation" (Mar 31), a different feature (resolution concierge) from GUIDANCE_ENGINE_FRD v2.1. `initiatedByUser` exists in code -> status is stale, and the name misleads.')
+flag(['functional/GUIDANCE_ENGINE_FRD_Updated.md'], 'RED', 'C3', 'A distinct user-initiated resolution FRD despite the "Updated" name. Manual journey route exists, but TR-01 names initiatedByUser, targetAssetId, and integer templateVersion while schema uses isUserInitiated, scopeId, and string templateVersion. FR-02/TR-01 are PARTIAL in requirement_status.csv.')
 flag(['functional/GUIDANCE_ENGINE_FRD.md', 'architecture/GUIDANCE_ENGINE.md'], 'ORANGE', 'C3', 'Three overlapping Guidance Engine specs (this, FRD_Updated, architecture/GUIDANCE_ENGINE.md); no doc says which governs. Last touched Mar 24-26 (FRD had a Jul 27 touch).')
 flag(['functional/HOME_EVENT_RADAR_FRD.md'], 'ORANGE', 'C4', 'Status still "Proposed" while the Implementation Plan says "In progress - launch acceptance implemented" and 2 of the 3 Home Event Radar ADRs are Accepted.')
 flag(['personalization/08-personalization-frd.md'], 'ORANGE', 'C5', 'Status "Proposed; implementation not authorized" but modules/personalization exists in code and README says internal validation is live.')
@@ -276,7 +290,10 @@ L = ['# Documentation Library', '',
  '| I want to... | Go to |', '|---|---|',
  '| Find docs about a feature/area | the area table below |',
  '| Find all runbooks / all ADRs / all FRDs | [BY-TYPE.md](BY-TYPE.md) |',
+ '| Decide which requirement governs | [AUTHORITY.md](AUTHORITY.md) |',
+ '| Change or retire product behavior | [CHANGE_POLICY.md](CHANGE_POLICY.md) |',
  '| Review FRD authority and unresolved requirement families | [REQUIREMENTS_REVIEW.md](REQUIREMENTS_REVIEW.md) |',
+ '| Check individual requirement status and evidence | [requirements.csv](requirements.csv) and [requirement_status.csv](requirement_status.csv) |',
  '| Know whether a doc is stale or conflicts with another | [FLAGS.md](FLAGS.md) |',
  '| Find documents that may be deleted | [FLAGS.md — Deletion candidates](FLAGS.md#deletion-candidates) |',
  '| Grep/filter by anything (status, date, dead-code refs, review basis) | [`catalog.csv`](catalog.csv) |',
@@ -301,8 +318,18 @@ L += ['', '## Which doc wins? (reading order when several overlap)', '',
  '| Pre-launch strategy | none - all Apr 2026 | `product/ContractToCozy_W7_Launch_Cutover_Runbook.md` for launch | all of `audit/`, `audit-gemini/` |', '',
  'These are recommendations from the flag review, not decisions recorded in the source docs.', '',
  '## Maintaining this library', '',
- 'Rebuild after docs change: `python3 docs/library/tools/build_library.py` (regenerates the catalog, area pages, BY-TYPE.md, FLAGS.md, and README.md; REQUIREMENTS_REVIEW.md is a manual audit note).',
+ 'Rebuild after docs change: `python3 docs/library/tools/build_library.py`, then `python3 docs/library/tools/build_requirements.py`. `requirement_status.csv`, AUTHORITY.md, and REQUIREMENTS_REVIEW.md are manually maintained. Run `python3 docs/library/tools/check_library.py` to validate generated pages, inventory, links, requirement entries, and evidence paths without modifying them.',
  'The `review_basis` column distinguishes targeted findings from metadata-only checks. A blank flag means no issue was detected by those checks, not that every requirement was validated.',
  'Flags are manual: edit the `flag(...)` calls in `tools/build_library.py` and the prose in `tools/flags_head.md`, then rebuild. Bump `TODAY` in the script when you re-baseline.']
 open(OUT + 'README.md', 'w').write('\n'.join(L) + '\n')
+if CHECK_MODE:
+    stale = []
+    for name in sorted(os.listdir(OUT)):
+        generated = open(OUT + name, 'rb').read()
+        current_path = LIBRARY_OUT + name
+        if not os.path.exists(current_path) or open(current_path, 'rb').read() != generated:
+            stale.append(name)
+    CHECK_TEMP.cleanup()
+    if stale:
+        raise SystemExit('Stale generated library files: ' + ', '.join(stale))
 print(len(rows), 'docs;', dict(collections.Counter(r['level'] for r in rows)))

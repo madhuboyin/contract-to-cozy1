@@ -24,6 +24,13 @@
 - [ ] Existing surfaces were reused, merged, or removed before adding a destination
 - [ ] Not applicable — explain below
 
+## Requirements traceability
+- [ ] Governing requirement IDs and acceptance criteria are named
+- [ ] `docs/library/requirement_status.csv` records status and current evidence paths
+- [ ] Governing FRD/ADR and affected wiki behavior were updated in this change
+- [ ] `python3 docs/library/tools/check_library.py` passes
+- [ ] No product requirement impact — explain below
+
 ## Database policy
 - [ ] No database schema change
 - [ ] `schema.prisma` changed; repository owner must generate/apply the migration

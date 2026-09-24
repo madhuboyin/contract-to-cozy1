@@ -1,6 +1,6 @@
 # Stale & Conflicting Documents
 
-[Library home](README.md) · Snapshot date: 2026-09-22 · Scope: all 313 files under `docs/`
+[Library home](README.md) · Snapshot date: 2026-09-24 · Scope: all 313 files under `docs/`
 
 **How to read this.** Each flag says *how it was established*:
 
@@ -26,10 +26,10 @@ Flag key: 🔴 conflicting / superseded · 🟠 status lags reality, or cites co
 
 | ID | Documents | Problem | Evidence | Suggested action |
 |---|---|---|---|---|
-| C1 | `functional/AI_CARDS_SUMMARY.md` vs `AI_CARDS_SUMMARY_UPDATED.md` | Same title. Old = 4 AI features, updated = 11 plus a Jul 28 note that Tax Appeal folded into Property Tax Center. Old file has no banner. | [executed] `diff` | Delete old or add "superseded" banner. |
-| C2 | `SMART_HOME_INTEGRATION_HUB.md` vs `SMART_HOME_IOT_INTEGRATION_FRD.md` | The FRD says it supersedes the Hub (parallel alert path would fork incident handling); the Hub says nothing. Neither has code: no smart-home route or page exists, 28/33 and 18/27 cited paths missing. | [read] FRD header · [executed] path check + `ls routes` | Banner the Hub; give the FRD a status line ("Proposed - not built"). |
-| C3 | `functional/GUIDANCE_ENGINE_FRD_Updated.md` | Filename says "Updated" but it is v1.0 (Mar 31), older-numbered than the v2.1 living FRD, and specifies a *different* feature (user-initiated resolution concierge). Status "Ready for Implementation" - but `initiatedByUser` exists in `guidanceJourney.service.ts`, so it was built. | [read] · [executed] grep | Rename (e.g. `GUIDANCE_RESOLUTION_JOURNEYS_FRD`), set status to Implemented. |
-| C10a | `audit/…strategic-audit-2026-04-18.md` and `…90-day-execution-plan-2026-04-18.md` | Each v2 sibling explicitly says it supersedes v1 of the same date. The v1 files have no reciprocal banner. | [read] v2 headers | Deletion candidates after confirming historical comparison is unnecessary; v2 retains the corrected plan. |
+| C1 | `functional/AI_CARDS_SUMMARY.md` vs `AI_CARDS_SUMMARY_UPDATED.md` | Same title. Old = 4 AI features, updated = 11 plus a Jul 28 note that Tax Appeal folded into Property Tax Center. Old file is now bannered as retired; the updated file also has a stale Climate Risk claim (`C18`). | [executed] `diff` · route check | Delete old after historical retention review; use current routes for the inventory. |
+| C2 | `SMART_HOME_INTEGRATION_HUB.md` vs `SMART_HOME_IOT_INTEGRATION_FRD.md` | The FRD says it supersedes the Hub (parallel alert path would fork incident handling); the Hub is now bannered as retired. Neither has a smart-home route or page; 28/33 and 18/27 cited paths are missing. | [read] FRD header · [executed] path check | Delete the Hub after historical retention review; keep the FRD as proposed intent. |
+| C3 | `functional/GUIDANCE_ENGINE_FRD_Updated.md` | Filename says “Updated” but it is a distinct v1.0 user-initiated resolution feature. A manual journey route exists, yet TR-01's proposed `initiatedByUser`, `targetAssetId`, and integer `templateVersion` do not match current `GuidanceJourney` fields (`isUserInitiated`, `scopeId`, string `templateVersion`). FR-02 and TR-01 are only partially verified in `requirement_status.csv`. | [read] · [executed] route/schema trace | Rename for scope clarity; reconcile requirements individually instead of marking the whole FRD implemented. |
+| C10a | `audit/…strategic-audit-2026-04-18.md` and `…90-day-execution-plan-2026-04-18.md` | Each v2 sibling explicitly says it supersedes v1 of the same date. The v1 files are now bannered as historical. | [read] v2 headers | Deletion candidates after confirming historical comparison is unnecessary; v2 retains the corrected plan. |
 | C11a | `functional/SEASONAL_FEATURE_SESSION_PROMPT.md` | An AI-session prompt, not a spec. Untouched since Jan 3; cites deleted files. | [executed] path check | Archive. |
 
 ### 🟠 Status lags reality / cites missing code
@@ -72,7 +72,7 @@ Flag key: 🔴 conflicting / superseded · 🟠 status lags reality, or cites co
 
 ## Deletion candidates
 
-These files should not govern future work. The reasons below are stronger than age alone; Git history preserves the old text if removal is chosen. They have no incoming document links except where noted. No source file has been deleted by this audit.
+These files should not govern future work. The four clear candidates are now bannered as retired in place; Git history preserves their old text if removal is chosen. They had no incoming document links except where noted at the time of review. No source file has been deleted by this audit.
 
 | Candidate | Evidence | Replacement / retention decision |
 |---|---|---|

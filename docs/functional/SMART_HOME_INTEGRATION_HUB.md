@@ -1,5 +1,10 @@
 # Smart Home Integration Hub
 
+> **Retired design draft.** [SMART_HOME_IOT_INTEGRATION_FRD.md](SMART_HOME_IOT_INTEGRATION_FRD.md)
+> explicitly supersedes this proposal and replaces its direct alert-to-Incident
+> path with the platform's signal and incident pipelines. The successor is
+> proposed target behavior, not evidence of a shipped Smart Home integration.
+
 ## Overview
 
 Smart Home Integration Hub connects a homeowner's existing IoT devices and utility accounts to the Contract to Cozy platform. Rather than relying on manual data entry, the hub pulls real readings — energy consumption, temperature, leak events, utility bills — from connected devices and normalises them into platform-native events, alerts, and time-series data.

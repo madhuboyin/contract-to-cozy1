@@ -1,5 +1,9 @@
 # ContractToCozy (CtC) Strategic Product Audit
 
+> **Retired historical v1.** [Version 2](contracttocozy-strategic-audit-v2-2026-04-18.md)
+> explicitly supersedes this audit. Both are April 2026 strategy snapshots,
+> not current delivery status or governing product requirements.
+
 **Date:** April 18, 2026  
 **Prepared as:** Principal Product Strategist + UX Auditor + Systems Architect + Growth Advisor + Category Dominance Consultant  
 **Audit posture:** Brutally honest, execution-first, acquirer-grade
@@ -479,4 +483,3 @@ Yes. Strongly yes.
 3. A premium trust product cannot ship visible placeholders in critical user flow.
 4. Users do not pay for dashboards. They pay for outcomes and reduced regret.
 5. If CtC consolidates and closes loops, it can own a real category.
-

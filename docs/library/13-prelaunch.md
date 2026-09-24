@@ -14,6 +14,8 @@
 
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
+| 🔴 C10 | [ContractToCozy 90-Day Execution Plan](../audit/contracttocozy-90-day-execution-plan-2026-04-18.md) |  | 2026-09-24 | 271 |
+| 🔴 C10 | [ContractToCozy (CtC) Strategic Product Audit](../audit/contracttocozy-strategic-audit-2026-04-18.md) |  | 2026-09-24 | 485 |
 |  | [Sprint 3 Mobile QA Matrix](../audit-gemini/sprint3-mobile-qa-matrix.md) |  | 2026-09-09 | 33 |
 | 🟡 | [J Checklist Implementation Plan (Partial + Missing Items)](../audit-gemini/j-partial-missing-implementation-plan.md) |  | 2026-04-20 | 94 |
 | 🟡 | [Sprint 2 Empty-State Audit](../audit-gemini/sprint2-empty-state-audit.md) |  | 2026-04-20 | 29 |
@@ -42,10 +44,8 @@
 | 🟠 C10 | [ContractToCozy — Pre-Launch Implementation Plan](../audit/contracttocozy-implementation-plan-2026-04-18.md) |  | 2026-04-19 | 191 |
 | 🟠 C10 | [ContractToCozy Pre-Launch Execution Plan](../audit/contracttocozy-pre-launch-execution-plan-2026-04-18.md) |  | 2026-04-19 | 429 |
 | 🟠 C10 | [ContractToCozy Pre-Launch Hardening Plan](../audit/contracttocozy-pre-launch-hardening-plan-2026-04-18.md) |  | 2026-04-19 | 433 |
-| 🔴 C10 | [ContractToCozy (CtC) Strategic Product Audit](../audit/contracttocozy-strategic-audit-2026-04-18.md) |  | 2026-04-19 | 482 |
 | 🟠 C10 | [ContractToCozy (CtC) Strategic Product Audit — v2](../audit/contracttocozy-strategic-audit-v2-2026-04-18.md) |  | 2026-04-19 | 566 |
 | 🟡 | [Sprint 1 — Gap Register](../audit/sprint1-gap-register-2026-04-18.md) |  | 2026-04-19 | 178 |
-| 🔴 C10 | [ContractToCozy 90-Day Execution Plan](../audit/contracttocozy-90-day-execution-plan-2026-04-18.md) |  | 2026-04-18 | 268 |
 | 🟡 | [ContractToCozy Route Merge Map (Old -> Canonical)](../audit/contracttocozy-route-merge-map-2026-04-18.md) |  | 2026-04-18 | 161 |
 | 🟡 | [ContractToCozy Revised P0-Safe Merge Table (Drop-in Replacement)](../audit/contracttocozy-route-merge-map-p0-safe-2026-04-18.md) | Ready for engineering implementation. | 2026-04-18 | 42 |
 | 🟡 | [Buyer-Readiness Trend Scorecard (Track 3)](../audits/ui-audit/scorecards/buyer-readiness-trend.v1.md) |  | 2026-04-13 | 61 |

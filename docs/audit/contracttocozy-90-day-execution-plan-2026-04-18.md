@@ -1,5 +1,9 @@
 # ContractToCozy 90-Day Execution Plan
 
+> **Retired historical v1.** [Version 2](contracttocozy-90-day-execution-plan-v2-2026-04-18.md)
+> explicitly supersedes this plan. Both are April 2026 planning snapshots,
+> not current delivery status or governing product requirements.
+
 **Date:** April 18, 2026  
 **Scope:** Convert strategic audit into a 0–90 day execution plan with owners, effort, dependencies, milestones, and success metrics.  
 **Primary objective:** Move CtC from fragmented feature lattice to coherent, premium, action-first homeowner platform.
@@ -265,4 +269,3 @@ CtC does not need more features in the next 90 days.
 CtC needs **coherence, closure, trust, and measurable savings outcomes**.
 
 If this plan is executed with discipline, CtC exits the quarter as a serious category contender instead of a fragmented feature set.
-
