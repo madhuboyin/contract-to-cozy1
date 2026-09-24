@@ -162,6 +162,9 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.67: fixture 091 (PRICE_FINALIZATIONS_LIST), re-derived from the retriever; no existing row changed. Candidate
   // pairs were swept against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4549).
   ['091-expected', '091', 'PRICE_FINALIZATIONS_LIST', .4066, true], ['091-competitor', '091', 'MATERIAL_SPECS_LIST', .2131, false],
+  // FRD v1.68: fixture 092 (DO_NOTHING_SIMULATION), re-derived from the retriever; no existing row changed. Of the swept
+  // candidates, only this one kept every Skill routing case resolved ("Show my inspecion findings" 0.4549).
+  ['092-expected', '092', 'DO_NOTHING_SIMULATION', .729, true], ['092-competitor', '092', 'OWNERSHIP_COSTS', .7036, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

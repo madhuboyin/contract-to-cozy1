@@ -74,6 +74,8 @@ const INLINE_ENTRY_READS = {
   'hoa-compliance': { operationId: 'HOA_COMPLIANCE_STATUS', message: 'Show my HOA records' },
   // FRD v1.67: backed by a new operation reading the Price Finalization page's saved records (listForProperty).
   'price-finalization': { operationId: 'PRICE_FINALIZATIONS_LIST', message: 'Show my price finalizations' },
+  // FRD v1.68: backed by a new operation reading the Do-Nothing Simulator's latest run and saved scenarios.
+  'do-nothing-simulator': { operationId: 'DO_NOTHING_SIMULATION', message: 'Show my do-nothing simulation' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

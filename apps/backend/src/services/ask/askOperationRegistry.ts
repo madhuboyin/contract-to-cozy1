@@ -110,6 +110,7 @@ export type AskOperationId =
   | 'GUIDANCE_JOURNEYS_LIST'
   | 'HOA_COMPLIANCE_STATUS'
   | 'PRICE_FINALIZATIONS_LIST'
+  | 'DO_NOTHING_SIMULATION'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -415,6 +416,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // admits any household member, but listChecks only admits the property's primary homeowner profile.
   // FRD v1.61: reads listHomeEvents, the call GET /properties/:id/home-events makes for the Home Timeline page.
   // FRD v1.62: reads listSpecs, the call GET /properties/:id/materials makes for the Material Specs page.
+  // FRD v1.68: reads getLatestRun and listScenarios, the two GETs the Do-Nothing Simulator page makes on load. OWNER floor:
+  // the routes admit any household member, but the service only admits the primary homeowner profile.
+  DO_NOTHING_SIMULATION: definition('DO_NOTHING_SIMULATION', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'do-nothing-simulator.latest', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   // FRD v1.67: reads listForProperty, the call GET /properties/:id/price-finalizations makes for the Price Finalization
   // page. OWNER floor: the route admits any household member, but the service only admits the primary homeowner profile.
   PRICE_FINALIZATIONS_LIST: definition('PRICE_FINALIZATIONS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'price-finalization.records', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -849,6 +853,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The latest saved Do-Nothing Simulator run: what putting off home upkeep could cost. One item's repair-or-replace timing
+// is REPLACEMENT_GUIDANCE; running, saving or editing a simulation is not this read.
+const doNothingPattern = /\bdo[- ]nothing (?:simulat\w*|scenarios?|runs?|results?|analysis|report)\b|\bcost of (?:doing nothing|inaction|waiting)\b|\bwhat (?:happens|would happen|could happen) if (?:i|we) (?:do nothing|don'?t do anything|keep putting (?:it|things|everything) off)\b/i;
+const doNothingOtherIntentPattern = /\b(?:run|rerun|re-run|create|save|new|edit|rename|delete|remove|change)\b/i;
 // The prices and terms recorded in Price Finalization ("what price did we agree with the plumber?"). Comparing quotes,
 // checking a price and negotiating stay with their own operations; finalizing, saving or booking is not this read.
 const priceFinalizationsPattern = /\bprice finali[sz]ations?\b|\bfinali[sz]ed (?:prices?|terms|quotes?)\b|\baccepted (?:prices?|terms|quotes?)\b|\bwhat (?:price|terms?)\b.{0,40}\b(?:agree(?:d)?|accept(?:ed)?|settle(?:d)?|lock(?:ed)? in)\b/i;
@@ -1071,6 +1079,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_RESERVE_PLAN', 0.97);
+  }
+  if (doNothingPattern.test(message) && !doNothingOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('DO_NOTHING_SIMULATION', 0.96);
   }
   if (priceFinalizationsPattern.test(message) && !priceFinalizationsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PRICE_FINALIZATIONS_LIST', 0.96);

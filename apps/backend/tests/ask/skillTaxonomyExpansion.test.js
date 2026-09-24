@@ -58,6 +58,7 @@ const TAXONOMY = Object.freeze({
   'guidance-overview': ['GUIDANCE_JOURNEYS_LIST'],
   'hoa-compliance': ['HOA_COMPLIANCE_STATUS'],
   'price-finalization': ['PRICE_FINALIZATIONS_LIST'],
+  'do-nothing-simulator': ['DO_NOTHING_SIMULATION'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

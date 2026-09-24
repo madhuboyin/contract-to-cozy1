@@ -33,6 +33,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   GUIDANCE_JOURNEYS_LIST: new Set(['guidance-journeys-boundary']),
   HOA_COMPLIANCE_STATUS: new Set(['hoa-compliance-boundary']),
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-boundary']),
+  DO_NOTHING_SIMULATION: new Set(['do-nothing-boundary']),
   // FRD v1.64: the safety-first boundary was never declared, so the validator removed it and then withheld every
   // INCIDENT_CONTINUATION answer for having no direct answer ("I couldn't verify this answer").
   INCIDENT_CONTINUATION: new Set(['incident-continuation-boundary']),
@@ -118,6 +119,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   GUIDANCE_JOURNEYS_LIST: new Set(['open-guidance-overview']),
   HOA_COMPLIANCE_STATUS: new Set(['open-hoa-compliance']),
   PRICE_FINALIZATIONS_LIST: new Set(['open-price-finalization']),
+  DO_NOTHING_SIMULATION: new Set(['open-do-nothing-simulator']),
   // FRD v1.64: INCIDENT_CONTINUATION had no entry, so both of its links were stripped from every answer.
   INCIDENT_CONTINUATION: new Set(['open-claims', 'open-emergency-help']),
   PROPERTY_BRIEFS_LIST: new Set(['open-property-brief']),
