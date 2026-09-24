@@ -114,6 +114,7 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'MATERIAL_SPECS_LIST', message: 'What paint colour is in our dining room?', category: 'COLLOQUIAL' },
   { operationId: 'PROPERTY_BRIEFS_LIST', message: 'Is the property brief we sent our insurer still shared?', category: 'COLLOQUIAL' },
   { operationId: 'GUIDANCE_JOURNEYS_LIST', message: 'How many steps are left in our guided journeys?', category: 'COLLOQUIAL' },
+  { operationId: 'HOA_COMPLIANCE_STATUS', message: 'How much are our HOA dues?', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -220,6 +221,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   SERVICE_PRICE_CHECKS: 'The price radar found your $1,450 plumber quote for a water line repair above the expected $900 to $1,200 range.',
   HOME_TIMELINE_EVENTS: 'Your home timeline records a kitchen remodel in 2024, verified by the contract, a home inspection in 2023, and the purchase of the house in 2021.',
   MATERIAL_SPECS_LIST: 'The dining room paint is Sherwin-Williams Alabaster (SW 7008), eggshell finish.',
+  HOA_COMPLIANCE_STATUS: 'Our HOA dues are $250 monthly to Maple Ridge HOA; the next dues payment is due November 1.',
   GUIDANCE_JOURNEYS_LIST: 'Two guided journeys are in progress with four steps left between them; the next step on the water heater is to compare replacement quotes.',
   PROPERTY_BRIEFS_LIST: 'Yes. The property brief you sent your insurer is still shared through one live link, which expires on October 30, 2026.',
   HOME_HABITS: 'The coach is recommending three small habits for your home, each with how often to do it and why.',

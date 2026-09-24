@@ -72,6 +72,7 @@ const DEFINITIONS = [
   adapter('material-specs.list', 'Material Specs list (MaterialSpecService)', 'MATERIAL_SPECS_LIST'),
   adapter('property-brief.briefs', 'Property Brief list (propertyBrief.service)', 'PROPERTY_BRIEFS_LIST'),
   adapter('guidance-overview.journeys', 'Guidance Overview journeys (guidanceJourneyService)', 'GUIDANCE_JOURNEYS_LIST'),
+  adapter('hoa-compliance.status', 'HOA Compliance records (HoaComplianceService)', 'HOA_COMPLIANCE_STATUS'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),
   adapter('inventory.create', 'InventoryService', 'INVENTORY_ITEM_CREATE', 'MUTATION_PREPARATION'),

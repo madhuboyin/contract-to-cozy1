@@ -70,6 +70,8 @@ const INLINE_ENTRY_READS = {
   // FRD v1.65 (product option A): backed by a new operation reading the Guidance Overview page's journeys
   // (getPropertyGuidance).
   'guidance-overview': { operationId: 'GUIDANCE_JOURNEYS_LIST', message: 'Show my guided journeys' },
+  // FRD v1.66: backed by a new operation reading the HOA page's association, approval records and violations.
+  'hoa-compliance': { operationId: 'HOA_COMPLIANCE_STATUS', message: 'Show my HOA records' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

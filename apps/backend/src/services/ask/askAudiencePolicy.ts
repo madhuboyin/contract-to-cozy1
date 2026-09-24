@@ -155,6 +155,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('MATERIAL_SPECS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PROPERTY_BRIEFS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('GUIDANCE_JOURNEYS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('HOA_COMPLIANCE_STATUS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOUSEHOLD_INVITATION', OWNER_LIFECYCLE_MODES),
   definePolicy('QUOTE_COMPARISON_CREATE', ALL_MODES),
   definePolicy('QUOTE_COMPARISON_REVIEW', ALL_MODES),

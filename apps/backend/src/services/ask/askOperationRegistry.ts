@@ -108,6 +108,7 @@ export type AskOperationId =
   | 'MATERIAL_SPECS_LIST'
   | 'PROPERTY_BRIEFS_LIST'
   | 'GUIDANCE_JOURNEYS_LIST'
+  | 'HOA_COMPLIANCE_STATUS'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -413,6 +414,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // admits any household member, but listChecks only admits the property's primary homeowner profile.
   // FRD v1.61: reads listHomeEvents, the call GET /properties/:id/home-events makes for the Home Timeline page.
   // FRD v1.62: reads listSpecs, the call GET /properties/:id/materials makes for the Material Specs page.
+  // FRD v1.66: reads getAssociation, listApprovalRecords and listViolations, the three GETs the HOA Compliance page makes.
+  HOA_COMPLIANCE_STATUS: definition('HOA_COMPLIANCE_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'hoa-compliance.status', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   // FRD v1.65: reads getPropertyGuidance, the call GET /properties/:id/guidance makes for the Guidance Overview page.
   GUIDANCE_JOURNEYS_LIST: definition('GUIDANCE_JOURNEYS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.journeys', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   // FRD v1.63: reads listPropertyBriefs, the call GET /properties/:id/property-briefs makes for the Property Brief page.
@@ -842,6 +845,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The HOA records on the HOA Compliance page: the association and dues, approval requests and violations. Whether work
+// needs approval (renovation readiness), HOA items at closing (buyer), and reporting or updating a record are not this read.
+const hoaCompliancePattern = /\bhoa (?:compliance|records?|approvals?|approval requests?|violations?|dues|fines?|status)\b|\b(?:my|our|the) (?:hoa|homeowners'? association)(?:'s)?\b.{0,40}\b(?:approv\w*|violations?|dues|fines?|records?|say|said|status)\b|\bhoa\b.{0,40}\b(?:approved|denied|violation notice|cure deadline)\b/i;
+const hoaComplianceOtherIntentPattern = /\b(?:report|add|submit|file|log|create|new|update|change|mark|delete|remove|should|need|needs|require[sd]?|allowed|can (?:i|we)|closing|purchase|escrow|before (?:i|we) (?:start|build|buy))\b/i;
 // The guided journeys already under way on Guidance Overview. Starting one is GUIDANCE_JOURNEY_CREATE (checked earlier);
 // skipping, dismissing or completing a step is not this read.
 const guidanceJourneysPattern = /\bguidance overview\b|\b(?:guided|guidance) (?:journeys?|plans?)\b|\bstep-by-step plans?\b/i;
@@ -1056,6 +1063,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (capitalReservePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('CAPITAL_RESERVE_PLAN', 0.97);
+  }
+  if (hoaCompliancePattern.test(message) && !hoaComplianceOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOA_COMPLIANCE_STATUS', 0.96);
   }
   if (renovationPermitPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('RENOVATION_PERMIT_READINESS', 0.97);
