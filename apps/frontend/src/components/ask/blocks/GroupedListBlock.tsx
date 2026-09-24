@@ -5,6 +5,11 @@ import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
 import { resolveGroupedListView, type GroupedListPresentationPreference } from '@/features/ask/adaptivePresentation';
 import { ResultViewContext } from '@/features/ask/useResultView';
+import { groupedListItems, PATTERN_LABELS, resolveGroupedListPattern } from '@/features/ask/displayPatterns';
+import { CardDeckView } from '../patterns/CardDeckView';
+import { PatternFrame } from '../patterns/PatternParts';
+import { RoomMapView } from '../patterns/RoomMapView';
+import { ShelvesView } from '../patterns/ShelvesView';
 import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
 import { HouseholdResultList } from '../HouseholdResultList';
@@ -145,7 +150,43 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
 const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection', 'property-inventory']);
 const HOME_EVENT_DETAIL_BLOCK_IDS = new Set(['inventory-history', 'property-recent-events']);
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014/015/019/022, FRD v1.72): a grouped list whose server declared a
+// shared pattern, and whose data fits it, renders through that pattern. The homeowner can switch it to the plain
+// list and back; the choice is kept with the result like the other view choices.
 export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
+  const controls = useContext(ResultViewContext);
+  const preference = controls?.view.groupedListModes[props.block.id] ?? 'AUTO';
+  const decision = resolveGroupedListPattern(props.block, preference);
+  const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
+    ...view, groupedListModes: { ...view.groupedListModes, [props.block.id]: mode },
+  }));
+  if (decision.pattern) {
+    const { block, itemActionsDisabled, onFilterClick, onItemAction } = props;
+    return (
+      <PatternFrame title={block.title} description={block.description} pattern={decision.pattern.toLowerCase()} patternLabel={PATTERN_LABELS[decision.pattern]}
+        onChooseList={controls ? () => setPreference('LIST') : undefined} filters={block.filters} onFilterClick={onFilterClick}
+        disabled={itemActionsDisabled} actions={block.actions}>
+        {decision.pattern === 'SHELVES' && <ShelvesView sections={block.sections} moreAction={block.actions[0]} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
+        {decision.pattern === 'DECK' && <CardDeckView items={groupedListItems(block)} swipeRightActionId={decision.swipeRightActionId} swipeLeftActionId={decision.swipeLeftActionId} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
+        {decision.pattern === 'ROOM_MAP' && <RoomMapView items={groupedListItems(block)} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
+      </PatternFrame>
+    );
+  }
+  if (decision.reason === 'HOMEOWNER_CHOSE_LIST' && props.block.presentation && controls) {
+    const label = PATTERN_LABELS[props.block.presentation.pattern];
+    return (
+      <div className="space-y-2">
+        <div className="flex justify-end">
+          <button type="button" onClick={() => setPreference('AUTO')} className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Show as {label.toLowerCase()}</button>
+        </div>
+        <DeclaredListBlock {...props} />
+      </div>
+    );
+  }
+  return <DeclaredListBlock {...props} />;
+};
+
+const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
   if (block.id === 'maintenance-groups') {
     return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onAccessLost={onAccessLost}

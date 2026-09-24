@@ -47,6 +47,13 @@ const AskActionSchema = z.object({
   }
 });
 
+const AskDisplayToneSchema = z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']);
+
+const AskAnswerChipSchema = z.object({
+  label: z.string().trim().min(1).max(60),
+  tone: AskDisplayToneSchema.default('DEFAULT'),
+});
+
 const SummaryBlockSchema = z.object({
   type: z.literal('SUMMARY'),
   id: z.string(),
@@ -54,6 +61,9 @@ const SummaryBlockSchema = z.object({
   body: z.string(),
   tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT'),
   actions: z.array(AskActionSchema).max(3).default([]),
+  // IW-PRES-013 (answer first): up to four number chips taken from the same records as the result. Optional so
+  // existing producers are unchanged.
+  chips: z.array(AskAnswerChipSchema).max(4).optional(),
 });
 
 // Ask Cozy Stage 3, Phase 5 (implementation plan §11; FRD §28/§29). The one
@@ -125,7 +135,28 @@ const GroupedListItemSchema = z.object({
   // Additive for existing grouped-list producers: actionable rows opt in;
   // historical/non-actionable rows remain valid without emitting an empty list.
   actions: z.array(GroupedListItemActionSchema).max(12).optional(),
+  // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.72): typed display facts the shared patterns use. All optional and
+  // additive; a renderer that does not know them keeps showing `description` and `meta`.
+  tone: AskDisplayToneSchema.optional(),
+  timingLabel: z.string().trim().min(1).max(80).nullable().optional(),
+  amountLabel: z.string().trim().min(1).max(80).nullable().optional(),
+  floorLevel: z.number().int().min(-5).max(200).nullable().optional(),
+  countLabel: z.string().trim().min(1).max(60).nullable().optional(),
+  badgeLabel: z.string().trim().min(1).max(60).nullable().optional(),
 });
+
+// IW-PRES-022: the server declares which shared pattern a grouped list uses. The client uses it only when the
+// block's data fits the pattern, and otherwise renders the ordinary grouped list (IW-PRES-012).
+const GroupedListPresentationSchema = z.discriminatedUnion('pattern', [
+  z.object({ pattern: z.literal('SHELVES') }),
+  z.object({
+    pattern: z.literal('DECK'),
+    // Item action ids a right or left swipe performs. Each must be declared on every item, or swiping is off.
+    swipeRightActionId: z.string().trim().min(1).max(120).nullable().optional(),
+    swipeLeftActionId: z.string().trim().min(1).max(120).nullable().optional(),
+  }),
+  z.object({ pattern: z.literal('ROOM_MAP') }),
+]);
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD §7 (ACT-001 FILTER_RESULT): a declared,
 // clickable filter -- `message` is the exact canned phrasing the existing
@@ -157,6 +188,7 @@ const GroupedListBlockSchema = z.object({
   })).max(12),
   actions: z.array(AskActionSchema).max(3).default([]),
   filters: z.array(GroupedListFilterSchema).max(6).default([]),
+  presentation: GroupedListPresentationSchema.optional(),
 });
 
 const TableBlockSchema = z.object({
@@ -320,7 +352,56 @@ const MetricRowBlockSchema = z.object({
 
 const TimelineBlockSchema = z.object({
   type: z.literal('TIMELINE'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
-  items: z.array(z.object({ id: z.string(), label: z.string(), date: z.string().nullable().optional(), description: z.string().nullable().optional(), status: z.string().nullable().optional(), href: z.string().nullable().optional() })).max(50),
+  items: z.array(z.object({
+    id: z.string(), label: z.string(), date: z.string().nullable().optional(), description: z.string().nullable().optional(), status: z.string().nullable().optional(), href: z.string().nullable().optional(),
+    // IW-PRES-017 (FRD v1.72): optional category (legend and filter), recorded date precision, and item actions.
+    category: z.object({ id: z.string().trim().min(1).max(60), label: z.string().trim().min(1).max(60) }).nullable().optional(),
+    datePrecision: z.enum(['DAY', 'MONTH', 'YEAR']).nullable().optional(),
+    entityType: z.string().trim().min(1).max(60).nullable().optional(),
+    actions: z.array(GroupedListItemActionSchema).max(4).optional(),
+  })).max(50),
+});
+
+const ComparisonBadgeSchema = z.object({
+  label: z.string().trim().min(1).max(48),
+  basis: z.string().trim().min(1).max(300),
+  policyCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,79}$/),
+});
+
+// IW-PRES-018 (FRD v1.72): age against a typical life range, one bar per item. Status is declared by the server
+// from the range, never worked out by the renderer. Items without an age are listed separately so the homeowner
+// can add the missing year through a declared item action.
+const LifespanBlockSchema = z.object({
+  type: z.literal('LIFESPAN'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  basis: z.string().trim().min(1).max(300),
+  items: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    ageYears: z.number().min(0).max(200),
+    typicalLifeYears: z.object({ min: z.number().min(0).max(200), max: z.number().min(0).max(200) })
+      .refine((range) => range.min <= range.max, { message: 'Typical life minimum must not exceed its maximum.' }),
+    status: z.enum(['WITHIN_RANGE', 'PLAN_AHEAD', 'PAST_RANGE']),
+    statusLabel: z.string().trim().min(1).max(60),
+    entityType: z.string().trim().min(1).max(60).nullable().optional(),
+    actions: z.array(GroupedListItemActionSchema).max(4).optional(),
+  })).max(50),
+  missingAge: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    entityType: z.string().trim().min(1).max(60).nullable().optional(),
+    actions: z.array(GroupedListItemActionSchema).max(4).optional(),
+  })).max(20).default([]),
+});
+
+// IW-PRES-020 (FRD v1.72): checklist readiness as a ring. `percent` is the domain's own readiness figure and
+// `basis` says what it counts; the renderer never recomputes it.
+const ProgressBlockSchema = z.object({
+  type: z.literal('PROGRESS'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  percent: z.number().min(0).max(100),
+  basis: z.string().trim().min(1).max(200),
+  metrics: z.array(z.object({ label: z.string().trim().min(1).max(60), value: z.string().trim().min(1).max(40), tone: AskDisplayToneSchema.default('DEFAULT') })).max(3).default([]),
+  nextSteps: z.array(GroupedListItemSchema).max(3).default([]),
+  actions: z.array(AskActionSchema).max(3).default([]),
 });
 
 const ComparisonBlockSchema = z.object({
@@ -332,11 +413,10 @@ const ComparisonBlockSchema = z.object({
     // Badges are server-declared decisions, never labels inferred by the
     // renderer. The policy code makes the governing rule inspectable while
     // basis provides the homeowner-facing explanation required by IW-PRES-006.
-    badge: z.object({
-      label: z.string().trim().min(1).max(48),
-      basis: z.string().trim().min(1).max(300),
-      policyCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,79}$/),
-    }).nullable().optional(),
+    badge: ComparisonBadgeSchema.nullable().optional(),
+    // IW-PRES-016 (FRD v1.72): an option may lead on several declared things ("Lowest price", "Soonest start").
+    // `badge` stays for existing producers; a renderer shows `badges` when present.
+    badges: z.array(ComparisonBadgeSchema).max(3).optional(),
     attributes: z.array(z.object({ label: z.string(), value: z.string(), tone: z.enum(['DEFAULT', 'POSITIVE', 'CAUTION', 'CRITICAL']).default('DEFAULT') })).max(12),
     actions: z.array(AskActionSchema).max(2).default([]),
   })).min(2).max(4),
@@ -543,6 +623,8 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   LimitationBlockSchema,
   EmptyStateBlockSchema,
   ErrorStateBlockSchema,
+  LifespanBlockSchema,
+  ProgressBlockSchema,
 ]);
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD §8 (CONF-002/CONF-003): a declared,
@@ -843,7 +925,9 @@ function validateEvidenceClaimMappings(
               ? target.options.some((option) => option.id === item.claim!.targetItemId)
               : target.type === 'TIMELINE'
                 ? target.items.some((entry) => entry.id === item.claim!.targetItemId)
-                : false;
+                : target.type === 'LIFESPAN'
+                  ? target.items.some((entry) => entry.id === item.claim!.targetItemId)
+                  : false;
         if (!targetItemExists) {
           ctx.addIssue({ code: 'custom', path: [...path, 'targetItemId'], message: 'Evidence claim item must exist in the referenced result block.' });
         }

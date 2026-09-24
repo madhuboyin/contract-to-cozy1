@@ -32,6 +32,7 @@ function filterBlockActions(block: AskPresentationBlock, householdRole: Househol
     case 'SCENARIO_COMPARISON':
     case 'EMPTY_STATE':
     case 'ERROR_STATE':
+    case 'PROGRESS':
       return { ...block, actions: filterActions(block.actions, householdRole) } as AskPresentationBlock;
     case 'BOUNDARY':
       return { ...block, actions: filterActions(block.actions ?? [], householdRole) } as AskPresentationBlock;

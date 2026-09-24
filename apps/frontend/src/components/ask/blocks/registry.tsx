@@ -19,7 +19,6 @@ import {
   MetricRowBlock,
   ProactiveInsightBlock,
   SummaryBlock,
-  TimelineBlock,
   UnsupportedBlock,
   WorkflowProgressBlock,
 } from './CoreBlocks';
@@ -37,6 +36,9 @@ import { GroupedListBlock } from './GroupedListBlock';
 import { MonitorBlock } from './MonitorBlock';
 import { OutcomeSummaryBlock, PriorityListBlock } from './PriorityAndOutcomeBlocks';
 import { TableBlock } from './TableBlock';
+import { LifespanBlock } from '../patterns/LifespanBlock';
+import { ProgressBlock } from '../patterns/ProgressBlock';
+import { TimelineTrackBlock } from '../patterns/TimelineTrackBlock';
 import type { AskBlockRenderer, AskBlockRendererProps, AskBlockType } from './types';
 
 type AskBlockRendererRegistry = { [T in AskBlockType]: AskBlockRenderer<T> };
@@ -54,7 +56,7 @@ export const ASK_BLOCK_RENDERERS: AskBlockRendererRegistry = {
   OUTPUT_ARTIFACTS: OutputArtifactsBlock,
   RELATED_RECORDS: RelatedRecordsBlock,
   METRIC_ROW: MetricRowBlock,
-  TIMELINE: TimelineBlock,
+  TIMELINE: TimelineTrackBlock,
   COMPARISON: ({ block }) => <ComparisonStripBlock block={block} renderAction={(action) => <ActionLink action={action} />} />,
   DECISION_TRACE: DecisionTraceBlock,
   DECISION_PROGRESS: DecisionProgressBlock,
@@ -69,6 +71,8 @@ export const ASK_BLOCK_RENDERERS: AskBlockRendererRegistry = {
   LIMITATION: LimitationBlock,
   EMPTY_STATE: EmptyStateBlock,
   ERROR_STATE: ErrorStateBlock,
+  LIFESPAN: LifespanBlock,
+  PROGRESS: ProgressBlock,
 };
 
 export function BlockView(props: AskBlockRendererProps) {

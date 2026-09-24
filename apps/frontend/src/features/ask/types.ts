@@ -42,10 +42,36 @@ export interface AskGroupedListFilter {
   active: boolean;
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.72): shared display-pattern types. Mirrors ask.contract.ts.
+export type AskDisplayTone = 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL';
+export interface AskAnswerChip { label: string; tone: AskDisplayTone }
+export interface AskGroupedListItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  meta: string[];
+  status?: string | null;
+  href?: string | null;
+  entityType?: string | null;
+  parentId?: string | null;
+  actions?: AskGroupedListItemAction[];
+  tone?: AskDisplayTone;
+  timingLabel?: string | null;
+  amountLabel?: string | null;
+  floorLevel?: number | null;
+  countLabel?: string | null;
+  badgeLabel?: string | null;
+}
+export type AskGroupedListPresentation =
+  | { pattern: 'SHELVES' }
+  | { pattern: 'DECK'; swipeRightActionId?: string | null; swipeLeftActionId?: string | null }
+  | { pattern: 'ROOM_MAP' };
+export interface AskComparisonBadge { label: string; basis: string; policyCode: string }
+
 export type AskPresentationBlock =
-  | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[] }
+  | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[] }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
-  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; sections: Array<{ id: string; title: string; count: number; offset?: number; items: Array<{ id: string; title: string; description?: string | null; meta: string[]; status?: string | null; href?: string | null; entityType?: string | null; parentId?: string | null; actions?: AskGroupedListItemAction[] }> }>; actions: AskAction[]; filters: AskGroupedListFilter[] }
+  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; sections: Array<{ id: string; title: string; count: number; offset?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation }
   | { type: 'TABLE'; id: string; title: string; description?: string | null; columns: Array<{ key: string; label: string }>; rows: Array<{ id: string; values: Record<string, string> }>; totalCount?: number; actions: AskAction[] }
   | { type: 'CAPABILITY_LIST'; id: string; title: string; description?: string | null; capabilities: Array<{ id: string; label: string; description: string; expectedOutput: string; href: string; inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: string; message: string } | null; inlineBoundary: string; readiness: 'READY' | 'NEEDS_PROPERTY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE' | 'AVAILABLE'; readinessLabel: string | null; readinessReasons: string[]; releaseStage: 'ACTIVE' | 'BETA' }> }
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null; claim?: { targetBlockId: string; targetItemId: string | null; text: string } | null }> }
@@ -58,8 +84,8 @@ export type AskPresentationBlock =
   > }
   | { type: 'RELATED_RECORDS'; id: string; title: string; relationships: Array<{ relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT'; source: { recordType: 'DOCUMENT'; recordId: string; label: string }; target: { recordType: 'HOME_EVENT'; recordId: string; label: string }; navigation: { label: string; href: string } | null }> }
   | { type: 'METRIC_ROW'; id: string; title: string; description?: string | null; metrics: Array<{ label: string; value: string; detail?: string | null; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL' }> }
-  | { type: 'TIMELINE'; id: string; title: string; description?: string | null; items: Array<{ id: string; label: string; date?: string | null; description?: string | null; status?: string | null; href?: string | null }> }
-  | { type: 'COMPARISON'; id: string; title: string; description?: string | null; options: Array<{ id: string; label: string; summary?: string | null; badge?: { label: string; basis: string; policyCode: string } | null; attributes: Array<{ label: string; value: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL' }>; actions: AskAction[] }>; actions: AskAction[] }
+  | { type: 'TIMELINE'; id: string; title: string; description?: string | null; items: Array<{ id: string; label: string; date?: string | null; description?: string | null; status?: string | null; href?: string | null; category?: { id: string; label: string } | null; datePrecision?: 'DAY' | 'MONTH' | 'YEAR' | null; entityType?: string | null; actions?: AskGroupedListItemAction[] }> }
+  | { type: 'COMPARISON'; id: string; title: string; description?: string | null; options: Array<{ id: string; label: string; summary?: string | null; badge?: AskComparisonBadge | null; badges?: AskComparisonBadge[]; attributes: Array<{ label: string; value: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL' }>; actions: AskAction[] }>; actions: AskAction[] }
   | { type: 'DECISION_TRACE'; id: string; title: string; steps: Array<{ label: string; detail: string; outcome?: string | null }> }
   | { type: 'DECISION_PROGRESS'; id: string; title: string; decisionThreadId: string; lifecycleStatus: 'OPEN' | 'GATHERING_CONTEXT' | 'READY_TO_COMPARE' | 'RECOMMENDATION_AVAILABLE' | 'ACTION_IN_PROGRESS' | 'DECIDED' | 'COMPLETED' | 'ABANDONED' | 'ARCHIVED'; contextStatus: 'CURRENT' | 'STALE' | 'CONFLICTED'; verdict: string | null; reasonCodes: string[]; limitationCodes: string[]; contextIssueCodes: string[]; confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null; generatedAt: string | null; actions: AskAction[] }
   | { type: 'SCENARIO_COMPARISON'; id: string; title: string; decisionThreadId: string; scenarioId: string; baseline: { label: string; verdict: string; reasonCodes: string[]; limitationCodes: string[] }; scenario: { label: string; verdict: string; reasonCodes: string[]; limitationCodes: string[]; assumptions: Array<{ label: string; value: string }> }; comparisonDirection: 'SCENARIO_FAVORS_REPLACE' | 'SCENARIO_FAVORS_REPAIR' | 'NO_CHANGE'; actions: AskAction[] }
@@ -72,7 +98,9 @@ export type AskPresentationBlock =
   | { type: 'ASSUMPTIONS'; id: string; title: string; items: string[] }
   | { type: 'LIMITATION'; id: string; title: string; body: string; severity: 'INFO' | 'CAUTION' }
   | { type: 'EMPTY_STATE'; id: string; title: string; body: string; actions: AskAction[] }
-  | { type: 'ERROR_STATE'; id: string; title: string; body: string; retryable: boolean; actions: AskAction[] };
+  | { type: 'ERROR_STATE'; id: string; title: string; body: string; retryable: boolean; actions: AskAction[] }
+  | { type: 'LIFESPAN'; id: string; title: string; description?: string | null; basis: string; items: Array<{ id: string; label: string; ageYears: number; typicalLifeYears: { min: number; max: number }; status: 'WITHIN_RANGE' | 'PLAN_AHEAD' | 'PAST_RANGE'; statusLabel: string; entityType?: string | null; actions?: AskGroupedListItemAction[] }>; missingAge: Array<{ id: string; label: string; entityType?: string | null; actions?: AskGroupedListItemAction[] }> }
+  | { type: 'PROGRESS'; id: string; title: string; description?: string | null; percent: number; basis: string; metrics: Array<{ label: string; value: string; tone: AskDisplayTone }>; nextSteps: AskGroupedListItem[]; actions: AskAction[] };
 
 export interface AskExecutionResponse {
   schemaVersion: '1.0';

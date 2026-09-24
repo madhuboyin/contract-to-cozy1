@@ -15,9 +15,22 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => (
   )}>
     <h3 className="font-semibold text-slate-950">{block.title}</h3>
     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
+    {/* IW-PRES-013: answer-first number chips, taken by the server from the same records as the result. */}
+    {block.chips && block.chips.length > 0 && (
+      <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="At a glance">
+        {block.chips.map((chip) => <li key={chip.label} data-ask-answer-chip={chip.tone.toLowerCase()} className={cn('rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums', ANSWER_CHIP_TONES[chip.tone])}>{chip.label}</li>)}
+      </ul>
+    )}
     {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
   </section>
 );
+
+const ANSWER_CHIP_TONES = {
+  DEFAULT: 'bg-slate-100 text-slate-700',
+  POSITIVE: 'bg-emerald-100 text-emerald-800',
+  CAUTION: 'bg-amber-100 text-amber-900',
+  CRITICAL: 'bg-red-100 text-red-800',
+} as const;
 
 // Ask Cozy Stage 3, Phase 5 (implementation plan §11; FRD §28). The one new
 // block type this phase adds -- structurally identical to SUMMARY plus a

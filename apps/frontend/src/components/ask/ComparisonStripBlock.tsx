@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import type { AskAction, AskPresentationBlock } from '@/features/ask/types';
 import { prefersReducedMotion, resolveAdaptiveComparisonPresentation, type ComparisonPresentationPreference } from '@/features/ask/adaptivePresentation';
 import { ResultViewContext } from '@/features/ask/useResultView';
+import { comparisonBadges } from '@/features/ask/displayPatterns';
 
 type ComparisonBlock = Extract<AskPresentationBlock, { type: 'COMPARISON' }>;
 
@@ -84,12 +85,14 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
             aria-label={`Option ${index + 1} of ${block.options.length}: ${option.label}`}
             className={cn('rounded-xl border border-slate-200 bg-white p-4 outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2', layout === 'STRIP' && 'sm:min-w-[19rem] sm:max-w-[22rem] sm:flex-1 sm:snap-start')}
           >
-            {option.badge && (
+            {comparisonBadges(option).length > 0 && (
               <div className="mb-3">
-                <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-800" data-badge-policy={option.badge.policyCode}>{option.badge.label}</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {comparisonBadges(option).map((badge) => <span key={badge.policyCode} className="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-800" data-badge-policy={badge.policyCode}>{badge.label}</span>)}
+                </div>
                 <details className="mt-1.5 text-xs text-slate-600">
-                  <summary className="cursor-pointer font-medium text-slate-700">Why this label</summary>
-                  <p className="mt-1 leading-5">{option.badge.basis}</p>
+                  <summary className="cursor-pointer font-medium text-slate-700">{comparisonBadges(option).length === 1 ? 'Why this label' : 'Why these labels'}</summary>
+                  {comparisonBadges(option).map((badge) => <p key={badge.policyCode} className="mt-1 leading-5">{comparisonBadges(option).length > 1 && <strong className="font-semibold">{badge.label}: </strong>}{badge.basis}</p>)}
                 </details>
               </div>
             )}
