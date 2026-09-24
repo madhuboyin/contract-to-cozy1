@@ -1039,6 +1039,38 @@ function roomMapExecution() {
   };
 }
 
+// IW-PRES-020 (FRD v1.80): seller-prep's sale readiness ring above the checklist.
+function sellerPrepProgressExecution() {
+  const decision = (id: string, label: string, message: string) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'SELLER_PREP_ITEM_DECISION' });
+  const pursue = decision('sale-item-pursue', 'Pursue before listing', 'Pursue this seller-prep checklist item.');
+  const waive = decision('sale-item-waive', 'Disclose and waive', 'Waive this seller-prep checklist item.');
+  const href = (id: string) => `/dashboard/properties/${propertyId}/tools/sale-case?focusItemId=${id}`;
+  const step = (id: string, title: string, description: string, amountLabel: string | null) => ({ id, title, description, amountLabel, meta: [], status: 'OPEN', href: href(id), entityType: 'SALE_READINESS_ITEM', actions: [pursue, waive] });
+  return {
+    schemaVersion: '1.0', executionId: 'execution-seller-prep-progress', sessionId: 'ask-acceptance-session',
+    question: 'How ready is my home to sell', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'SELLER_PREP_CHECKLIST', version: '1.0', family: 'DECISION_ANALYSIS' }, contextVersion: null,
+    blocks: [{
+      type: 'SUMMARY', id: 'seller-prep-summary', title: 'Your seller-prep checklist', tone: 'DEFAULT', body: '3 open items, 1 already in progress, 1 waived.',
+      actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: `/dashboard/properties/${propertyId}/tools/sale-case`, style: 'SECONDARY' }],
+    }, {
+      type: 'PROGRESS', id: 'seller-prep-progress', title: 'Sale readiness',
+      description: 'Counts the must-address items: material blockers, items that need verifying, and professional decisions. Optional improvements and presentation work are listed below but not counted.',
+      percent: 50, basis: '3 of 6 must-address items resolved or disclosed',
+      metrics: [{ label: 'Open', value: '2', tone: 'CAUTION' }, { label: 'Pursuing', value: '1', tone: 'DEFAULT' }, { label: 'Waived', value: '1', tone: 'DEFAULT' }],
+      nextSteps: [
+        step('blocker-open', 'Repair the cracked foundation wall', 'Safety & structural · Blocks a sale', '$5,000–$9,000 estimated'),
+        step('verify-open', 'Confirm the deck permit', 'Permits & disclosure · Needs verifying', null),
+      ],
+      actions: [],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: ['What should I prioritize first?'],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
 function relatedRecordsExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-related-records', sessionId: 'ask-acceptance-session',
@@ -1612,6 +1644,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/show the task output/i.test(body.message)) {
       const response = maintenanceOutputExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/^how ready is my home to sell/i.test(body.message)) {
+      const response = sellerPrepProgressExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

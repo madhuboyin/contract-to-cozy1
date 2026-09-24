@@ -791,6 +791,27 @@ const BUDGET_RECOMMENDATION_MAX_ITEMS = 4;
 // recommended again. Greedy value-add-per-dollar selection, not an optimal
 // knapsack solve — transparent and good enough for "which few things
 // should I prioritize," not a promise of the mathematically best subset.
+// FRD v1.80 (Ask progress ring, homeowner decision 2026-09-24): the sale case's own readiness figure. It counts
+// only the must-address items -- material blockers, items needing verification, and professional decisions --
+// and treats one as settled when it is resolved (its source cleared) or disclosed and waived. Pursuing is a
+// commitment, not done. Optional improvements and presentation work are not counted. With no must-address item the
+// figure is null: absence of findings is not evidence of readiness (see the structural-evidence rule above).
+export const SALE_READINESS_MUST_ADDRESS_CLASSES: readonly SaleReadinessRequirementClass[] = ['MATERIAL_BLOCKER', 'VERIFICATION_NEEDED', 'PROFESSIONAL_DECISION'];
+
+export function saleReadinessFigure(items: ReadonlyArray<Pick<SaleReadinessItem, 'status' | 'requirementClass' | 'category'>>): {
+  percent: number | null; settled: number; total: number; open: number; pursuing: number; waived: number; resolved: number;
+} {
+  const counted = items.filter((item) => SALE_READINESS_MUST_ADDRESS_CLASSES.includes(item.requirementClass) && item.category !== 'PRESENTATION');
+  const count = (status: SaleReadinessItemStatus) => counted.filter((item) => item.status === status).length;
+  const resolved = count('RESOLVED');
+  const waived = count('WAIVED');
+  const settled = resolved + waived;
+  return {
+    percent: counted.length ? Math.round((settled / counted.length) * 100) : null,
+    settled, total: counted.length, open: count('OPEN'), pursuing: count('PURSUING'), waived, resolved,
+  };
+}
+
 function computeBudgetRecommendation(
   items: Array<Pick<SaleReadinessItem, 'id' | 'status' | 'estimatedCostMinCents' | 'estimatedCostMaxCents' | 'estimatedValueAddMinCents' | 'estimatedValueAddMaxCents'>>,
   budgetRange: SalePrepBudgetRange | null,

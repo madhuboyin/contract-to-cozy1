@@ -73,6 +73,7 @@ export const SELLER_PREP_SKILL = Object.freeze({
   "authorizationFloor": "VIEWER",
   "allowedResultBlocks": [
     "SUMMARY",
+    "PROGRESS",
     "GROUPED_LIST",
     "EVIDENCE",
     "WORKFLOW_PROGRESS",

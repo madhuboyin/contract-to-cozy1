@@ -9,6 +9,7 @@ import { matchesSavingsOpportunitiesAnswerContract } from './askSavingsIntent';
 import { matchesOwnershipCostsAnswerContract } from './askOwnershipCostsIntent';
 import { matchesHomeActionsAnswerContract } from './askHomeActionsIntent';
 import { matchesQuoteComparisonReviewAnswerContract } from './askQuoteReviewIntent';
+import { matchesSellerPrepChecklistAnswerContract } from './askSellerPrepIntent';
 
 export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.6';
 
@@ -104,6 +105,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'HOME_ACTIONS'
     && matchesHomeActionsAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'SELLER_PREP_CHECKLIST'
+    && matchesSellerPrepChecklistAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,

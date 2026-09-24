@@ -130,7 +130,7 @@ import { HomeSavingsService } from '../homeSavings.service';
 import { HiddenAssetService } from '../hiddenAssets.service';
 import { savingsBenefitsUnifiedService } from '../savingsBenefitsUnified.service';
 import { SellHoldRentService } from '../sellHoldRent.service';
-import { PropertySaleCaseService } from '../propertySaleCase.service';
+import { PropertySaleCaseService, SALE_READINESS_MUST_ADDRESS_CLASSES, saleReadinessFigure } from '../propertySaleCase.service';
 import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../ownershipCosts/ownershipCostReadModel.service';
 import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../inventory.service';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
@@ -7092,6 +7092,10 @@ const SALE_READINESS_CATEGORY_LABELS: Record<string, string> = {
   PRESENTATION: 'Presentation',
 };
 
+const SALE_READINESS_CLASS_LABELS: Record<string, string> = {
+  MATERIAL_BLOCKER: 'Blocks a sale', VERIFICATION_NEEDED: 'Needs verifying', PROFESSIONAL_DECISION: 'Professional decision',
+};
+
 function sellerPrepCostRangeMeta(item: { estimatedCostMinCents: number | null; estimatedCostMaxCents: number | null }): string[] {
   if (item.estimatedCostMinCents == null) return [];
   const min = money(item.estimatedCostMinCents / 100);
@@ -7180,6 +7184,38 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     tone: 'DEFAULT',
     actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: checklistHref, style: 'SECONDARY' }],
   }];
+
+  // IW-PRES-020 (FRD v1.80): the sale case's own readiness figure as a ring, with the must-address counts and the next
+  // three open must-address items (blockers first), each with the two decisions an open item allows.
+  const figure = saleReadinessFigure(overview.readinessItems);
+  if (figure.percent !== null) {
+    const classOrder = (item: typeof openItems[number]) => SALE_READINESS_MUST_ADDRESS_CLASSES.indexOf(item.requirementClass);
+    const openActions = itemActions.filter((action) => action.id === 'sale-item-pursue' || action.id === 'sale-item-waive');
+    const nextSteps = openItems
+      .filter((item) => classOrder(item) >= 0 && item.category !== 'PRESENTATION')
+      .map((item, index) => ({ item, index }))
+      .sort((left, right) => classOrder(left.item) - classOrder(right.item) || left.index - right.index)
+      .slice(0, 3)
+      .map(({ item }) => ({
+        id: item.id, title: item.title,
+        description: [SALE_READINESS_CATEGORY_LABELS[item.category] ?? item.category, SALE_READINESS_CLASS_LABELS[item.requirementClass]].filter(Boolean).join(' · '),
+        amountLabel: sellerPrepCostRangeMeta(item)[0] ?? null,
+        meta: [], status: item.status, href: saleCaseHref(propertyId, item.id), entityType: 'SALE_READINESS_ITEM', actions: openActions,
+      }));
+    blocks.push({
+      type: 'PROGRESS', id: 'seller-prep-progress', title: 'Sale readiness',
+      description: 'Counts the must-address items: material blockers, items that need verifying, and professional decisions. Optional improvements and presentation work are listed below but not counted.',
+      percent: figure.percent,
+      basis: `${figure.settled} of ${figure.total} must-address item${figure.total === 1 ? '' : 's'} resolved or disclosed`,
+      metrics: [
+        { label: 'Open', value: String(figure.open), tone: figure.open ? 'CAUTION' : 'DEFAULT' },
+        { label: 'Pursuing', value: String(figure.pursuing), tone: 'DEFAULT' },
+        { label: 'Waived', value: String(figure.waived), tone: 'DEFAULT' },
+      ],
+      nextSteps,
+      actions: [],
+    });
+  }
 
   // FRD v1.44: items being pursued and items disclosed-and-waived are listed too (the traditional page shows both),
   // so their Stop pursuing / Reopen decisions are reachable inline.

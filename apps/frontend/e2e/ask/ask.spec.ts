@@ -1429,6 +1429,42 @@ test('on a phone, the room map tiles fit the screen and a room opens as a bottom
   await expect(response.getByText('Kitchen · 8 items · 2 open tasks · Updated Sep 1, 2026')).toBeVisible();
 });
 
+test('sale readiness answers with a progress ring: percent and basis, must-address tiles, next steps whose decision is sent for that item (FRD v1.80)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('How ready is my home to sell');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-seller-prep-progress [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: '50% ready. 3 of 6 must-address items resolved or disclosed' })).toBeVisible();
+  await expect(ring.locator('dl > div')).toHaveText(['Open2', 'Pursuing1', 'Waived1']);
+  const blocker = ring.locator('[data-ask-progress-step="blocker-open"]');
+  await expect(blocker.getByText('Safety & structural · Blocks a sale · $5,000–$9,000 estimated')).toBeVisible();
+  await expect(blocker.getByRole('link', { name: 'Open Repair the cracked foundation wall' })).toHaveAttribute('href', /tools\/sale-case\?focusItemId=blocker-open/);
+  await blocker.getByRole('button', { name: /Pursue before listing/ }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Pursue this seller-prep checklist item.'
+    && (body.launchContext as { entityType?: string } | undefined)?.entityType === 'SALE_READINESS_ITEM'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'blocker-open')).toBe(true);
+});
+
+test('on a phone, the sale readiness ring, tiles and next steps fit the screen (FRD v1.80)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('How ready is my home to sell');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-seller-prep-progress [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: /^50% ready/ })).toBeVisible();
+  for (const element of [...await ring.locator('dl > div').all(), ...await ring.locator('[data-ask-progress-step]').all()]) {
+    const box = await element.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  await expect(ring.locator('[data-ask-progress-step="verify-open"]').getByRole('button', { name: /Disclose and waive/ })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
   await installAskApi(page, { maintenanceDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

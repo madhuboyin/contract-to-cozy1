@@ -185,6 +185,7 @@ export const SELLER_PREP_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   "expectedBlockTypes": [
     "SUMMARY",
+    "PROGRESS",
     "GROUPED_LIST",
     "EVIDENCE",
     "WORKFLOW_PROGRESS",

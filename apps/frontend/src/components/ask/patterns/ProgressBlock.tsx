@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { ActionLink } from '../blocks/context';
+import { ActionLink, AskContextLink } from '../blocks/context';
 import type { AskBlockRenderer } from '../blocks/types';
 import { ItemActionButtons, TONE_CHIP } from './PatternParts';
 
@@ -54,6 +54,7 @@ export const ProgressBlock: AskBlockRenderer<'PROGRESS'> = ({ block, onItemActio
                   {(step.description || step.amountLabel) && <p className="text-xs text-slate-500">{[step.description, step.amountLabel].filter(Boolean).join(' · ')}</p>}
                 </div>
                 <ItemActionButtons item={step} actions={step.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />
+                {step.href && <AskContextLink href={step.href} className="text-xs font-semibold text-teal-700 hover:underline">Open<span className="sr-only"> {step.title}</span></AskContextLink>}
               </li>
             ))}
           </ul>
