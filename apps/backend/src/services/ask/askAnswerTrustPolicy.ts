@@ -28,6 +28,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   PROJECT_TRACKER_PROJECTS: new Set(['project-tracker-boundary']),
   SERVICE_PRICE_CHECKS: new Set(['service-price-radar-boundary']),
   HOME_TIMELINE_EVENTS: new Set(['home-timeline-boundary']),
+  MATERIAL_SPECS_LIST: new Set(['material-specs-boundary']),
   QUOTE_COMPARISON_REVIEW: new Set(['quote-review-boundary']),
   CAPITAL_RESERVE_PLAN: new Set(['capital-plan-boundary']),
   HOME_EVENT_RADAR_FEED: new Set(['home-event-radar-partial']),
@@ -106,6 +107,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker']),
   SERVICE_PRICE_CHECKS: new Set(['open-service-price-radar']),
   HOME_TIMELINE_EVENTS: new Set(['open-home-timeline']),
+  MATERIAL_SPECS_LIST: new Set(['open-material-specs']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.
   SELLER_PREP_CHECKLIST: new Set(['open-seller-prep', 'sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen']),

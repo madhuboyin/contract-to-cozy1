@@ -29,7 +29,7 @@ test('every one of the 86 Ask operations resolves to a registered capability han
   // Appendix D, second reference journey, 2026-09-22).
   // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
-  assert.equal(operationIds.length, 104);
+  assert.equal(operationIds.length, 105);
   assert.deepEqual(validateCapabilityHandlerRegistry(), []);
 });
 

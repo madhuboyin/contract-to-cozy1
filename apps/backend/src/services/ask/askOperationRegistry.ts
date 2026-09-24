@@ -105,6 +105,7 @@ export type AskOperationId =
   | 'PROJECT_TRACKER_PROJECTS'
   | 'SERVICE_PRICE_CHECKS'
   | 'HOME_TIMELINE_EVENTS'
+  | 'MATERIAL_SPECS_LIST'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -409,6 +410,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // FRD v1.60: reads listChecks, the call GET /properties/:id/service-price-radar/checks makes. OWNER floor: the route
   // admits any household member, but listChecks only admits the property's primary homeowner profile.
   // FRD v1.61: reads listHomeEvents, the call GET /properties/:id/home-events makes for the Home Timeline page.
+  // FRD v1.62: reads listSpecs, the call GET /properties/:id/materials makes for the Material Specs page.
+  MATERIAL_SPECS_LIST: definition('MATERIAL_SPECS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'material-specs.list', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_TIMELINE_EVENTS: definition('HOME_TIMELINE_EVENTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-timeline.events', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   SERVICE_PRICE_CHECKS: definition('SERVICE_PRICE_CHECKS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'service-price-radar.checks', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PROJECT_TRACKER_PROJECTS: definition('PROJECT_TRACKER_PROJECTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'project-tracker.projects', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
@@ -833,6 +836,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The finishes and products recorded in Material Specs ("what paint colour is the living room?"). Choosing, buying or
+// adding a material is not this read.
+const materialSpecsPattern = /\bmaterial specs?\b|\b(?:my|our|recorded) (?:materials|finishes)\b|\bpaint colou?rs?\b|\bwhat (?:paint|colou?r|tile|flooring|grout|countertops?|cabinets?|wallpaper|siding|trim)\b.{0,50}\b(?:use|used|is|are|did|was|in|on)\b/i;
+const materialSpecsOtherIntentPattern = /\b(?:should|recommend|suggest|choose|pick|buy|order|new|add|record|log|best|trend(?:ing|s)?|ideas?)\b/i;
 // The whole-home history on the Home Timeline. Recent changes are HOME_CHANGE_SUMMARY, past hazards are
 // PAST_HAZARD_EXPOSURE, one item's history is INVENTORY_LOOKUP, and logging or correcting an event is a write.
 const homeTimelinePattern = /\bhome timeline\b|\b(?:my|our|the) (?:home|house|property)(?:'s)? (?:timeline|history)\b|\btimeline (?:of|for) (?:my|our|the) (?:home|house|property)\b|\bhistory of (?:my|our|the|this) (?:home|house|property)\b/i;
@@ -1076,6 +1083,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
   if (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('DIY_PROJECTS', 0.96);
+  }
+  if (materialSpecsPattern.test(message) && !materialSpecsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('MATERIAL_SPECS_LIST', 0.96);
   }
   if (homeTimelinePattern.test(message) && !homeTimelineOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_TIMELINE_EVENTS', 0.96);

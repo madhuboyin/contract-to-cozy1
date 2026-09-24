@@ -69,6 +69,7 @@ const DEFINITIONS = [
   adapter('project-tracker.projects', 'Project Tracker projects (projectTracker.service)', 'PROJECT_TRACKER_PROJECTS'),
   adapter('service-price-radar.checks', 'Service Price Radar checks (ServicePriceRadarService)', 'SERVICE_PRICE_CHECKS'),
   adapter('home-timeline.events', 'Home Timeline events (HomeEventsService)', 'HOME_TIMELINE_EVENTS'),
+  adapter('material-specs.list', 'Material Specs list (MaterialSpecService)', 'MATERIAL_SPECS_LIST'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),
   adapter('inventory.create', 'InventoryService', 'INVENTORY_ITEM_CREATE', 'MUTATION_PREPARATION'),

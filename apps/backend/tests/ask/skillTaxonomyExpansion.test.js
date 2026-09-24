@@ -53,6 +53,7 @@ const TAXONOMY = Object.freeze({
   'project-tracker': ['PROJECT_TRACKER_PROJECTS'],
   'service-price-radar': ['SERVICE_PRICE_CHECKS'],
   'home-timeline': ['HOME_TIMELINE_EVENTS'],
+  'material-specs': ['MATERIAL_SPECS_LIST'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

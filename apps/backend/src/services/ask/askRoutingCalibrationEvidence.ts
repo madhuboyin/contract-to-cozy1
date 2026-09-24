@@ -141,6 +141,10 @@ const ROWS: readonly ObservationTuple[] = [
   // until none moved). Candidate pairs were swept against every Skill routing case; this one keeps them resolved
   // ("Show my inspecion findings" 0.445).
   ['086-expected', '086', 'HOME_TIMELINE_EVENTS', .7155, true], ['086-competitor', '086', 'HOME_HABITS', .6711, false],
+  // FRD v1.62: fixture 087 (MATERIAL_SPECS_LIST), re-derived from the retriever; no existing row changed (a first-draft
+  // positive sharing the "...recorded for..." frame with fixtures 009 and 055 was reworded). Candidate pairs were swept
+  // against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4557).
+  ['087-expected', '087', 'MATERIAL_SPECS_LIST', .3611, true], ['087-competitor', '087', 'OWNERSHIP_COSTS', .1221, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

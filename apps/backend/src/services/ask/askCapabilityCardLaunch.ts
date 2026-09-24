@@ -60,6 +60,8 @@ const INLINE_ENTRY_READS = {
   'service-price-radar': { operationId: 'SERVICE_PRICE_CHECKS', message: 'Show my service price radar' },
   // FRD v1.61: backed by a new operation reading the Home Timeline page's events (listHomeEvents).
   'home-timeline': { operationId: 'HOME_TIMELINE_EVENTS', message: 'Show my home timeline' },
+  // FRD v1.62: backed by a new operation reading the Material Specs page's list (listSpecs).
+  'material-specs': { operationId: 'MATERIAL_SPECS_LIST', message: 'Show my material specs' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {
