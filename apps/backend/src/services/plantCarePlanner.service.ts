@@ -20,6 +20,8 @@ export interface PlantWeatherSignals {
   droughtCategory: string | null;
 }
 
+export type PlantConditionSourceStatus = 'OK' | 'UNAVAILABLE' | 'NO_LOCATION';
+
 export interface PlantCareRecommendation {
   id: string;
   homePlantId: string;
@@ -269,6 +271,17 @@ export class PlantCarePlannerService {
         : null,
     };
     const hardinessZone = hardiness.status === 'ok' ? hardiness.data.zone : null;
+    // Every signal above reads false when its source did not answer, so callers need to know which sources did before
+    // treating "no care changes" as an all-clear (FRD v1.55, Ask PLANT_CARE_OUTLOOK).
+    const hasLocation = property.latitude !== null && property.longitude !== null;
+    const sourceState = (result: { status: string } | null): PlantConditionSourceStatus =>
+      (!hasLocation ? 'NO_LOCATION' : result?.status === 'ok' ? 'OK' : 'UNAVAILABLE');
+    const sourceStatus: Record<'weather' | 'airQuality' | 'drought' | 'hardiness', PlantConditionSourceStatus> = {
+      weather: sourceState(weather),
+      airQuality: sourceState(airQuality),
+      drought: sourceState(drought),
+      hardiness: hardiness.status === 'ok' ? 'OK' : property.zipCode ? 'UNAVAILABLE' : 'NO_LOCATION',
+    };
     const applicablePlants = outdoorDecision.status === 'APPLICABLE'
       ? plants
       : plants.filter(plant => plant.locationType === 'INDOOR');
@@ -301,6 +314,7 @@ export class PlantCarePlannerService {
         outdoor: outdoorDecision,
       },
       signals,
+      sourceStatus,
       hardinessZone,
       plants: applicablePlants,
       zones: applicableZones,

@@ -98,6 +98,7 @@ export type AskOperationId =
   | 'HOME_STATUS_BOARD'
   | 'HOME_HABITS'
   | 'HOME_DIGITAL_WILL'
+  | 'PLANT_CARE_OUTLOOK'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -393,6 +394,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // FRD v1.53: reads listActiveHabits, the same call GET /properties/:id/home-habits (Home Habit Coach) makes.
   // FRD v1.54: reads getByProperty, the same call GET /properties/:id/home-digital-will (Home Continuity Plan) makes,
   // behind the same CONTRIBUTOR floor.
+  // FRD v1.55: reads getOutlook, the same call GET /properties/:id/plant-advisor/care-outlook (Plant Advisor's Care tab)
+  // makes, including its weather, air-quality, drought and hardiness lookups.
+  PLANT_CARE_OUTLOOK: definition('PLANT_CARE_OUTLOOK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'plant-advisor.care-outlook', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_DIGITAL_WILL: definition('HOME_DIGITAL_WILL', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-digital-will.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_HABITS: definition('HOME_HABITS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-habits.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_STATUS_BOARD: definition('HOME_STATUS_BOARD', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'status-board.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -810,6 +814,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// Care for the plants and garden zones the household tracks in Plant Advisor. Picking new plants for a room is the
+// page's recommendation flow, and "plant" as a verb or a power plant is not this.
+const plantCareOutlookPattern = /\bplant advisor\b|\bplant care\b|\b(?:my|our) (?:house ?|indoor |outdoor |potted )?plants\b|\bwater(?:ing)? (?:my|our|the) plants\b|\bgarden zones?\b|\b(?:my|our) garden\b/i;
+const plantCareOtherIntentPattern = /\b(?:buy|get|add|recommend|suggest|pick|choose|which|what)\b.{0,20}\bplants? (?:should|to|for|would)\b|\bpower plant|\bplants? (?:for|in) (?:my|the|our) (?:\w+ )?(?:room|bedroom|kitchen|office|bathroom)\b/i;
 // The household's Home Continuity Plan (Home Digital Will). A legal will or estate plan is not this.
 const homeDigitalWillPattern = /\b(?:home )?continuity plan\b|\bdigital will\b|\bhome (?:handoff|hand-off|hand off) plan\b|\btrusted contacts?\b.{0,30}\b(?:home|house|plan)\b|\b(?:if|when) (?:someone|somebody|anyone) (?:else )?(?:takes? over|has to take over|needs to run)\b.{0,30}\b(?:home|house|place)\b/i;
 const homeDigitalWillOtherIntentPattern = /\b(?:estate|probate|attorney|lawyer|legal will|last will|testament|inherit(?:ance)?)\b/i;
@@ -1016,6 +1024,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('DOCUMENT_LOOKUP', 0.95);
   }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
+  if (plantCareOutlookPattern.test(message) && !plantCareOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('PLANT_CARE_OUTLOOK', 0.96);
+  }
   if (homeDigitalWillPattern.test(message) && !homeDigitalWillOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_DIGITAL_WILL', 0.96);
   }

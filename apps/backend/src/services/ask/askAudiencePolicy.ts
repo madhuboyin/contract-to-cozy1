@@ -145,6 +145,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('HOME_STATUS_BOARD', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_HABITS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_DIGITAL_WILL', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('PLANT_CARE_OUTLOOK', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOUSEHOLD_INVITATION', OWNER_LIFECYCLE_MODES),
   definePolicy('QUOTE_COMPARISON_CREATE', ALL_MODES),
   definePolicy('QUOTE_COMPARISON_REVIEW', ALL_MODES),

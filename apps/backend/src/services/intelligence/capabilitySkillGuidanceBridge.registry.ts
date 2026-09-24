@@ -54,6 +54,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'status-board': ['HOME_STATUS_BOARD'],
   'home-habit-coach': ['HOME_HABITS'],
   'home-digital-will': ['HOME_DIGITAL_WILL'],
+  'plant-advisor': ['PLANT_CARE_OUTLOOK'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
@@ -72,7 +73,7 @@ const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
   'diy', 'hoa-compliance', 'home-digital-twin',
   'home-briefing',
   'permits',
-  'plant-advisor', 'project-tracker', 'service-price-radar',
+  'project-tracker', 'service-price-radar',
 ];
 
 const PHASE6_METADATA: Readonly<Record<string, Pick<CapabilitySkillGuidanceBridgeEntry,

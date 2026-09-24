@@ -46,6 +46,8 @@ const INLINE_ENTRY_READS = {
   'home-habit-coach': { operationId: 'HOME_HABITS', message: 'Show my home habits' },
   // FRD v1.54: backed by a new operation reading the same getByProperty the Home Continuity Plan page reads.
   'home-digital-will': { operationId: 'HOME_DIGITAL_WILL', message: 'Show my home continuity plan' },
+  // FRD v1.55: backed by a new operation reading the same getOutlook Plant Advisor's Care tab reads.
+  'plant-advisor': { operationId: 'PLANT_CARE_OUTLOOK', message: 'Show my plant care outlook' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

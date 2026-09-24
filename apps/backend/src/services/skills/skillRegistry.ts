@@ -28,6 +28,7 @@ import { HOME_RISK_REPLAY_SKILL } from './home-risk-replay';
 import { STATUS_BOARD_SKILL } from './status-board';
 import { HOME_HABIT_COACH_SKILL } from './home-habit-coach';
 import { HOME_DIGITAL_WILL_SKILL } from './home-digital-will';
+import { PLANT_ADVISOR_SKILL } from './plant-advisor';
 import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { SELLER_PREP_SKILL } from './seller-prep';
 import { BUYER_CLOSING_SKILL } from './buyer-closing';
@@ -77,6 +78,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'status-board': STATUS_BOARD_SKILL,
   'home-habit-coach': HOME_HABIT_COACH_SKILL,
   'home-digital-will': HOME_DIGITAL_WILL_SKILL,
+  'plant-advisor': PLANT_ADVISOR_SKILL,
   'seller-preparation': SELLER_PREPARATION_SKILL,
   'seller-prep': SELLER_PREP_SKILL,
   'buyer-closing': BUYER_CLOSING_SKILL,
