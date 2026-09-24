@@ -50,6 +50,8 @@ const INLINE_ENTRY_READS = {
   'plant-advisor': { operationId: 'PLANT_CARE_OUTLOOK', message: 'Show my plant care outlook' },
   // FRD v1.56: backed by a new operation reading the same listCasesForProperty the Negotiation Shield case list reads.
   'negotiation-shield': { operationId: 'NEGOTIATION_SHIELD_CASES', message: 'Show my negotiation shield cases' },
+  // FRD v1.57: backed by a new operation reading the Home Upgrade Planner's saved scenarios (listScenarios).
+  'home-digital-twin': { operationId: 'HOME_UPGRADE_SCENARIOS', message: 'Show my upgrade planner options' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

@@ -100,6 +100,7 @@ export type AskOperationId =
   | 'HOME_DIGITAL_WILL'
   | 'PLANT_CARE_OUTLOOK'
   | 'NEGOTIATION_SHIELD_CASES'
+  | 'HOME_UPGRADE_SCENARIOS'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -398,6 +399,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // FRD v1.55: reads getOutlook, the same call GET /properties/:id/plant-advisor/care-outlook (Plant Advisor's Care tab)
   // makes, including its weather, air-quality, drought and hardiness lookups.
   // FRD v1.56: reads listCasesForProperty, the same call GET /properties/:id/negotiation-shield/cases makes.
+  // FRD v1.57: reads listScenarios, the same call GET /properties/:id/home-digital-twin/scenarios makes.
+  HOME_UPGRADE_SCENARIOS: definition('HOME_UPGRADE_SCENARIOS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-digital-twin.scenarios', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASES: definition('NEGOTIATION_SHIELD_CASES', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'negotiation-shield.cases', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PLANT_CARE_OUTLOOK: definition('PLANT_CARE_OUTLOOK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'plant-advisor.care-outlook', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_DIGITAL_WILL: definition('HOME_DIGITAL_WILL', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-digital-will.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -817,6 +820,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The household's saved Home Upgrade Planner (home digital twin) options. Asking whether to repair or replace something
+// is REPLACEMENT_GUIDANCE; this is the options already saved in the planner.
+const homeUpgradeScenariosPattern = /\bupgrade planner\b|\b(?:home )?digital twin\b|\b(?:my|our) (?:saved )?(?:upgrade|what-if) (?:options|scenarios|plans)\b|\bsaved (?:upgrade|what-if) (?:options|scenarios)\b|\bwhat-if scenarios\b/i;
+const homeUpgradeScenariosOtherIntentPattern = /\b(?:create|new|add|start|run|calculate|compute)\b/i;
 // The household's Negotiation Shield reviews. Naming the tool always lands here; the generic phrasings step aside for a
 // purchase negotiation (BUYER_NEGOTIATION_READINESS, checked earlier) and for starting or comparing something new.
 const negotiationShieldNamedPattern = /\bnegotiation shield\b/i;
@@ -1038,6 +1045,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('DOCUMENT_LOOKUP', 0.95);
   }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
+  if (homeUpgradeScenariosPattern.test(message) && !homeUpgradeScenariosOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOME_UPGRADE_SCENARIOS', 0.96);
+  }
   if (negotiationShieldCasesPattern.test(message) && !negotiationShieldOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('NEGOTIATION_SHIELD_CASES', 0.96);
   }
