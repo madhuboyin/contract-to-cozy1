@@ -36,6 +36,7 @@ import { PROJECT_TRACKER_SKILL } from './project-tracker';
 import { SERVICE_PRICE_RADAR_SKILL } from './service-price-radar';
 import { HOME_TIMELINE_SKILL } from './home-timeline';
 import { MATERIAL_SPECS_SKILL } from './material-specs';
+import { PROPERTY_BRIEF_SKILL } from './property-brief';
 import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { SELLER_PREP_SKILL } from './seller-prep';
 import { BUYER_CLOSING_SKILL } from './buyer-closing';
@@ -93,6 +94,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'service-price-radar': SERVICE_PRICE_RADAR_SKILL,
   'home-timeline': HOME_TIMELINE_SKILL,
   'material-specs': MATERIAL_SPECS_SKILL,
+  'property-brief': PROPERTY_BRIEF_SKILL,
   'seller-preparation': SELLER_PREPARATION_SKILL,
   'seller-prep': SELLER_PREP_SKILL,
   'buyer-closing': BUYER_CLOSING_SKILL,

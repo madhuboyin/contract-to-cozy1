@@ -76,7 +76,7 @@ test('reserve-fund and the renovation advisor launch inline, and their messages 
 });
 
 test('capabilities whose page reads different records than any Ask operation are not launched into a substitute', () => {
-  for (const capabilityId of ['property-brief', 'emergency', 'guidance-overview']) {
+  for (const capabilityId of ['emergency', 'guidance-overview']) {
     assert.equal(capabilityCardLaunch(capabilityId).inlineLaunch, null, capabilityId);
   }
   // FRD v1.61: home-timeline now launches HOME_TIMELINE_EVENTS, its own operation reading the page's own records
@@ -85,4 +85,7 @@ test('capabilities whose page reads different records than any Ask operation are
   // FRD v1.62: material-specs now launches MATERIAL_SPECS_LIST, its own operation reading the page's own records
   // (listSpecs), not the document-promotion operations the bridge also maps to it.
   assert.equal(capabilityCardLaunch('material-specs').inlineLaunch.operationId, 'MATERIAL_SPECS_LIST');
+  // FRD v1.63: property-brief now launches PROPERTY_BRIEFS_LIST, its own operation reading the page's own records
+  // (listPropertyBriefs), not the PROPERTY_SUMMARY/MAJOR_EVENT_ENTRY operations the bridge also maps to it.
+  assert.equal(capabilityCardLaunch('property-brief').inlineLaunch.operationId, 'PROPERTY_BRIEFS_LIST');
 });

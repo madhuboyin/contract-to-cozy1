@@ -21,7 +21,7 @@ test('a capabilityId shared by multiple operations is excluded rather than guess
   assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['mortgage-refinance-radar'], undefined);
   // 'quote-comparison' fronts both CREATE and REVIEW.
   assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['quote-comparison'], undefined);
-  // 'property-brief' fronts both PROPERTY_SUMMARY and MAJOR_EVENT_ENTRY.
+  // 'property-brief' fronts PROPERTY_BRIEFS_LIST, PROPERTY_SUMMARY and MAJOR_EVENT_ENTRY.
   assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['property-brief'], undefined);
 });
 

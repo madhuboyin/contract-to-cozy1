@@ -62,6 +62,8 @@ const INLINE_ENTRY_READS = {
   'home-timeline': { operationId: 'HOME_TIMELINE_EVENTS', message: 'Show my home timeline' },
   // FRD v1.62: backed by a new operation reading the Material Specs page's list (listSpecs).
   'material-specs': { operationId: 'MATERIAL_SPECS_LIST', message: 'Show my material specs' },
+  // FRD v1.63: backed by a new operation reading the Property Brief page's saved briefs (listPropertyBriefs).
+  'property-brief': { operationId: 'PROPERTY_BRIEFS_LIST', message: 'Show my property briefs' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

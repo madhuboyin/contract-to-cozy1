@@ -106,6 +106,7 @@ export type AskOperationId =
   | 'SERVICE_PRICE_CHECKS'
   | 'HOME_TIMELINE_EVENTS'
   | 'MATERIAL_SPECS_LIST'
+  | 'PROPERTY_BRIEFS_LIST'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -411,6 +412,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // admits any household member, but listChecks only admits the property's primary homeowner profile.
   // FRD v1.61: reads listHomeEvents, the call GET /properties/:id/home-events makes for the Home Timeline page.
   // FRD v1.62: reads listSpecs, the call GET /properties/:id/materials makes for the Material Specs page.
+  // FRD v1.63: reads listPropertyBriefs, the call GET /properties/:id/property-briefs makes for the Property Brief page.
+  PROPERTY_BRIEFS_LIST: definition('PROPERTY_BRIEFS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property-brief.briefs', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   MATERIAL_SPECS_LIST: definition('MATERIAL_SPECS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'material-specs.list', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_TIMELINE_EVENTS: definition('HOME_TIMELINE_EVENTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-timeline.events', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   SERVICE_PRICE_CHECKS: definition('SERVICE_PRICE_CHECKS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'service-price-radar.checks', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -836,6 +839,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The household's saved Property Briefs and their share links. Preparing, sharing, sending, revoking or refreshing a
+// brief is not this read, and a "brief summary" of the home is PROPERTY_SUMMARY's.
+const propertyBriefsPattern = /\bproperty briefs?\b|\b(?:my|our|saved|shared) (?:home |house )?briefs?\b|\bbrief(?:'s)? (?:share )?links?\b/i;
+const propertyBriefsOtherIntentPattern = /\b(?:create|make|prepare|build|generate|new|send|email|revoke|republish|refresh|update|delete|archive|remove)\b|\bshare (?:my|our|the|a|this|it)\b/i;
 // The finishes and products recorded in Material Specs ("what paint colour is the living room?"). Choosing, buying or
 // adding a material is not this read.
 const materialSpecsPattern = /\bmaterial specs?\b|\b(?:my|our|recorded) (?:materials|finishes)\b|\bpaint colou?rs?\b|\bwhat (?:paint|colou?r|tile|flooring|grout|countertops?|cabinets?|wallpaper|siding|trim)\b.{0,50}\b(?:use|used|is|are|did|was|in|on)\b/i;
@@ -1083,6 +1090,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
   if (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('DIY_PROJECTS', 0.96);
+  }
+  if (propertyBriefsPattern.test(message) && !propertyBriefsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('PROPERTY_BRIEFS_LIST', 0.96);
   }
   if (materialSpecsPattern.test(message) && !materialSpecsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MATERIAL_SPECS_LIST', 0.96);
