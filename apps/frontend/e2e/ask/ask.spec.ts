@@ -1284,6 +1284,57 @@ test('on a phone, quote cards stack within the screen and the table scrolls insi
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('home timeline answers on a track: latest event selected, category chips, stepping, undated events listed below, List kept (FRD v1.77)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home timeline history');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-home-timeline-track');
+  const track = response.locator('[data-display-pattern="timeline"]');
+  await expect(track).toBeVisible();
+  const detail = track.locator('[data-ask-timeline-selected="kitchen"]');
+  await expect(detail.getByText('Jun 15, 2024 · Work done · Evidence Verified')).toBeVisible();
+  await expect(detail.getByText('Improvement · Highlight')).toBeVisible();
+  await expect(track.getByRole('button', { name: 'Feb 2024: Paint colours chosen (Records and notes)' })).toBeVisible();
+  await expect(track.getByRole('group', { name: 'Show types' }).getByRole('button')).toHaveText(['Work done', 'Records and notes', 'Inspections', 'Claims', 'Purchases and value']);
+  await track.getByRole('button', { name: 'Previous event' }).click();
+  await expect(track.locator('[data-ask-timeline-selected="paint"]')).toBeVisible();
+  await track.getByRole('button', { name: 'Claims', exact: true }).click();
+  await expect(track.locator('[data-ask-timeline-point="claim"]')).toHaveCount(0);
+  await expect(response.getByRole('heading', { name: 'Date unknown' }).first()).toBeVisible();
+  await expect(response.getByText('Old roof work')).toBeVisible();
+
+  await response.getByRole('button', { name: 'List', exact: true }).click();
+  const list = response.locator('[data-timeline-list]');
+  await expect(list.getByRole('listitem')).toHaveCount(5);
+  await expect(list.getByRole('listitem').nth(2).getByText('2023', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? '{}').timelineLayouts?.['home-timeline-events'], `ctc:ask-result-view:v1:${sessionIdOf(page.url())}:${propertyId}:execution-home-timeline-track`)).toBe('LIST');
+  await response.getByRole('button', { name: 'Timeline', exact: true }).click();
+  await expect(track).toBeVisible();
+  expect(api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, the home timeline track scrolls sideways inside its box and the selected event fits the screen (FRD v1.77)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home timeline history');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const track = page.locator('#ask-execution-execution-home-timeline-track [data-display-pattern="timeline"]');
+  await expect(track).toBeVisible();
+  const scroller = track.locator('[aria-label^="Home timeline,"]');
+  expect(await scroller.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const box = await track.locator('[data-ask-timeline-selected="kitchen"]').boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  await track.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(page.locator('#ask-execution-execution-home-timeline-track [data-timeline-list]')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
   await installAskApi(page, { maintenanceDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

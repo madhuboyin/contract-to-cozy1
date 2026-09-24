@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { resolveTimelineTrack } from '@/features/ask/displayPatterns';
 import { AskContextLink } from '../blocks/context';
-import { TimelineBlock } from '../blocks/CoreBlocks';
+import { TimelineBlock, TimelineList } from '../blocks/CoreBlocks';
+import { ResultViewContext } from '@/features/ask/useResultView';
 import type { AskBlockRenderer } from '../blocks/types';
 import { ItemActionButtons } from './PatternParts';
 
@@ -26,7 +27,33 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   }, [block]);
   const [hidden, setHidden] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const controls = useContext(ResultViewContext);
+  const layout = controls?.view.timelineLayouts?.[block.id] ?? 'TRACK';
   if (!points) return <TimelineBlock {...props} />;
+  // FRD v1.77: the same records as a vertical list, kept with the result; the track stays the default.
+  const layoutSwitch = controls && (
+    <div className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+      {(['TRACK', 'LIST'] as const).map((choice) => (
+        <button key={choice} type="button" aria-pressed={layout === choice}
+          onClick={() => controls.change((view) => ({ ...view, timelineLayouts: { ...(view.timelineLayouts ?? {}), [block.id]: choice } }))}
+          className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', layout === choice ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>
+          {choice === 'TRACK' ? 'Timeline' : 'List'}
+        </button>
+      ))}
+    </div>
+  );
+  const heading = (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h3 className="font-semibold text-slate-950">{block.title}</h3>
+        {block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
+      </div>
+      {layoutSwitch}
+    </div>
+  );
+  if (layout === 'LIST') {
+    return <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}<TimelineList block={block} /></section>;
+  }
 
   const ordered = block.items
     .map((item, index) => ({ item, point: points[index] }))
@@ -46,8 +73,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline">
-      <h3 className="font-semibold text-slate-950">{block.title}</h3>
-      {block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
+      {heading}
       {categories.length > 1 && (
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Show types">
           {categories.map((category) => {
@@ -91,6 +117,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
           <div className="min-w-0 flex-1">
             <p className="text-xs text-slate-500">{selected.point.label}{selected.item.category ? ` · ${selected.item.category.label}` : ''}{selected.item.status ? ` · ${selected.item.status}` : ''}</p>
             <p className="font-semibold text-slate-950">{selected.item.label}</p>
+            {selected.item.meta && selected.item.meta.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{selected.item.meta.join(' · ')}</p>}
             {selected.item.description && <p className="mt-1 text-sm text-slate-600">{selected.item.description}</p>}
             <ItemActionButtons className="mt-2" item={selected.item} actions={selected.item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />
             {selected.item.href && <AskContextLink href={selected.item.href} className="mt-2 inline-block text-xs font-semibold text-teal-700 hover:underline">Open record</AskContextLink>}

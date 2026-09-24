@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatibility';
+import { timelinePoint } from '@/features/ask/displayPatterns';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
@@ -81,12 +82,36 @@ export const MetricRowBlock: AskBlockRenderer<'METRIC_ROW'> = ({ block }) => (
   </section>
 );
 
+// The vertical timeline list: the fallback when a track cannot be drawn, and the List choice beside the track.
+// Dates read as recorded (FRD v1.77): "Feb 2024" for a month, never an invented day; an unreadable date shows as sent.
 export const TimelineBlock: AskBlockRenderer<'TIMELINE'> = ({ block }) => (
   <section className="rounded-2xl border border-slate-200 bg-white p-4">
     <h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
-    <ol className="mt-4 border-l-2 border-teal-200 pl-4">{block.items.map((item) => <li key={item.id} className="relative pb-4 before:absolute before:-left-[1.34rem] before:top-1 before:h-2.5 before:w-2.5 before:rounded-full before:bg-teal-700"><div className="flex flex-wrap items-center gap-2">{item.href ? <AskContextLink href={item.href} className="font-semibold text-slate-900 hover:text-teal-700">{item.label}</AskContextLink> : <span className="font-semibold text-slate-900">{item.label}</span>}{item.date && <span className="text-xs text-slate-500">{item.date}</span>}{item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{item.status}</span>}</div>{item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}</li>)}</ol>
+    <TimelineList block={block} />
   </section>
 );
+
+export function TimelineList({ block }: { block: Extract<AskPresentationBlock, { type: 'TIMELINE' }> }) {
+  return (
+    <ol className="mt-4 border-l-2 border-teal-200 pl-4" data-timeline-list>
+      {block.items.map((item) => {
+        const dateLabel = timelinePoint(item.id, item.date, item.datePrecision)?.label ?? item.date;
+        const facts = [item.category?.label, ...(item.meta ?? [])].filter(Boolean);
+        return (
+          <li key={item.id} className="relative pb-4 before:absolute before:-left-[1.34rem] before:top-1 before:h-2.5 before:w-2.5 before:rounded-full before:bg-teal-700">
+            <div className="flex flex-wrap items-center gap-2">
+              {item.href ? <AskContextLink href={item.href} className="font-semibold text-slate-900 hover:text-teal-700">{item.label}</AskContextLink> : <span className="font-semibold text-slate-900">{item.label}</span>}
+              {dateLabel && <span className="text-xs text-slate-500">{dateLabel}</span>}
+              {item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{item.status}</span>}
+            </div>
+            {facts.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>}
+            {item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 export const AssumptionsBlock: AskBlockRenderer<'ASSUMPTIONS'> = ({ block, onOpenContext }) => onOpenContext ? null : (
   <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

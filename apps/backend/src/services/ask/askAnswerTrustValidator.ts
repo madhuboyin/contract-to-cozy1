@@ -71,6 +71,10 @@ function authoredPresentationText(block: AskPresentationBlock): string {
   if (block.type === 'PROGRESS') {
     return [block.title, block.description, block.basis, ...block.metrics.map((metric) => metric.label)].filter(Boolean).join(' ');
   }
+  // Timeline items are canonical event titles and summaries; only the block copy and Ask's category labels are checked.
+  if (block.type === 'TIMELINE') {
+    return [block.title, block.description, ...block.items.map((item) => item.category?.label)].filter(Boolean).join(' ');
+  }
   // Comparison options name canonical records (provider names, recorded scope and terms); only Ask's own copy is
   // checked: titles, attribute labels and declared badges.
   if (block.type === 'COMPARISON') {

@@ -368,7 +368,9 @@ const TimelineBlockSchema = z.object({
     datePrecision: z.enum(['DAY', 'MONTH', 'YEAR']).nullable().optional(),
     entityType: z.string().trim().min(1).max(60).nullable().optional(),
     actions: z.array(GroupedListItemActionSchema).max(4).optional(),
-  })).max(50),
+    // FRD v1.77: short record facts shown in the selected item's detail (for example type, "Highlight", a date range).
+    meta: z.array(z.string().trim().min(1).max(80)).max(6).optional(),
+  })).max(100),
 });
 
 const ComparisonBadgeSchema = z.object({

@@ -9,6 +9,7 @@ export type ResultView = {
   presentationModes: Record<string, 'AUTO' | 'TABLE' | 'CARDS'>;
   comparisonLayouts: Record<string, 'AUTO' | 'STRIP' | 'GRID' | 'TABLE'>;
   groupedListModes: Record<string, 'AUTO' | 'LIST' | 'CARDS'>;
+  timelineLayouts?: Record<string, 'TRACK' | 'LIST'>;
   scrollOffset: number | null;
 };
 export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, detailTarget: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, groupedListModes: {}, scrollOffset: null };
@@ -37,6 +38,9 @@ export function readResultView(storage: Storage, key: string): ResultView {
       groupedListModes: Object.fromEntries(Object.entries(value.groupedListModes ?? {})
         .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'LIST', 'CARDS'].includes(String(mode)))
         .slice(0, 50)) as ResultView['groupedListModes'],
+      timelineLayouts: Object.fromEntries(Object.entries(value.timelineLayouts ?? {})
+        .filter(([key, mode]) => key.length <= 120 && ['TRACK', 'LIST'].includes(String(mode)))
+        .slice(0, 50)) as NonNullable<ResultView['timelineLayouts']>,
       scrollOffset: Number.isFinite(value.scrollOffset) ? value.scrollOffset : null,
     };
   } catch { return EMPTY_RESULT_VIEW; }
@@ -69,6 +73,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
   const tableIds = new Set(execution.blocks.filter((block) => block.type === 'TABLE').map((block) => block.id));
   const comparisonIds = new Set(execution.blocks.filter((block) => block.type === 'COMPARISON').map((block) => block.id));
   const groupedListIds = new Set(execution.blocks.filter((block) => block.type === 'GROUPED_LIST').map((block) => block.id));
+  const timelineIds = new Set(execution.blocks.filter((block) => block.type === 'TIMELINE').map((block) => block.id));
   return {
     ...view,
     selectedTaskId: view.selectedTaskId && ids.has(view.selectedTaskId) ? view.selectedTaskId : null,
@@ -79,6 +84,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
     presentationModes: Object.fromEntries(Object.entries(view.presentationModes ?? {}).filter(([blockId]) => tableIds.has(blockId))),
     comparisonLayouts: Object.fromEntries(Object.entries(view.comparisonLayouts ?? {}).filter(([blockId]) => comparisonIds.has(blockId))),
     groupedListModes: Object.fromEntries(Object.entries(view.groupedListModes ?? {}).filter(([blockId]) => groupedListIds.has(blockId))),
+    timelineLayouts: Object.fromEntries(Object.entries(view.timelineLayouts ?? {}).filter(([blockId]) => timelineIds.has(blockId))),
   };
 }
 export function mergeResultExecutions(current: AskExecutionResponse[], incoming: AskExecutionResponse[]): AskExecutionResponse[] {

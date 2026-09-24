@@ -8496,6 +8496,35 @@ function timelineEventDate(event: TimelineEventView): string {
   }
 }
 
+// FRD v1.77 (homeowner decision): five colour categories for the timeline track instead of the twelve event types.
+const HOME_TIMELINE_CATEGORIES: Record<string, { id: string; label: string }> = {
+  REPAIR: { id: 'work', label: 'Work done' }, MAINTENANCE: { id: 'work', label: 'Work done' },
+  IMPROVEMENT: { id: 'work', label: 'Work done' }, VERIFIED_RESOLUTION: { id: 'work', label: 'Work done' },
+  INSPECTION: { id: 'inspections', label: 'Inspections' },
+  CLAIM: { id: 'claims', label: 'Claims' },
+  PURCHASE: { id: 'purchases', label: 'Purchases and value' }, VALUE_UPDATE: { id: 'purchases', label: 'Purchases and value' },
+};
+export function homeTimelineCategory(type: string | null | undefined): { id: string; label: string } {
+  return HOME_TIMELINE_CATEGORIES[type ?? ''] ?? { id: 'records', label: 'Records and notes' };
+}
+
+type HomeTimelinePlacement = { date: string; precision: 'DAY' | 'MONTH' | 'YEAR' };
+/**
+ * Where an event sits on the track, in the property's time zone, at no more precision than was recorded: YYYY-MM-DD,
+ * YYYY-MM or YYYY. A range sits at its start (its own start date, or the recorded date when the start is missing).
+ * An unknown or unreadable date returns null, and the event is listed under the track instead. Exported for tests.
+ */
+export function homeTimelinePlacement(event: { occurredAt: Date | string; datePrecision: string | null; dateRangeStart?: Date | string | null }): HomeTimelinePlacement | null {
+  if (event.datePrecision === 'UNKNOWN') return null;
+  const source = event.datePrecision === 'RANGE' && event.dateRangeStart ? new Date(event.dateRangeStart) : new Date(event.occurredAt);
+  if (Number.isNaN(source.getTime())) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: getAskPropertyTimezone() })
+    .formatToParts(source).map((part) => [part.type, part.value]));
+  if (event.datePrecision === 'YEAR') return { date: parts.year, precision: 'YEAR' };
+  if (event.datePrecision === 'MONTH') return { date: `${parts.year}-${parts.month}`, precision: 'MONTH' };
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, precision: 'DAY' };
+}
+
 export function homeTimelineFromView(allEvents: readonly TimelineEventView[], propertyId: string, userId: string): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
   const openAction = { id: 'open-home-timeline', label: 'Open Home Timeline', href: pageHref, style: 'PRIMARY' as const };
@@ -8535,36 +8564,52 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
       body: 'Older history is on the Home Timeline page, which can filter by date and event type.', severity: 'INFO',
     });
   }
-  const byYear = new Map<string, TimelineEventView[]>();
-  for (const event of events) {
-    const occurred = new Date(event.occurredAt);
-    const key = event.datePrecision === 'UNKNOWN' || Number.isNaN(occurred.getTime()) ? 'Date unknown' : new Intl.DateTimeFormat('en-US', { year: 'numeric', timeZone: getAskPropertyTimezone() }).format(occurred);
-    byYear.set(key, [...(byYear.get(key) ?? []), event]);
-  }
-  blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'home-timeline-events', title: 'Home timeline', description: 'Newest first, by year. Open an event on the timeline for its evidence and revisions.',
-    sections: [...byYear.entries()].map(([year, rows]) => ({
-      id: `home-timeline-${year.replace(/\s+/g, '-').toLowerCase()}`, title: year, count: rows.length,
-      items: rows.map((event) => {
-        const synthetic = Boolean((event.meta as { synthetic?: boolean } | null)?.synthetic);
+  // IW-PRES-017 (FRD v1.77): dated events go on a timeline track; events whose date is unknown are listed under it.
+  const dated = events.map((event) => ({ event, placement: homeTimelinePlacement(event) }));
+  const onTrack = dated.filter((entry): entry is { event: TimelineEventView; placement: HomeTimelinePlacement } => entry.placement !== null);
+  const undated = dated.filter((entry) => entry.placement === null).map((entry) => entry.event);
+  const eventHref = (event: TimelineEventView) => (Boolean((event.meta as { synthetic?: boolean } | null)?.synthetic) ? pageHref : `${pageHref}?eventId=${encodeURIComponent(event.id)}`);
+  const eventMeta = (event: TimelineEventView) => [
+    TIMELINE_LABEL(event.type),
+    ...(event.subtype && event.subtype !== event.type ? [TIMELINE_LABEL(event.subtype)] : []),
+    ...(event.importance === 'HIGHLIGHT' ? ['Highlight'] : []),
+    ...(event.visibility === 'PRIVATE' ? ['Private'] : []),
+  ];
+  if (onTrack.length) {
+    blocks.push({
+      type: 'TIMELINE', id: 'home-timeline-events', title: 'Home timeline',
+      description: 'Each event sits at its recorded date; a month or a year is shown as recorded, and a range at its start. Open an event on the timeline for its evidence and revisions.',
+      items: onTrack.map(({ event, placement }) => {
+        const category = homeTimelineCategory(event.type);
         return {
           id: event.id,
-          title: event.title,
+          label: event.title,
+          date: placement.date,
+          datePrecision: placement.precision,
           description: event.summary ?? null,
-          meta: [
-            timelineEventDate(event),
-            TIMELINE_LABEL(event.type),
-            ...(event.subtype && event.subtype !== event.type ? [TIMELINE_LABEL(event.subtype)] : []),
-            ...(event.importance === 'HIGHLIGHT' ? ['Highlight'] : []),
-            ...(event.visibility === 'PRIVATE' ? ['Private'] : []),
-          ],
           status: TIMELINE_LABEL(event.verificationStatus),
-          href: synthetic ? pageHref : `${pageHref}?eventId=${encodeURIComponent(event.id)}`,
+          href: eventHref(event),
+          category,
+          entityType: 'HOME_EVENT',
+          meta: [...(event.datePrecision === 'RANGE' ? [timelineEventDate(event)] : []), ...eventMeta(event)].slice(0, 6),
         };
       }),
-    })),
-    actions: [],
-  });
+    });
+  }
+  if (undated.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', filters: [], id: 'home-timeline-undated', title: 'Date unknown', description: 'These events have no recorded date, so they are not placed on the timeline.',
+      sections: [{
+        id: 'home-timeline-date-unknown', title: 'Date unknown', count: undated.length,
+        items: undated.map((event) => ({
+          id: event.id, title: event.title, description: event.summary ?? null,
+          meta: ['Date unknown', ...eventMeta(event)],
+          status: TIMELINE_LABEL(event.verificationStatus), href: eventHref(event),
+        })),
+      }],
+      actions: [],
+    });
+  }
   blocks.push(boundary);
   return { status: 'ANSWERED', reasonCode: 'HOME_TIMELINE_READY', blocks, suggestions: ['What changed at my home recently?'] };
 }

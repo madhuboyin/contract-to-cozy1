@@ -935,6 +935,45 @@ function quoteReviewStripExecution() {
   };
 }
 
+// IW-PRES-017 (FRD v1.77): the Home Timeline answer on the track, with one undated event listed under it.
+function homeTimelineTrackExecution() {
+  const page = `/dashboard/properties/${propertyId}/timeline`;
+  const item = (id: string, label: string, date: string, datePrecision: 'DAY' | 'MONTH' | 'YEAR', category: { id: string; label: string }, meta: string[], status = 'Unverified', description: string | null = null) => ({
+    id, label, date, datePrecision, description, status, href: `${page}?eventId=${id}`, category, entityType: 'HOME_EVENT', meta,
+  });
+  const work = { id: 'work', label: 'Work done' };
+  return {
+    schemaVersion: '1.0', executionId: 'execution-home-timeline-track', sessionId: 'ask-acceptance-session',
+    question: 'Show my home timeline history', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'HOME_TIMELINE_EVENTS', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
+    blocks: [{
+      type: 'SUMMARY', id: 'home-timeline-summary', title: '6 events on the home timeline', tone: 'DEFAULT',
+      body: '3 confirmed or verified by evidence. Most recent: Kitchen remodel (Jun 15, 2024).',
+      actions: [{ id: 'open-home-timeline', label: 'Open Home Timeline', href: page, style: 'PRIMARY' }],
+    }, {
+      type: 'TIMELINE', id: 'home-timeline-events', title: 'Home timeline',
+      description: 'Each event sits at its recorded date; a month or a year is shown as recorded, and a range at its start. Open an event on the timeline for its evidence and revisions.',
+      items: [
+        item('kitchen', 'Kitchen remodel', '2024-06-15', 'DAY', work, ['Improvement', 'Highlight'], 'Evidence Verified', 'New cabinets and counters.'),
+        item('paint', 'Paint colours chosen', '2024-02', 'MONTH', { id: 'records', label: 'Records and notes' }, ['Note']),
+        item('inspection', 'Home inspection', '2023', 'YEAR', { id: 'inspections', label: 'Inspections' }, ['Inspection'], 'Homeowner Confirmed'),
+        item('claim', 'Water damage claim', '2021-09-03', 'DAY', { id: 'claims', label: 'Claims' }, ['Claim'], 'Evidence Verified'),
+        item('purchase', 'Home purchased', '2018-05-20', 'DAY', { id: 'purchases', label: 'Purchases and value' }, ['Purchase']),
+      ],
+    }, {
+      type: 'GROUPED_LIST', id: 'home-timeline-undated', title: 'Date unknown', description: 'These events have no recorded date, so they are not placed on the timeline.', filters: [], actions: [],
+      sections: [{ id: 'home-timeline-date-unknown', title: 'Date unknown', count: 1, items: [{ id: 'roof', title: 'Old roof work', description: null, meta: ['Date unknown', 'Repair'], status: 'Disputed', href: `${page}?eventId=roof` }] }],
+    }, {
+      type: 'BOUNDARY', id: 'home-timeline-boundary', title: 'History as recorded', severity: 'INFO', suggestions: [],
+      body: 'Events are shown as they were recorded, with how well each is verified and how precise its date is. Unverified and inferred events have not been confirmed. Private events recorded by other household members are not shown.',
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: ['What changed at my home recently?'],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
 function relatedRecordsExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-related-records', sessionId: 'ask-acceptance-session',
@@ -1508,6 +1547,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/show the task output/i.test(body.message)) {
       const response = maintenanceOutputExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/^show my home timeline history/i.test(body.message)) {
+      const response = homeTimelineTrackExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;
