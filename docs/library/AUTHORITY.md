@@ -19,6 +19,8 @@ This is the canonical **reading and status policy** for product requirements. Li
 
 ## Ask Cozy lineage
 
+Start with [Ask Cozy Product Reference](ASK_COZY_PRODUCT_REFERENCE.md) for a consolidated product and current-evidence overview, then use the governing sources below for normative requirement text.
+
 Read the Ask documents by scope rather than filename date:
 
 1. [Ask Redo FRD](../product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md) is the early platform baseline. Its adopted routing, operation, confirmation, and governance constraints remain relevant where a later document does not revise them.

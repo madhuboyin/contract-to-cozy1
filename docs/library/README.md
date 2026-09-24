@@ -14,6 +14,7 @@ A searchable map of everything under `docs/` (313 files, snapshot 2026-09-24). S
 | Change or retire product behavior | [CHANGE_POLICY.md](CHANGE_POLICY.md) |
 | Review FRD authority and unresolved requirement families | [REQUIREMENTS_REVIEW.md](REQUIREMENTS_REVIEW.md) |
 | Check individual requirement status and evidence | [requirements.csv](requirements.csv) and [requirement_status.csv](requirement_status.csv) |
+| Understand Ask Cozy product behavior, authority, coverage and gaps | [ASK_COZY_PRODUCT_REFERENCE.md](ASK_COZY_PRODUCT_REFERENCE.md) |
 | Review Ask Inline Workspace coverage and open evidence gaps | [ASK_INLINE_COVERAGE.md](ASK_INLINE_COVERAGE.md) |
 | Review Ask Cross Domain rollout coverage and phase exits | [ASK_CROSS_DOMAIN_COVERAGE.md](ASK_CROSS_DOMAIN_COVERAGE.md) |
 | Know whether a doc is stale or conflicts with another | [FLAGS.md](FLAGS.md) |
@@ -66,6 +67,6 @@ These are recommendations from the flag review, not decisions recorded in the so
 
 ## Maintaining this library
 
-Rebuild after docs change: `python3 docs/library/tools/build_library.py`, then `python3 docs/library/tools/build_requirements.py`. `requirement_status.csv`, AUTHORITY.md, REQUIREMENTS_REVIEW.md, ASK_INLINE_COVERAGE.md, and ASK_CROSS_DOMAIN_COVERAGE.md are manually maintained. Run `python3 docs/library/tools/check_library.py` to validate generated pages, inventory, links, requirement entries, and evidence paths without modifying them.
+Rebuild after docs change: `python3 docs/library/tools/build_library.py`, then `python3 docs/library/tools/build_requirements.py`. `requirement_status.csv`, AUTHORITY.md, REQUIREMENTS_REVIEW.md, ASK_COZY_PRODUCT_REFERENCE.md, ASK_INLINE_COVERAGE.md, and ASK_CROSS_DOMAIN_COVERAGE.md are manually maintained. Run `python3 docs/library/tools/check_library.py` to validate generated pages, inventory, links, requirement entries, and evidence paths without modifying them.
 The `review_basis` column distinguishes targeted findings from metadata-only checks. A blank flag means no issue was detected by those checks, not that every requirement was validated.
 Flags are manual: edit the `flag(...)` calls in `tools/build_library.py` and the prose in `tools/flags_head.md`, then rebuild. Bump `TODAY` in the script when you re-baseline.
