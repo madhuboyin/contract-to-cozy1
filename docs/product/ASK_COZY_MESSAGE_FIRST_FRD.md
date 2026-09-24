@@ -9,6 +9,8 @@ STAGE 2 ASSUMPTION → NEW CODE EVIDENCE → IMPACT → RECOMMENDED ADJUSTMENT
 ```
 Two such adjustments are formatted this way directly in this document (§14, §16); two more appear in the companion implementation plan (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §4.1, §4.4); one more (the `GroundedAskProposal.kind` mapping gaps) is presented as a table rather than this format, in §23 below and implementation plan §4.2 — all five are evidence-backed, none speculative.
 **Labeling convention (continued from Stage 2):** **[FACT]** verified in Stage 1/2 or this pass's fresh code reading; **[REQUIREMENT]** a Stage 3 functional/technical requirement (not a finding); **[OPEN]** a question this pass could not resolve and flags for the implementation plan or Phase 0.
+
+**Stable IDs:** `MF-001`–`MF-054` identify the normative requirements in this FRD. The ID remains attached to the requirement when wording or implementation status changes; retired requirements retain their ID and receive an explicit status.
 **Revision note 1:** an external review round against this document and the implementation plan together, checked against fresh code reading rather than taken on faith, found: a second, undocumented orchestrator dispatch surface for confirmed-write execution that §16/§17's "zero dispatch branches" criterion didn't originally cover (§17, fixed); a mislabeled mechanism in §22 that conflated `AskConfirmationReceipt`'s confirmation saga with the unrelated `DomainEvent`-backed extraction job's own claim-token fencing (§22, fixed); a gap in how a response surfaces that a captured candidate's child execution exists at all, not just how its confirmation card renders once found (§28, flagged **[OPEN]**); and a representative example (§19, the mortgage-rate statement) that targets a fact this pass confirmed is not writable through this section's own capture mechanism (§19, flagged with the implementation plan's fix).
 **Revision note 2:** a follow-up review round found revision 1's fixes acknowledged the child-execution delivery gap without deciding it, and the mortgage-rate fix didn't yet specify atomicity/idempotency for the new writer or check whether readers actually consume the evidence it produces. Both now decided rather than deferred: §28 specifies the `childExecutions` response field, its full discover/render/edit/refresh contract, and closes the [OPEN] item; §19 adds the non-writability note pointing at the implementation plan's fully-specified writer contract (transaction shape, idempotency ordering, and confirmation that the existing financing context assembler already reads real evidence in preference to its synthetic fallback — implementation plan §9). Phase 3's acceptance criterion in the implementation plan (§9) was also revised to state explicitly, not silently, that proactive delivery of the async-fallback tail is out of this phase's scope.
 **Revision note 3 — Phase 0 implementation pass:** closes the decisions this document left to Phase 0. Full evidence lives in the implementation plan (§4.2, §4.6, §4.7, §4.10, per the two-document separation) — summarized here: §23's two kind-mapping gaps are resolved (`UPLOAD_EVIDENCE` scoped to `HomeEventEvidence`-backed evidence on a sibling `HomeEvent` candidate, with evidence-on-other-kinds left explicitly open pending a Phase 3 schema decision; `ADD_NOTE` mapped onto `HomeEvent` with `type: NOTE`); §31's `askEnvelopeQueryScope.ts` domain-list question is resolved as a per-component allowlist, with a new finding that the fix alone is insufficient — `PropertyRadarMatch`/`PropertyRadarCompoundInsight` never populate `entityRef`, so this is now a documented Phase 7 precondition alongside the existing Radar-seed-data gap; §16's `HVAC_SPECIALIST_ENGAGE` confirmation question is resolved as by-design, not a gap; and §31's renovation naming ambiguity is resolved — `RENOVATION_PERMIT_READINESS` and `homeRenovationAdvisor/` are confirmed to be two distinct features, no rewiring needed.
@@ -39,8 +41,8 @@ Per Stage 2 §33: the smallest coherent architecture that lets Ask Cozy become t
 
 Adopted unchanged from Stage 2 §5 (all 14 principles, ACCEPT/MODIFY verdicts as decided there). Restated as the two principles most load-bearing for this FRD's requirements:
 
-1. **[REQUIREMENT]** Conversation invokes capabilities and proposes knowledge; it never becomes the system of record. Every conversational write lands in an existing domain model (`PropertyFactEvidence`, `HomeEvent`, `Warranty`, `DecisionThread`) via the confirmation path (§22) — never a conversation-only store.
-2. **[REQUIREMENT]** A capability added after this program lands must not require a new dispatch branch inside `askOrchestrator.service.ts` (Stage 2's Test 8, restated as Definition of Done Test G in the implementation plan).
+**MF-001 — Requirement.** 1.  Conversation invokes capabilities and proposes knowledge; it never becomes the system of record. Every conversational write lands in an existing domain model (`PropertyFactEvidence`, `HomeEvent`, `Warranty`, `DecisionThread`) via the confirmation path (§22) — never a conversation-only store.
+**MF-002 — Requirement.** 2.  A capability added after this program lands must not require a new dispatch branch inside `askOrchestrator.service.ts` (Stage 2's Test 8, restated as Definition of Done Test G in the implementation plan).
 
 ---
 
@@ -52,7 +54,7 @@ In scope: conversational understanding/extraction (§9–§15), the capability i
 
 ## 5. Non-Goals
 
-**[REQUIREMENT]** This program does not: replace deterministic routing with an LLM classifier; build a provider marketplace or new service-provider integrations; create a new universal knowledge database; build a specialized agent per domain (only the existing HVAC specialist agent remains, per Stage 2 §25's four-part test); redesign traditional UI pages beyond the smallest addition needed for review/correction of new conversational writes (§33); or achieve perfect extraction accuracy before pilot (§15 defines pragmatic thresholds instead).
+**MF-003 — Requirement.** This program does not: replace deterministic routing with an LLM classifier; build a provider marketplace or new service-provider integrations; create a new universal knowledge database; build a specialized agent per domain (only the existing HVAC specialist agent remains, per Stage 2 §25's four-part test); redesign traditional UI pages beyond the smallest addition needed for review/correction of new conversational writes (§33); or achieve perfect extraction accuracy before pilot (§15 defines pragmatic thresholds instead).
 
 ---
 
@@ -87,37 +89,37 @@ Each arrow maps to a concrete mechanism defined in §10 (turn processing contrac
 ### 8.1 Ask a decision question
 > "Should I refinance?"
 
-**[REQUIREMENT]** Understand refinance intent (deterministic routing, unchanged — `REFINANCE_ANALYSIS` at 0.97 confidence per Stage 1's traced example) → retrieve mortgage/property/rate context (existing aggregation context, unchanged) → invoke `refinance.analysis` via the capability layer (§16) → return the decision-oriented answer with existing `NOT_APPLICABLE`/`NEEDS_CONTEXT`/`UNAVAILABLE` degradation states (**[FACT — Stage 1]**, already reference-quality) → expose missing context via existing `captureRequests` slot-filling → recommend next actions (§27).
+**MF-004 — Requirement.** Understand refinance intent (deterministic routing, unchanged — `REFINANCE_ANALYSIS` at 0.97 confidence per Stage 1's traced example) → retrieve mortgage/property/rate context (existing aggregation context, unchanged) → invoke `refinance.analysis` via the capability layer (§16) → return the decision-oriented answer with existing `NOT_APPLICABLE`/`NEEDS_CONTEXT`/`UNAVAILABLE` degradation states (**[FACT — Stage 1]**, already reference-quality) → expose missing context via existing `captureRequests` slot-filling → recommend next actions (§27).
 
 ### 8.2 Report something that happened
 > "I replaced my roof last summer for $14,500."
 
-**[REQUIREMENT]** Pre-filter fires (§11) → extraction identifies one `EVENT` candidate with `datePrecision: RANGE` (not a fabricated month — Stage 2 §14 correction) → candidate becomes a `CAPTURE_EVENT_CONFIRM` child execution in `NEEDS_CONFIRMATION` status → homeowner confirms → `AskConfirmationReceipt` saga executes the idempotent `HomeEvent` upsert (§22) → future turns see the fact via the existing aggregation-context read path, unchanged.
+**MF-005 — Requirement.** Pre-filter fires (§11) → extraction identifies one `EVENT` candidate with `datePrecision: RANGE` (not a fabricated month — Stage 2 §14 correction) → candidate becomes a `CAPTURE_EVENT_CONFIRM` child execution in `NEEDS_CONFIRMATION` status → homeowner confirms → `AskConfirmationReceipt` saga executes the idempotent `HomeEvent` upsert (§22) → future turns see the fact via the existing aggregation-context read path, unchanged.
 
 ### 8.3 Combined statement + question
 > "I serviced the HVAC yesterday for $275. Was that too expensive?"
 
-**[REQUIREMENT]** Deterministic routing resolves the cost/fairness question to whatever capability answers it (existing or a Stage 3 gap to confirm in Phase 0 — **[OPEN]**: no `AskOperationId` was found in the handler inventory (§16, full detail in the implementation plan §5) that answers "is this price fair" directly; if none exists today, this scenario's *answer* half degrades to `GROUNDED_GUIDANCE` while the *capture* half still succeeds — both halves are independently testable and neither blocks the other, so this gap does not block the capture requirement). Independently, the pre-filter fires and extraction proposes the service-event candidate — but only for fields the routed operation's own bounded regex extractor didn't already consume this turn (Stage 2's dedup rule), so a routed `MAINTENANCE_TASK_COMPLETE` that already captured `actualCost` does not also get a duplicate general-extraction candidate for the same cost.
+**MF-006 — Requirement.** Deterministic routing resolves the cost/fairness question to whatever capability answers it (existing or a Stage 3 gap to confirm in Phase 0 — **[OPEN]**: no `AskOperationId` was found in the handler inventory (§16, full detail in the implementation plan §5) that answers "is this price fair" directly; if none exists today, this scenario's *answer* half degrades to `GROUNDED_GUIDANCE` while the *capture* half still succeeds — both halves are independently testable and neither blocks the other, so this gap does not block the capture requirement). Independently, the pre-filter fires and extraction proposes the service-event candidate — but only for fields the routed operation's own bounded regex extractor didn't already consume this turn (Stage 2's dedup rule), so a routed `MAINTENANCE_TASK_COMPLETE` that already captured `actualCost` does not also get a duplicate general-extraction candidate for the same cost.
 
 ### 8.4 External/contextual intelligence question
 > "Is my roof at risk because of the storms?"
 
-**[REQUIREMENT]** Depends on two Phase 0 fixes being complete first (both detailed in §31): the `askEnvelopeQueryScope.ts` domain-mapping fix (confirmed still present) and confirmed/established Radar data for the property in question (Stage 1/2 never verified this was populated; this pass confirmed the seed script creates none). Once both hold: property + weather/radar context assembles via `queryIntelligenceEnvelope` (existing, unchanged) → grounded answer with `EVIDENCE`/`WHY_NOW` blocks (existing block types, unchanged) → honest `MISSING`/`LIMITATION` blocks where data isn't available → next actions.
+**MF-007 — Requirement.** Depends on two Phase 0 fixes being complete first (both detailed in §31): the `askEnvelopeQueryScope.ts` domain-mapping fix (confirmed still present) and confirmed/established Radar data for the property in question (Stage 1/2 never verified this was populated; this pass confirmed the seed script creates none). Once both hold: property + weather/radar context assembles via `queryIntelligenceEnvelope` (existing, unchanged) → grounded answer with `EVIDENCE`/`WHY_NOW` blocks (existing block types, unchanged) → honest `MISSING`/`LIMITATION` blocks where data isn't available → next actions.
 
 ### 8.5 Life-event / goal statement
 > "I'm thinking about selling next year."
 
-**[REQUIREMENT]** Pre-filter fires on a goal pattern → extraction produces a `GOAL` candidate → per Stage 2 §17's materiality carve-out, `DecisionThread` creation/attachment happens **without** a confirmation gate (it's workflow bookkeeping, not durable knowledge — Stage 2's own correction) → `AskSession.activeDecisionThreadId` cache set, canonical resolution via `DecisionThread.activeIdentityKey` (Stage 2 §17) → next-action scan biased toward the active thread surfaces Seller Prep/sell-hold-rent capabilities (§26) without the homeowner needing to know either exists.
+**MF-008 — Requirement.** Pre-filter fires on a goal pattern → extraction produces a `GOAL` candidate → per Stage 2 §17's materiality carve-out, `DecisionThread` creation/attachment happens **without** a confirmation gate (it's workflow bookkeeping, not durable knowledge — Stage 2's own correction) → `AskSession.activeDecisionThreadId` cache set, canonical resolution via `DecisionThread.activeIdentityKey` (Stage 2 §17) → next-action scan biased toward the active thread surfaces Seller Prep/sell-hold-rent capabilities (§26) without the homeowner needing to know either exists.
 
 ### 8.6 Proactive interaction
 > Mortgage rates become favorable.
 
-**[REQUIREMENT]** `DomainEvent` (existing outbox, unchanged) → per-domain relevance evaluation (existing, per-domain, unchanged per Stage 2 §20) → `notifyWithAskContinuation` (generalized wrapper, §29) → pre-loaded `AskExecution` the homeowner opens with context already assembled.
+**MF-009 — Requirement.** `DomainEvent` (existing outbox, unchanged) → per-domain relevance evaluation (existing, per-domain, unchanged per Stage 2 §20) → `notifyWithAskContinuation` (generalized wrapper, §29) → pre-loaded `AskExecution` the homeowner opens with context already assembled.
 
 ### 8.7 Correction
 > "Actually, the roof was replaced in 2023, not 2024."
 
-**[REQUIREMENT]** Detected as a `CORRECT_FACT`-shaped candidate (existing `GroundedAskProposal.kind` semantics migrate onto the new operation model per §23) → proposed change shown via the existing `confirmation` object (not a new block type — §14 finding) → on confirm, `HomeEvent`'s existing `supersedesEventId`/`isCurrent` revision chain creates a new current revision, never a hard delete (**[FACT — Stage 1]**, already the model's designed behavior) → audit trail via `HomeEventVerificationRecord` (existing) → future context reads see the corrected value.
+**MF-010 — Requirement.** Detected as a `CORRECT_FACT`-shaped candidate (existing `GroundedAskProposal.kind` semantics migrate onto the new operation model per §23) → proposed change shown via the existing `confirmation` object (not a new block type — §14 finding) → on confirm, `HomeEvent`'s existing `supersedesEventId`/`isCurrent` revision chain creates a new current revision, never a hard delete (**[FACT — Stage 1]**, already the model's designed behavior) → audit trail via `HomeEventVerificationRecord` (existing) → future context reads see the corrected value.
 
 **[OPEN — Phase 0 finding, see §31]**: this pass found `askDomainCommandRegistry.ts`'s `correctionModes` vocabulary — which Stage 2 planned to reuse for exactly this story — is **entirely unconsumed** anywhere in the codebase (not even hand-written per-command). The correction UX above must be built using `HomeEvent`'s existing revision chain directly; there is no existing correction dispatcher to plug into.
 
@@ -125,7 +127,7 @@ Each arrow maps to a concrete mechanism defined in §10 (turn processing contrac
 
 ## 9. Turn Types
 
-**[REQUIREMENT]** Eight interaction types, none of which become a new routing operation ID by itself:
+**MF-011 — Requirement.** Eight interaction types, none of which become a new routing operation ID by itself:
 
 | Type | Owner | Mechanism |
 |---|---|---|
@@ -144,7 +146,7 @@ A single message may produce multiple types simultaneously (§8.3's combined exa
 
 ## 10. Turn Processing Contract
 
-**[REQUIREMENT]** Normative lifecycle, synchronous unless marked:
+**MF-012 — Requirement.** Normative lifecycle, synchronous unless marked:
 
 ```
 1.  Receive message
@@ -176,19 +178,19 @@ Steps 6 and 8 are independent — routing succeeding or failing does not gate ex
 
 ## 11. Routing Requirements
 
-**[REQUIREMENT]** No change to deterministic routing itself (regex → local embedding classifier → confidence gate, per Stage 1/2, unchanged). **[OPEN]**: the specific routing-coverage misses Stage 1 traced (Scenario D "storms," Scenario E "selling next year") are pattern/example additions, not architecture — Stage 3's implementation plan should size adding these patterns as ordinary routing-quality work using the existing `askRoutingQualityEvaluator`/`askTrustCertificationCorpus` harness (**[FACT — this pass]**, confirmed to exist: `apps/backend/tests/ask/askRoutingCalibration.test.js` + a hand-labeled `CERTIFICATION_ROWS` corpus tagged by category), not a new evaluation system.
+**MF-013 — Requirement.** No change to deterministic routing itself (regex → local embedding classifier → confidence gate, per Stage 1/2, unchanged). **[OPEN]**: the specific routing-coverage misses Stage 1 traced (Scenario D "storms," Scenario E "selling next year") are pattern/example additions, not architecture — Stage 3's implementation plan should size adding these patterns as ordinary routing-quality work using the existing `askRoutingQualityEvaluator`/`askTrustCertificationCorpus` harness (**[FACT — this pass]**, confirmed to exist: `apps/backend/tests/ask/askRoutingCalibration.test.js` + a hand-labeled `CERTIFICATION_ROWS` corpus tagged by category), not a new evaluation system.
 
 ---
 
 ## 12. Conversational Understanding Requirements
 
-**[REQUIREMENT]** Two components, specified in full in §13/§14: a deterministic pre-filter that gates whether an LLM call happens at all, and a bounded structured-extraction contract for when it does. Both are additive to deterministic routing (unchanged, §11), never a replacement for it, per Stage 2 §7's decision that extraction is an independent decision from routing's outcome, not gated on routing failing.
+**MF-014 — Requirement.** Two components, specified in full in §13/§14: a deterministic pre-filter that gates whether an LLM call happens at all, and a bounded structured-extraction contract for when it does. Both are additive to deterministic routing (unchanged, §11), never a replacement for it, per Stage 2 §7's decision that extraction is an independent decision from routing's outcome, not gated on routing failing.
 
 ---
 
 ## 13. Extraction Pre-filter
 
-**[REQUIREMENT]** Deterministic, cheap, no LLM call for the common case. Must:
+**MF-015 — Requirement.** Deterministic, cheap, no LLM call for the common case. Must:
 - Run before any LLM extraction call, gating whether one happens at all.
 - Achieve measurable recall/precision against the evaluation corpus (§15).
 - Fail safe: a missed trigger (false negative) loses conversational capture for that turn but never blocks the routed answer; a false trigger costs one extra bounded LLM call, never a wrong write (extraction only ever produces *proposals*, per §16).
@@ -200,7 +202,7 @@ Illustrative trigger/non-trigger examples per the request are directional, not e
 
 ## 14. Structured Extraction Contract
 
-**[REQUIREMENT]** When the pre-filter fires: one bounded, schema-constrained LLM call; output is a typed list of candidate items (never free text); the model never writes to a canonical domain model directly (only produces proposals — Stage 2 §16's confirmation-required rule, unchanged, still enforced by the existing Trust FRD's unconditional material-write-confirmation requirement, **[FACT — Stage 1]**); each candidate carries:
+**MF-016 — Requirement.** When the pre-filter fires: one bounded, schema-constrained LLM call; output is a typed list of candidate items (never free text); the model never writes to a canonical domain model directly (only produces proposals — Stage 2 §16's confirmation-required rule, unchanged, still enforced by the existing Trust FRD's unconditional material-write-confirmation requirement, **[FACT — Stage 1]**); each candidate carries:
 - category (`FACT` | `EVENT` | `GOAL` — command/intent stays in deterministic routing per Stage 2 §8)
 - `attribution` (`FIRSTHAND` | `THIRD_PARTY_RELAYED` | `INFERRED` — Stage 2 §15)
 - `extractionConfidence` (a field genuinely separate from each target model's existing `confidence`/`confidenceScore`, per Stage 2's corrected §15 — reusing the existing field was found to conflate parse-confidence with fact-reliability, since `groundedAsk.service.ts:85` already averages the existing field into answer-level trust)
@@ -228,13 +230,13 @@ RECOMMENDED ADJUSTMENT: drop FACT_CONFIRMATION. Represent a captured candidate's
   commands. Keep PROACTIVE_INSIGHT — it is a genuine gap.
 ```
 
-**[REQUIREMENT] Failure behavior:** per Stage 2 §7's corrected design, durable intent (a `DomainEvent`) is persisted **before** any LLM call is attempted, not after success — a process restart never silently loses the fact that extraction was owed for a turn. The routed answer always succeeds independently of extraction's outcome. A stale, slow-finishing attempt whose lease was legitimately reclaimed must not persist its result (Stage 2's commit-time claim-token re-verification, §22). No duplicate candidate proposals reach the user (Stage 2's atomic all-or-nothing candidate-set persistence plus deterministic candidate identities reusing `AskExecution.clientRequestId`'s existing uniqueness).
+**MF-017 — Requirement.** Failure behavior: per Stage 2 §7's corrected design, durable intent (a `DomainEvent`) is persisted **before** any LLM call is attempted, not after success — a process restart never silently loses the fact that extraction was owed for a turn. The routed answer always succeeds independently of extraction's outcome. A stale, slow-finishing attempt whose lease was legitimately reclaimed must not persist its result (Stage 2's commit-time claim-token re-verification, §22). No duplicate candidate proposals reach the user (Stage 2's atomic all-or-nothing candidate-set persistence plus deterministic candidate identities reusing `AskExecution.clientRequestId`'s existing uniqueness).
 
 ---
 
 ## 15. Extraction Evaluation
 
-**[REQUIREMENT]** A dedicated corpus, extending the existing pattern (**[FACT — this pass]**: `askTrustCertificationCorpus.ts` already establishes hand-labeled, categorized, frozen fixtures with a `provenance` tag — this is the template, not a new harness design). Categories, per the request, all required: positive factual statements, negative questions, mixed question+fact, hedged statements, third-party statements, corrections, ambiguous dates, cost/provider combinations, multiple facts in one turn, unrelated household conversation, false-positive traps.
+**MF-018 — Requirement.** A dedicated corpus, extending the existing pattern (**[FACT — this pass]**: `askTrustCertificationCorpus.ts` already establishes hand-labeled, categorized, frozen fixtures with a `provenance` tag — this is the template, not a new harness design). Categories, per the request, all required: positive factual statements, negative questions, mixed question+fact, hedged statements, third-party statements, corrections, ambiguous dates, cost/provider combinations, multiple facts in one turn, unrelated household conversation, false-positive traps.
 
 Metrics and **pragmatic pilot thresholds** (illustrative starting points — a Stage 3 implementation calibration task, not fixed science):
 
@@ -249,15 +251,15 @@ Metrics and **pragmatic pilot thresholds** (illustrative starting points — a S
 | Duplicate rate (same fact proposed twice for one message) | ≤ 2% |
 | False persistence proposal rate (a candidate proposed for information that isn't actually new/true) | ≤ 5%, since confirmation is the backstop, not the only defense |
 
-**[REQUIREMENT]** These thresholds gate pilot readiness (§40), not general availability — they are revisited once real usage data exists, and this document does not claim they are validated against production traffic.
+**MF-019 — Requirement.** These thresholds gate pilot readiness (§40), not general availability — they are revisited once real usage data exists, and this document does not claim they are validated against production traffic.
 
 ---
 
 ## 16. Capability Invocation Requirements
 
-**[REQUIREMENT]** Given an `operationId`, the layer must: resolve adapter (existing `getSkillAdapterForOperation`) → validate policy (existing `resolveEffectiveSkillOperationPolicy`) → resolve registered handler (new registry) → build the normalized invocation envelope → execute → return `AskOperationResult` → emit execution metadata (existing `SkillExecutionBinding`).
+**MF-020 — Requirement.** Given an `operationId`, the layer must: resolve adapter (existing `getSkillAdapterForOperation`) → validate policy (existing `resolveEffectiveSkillOperationPolicy`) → resolve registered handler (new registry) → build the normalized invocation envelope → execute → return `AskOperationResult` → emit execution metadata (existing `SkillExecutionBinding`).
 
-**[REQUIREMENT] Canonical envelope**, per Stage 2 §11 with two corrections from this pass's handler inventory (67 operations documented, implementation plan §5, confirmed complete against the registry per implementation plan §4.8):
+**MF-021 — Requirement.** Canonical envelope., per Stage 2 §11 with two corrections from this pass's handler inventory (67 operations documented, implementation plan §5, confirmed complete against the registry per implementation plan §4.8):
 
 ```ts
 type CapabilityInvocationEnvelope = {
@@ -298,19 +300,19 @@ RECOMMENDED ADJUSTMENT: define a second, explicit adapter category — "passthro
   or a genuine gap, before migrating it.
 ```
 
-**[REQUIREMENT] Handler registration:** Registry keyed by **adapter id** (Stage 2's corrected §11 — not `AskOperationId`, since an adapter's `allowedOperations` is declared as an array). Duplicate-handler registration must fail at initialization (a startup assertion, mirroring the existing `validateSkillAdapterDefinitions`/`validateSkillDefinitions` static-consistency checkers Stage 1 found already exist and run at build/test time); a missing handler for a registered, enabled adapter must fail as a typed `ASK_CAPABILITY_HANDLER_MISSING` error (existing `errorContract: 'ASK_TYPED_RESULT'` convention, per Stage 1's finding on `SkillAdapterDefinition`), never an undefined-function runtime crash; adapter-to-handler integrity is checked by the same initialization validator that already checks adapter-to-operation integrity (`validateSkillAdapterDefinitions`, extend rather than duplicate).
+**MF-022 — Requirement.** Handler registration. Registry keyed by **adapter id** (Stage 2's corrected §11 — not `AskOperationId`, since an adapter's `allowedOperations` is declared as an array). Duplicate-handler registration must fail at initialization (a startup assertion, mirroring the existing `validateSkillAdapterDefinitions`/`validateSkillDefinitions` static-consistency checkers Stage 1 found already exist and run at build/test time); a missing handler for a registered, enabled adapter must fail as a typed `ASK_CAPABILITY_HANDLER_MISSING` error (existing `errorContract: 'ASK_TYPED_RESULT'` convention, per Stage 1's finding on `SkillAdapterDefinition`), never an undefined-function runtime crash; adapter-to-handler integrity is checked by the same initialization validator that already checks adapter-to-operation integrity (`validateSkillAdapterDefinitions`, extend rather than duplicate).
 
-**[REQUIREMENT] Existing handler migration:** every existing handler gets a shim; **thin shims are acceptable and preferred** — do not rewrite handler bodies to a common signature unless a handler is independently being modified for another reason. The full inventory (exact args, adapter ids, confirmation requirements, shim complexity) lives in the implementation plan (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §5), not duplicated here per the two-document separation — 67 operations documented there, confirmed complete against `askOperationRegistry.ts`'s full literal union (implementation plan §4.8's diff: exact match, nothing missing). **[FACT — this pass]** summary of the 67 documented: 58 fit the standard scalar-destructure shim pattern, 3 need a `launchContext`-derived field, 3 are trivial (no envelope fields at all), 2 need the passthrough category above, 1 needs context-provider values the envelope doesn't carry; 25 require confirmation via `AskDomainCommandRegistry`.
+**MF-023 — Requirement.** Existing handler migration. every existing handler gets a shim; **thin shims are acceptable and preferred** — do not rewrite handler bodies to a common signature unless a handler is independently being modified for another reason. The full inventory (exact args, adapter ids, confirmation requirements, shim complexity) lives in the implementation plan (`docs/architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md` §5), not duplicated here per the two-document separation — 67 operations documented there, confirmed complete against `askOperationRegistry.ts`'s full literal union (implementation plan §4.8's diff: exact match, nothing missing). **[FACT — this pass]** summary of the 67 documented: 58 fit the standard scalar-destructure shim pattern, 3 need a `launchContext`-derived field, 3 are trivial (no envelope fields at all), 2 need the passthrough category above, 1 needs context-provider values the envelope doesn't carry; 25 require confirmation via `AskDomainCommandRegistry`.
 
 ---
 
 ## 17. Ask Orchestrator Responsibilities
 
-**[REQUIREMENT]** Owns: execution/session coordination, routing coordination, context coordination, capability invocation coordination (calls `capability.invoke`, does not contain domain branches), extraction coordination (calls the extraction module, does not contain extraction logic inline), response aggregation, trust/safety gates (unchanged: `askAnswerTrustValidator`, `askSemanticAnswerValidator` stay where they are).
+**MF-024 — Requirement.** Owns: execution/session coordination, routing coordination, context coordination, capability invocation coordination (calls `capability.invoke`, does not contain domain branches), extraction coordination (calls the extraction module, does not contain extraction logic inline), response aggregation, trust/safety gates (unchanged: `askAnswerTrustValidator`, `askSemanticAnswerValidator` stay where they are).
 
-**[REQUIREMENT]** Does NOT own: refinance logic, seller-prep logic, maintenance logic, weather/radar logic, domain calculations, domain-specific write logic, static next-action catalogs (moves to §27's dedicated module).
+**MF-025 — Requirement.** Does NOT own: refinance logic, seller-prep logic, maintenance logic, weather/radar logic, domain calculations, domain-specific write logic, static next-action catalogs (moves to §27's dedicated module).
 
-**[REQUIREMENT] Measurable completion criterion** (per the request's explicit instruction against a line-count target):
+**MF-026 — Requirement.** Measurable completion criterion. (per the request's explicit instruction against a line-count target):
 > Adding a new capability after this refactor does not require adding another domain-specific dispatch branch inside `askOrchestrator.service.ts`.
 
 Testable directly: a new capability's PR diff touches the handler registry (one new entry) and its own skill package — never `askOrchestrator.service.ts`'s dispatch switch.
@@ -327,7 +329,7 @@ Per Stage 2 §9/§13's per-category routing table — no new universal store; ev
 
 **Target: `PropertyFactEvidence` via `capturePropertyFact`.**
 
-**[REQUIREMENT]**, per Stage 2 §16 (fully corrected across four review rounds — this FRD carries forward the *final* design, not any intermediate draft):
+**MF-027 — Requirement.** per Stage 2 §16 (fully corrected across four review rounds — this FRD carries forward the *final* design, not any intermediate draft):
 - fact-key validation: existing Zod schemas per factKey, extend catalog only as needed (unchanged mechanism)
 - source: `sourceType` unchanged in meaning (`USER_REPORTED` for homeowner statements regardless of channel)
 - attribution: new `attribution` field (`FIRSTHAND`/`THIRD_PARTY_RELAYED`/`INFERRED`) — for `THIRD_PARTY_RELAYED`/`INFERRED` items, the confirm-time write must **not** apply the existing unconditional `verifiedAt`-set/`confidence: 0.9` treatment (`capturePropertyFact.ts:311` confirmed to do this for every `USER_REPORTED` value today) — write `verifiedAt: null` and a distinctly lower confidence instead (Stage 2's corrected §15)
@@ -337,7 +339,7 @@ Per Stage 2 §9/§13's per-category routing table — no new universal store; ev
 - idempotency: new `captureExecutionId` field + `@@unique([propertyId, factKey, captureExecutionId])` — **not** `sourceEntityId`, which this pass confirmed (`capturePropertyFact.ts:309`) already means "acting user" for every existing caller; reusing it would break ordinary repeat edits by the same homeowner (Stage 2's third-round correction)
 - supersession/conflict: existing `supersededAt` chain and `decideFactMerge` priority pattern, unchanged; idempotency dedup must resolve to the original execution's write regardless of current supersession state (Stage 2's second-round correction — a stale replay must not resurrect a value a later, unrelated correction already superseded)
 
-**[FACT — new this pass, found during a cross-document consistency review]** Not every scalar fact goes through `capturePropertyFact`/`PropertyFactEvidence`: `factCatalog.ts` marks a subset (e.g. `financial.currentMortgage`, `financial.financingProfile`) `writable: false`, with their `canonicalOwner` naming a distinct model (`PropertyFinancingProfile`) that `capturePropertyFact` does not write to at all — a mortgage-rate statement is this section's own representative example (implementation plan §9) but does not go through this section's mechanism. **[REQUIREMENT]** For any fact whose canonical owner is not `PropertyFactEvidence`, capture requires its own dedicated writer against that model, following the same confirmation/idempotency/attribution shape as above but not literally the same `capturePropertyFact` function; implementation plan §9 specifies the first such case (`PropertyFinancingProfile.interestRateBps`).
+**MF-028 — Requirement.** **[FACT — new this pass, found during a cross-document consistency review]** Not every scalar fact goes through `capturePropertyFact`/`PropertyFactEvidence`: `factCatalog.ts` marks a subset (e.g. `financial.currentMortgage`, `financial.financingProfile`) `writable: false`, with their `canonicalOwner` naming a distinct model (`PropertyFinancingProfile`) that `capturePropertyFact` does not write to at all — a mortgage-rate statement is this section's own representative example (implementation plan §9) but does not go through this section's mechanism.  For any fact whose canonical owner is not `PropertyFactEvidence`, capture requires its own dedicated writer against that model, following the same confirmation/idempotency/attribution shape as above but not literally the same `capturePropertyFact` function; implementation plan §9 specifies the first such case (`PropertyFinancingProfile.interestRateBps`).
 
 ---
 
@@ -345,7 +347,7 @@ Per Stage 2 §9/§13's per-category routing table — no new universal store; ev
 
 **Target: `HomeEvent`, extended with two narrow, precedented fields.**
 
-**[REQUIREMENT]**: `HomeEvent.providerName: String?` and `HomeEvent.warrantyId: String? (FK → Warranty)` — both consistent with the model's existing pattern of optional related-record links (`claimId`, `expenseId`, `projectId` already exist on this exact model, per Stage 2's verified finding). Approximate dates preserved via existing `datePrecision`/`dateRangeStart`/`dateRangeEnd` fields — never collapsed to a fabricated exact month (Stage 2's corrected §14). Retrospective status via existing `isRetrospective` flag (purpose-built for this, per an inline schema comment Stage 2 found). Cost via existing `amount`. Evidence/provenance via existing `HomeEventEvidence`/`HomeEventVerificationRecord`. Confirmation via `AskConfirmationReceipt` (§22). Idempotency via existing `idempotencyKey` field + existing `@@unique([propertyId, idempotencyKey])` constraint, populated with the execution id for the first time for this purpose (Stage 2's finding — the field already exists, unused for this until now). Correction: **[OPEN, per §31's finding]** — no existing `correctionModes` dispatcher to reuse; build directly on `HomeEvent`'s existing `supersedesEventId`/`isCurrent` revision chain.
+**MF-029 — Requirement.** `HomeEvent.providerName: String?` and `HomeEvent.warrantyId: String? (FK → Warranty)` — both consistent with the model's existing pattern of optional related-record links (`claimId`, `expenseId`, `projectId` already exist on this exact model, per Stage 2's verified finding). Approximate dates preserved via existing `datePrecision`/`dateRangeStart`/`dateRangeEnd` fields — never collapsed to a fabricated exact month (Stage 2's corrected §14). Retrospective status via existing `isRetrospective` flag (purpose-built for this, per an inline schema comment Stage 2 found). Cost via existing `amount`. Evidence/provenance via existing `HomeEventEvidence`/`HomeEventVerificationRecord`. Confirmation via `AskConfirmationReceipt` (§22). Idempotency via existing `idempotencyKey` field + existing `@@unique([propertyId, idempotencyKey])` constraint, populated with the execution id for the first time for this purpose (Stage 2's finding — the field already exists, unused for this until now). Correction: **[OPEN, per §31's finding]** — no existing `correctionModes` dispatcher to reuse; build directly on `HomeEvent`'s existing `supersedesEventId`/`isCurrent` revision chain.
 
 ---
 
@@ -353,18 +355,18 @@ Per Stage 2 §9/§13's per-category routing table — no new universal store; ev
 
 **Target: `DecisionThread` (existing, generalized from HVAC-only).**
 
-**[REQUIREMENT]**: **[FACT — this pass]** `DecisionThread.goalCode` is a plain string column (confirmed, no Prisma enum) — adding `SELL_HOLD_RENT`/`RENOVATION`/`CLAIM`/`REFINANCE` requires zero schema change. Create/reuse/resume/close rules per Stage 2 §17:
+**MF-030 — Requirement.** **[FACT — this pass]** `DecisionThread.goalCode` is a plain string column (confirmed, no Prisma enum) — adding `SELL_HOLD_RENT`/`RENOVATION`/`CLAIM`/`REFINANCE` requires zero schema change. Create/reuse/resume/close rules per Stage 2 §17:
 - **Create**: a `GOAL` candidate with no matching open thread for `(propertyId, decisionDefinitionId, primaryEntityType, primaryEntityId)` creates one — exempt from the confirmation gate that applies to durable-knowledge writes (Stage 2's materiality carve-out: a thread is workflow state, not a fact about the home, and is reversible at zero cost).
 - **Reuse/resume**: canonical lookup is `DecisionThread.activeIdentityKey`, not a session-level pointer — this supports multiple concurrent goals for one property and cross-session resumption (Stage 2's third-round correction of an earlier single-pointer design). `AskSession.activeDecisionThreadId` is a same-session cache only.
 - **Close**: existing `lifecycleStatus` transitions (`DECIDED`/`COMPLETED`/`ABANDONED`), unchanged mechanism.
 
-**[REQUIREMENT]** Avoid one thread per casual mention: a `GOAL` candidate only creates/attaches a thread when the pre-filter+extraction combination reaches its normal confidence bar for the `GOAL` category (§14) — a passing mention that doesn't clear extraction confidence produces no thread, consistent with how every other candidate category already requires the pre-filter to fire before anything happens.
+**MF-031 — Requirement.** Avoid one thread per casual mention: a `GOAL` candidate only creates/attaches a thread when the pre-filter+extraction combination reaches its normal confidence bar for the `GOAL` category (§14) — a passing mention that doesn't clear extraction confidence produces no thread, consistent with how every other candidate category already requires the pre-filter to fire before anything happens.
 
 ---
 
 ## 22. Confirmation & Idempotency
 
-**[REQUIREMENT] Canonical lifecycle** (Stage 2 §16, four-times-corrected — this is the final design):
+**MF-032 — Requirement.** Canonical lifecycle. (Stage 2 §16, four-times-corrected — this is the final design):
 
 ```
 candidate → AskExecution (NEEDS_CONFIRMATION, parametersJson holds the candidate payload)
@@ -379,7 +381,7 @@ candidate → AskExecution (NEEDS_CONFIRMATION, parametersJson holds the candida
   → audit (existing AskExecutionEvent log)
 ```
 
-**[REQUIREMENT]** Specify each of the following exactly per Stage 2's final, corrected design:
+**MF-033 — Requirement.** Specify each of the following exactly per Stage 2's final, corrected design:
 - **Confirm**: as above.
 - **Reject**: existing `rejectGroundedAskProposal`-equivalent path — status → `REJECTED`/`CANCELLED`, no domain write.
 - **Edit-before-confirm**: candidate payload is editable via the existing `captureRequests`/`suppliedInput` mechanism before the confirm call, not a separate edit endpoint.
@@ -390,7 +392,7 @@ candidate → AskExecution (NEEDS_CONFIRMATION, parametersJson holds the candida
 - **Partial failure — a *different* mechanism, on a *different* subsystem, than the two bullets above (relabeled this pass — an earlier draft placed this under the `AskConfirmationReceipt` canonical lifecycle above, which conflated two independent mechanisms):** this bullet is about the `DomainEvent`-backed **extraction job's** candidate-set persistence (implementation plan §4.9/§8), not about `AskConfirmationReceipt` at all — `AskConfirmationReceipt`'s own reclaim behavior is the "Timeout / stale lease" bullet above, and needed no new mechanism this stage. What *is* new: a slow, reclaimed extraction attempt (one still finishing after its `DomainEvent` lease was legitimately reclaimed by a later attempt) must not persist its candidate set once its claim token no longer matches the current `attempts` value on that `DomainEvent` row (Stage 2's fourth-round correction) — the commit-time claim-token re-verification, a conditional update inside the same transaction as the candidate creates, rolls the whole transaction back including any candidate writes if the check fails.
 - **Warranty/event dependency ordering**: bidirectional `linkedExecutionId` (Stage 2's fourth-round correction — set on both sibling candidates, not one-sided) plus asynchronous reconciliation via a `DomainEvent` (`ASK_CAPTURE_LINK_RECONCILE`) processed against durably-committed state, not a synchronous check at completion time (Stage 2's third-round correction of a race-prone earlier design).
 
-**[REQUIREMENT]** Material writes are never committed by the extraction LLM directly — extraction produces typed candidates only; every persistence path above runs through this confirmation lifecycle, with zero exception (Stage 2 §15, unconditional per the existing Trust FRD).
+**MF-034 — Requirement.** Material writes are never committed by the extraction LLM directly — extraction produces typed candidates only; every persistence path above runs through this confirmation lifecycle, with zero exception (Stage 2 §15, unconditional per the existing Trust FRD).
 
 ---
 
@@ -413,19 +415,19 @@ candidate → AskExecution (NEEDS_CONFIRMATION, parametersJson holds the candida
 
 ## 24. Provenance
 
-**[REQUIREMENT]** Four independent axes (Stage 2 §15, final corrected design): **source** (`sourceType`, unchanged meaning), **capture channel** (new `captureChannel` field), **extraction confidence** (new, genuinely separate `extractionConfidence` field), **confirmation state** (existing `verificationStatus`/`verifiedAt` fields). Never collapsed into one field, and never reusing an existing field whose current meaning would conflict (§14's `confidence`-reuse correction). `attribution` (`FIRSTHAND`/`THIRD_PARTY_RELAYED`/`INFERRED`) is a fifth, related tag that determines how source/confidence combine for a given candidate (§19).
+**MF-035 — Requirement.** Four independent axes (Stage 2 §15, final corrected design): **source** (`sourceType`, unchanged meaning), **capture channel** (new `captureChannel` field), **extraction confidence** (new, genuinely separate `extractionConfidence` field), **confirmation state** (existing `verificationStatus`/`verifiedAt` fields). Never collapsed into one field, and never reusing an existing field whose current meaning would conflict (§14's `confidence`-reuse correction). `attribution` (`FIRSTHAND`/`THIRD_PARTY_RELAYED`/`INFERRED`) is a fifth, related tag that determines how source/confidence combine for a given candidate (§19).
 
 ---
 
 ## 25. Context Assembly
 
-**[REQUIREMENT]** Reuse `getAggregationPropertyContext` (existing, unchanged) with `SEARCH_ASSISTANT`'s scope widened to include `STRUCTURE`/`EVENTS` (Stage 2 §9 — a config change to an existing mechanism). Each capability's own `requiredContextProviders`/`optionalContextProviders` (existing skill metadata) remains the per-operation context-selection mechanism — not replaced. Freshness/latency/authorization/missing-value handling: owned by the existing aggregation-context service, unchanged. Provider failures/stale integrations: surfaced via the existing `MISSING`/`UNAVAILABLE` fact states, consumed directly by next-action generation (§27) and cold-start behavior (Stage 2 §27), not a new signal.
+**MF-036 — Requirement.** Reuse `getAggregationPropertyContext` (existing, unchanged) with `SEARCH_ASSISTANT`'s scope widened to include `STRUCTURE`/`EVENTS` (Stage 2 §9 — a config change to an existing mechanism). Each capability's own `requiredContextProviders`/`optionalContextProviders` (existing skill metadata) remains the per-operation context-selection mechanism — not replaced. Freshness/latency/authorization/missing-value handling: owned by the existing aggregation-context service, unchanged. Provider failures/stale integrations: surfaced via the existing `MISSING`/`UNAVAILABLE` fact states, consumed directly by next-action generation (§27) and cold-start behavior (Stage 2 §27), not a new signal.
 
 ---
 
 ## 26. Multi-turn State
 
-**[REQUIREMENT]** Three explicitly separated layers (Stage 2 §17, final design):
+**MF-037 — Requirement.** Three explicitly separated layers (Stage 2 §17, final design):
 
 | Layer | Model | Persists |
 |---|---|---|
@@ -433,13 +435,13 @@ candidate → AskExecution (NEEDS_CONFIRMATION, parametersJson holds the candida
 | Active workflow state | `DecisionThread` + `DecisionThreadExecutionLink` | Active goal, selected next action's resumption target |
 | Persistent home knowledge | `PropertyFactEvidence`, `HomeEvent`, `Warranty`, etc. | Durable facts/events |
 
-**[REQUIREMENT]** No unbounded transcript stuffing into LLM context — extraction and any conversational reasoning consume the current message, bounded aggregation context, and (when active) the `DecisionThread`'s already-structured state (`factReferences`, `assumptions`, `options`, `questions`) — never a raw list of prior messages (Stage 2 §17, explicit).
+**MF-038 — Requirement.** No unbounded transcript stuffing into LLM context — extraction and any conversational reasoning consume the current message, bounded aggregation context, and (when active) the `DecisionThread`'s already-structured state (`factReferences`, `assumptions`, `options`, `questions`) — never a raw list of prior messages (Stage 2 §17, explicit).
 
 ---
 
 ## 27. Next Actions
 
-**[REQUIREMENT]** Dedicated module (moves out of the orchestrator, §17). Deterministic generation (Stage 2's decision, confirmed sufficient — no new LLM call), consuming: current request, current response, available capabilities (existing skill `consumerPolicy`), missing context (existing `MISSING` fact state), active `DecisionThread`, known home state, logical decision path.
+**MF-039 — Requirement.** Dedicated module (moves out of the orchestrator, §17). Deterministic generation (Stage 2's decision, confirmed sufficient — no new LLM call), consuming: current request, current response, available capabilities (existing skill `consumerPolicy`), missing context (existing `MISSING` fact state), active `DecisionThread`, known home state, logical decision path.
 
 Corrected design (Stage 2's second-round finding, incorporating an under-credited existing mechanism):
 - **Candidate generation**: capabilities whose `consumerPolicy` includes `ASK`.
@@ -453,9 +455,9 @@ Corrected design (Stage 2's second-round finding, incorporating an under-credite
 
 ## 28. Structured UI Blocks
 
-**[REQUIREMENT]** Keep `AskPresentationBlock` (**[FACT — this pass]** confirmed 24 current variants: `SUMMARY`, `GROUPED_LIST`, `TABLE`, `CAPABILITY_LIST`, `EVIDENCE`, `BOUNDARY`, `MONITOR`, `WORKFLOW_PROGRESS`, `METRIC_ROW`, `TIMELINE`, `COMPARISON`, `DECISION_TRACE`, `DECISION_PROGRESS`, `SCENARIO_COMPARISON`, `PREFERENCE_REFERENCE`, `WHY_NOW`, `RECOMMENDATION_CHANGE`, `CHANGE_SUMMARY`, `PRIORITY_LIST`, `OUTCOME_SUMMARY`, `ASSUMPTIONS`, `LIMITATION`, `EMPTY_STATE`, `ERROR_STATE`). Add exactly **one** new block type: `PROACTIVE_INSIGHT` (a genuine gap — no existing field distinguishes a Cozy-initiated execution). **Do not add `FACT_CONFIRMATION`** — per §14's STAGE 2 ASSUMPTION correction, the existing `confirmation` field already covers this need with zero new schema.
+**MF-040 — Requirement.** Keep `AskPresentationBlock` (**[FACT — this pass]** confirmed 24 current variants: `SUMMARY`, `GROUPED_LIST`, `TABLE`, `CAPABILITY_LIST`, `EVIDENCE`, `BOUNDARY`, `MONITOR`, `WORKFLOW_PROGRESS`, `METRIC_ROW`, `TIMELINE`, `COMPARISON`, `DECISION_TRACE`, `DECISION_PROGRESS`, `SCENARIO_COMPARISON`, `PREFERENCE_REFERENCE`, `WHY_NOW`, `RECOMMENDATION_CHANGE`, `CHANGE_SUMMARY`, `PRIORITY_LIST`, `OUTCOME_SUMMARY`, `ASSUMPTIONS`, `LIMITATION`, `EMPTY_STATE`, `ERROR_STATE`). Add exactly **one** new block type: `PROACTIVE_INSIGHT` (a genuine gap — no existing field distinguishes a Cozy-initiated execution). **Do not add `FACT_CONFIRMATION`** — per §14's STAGE 2 ASSUMPTION correction, the existing `confirmation` field already covers this need with zero new schema.
 
-**[REQUIREMENT]** Frontend impact (**[FACT — this pass]**): `AskWorkspace.tsx`'s `BlockView` is a single 1707-line function using an inline `if (block.type === 'X')` chain — not a per-block-component architecture. Adding `PROACTIVE_INSIGHT` means one more `if` branch in this same file (and the mirrored type in `apps/frontend/src/features/ask/types.ts`); no new component-registry pattern is introduced by this program.
+**MF-041 — Requirement.** Frontend impact (**[FACT — this pass]**): `AskWorkspace.tsx`'s `BlockView` is a single 1707-line function using an inline `if (block.type === 'X')` chain — not a per-block-component architecture. Adding `PROACTIVE_INSIGHT` means one more `if` branch in this same file (and the mirrored type in `apps/frontend/src/features/ask/types.ts`); no new component-registry pattern is introduced by this program.
 
 **[REQUIREMENT — decided this pass, was flagged [OPEN] in an earlier draft]** Rendering a captured candidate's `confirmation` field (§14's correction, above) requires the frontend to first learn the candidate's child `AskExecution` exists. `AskExecutionResponseSchema` gains a bounded `childExecutions` array (max 3, one level deep, full nested `AskExecutionResponse` objects — implementation plan §18/§19 has the exact schema and rationale) so a synchronously-completed capture is delivered inline in the *same* turn's response, not via a separate fetch. §10's Turn Processing Contract step 12 ("surface confirmation... on each child execution") is satisfied by this field, not by the existing singular top-level `confirmation` field (which still correctly describes the confirmation-card *mechanism itself* — §14's "zero new schema" claim was, and remains, scoped to that mechanism, not to how the response exposes that a second execution exists). Frontend impact is one field on the response contract plus one line in `ask()`'s state update (implementation plan §19) — `ConfirmationCard`/`BlockView` render every execution identically regardless of whether it arrived as the main response or via `childExecutions`, so neither needs a code change. The async-fallback case (extraction completing after the response already returned) is not covered by this field — implementation plan §9 specifies that case's own, narrower, explicitly-scoped acceptance bar.
 
@@ -463,11 +465,11 @@ Corrected design (Stage 2's second-round finding, incorporating an under-credite
 
 ## 29. Proactive Cozy
 
-**[REQUIREMENT]** Generalize the existing pattern (Stage 2 §20, final design): `DomainEvent` (existing outbox) → domain relevance evaluation (existing, kept per-domain — genuinely domain-specific, not centralized) → `notifyWithAskContinuation` (**new, small wrapper** eliminating the confirmed copy-pasted duplication between the two existing callers) → pre-loaded `AskExecution` → homeowner sees a `PROACTIVE_INSIGHT`-tagged Cozy turn.
+**MF-042 — Requirement.** Generalize the existing pattern (Stage 2 §20, final design): `DomainEvent` (existing outbox) → domain relevance evaluation (existing, kept per-domain — genuinely domain-specific, not centralized) → `notifyWithAskContinuation` (**new, small wrapper** eliminating the confirmed copy-pasted duplication between the two existing callers) → pre-loaded `AskExecution` → homeowner sees a `PROACTIVE_INSIGHT`-tagged Cozy turn.
 
-**[REQUIREMENT]** Deduplication: existing `NotificationService.create()`'s `deduplicationKey`, unchanged. Urgency/suppression: existing per-domain logic + `askSuggestionPolicy.ts`'s repeat-filter, unchanged mechanisms reused. Ask deep-linking: existing `actionUrl` pattern from `createAskNotificationContinuation`. Already-resolved insight / dismissal / repeat reminders / user preferences: **[OPEN]** — not explicitly designed in Stage 2; Stage 3's implementation plan should scope this as its own small vertical slice within Phase 5, reusing whatever dismissal/preference mechanism `NotificationService` already has (not verified in this pass — flag for Phase 0).
+**MF-043 — Requirement.** Deduplication: existing `NotificationService.create()`'s `deduplicationKey`, unchanged. Urgency/suppression: existing per-domain logic + `askSuggestionPolicy.ts`'s repeat-filter, unchanged mechanisms reused. Ask deep-linking: existing `actionUrl` pattern from `createAskNotificationContinuation`. Already-resolved insight / dismissal / repeat reminders / user preferences: **[OPEN]** — not explicitly designed in Stage 2; Stage 3's implementation plan should scope this as its own small vertical slice within Phase 5, reusing whatever dismissal/preference mechanism `NotificationService` already has (not verified in this pass — flag for Phase 0).
 
-**[REQUIREMENT]** Home Event Radar migrates its direct `Notification` write onto this same `DomainEvent` rail (Stage 2's explicit decision) — see §31 for the specific migration requirements and the two things this pass found still open.
+**MF-044 — Requirement.** Home Event Radar migrates its direct `Notification` write onto this same `DomainEvent` rail (Stage 2's explicit decision) — see §31 for the specific migration requirements and the two things this pass found still open.
 
 ---
 
@@ -479,7 +481,7 @@ Covered in full in §21. Restated: Job 3 ("when something major happens") is ser
 
 ## 31. Domain Capability Exposure
 
-**[REQUIREMENT]**, per Stage 2 §23's classification, restated with this pass's fresh findings:
+**MF-045 — Requirement.** per Stage 2 §23's classification, restated with this pass's fresh findings:
 
 - **Home Event Radar — expose now, but three things must happen first**, per Phase 0's resolution (implementation plan §4.6, §4.5):
   1. **[RESOLVED — Phase 0]** the `askEnvelopeQueryScope.ts` domain-mapping bug is confirmed still present exactly as previously described (component-scoped queries hardcode `domains: ['ASSET_LIFECYCLE']`, excluding `WEATHER`). Decision: a per-component allowlist (`ROOF`/`FOUNDATION`/`EXTERIOR`/`SITE` gain `WEATHER`; `INTERIOR` does not), not an unconditional widen — verified more precise now that `intelligenceEnvelopeQuery.service.ts`'s domain and entityRef filters are confirmed to be independent `AND` checks (neither compensates for the other).
@@ -498,7 +500,7 @@ Covered in full in §21. Restated: Job 3 ("when something major happens") is ser
 
 ## 32. LLM Boundaries
 
-**[REQUIREMENT]** For the one new LLM call (extraction, §14), document per the request's checklist:
+**MF-046 — Requirement.** For the one new LLM call (extraction, §14), document per the request's checklist:
 
 | Aspect | Requirement |
 |---|---|
@@ -512,37 +514,37 @@ Covered in full in §21. Restated: Job 3 ("when something major happens") is ser
 | Observability | Logged the same way `askRoutingQualityEvaluator` already logs routing decisions (existing calibration-harness pattern, reused) |
 | Test strategy | Extends the existing 48-file Ask test suite + 3 DB-integration tests + certification corpus (**[FACT — this pass]**, confirmed to exist) — new fixture rows and new `.db.test.js` files following the established naming convention, not a new harness |
 
-**[REQUIREMENT]** The existing two live LLM calls (`synthesizeAskResult`, `selectAskRemoteFallbackTypedClaims`) are unchanged — still schema-constrained, still instructed never to invent facts (**[FACT — Stage 1]**).
+**MF-047 — Requirement.** The existing two live LLM calls (`synthesizeAskResult`, `selectAskRemoteFallbackTypedClaims`) are unchanged — still schema-constrained, still instructed never to invent facts (**[FACT — Stage 1]**).
 
 ---
 
 ## 33. Traditional UI Requirements
 
-**[REQUIREMENT]** Every material conversational write must have a review/correction path outside chat (Stage 2 §21/§33, unchanged principle). For the two capture targets this program adds: `PropertyFactEvidence` edits already have an existing property-edit UI path (per Stage 1's project history — property basics/systems editing exists); `HomeEvent` — **[RESOLVED — Phase 0]** a homeowner-facing timeline view already exists at `/dashboard/properties/[id]/timeline` (`apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/timeline/page.tsx`) and already supports both review and correction, not just viewing: `correctHomeEvent` (`homeEventsApi.ts:141-146`) is a `PATCH` requiring a `correctionReason`, backed by `PATCH /properties/:propertyId/home-events/:eventId` (`apps/backend/src/routes/homeEvents.routes.ts:72-78`, gated by `authenticate`/`propertyAuthMiddleware`/`requireHouseholdRole('CONTRIBUTOR')` — homeowner-level auth, no admin role). Confirm/dispute (`confirmHomeEvent`), visibility, and evidence-attach endpoints exist too. No new UI work needed for this requirement — a conversationally-captured `HomeEvent` is reviewable/correctable through an existing, already-wired path.
+**MF-048 — Requirement.** Every material conversational write must have a review/correction path outside chat (Stage 2 §21/§33, unchanged principle). For the two capture targets this program adds: `PropertyFactEvidence` edits already have an existing property-edit UI path (per Stage 1's project history — property basics/systems editing exists); `HomeEvent` — **[RESOLVED — Phase 0]** a homeowner-facing timeline view already exists at `/dashboard/properties/[id]/timeline` (`apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/timeline/page.tsx`) and already supports both review and correction, not just viewing: `correctHomeEvent` (`homeEventsApi.ts:141-146`) is a `PATCH` requiring a `correctionReason`, backed by `PATCH /properties/:propertyId/home-events/:eventId` (`apps/backend/src/routes/homeEvents.routes.ts:72-78`, gated by `authenticate`/`propertyAuthMiddleware`/`requireHouseholdRole('CONTRIBUTOR')` — homeowner-level auth, no admin role). Confirm/dispute (`confirmHomeEvent`), visibility, and evidence-attach endpoints exist too. No new UI work needed for this requirement — a conversationally-captured `HomeEvent` is reviewable/correctable through an existing, already-wired path.
 
 ---
 
 ## 34. Security
 
-**[REQUIREMENT]** User/property authorization: unchanged existing middleware, applied identically to the new `CAPTURE_FACT_CONFIRM`/`CAPTURE_EVENT_CONFIRM` operation family (Stage 2 §7's explicit "safety is inherited, must be verified, not assumed" requirement). Confirmation-time re-check: existing `AskConfirmationReceipt` behavior, unchanged, must not be weakened for the new operation family. Role enforcement: same `roleFloor` mechanism as the 25 existing commands — a `VIEWER` cannot confirm a captured fact any more than they can create a maintenance task today. No cross-property context leakage: existing property-scoping on aggregation context and capability invocation, unchanged.
+**MF-049 — Requirement.** User/property authorization: unchanged existing middleware, applied identically to the new `CAPTURE_FACT_CONFIRM`/`CAPTURE_EVENT_CONFIRM` operation family (Stage 2 §7's explicit "safety is inherited, must be verified, not assumed" requirement). Confirmation-time re-check: existing `AskConfirmationReceipt` behavior, unchanged, must not be weakened for the new operation family. Role enforcement: same `roleFloor` mechanism as the 25 existing commands — a `VIEWER` cannot confirm a captured fact any more than they can create a maintenance task today. No cross-property context leakage: existing property-scoping on aggregation context and capability invocation, unchanged.
 
 ---
 
 ## 35. Reliability
 
-**[REQUIREMENT]** Durable extraction intent: persisted before the LLM call is attempted, not after (§14). Retry-safe workers: shared lease ownership between the inline attempt and the async worker (one claim, two triggers — Stage 2's third-round correction). Lease correctness: commit-time claim-token re-verification, not just claim-time (Stage 2's fourth-round correction). Idempotent writes: per-model, matching on execution identity, not current/active state (§22).
+**MF-050 — Requirement.** Durable extraction intent: persisted before the LLM call is attempted, not after (§14). Retry-safe workers: shared lease ownership between the inline attempt and the async worker (one claim, two triggers — Stage 2's third-round correction). Lease correctness: commit-time claim-token re-verification, not just claim-time (Stage 2's fourth-round correction). Idempotent writes: per-model, matching on execution identity, not current/active state (§22).
 
 ---
 
 ## 36. Performance
 
-**[REQUIREMENT]** Deterministic routing path unaffected — the pre-filter is the only new cost on every turn, and it's deterministic/cheap by requirement (§13). Extraction's bounded synchronous attempt (~1.5s illustrative timeout) must not materially degrade a simple request's latency when the pre-filter doesn't fire (the common case). Async fallback (§10 step 8) must work correctly under process restart (§14).
+**MF-051 — Requirement.** Deterministic routing path unaffected — the pre-filter is the only new cost on every turn, and it's deterministic/cheap by requirement (§13). Extraction's bounded synchronous attempt (~1.5s illustrative timeout) must not materially degrade a simple request's latency when the pre-filter doesn't fire (the common case). Async fallback (§10 step 8) must work correctly under process restart (§14).
 
 ---
 
 ## 37. Observability
 
-**[REQUIREMENT]** Log, per turn: route chosen, capability invoked, whether extraction triggered, candidates generated (count + category), confirmation state transitions, write result, next actions generated (count + which), proactive-continuation origin (which producer). Reuse existing `AskExecutionEvent` audit trail and `askRoutingQualityEvaluator`'s calibration pattern (§32) — not a new observability system.
+**MF-052 — Requirement.** Log, per turn: route chosen, capability invoked, whether extraction triggered, candidates generated (count + category), confirmation state transitions, write result, next actions generated (count + which), proactive-continuation origin (which producer). Reuse existing `AskExecutionEvent` audit trail and `askRoutingQualityEvaluator`'s calibration pattern (§32) — not a new observability system.
 
 ---
 
@@ -554,13 +556,13 @@ Full test pyramid defined in the implementation plan (§23). This FRD's requirem
 
 ## 39. Evaluation
 
-Per §15 (extraction) and §11 (routing) — both extend existing infrastructure (`askRoutingQualityEvaluator`, `askTrustCertificationCorpus`, the 48-file `apps/backend/tests/ask/` suite). **[REQUIREMENT]** pilot release does not depend only on conventional unit tests — the extraction evaluation corpus (§15) and its pragmatic thresholds are a required, non-optional deliverable, per the request's explicit instruction.
+**MF-053 — Requirement.** Per §15 (extraction) and §11 (routing) — both extend existing infrastructure (`askRoutingQualityEvaluator`, `askTrustCertificationCorpus`, the 48-file `apps/backend/tests/ask/` suite).  pilot release does not depend only on conventional unit tests — the extraction evaluation corpus (§15) and its pragmatic thresholds are a required, non-optional deliverable, per the request's explicit instruction.
 
 ---
 
 ## 40. Acceptance Criteria
 
-**[REQUIREMENT]** This FRD is satisfied when every user story in §8 passes its stated behavior against the turn processing contract (§10), every knowledge-capture target (§19–§21) enforces its idempotency/attribution/confirmation requirements under the race-condition tests defined in the implementation plan (§23), the capability layer (§16/§17) passes every operation (the 67-operation set confirmed complete per implementation plan §4.8) through the registry with zero orchestrator dispatch branches remaining **on either dispatch surface — propose-time and confirm-time (§17's new finding, implementation plan §4.9)**, and the extraction evaluation corpus (§15) clears its pilot thresholds. Full Definition of Done in the implementation plan (§27).
+**MF-054 — Requirement.** This FRD is satisfied when every user story in §8 passes its stated behavior against the turn processing contract (§10), every knowledge-capture target (§19–§21) enforces its idempotency/attribution/confirmation requirements under the race-condition tests defined in the implementation plan (§23), the capability layer (§16/§17) passes every operation (the 67-operation set confirmed complete per implementation plan §4.8) through the registry with zero orchestrator dispatch branches remaining **on either dispatch surface — propose-time and confirm-time (§17's new finding, implementation plan §4.9)**, and the extraction evaluation corpus (§15) clears its pilot thresholds. Full Definition of Done in the implementation plan (§27).
 
 ---
 

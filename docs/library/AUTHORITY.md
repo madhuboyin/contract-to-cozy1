@@ -29,7 +29,7 @@ Read the Ask documents by scope rather than filename date:
 6. [Cross-Domain Rollout](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) governs shared interaction rules and domain rollout requirements. Its phase verification records provide static evidence with explicit partials; they do not make its proposed header a blanket implementation claim.
 7. [Inline Workspace](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) is the latest scoped addendum. It overrides the two interaction assumptions named in its §2: routine domain-page handoff and exclusion of a richer responsive workspace. Other earlier requirements remain in force unless an explicit conflict exists.
 
-This resolves document reading order, not delivery status. Use `requirements.csv` for requirement-level status. The three unnumbered Ask documents remain `NEEDS_ATOMIZATION`; assign stable IDs before changing their behavior.
+This resolves document reading order, not delivery status. Use `requirements.csv` for requirement-level status. The Ask requirement sources now have stable IDs in `requirements.csv`. Use those IDs in future changes and retain an ID when its wording or status changes.
 
 ## Requirement status vocabulary
 

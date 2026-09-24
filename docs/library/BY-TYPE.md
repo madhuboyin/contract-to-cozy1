@@ -9,9 +9,9 @@ Most recently changed first; showing area.
 | | Document | Area | Last changed |
 |---|---|---|---|
 |  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) | Ask Cozy | 2026-09-24 |
+|  | [Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)](../product/ASK_COZY_MESSAGE_FIRST_FRD.md) | Ask Cozy | 2026-09-24 |
 | 🟠 | [Ask Cozy — Cross-Domain Interaction Rollout FRD](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) | Ask Cozy | 2026-09-17 |
 |  | [Ask Cozy — Interaction Model & UI FRD](../product/ASK_COZY_INTERACTION_MODEL_UI_FRD.md) | Ask Cozy | 2026-09-17 |
-|  | [Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)](../product/ASK_COZY_MESSAGE_FIRST_FRD.md) | Ask Cozy | 2026-09-14 |
 |  | [RentCast Property Setup Integration — Functional Requirements Document](../product/RENTCAST_PROPERTY_SETUP_INTEGRATION_FRD.md) | Property Context & Property Setup | 2026-09-10 |
 |  | [Property Setup Simplification — Minimal-Change FRD](../product/PROPERTY_SETUP_SIMPLIFICATION_MINIMAL_CHANGE_FRD.md) | Property Context & Property Setup | 2026-09-09 |
 |  | [Environment Report — Functional Requirements Document](../functional/ENVIRONMENT_REPORT_FRD.md) | Property Intelligence | 2026-09-03 |

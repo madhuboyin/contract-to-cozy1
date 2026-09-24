@@ -9,9 +9,9 @@
 | | Document | Status (as written) | Last changed | Lines |
 |---|---|---|---|---|
 |  | [Ask Cozy — Inline Workspace Product Requirements Document](../product/ASK_COZY_INLINE_WORKSPACE_FRD.md) | v1.62 · Approved product direction; implementation is partial and tracked by requirement | 2026-09-24 | 1054 |
+|  | [Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)](../product/ASK_COZY_MESSAGE_FIRST_FRD.md) |  | 2026-09-24 | 569 |
 | 🟠 C6 | [Ask Cozy — Cross-Domain Interaction Rollout FRD](../product/ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md) | v1.1 · Proposed follow-on requirements; implementation is not claimed | 2026-09-17 | 735 |
 |  | [Ask Cozy — Interaction Model & UI FRD](../product/ASK_COZY_INTERACTION_MODEL_UI_FRD.md) | v1.2 · Maintenance interaction corrections implemented — see §29 for scope and verifica | 2026-09-17 | 661 |
-|  | [Ask Cozy — Message-First Functional Requirements Document (Stage 3, Part A)](../product/ASK_COZY_MESSAGE_FIRST_FRD.md) |  | 2026-09-14 | 567 |
 | 🟠 C6 | [AI Home Concierge — Intelligence, Personalization, and Proactive Concierge](../product/AI_HOME_CONCIERGE_ASK_INTELLIGENCE_INCREMENTAL_FRD.md) | v1.6 · "Proposed — production implementation and real-user collection blocked on P0 app | 2026-08-29 | 1511 |
 | 🟠 C6 | [AI Home Concierge — Ask Redo](../product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md) | v1.6 · "Implementation in progress" | 2026-08-16 | 2261 |
 |  | [AI Home Concierge Ask — Audience Context and Persona-Aware Guidance Addendum](../product/AI_HOME_CONCIERGE_ASK_AUDIENCE_CONTEXT_ADDENDUM_FRD.md) | v1.0 · Implemented and verified | 2026-08-15 | 1024 |
