@@ -127,7 +127,12 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.58: fixture 083 (DIY_PROJECTS), re-derived from the retriever; no existing row changed (a first-draft positive
   // sharing the "How far along…" frame with fixtures 047 and 082 was reworded). Candidate pairs were swept against every
   // Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4448).
-  ['083-expected', '083', 'DIY_PROJECTS', .3955, true], ['083-competitor', '083', 'BUYER_INSPECTION_REVIEW', .175, false],
+  ['083-expected', '083', 'DIY_PROJECTS', .3955, true], ['083-competitor', '083', 'PROJECT_TRACKER_PROJECTS', .2513, false],
+  // FRD v1.59: fixture 084 (PROJECT_TRACKER_PROJECTS), re-derived from the retriever. "projects" made this operation
+  // fixture 083's (DIY) top competitor, so 083's competitor row was re-derived; a first-draft positive naming renovation
+  // projects outranked RENOVATION_PERMIT_READINESS on fixture 024 and was reworded. Candidate pairs were swept against
+  // every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4444).
+  ['084-expected', '084', 'PROJECT_TRACKER_PROJECTS', .8039, true], ['084-competitor', '084', 'QUOTE_COMPARISON_REVIEW', .5647, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

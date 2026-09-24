@@ -66,6 +66,7 @@ const DEFINITIONS = [
   adapter('negotiation-shield.cases', 'Negotiation Shield cases (NegotiationShieldService)', 'NEGOTIATION_SHIELD_CASES'),
   adapter('home-digital-twin.scenarios', 'Home Upgrade Planner scenarios (HomeDigitalTwinScenarioService)', 'HOME_UPGRADE_SCENARIOS'),
   adapter('diy.projects', 'DIY Project Center projects (DiyService)', 'DIY_PROJECTS'),
+  adapter('project-tracker.projects', 'Project Tracker projects (projectTracker.service)', 'PROJECT_TRACKER_PROJECTS'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),
   adapter('inventory.create', 'InventoryService', 'INVENTORY_ITEM_CREATE', 'MUTATION_PREPARATION'),

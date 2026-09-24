@@ -149,6 +149,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('NEGOTIATION_SHIELD_CASES', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_UPGRADE_SCENARIOS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('DIY_PROJECTS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('PROJECT_TRACKER_PROJECTS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOUSEHOLD_INVITATION', OWNER_LIFECYCLE_MODES),
   definePolicy('QUOTE_COMPARISON_CREATE', ALL_MODES),
   definePolicy('QUOTE_COMPARISON_REVIEW', ALL_MODES),

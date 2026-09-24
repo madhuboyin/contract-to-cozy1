@@ -32,6 +32,7 @@ import { PLANT_ADVISOR_SKILL } from './plant-advisor';
 import { NEGOTIATION_SHIELD_SKILL } from './negotiation-shield';
 import { HOME_DIGITAL_TWIN_SKILL } from './home-digital-twin';
 import { DIY_SKILL } from './diy';
+import { PROJECT_TRACKER_SKILL } from './project-tracker';
 import { SELLER_PREPARATION_SKILL } from './seller-preparation';
 import { SELLER_PREP_SKILL } from './seller-prep';
 import { BUYER_CLOSING_SKILL } from './buyer-closing';
@@ -85,6 +86,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'negotiation-shield': NEGOTIATION_SHIELD_SKILL,
   'home-digital-twin': HOME_DIGITAL_TWIN_SKILL,
   diy: DIY_SKILL,
+  'project-tracker': PROJECT_TRACKER_SKILL,
   'seller-preparation': SELLER_PREPARATION_SKILL,
   'seller-prep': SELLER_PREP_SKILL,
   'buyer-closing': BUYER_CLOSING_SKILL,

@@ -50,6 +50,7 @@ const TAXONOMY = Object.freeze({
   'negotiation-shield': ['NEGOTIATION_SHIELD_CASES'],
   'home-digital-twin': ['HOME_UPGRADE_SCENARIOS'],
   diy: ['DIY_PROJECTS'],
+  'project-tracker': ['PROJECT_TRACKER_PROJECTS'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

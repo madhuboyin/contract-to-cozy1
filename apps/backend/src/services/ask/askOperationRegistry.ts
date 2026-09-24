@@ -102,6 +102,7 @@ export type AskOperationId =
   | 'NEGOTIATION_SHIELD_CASES'
   | 'HOME_UPGRADE_SCENARIOS'
   | 'DIY_PROJECTS'
+  | 'PROJECT_TRACKER_PROJECTS'
   | 'HOUSEHOLD_INVITATION'
   | 'GUIDANCE_JOURNEY_CREATE'
   | 'QUOTE_COMPARISON_CREATE'
@@ -402,6 +403,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // FRD v1.56: reads listCasesForProperty, the same call GET /properties/:id/negotiation-shield/cases makes.
   // FRD v1.57: reads listScenarios, the same call GET /properties/:id/home-digital-twin/scenarios makes.
   // FRD v1.58: reads listProjects (planning and in progress), the call GET /properties/:id/diy/projects makes for the page.
+  // FRD v1.59: reads listProjects, the call GET /properties/:id/projects makes for the Project Tracker page.
+  PROJECT_TRACKER_PROJECTS: definition('PROJECT_TRACKER_PROJECTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'project-tracker.projects', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   DIY_PROJECTS: definition('DIY_PROJECTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'diy.projects', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_UPGRADE_SCENARIOS: definition('HOME_UPGRADE_SCENARIOS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-digital-twin.scenarios', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASES: definition('NEGOTIATION_SHIELD_CASES', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'negotiation-shield.cases', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -823,6 +826,10 @@ const neighborhoodChangePattern = new RegExp([
 // and coverage stay with their own operations.
 // Suggested household habits (Home Habit Coach). Maintenance tasks due and what to do next stay with their own
 // operations.
+// The household's contractor projects in Project Tracker. DIY projects, renovation permit readiness and starting a
+// project are other operations or the page's writes.
+const trackedProjectsPattern = /\bproject tracker\b|\b(?:my|our) (?:contractor |home |renovation |remodel(?:ing)? |repair )?projects\b|\bcontractor projects?\b|\bprojects? (?:am i|are we|i am|we are|i'm|we're) tracking\b/i;
+const trackedProjectsOtherIntentPattern = /\b(?:diy|do[- ]it[- ]yourself|permits?|ready|readiness|blockers?|blocking|compliance|start|create|new|add)\b/i;
 // The household's active DIY projects. Asking whether to do a job yourself is the page's decision engine, and starting a
 // project is the page's write; neither is this read.
 const diyProjectsPattern = /\bdiy (?:project center|projects?)\b|\b(?:my|our) diy\b|\bdo[- ]it[- ]yourself projects?\b/i;
@@ -1054,6 +1061,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
   if (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('DIY_PROJECTS', 0.96);
+  }
+  if (trackedProjectsPattern.test(message) && !trackedProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('PROJECT_TRACKER_PROJECTS', 0.96);
   }
   if (homeUpgradeScenariosPattern.test(message) && !homeUpgradeScenariosOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_UPGRADE_SCENARIOS', 0.96);

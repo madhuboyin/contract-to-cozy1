@@ -54,6 +54,8 @@ const INLINE_ENTRY_READS = {
   'home-digital-twin': { operationId: 'HOME_UPGRADE_SCENARIOS', message: 'Show my upgrade planner options' },
   // FRD v1.58: backed by a new operation reading the DIY page's active-project list (listProjects).
   diy: { operationId: 'DIY_PROJECTS', message: 'Show my DIY projects' },
+  // FRD v1.59: backed by a new operation reading the Project Tracker page's list (listProjects).
+  'project-tracker': { operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my project tracker' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {
