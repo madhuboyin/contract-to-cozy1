@@ -49,6 +49,7 @@ const TAXONOMY = Object.freeze({
   'plant-advisor': ['PLANT_CARE_OUTLOOK'],
   'negotiation-shield': ['NEGOTIATION_SHIELD_CASES'],
   'home-digital-twin': ['HOME_UPGRADE_SCENARIOS'],
+  diy: ['DIY_PROJECTS'],
 });
 
 // 'maintenance' is deliberately excluded from this list even though

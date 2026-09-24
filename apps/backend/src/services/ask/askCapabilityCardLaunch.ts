@@ -52,6 +52,8 @@ const INLINE_ENTRY_READS = {
   'negotiation-shield': { operationId: 'NEGOTIATION_SHIELD_CASES', message: 'Show my negotiation shield cases' },
   // FRD v1.57: backed by a new operation reading the Home Upgrade Planner's saved scenarios (listScenarios).
   'home-digital-twin': { operationId: 'HOME_UPGRADE_SCENARIOS', message: 'Show my upgrade planner options' },
+  // FRD v1.58: backed by a new operation reading the DIY page's active-project list (listProjects).
+  diy: { operationId: 'DIY_PROJECTS', message: 'Show my DIY projects' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export function capabilityCardLaunch(capabilityId: string) {

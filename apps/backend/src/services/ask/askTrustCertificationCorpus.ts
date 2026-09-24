@@ -107,6 +107,7 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'PLANT_CARE_OUTLOOK', message: 'Do my house plants need anything with this weather?', category: 'COLLOQUIAL' },
   { operationId: 'NEGOTIATION_SHIELD_CASES', message: 'Where do our negotiation reviews stand?', category: 'COLLOQUIAL' },
   { operationId: 'HOME_UPGRADE_SCENARIOS', message: 'How do our saved upgrade options compare on cost?', category: 'COLLOQUIAL' },
+  { operationId: 'DIY_PROJECTS', message: 'Which of our DIY projects still have steps left?', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -208,6 +209,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PLANT_CARE_OUTLOOK: "Yes, with heat in this week's forecast, check the soil of your house plants more often; the fern needs it soon.",
   NEGOTIATION_SHIELD_CASES: 'Two of your negotiation reviews are open: the roof quote review was analyzed last week and the premium increase review is still a draft.',
   HOME_UPGRADE_SCENARIOS: 'Of your saved upgrade options, repairing the water heater costs about $400–$700 upfront, while replacing it with a heat pump model costs $2,800–$4,200 and pays back in about 6 years.',
+  DIY_PROJECTS: 'Two of your DIY projects still have steps left: repainting the hallway is 3 of 5 steps done and re-caulking the tub is still in planning.',
   HOME_HABITS: 'The coach is recommending three small habits for your home, each with how often to do it and why.',
   HOUSEHOLD_INVITATION: 'Your partner can be invited to this household after you confirm the role.',
   GUIDANCE_JOURNEY_CREATE: 'A guided project plan can be started with the first governed step.',

@@ -57,6 +57,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'plant-advisor': ['PLANT_CARE_OUTLOOK'],
   'negotiation-shield': ['NEGOTIATION_SHIELD_CASES'],
   'home-digital-twin': ['HOME_UPGRADE_SCENARIOS'],
+  diy: ['DIY_PROJECTS'],
   'material-specs': ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
 };
 
@@ -72,7 +73,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
  * Ask-reachable.
  */
 const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
-  'diy', 'hoa-compliance',
+  'hoa-compliance',
   'home-briefing',
   'permits',
   'project-tracker', 'service-price-radar',
