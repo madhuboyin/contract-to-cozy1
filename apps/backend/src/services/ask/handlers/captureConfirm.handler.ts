@@ -327,6 +327,11 @@ async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<Co
   // Phase 3 evidence-upload add slice: a homeowner-initiated attach (evidenceAttachResult, above) already knows and
   // re-verified its target event at propose time, so it has no extraction sibling to wait on -- eventId comes
   // straight from this execution's own stored parameters, not a linked execution's receipt.
+  // FRD v1.99: a homeowner-initiated attach may target an inventory item or a warranty instead of a timeline event. Those
+  // link the uploaded document to the record (Document.inventoryItemId / Document.warrantyId) rather than to an event.
+  if (parameters.captureOrigin === USER_ADD_ORIGIN && (parameters.evidenceTargetType === 'INVENTORY_ITEM' || parameters.evidenceTargetType === 'WARRANTY')) {
+    return confirmEvidenceRecordLink(ctx, parameters.evidenceTargetType, documentId);
+  }
   let eventId: string;
   if (parameters.captureOrigin === USER_ADD_ORIGIN) {
     if (typeof parameters.eventId !== 'string' || !parameters.eventId.trim()) {
@@ -389,6 +394,55 @@ async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<Co
     });
   }
   return { result, artifactType: command.artifactType, artifactId: link.id, refreshedExecutions: refresh.refreshedExecutions };
+}
+
+// Links an uploaded document to an existing inventory item or warranty (FRD v1.99). The target is re-verified with the
+// same scoping as at propose time, and the write is one conditional update, so it is atomic: it succeeds when the document
+// is unlinked (or already linked to this record, which makes a repeat harmless) and refuses when it moved elsewhere.
+async function confirmEvidenceRecordLink(ctx: ConfirmCapabilityContext, targetType: 'INVENTORY_ITEM' | 'WARRANTY', documentId: string): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, command } = ctx;
+  const targetId = parameters.evidenceTargetId;
+  if (typeof targetId !== 'string' || !targetId.trim()) {
+    throw Object.assign(new Error('The record to attach the document to is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  const target = targetType === 'INVENTORY_ITEM'
+    ? await prisma.inventoryItem.findFirst({ where: { id: targetId, propertyId: execution.propertyId }, select: { id: true, name: true } })
+    : await prisma.warranty.findFirst({ where: { id: targetId, propertyId: execution.propertyId, homeownerProfile: { userId } }, select: { id: true, providerName: true } });
+  if (!target) throw Object.assign(new Error('That record is no longer available to attach a document to.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const title = 'name' in target ? target.name : target.providerName;
+  const linkField = targetType === 'INVENTORY_ITEM' ? 'inventoryItemId' : 'warrantyId';
+  const updated = await prisma.document.updateMany({
+    where: { id: documentId, propertyId: execution.propertyId, OR: [{ [linkField]: null }, { [linkField]: targetId }] },
+    data: { [linkField]: targetId },
+  });
+  if (updated.count === 0) {
+    throw Object.assign(new Error('That document is already filed under another record, or is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  const document = await prisma.document.findFirst({ where: { id: documentId, propertyId: execution.propertyId }, select: { id: true, name: true } });
+  const href = targetType === 'INVENTORY_ITEM'
+    ? `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inventory?openItemId=${encodeURIComponent(targetId)}`
+    : '/dashboard/warranties';
+  const where = targetType === 'INVENTORY_ITEM' ? 'inventory item' : 'warranty';
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: 'EVIDENCE_ATTACHED',
+    blocks: [{
+      type: 'SUMMARY', id: `evidence-attached-${documentId}`, title: `Attached to "${title}"`, tone: 'POSITIVE',
+      body: `${document?.name ?? 'The document'} is now filed with this ${where}.`, actions: [],
+    }, {
+      type: 'SUMMARY', id: `evidence-attached-open-${documentId}`, title: 'Open the record', tone: 'DEFAULT', body: 'See the document with the record it now belongs to.',
+      actions: [{ id: 'open-attached-record', label: targetType === 'INVENTORY_ITEM' ? 'Open home inventory' : 'Open Warranties', href, style: 'SECONDARY' }],
+    }],
+    confirmation: null, suggestions: [],
+  };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'BOUNDARY', id: `capture-evidence-refresh-failed-${documentId}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+      body: `This document was attached to your ${where}. A list you were viewing could not refresh automatically -- ask again to see its current state.`,
+      suggestions: [],
+    });
+  }
+  return { result, artifactType: command.artifactType, artifactId: documentId, refreshedExecutions: refresh.refreshedExecutions };
 }
 
 registerConfirmCapabilityHandler('capture.evidence.confirm', confirmCaptureEvidence);

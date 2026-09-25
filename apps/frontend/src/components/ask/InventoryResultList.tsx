@@ -7,6 +7,7 @@ import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { CorrectionActions } from './CorrectionActions';
+import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from './AttachEvidenceControl';
 import type { InventoryItem } from '@/types';
 import { ActionLink } from './blocks/context';
 
@@ -30,7 +31,7 @@ function errorCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null;
 }
 
-type InventoryItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+type InventoryItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => void;
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return 'Not recorded';
@@ -130,6 +131,15 @@ function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disable
           <div><dt className="text-xs text-slate-500">Verification</dt><dd className="mt-0.5 font-medium text-slate-900">{item.isVerified ? 'Verified record' : 'Not verified'}</dd></div>
         </dl>
         {onAction && <CorrectionActions actions={fallbackItem.actions ?? []} subject={item.name} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />}
+        {onAction && (fallbackItem.actions?.length ?? 0) > 0 && (
+          <AttachEvidenceControl
+            event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: item.name }}
+            propertyId={expectedPropertyId}
+            disabled={disabled}
+            label="Attach a document"
+            onAttached={(documentId) => onAction(fallbackItem.entityType, fallbackItem.id, EVIDENCE_ATTACH_MESSAGES.INVENTORY_ITEM, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
+          />
+        )}
         <p className="mt-3 text-xs text-slate-500">{item.documents?.length ?? 0} document{(item.documents?.length ?? 0) === 1 ? '' : 's'} · {item.warranty ? 'Warranty on file' : 'No warranty on file'} · Current canonical record · updated {formatDate(item.updatedAt)}</p>
       </>}
     </aside>

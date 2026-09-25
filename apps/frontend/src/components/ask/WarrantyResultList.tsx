@@ -7,6 +7,7 @@ import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { CorrectionActions } from './CorrectionActions';
+import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from './AttachEvidenceControl';
 import { ActionLink } from './blocks/context';
 import type { Warranty } from '@/types';
 
@@ -32,7 +33,7 @@ function formatCurrency(value: number | null | undefined): string {
 // a list, so a removed warranty is a data absence, never an HTTP 404 --
 // there is no shared-status ambiguity to resolve the way Inventory/Document
 // detail must.
-type WarrantyItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+type WarrantyItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => void;
 
 function WarrantyDetail({ warrantyId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose }: {
   warrantyId: string;
@@ -111,6 +112,15 @@ function WarrantyDetail({ warrantyId, expectedPropertyId, fallbackItem, disabled
       </dl>
       {warranty.coverageDetails && <p className="mt-3 text-sm leading-6 text-slate-700">{warranty.coverageDetails}</p>}
       {onAction && <CorrectionActions actions={fallbackItem.actions ?? []} subject={warranty.providerName} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />}
+      {onAction && (fallbackItem.actions?.length ?? 0) > 0 && (
+        <AttachEvidenceControl
+          event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: warranty.providerName }}
+          propertyId={expectedPropertyId}
+          disabled={disabled}
+          label="Attach a document"
+          onAttached={(documentId) => onAction(fallbackItem.entityType, fallbackItem.id, EVIDENCE_ATTACH_MESSAGES.WARRANTY, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
+        />
+      )}
       <p className="mt-3 text-xs text-slate-500">Current canonical warranty record.</p>
     </>}
   </aside>;

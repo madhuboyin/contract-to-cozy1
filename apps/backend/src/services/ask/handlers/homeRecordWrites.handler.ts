@@ -495,48 +495,82 @@ export async function eventAddResult(userId: string, propertyId: string, sourceE
   };
 }
 
-function evidenceAttachConfirmation(document: { id: string; name: string }, event: { id: string; title: string }, version: number, expiresAt: Date) {
+// Evidence can be attached to a home timeline event (the original), and (FRD v1.99) to an inventory item or a warranty. All
+// three reuse CAPTURE_EVIDENCE_CONFIRM: the target type travels in the execution's own stored parameters.
+export type EvidenceAttachTargetType = 'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY';
+export const EVIDENCE_ATTACH_TARGET_TYPES: readonly EvidenceAttachTargetType[] = ['HOME_EVENT', 'INVENTORY_ITEM', 'WARRANTY'];
+const EVIDENCE_TARGET_COPY: Record<EvidenceAttachTargetType, { noun: string; where: string; missingTitle: string; missingBody: string }> = {
+  HOME_EVENT: { noun: 'timeline entry', where: 'home timeline entry', missingTitle: 'This timeline event is no longer available', missingBody: 'It may have been corrected, removed, or you no longer have access to it. Open the home timeline to find it.' },
+  INVENTORY_ITEM: { noun: 'inventory item', where: 'inventory item', missingTitle: 'This inventory item is no longer available', missingBody: 'It may have been removed, or you no longer have access to it. Open the home inventory to find it.' },
+  WARRANTY: { noun: 'warranty', where: 'warranty', missingTitle: 'This warranty is no longer available', missingBody: 'It may have been removed, or only the person who added it can attach documents to it. Open Warranties to check.' },
+};
+
+function evidenceAttachConfirmation(document: { id: string; name: string }, target: { id: string; title: string; type: EvidenceAttachTargetType }, version: number, expiresAt: Date) {
+  const copy = EVIDENCE_TARGET_COPY[target.type];
   return {
-    confirmationId: `evidence-attach-${event.id}-${version}`, version, title: 'Attach this document as evidence?',
-    description: 'You are attaching a document you just uploaded to this home timeline entry. No change is saved until you confirm.',
-    fields: [{ label: 'Document', value: document.name }, { label: 'Attach to', value: event.title }],
+    confirmationId: `evidence-attach-${target.id}-${version}`, version, title: 'Attach this document as evidence?',
+    description: `You are attaching a document you just uploaded to this ${copy.where}. No change is saved until you confirm.`,
+    fields: [{ label: 'Document', value: document.name }, { label: 'Attach to', value: target.title }],
     editableFields: [], confirmLabel: 'Attach document',
-    consentText: 'I confirm this document is evidence for this home record entry.',
+    consentText: target.type === 'HOME_EVENT' ? 'I confirm this document is evidence for this home record entry.' : `I confirm this document belongs with this ${copy.noun}.`,
     expiresAt: expiresAt.toISOString(),
   };
 }
 
-export async function evidenceAttachResult(userId: string, propertyId: string, eventId: string, documentId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
+// The exact target is re-read at propose time (never trusted from launchContext), with the same scoping each type's own
+// correction uses: a PRIVATE event only for its creator, an inventory item of this property, and a warranty only for the
+// household member who added it.
+async function evidenceTarget(userId: string, propertyId: string, type: EvidenceAttachTargetType, id: string): Promise<{ id: string; title: string; type: EvidenceAttachTargetType } | null> {
+  if (type === 'HOME_EVENT') {
+    const event = await prisma.homeEvent.findFirst({
+      where: { id, propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
+      select: { id: true, title: true },
+    });
+    return event ? { id: event.id, title: event.title, type } : null;
+  }
+  if (type === 'INVENTORY_ITEM') {
+    const item = await prisma.inventoryItem.findFirst({ where: { id, propertyId }, select: { id: true, name: true } });
+    return item ? { id: item.id, title: item.name, type } : null;
+  }
+  const warranty = await prisma.warranty.findFirst({ where: { id, propertyId, homeownerProfile: { userId } }, select: { id: true, providerName: true } });
+  return warranty ? { id: warranty.id, title: warranty.providerName, type } : null;
+}
+
+export async function evidenceAttachResult(userId: string, propertyId: string, targetId: string, documentId: string, sourceExecutionId: string | null, targetType: EvidenceAttachTargetType = 'HOME_EVENT'): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
+  const copy = EVIDENCE_TARGET_COPY[targetType];
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-permission', title: 'A contributor or owner can attach evidence', body: 'Your role can view the timeline but not attach documents to it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-permission', title: 'A contributor or owner can attach evidence', body: `Your role can view this ${copy.noun} but not attach documents to it.`, tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
-  // Same PRIVATE-creator-only scoping as HOME_EVENT_CORRECT/HOME_EVENT_VISIBILITY: a PRIVATE event this requester
-  // did not create is excluded here rather than surfacing a distinct permission message, matching every other
-  // event read/write producer's existing behaviour (the event simply never reaches a contributor who cannot see it).
-  const event = await prisma.homeEvent.findFirst({
-    where: { id: eventId, propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
-    select: { id: true, title: true },
-  });
-  if (!event) {
+  const target = await evidenceTarget(userId, propertyId, targetType, targetId);
+  if (!target) {
     return {
-      status: 'NOT_APPLICABLE', reasonCode: 'HOME_EVENT_NOT_FOUND',
-      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-event-missing', title: 'This timeline event is no longer available', body: 'It may have been corrected, removed, or you no longer have access. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'PRIMARY' }] }],
+      status: 'NOT_APPLICABLE', reasonCode: `${targetType}_NOT_FOUND`,
+      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-event-missing', title: copy.missingTitle, body: copy.missingBody, tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
   // The document was just uploaded (property-scoped) by POST .../evidence-upload; re-verified here rather than
   // trusted from launchContext, same "never trust the client's id" pattern as every dynamic room/item dropdown.
-  const document = await prisma.document.findFirst({ where: { id: documentId, propertyId }, select: { id: true, name: true } });
+  const document = await prisma.document.findFirst({ where: { id: documentId, propertyId }, select: { id: true, name: true, inventoryItemId: true, warrantyId: true } });
   if (!document) {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'DOCUMENT_NOT_FOUND',
-      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-document-missing', title: 'The uploaded document could not be found', body: 'Upload the file again from this event.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-document-missing', title: 'The uploaded document could not be found', body: `Upload the file again from this ${copy.noun}.`, tone: 'CAUTION', actions: [] }],
+      suggestions: [],
+    };
+  }
+  // A document already filed under a different item or warranty is not moved silently.
+  const linkedElsewhere = (targetType === 'INVENTORY_ITEM' && document.inventoryItemId && document.inventoryItemId !== target.id)
+    || (targetType === 'WARRANTY' && document.warrantyId && document.warrantyId !== target.id);
+  if (linkedElsewhere) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'DOCUMENT_ALREADY_LINKED',
+      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-document-linked', title: 'This document is already filed elsewhere', body: 'It is attached to another record. Upload a new copy to attach it here.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -544,11 +578,11 @@ export async function evidenceAttachResult(userId: string, propertyId: string, e
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'EVIDENCE_ATTACH_CONFIRMATION_REQUIRED',
     parameters: {
-      documentId: document.id, eventId: event.id, captureOrigin: USER_ADD_ORIGIN, sourceExecutionId,
-      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+      documentId: document.id, eventId: targetType === 'HOME_EVENT' ? target.id : undefined, evidenceTargetType: targetType, evidenceTargetId: target.id,
+      captureOrigin: USER_ADD_ORIGIN, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'evidence-attach-review', title: `Attach this document to "${event.title}"?`, body: 'Nothing has been saved yet. Review, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline instead', href: timelineHref, style: 'SECONDARY' }] }],
-    confirmation: evidenceAttachConfirmation(document, event, 1, expiresAt),
+    blocks: [{ type: 'SUMMARY', id: 'evidence-attach-review', title: `Attach this document to "${target.title}"?`, body: 'Nothing has been saved yet. Review, then confirm.', tone: 'DEFAULT', actions: [] }],
+    confirmation: evidenceAttachConfirmation(document, target, 1, expiresAt),
     suggestions: [],
   };
 }

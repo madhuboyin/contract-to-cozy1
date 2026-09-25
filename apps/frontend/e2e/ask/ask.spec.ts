@@ -1166,6 +1166,46 @@ test('on a phone, seller-prep shelves stay inside the screen and an item opens a
   await expect(sheet).toBeHidden();
 });
 
+test('a contributor attaches a document to an inventory item and to a warranty inline, each with its own message and a confirmation naming the record (FRD v1.99)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory' }) });
+  await response.getByRole('button', { name: 'Water heater' }).click();
+  await expect(response.getByText('Tank-style, in basement utility closet.')).toBeVisible();
+  await expect(response.locator('button', { hasText: 'Attach a document' })).toBeVisible();
+  await response.getByLabel('Attach evidence file for Water heater').setInputFiles({ name: 'receipt.pdf', mimeType: 'application/pdf', buffer: Buffer.from('fixture receipt bytes') });
+
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Attach this document to this inventory item.'
+    && (body.launchContext as { entityType?: string } | undefined)?.entityType === 'INVENTORY_ITEM'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'item-property-summary'
+    && (body.launchContext as { documentId?: string } | undefined)?.documentId === 'document-evidence-fixture')).toBe(true);
+  await expect(page.getByText('Attach this document as evidence?')).toBeVisible();
+  await expect(page.getByRole('definition').filter({ hasText: 'receipt.pdf' })).toBeVisible();
+  await expect(page.getByRole('definition').filter({ hasText: 'Water heater' })).toBeVisible();
+  await page.getByLabel(/I confirm this document belongs with this inventory item/).check();
+  await page.getByRole('button', { name: 'Attach document' }).click();
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('on a phone, the attach control on an inventory item fits the screen (FRD v1.99)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory' }) });
+  await response.getByRole('button', { name: 'Water heater' }).click();
+  const control = response.locator('button', { hasText: 'Attach a document' });
+  await expect(control).toBeVisible();
+  const box = await control.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('Refinance: the analysis shows the homeowner’s rate monitor, and Pause works inline (FRD v1.45)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

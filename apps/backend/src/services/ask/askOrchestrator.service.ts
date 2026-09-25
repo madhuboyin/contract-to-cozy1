@@ -7,7 +7,7 @@
 // orchestrator used to export, so existing imports keep working. See
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md. Do not add logic here.
 import './handlers/statusBoard.handler';
-export { EVIDENCE_ATTACH_MESSAGE } from './handlers/miscHandlers.handler';
+export { EVIDENCE_ATTACH_MESSAGE, EVIDENCE_ATTACH_MESSAGES } from './handlers/miscHandlers.handler';
 import './execution/createAskExecution';
 export { createAskExecution } from './execution/createAskExecution';
 import './execution/askClarification';

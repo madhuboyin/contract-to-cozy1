@@ -18,7 +18,7 @@ import { queryIntelligenceEnvelope } from '../../intelligenceEnvelope';
 import { ReplaceRepairService } from '../../replaceRepairAnalysis.service';
 import { humanDate, money } from '../askFormatting';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HOME_CHANGE_SUMMARY_WINDOW_DAYS, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, MaintenanceCompletionWorkflowInput, RadarEnvelopeQuerySuppliedInput } from '../askHandlerSupport';
-import { EVENT_ADD_MESSAGE, eventAddResult, evidenceAttachResult, WARRANTY_ADD_MESSAGE, warrantyAddResult } from '../handlers/homeRecordWrites.handler';
+import { EVENT_ADD_MESSAGE, EVIDENCE_ATTACH_TARGET_TYPES, type EvidenceAttachTargetType, eventAddResult, evidenceAttachResult, WARRANTY_ADD_MESSAGE, warrantyAddResult } from '../handlers/homeRecordWrites.handler';
 import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
@@ -769,6 +769,13 @@ registerCapabilityHandler('capture.warranty.confirm', async (envelope) => {
 // One-shot, like HOME_EVENT_VISIBILITY: propose builds the confirmation card directly, no separate form step,
 // since the "form" (picking and uploading a file) already happened client-side before this call.
 export const EVIDENCE_ATTACH_MESSAGE = 'Attach evidence to this home timeline entry.';
+// The canned message for each target the homeowner can attach a file to (FRD v1.99); it shows as their message in the
+// conversation, so it names the record type. The propose guard requires the message that matches the launch context's type.
+export const EVIDENCE_ATTACH_MESSAGES: Record<'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY', string> = {
+  HOME_EVENT: EVIDENCE_ATTACH_MESSAGE,
+  INVENTORY_ITEM: 'Attach this document to this inventory item.',
+  WARRANTY: 'Attach this document to this warranty.',
+};
 
 // A document is attached as evidence to an EXISTING event only from the declared "Attach evidence" control (see
 // evidenceAttachResult above), which requires the file to already be uploaded (documentId) and the exact target
@@ -778,11 +785,11 @@ export const EVIDENCE_ATTACH_MESSAGE = 'Attach evidence to this home timeline en
 registerCapabilityHandler('capture.evidence.confirm', async (envelope) => {
   const declaredAttachAction = envelope.launchContext?.operationId === 'CAPTURE_EVIDENCE_CONFIRM'
     && envelope.launchContext.surface !== 'ASK_REFRESH'
-    && envelope.message === EVIDENCE_ATTACH_MESSAGE
-    && envelope.launchContext.entityType === 'HOME_EVENT'
+    && envelope.message === EVIDENCE_ATTACH_MESSAGES[envelope.launchContext.entityType as EvidenceAttachTargetType]
+    && (EVIDENCE_ATTACH_TARGET_TYPES as readonly string[]).includes(envelope.launchContext.entityType as string)
     && typeof envelope.launchContext.entityId === 'string'
     && typeof envelope.launchContext.documentId === 'string';
   return declaredAttachAction
-    ? evidenceAttachResult(envelope.userId, envelope.propertyId!, envelope.launchContext!.entityId as string, envelope.launchContext!.documentId as string, envelope.launchContext?.sourceExecutionId ?? null)
+    ? evidenceAttachResult(envelope.userId, envelope.propertyId!, envelope.launchContext!.entityId as string, envelope.launchContext!.documentId as string, envelope.launchContext?.sourceExecutionId ?? null, envelope.launchContext!.entityType as EvidenceAttachTargetType)
     : captureNotDirectlyRoutableResult('evidence');
 });

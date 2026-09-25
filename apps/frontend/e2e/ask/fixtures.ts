@@ -614,25 +614,32 @@ function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ve
 // EVIDENCE_ATTACH_MESSAGE in HomeEventResultList.tsx and askOrchestrator.service.ts exactly. Unlike every other
 // correction here, editableFields is always [] -- the file was already picked and uploaded client-side before
 // this execution exists, so there is nothing left to edit on the confirmation card, only review and consent.
-function evidenceAttachConfirmation(version: number, documentName: string) {
+// FRD v1.99: the same flow for an inventory item or a warranty; only the record and the wording differ.
+type EvidenceTarget = { kind: 'event' | 'inventory' | 'warranty'; title: string; where: string; noun: string; message: string };
+const EVIDENCE_TARGETS: Record<EvidenceTarget['kind'], EvidenceTarget> = {
+  event: { kind: 'event', title: 'Roof replacement', where: 'home timeline entry', noun: 'home record entry', message: 'Attach evidence to this home timeline entry.' },
+  inventory: { kind: 'inventory', title: 'Water heater', where: 'inventory item', noun: 'inventory item', message: 'Attach this document to this inventory item.' },
+  warranty: { kind: 'warranty', title: 'Acme Home Warranty', where: 'warranty', noun: 'warranty', message: 'Attach this document to this warranty.' },
+};
+function evidenceAttachConfirmation(version: number, documentName: string, target: EvidenceTarget = EVIDENCE_TARGETS.event) {
   return {
-    confirmationId: `evidence-attach-event-property-summary-${version}`, version, title: 'Attach this document as evidence?',
-    description: 'You are attaching a document you just uploaded to this home timeline entry. No change is saved until you confirm.',
-    fields: [{ label: 'Document', value: documentName }, { label: 'Attach to', value: 'Roof replacement' }],
-    editableFields: [], confirmLabel: 'Attach document', consentText: 'I confirm this document is evidence for this home record entry.',
+    confirmationId: `evidence-attach-${target.kind}-property-summary-${version}`, version, title: 'Attach this document as evidence?',
+    description: `You are attaching a document you just uploaded to this ${target.where}. No change is saved until you confirm.`,
+    fields: [{ label: 'Document', value: documentName }, { label: 'Attach to', value: target.title }],
+    editableFields: [], confirmLabel: 'Attach document', consentText: target.kind === 'event' ? 'I confirm this document is evidence for this home record entry.' : `I confirm this document belongs with this ${target.noun}.`,
     expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
   };
 }
 
-function evidenceAttachExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', version: number, documentName: string, sessionId?: string) {
+function evidenceAttachExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', version: number, documentName: string, sessionId?: string, target: EvidenceTarget = EVIDENCE_TARGETS.event) {
   const base = propertySummaryTimelineExecution();
   return {
-    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-evidence-attach', question: 'Attach evidence to this home timeline entry.', status,
+    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-evidence-attach', question: target.message, status,
     operation: { id: 'CAPTURE_EVIDENCE_CONFIRM', version: '1.0', family: 'COMMAND' }, contextVersion: 'evidence-attach-v1',
     blocks: status === 'COMPLETED'
       ? [{ type: 'SUMMARY', id: 'evidence-attached-link-1', title: 'Attached to your home timeline', tone: 'POSITIVE', body: `${documentName} is now attached as evidence on your home timeline.`, actions: [] }]
-      : [{ type: 'SUMMARY', id: 'evidence-attach-review', title: 'Attach this document to "Roof replacement"?', body: 'Nothing has been saved yet. Review, then confirm.', tone: 'DEFAULT', actions: [] }],
-    confirmation: status === 'COMPLETED' ? null : evidenceAttachConfirmation(version, documentName),
+      : [{ type: 'SUMMARY', id: 'evidence-attach-review', title: `Attach this document to "${target.title}"?`, body: 'Nothing has been saved yet. Review, then confirm.', tone: 'DEFAULT', actions: [] }],
+    confirmation: status === 'COMPLETED' ? null : evidenceAttachConfirmation(version, documentName, target),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -1989,6 +1996,13 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/correct the title of this timeline event/i.test(body.message)) {
       const response = eventCorrectionExecution('NEEDS_CONFIRMATION', 1, 'Roof replacement', body.sessionId);
+      if (body.sessionId) correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/attach this document to this (inventory item|warranty)/i.test(body.message)) {
+      const target = /warranty/i.test(body.message) ? EVIDENCE_TARGETS.warranty : EVIDENCE_TARGETS.inventory;
+      const response = evidenceAttachExecution('NEEDS_CONFIRMATION', 1, 'receipt.pdf', body.sessionId as string | undefined, target);
       if (body.sessionId) correctionSessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

@@ -15,7 +15,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 require('../../src/services/ask/askOrchestrator.service.ts');
-const { roomCreateResult, inventoryItemCreateResult, roomRenameItemActions, HOME_EVENT_VISIBILITY_MESSAGE, EVIDENCE_ATTACH_MESSAGE } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { roomCreateResult, inventoryItemCreateResult, roomRenameItemActions, HOME_EVENT_VISIBILITY_MESSAGE, EVIDENCE_ATTACH_MESSAGE, EVIDENCE_ATTACH_MESSAGES } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
 const { InventoryService } = require('../../src/services/inventory.service.ts');
@@ -1380,7 +1380,7 @@ test('CAPTURE_EVIDENCE_CONFIRM propose: only the declared "Attach evidence" acti
   const declared = await proposeEvidenceAttach();
   assert.equal(declared.status, 'NEEDS_CONFIRMATION');
   assert.equal(declared.reasonCode, 'EVIDENCE_ATTACH_CONFIRMATION_REQUIRED');
-  assert.deepEqual(declared.parameters, { documentId: 'doc-1', eventId: 'event-1', captureOrigin: 'USER_ADD', sourceExecutionId: null, confirmationVersion: 1, confirmationExpiresAt: declared.parameters.confirmationExpiresAt });
+  assert.deepEqual(declared.parameters, { documentId: 'doc-1', eventId: 'event-1', evidenceTargetType: 'HOME_EVENT', evidenceTargetId: 'event-1', captureOrigin: 'USER_ADD', sourceExecutionId: null, confirmationVersion: 1, confirmationExpiresAt: declared.parameters.confirmationExpiresAt });
   assert.equal(declared.confirmation.title, 'Attach this document as evidence?');
   assert.deepEqual(declared.confirmation.fields, [{ label: 'Document', value: 'Invoice.pdf' }, { label: 'Attach to', value: 'Roof replacement' }]);
 
@@ -1390,7 +1390,7 @@ test('CAPTURE_EVIDENCE_CONFIRM propose: only the declared "Attach evidence" acti
   assert.equal(wrongMessage.status, 'OUT_OF_SCOPE');
   const noDocumentId = await capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message: EVIDENCE_ATTACH_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'HOME_EVENT', entityId: 'event-1', operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
   assert.equal(noDocumentId.status, 'OUT_OF_SCOPE', 'documentId missing entirely (no file uploaded yet) must not build a card');
-  const wrongEntityType = await capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message: EVIDENCE_ATTACH_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ITEM', entityId: 'event-1', documentId: 'doc-1', operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
+  const wrongEntityType = await capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message: EVIDENCE_ATTACH_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'ROOM', entityId: 'event-1', documentId: 'doc-1', operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
   assert.equal(wrongEntityType.status, 'OUT_OF_SCOPE');
 });
 
@@ -1418,7 +1418,9 @@ test('CAPTURE_EVIDENCE_CONFIRM propose blocks a VIEWER, and re-verifies the even
 // against the real function body closes that gap, the same pattern used elsewhere in this arc.
 test('CAPTURE_EVIDENCE_CONFIRM propose: source shape -- the event query is property-scoped and excludes another creator\'s PRIVATE event; the document query is property-scoped', () => {
   const fn = orchestratorSource.slice(orchestratorSource.indexOf('async function evidenceAttachResult'), orchestratorSource.indexOf('async function warrantyCorrectResult'));
-  assert.match(fn, /where:\s*\{\s*id:\s*eventId,\s*propertyId,\s*isCurrent:\s*true,\s*deletedAt:\s*null,\s*OR:\s*\[\{\s*visibility:\s*\{\s*not:\s*'PRIVATE'\s*\}\s*\},\s*\{\s*createdById:\s*userId\s*\}\]/);
+  // The event query moved into evidenceTarget (FRD v1.99), still before the propose function in the same file.
+  const target = orchestratorSource.slice(orchestratorSource.indexOf('async function evidenceTarget'), orchestratorSource.indexOf('async function evidenceAttachResult'));
+  assert.match(target, /where:\s*\{\s*id,\s*propertyId,\s*isCurrent:\s*true,\s*deletedAt:\s*null,\s*OR:\s*\[\{\s*visibility:\s*\{\s*not:\s*'PRIVATE'\s*\}\s*\},\s*\{\s*createdById:\s*userId\s*\}\]/);
   assert.match(fn, /prisma\.document\.findFirst\(\{\s*where:\s*\{\s*id:\s*documentId,\s*propertyId\s*\}/);
 });
 
@@ -1457,4 +1459,82 @@ test('CAPTURE_EVIDENCE_CONFIRM confirm: the pre-existing extraction-sibling bran
   assert.equal(await codeOf(confirmCapabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', {
     userId: 'u1', execution: executionWithSibling, parameters: { documentId: 'doc-1' }, access: { role: 'CONTRIBUTOR' }, command: getAskDomainCommandByOperation('CAPTURE_EVIDENCE_CONFIRM'),
   })), 'EVIDENCE_SIBLING_EVENT_NOT_CONFIRMED');
+});
+
+// ───────────────────────────── Evidence attach to an inventory item or a warranty (FRD v1.99) ─────────────────────────────
+const proposeRecordAttach = async (entityType, entityId, { documentId = 'doc-1' } = {}) =>
+  capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message: EVIDENCE_ATTACH_MESSAGES[entityType], launchContext: { surface: 'ASK_WORKSPACE', entityType, entityId, documentId, operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
+
+function recordModels({ item = { id: 'item-1', name: 'Water heater' }, warranty = { id: 'war-1', providerName: 'Acme Home Warranty' }, document = { id: 'doc-1', propertyId: 'p1', name: 'Receipt.pdf', inventoryItemId: null, warrantyId: null }, updateCount = 1 } = {}) {
+  const queries = { inventoryItem: [], warranty: [], document: [], update: [] };
+  models.inventoryItem = { findFirst: async (query) => { queries.inventoryItem.push(query); return item; } };
+  models.warranty = { findFirst: async (query) => { queries.warranty.push(query); return warranty; } };
+  models.document = { findFirst: async (query) => { queries.document.push(query); return document; }, updateMany: async (query) => { queries.update.push(query); return { count: updateCount }; } };
+  return queries;
+}
+
+test('evidence to an inventory item or a warranty: the target is re-read with its own scoping, and a confirmation card names the record', async () => {
+  const queries = recordModels();
+  const item = await proposeRecordAttach('INVENTORY_ITEM', 'item-1');
+  assert.equal(item.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual([item.parameters.evidenceTargetType, item.parameters.evidenceTargetId, item.parameters.eventId], ['INVENTORY_ITEM', 'item-1', undefined]);
+  assert.deepEqual(item.confirmation.fields, [{ label: 'Document', value: 'Receipt.pdf' }, { label: 'Attach to', value: 'Water heater' }]);
+  assert.match(item.confirmation.description, /inventory item/);
+  assert.deepEqual(queries.inventoryItem[0].where, { id: 'item-1', propertyId: 'p1' });
+  const warranty = await proposeRecordAttach('WARRANTY', 'war-1');
+  assert.equal(warranty.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(warranty.confirmation.fields[1], { label: 'Attach to', value: 'Acme Home Warranty' });
+  // A warranty is only the adding member's to change, as for its corrections.
+  assert.deepEqual(queries.warranty[0].where, { id: 'war-1', propertyId: 'p1', homeownerProfile: { userId: 'u1' } });
+});
+
+test('evidence to a record: a viewer is blocked, a missing record or document says so, and a document filed elsewhere is not moved', async () => {
+  recordModels();
+  accessRole = 'VIEWER';
+  assert.equal((await proposeRecordAttach('INVENTORY_ITEM', 'item-1')).status, 'BLOCKED');
+  accessRole = 'CONTRIBUTOR';
+  recordModels({ item: null });
+  assert.equal((await proposeRecordAttach('INVENTORY_ITEM', 'item-1')).reasonCode, 'INVENTORY_ITEM_NOT_FOUND');
+  recordModels({ warranty: null });
+  assert.equal((await proposeRecordAttach('WARRANTY', 'war-1')).reasonCode, 'WARRANTY_NOT_FOUND');
+  recordModels({ document: null });
+  assert.equal((await proposeRecordAttach('INVENTORY_ITEM', 'item-1')).reasonCode, 'DOCUMENT_NOT_FOUND');
+  recordModels({ document: { id: 'doc-1', propertyId: 'p1', name: 'Receipt.pdf', inventoryItemId: 'item-2', warrantyId: null } });
+  assert.equal((await proposeRecordAttach('INVENTORY_ITEM', 'item-1')).reasonCode, 'DOCUMENT_ALREADY_LINKED');
+  recordModels({ item: { id: 'item-2', name: 'Water heater' }, document: { id: 'doc-1', propertyId: 'p1', name: 'Receipt.pdf', inventoryItemId: 'item-2', warrantyId: null } });
+  assert.equal((await proposeRecordAttach('INVENTORY_ITEM', 'item-2')).status, 'NEEDS_CONFIRMATION', 'the same record again is harmless');
+  recordModels({ document: { id: 'doc-1', propertyId: 'p1', name: 'Receipt.pdf', inventoryItemId: null, warrantyId: 'war-9' } });
+  assert.equal((await proposeRecordAttach('WARRANTY', 'war-1')).reasonCode, 'DOCUMENT_ALREADY_LINKED');
+});
+
+test('evidence to a record, confirm: one conditional update links an unlinked document, the target is re-verified, and a document that moved is refused', async () => {
+  const queries = recordModels();
+  const done = await invoke('CAPTURE_EVIDENCE_CONFIRM', { documentId: 'doc-1', evidenceTargetType: 'INVENTORY_ITEM', evidenceTargetId: 'item-1', captureOrigin: 'USER_ADD' });
+  assert.equal(done.result.reasonCode, 'EVIDENCE_ATTACHED');
+  assert.deepEqual(queries.update[0], { where: { id: 'doc-1', propertyId: 'p1', OR: [{ inventoryItemId: null }, { inventoryItemId: 'item-1' }] }, data: { inventoryItemId: 'item-1' } });
+  assert.equal(calls.attachDocument.length, 0, 'the event path is not used');
+  const warranty = recordModels();
+  await invoke('CAPTURE_EVIDENCE_CONFIRM', { documentId: 'doc-1', evidenceTargetType: 'WARRANTY', evidenceTargetId: 'war-1', captureOrigin: 'USER_ADD' });
+  assert.deepEqual(warranty.update[0].data, { warrantyId: 'war-1' });
+  recordModels({ updateCount: 0 });
+  assert.equal(await codeOf(invoke('CAPTURE_EVIDENCE_CONFIRM', { documentId: 'doc-1', evidenceTargetType: 'INVENTORY_ITEM', evidenceTargetId: 'item-1', captureOrigin: 'USER_ADD' })), 'ASK_CONFIRMATION_NOT_ACTIVE');
+  recordModels({ item: null });
+  assert.equal(await codeOf(invoke('CAPTURE_EVIDENCE_CONFIRM', { documentId: 'doc-1', evidenceTargetType: 'INVENTORY_ITEM', evidenceTargetId: 'item-1', captureOrigin: 'USER_ADD' })), 'ASK_CONFIRMATION_NOT_ACTIVE');
+  recordModels();
+  assert.equal(await codeOf(invoke('CAPTURE_EVIDENCE_CONFIRM', { documentId: 'doc-1', evidenceTargetType: 'INVENTORY_ITEM', captureOrigin: 'USER_ADD' })), 'ASK_CONFIRMATION_NOT_ACTIVE', 'no target id');
+});
+
+test('evidence to a record: the canned message must match the record type, so one type\'s message cannot drive another', async () => {
+  recordModels();
+  const mismatched = await capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message: EVIDENCE_ATTACH_MESSAGES.HOME_EVENT, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ITEM', entityId: 'item-1', documentId: 'doc-1', operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
+  assert.equal(mismatched.status, 'OUT_OF_SCOPE');
+  assert.deepEqual(EVIDENCE_ATTACH_MESSAGES, { HOME_EVENT: 'Attach evidence to this home timeline entry.', INVENTORY_ITEM: 'Attach this document to this inventory item.', WARRANTY: 'Attach this document to this warranty.' });
+});
+
+// The fakes above ignore `where`, so the confirm-time scoping is pinned against the real function body (as this file does elsewhere).
+test('evidence to a record, confirm: source shape -- the warranty is re-read for the member who added it, and both reads are property-scoped', () => {
+  const fn = orchestratorSource.slice(orchestratorSource.indexOf('async function confirmEvidenceRecordLink'), orchestratorSource.indexOf("registerConfirmCapabilityHandler('capture.evidence.confirm'"));
+  assert.match(fn, /prisma\.inventoryItem\.findFirst\(\{ where: \{ id: targetId, propertyId: execution\.propertyId \}/);
+  assert.match(fn, /prisma\.warranty\.findFirst\(\{ where: \{ id: targetId, propertyId: execution\.propertyId, homeownerProfile: \{ userId \} \}/);
+  assert.match(fn, /prisma\.document\.updateMany\(\{\s*where: \{ id: documentId, propertyId: execution\.propertyId, OR:/);
 });
