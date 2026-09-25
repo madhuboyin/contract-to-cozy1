@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -323,7 +324,7 @@ test('an unchanged review says so', async () => {
 // ───────────────────────────── submitAskCapture wiring (source governance) ─────────────────────────────
 // submitAskCapture touches the database directly and has no runtime harness (see conversationalCapture.test.js).
 
-const orchestratorSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 test('submitAskCapture allows both radar forms, checks key, role and version before building the review, and never writes', () => {
   const start = orchestratorSource.indexOf('export async function submitAskCapture(');

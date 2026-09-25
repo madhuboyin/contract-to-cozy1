@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -76,7 +77,7 @@ test('lineage validation rejects duplicate, executable, invalid, and orphaned hi
 });
 
 test('saved Ask responses resolve exact lineage before any current operation-owner fallback', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const mapperStart = orchestrator.indexOf('function mapPersistedExecution(');
   const mapperEnd = orchestrator.indexOf('\nasync function withAskTimeout', mapperStart);
   const mapper = orchestrator.slice(mapperStart, mapperEnd);

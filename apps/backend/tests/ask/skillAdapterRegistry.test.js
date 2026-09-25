@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -113,7 +114,7 @@ test('adapter registry validation rejects mismatched ownership, duplicate operat
 });
 
 test('runtime checks adapter availability before context composition or dispatch and rechecks pending writes', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   // Post-Phase-1 policy-enforcement fix: skillRuntimeUnavailableReason now
   // lives in capabilityHandlerRegistry.ts (askOrchestrator.service.ts
   // imports it, single source of truth for both callers) -- its own
@@ -137,7 +138,7 @@ test('runtime checks adapter availability before context composition or dispatch
 
 test('adapter telemetry distinguishes registered adapter time from Skill and context-provider time', () => {
   const metrics = readFileSync(resolve(__dirname, '../../src/lib/metrics.ts'), 'utf8');
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(metrics, /name: 'ask_skill_adapter_executions_total'/);
   assert.match(metrics, /name: 'ask_skill_adapter_execution_duration_seconds'/);
   assert.match(metrics, /labelNames: \['adapter', 'adapter_version', 'operation', 'status'\]/);

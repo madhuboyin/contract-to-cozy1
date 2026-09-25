@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -74,7 +75,7 @@ test('every material Ask command has governed confirmation, authorization, cance
 
 test('material confirmations acquire a unique leased claim before domain mutation', () => {
   const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   // Post-Phase-2 (implementation plan §8, §4.9): the domain mutation is no
   // longer inline per-operation branch code positioned later in the same
   // function -- confirmAskExecution now calls the confirm-time capability
@@ -98,7 +99,7 @@ test('material confirmations acquire a unique leased claim before domain mutatio
 });
 
 test('grounded-guidance remote fallback demotes low-confidence answers instead of always returning ANSWERED', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const fnStart = orchestrator.indexOf('async function groundedGuidanceResult(');
   const fnEnd = orchestrator.indexOf('\nasync function executeOperationCore(', fnStart);
   const fn = orchestrator.slice(fnStart, fnEnd);
@@ -107,7 +108,7 @@ test('grounded-guidance remote fallback demotes low-confidence answers instead o
 });
 
 test('orphaned RUNNING executions (no confirmation receipt) are reclaimed on a timeout, not left stuck forever', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(orchestrator, /async function reclaimOrphanedRunningExecution/);
   assert.match(orchestrator, /status: 'FAILED_RETRYABLE', reasonCode: 'ASK_EXECUTION_INTERRUPTED'/);
   // Both recovery entry points must use it: the pending-work sweep and a
@@ -119,7 +120,7 @@ test('orphaned RUNNING executions (no confirmation receipt) are reclaimed on a t
 });
 
 test('home-deadline monitor confirmation rechecks warranty/insurance source freshness, not just maintenance-sourced tasks', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   // Prep time must capture a version signature for the warranty/policy
   // source alongside the monitor input.
   assert.match(orchestrator, /parameters: \{ homeDeadlineMonitor: input, homeDeadlineSourceVersion: homeDeadlineSourceVersion\(source\)/);
@@ -136,7 +137,7 @@ test('home-deadline monitor confirmation rechecks warranty/insurance source fres
 });
 
 test('financing-profile capture claims its idempotency receipt before writing, not after', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const claimIndex = orchestrator.indexOf("canonicalOwner: 'PropertyFinancingProfile', answerHash },\n      });");
   const writeIndex = orchestrator.indexOf('await upsertProfile(execution.propertyId,');
   assert.ok(claimIndex > 0, 'pre-write receipt claim not found');
@@ -153,7 +154,7 @@ test('TABLE blocks carry a true-vs-shown count like GROUPED_LIST sections alread
   const withoutCount = AskPresentationBlockSchema.parse({ ...tableBlock, totalCount: undefined });
   assert.equal(withoutCount.totalCount, undefined);
 
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   // The capital windows are a TIMELINE since FRD v1.90, which has no count field: the truncation is disclosed in the
   // block's own description instead, from the true total (items.length) against the windows shown.
   assert.match(orchestrator, /capitalTimelineBlock\(upcoming, items\.length, href\)/);
@@ -161,7 +162,7 @@ test('TABLE blocks carry a true-vs-shown count like GROUPED_LIST sections alread
 });
 
 test('Property Summary declares recent HomeEvent identity for inline detail and a separate timeline choice', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const start = orchestrator.indexOf("id: 'property-recent-events'");
   const end = orchestrator.indexOf("const freshness =", start);
   assert.ok(start > 0 && end > start, 'property-recent-events producer not found');
@@ -172,7 +173,7 @@ test('Property Summary declares recent HomeEvent identity for inline detail and 
 });
 
 test('Property Summary declares bounded InventoryRoom identities for inline detail and a separate Rooms choice', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const start = orchestrator.indexOf("id: 'property-rooms'");
   const end = orchestrator.indexOf("if (incompleteScopes.length)", start);
   assert.ok(start > 0 && end > start, 'property-rooms producer not found');
@@ -186,7 +187,7 @@ test('Property Summary declares bounded InventoryRoom identities for inline deta
 });
 
 test('Property Summary declares bounded Document identities for inline detail and a separate Documents choice', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const start = orchestrator.indexOf("id: 'property-documents'");
   const end = orchestrator.indexOf("if (incompleteScopes.length)", start);
   assert.ok(start > 0 && end > start, 'property-documents producer not found');
@@ -200,7 +201,7 @@ test('Property Summary declares bounded Document identities for inline detail an
 });
 
 test('Property Summary declares bounded InventoryItem identities for inline detail and a separate inventory choice', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const start = orchestrator.indexOf("id: 'property-inventory'");
   const end = orchestrator.indexOf("if (household)", start);
   assert.ok(start > 0 && end > start, 'property-inventory producer not found');
@@ -217,7 +218,7 @@ test('Property Summary declares bounded InventoryItem identities for inline deta
 });
 
 test('Property Summary declares bounded HouseholdMember identities for inline detail and a separate household choice', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const start = orchestrator.indexOf("id: 'property-household'");
   const end = orchestrator.indexOf("if (rooms)", start);
   assert.ok(start > 0 && end > start, 'property-household producer not found');
@@ -235,7 +236,7 @@ test('Property Summary declares bounded HouseholdMember identities for inline de
 });
 
 test('Property Summary declares bounded Warranty identities for inline detail and a separate warranties choice', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const start = orchestrator.indexOf("id: 'property-warranties'");
   const end = orchestrator.indexOf("if (rooms)", start);
   assert.ok(start > 0 && end > start, 'property-warranties producer not found');
@@ -269,7 +270,7 @@ test('evidence claim mappings resolve exact response block and item identities',
   assert.equal(AskExecutionResponseSchema.safeParse({ ...base, blocks: [table, { ...evidence, items: [{ ...evidence.items[0], claim: { ...evidence.items[0].claim, targetBlockId: 'missing-block' } }] }] }).success, false);
   assert.equal(AskExecutionResponseSchema.safeParse({ ...base, blocks: [table, { ...evidence, items: [{ ...evidence.items[0], claim: { ...evidence.items[0].claim, targetItemId: 'missing-row' } }] }] }).success, false);
 
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const ownershipEvidence = orchestrator.slice(orchestrator.indexOf("id: 'ownership-cost-evidence'") - 1200, orchestrator.indexOf("id: 'ownership-cost-evidence'") + 300);
   assert.match(ownershipEvidence, /targetBlockId: 'ownership-cost-categories'/);
   assert.match(ownershipEvidence, /targetItemId: category\.category/);
@@ -301,7 +302,7 @@ test('output artifacts require exact canonical identity, type-specific lifecycle
   assert.equal(AskPresentationBlockSchema.safeParse({ ...quoteWorkspace, items: [{ ...quoteWorkspace.items[0], relationship: 'UPDATED' }] }).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse({ ...quoteWorkspace, items: [{ ...quoteWorkspace.items[0], status: 'PENDING' }] }).success, false);
 
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const createStart = orchestrator.indexOf('async function confirmMaintenanceTaskCreate(');
   const createEnd = orchestrator.indexOf('\nasync function confirmMaintenanceTaskUpdate(', createStart);
   const createHandler = orchestrator.slice(createStart, createEnd);
@@ -333,7 +334,7 @@ test('related records require an exact document-to-home-event relationship from 
   assert.equal(AskPresentationBlockSchema.safeParse({ ...related, relationships: [{ ...related.relationships[0], relationshipType: 'INFERRED_FROM_LABEL' }] }).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse({ ...related, relationships: [{ ...related.relationships[0], navigation: { label: 'Unsafe', href: 'https://example.com/event-1' } }] }).success, false);
 
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const handlerStart = orchestrator.indexOf('async function confirmCaptureEvidence(');
   const handlerEnd = orchestrator.indexOf("registerConfirmCapabilityHandler('capture.evidence.confirm'", handlerStart);
   const handler = orchestrator.slice(handlerStart, handlerEnd);
@@ -343,7 +344,7 @@ test('related records require an exact document-to-home-event relationship from 
 });
 
 test('RECEIVED is a genuinely reachable execution.status, not just an AskExecutionEvent.eventType', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const createIndex = orchestrator.indexOf('const execution = await prisma.askExecution.create({');
   const eventIndex = orchestrator.indexOf("eventType: 'RECEIVED'", createIndex);
   const createCall = orchestrator.slice(createIndex, eventIndex);

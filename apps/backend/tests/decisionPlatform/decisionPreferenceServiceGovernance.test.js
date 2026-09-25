@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -11,7 +12,7 @@ require('ts-node/register');
 
 const preferenceServiceSource = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/decisionPreferenceService.ts'), 'utf8');
 const threadServiceSource = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/decisionThreadService.ts'), 'utf8');
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 function functionBody(source, functionSignaturePattern) {
   const match = source.match(functionSignaturePattern);

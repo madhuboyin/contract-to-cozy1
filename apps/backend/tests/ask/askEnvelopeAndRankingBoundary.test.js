@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -91,7 +92,7 @@ test('the Envelope operation is read-only and journey-neutral', () => {
 });
 
 test('the orchestrator Envelope case does not reach promotion, ranking, or coverage owners', () => {
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   const start = source.indexOf('async function intelligenceEnvelopeQueryResult');
   assert.ok(start >= 0);
   const body = source.slice(start, source.indexOf('\n}\n', start) + 2);
@@ -111,7 +112,7 @@ test('the orchestrator Envelope case does not reach promotion, ranking, or cover
 // this class of function -- same convention askNextActions.test.js
 // documents for buildAskNextActionsBlock).
 test('intelligenceEnvelopeQueryResult accepts suppliedInput and scopes items to the supplied radarMatchId via source.sourceRecordId', () => {
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   const start = source.indexOf('async function intelligenceEnvelopeQueryResult');
   assert.ok(start >= 0);
   const body = source.slice(start, source.indexOf('\n}\n', start) + 2);
@@ -124,7 +125,7 @@ test('intelligenceEnvelopeQueryResult accepts suppliedInput and scopes items to 
 });
 
 test('the maintenance.complete and intelligence-envelope.query registrations both read envelope.suppliedInput', () => {
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/ACT-003: maintenance.complete
   // now also falls back to launchContext.entityId (a fresh execution's
   // canonical target, e.g. a "Complete" row action) when suppliedInput is
@@ -143,7 +144,7 @@ test('the maintenance.complete and intelligence-envelope.query registrations bot
 });
 
 test('suppliedInput is threaded end-to-end: askFollowUpContext\'s result reaches buildCapabilityInvocationEnvelope', () => {
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   // The one call site that actually has a resolved followUp to thread.
   assert.match(source, /suppliedInput: followUp\.suppliedInput,/);
   // The envelope builder actually sets it on CapabilityInvocationEnvelope,

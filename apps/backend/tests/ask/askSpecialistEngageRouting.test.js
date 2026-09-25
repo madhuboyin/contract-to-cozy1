@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -124,7 +125,7 @@ test('HVAC_SPECIALIST_ENGAGE is a deterministic, governed operation on the repai
 });
 
 test('the Specialist engage adapter drives the agent runtime and never a second ranking / promotion path', () => {
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   const start = source.indexOf('export async function hvacSpecialistEngageResult');
   assert.ok(start >= 0, 'hvacSpecialistEngageResult exists');
   const body = source.slice(start, source.indexOf('\nasync function dispatchOperationAdapterResult(', start));

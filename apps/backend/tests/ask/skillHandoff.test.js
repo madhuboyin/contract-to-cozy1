@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -109,7 +110,7 @@ test('Ask response handoff contract is additive and bounded', () => {
 });
 
 test('orchestration persists handoffs and startup validation is fail-fast', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const index = readFileSync(resolve(__dirname, '../../src/index.ts'), 'utf8');
   const metrics = readFileSync(resolve(__dirname, '../../src/lib/metrics.ts'), 'utf8');
   assert.match(orchestrator, /resolveSkillHandoffSuggestion/);

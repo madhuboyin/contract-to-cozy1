@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -27,7 +28,7 @@ test('every one of the 42 confirmation-required Ask commands resolves to a regis
 });
 
 test('confirmAskExecution no longer branches on operationId for its write dispatch (Test G, implementation plan §4.9)', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const confirmStart = orchestrator.indexOf('export async function confirmAskExecution(');
   assert.ok(confirmStart >= 0);
   const confirmEnd = orchestrator.indexOf('\nexport async function cancelAskExecution(', confirmStart);
@@ -38,7 +39,7 @@ test('confirmAskExecution no longer branches on operationId for its write dispat
 });
 
 test('each of the 38 extracted confirm handler functions is registered exactly once, by its command\'s own declared adapterKey', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     const escapedKey = definition.adapterKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pattern = new RegExp(`registerConfirmCapabilityHandler\\('${escapedKey}', \\w+\\);`);

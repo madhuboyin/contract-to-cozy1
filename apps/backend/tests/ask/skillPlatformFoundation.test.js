@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -94,7 +95,7 @@ test('Skill feature and kill-switch controls are independent of operation contro
 });
 
 test('disabling a Skill prevents a pending confirmation before its mutation claim', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const confirmStart = orchestrator.indexOf('export async function confirmAskExecution(');
   const skillCheck = orchestrator.indexOf('skillRuntimeUnavailableReason(registeredOperationId, controls)', confirmStart);
   const claimRead = orchestrator.indexOf('const previous = await prisma.askConfirmationReceipt.findUnique', confirmStart);
@@ -106,7 +107,7 @@ test('disabling a Skill prevents a pending confirmation before its mutation clai
 });
 
 test('disabling a Skill prevents inline capture before any canonical write or capture receipt', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   const captureStart = orchestrator.indexOf('export async function submitAskCapture(');
   const skillCheck = orchestrator.indexOf('skillRuntimeUnavailableReason(registeredOperationId, controls)', captureStart);
   const receiptRead = orchestrator.indexOf('const previousCapture = await prisma.askCaptureReceipt.findUnique', captureStart);
@@ -120,7 +121,7 @@ test('disabling a Skill prevents inline capture before any canonical write or ca
 
 test('Skill execution telemetry uses bounded registry identity and includes every invocation result', () => {
   const metrics = readFileSync(resolve(__dirname, '../../src/lib/metrics.ts'), 'utf8');
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(metrics, /name: 'ask_skill_executions_total'/);
   assert.match(metrics, /labelNames: \['skill', 'skill_version', 'operation', 'status'\]/);
   assert.match(metrics, /name: 'ask_skill_execution_duration_seconds'/);
@@ -134,7 +135,7 @@ test('Skill execution telemetry uses bounded registry identity and includes ever
 });
 
 test('routing lineage records Skill and operation versions without a database schema change', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(orchestrator, /eventType: 'CAPABILITY_RESOLVED'/);
   assert.match(orchestrator, /skillId: routingDecision\.requiresClarification \? null : selectedSkill\?\.id \?\? null/);
   assert.match(orchestrator, /skillVersion: routingDecision\.requiresClarification \? null : selectedSkill\?\.version \?\? null/);

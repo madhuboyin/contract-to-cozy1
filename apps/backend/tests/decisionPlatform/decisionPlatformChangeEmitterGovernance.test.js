@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -15,7 +16,7 @@ const emitterSource = readFileSync(resolve(__dirname, '../../src/services/decisi
 const threadServiceSource = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/decisionThreadService.ts'), 'utf8');
 const preferenceServiceSource = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/decisionPreferenceService.ts'), 'utf8');
 const registrySource = readFileSync(resolve(__dirname, '../../src/services/ask/askOperationRegistry.ts'), 'utf8');
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 // A naive "next { after the first )" body-start search breaks on functions
 // whose return type is an inline object literal (e.g.

@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -101,7 +102,7 @@ test('all twenty-three representative Skills own the intended canonical operatio
 
 test('taxonomy expansion remains declarative and adds no per-Skill core routing branches', () => {
   const router = readFileSync(resolve(__dirname, '../../src/services/skills/skillRouter.ts'), 'utf8');
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   for (const skillId of EXPANDED_SKILLS) {
     const constant = skillId.toUpperCase().replace(/-/g, '_');
     assert.doesNotMatch(router, new RegExp(constant));

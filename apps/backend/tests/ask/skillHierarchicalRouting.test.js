@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -108,7 +109,7 @@ test('close Skill candidates fail closed as ambiguous instead of silently choosi
 });
 
 test('Ask normalizes unsupported and ambiguous Skill routing with stable codes', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(orchestrator, /outcome === 'UNSUPPORTED'\) return 'ASK_SKILL_UNSUPPORTED'/);
   assert.match(orchestrator, /'ASK_SKILL_AMBIGUOUS'/);
   assert.match(orchestrator, /skillRoutingReasonCode: stableSkillRoutingReasonCode/);

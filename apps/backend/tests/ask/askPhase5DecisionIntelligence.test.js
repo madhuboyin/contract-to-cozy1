@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -40,7 +41,7 @@ test('Phase 5 homeowner language routes deterministically to governed decision a
 });
 
 test('Phase 5 adapters invoke canonical domain services and retain professional boundaries', () => {
-  const source = fs.readFileSync(path.resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   for (const contract of [
     /replaceRepairService\.runItemAnalysis/,
     /getWorkspaceComparability/,

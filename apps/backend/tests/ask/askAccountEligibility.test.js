@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -30,7 +31,7 @@ test('Ask Cozy account policy allows homeowners and rejects provider/admin accou
 test('the account-role guard protects the complete Ask router after authentication', () => {
   const routes = readFileSync(resolve(__dirname, '../../src/routes/ask.routes.ts'), 'utf8');
   const middleware = readFileSync(resolve(__dirname, '../../src/middleware/askAccountEligibility.middleware.ts'), 'utf8');
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
 
   assert.match(routes, /router\.use\('\/ask', authenticate, requireAskEligibleAccount\)/);
   assert.match(middleware, /ASK_ACCOUNT_ROLE_NOT_ELIGIBLE/);

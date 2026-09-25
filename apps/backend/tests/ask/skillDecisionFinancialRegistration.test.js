@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -87,7 +88,7 @@ test('SP4 manifests preserve canonical service and Decision Platform boundaries'
   assert.ok(refinanceManifest.dependencies.some((dependency) => dependency.id === 'refinance-radar-analysis'));
   assert.ok(refinanceManifest.dependencies.some((dependency) => dependency.id === 'refinance-rate-monitor'));
 
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(orchestrator, /replaceRepairService\.runItemAnalysis/);
   assert.match(orchestrator, /decisionThreadService\.createHvacDecisionThread/);
   assert.match(orchestrator, /decisionThreadService\.createHvacScenario/);

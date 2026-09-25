@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -18,7 +19,7 @@ const {
 // required patterns inside askOrchestrator.service.ts without a live DB.
 
 const source = readFileSync(resolve(__dirname, '../../src/services/decisionPlatform/decisionThreadService.ts'), 'utf8');
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 test('decisionThreadService imports and uses every Phase 7A transition-contract function', () => {
   assert.match(source, /isLifecycleTransitionAllowed/);

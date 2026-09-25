@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -70,7 +71,7 @@ test('the context provider registry and provider-backed Skill manifests validate
 });
 
 test('Ask exposes stable provider and budget error codes for blocked required context', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(orchestrator, /budgetFailure \? 'ASK_CONTEXT_BUDGET_EXCEEDED' : 'ASK_CONTEXT_PROVIDER_UNAVAILABLE'/);
   assert.doesNotMatch(orchestrator, /ASK_REQUIRED_CONTEXT_UNAVAILABLE/);
 });

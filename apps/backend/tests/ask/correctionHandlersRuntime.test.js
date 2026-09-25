@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { readFileSync } = require('node:fs');
@@ -544,7 +545,7 @@ test('HOME_EVENT_CORRECT propose offers "No room"/"No item" plus the property\'s
 test('HOME_EVENT_CORRECT edit re-validates a link value against live data and rebuilds a fresh option list (source-shape, like every other edit handler in this file)', () => {
   const { readFileSync } = require('node:fs');
   const { resolve } = require('node:path');
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   const body = (startMarker, endMarker) => source.slice(source.indexOf(startMarker), source.indexOf(endMarker, source.indexOf(startMarker)));
   const edit = body('async function editHomeEventCorrectConfirmation(', 'const EDIT_CONFIRMATION_HANDLERS');
   assert.match(edit, /await homeEventCorrectionValueError\(execution\.propertyId!, existing\.data\.field, input\.edits\.value\)/, 'the edited value is re-validated against live data, not the stale proposal');
@@ -555,7 +556,7 @@ test('HOME_EVENT_CORRECT edit re-validates a link value against live data and re
 test('the room/item existence check and the option list are both scoped to this property, not just any record with that id', () => {
   const { readFileSync } = require('node:fs');
   const { resolve } = require('node:path');
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   const body = (startMarker, endMarker) => source.slice(source.indexOf(startMarker), source.indexOf(endMarker, source.indexOf(startMarker)));
   const valueError = body('async function homeEventCorrectionValueError(', 'async function homeEventLinkOptions(');
   assert.match(valueError, /prisma\.inventoryRoom\.findFirst\(\{ where: \{ id: value, propertyId \}/, 'a room id from another property must be rejected, not just any existing room id');
@@ -794,7 +795,7 @@ test('INVENTORY_ITEM_CORRECT propose offers "No room" plus the property\'s own r
 test('INVENTORY_ITEM_CORRECT edit re-validates a room value against live data (source-shape, like every other edit handler in this file)', () => {
   const { readFileSync } = require('node:fs');
   const { resolve } = require('node:path');
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   const body = (startMarker, endMarker) => {
     const start = source.indexOf(startMarker);
     assert.ok(start > 0, `${startMarker} not found`);
@@ -810,7 +811,7 @@ test('INVENTORY_ITEM_CORRECT edit re-validates a room value against live data (s
 test('the room existence check and the option list for INVENTORY_ITEM_CORRECT are both scoped to this property', () => {
   const { readFileSync } = require('node:fs');
   const { resolve } = require('node:path');
-  const source = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   const body = (startMarker, endMarker) => {
     const start = source.indexOf(startMarker);
     assert.ok(start > 0, `${startMarker} not found`);
@@ -875,7 +876,7 @@ test('inventory propose: an unspecified field asks which detail to correct inste
 test('inventory item actions: contributors get one action per correctable field, all pinned to the operation; the row schema accepts them', () => {
   const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
   assert.ok(AskPresentationBlockSchema, 'the block schema export must exist for this test to mean anything');
-  const source = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const source = readAskOrchestratorSources();
   assert.match(source, /function inventoryCorrectionItemActions\(canManage: boolean\) \{\s*if \(!canManage\) return undefined;\s*return \(Object\.keys\(INVENTORY_CORRECTION_FIELDS\)/);
   // ten actions on one row must validate (the row schema used to cap actions at three)
   const row = { id: 'item-1', title: 'Water heater', meta: [], actions: Array.from({ length: 10 }, (_, index) => ({ id: `a${index}`, label: `A${index}`, message: 'Correct the condition of this inventory item.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' })) };
@@ -1347,7 +1348,7 @@ test('INVENTORY_ITEM_CREATE confirm maps a writer refusal to a clear error, lets
 // for confirmCaptureEvidence's write path at all (previously covered only by registration/source-shape checks;
 // see groundedAskProposalRetirement.test.js). Covers both the new USER_ADD branch and, as a regression guard, the
 // pre-existing extraction-sibling branch it sits alongside.
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 function evidenceModels({
   event = { id: 'event-1', propertyId: 'p1', title: 'Roof replacement', isCurrent: true, deletedAt: null, visibility: 'HOUSEHOLD', createdById: 'u9' },

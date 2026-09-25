@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -13,7 +14,7 @@ require('ts-node/register');
 // codebase; this file follows that established precedent rather than
 // inventing a one-off runtime mock for this one writer.
 const writerSource = readFileSync(resolve(__dirname, '../../src/modules/propertyContext/application/capturePropertyFinancingFact.ts'), 'utf8');
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 test('capturePropertyFinancingFact creates the idempotency-gating PropertyFactEvidence row as the transaction\'s first statement', () => {
   const txIdx = writerSource.indexOf('await prisma.$transaction(async (tx) => {');

@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -232,7 +233,7 @@ test('deriveAskNextActionsSourceContext returns null for a plain typed question 
 // itself calls getCapabilitySuggestions (a DB-touching function), so the gate
 // widening and call-site wiring are verified against the source directly,
 // matching this file's established convention for DB-touching code.
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 test('executeOperation\'s next-actions gate no longer requires an ASK_OPERATION_CAPABILITY entry (this excluded GROUNDED_GUIDANCE, Stage 1\'s first named gap)', () => {
   const idx = orchestratorSource.indexOf('async function executeOperation(');

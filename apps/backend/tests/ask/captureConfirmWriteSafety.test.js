@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -18,7 +19,7 @@ require('ts-node/register');
 // rather than inventing a one-off runtime mock.
 const captureSource = readFileSync(resolve(__dirname, '../../src/modules/propertyContext/application/capturePropertyFact.ts'), 'utf8');
 const homeEventsServiceSource = readFileSync(resolve(__dirname, '../../src/services/homeEvents.service.ts'), 'utf8');
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 test('capturePropertyFact resolves a replayed captureExecutionId to the original write before attempting a new one, regardless of current supersession state', () => {
   const idx = captureSource.indexOf('if (input.captureExecutionId) {');

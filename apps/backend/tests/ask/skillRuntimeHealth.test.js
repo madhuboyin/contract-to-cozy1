@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -170,7 +171,7 @@ test('composer rejects a disabled provider before authorization or provider acce
 });
 
 test('Ask passes provider controls into composition and health controls into routing', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(orchestrator, /composeSkillContext\([\s\S]*providerEnabled: controls\.contextProviderEnabled/);
   assert.match(orchestrator, /resolveHierarchicalSkillRouting\([\s\S]*contextProviderEnabled: controls\.contextProviderEnabled/);
 });

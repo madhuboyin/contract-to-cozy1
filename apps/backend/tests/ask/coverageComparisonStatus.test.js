@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -77,7 +78,7 @@ test('the full hierarchical skill router resolves COVERAGE_COMPARISON_STATUS to 
 // runtime-mocked test harness in this codebase for this class of function
 // (same established gap as sellerPrepChecklistResult -- see that file's
 // header for the convention this mirrors).
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 function handlerBody() {
   const start = orchestratorSource.indexOf('async function coverageComparisonStatusResult(');

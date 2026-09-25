@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -96,7 +97,7 @@ test('effective policy drift has a distinct fail-closed reason', () => {
 
 test('Ask persists and rechecks bindings without a migration script', () => {
   const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.match(schema, /model AskExecution[\s\S]*skillId\s+String\?[\s\S]*skillBindingJson\s+Json\?/);
   assert.match(schema, /model AskConfirmationReceipt[\s\S]*effectivePolicyVersion\s+String\?[\s\S]*contextVersion\s+String\?/);
   assert.match(orchestrator, /const selectedSkillBinding = [\s\S]*buildSkillExecutionBinding/);

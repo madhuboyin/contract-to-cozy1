@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -36,7 +37,7 @@ const controllerSource = readFileSync(resolve(__dirname, '../../src/controllers/
 const routesSource = readFileSync(resolve(__dirname, '../../src/routes/gemini.routes.ts'), 'utf8');
 const schemaSource = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
 const clientSource = readFileSync(resolve(__dirname, '../../../frontend/src/lib/api/client.ts'), 'utf8');
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 test('the legacy proposal create/confirm/reject functions no longer exist', () => {
   assert.doesNotMatch(serviceSource, /export async function createGroundedAskProposal/);

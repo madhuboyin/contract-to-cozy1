@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -74,7 +75,7 @@ test('the full hierarchical skill router resolves SELLER_PREP_CHECKLIST to the s
 // (same established gap as sellHoldRentAnalysisResult -- see this file's
 // header and captureConfirmWriteSafety.test.js's own header for the
 // convention this mirrors).
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 function handlerBody() {
   const start = orchestratorSource.indexOf('async function sellerPrepChecklistResult(');

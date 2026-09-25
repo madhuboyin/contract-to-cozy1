@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -93,7 +94,7 @@ test('Skill discovery remains separate from Capability Registry destinations and
 
 test('adding Property Record required no capability-specific router or orchestrator branch', () => {
   const router = readFileSync(resolve(__dirname, '../../src/services/skills/skillRouter.ts'), 'utf8');
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.doesNotMatch(router, /propertyRecord|PROPERTY_RECORD/);
   assert.doesNotMatch(orchestrator, /skills\/propertyRecord|case 'PROPERTY_RECORD/);
 });

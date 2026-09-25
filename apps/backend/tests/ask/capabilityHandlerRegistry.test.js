@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -60,7 +61,7 @@ test('AskCapabilityHandlerMissingError carries the existing ASK_TYPED_RESULT err
 });
 
 test('propose-time dispatch no longer branches on operationId inside askOrchestrator.service.ts', () => {
-  const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+  const orchestrator = readAskOrchestratorSources();
   assert.equal(orchestrator.includes('switch (input.operation.operationId)'), false);
   const dispatchStart = orchestrator.indexOf('async function dispatchOperationAdapterResult(');
   assert.ok(dispatchStart >= 0);

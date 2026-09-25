@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
@@ -66,7 +67,7 @@ test('returns no children when the pre-filter does not fire, even with the flag 
   }
 });
 
-const orchestratorSource = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
+const orchestratorSource = readAskOrchestratorSources();
 
 test('the extraction-trigger call site is independent of the routed answer (FRD §10) -- wrapped in its own try/catch so a capture-side failure cannot affect the turn\'s response', () => {
   const idx = orchestratorSource.indexOf('runConversationalCaptureForTurn({');
