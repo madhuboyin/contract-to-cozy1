@@ -114,7 +114,7 @@ export const BUYER_CLOSING_SKILL = Object.freeze({
   // via reconcileAskExecutionSideEffects) without their own operation-level
   // allowedBlockTypes declaring it -- a pre-existing gap this also closes --
   // and BUYER_LIFECYCLE_UPDATE now does the same for the same reason.
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

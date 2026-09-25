@@ -5092,6 +5092,43 @@ const PROPERTY_SCOPE_LABELS: Record<string, string> = {
   INVENTORY: 'Inventory', OPTIONAL_HOUSEHOLD: 'Optional household context',
 };
 
+// IW-PRES-020 (FRD v1.91): the Property Context's own completeness as a ring. The percent is the domain's
+// (`completenessPercent`, known facts of all applicable facts across the areas); the basis says exactly that. The tiles are
+// the domain's own counts of missing, conflicted and stale facts, and the next steps are the three least complete areas
+// with the capture actions the list below already declares. Nothing is recomputed here beyond the sums of what the
+// domain reports; with no applicable facts there is no ring.
+export function propertyCompletenessProgress(
+  completeness: { completenessPercent: number; scopes: Array<{ scope: string; totalFacts: number; knownFacts: number; completenessPercent: number; missingFactKeys: string[]; conflictedFactKeys: string[]; staleFactKeys: string[] }> },
+  incompleteScopes: ReadonlyArray<{ scope: string; totalFacts: number; knownFacts: number; completenessPercent: number; missingFactKeys: string[]; conflictedFactKeys: string[]; staleFactKeys: string[] }>,
+  propertyId: string,
+  canManage: boolean,
+): Extract<AskPresentationBlock, { type: 'PROGRESS' }> | null {
+  const total = completeness.scopes.reduce((sum, scope) => sum + scope.totalFacts, 0);
+  if (total === 0) return null;
+  const known = completeness.scopes.reduce((sum, scope) => sum + scope.knownFacts, 0);
+  const sum = (pick: (scope: typeof completeness.scopes[number]) => number) => completeness.scopes.reduce((count, scope) => count + pick(scope), 0);
+  const metric = (label: string, value: number) => ({ label, value: String(value), tone: value ? 'CAUTION' as const : 'DEFAULT' as const });
+  return {
+    type: 'PROGRESS', id: 'property-completeness-progress', title: 'Property record completeness',
+    description: 'Counts the governed property facts that apply to this home and are known. Facts that are missing, conflicted or out of date are not counted as known.',
+    percent: completeness.completenessPercent,
+    basis: `${known} of ${total} applicable facts known across ${completeness.scopes.length} area${completeness.scopes.length === 1 ? '' : 's'}`,
+    metrics: [
+      metric('Missing', sum((scope) => scope.missingFactKeys.length)),
+      metric('Conflicted', sum((scope) => scope.conflictedFactKeys.length)),
+      metric('Stale', sum((scope) => scope.staleFactKeys.length)),
+    ],
+    nextSteps: incompleteScopes.slice(0, 3).map((scope) => ({
+      id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
+      description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
+      meta: [], status: `${scope.completenessPercent}% COMPLETE`, href: areaCaptureFallbackHref(propertyId, scope.scope),
+      entityType: 'PROPERTY_CONTEXT_AREA',
+      actions: areaCaptureRowActions(scope.scope, canManage, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
+    })),
+    actions: [],
+  };
+}
+
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const propertyHref = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
   const completenessFocus = isPropertyCompletenessRequest(message);
@@ -5311,6 +5348,9 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   }
 
   if (incompleteScopes.length) {
+    // IW-PRES-020 (FRD v1.91): the ring leads the list of areas that can improve.
+    const ring = completeness ? propertyCompletenessProgress(completeness, incompleteScopes, propertyId, canImproveContext) : null;
+    if (ring) blocks.push(ring);
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve',
       description: 'Internal fact keys are intentionally hidden. Open the property record or answer the inline prompt to add canonical information.',
@@ -6664,6 +6704,43 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
   };
 }
 
+// IW-PRES-020 (FRD v1.91): the closing-day workspace's own five checks as a ring. The figure is the page's: how many of
+// the workspace's recorded checks are done (the summary already says "X of 5 ready" when nothing blocks). The tiles are
+// the checks done, not yet done, and the blockers recorded on the Buyer Plan; the next steps are up to three blockers
+// first and then the checks still to do, each linking to the plan. Nothing is decided here: no actions are declared.
+const BUYER_CLOSING_DAY_CHECKS = [
+  ['identificationReady', 'Identification'], ['requiredDocumentsReady', 'Required documents'], ['fundsReadinessReviewed', 'Funds readiness reviewed'],
+  ['blockersReviewed', 'Blockers reviewed'], ['questionsResolved', 'Questions resolved'],
+] as const;
+
+export function buyerClosingDayProgress(
+  workspace: Partial<Record<typeof BUYER_CLOSING_DAY_CHECKS[number][0], boolean>> | null,
+  blockers: ReadonlyArray<{ id: string; title: string; status: string }>,
+  planHref: string,
+): Extract<AskPresentationBlock, { type: 'PROGRESS' }> | null {
+  if (!workspace) return null;
+  const checks = BUYER_CLOSING_DAY_CHECKS.map(([key, label]) => ({ key, label, done: Boolean(workspace[key]) }));
+  const done = checks.filter((check) => check.done).length;
+  const pending = checks.filter((check) => !check.done);
+  const steps = [
+    ...blockers.map((blocker) => ({ id: blocker.id, title: blocker.title, description: 'Blocker recorded on the Buyer Plan', status: blocker.status })),
+    ...pending.map((check) => ({ id: `closing-day-check-${check.key}`, title: check.label, description: 'Closing-day check not done yet', status: 'PENDING' })),
+  ].slice(0, 3);
+  return {
+    type: 'PROGRESS', id: 'buyer-closing-day-progress', title: 'Closing-day readiness',
+    description: 'Counts the five checks recorded on your closing-day workspace. Blockers on the Buyer Plan are listed but are not part of the count.',
+    percent: Math.round((done / checks.length) * 100),
+    basis: `${done} of ${checks.length} closing-day checks done`,
+    metrics: [
+      { label: 'Done', value: String(done), tone: 'DEFAULT' },
+      { label: 'Not yet', value: String(pending.length), tone: pending.length ? 'CAUTION' : 'DEFAULT' },
+      { label: 'Blockers', value: String(blockers.length), tone: blockers.length ? 'CAUTION' : 'DEFAULT' },
+    ],
+    nextSteps: steps.map((step) => ({ ...step, meta: [], href: planHref, entityType: null })),
+    actions: [],
+  };
+}
+
 async function buyerClosingDayReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s closing-day readiness right now.');
@@ -6685,6 +6762,9 @@ async function buyerClosingDayReadinessResult(userId: string, propertyId: string
     tone: blockers.length ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
   }];
+  // IW-PRES-020 (FRD v1.91): the workspace's five checks as a ring, ahead of the blockers list.
+  const ring = buyerClosingDayProgress(workspace, blockers, planHref);
+  if (ring) blocks.push(ring);
   if (blockers.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-closing-day-blockers', title: 'Blockers before closing day', description: 'Open or blocking tasks recorded on the Buyer Plan.',

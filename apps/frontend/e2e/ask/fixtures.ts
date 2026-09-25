@@ -1088,6 +1088,65 @@ function capitalTimelineTrackExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.91): the Property Context's own completeness as a ring, with the three
+// least complete areas as next steps (the first with its capture action).
+function propertyCompletenessRingExecution() {
+  const fill = { id: 'fill-area-core', label: 'Fill in missing details', message: 'Fill in the missing core property details.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE' };
+  const step = (id: string, title: string, description: string, status: string, actions?: unknown[]) => ({ id, title, description, meta: [], status, href: `/dashboard/properties/${propertyId}/edit`, entityType: 'PROPERTY_CONTEXT_AREA', ...(actions ? { actions } : {}) });
+  return {
+    schemaVersion: '1.0', executionId: 'execution-property-completeness-ring', sessionId: 'ask-acceptance-session',
+    question: 'How complete is my home record?', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'PROPERTY_SUMMARY', version: '1.0', family: 'STATUS_SUMMARY' }, contextVersion: null,
+    blocks: [
+      { type: 'SUMMARY', id: 'property-summary', title: 'Acceptance Home’s Property Context is 62% complete', tone: 'CAUTION', body: '9 missing, 1 conflicted, and 2 stale details were found across 3 areas.',
+        actions: [{ id: 'open-property-record', label: 'Review missing details', href: `/dashboard/properties/${propertyId}`, style: 'PRIMARY' }] },
+      { type: 'PROGRESS', id: 'property-completeness-progress', title: 'Property record completeness',
+        description: 'Counts the governed property facts that apply to this home and are known. Facts that are missing, conflicted or out of date are not counted as known.',
+        percent: 62, basis: '31 of 50 applicable facts known across 9 areas',
+        metrics: [{ label: 'Missing', value: '9', tone: 'CAUTION' }, { label: 'Conflicted', value: '1', tone: 'CAUTION' }, { label: 'Stale', value: '2', tone: 'CAUTION' }],
+        nextSteps: [
+          step('CORE', 'Core details', '4 of 10 facts known', '40% COMPLETE', [fill]),
+          step('EXTERIOR', 'Exterior', '6 of 11 facts known', '55% COMPLETE'),
+          step('SAFETY', 'Safety', '4 of 6 facts known', '67% COMPLETE'),
+        ], actions: [] },
+      { type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve', description: 'Internal fact keys are intentionally hidden.',
+        sections: [{ id: 'incomplete-scopes', title: 'Property Context completeness', count: 1, items: [step('CORE', 'Core details', '4 of 10 facts known', '40% COMPLETE')] }], actions: [] },
+    ],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
+// FRD v1.91: the buyer closing-day workspace's five checks as a ring; blockers first, then the checks still to do.
+function buyerClosingDayRingExecution() {
+  const plan = `/dashboard/properties/${propertyId}/buyer-plan`;
+  const step = (id: string, title: string, description: string, status: string) => ({ id, title, description, meta: [], status, href: plan, entityType: null });
+  return {
+    schemaVersion: '1.0', executionId: 'execution-buyer-closing-day-ring', sessionId: 'ask-acceptance-session',
+    question: 'What do I need for closing day?', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'BUYER_CLOSING_DAY_READINESS', version: '1.0', family: 'STATUS_SUMMARY' }, contextVersion: null,
+    blocks: [
+      { type: 'SUMMARY', id: 'buyer-closing-day-summary', title: '1 blocker remains before closing day', tone: 'CAUTION', body: 'Confirm your appointment, identification, required documents, funds readiness, and questions before closing day.',
+        actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: plan, style: 'PRIMARY' }] },
+      { type: 'PROGRESS', id: 'buyer-closing-day-progress', title: 'Closing-day readiness',
+        description: 'Counts the five checks recorded on your closing-day workspace. Blockers on the Buyer Plan are listed but are not part of the count.',
+        percent: 40, basis: '2 of 5 closing-day checks done',
+        metrics: [{ label: 'Done', value: '2', tone: 'DEFAULT' }, { label: 'Not yet', value: '3', tone: 'CAUTION' }, { label: 'Blockers', value: '1', tone: 'CAUTION' }],
+        nextSteps: [
+          step('blocker-stubs', 'Lender needs pay stubs', 'Blocker recorded on the Buyer Plan', 'PENDING'),
+          step('closing-day-check-fundsReadinessReviewed', 'Funds readiness reviewed', 'Closing-day check not done yet', 'PENDING'),
+          step('closing-day-check-blockersReviewed', 'Blockers reviewed', 'Closing-day check not done yet', 'PENDING'),
+        ], actions: [] },
+    ],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -2009,6 +2068,18 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/what big expenses are coming up/i.test(body.message)) {
       const response = capitalTimelineTrackExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/how complete is my home record/i.test(body.message)) {
+      const response = propertyCompletenessRingExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/what do i need for closing day/i.test(body.message)) {
+      const response = buyerClosingDayRingExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

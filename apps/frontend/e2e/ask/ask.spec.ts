@@ -1744,6 +1744,76 @@ test('on a phone, the sale readiness ring, tiles and next steps fit the screen (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('the home record answers with a completeness ring, its own missing, conflicted and stale counts, and the least complete areas with their capture action (FRD v1.91)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('How complete is my home record?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-property-completeness-ring [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: '62% ready. 31 of 50 applicable facts known across 9 areas' })).toBeVisible();
+  await expect(ring.locator('dl > div')).toHaveText(['Missing9', 'Conflicted1', 'Stale2']);
+  await expect(ring.locator('[data-ask-progress-step]')).toHaveCount(3);
+  const core = ring.locator('[data-ask-progress-step="CORE"]');
+  await expect(core).toContainText('4 of 10 facts known');
+  await expect(core.getByRole('link', { name: 'Open Core details' })).toHaveAttribute('href', /\/edit/);
+  await core.getByRole('button', { name: 'Fill in missing details' }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Fill in the missing core property details.')).toBe(true);
+  await expect(ring.locator('[data-ask-progress-step="EXTERIOR"]').getByRole('button')).toHaveCount(0);
+});
+
+test('on a phone, the completeness ring, tiles and next steps fit the screen (FRD v1.91)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('How complete is my home record?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-property-completeness-ring [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: /^62% ready/ })).toBeVisible();
+  for (const element of [...await ring.locator('dl > div').all(), ...await ring.locator('[data-ask-progress-step]').all()]) {
+    const box = await element.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('closing day answers with the workspace\'s five checks as a ring, blockers first, each step linking to the plan and none deciding anything (FRD v1.91)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What do I need for closing day?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-buyer-closing-day-ring [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: '40% ready. 2 of 5 closing-day checks done' })).toBeVisible();
+  await expect(ring.locator('dl > div')).toHaveText(['Done2', 'Not yet3', 'Blockers1']);
+  const steps = ring.locator('[data-ask-progress-step]');
+  await expect(steps).toHaveCount(3);
+  await expect(steps.first()).toContainText('Lender needs pay stubs');
+  await expect(steps.nth(1)).toContainText('Funds readiness reviewed');
+  await expect(steps.first().getByRole('link', { name: 'Open Lender needs pay stubs' })).toHaveAttribute('href', /buyer-plan/);
+  await expect(ring.getByRole('button')).toHaveCount(0);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, the closing-day ring, tiles and steps fit the screen (FRD v1.91)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What do I need for closing day?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-buyer-closing-day-ring [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: /^40% ready/ })).toBeVisible();
+  for (const element of [...await ring.locator('dl > div').all(), ...await ring.locator('[data-ask-progress-step]').all()]) {
+    const box = await element.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('home actions show their priorities as shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

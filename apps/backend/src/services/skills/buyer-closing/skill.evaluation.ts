@@ -58,7 +58,7 @@ export const BUYER_CLOSING_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.lender-portal'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONFIRMATION', 'COMPLETED'],
-  expectedBlockTypes: ['BOUNDARY', 'EVIDENCE', 'GROUPED_LIST', 'LIMITATION', 'SUMMARY', 'WORKFLOW_PROGRESS'],
+  expectedBlockTypes: ['BOUNDARY', 'EVIDENCE', 'GROUPED_LIST', 'LIMITATION', 'PROGRESS', 'SUMMARY', 'WORKFLOW_PROGRESS'],
   expectedCanonicalCalls: BUYER_CLOSING_SKILL.allowedAdapters,
   prohibitedCanonicalCalls: ['maintenance.create'],
   modelDisabledCase: { message: "What's my buyer plan status?", expectedOperationId: 'BUYER_PLAN_STATUS' },
