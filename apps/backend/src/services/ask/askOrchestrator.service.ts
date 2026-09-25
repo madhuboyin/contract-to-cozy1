@@ -1,40 +1,19 @@
 import { getCaptureDefinition, getCaptureDefinitionForFact } from '../../modules/propertyContext/catalog/captureRegistry';
 import { PROPERTY_AREA_CAPTURE_FEATURE, PROPERTY_AREA_CAPTURE_OPERATION, PROPERTY_AREA_CAPTURE_SCOPES, type PropertyAreaCaptureScope } from '../../modules/propertyContext/catalog/featureRequirementRegistry';
-import { PROPERTY_FACT_CATALOG, getFactDefinition } from '../../modules/propertyContext/catalog/factCatalog';
+import { getFactDefinition, PROPERTY_FACT_CATALOG } from '../../modules/propertyContext/catalog/factCatalog';
 import { getContextCompleteness } from '../../modules/propertyContext/application/getContextCompleteness';
-import { AskCaptureAttribution, AskExecution, AskExecutionStatus, HouseholdRole, HomeBuyerTaskStatus, BuyerFindingDisposition, BuyerPlanPriority, ClaimType as PrismaClaimType, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, RefinanceScenarioTerm, ServiceCategory, WarrantyCategory } from '@prisma/client';
+import { AskCaptureAttribution, AskExecution, AskExecutionStatus, BuyerFindingDisposition, BuyerPlanPriority, ClaimType as PrismaClaimType, HomeBuyerTaskStatus, HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, NotificationCadence, Prisma, PropertyFactSourceType, RecurrenceFrequency, RefinanceRateMonitorProduct, RefinanceScenarioTerm, ServiceCategory, WarrantyCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
-import {
-  ASK_RESPONSE_SCHEMA_VERSION,
-  AskExecutionResponseSchema,
-  type AskCaptureRequest,
-  type AskExecutionResponse,
-  type AskPendingWorkItem,
-  type AskRecentSessionPage,
-  type AskRecentSessionSummary,
-  type AskSessionUpdateRequest,
-  type AskPresentationBlock,
-  type CreateAskExecutionRequest,
-  type ContinueAskExecution,
-  type RecordAskCaptureEvent,
-  type RequestAskCorrection,
-  type ResolveAskExecutionProperty,
-  type SubmitAskCaptureRequest,
-  type SubmitAskClarification,
-  type SubmitAskConfirmation,
-  type EditAskConfirmation,
-  type SubmitAskFeedback,
-  type SubmitHomeActionUsefulnessFeedback,
-} from '../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, type AskCaptureRequest, type AskExecutionResponse, type AskPendingWorkItem, type AskPresentationBlock, type AskRecentSessionPage, type AskRecentSessionSummary, type AskSessionUpdateRequest, type ContinueAskExecution, type CreateAskExecutionRequest, type EditAskConfirmation, type RecordAskCaptureEvent, type RequestAskCorrection, type ResolveAskExecutionProperty, type SubmitAskCaptureRequest, type SubmitAskClarification, type SubmitAskConfirmation, type SubmitAskFeedback, type SubmitHomeActionUsefulnessFeedback } from '../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
 import { ASK_SESSION_HISTORY_PAGE_SIZE, askHistoryAccessiblePropertyWhere, askSessionHistoryWhere, decodeAskSessionHistoryCursor, encodeAskSessionHistoryCursor } from './askSessionHistoryPagination';
 import { askAnswerTrustTotal, askCorrectionsTotal, askExecutionDurationSeconds, askExecutionsTotal, askFeedbackTotal, askInlineCapturesTotal, askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal, askResultSynthesisTotal, askRoutingDecisionsTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal, askSkillPresentationDurationSeconds, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../lib/metrics';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { PropertyMaintenanceTaskService } from '../PropertyMaintenanceTask.service';
-import { HomeBuyerTaskService, CLOSING_HOME_LANES } from '../HomeBuyerTask.service';
+import { CLOSING_HOME_LANES, HomeBuyerTaskService } from '../HomeBuyerTask.service';
 import type { BuyerClosingHomeLaneKey } from '../../productFramework/buyerAcquisition.contract';
 import { BuyerPurchaseLenderReadinessService } from '../buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../buyerTitleEscrow.service';
@@ -48,77 +27,37 @@ import { skillContextProviderKey } from '../skills/context/skillContextProviderR
 import { loadCanonicalMaintenanceTaskSet, type MaintenanceTaskContext, type MaintenanceTaskContextTask } from '../skills/context/maintenanceTaskContext.provider';
 import type { SeasonalChecklistContext } from '../skills/context/seasonalChecklistContext.provider';
 import { buyerPlanContextProvider } from '../skills/context/buyerPlanContext.provider';
-import {
-  operatingModeForOwnershipState,
-  PROPERTY_JOURNEY_CONTEXT_PROVIDER,
-  type PropertyJourneyContext,
-} from '../skills/context/propertyJourneyContext.contract';
+import { operatingModeForOwnershipState, PROPERTY_JOURNEY_CONTEXT_PROVIDER, type PropertyJourneyContext } from '../skills/context/propertyJourneyContext.contract';
 import type { ComposedSkillContext } from '../skills/context/skillContext.contract';
 import { MAINTENANCE_TASK_CONTEXT_PROVIDER, SEASONAL_CHECKLIST_CONTEXT_PROVIDER } from '../skills/maintenance/skill.manifest';
-import {
-  ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED,
-  ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED_MESSAGE,
-  assertAskAccountRoleEligible,
-  type AskAccountRole,
-} from './askAccountEligibility';
-import {
-  evaluateAskAudienceApplicability,
-  getAskAudiencePolicy,
-  isAskOperationDiscoverableForAudience,
-  type AskAudienceApplicabilityDecision,
-} from './askAudiencePolicy';
+import { ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED, ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED_MESSAGE, assertAskAccountRoleEligible, type AskAccountRole } from './askAccountEligibility';
+import { evaluateAskAudienceApplicability, getAskAudiencePolicy, isAskOperationDiscoverableForAudience, type AskAudienceApplicabilityDecision } from './askAudiencePolicy';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../coverageGap.service';
 import { getOrCreateCoverageComparison } from '../coverageComparison.service';
 import { generateForecast, listForecast } from '../maintenancePrediction.service';
 import { answerGroundedAsk } from '../groundedAsk.service';
-import {
-  buildCapabilityCatalog,
-  canonicalCapabilityRegistry,
-  matchCapabilityGoal,
-  type CapabilityCatalogItem,
-} from '../../productFramework/capabilities';
+import { buildCapabilityCatalog, canonicalCapabilityRegistry, matchCapabilityGoal, type CapabilityCatalogItem } from '../../productFramework/capabilities';
 import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../toolDiscoveryAvailability.service';
 import { getCapabilityDiscoveryReadiness, getRelatedCapabilities } from '../capabilityRelated.service';
-import {
-  ASK_OPERATION_DEFINITIONS,
-  getAskOperationDefinition,
-  isPropertyCompletenessRequest,
-  resolveAskOperation,
-  type AskOperationId,
-  type AskOperationResolution,
-  type AskOperationResult,
-} from './askOperationRegistry';
-import {
-  capabilityInvoke,
-  needsPropertyResult,
-  operationalUnavailableResult,
-  permissionRequiredResult,
-  registerCapabilityHandler,
-  skillRuntimeUnavailableReason,
-  type CapabilityInvocationDependencies,
-} from './capabilityHandlerRegistry';
+import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, isPropertyCompletenessRequest, resolveAskOperation, type AskOperationId, type AskOperationResolution, type AskOperationResult } from './askOperationRegistry';
+import { capabilityInvoke, needsPropertyResult, operationalUnavailableResult, permissionRequiredResult, registerCapabilityHandler, skillRuntimeUnavailableReason, type CapabilityInvocationDependencies } from './capabilityHandlerRegistry';
 import type { CapabilityInvocationEnvelope } from './capabilityInvocation.contract';
-import {
-  confirmCapabilityInvoke,
-  registerConfirmCapabilityHandler,
-  type ConfirmCapabilityContext,
-  type ConfirmCapabilityResult,
-} from './confirmCapabilityHandlerRegistry';
+import { confirmCapabilityInvoke, registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from './confirmCapabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
 import { assertCoverageConflictFree } from '../coverageConflict.service';
 import { captureFeatureContext, normalizeAnswers, PropertyContextCaptureValidationError, PropertyContextVersionConflictError } from '../../modules/propertyContext/application/captureFeatureContext';
 import { capturePropertyFact } from '../../modules/propertyContext/application/capturePropertyFact';
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { captureWarranty } from '../../modules/propertyContext/application/captureWarranty';
-import { PropertyContextAccessDeniedError, getPropertyContext } from '../../modules/propertyContext/application/getPropertyContext';
-import { runConversationalCaptureForTurn, editCaptureFactCandidate, editCaptureEventCandidate, editCaptureWarrantyCandidate, warrantyAddCaptureRequest, eventAddCaptureRequest, buildUserAddedEventConfirmation, EVENT_ADD_CAPTURE_KEY, USER_ADD_ORIGIN } from './conversationalUnderstanding/conversationalCapture';
-import { buildAskNextActionsBlock, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, NEXT_ACTION_CONTEXT_PREFIX, nextActionContextOperation } from './askNextActions';
+import { getPropertyContext, PropertyContextAccessDeniedError } from '../../modules/propertyContext/application/getPropertyContext';
+import { buildUserAddedEventConfirmation, editCaptureEventCandidate, editCaptureFactCandidate, editCaptureWarrantyCandidate, EVENT_ADD_CAPTURE_KEY, eventAddCaptureRequest, runConversationalCaptureForTurn, USER_ADD_ORIGIN, warrantyAddCaptureRequest } from './conversationalUnderstanding/conversationalCapture';
+import { buildAskNextActionsBlock, NEXT_ACTION_CONTEXT_PREFIX, NEXT_ACTION_FACT_QUESTIONS, NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, nextActionContextOperation } from './askNextActions';
 import { capabilityCardLaunch } from './askCapabilityCardLaunch';
 import { HomeEventsService } from '../homeEvents.service';
 import { APIError } from '../../middleware/error.middleware';
 import { isWaterHeaterInventoryName } from '../repairReplaceEligibility';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
-import { inferMajorApplianceType, formatMajorApplianceType, PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX } from '../majorAppliance.util';
+import { formatMajorApplianceType, inferMajorApplianceType, PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX } from '../majorAppliance.util';
 import { getFinancialContextDecisions } from '../financialContext/context';
 import { getProfile, upsertProfile } from '../financing.service';
 import { RefinanceRadarService } from '../../refinanceRadar/refinanceRadar.service';
@@ -144,24 +83,15 @@ import { RADAR_ACTION_CODES, type RadarActionTaskOperation } from '../../modules
 import { deriveRadarTaskDueDate, RadarTaskDueDateError } from '../../modules/homeEventRadar/domain/radarTaskDueDate';
 import type { RadarNotificationPreferenceProjection } from '../../modules/homeEventRadar/domain/radarNotificationPreferences';
 import { updateRadarNotificationPreferencesBodySchema } from '../../validators/homeEventRadar.validators';
-import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../analytics';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../analytics';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../homeActions.service';
-// C2C Intelligence & Agentic Evolution Phase 3 / PR 12b (architecture §8 task 2,
-// §22): Ask engagement with a delivered HVAC repair-or-replace Home Action is
-// adapted onto the same Phase 2 Specialist Agent runtime the in-app panel uses.
-import {
-  invokeAgentRuntime,
-  AgentRuntimeAuthorizationError,
-  AgentRuntimeCasConflictError,
-  AgentRuntimeDisabledError,
-  AgentRuntimeStateError,
-} from '../agents/agentRuntime.service';
+import { AgentRuntimeAuthorizationError, AgentRuntimeCasConflictError, AgentRuntimeDisabledError, AgentRuntimeStateError, invokeAgentRuntime } from '../agents/agentRuntime.service';
 import type { AgentRunStatusProjection, HvacSpecialistHomeActionOrigin } from '../agents/agentRuntime.contract';
 import { buildBuyerPlanHomeActionsResult } from './askBuyerPlanPresentation';
 import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
 import { hoaComplianceService } from '../hoaCompliance.service';
 import { priceFinalizationService } from '../priceFinalization.service';
-import { DoNothingSimulatorService } from '../doNothingSimulator.service';
+import { DoNothingSimulatorService, markDoNothingRunsStale } from '../doNothingSimulator.service';
 import { applianceOracleService } from '../applianceOracle.service';
 import { budgetForecasterService } from '../budgetForecaster.service';
 import { getProtectionContextDecisions } from '../protection/context';
@@ -169,101 +99,32 @@ import { mapGuidanceJourney } from '../guidanceEngine/guidanceMapper';
 import { getOrCreateQuoteComparisonWorkspace, getQuoteComparisonWorkspace, getWorkspaceComparability } from '../quoteComparison.service';
 import { upsertNotificationPreference } from '../notificationPreference.service';
 import { updateInsurancePolicy, updateWarranty } from '../home-management.service';
-import {
-  correctionDateString, correctionDisplay, correctionMoneyFromDollars, correctionMoneyToCents, correctionNormalized, correctionValueError,
-  type CorrectionFieldSpec, type CorrectionOption,
-} from './askCorrectionFields';
+import { correctionDateString, correctionDisplay, correctionMoneyFromDollars, correctionMoneyToCents, correctionNormalized, correctionValueError, type CorrectionFieldSpec, type CorrectionOption } from './askCorrectionFields';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../coverageAnalysis.service';
-import { markReplaceRepairStale } from '../replaceRepairAnalysis.service';
+import { markReplaceRepairStale, ReplaceRepairService } from '../replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../riskPremiumOptimizer.service';
-import { markDoNothingRunsStale } from '../doNothingSimulator.service';
-import { ReplaceRepairService } from '../replaceRepairAnalysis.service';
 import { homeReserveFundService } from '../homeReserveFund.service';
 import { BreakEvenService, type BreakEvenDTO } from '../breakEven.service';
 import { getAroundYourHome } from '../../propertyIntelligence/aroundYourHome.service';
 import { getPastHazardExposure } from '../../propertyIntelligence/pastHazardExposure.service';
 import { humanDate, money, readableCode, titleCase } from './askFormatting';
-import './handlers/statusBoard.handler';
-import { HOME_EVENT_CORRECTION_FIELDS, HomeEventCorrectionField } from './askHandlerSupport';
+import { AreaCaptureAnswerSchema, areaCaptureError, areaCapturePrompt, areaCaptureStateFrom, areaCaptureSubmitResult } from './handlers/propertySummary.handler';
+import { AREA_CAPTURE_MESSAGES, areaCaptureFallbackHref, areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, askCaptureRequest, askContextFingerprint, AskViewState, audienceApplicabilityResult, audienceTelemetryFor, BUYER_FINDING_DISPOSITION_LABELS, capabilityResult, captureFallbackHref, durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, expireIfSkillBindingChanged, formatOutcomeCents, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionField, HomeEventCorrectionInputSchema, homeEventCorrectionItemActions, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InspectionResolution, InspectionResolutionSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, isCapitalTimelineAnalysisStale, isValidDateEditInput, journeyContextFrom, loadRadarMatchForWrite, MaintenanceCompletionWorkflowInput, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskUpdateInputSchema, MaintenanceTaskWorkflowInput, MaintenanceTaskWorkflowInputSchema, mapPersistedExecution, MAX_RESULT_ITEMS, outcomeSummaryBlock, parseCapitalTimelineHorizonRequest, preservedExecutionHistory, propertyLabel, propertySummary, QuoteWorkspaceCommandInputSchema, RadarFeedbackInputSchema, RadarTaskAnswerSchema, RadarTaskInputSchema, RadarTaskTargetSchema, readablePropertyValue, recordAskAnswerTrustMetrics, RoomCreateInputSchema, RoomRenameInputSchema, safeTimezone, terminalStatus, WarrantyCorrectionInputSchema } from './askHandlerSupport';
+import { INSPECTION_RESOLUTION_DEFAULT, inspectionFindingVersion, inspectionResolutionEditableFields } from './handlers/inspection.handler';
+import { quoteWorkspaceContextVersion } from './handlers/quotes.handler';
+import { refinanceMonitorBlock, refinanceMonitorContextVersion } from './handlers/refinance.handler';
+import { EVENT_ADD_MESSAGE, eventAddResult, evidenceAttachResult, homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdInvitationResult, householdService, householdWorkflowVersion, ROOM_ADD_MESSAGE, ROOM_CORRECTION_FIELDS, ROOM_CREATE_CAPTURE_KEY, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomCreateContextVersion, roomCreateResult, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomRenameItemActions, roomTypeLabel, WARRANTY_ADD_MESSAGE, WARRANTY_CORRECTION_FIELDS, warrantyAddResult, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionItemActions, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from './handlers/homeRecordWrites.handler';
 import { SALE_READINESS_ITEM_STATUS_LABELS, saleCaseHref, sellerPrepItemContextVersion } from './handlers/sellHoldRent.handler';
-import './handlers/sellHoldRent.handler';
-export { sellHoldRentComparison, sellerPrepShelfFacts, SELLER_PREP_ITEM_ACTIONS, sellerPrepItemActions, saleCaseHref } from './handlers/sellHoldRent.handler';
-import { inventoryService, inventoryCategoryLabel, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_CORRECTION_FIELDS, INVENTORY_ROOM_LINK_FIELD, inventoryFieldCurrent, inventoryFieldValueError, inventoryRoomLinkOptions, inventoryCorrectionCombinedBlocker, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldDisplay, inventoryItemContextVersion, inventoryCorrectionItemActions, inventoryCorrectionConfirmation, INVENTORY_ADD_MESSAGE, INVENTORY_CREATE_CAPTURE_KEY, INVENTORY_NO_ROOM_VALUE, inventoryAddItemAction, inventoryCreateRooms, inventoryCreateContextVersion, inventoryCreateBlocker, inventoryItemCreateResult } from './handlers/inventory.handler';
-import './handlers/inventory.handler';
-export { inventoryItemCreateResult } from './handlers/inventory.handler';
-import { InventoryItemCorrectionInputSchema, homeEventCorrectionItemActions, InventoryCreateInputSchema, isValidDateEditInput } from './askHandlerSupport';
-export { HOME_EVENT_VISIBILITY_MESSAGE, isValidDateEditInput } from './askHandlerSupport';
-import './handlers/savingsOwnership.handler';
-import './handlers/coverage.handler';
-export { coverageComparisonStrip } from './handlers/coverage.handler';
-import { claimConflictDescription, CLAIM_TYPE_PATTERNS, ClaimFileWorkflowInputSchema, claimFileResult } from './handlers/claims.handler';
-import './handlers/claims.handler';
-export { claimConflictDescription, ClaimFileWorkflowInputSchema, claimFileResult, incidentContinuationFromRecords, CLAIM_TRANSITION_ACTIONS, claimItemActions } from './handlers/claims.handler';
-import { exactEntityMatch } from './askHandlerSupport';
-import { RADAR_USER_STATE_LABEL, RADAR_FEEDBACK_OPTIONS, radarEventHref, radarStateContextVersion, radarFeedbackConfirmation, RADAR_FEEDBACK_REVIEW_BODY, radarConfirmError, radarWriteReceipt, RADAR_TASK_CAPTURE_KEY, RADAR_PREFERENCES_CAPTURE_KEY, radarDateTimeLabel, radarTaskContextVersion, radarCaptureError, radarTaskFormResult, RADAR_TASK_CONFIRM_ERRORS, radarPreferencesContextVersion, radarPreferencesBodyFromAnswer, radarPreferenceLabels, radarPreferencesFormResult } from './handlers/homeEventRadar.handler';
-import './handlers/homeEventRadar.handler';
-export { RadarFeedLifecycleFilter, RadarFeedFamilyFilter, RadarFeedFilterState, parseRadarFeedFilters, radarFeedFilterMessage, RADAR_STATE_MESSAGES, RadarStateRequest, RADAR_MARK_DONE_MESSAGE, RADAR_FEEDBACK_MESSAGE, RADAR_TASK_MESSAGE, RADAR_PREFERENCES_MESSAGE, radarEventItemActions, radarStateTransition, radarStateContextVersion, homeEventRadarStateResult, radarZonedWallClockToUtc, radarTaskFormResult, radarPreferencesContextVersion, radarPreferencesBodyFromAnswer, radarPreferencesFormResult } from './handlers/homeEventRadar.handler';
-import { RadarFeedbackInputSchema, loadRadarMatchForWrite, RadarTaskTargetSchema, RadarTaskAnswerSchema, RadarTaskInputSchema } from './askHandlerSupport';
-import { hvacDecisionStartContextVersion, hvacDecisionThreadVersionFingerprint, HVAC_VERDICT_RANK, hvacDecisionStartResult } from './handlers/hvacDecision.handler';
-import './handlers/hvacDecision.handler';
-export { HvacSpecialistEngageDependencies, hvacSpecialistEngageResult } from './handlers/hvacDecision.handler';
-import { askContextFingerprint, formatOutcomeCents, outcomeSummaryBlock } from './askHandlerSupport';
-import { executeOperation, refreshAskSourceExecution, reconcileAskExecutionSideEffects } from './execution/executeOperation';
-import './execution/executeOperation';
-export { refreshAskExecutionAfterConflict, ASK_MUTATION_IMPACT_MAP, siblingOperationIdsForBuyerTaskMutation, selectSiblingRefreshTargets, capReconciledChildExecutions } from './execution/executeOperation';
-import { journeyContextFrom, audienceApplicabilityResult, asInputJson, propertyLabel, terminalStatus, audienceTelemetryFor, propertySummary, recordAskAnswerTrustMetrics, captureFallbackHref, preservedExecutionHistory, mapPersistedExecution, expireIfSkillBindingChanged } from './askHandlerSupport';
-export { preservedExecutionHistory } from './askHandlerSupport';
-import { buyerTaskConflictDescription, buyerFindingConflictDescription, buyerPlanHref, buyerTaskVersion } from './handlers/buyerPlan.handler';
-import './handlers/buyerPlan.handler';
-export { buyerTaskConflictDescription, buyerFindingConflictDescription, buyerJourneyStageLabel, parseBuyerDeadlineLaneFilter, selectBuyerDeadlineMilestones, buildBuyerDeadlinesViewState, BUYER_TASK_ITEM_ACTIONS, buyerTaskItemActions, buyerDeadlineTaskRow, buyerClosingDayProgress } from './handlers/buyerPlan.handler';
-import { durableFreeTextClarification } from './askHandlerSupport';
-import { maintenanceMoney, maintenanceWorkflowVersion, extractMaintenanceDueDate, maintenanceTaskCreateResult, maintenanceTaskVersion, maintenanceConflictDescription, maintenanceCompletionMatch, extractMaintenanceCompletionInput, maintenanceTaskCompleteResult, maintenanceUpdateAction, maintenanceUpdateSubject, maintenanceTaskUpdateResult, maintenanceMonitorSubject, loadAskViewState, maintenanceResult } from './handlers/maintenance.handler';
-import './handlers/maintenance.handler';
-export { mergeMaintenanceViewContinuation, maintenanceOpenTimingGroups, maintenanceShelfFacts, resolveMaintenanceCollectionOffset } from './handlers/maintenance.handler';
-import { MAX_RESULT_ITEMS, MaintenanceTaskWorkflowInputSchema, MaintenanceTaskWorkflowInput, MaintenanceCompletionWorkflowInputSchema, MaintenanceCompletionWorkflowInput, MaintenanceTaskUpdateInputSchema } from './askHandlerSupport';
-import { safeTimezone, BUYER_FINDING_DISPOSITION_LABELS, AskViewState } from './askHandlerSupport';
-import { askCaptureRequest, ensurePropertyAccess, isCapitalTimelineAnalysisStale, parseCapitalTimelineHorizonRequest } from './askHandlerSupport';
-export { isCapitalTimelineAnalysisStale, parseCapitalTimelineHorizonRequest } from './askHandlerSupport';
-import './handlers/hoaCompliance.handler';
-export { hoaComplianceFromView } from './handlers/hoaCompliance.handler';
-import './handlers/guidanceOverview.handler';
-export { guidanceJourneysFromView } from './handlers/guidanceOverview.handler';
-import './handlers/propertyBrief.handler';
-export { propertyBriefsFromView } from './handlers/propertyBrief.handler';
+import { INVENTORY_ADD_MESSAGE, INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_CREATE_CAPTURE_KEY, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryAddItemAction, inventoryCategoryLabel, inventoryCorrectionCombinedBlocker, inventoryCorrectionConfirmation, inventoryCorrectionItemActions, inventoryCreateBlocker, inventoryCreateContextVersion, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryItemCreateResult, inventoryRoomLinkOptions, inventoryService } from './handlers/inventory.handler';
+import { CLAIM_TYPE_PATTERNS, claimConflictDescription, claimFileResult, ClaimFileWorkflowInputSchema } from './handlers/claims.handler';
+import { RADAR_FEEDBACK_OPTIONS, RADAR_FEEDBACK_REVIEW_BODY, RADAR_PREFERENCES_CAPTURE_KEY, RADAR_TASK_CAPTURE_KEY, RADAR_TASK_CONFIRM_ERRORS, RADAR_USER_STATE_LABEL, radarCaptureError, radarConfirmError, radarDateTimeLabel, radarEventHref, radarFeedbackConfirmation, radarPreferenceLabels, radarPreferencesBodyFromAnswer, radarPreferencesContextVersion, radarPreferencesFormResult, radarStateContextVersion, radarTaskContextVersion, radarTaskFormResult, radarWriteReceipt } from './handlers/homeEventRadar.handler';
+import { HVAC_VERDICT_RANK, hvacDecisionStartContextVersion, hvacDecisionStartResult, hvacDecisionThreadVersionFingerprint } from './handlers/hvacDecision.handler';
+import { executeOperation, reconcileAskExecutionSideEffects, refreshAskSourceExecution } from './execution/executeOperation';
+import { buyerFindingConflictDescription, buyerPlanHref, buyerTaskConflictDescription, buyerTaskVersion } from './handlers/buyerPlan.handler';
+import { extractMaintenanceCompletionInput, extractMaintenanceDueDate, loadAskViewState, maintenanceCompletionMatch, maintenanceConflictDescription, maintenanceMoney, maintenanceMonitorSubject, maintenanceResult, maintenanceTaskCompleteResult, maintenanceTaskCreateResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceUpdateAction, maintenanceUpdateSubject, maintenanceWorkflowVersion } from './handlers/maintenance.handler';
 import { roomMapFacts } from './handlers/homeTimeline.handler';
-import './handlers/homeTimeline.handler';
-export { HOME_TIMELINE_ASK_LIMIT, roomMapFacts, homeTimelineCategory, homeTimelinePlacement, homeTimelineFromView } from './handlers/homeTimeline.handler';
-import './handlers/materialSpecs.handler';
-export { materialSpecsFromView } from './handlers/materialSpecs.handler';
-import './handlers/applianceOracleBudget.handler';
-export { oracleApplianceLabel, oracleLifespanItem, applianceFailureRiskFromView, maintenanceBudgetFromView } from './handlers/applianceOracleBudget.handler';
-import './handlers/doNothingSimulator.handler';
-export { doNothingSimulationFromView } from './handlers/doNothingSimulator.handler';
-import './handlers/priceFinalization.handler';
-export { PRICE_FINALIZATION_ASK_LIMIT, priceFinalizationsFromView } from './handlers/priceFinalization.handler';
-import './handlers/negotiationShield.handler';
-export { NEGOTIATION_SHIELD_ASK_LIMIT, negotiationShieldCasesFromView } from './handlers/negotiationShield.handler';
-import './handlers/homeUpgradePlanner.handler';
-export { homeUpgradeComparison, homeUpgradeScenariosFromView } from './handlers/homeUpgradePlanner.handler';
-import './handlers/diyProjectCenter.handler';
-export { DIY_ACTIVE_STATUSES, diyProjectsFromView } from './handlers/diyProjectCenter.handler';
-import './handlers/projectTracker.handler';
-export { trackedProjectsFromView } from './handlers/projectTracker.handler';
-import './handlers/servicePriceRadar.handler';
-export { SERVICE_PRICE_RADAR_ASK_LIMIT, servicePriceChecksFromView } from './handlers/servicePriceRadar.handler';
-import './handlers/aroundYourHome.handler';
-export { neighborhoodChangeFeedFromView } from './handlers/aroundYourHome.handler';
-import './handlers/homeRiskReplay.handler';
-export { pastHazardExposureFromView } from './handlers/homeRiskReplay.handler';
-import './handlers/homeHabitCoach.handler';
-export { HOME_HABITS_ASK_LIMIT, homeHabitsFromView } from './handlers/homeHabitCoach.handler';
-import './handlers/homeDigitalWill.handler';
-export { digitalWillHandoffProgress, digitalWillFromView } from './handlers/homeDigitalWill.handler';
-import './handlers/plantAdvisor.handler';
-export { plantCareOutlookFromView } from './handlers/plantAdvisor.handler';
-export { STATUS_BOARD_ASK_LIMIT, statusBoardFromView, statusBoardMeta, statusBoardShelfFacts } from './handlers/statusBoard.handler';
 import { HomeHabitCoachService } from '../homeHabitCoach/homeHabitCoachService';
-import { HomeDigitalWillService, evaluateHomeDigitalWillHandoffReadiness } from '../homeDigitalWill.service';
+import { evaluateHomeDigitalWillHandoffReadiness, HomeDigitalWillService } from '../homeDigitalWill.service';
 import { PlantCarePlannerService } from '../plantCarePlanner.service';
 import { listNegotiationShieldCasesForProperty } from '../negotiationShieldCaseList';
 import { HomeDigitalTwinScenarioService } from '../homeDigitalTwinScenario.service';
@@ -280,18 +141,13 @@ import { PermitTrackerService } from '../permitTracker.service';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import * as decisionThreadService from '../decisionPlatform/decisionThreadService';
 import * as decisionPreferenceService from '../decisionPlatform/decisionPreferenceService';
-import { decisionProgressBlock, whyNowBlock, recommendationChangeBlock, evidenceItemsForCanonicalFacts, assumptionsItemsForSnapshot, type HvacEvidenceSourceItem } from './decisionThreadPresentationBlocks';
-// FRD Sec22 decision (DECIDED 2026-09-17, Option B -- docs/architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md
-// SS4.8): sellHoldRentAnalysisResult reads an existing thread's progress via
-// the same read-only selectThread already used elsewhere (conversationalCapture.ts's
-// fetchActiveDecisionThreadContext) -- it never calls createOrResumeThread itself,
-// so thread creation stays exclusively SELL_HOLD_RENT_GOAL_CAPTURE's job (GOAL-003).
+import { assumptionsItemsForSnapshot, decisionProgressBlock, evidenceItemsForCanonicalFacts, recommendationChangeBlock, type HvacEvidenceSourceItem, whyNowBlock } from './decisionThreadPresentationBlocks';
 import { sellHoldRentDecisionFamilyAdapter } from '../decisionPlatform/domainSnapshotAdapters';
 import { HouseholdProfileNotEnabledError, PreferenceNotAuthorizedError } from '../decisionPlatform/decisionPreferenceService';
 import * as outcomeObservationService from '../decisionPlatform/outcomeObservationService';
-import { sourceTypeLabel as outcomeSourceTypeLabel } from '../decisionPlatform/outcomeObservationService';
+import { recordDocumentPromotionOutcome, sourceTypeLabel as outcomeSourceTypeLabel } from '../decisionPlatform/outcomeObservationService';
 import { listPropertyChanges } from '../../propertyChanges/propertyChange.service';
-import { sourceTypeLabel, buildChangeSummaryText } from '../decisionPlatform/homeChangeSummaryMapping';
+import { buildChangeSummaryText, sourceTypeLabel } from '../decisionPlatform/homeChangeSummaryMapping';
 import { buildPriorityListView } from '../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds, recordHomeActionUsefulnessFeedback } from '../decisionPlatform/homeActionUsefulnessFeedback.service';
 import { recordTypedFeedback } from '../feedback/typedFeedback.service';
@@ -305,18 +161,11 @@ import { suppressRepeatedAskSuggestions } from './askSuggestionPolicy';
 import { enterAskExecutionContext, getAskPropertyTimezone } from './askExecutionContext';
 import { synthesizeAskResult } from './askResultSynthesis.service';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
-import {
-  ASK_OPERATION_CAPABILITY,
-  ASK_CAPABILITY_UNIQUE_OPERATION,
-} from '../intelligence/capabilitySkillGuidanceBridge.registry';
+import { ASK_CAPABILITY_UNIQUE_OPERATION, ASK_OPERATION_CAPABILITY } from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import { resolveHierarchicalSkillRouting, type SkillRoutingOutcome } from '../skills/skillRouter';
 import { getSkillAdapter } from '../skills/adapters/skillAdapterRegistry';
 import { buildSkillExecutionBinding, validateSkillExecutionBinding } from '../skills/skillExecutionBinding';
-import {
-  buildSkillExecutionTelemetry,
-  createSkillExecutionTimingTrace,
-  type SkillExecutionTimingTrace,
-} from '../skills/skillExecutionTelemetry';
+import { buildSkillExecutionTelemetry, createSkillExecutionTimingTrace, type SkillExecutionTimingTrace } from '../skills/skillExecutionTelemetry';
 import { resolveSkillHandoffSuggestion } from '../skills/skillHandoff';
 import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
 import { buildFocusedHomeActionGuidance, focusedHomeActionCategory, focusedHomeActionQuestion, focusedOperationForLaunchContext } from './askFocusedGuidance';
@@ -346,15 +195,83 @@ import { transitionWorkItem } from '../../modules/homeOperations/application/tra
 import { assertUserWorkItemTransition } from '../../modules/homeOperations/domain/userGovernance';
 import { snoozeWorkItem } from '../../modules/homeOperations/application/snoozeWorkItem.usecase';
 import { completeAcceptedOperationalWorkItem } from '../homeActionCompletion.service';
-import { recordDocumentPromotionOutcome } from '../decisionPlatform/outcomeObservationService';
 import { resolveWorkItemRecommendationSnapshotId } from '../decisionPlatform/homeActionDecisionLineage';
+import './handlers/statusBoard.handler';
+export { HOME_EVENT_VISIBILITY_MESSAGE, InspectionResolutionSchema, isCapitalTimelineAnalysisStale, isValidDateEditInput, parseCapitalTimelineHorizonRequest, preservedExecutionHistory } from './askHandlerSupport';
+import './handlers/homeActions.handler';
+import './handlers/propertySummary.handler';
+import './handlers/capitalPlanning.handler';
+import './handlers/inspection.handler';
+import './handlers/documents.handler';
+import './handlers/quotes.handler';
+import './handlers/refinance.handler';
+import './handlers/homeRecordWrites.handler';
+import './handlers/sellHoldRent.handler';
+import './handlers/inventory.handler';
+import './handlers/savingsOwnership.handler';
+import './handlers/coverage.handler';
+import './handlers/claims.handler';
+import './handlers/homeEventRadar.handler';
+import './handlers/hvacDecision.handler';
+import './execution/executeOperation';
+import './handlers/buyerPlan.handler';
+import './handlers/maintenance.handler';
+import './handlers/hoaCompliance.handler';
+import './handlers/guidanceOverview.handler';
+import './handlers/propertyBrief.handler';
+import './handlers/homeTimeline.handler';
+import './handlers/materialSpecs.handler';
+import './handlers/applianceOracleBudget.handler';
+import './handlers/doNothingSimulator.handler';
+import './handlers/priceFinalization.handler';
+import './handlers/negotiationShield.handler';
+import './handlers/homeUpgradePlanner.handler';
+import './handlers/diyProjectCenter.handler';
+import './handlers/projectTracker.handler';
+import './handlers/servicePriceRadar.handler';
+import './handlers/aroundYourHome.handler';
+import './handlers/homeRiskReplay.handler';
+import './handlers/homeHabitCoach.handler';
+import './handlers/homeDigitalWill.handler';
+import './handlers/plantAdvisor.handler';
+export { executeOperationCore, executeOperation, refreshAskExecutionAfterConflict, refreshAskSourceExecution, ASK_MUTATION_IMPACT_MAP, siblingOperationIdsForBuyerTaskMutation, selectSiblingRefreshTargets, capReconciledChildExecutions, reconcileAskExecutionSideEffects } from './execution/executeOperation';
+export { oracleApplianceLabel, oracleLifespanItem, applianceFailureRiskFromView, maintenanceBudgetFromView } from './handlers/applianceOracleBudget.handler';
+export { neighborhoodChangeFeedFromView } from './handlers/aroundYourHome.handler';
+export { buyerTaskConflictDescription, buyerFindingConflictDescription, buyerPlanHref, buyerJourneyStageLabel, parseBuyerDeadlineLaneFilter, selectBuyerDeadlineMilestones, buildBuyerDeadlinesViewState, BUYER_TASK_ITEM_ACTIONS, buyerTaskItemActions, buyerDeadlineTaskRow, buyerTaskVersion, buyerClosingDayProgress } from './handlers/buyerPlan.handler';
+export { capitalTimelineBlock, renovationReadinessProgress } from './handlers/capitalPlanning.handler';
+export { claimConflictDescription, CLAIM_TYPE_PATTERNS, ClaimFileWorkflowInputSchema, claimFileResult, incidentContinuationFromRecords, CLAIM_TRANSITION_ACTIONS, claimItemActions } from './handlers/claims.handler';
+export { coverageComparisonStrip } from './handlers/coverage.handler';
+export { DIY_ACTIVE_STATUSES, diyProjectsFromView } from './handlers/diyProjectCenter.handler';
+export { doNothingSimulationFromView } from './handlers/doNothingSimulator.handler';
+export { guidanceJourneysFromView } from './handlers/guidanceOverview.handler';
+export { hoaComplianceFromView } from './handlers/hoaCompliance.handler';
+export { isAllPropertyAttentionRequest, buildAllPropertyHomeActionSection, formatUnavailableHomeActionProducers, homeActionShelfFacts } from './handlers/homeActions.handler';
+export { digitalWillHandoffProgress, digitalWillFromView } from './handlers/homeDigitalWill.handler';
+export { parseRadarFeedFilters, radarFeedFilterMessage, RADAR_STATE_MESSAGES, RADAR_MARK_DONE_MESSAGE, RADAR_FEEDBACK_MESSAGE, RADAR_TASK_MESSAGE, RADAR_PREFERENCES_MESSAGE, RADAR_USER_STATE_LABEL, RADAR_FEEDBACK_OPTIONS, radarEventHref, radarEventItemActions, radarStateTransition, radarStateContextVersion, homeEventRadarStateResult, radarFeedbackConfirmation, RADAR_FEEDBACK_REVIEW_BODY, radarConfirmError, radarWriteReceipt, RADAR_TASK_CAPTURE_KEY, RADAR_PREFERENCES_CAPTURE_KEY, radarZonedWallClockToUtc, radarDateTimeLabel, radarTaskContextVersion, radarCaptureError, radarTaskFormResult, RADAR_TASK_CONFIRM_ERRORS, radarPreferencesContextVersion, radarPreferencesBodyFromAnswer, radarPreferenceLabels, radarPreferencesFormResult, RadarFeedLifecycleFilter, RadarFeedFamilyFilter, RadarFeedFilterState, RadarStateRequest } from './handlers/homeEventRadar.handler';
+export { HOME_HABITS_ASK_LIMIT, homeHabitsFromView } from './handlers/homeHabitCoach.handler';
+export { householdService, householdWorkflowVersion, householdInvitationResult, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventCorrectionBlocker, homeEventContextVersion, homeEventCorrectionConfirmation, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, WARRANTY_CORRECTION_FIELDS, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch, warrantyContextVersion, warrantyCorrectionItemActions, warrantyCorrectionConfirmation, warrantyAddResult, eventAddResult, evidenceAttachResult, roomTypeLabel, ROOM_CORRECTION_FIELDS, roomFieldCurrent, roomFieldDisplay, roomContextVersion, roomCorrectionValueError, roomCorrectionNormalized, roomRenameItemActions, roomRenameConfirmation, EVENT_ADD_MESSAGE, WARRANTY_ADD_MESSAGE, ROOM_ADD_MESSAGE, ROOM_CREATE_CAPTURE_KEY, roomCreateContextVersion, roomCreateResult, homeEventsServiceForCapture } from './handlers/homeRecordWrites.handler';
+export { pastHazardExposureFromView } from './handlers/homeRiskReplay.handler';
+export { HOME_TIMELINE_ASK_LIMIT, roomMapFacts, homeTimelineCategory, homeTimelinePlacement, homeTimelineFromView } from './handlers/homeTimeline.handler';
+export { homeUpgradeComparison, homeUpgradeScenariosFromView } from './handlers/homeUpgradePlanner.handler';
+export { hvacDecisionStartContextVersion, hvacDecisionThreadVersionFingerprint, HVAC_VERDICT_RANK, hvacDecisionStartResult, hvacSpecialistEngageResult, HvacSpecialistEngageDependencies } from './handlers/hvacDecision.handler';
+export { INSPECTION_FINDING_ACTIONS, inspectionFindingItemActions, inspectionFindingActionAllowed, inspectionFindingItemActionsFor, INSPECTION_FINDING_BATCH_ACTIONS, INSPECTION_FINDING_DECK_PRESENTATION, inspectionFindingDeckFacts, inspectionHubHref, INSPECTION_RESOLUTION_DEFAULT, inspectionResolutionEditableFields, inspectionFindingVersion } from './handlers/inspection.handler';
+export { inventoryService, inventoryCategoryLabel, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_CORRECTION_FIELDS, INVENTORY_ROOM_LINK_FIELD, inventoryFieldCurrent, inventoryFieldValueError, inventoryRoomLinkOptions, inventoryCorrectionCombinedBlocker, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldDisplay, inventoryItemContextVersion, inventoryCorrectionItemActions, inventoryCorrectionConfirmation, INVENTORY_ADD_MESSAGE, INVENTORY_CREATE_CAPTURE_KEY, INVENTORY_NO_ROOM_VALUE, inventoryAddItemAction, inventoryCreateRooms, inventoryCreateContextVersion, inventoryCreateBlocker, inventoryItemCreateResult } from './handlers/inventory.handler';
+export { maintenanceMoney, maintenanceWorkflowVersion, extractMaintenanceDueDate, maintenanceTaskCreateResult, maintenanceTaskVersion, maintenanceConflictDescription, maintenanceCompletionMatch, extractMaintenanceCompletionInput, maintenanceTaskCompleteResult, maintenanceUpdateAction, maintenanceUpdateSubject, maintenanceTaskUpdateResult, maintenanceMonitorSubject, loadAskViewState, mergeMaintenanceViewContinuation, maintenanceOpenTimingGroups, maintenanceShelfFacts, resolveMaintenanceCollectionOffset, maintenanceResult } from './handlers/maintenance.handler';
+export { materialSpecsFromView } from './handlers/materialSpecs.handler';
+export { NEGOTIATION_SHIELD_ASK_LIMIT, negotiationShieldCasesFromView } from './handlers/negotiationShield.handler';
+export { plantCareOutlookFromView } from './handlers/plantAdvisor.handler';
+export { PRICE_FINALIZATION_ASK_LIMIT, priceFinalizationsFromView } from './handlers/priceFinalization.handler';
+export { trackedProjectsFromView } from './handlers/projectTracker.handler';
+export { propertyBriefsFromView } from './handlers/propertyBrief.handler';
+export { propertyCompletenessProgress, areaCaptureRowActions, areaCaptureStateFrom, AreaCaptureAnswerSchema, areaCaptureError, areaCapturePrompt, areaCaptureSubmitResult } from './handlers/propertySummary.handler';
+export { areaCaptureFallbackHref } from './askHandlerSupport';
+export { quoteWorkspaceContextVersion, quoteComparisonWorkspaceHref, QUOTE_LOWEST_PRICE_BADGE, quoteReviewComparison } from './handlers/quotes.handler';
+export { refinanceMonitorContextVersion, parseRefinanceScenarioEdit, refinanceMonitorBlock, breakEvenHorizonYears, breakEvenAnalysisFromDto, refinanceScenarioComparison } from './handlers/refinance.handler';
+export { SALE_READINESS_ITEM_STATUS_LABELS, sellHoldRentComparison, sellerPrepShelfFacts, SELLER_PREP_ITEM_ACTIONS, sellerPrepItemActions, saleCaseHref, sellerPrepItemContextVersion } from './handlers/sellHoldRent.handler';
+export { SERVICE_PRICE_RADAR_ASK_LIMIT, servicePriceChecksFromView } from './handlers/servicePriceRadar.handler';
+export { STATUS_BOARD_ASK_LIMIT, statusBoardShelfFacts, statusBoardMeta, statusBoardFromView } from './handlers/statusBoard.handler';
 
-const refinanceRadarService = new RefinanceRadarService();
-const mortgageRateService = new MortgageRateService();
-const householdService = new HouseholdService();
 const replaceRepairService = new ReplaceRepairService();
-const homeCapitalTimelineService = new HomeCapitalTimelineService();
-const permitTrackerService = new PermitTrackerService();
 const materialSpecService = new MaterialSpecService();
 
 
@@ -373,21 +290,12 @@ const RefinanceProfileCaptureSchema = z.object({
   monthlyPaymentUsd: z.number().positive().max(1_000_000).optional(),
 }).strict();
 
-const HouseholdInvitationInputSchema = z.object({
-  email: z.string().trim().email().transform((value) => value.toLowerCase()),
-  role: z.enum([HouseholdRole.CONTRIBUTOR, HouseholdRole.VIEWER]),
-}).strict();
-type InvitableHouseholdRole = z.infer<typeof HouseholdInvitationInputSchema>['role'];
 
 
 
 
 
 
-const QuoteWorkspaceCommandInputSchema = z.object({
-  serviceCategory: z.nativeEnum(ServiceCategory),
-  scopeSummary: z.string().trim().min(3).max(1000),
-}).strict();
 
 const GuidanceJourneyCommandInputSchema = z.object({
   scopeCategory: z.enum(['ITEM', 'SERVICE']),
@@ -484,10 +392,6 @@ function askFailureBlocks(error: unknown, retryable: boolean): AskPresentationBl
 
 
 
-async function quoteWorkspaceContextVersion(propertyId: string): Promise<string> {
-  const workspaces = await prisma.quoteComparisonWorkspace.findMany({ where: { propertyId }, select: { id: true, status: true, updatedAt: true }, orderBy: { id: 'asc' } });
-  return askContextFingerprint(workspaces.map((workspace) => [workspace.id, workspace.status, workspace.updatedAt.toISOString()]));
-}
 
 async function guidanceJourneyContextVersion(propertyId: string, input: z.infer<typeof GuidanceJourneyCommandInputSchema>): Promise<string> {
   if (input.inventoryItemId) {
@@ -500,10 +404,6 @@ async function guidanceJourneyContextVersion(propertyId: string, input: z.infer<
 
 
 
-async function refinanceMonitorContextVersion(userId: string, propertyId: string): Promise<string> {
-  const [preference, snapshot] = await Promise.all([getRefinanceAlertPreference(userId, propertyId), mortgageRateService.getLatestSnapshot()]);
-  return askContextFingerprint({ preference, snapshotId: snapshot?.id ?? null, snapshotDate: snapshot?.date ?? null });
-}
 
 
 
@@ -515,131 +415,9 @@ async function enterAskPropertyTimezoneContext(propertyId: string | null | undef
   enterAskExecutionContext({ propertyTimezone: property?.timezone });
 }
 
-async function householdWorkflowVersion(propertyId: string): Promise<string> {
-  const [members, invites] = await Promise.all([
-    prisma.householdMember.findMany({
-      where: { propertyId }, orderBy: { id: 'asc' },
-      select: { id: true, role: true, isPrimaryOwner: true, updatedAt: true },
-    }),
-    prisma.householdInvite.findMany({
-      where: { propertyId }, orderBy: { id: 'asc' },
-      select: { id: true, role: true, status: true, createdAt: true, acceptedAt: true, revokedAt: true, expiresAt: true },
-    }),
-  ]);
-  return createHash('sha256').update(JSON.stringify({
-    propertyId,
-    members,
-    invites,
-  })).digest('hex');
-}
 
-function invitationRoleCopy(role: InvitableHouseholdRole): string {
-  return role === HouseholdRole.CONTRIBUTOR
-    ? 'Contributor — can view records, complete tasks, log events, and add inventory'
-    : 'Viewer — read-only access; cannot create or modify home records';
-}
 
-function extractHouseholdInvitationInput(message: string): Partial<z.input<typeof HouseholdInvitationInputSchema>> {
-  const email = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
-  const role = /\b(viewer|read[ -]?only)\b/i.test(message)
-    ? HouseholdRole.VIEWER
-    : /\b(contributor|edit(?:or)?|help (?:manage|maintain)|complete tasks?)\b/i.test(message)
-      ? HouseholdRole.CONTRIBUTOR
-      : undefined;
-  return { ...(email ? { email } : {}), ...(role ? { role } : {}) };
-}
 
-async function householdInvitationResult(
-  userId: string,
-  propertyId: string,
-  message: string,
-  suppliedInput?: z.infer<typeof HouseholdInvitationInputSchema>,
-): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  const householdHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/household`;
-  if (access.role !== HouseholdRole.OWNER) {
-    return {
-      status: 'BLOCKED',
-      reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{
-        type: 'SUMMARY', id: 'household-invite-owner-required', title: 'A household owner needs to send this invitation',
-        body: 'Inviting someone changes access to this home’s records. Contributors and viewers can review their current access, but only an owner can choose a role and send an invitation.',
-        tone: 'CAUTION', actions: [{ id: 'open-household', label: 'Review household access', href: householdHref, style: 'SECONDARY' }],
-      }],
-      suggestions: ['What can my current household role do?'],
-    };
-  }
-
-  const contextVersion = await householdWorkflowVersion(propertyId);
-  const extracted = suppliedInput ?? extractHouseholdInvitationInput(message);
-  const parsed = HouseholdInvitationInputSchema.safeParse(extracted);
-  if (!parsed.success) {
-    const currentAnswer = {
-      ...(typeof extracted.email === 'string' ? { email: extracted.email } : {}),
-      ...(extracted.role ? { role: extracted.role } : {}),
-    };
-    return {
-      status: 'NEEDS_CONTEXT', reasonCode: 'HOUSEHOLD_INVITATION_INPUT_REQUIRED', contextVersion,
-      parameters: { householdContextVersion: contextVersion },
-      blocks: [{
-        type: 'SUMMARY', id: 'household-invite-input', title: 'Choose who to invite and what they can do',
-        body: 'Use Contributor for someone who helps maintain the home record. Use Viewer for read-only access. An invitation does not establish a legal ownership interest or imply a family relationship.',
-        tone: 'DEFAULT', actions: [],
-      }],
-      captureRequests: [{
-        requirementId: `household-invite-${contextVersion.slice(0, 20)}`,
-        captureKey: 'HOUSEHOLD_INVITATION_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
-        title: 'Household invitation details', question: 'Who should receive access, and which role should they have?',
-        helpText: 'The email and role are used only for this invitation workflow. They are not saved as inferred household facts.',
-        inputSchema: { type: 'GROUP', fields: [
-          { key: 'email', label: 'Email address', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 254 } },
-          { key: 'role', label: 'Access role', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
-            { label: 'Contributor — can help manage the home', value: HouseholdRole.CONTRIBUTOR },
-            { label: 'Viewer — read-only access', value: HouseholdRole.VIEWER },
-          ] } },
-        ] },
-        currentAnswer, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used for this household invitation',
-        confirmationText: null, expectedContextVersion: contextVersion,
-      }],
-      suggestions: ['Open household settings instead'],
-    };
-  }
-
-  const property = await propertySummary(propertyId);
-  const confirmationVersion = 1;
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOUSEHOLD_INVITATION_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: {
-      inviteEmail: parsed.data.email,
-      inviteRole: parsed.data.role,
-      householdContextVersion: contextVersion,
-      confirmationVersion,
-      confirmationExpiresAt: expiresAt.toISOString(),
-    },
-    blocks: [{
-      type: 'SUMMARY', id: 'household-invite-review', title: 'Review the household invitation',
-      body: 'No invitation has been created yet. Confirm the recipient and role below. The recipient must accept before access becomes active.',
-      tone: 'DEFAULT', actions: [{ id: 'manage-household', label: 'Open household settings', href: householdHref, style: 'SECONDARY' }],
-    }],
-    confirmation: {
-      confirmationId: `household-invite-${propertyId}-${confirmationVersion}`,
-      version: confirmationVersion,
-      title: 'Send this household invitation?',
-      description: 'This creates a seven-day invitation for the selected home. Access begins only after the recipient accepts it.',
-      fields: [
-        { label: 'Home', value: property?.label ?? 'Selected home' },
-        { label: 'Recipient', value: parsed.data.email },
-        { label: 'Role', value: invitationRoleCopy(parsed.data.role) },
-        { label: 'Legal ownership', value: 'Not changed by this invitation' },
-      ],
-      editableFields: [], confirmLabel: 'Send invitation',
-      consentText: 'I confirm this recipient and access role are correct and authorize ContractToCozy to create the invitation.',
-      expiresAt: expiresAt.toISOString(),
-    },
-    suggestions: [],
-  };
-}
 
 
 
@@ -680,195 +458,13 @@ export function saleReadinessItemConflictDescription(item: { title: string; stat
 
 
 
-function serviceCategoryFromMessage(message: string): ServiceCategory | null {
-  const categories: Array<[RegExp, ServiceCategory]> = [
-    [/\b(?:roof|roofing)\b/i, ServiceCategory.ROOFING], [/\bplumb/i, ServiceCategory.PLUMBING],
-    [/\belectric/i, ServiceCategory.ELECTRICAL], [/\b(?:hvac|heating|cooling|furnace|air conditioner)\b/i, ServiceCategory.HVAC],
-    [/\b(?:clean|cleaning)\b/i, ServiceCategory.CLEANING], [/\b(?:paint|painting)\b/i, ServiceCategory.PAINTING],
-    [/\b(?:landscap|yard)\b/i, ServiceCategory.LANDSCAPING], [/\b(?:appliance)\b/i, ServiceCategory.APPLIANCE_REPAIR],
-    [/\b(?:inspect|inspection)\b/i, ServiceCategory.INSPECTION], [/\b(?:warranty)\b/i, ServiceCategory.WARRANTY],
-    [/\b(?:insurance|coverage)\b/i, ServiceCategory.INSURANCE],
-  ];
-  return categories.find(([pattern]) => pattern.test(message))?.[1] ?? null;
-}
 
 
-async function quoteComparisonCreateResult(propertyId: string, message: string): Promise<AskOperationResult> {
-  const serviceCategory = serviceCategoryFromMessage(message);
-  if (!serviceCategory) return {
-    status: 'NEEDS_CLARIFICATION', reasonCode: 'QUOTE_COMPARISON_SCOPE_REQUIRED',
-    ...durableFreeTextClarification('QUOTE_COMPARISON_CREATE', 'What service are the quotes for?'),
-    blocks: [{ type: 'SUMMARY', id: 'quote-workspace-scope', title: 'What service are the quotes for?', body: 'Name the service—such as roofing, plumbing, HVAC, electrical, cleaning, or painting—before creating the comparison workspace.', tone: 'CAUTION', actions: [] }],
-    suggestions: ['Create a quote comparison for roofing', 'Create a quote comparison for plumbing'],
-  };
-  const input = QuoteWorkspaceCommandInputSchema.parse({ serviceCategory, scopeSummary: message.slice(0, 1000) });
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  const contextVersion = await quoteWorkspaceContextVersion(propertyId);
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_COMPARISON_CONFIRMATION_REQUIRED', contextVersion, parameters: { quoteWorkspace: input, quoteWorkspaceContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
-    blocks: [{ type: 'SUMMARY', id: 'quote-workspace-review', title: 'Review this comparison workspace', body: 'No workspace or quote has been created yet.', tone: 'DEFAULT', actions: [] }],
-    confirmation: { confirmationId: `quote-workspace-${propertyId}-1`, version: 1, title: 'Create this quote comparison?', description: 'This creates one canonical draft workspace; it does not select a provider or accept a quote.', fields: [{ label: 'Service', value: serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Scope', value: input.scopeSummary }], editableFields: [], confirmLabel: 'Create workspace', consentText: 'I authorize creating this draft comparison workspace for the selected home.', expiresAt: expiresAt.toISOString() }, suggestions: [],
-  };
-}
 
-// D05 fix (docs/architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md):
-// this href's own `?workspaceId=` was never read by the frontend page at
-// all -- confirmed by direct read of QuoteComparisonWorkspaceClient.tsx: it
-// seeds a `workspaceId` state from a DIFFERENT param name
-// (`quoteComparisonWorkspaceId`), then immediately overwrites that state
-// regardless, since `loadQuotes` unconditionally calls
-// getOrCreateQuoteComparisonWorkspace(propertyId, { serviceCategory,
-// inventoryItemId: itemId, ... }) -- a lookup keyed by scope, not by id.
-// Neither this link's dead `workspaceId` nor a corrected
-// `quoteComparisonWorkspaceId` would change what workspace loads. The fix
-// is to pass what the page's own lookup actually keys by, using its own
-// param names (`serviceCategory`/`itemId`), so a property with more than
-// one open workspace lands back on the SAME one Ask was just discussing
-// instead of silently resolving (or creating) a different one. A workspace
-// with neither field set (a "general," unscoped workspace) falls back to
-// the old `?workspaceId=` form -- not a fix for that case (the page's own
-// get-or-create lookup has no id-based path at all today), but not a
-// regression either, since that case had nothing this href could correct.
-// Pure and exported for direct unit testing.
-export function quoteComparisonWorkspaceHref(
-  baseHref: string,
-  workspace: { id: string; serviceCategory: string | null; inventoryItemId: string | null },
-): string {
-  const scopeParams = new URLSearchParams();
-  if (workspace.serviceCategory) scopeParams.set('serviceCategory', workspace.serviceCategory);
-  if (workspace.inventoryItemId) scopeParams.set('itemId', workspace.inventoryItemId);
-  return scopeParams.size
-    ? `${baseHref}?${scopeParams.toString()}`
-    : `${baseHref}?workspaceId=${encodeURIComponent(workspace.id)}`;
-}
 
-const QUOTE_STALE_AFTER_DAYS = 90;
-const quoteDate = (value: Date) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(value);
-const quoteReadinessLabel = (stage: unknown) => String(stage ?? 'Needs review').toLowerCase().replace(/_/g, ' ');
-export const QUOTE_LOWEST_PRICE_BADGE = {
-  label: 'Lowest price',
-  policyCode: 'QUOTE_LOWEST_PRICE_SCOPE_ALIGNED',
-  basis: 'The lowest recorded total among the comparison-ready proposals, which cover the same confirmed scope. It is not a recommendation: check exclusions, warranty and payment terms.',
-} as const;
 
-type QuoteForReview = {
-  id: string; vendorName: string; quoteAmount: unknown; currency?: string | null; decision?: string | null;
-  readinessStage?: string | null; scopeSummary?: string | null; serviceLabelRaw?: string | null;
-  quoteDate?: Date | null; expirationDate?: Date | null; missingFactsJson?: unknown;
-  terms?: Array<{ type: string; value: string }> | null;
-};
 
-/**
- * IW-PRES-016 (FRD v1.76). The quotes still in play (every quote the homeowner has not rejected) as a comparison
- * strip, or null when there are fewer than two or more than four of them; the caller then keeps the table. The only
- * badge is "Lowest price", and only when the workspace is COMPARABLE, among its comparison-ready quotes, in one
- * currency and without a tie; its Price attribute is then the declared leading value. Freshness mirrors the
- * comparison page (expired, no quote date, or over 90 days old is a caution). Pure and exported for tests.
- */
-export function quoteReviewComparison(
-  quotes: QuoteForReview[],
-  comparability: { status: string; eligibleQuoteIds: string[] },
-  now: Date = new Date(),
-): Extract<AskPresentationBlock, { type: 'COMPARISON' }> | null {
-  const active = quotes.filter((quote) => quote.decision !== 'REJECTED');
-  if (active.length < 2 || active.length > 4) return null;
-  const rejected = quotes.length - active.length;
-  const amountOf = (quote: QuoteForReview) => {
-    const value = Number(quote.quoteAmount);
-    return Number.isFinite(value) && value >= 0 ? { value, currency: (quote.currency ?? 'USD').toUpperCase() } : null;
-  };
-  let lowestId: string | null = null;
-  if (comparability.status === 'COMPARABLE') {
-    const eligible = new Set(comparability.eligibleQuoteIds);
-    const priced = active.filter((quote) => eligible.has(quote.id)).map((quote) => ({ id: quote.id, amount: amountOf(quote) }));
-    const currencies = new Set(priced.map((entry) => entry.amount?.currency));
-    if (priced.length >= 2 && priced.every((entry) => entry.amount) && currencies.size === 1) {
-      const min = Math.min(...priced.map((entry) => entry.amount!.value));
-      const atMin = priced.filter((entry) => entry.amount!.value === min);
-      if (atMin.length === 1) lowestId = atMin[0].id;
-    }
-  }
-  const ready = new Set(comparability.eligibleQuoteIds);
-  return {
-    type: 'COMPARISON', id: 'quote-review-table', title: 'Recorded proposals',
-    description: `Ask preserves the canonical readiness state and does not select a provider.${rejected ? ` ${rejected} rejected ${rejected === 1 ? 'quote is' : 'quotes are'} not shown; open the quote comparison to see ${rejected === 1 ? 'it' : 'them'}.` : ''}`,
-    options: active.map((quote) => {
-      const amount = amountOf(quote);
-      const leading = quote.id === lowestId;
-      const expired = quote.expirationDate ? quote.expirationDate.getTime() < now.getTime() : false;
-      const ageDays = quote.quoteDate ? Math.floor((now.getTime() - quote.quoteDate.getTime()) / 86_400_000) : null;
-      const freshness = expired
-        ? { value: `Expired ${quoteDate(quote.expirationDate!)}`, tone: 'CAUTION' as const }
-        : ageDays === null
-          ? { value: 'Quote date not recorded', tone: 'CAUTION' as const }
-          : ageDays > QUOTE_STALE_AFTER_DAYS
-            ? { value: `Quoted ${quoteDate(quote.quoteDate!)}, over ${QUOTE_STALE_AFTER_DAYS} days ago`, tone: 'CAUTION' as const }
-            : { value: `Quoted ${quoteDate(quote.quoteDate!)}`, tone: 'DEFAULT' as const };
-      const scope = quote.scopeSummary ?? quote.serviceLabelRaw ?? null;
-      const warranty = (quote.terms ?? []).find((term) => term.type === 'WARRANTY')?.value ?? null;
-      const missing = Array.isArray(quote.missingFactsJson)
-        ? (quote.missingFactsJson as Array<{ label?: unknown }>).map((fact) => (typeof fact?.label === 'string' ? fact.label : null)).filter((label): label is string => Boolean(label))
-        : [];
-      return {
-        id: quote.id, label: quote.vendorName, summary: null,
-        ...(leading ? { badges: [{ ...QUOTE_LOWEST_PRICE_BADGE }] } : {}),
-        amount,
-        attributes: [
-          { label: 'Price', value: amount ? `${amount.currency} ${amount.value.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : 'Price not recorded', tone: amount ? 'DEFAULT' as const : 'CAUTION' as const, ...(leading ? { leading: true } : {}) },
-          ready.has(quote.id)
-            ? { label: 'Readiness', value: 'Comparison ready', tone: 'POSITIVE' as const }
-            : { label: 'Readiness', value: quoteReadinessLabel(quote.readinessStage), tone: 'CAUTION' as const },
-          { label: 'Scope', value: scope ?? 'Scope not confirmed', tone: scope ? 'DEFAULT' as const : 'CAUTION' as const },
-          { label: 'Warranty', value: warranty ?? 'Not recorded', tone: 'DEFAULT' as const },
-          { label: 'Freshness', ...freshness },
-          missing.length
-            ? { label: 'Missing facts', value: missing.slice(0, 3).join(', ') + (missing.length > 3 ? ` and ${missing.length - 3} more` : ''), tone: 'CAUTION' as const }
-            : { label: 'Missing facts', value: 'None', tone: 'DEFAULT' as const },
-        ],
-        actions: [],
-      };
-    }),
-    actions: [],
-  };
-}
 
-async function quoteComparisonReviewResult(propertyId: string): Promise<AskOperationResult> {
-  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true } });
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/quote-comparison`;
-  if (!latest) return {
-    status: 'READY_WITH_LIMITATIONS', reasonCode: 'QUOTE_COMPARISON_NOT_STARTED',
-    blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: 'Create a workspace and add at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.', tone: 'CAUTION', actions: [{ id: 'create-comparison', label: 'Create comparison workspace', href, style: 'PRIMARY' }] }],
-    suggestions: ['Create a quote comparison workspace for roofing bids'],
-  };
-  const [workspace, comparability] = await Promise.all([
-    getQuoteComparisonWorkspace(propertyId, latest.id), getWorkspaceComparability(propertyId, latest.id),
-  ]);
-  if (!workspace) throw new Error('Quote comparison workspace is unavailable.');
-  const quotes = (workspace.quotes ?? []) as Array<any>;
-  const comparisonReady = new Set(comparability.eligibleQuoteIds);
-  const amounts = quotes.map((quote) => Number(quote.quoteAmount)).filter(Number.isFinite);
-  const lowest = amounts.length ? Math.min(...amounts) : null;
-  const highest = amounts.length ? Math.max(...amounts) : null;
-  const workspaceHref = quoteComparisonWorkspaceHref(href, workspace);
-  const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'quote-review-summary', title: quotes.length < 2 ? 'Add another proposal before comparing' : comparability.status === 'COMPARABLE' ? `${quotes.length} proposals are ready for a scope-aligned review` : 'The recorded proposals are not safely comparable yet',
-    body: `${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
-    tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-comparison', label: 'Open quote comparison', href: workspaceHref, style: 'PRIMARY' }],
-  }];
-  // IW-PRES-016 (FRD v1.76): two to four quotes still in play render as a comparison strip; one quote, or five and
-  // more, keep the table below with every quote.
-  const strip = quoteReviewComparison(quotes, comparability);
-  if (strip) blocks.push(strip);
-  else if (quotes.length) blocks.push({
-    type: 'TABLE', id: 'quote-review-table', title: 'Recorded proposals', description: 'Ask preserves the canonical readiness state and does not select a provider.',
-    columns: [{ key: 'vendor', label: 'Provider' }, { key: 'amount', label: 'Price' }, { key: 'readiness', label: 'Readiness' }, { key: 'scope', label: 'Scope' }],
-    rows: quotes.map((quote) => ({ id: quote.id, values: { vendor: quote.vendorName, amount: `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, readiness: comparisonReady.has(quote.id) ? 'Comparison ready' : String(quote.readinessStage ?? 'Needs review').toLowerCase().replace(/_/g, ' '), scope: quote.scopeSummary ?? quote.serviceLabelRaw ?? 'Scope not confirmed' } })), actions: [],
-  });
-  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'Resolve scope or fact gaps in the canonical workspace before making a decision.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: workspaceHref })) }], actions: [] });
-  blocks.push({ type: 'EVIDENCE', id: 'quote-review-evidence', title: 'Proposal freshness', items: quotes.slice(0, 20).map((quote) => ({ label: quote.vendorName, source: quote.sourceType ? `Quote · ${String(quote.sourceType).toLowerCase()}` : 'Recorded quote', observedAt: quote.updatedAt?.toISOString?.() ?? quote.createdAt?.toISOString?.() ?? null })) });
-  blocks.push({ type: 'BOUNDARY', id: 'quote-review-boundary', title: 'Comparison support—not provider endorsement', body: 'Verify scope, credentials, insurance, references, permits, warranties, payment milestones, and final terms. Ask does not accept a quote, rank provider trust, or guarantee workmanship.', severity: 'INFO', suggestions: [] });
-  return { status: comparability.status === 'COMPARABLE' ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: comparability.status === 'COMPARABLE' ? undefined : `QUOTE_${comparability.status}`, contextVersion: workspace.updatedAt?.toISOString?.() ?? null, blocks, suggestions: ['What makes these quotes incomparable?', 'Open quote comparison'] };
-}
 
 async function guidanceJourneyCreateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const inventory = await prisma.inventoryItem.findMany({ where: { propertyId }, select: { id: true, name: true }, take: 100 });
@@ -1180,116 +776,16 @@ async function preferenceReferenceBlocksForSnapshot(idPrefix: string, preference
 
 
 
-// Inspection-hub capability-card slice (FRD v1.43). The three confirmed INSPECTION_FINDING_UPDATE actions, declared on
-// each finding row; the inline detail (InspectionFindingResultList) shows only those the finding's LIVE state allows.
-// inspectionFindingAction parses each message back to exactly its own action.
-export const INSPECTION_FINDING_ACTIONS = [
-  { id: 'finding-accept', label: 'Accept as work', message: 'Accept this inspection finding as work.', action: 'ACCEPT' },
-  { id: 'finding-dismiss', label: 'Dismiss', message: 'Dismiss this inspection finding.', action: 'DISMISS' },
-  { id: 'finding-resolve', label: 'Mark resolved', message: 'Mark this inspection finding resolved.', action: 'RESOLVE' },
-] as const;
 
-export function inspectionFindingItemActions(role: HouseholdRole) {
-  if (role === HouseholdRole.VIEWER) return [];
-  return INSPECTION_FINDING_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INSPECTION_FINDING_UPDATE' }));
-}
 
-// The actions a finding's recorded state allows, mirroring inspectionHub.service and the inline detail's
-// findingActionsForLiveState: accepting as work needs an OPEN finding not already accepted; a dismissed or resolved
-// finding cannot be dismissed or resolved again. Every confirm re-checks against the live record.
-export function inspectionFindingActionAllowed(action: 'ACCEPT' | 'DISMISS' | 'RESOLVE', finding: { status: string; workDisposition: string }): boolean {
-  if (action === 'ACCEPT') return finding.status === 'OPEN' && finding.workDisposition !== 'ACCEPTED';
-  return finding.status !== 'DISMISSED' && finding.status !== 'RESOLVED';
-}
 
-// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-015, FRD v1.75): each finding declares only the actions its state allows.
-export function inspectionFindingItemActionsFor(role: HouseholdRole, finding: { status: string; workDisposition: string }) {
-  const allowed = new Set(INSPECTION_FINDING_ACTIONS.filter(({ action }) => inspectionFindingActionAllowed(action, finding)).map(({ id }) => id));
-  return inspectionFindingItemActions(role).filter((action) => allowed.has(action.id));
-}
 
-// Accept as work and Dismiss are collected in the deck and confirmed together; Mark resolved asks how the finding was
-// fixed, so it keeps its own confirmation.
-export const INSPECTION_FINDING_BATCH_ACTIONS: Readonly<Record<string, 'ACCEPT' | 'DISMISS'>> = { 'finding-accept': 'ACCEPT', 'finding-dismiss': 'DISMISS' };
-export const INSPECTION_FINDING_DECK_PRESENTATION = {
-  pattern: 'DECK' as const,
-  swipeRightActionId: 'finding-accept',
-  swipeLeftActionId: 'finding-dismiss',
-  batch: { operationId: 'INSPECTION_FINDING_UPDATE', entityType: 'INSPECTION_FINDING', actionIds: Object.keys(INSPECTION_FINDING_BATCH_ACTIONS), message: 'Review my inspection finding decisions.' },
-};
 
-const INSPECTION_SEVERITY_LABELS: Record<string, string> = { SAFETY: 'Safety', MAJOR: 'Major', MINOR: 'Minor', MONITOR: 'Monitor', INFORMATIONAL: 'Informational' };
-export function inspectionFindingDeckFacts(finding: { severity: string; estimatedCostCentsLow: number | null; estimatedCostCentsHigh: number | null }, inspectionDate: string | null) {
-  const dollars = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
-  const low = finding.estimatedCostCentsLow;
-  const high = finding.estimatedCostCentsHigh;
-  return {
-    tone: finding.severity === 'SAFETY' ? 'CRITICAL' as const : finding.severity === 'MAJOR' ? 'CAUTION' as const : 'DEFAULT' as const,
-    badgeLabel: INSPECTION_SEVERITY_LABELS[finding.severity] ?? String(finding.severity).toLowerCase(),
-    timingLabel: inspectionDate ? `Inspected ${inspectionDate}` : null,
-    amountLabel: low && high && low !== high ? `Est. ${dollars(low)}–${dollars(high)}` : low || high ? `Est. ${dollars((low || high)!)}` : null,
-  };
-}
 
-// The traditional hub pages. There is no /inspection route; earlier Ask links pointed there and were broken.
-export function inspectionHubHref(propertyId: string, finding?: { id: string; reportId: string }): string {
-  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}/inspection-hub`;
-  return finding ? `${base}/${encodeURIComponent(finding.reportId)}?findingId=${encodeURIComponent(finding.id)}` : `${base}/open-items`;
-}
 
-async function inspectionFindingsResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  const findings = await prisma.inspectionFinding.findMany({
-    where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } },
-    orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }], take: 50,
-    include: { report: { select: { inspectionDate: true, inspectorName: true } } },
-  });
-  const href = inspectionHubHref(propertyId);
-  const findingActions = inspectionFindingItemActions(access.role);
-  if (findings.length === 0) return {
-    status: 'ANSWERED', reasonCode: 'NO_OPEN_INSPECTION_FINDINGS',
-    blocks: [{ type: 'EMPTY_STATE', id: 'inspection-findings-empty', title: 'No open confirmed inspection findings', body: 'Ask found no unresolved findings from a homeowner-confirmed inspection report.', actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'PRIMARY' }] }], suggestions: [],
-  };
-  return {
-    status: 'ANSWERED', reasonCode: 'INSPECTION_FINDINGS_FOUND',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], ...(findingActions.length ? { presentation: INSPECTION_FINDING_DECK_PRESENTATION } : {}), id: 'inspection-findings', title: 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Open a finding to accept it as work, dismiss it, or mark it resolved.', sections: [{ id: 'open', title: 'Needs review', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href: inspectionHubHref(propertyId, finding), entityType: 'INSPECTION_FINDING', parentId: finding.reportId, actions: inspectionFindingItemActionsFor(access.role, finding), ...inspectionFindingDeckFacts(finding, humanDate(finding.report.inspectionDate) ?? null) })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }],
-    suggestions: findings.slice(0, 2).map((finding) => `Accept ${finding.homeSystem} finding ${finding.id} as work`),
-  };
-}
 
-function inspectionFindingAction(message: string): 'ACCEPT' | 'DISMISS' | 'RESOLVE' | null {
-  if (/\baccept|track|make (?:this )?work\b/i.test(message)) return 'ACCEPT';
-  if (/\bdismiss|not applicable|ignore\b/i.test(message)) return 'DISMISS';
-  if (/\bresolve|already (?:fixed|resolved)|completed\b/i.test(message)) return 'RESOLVE';
-  return null;
-}
 
-// Resolving asks what the traditional "Mark as Resolved" dialog asks: how it was resolved (the same five methods,
-// defaulting to contractor work), optional notes and an optional cost. FRD v1.43: Ask previously wrote the method
-// 'HOMEOWNER_CONFIRMED', which is not an InspectionResolutionMethod value, so every Ask resolve would have been
-// rejected by the database.
-const INSPECTION_RESOLUTION_METHOD_OPTIONS: readonly CorrectionOption[] = [
-  { label: 'Contractor work', value: 'CONTRACTOR_WORK' },
-  { label: 'DIY repair', value: 'DIY' },
-  { label: 'Seller repair', value: 'SELLER_REPAIR' },
-  { label: 'Credited at closing', value: 'CREDITED_AT_CLOSING' },
-  { label: 'Dismissed / not applicable', value: 'DISMISSED' },
-];
-export const InspectionResolutionSchema = z.object({
-  method: z.enum(['CONTRACTOR_WORK', 'DIY', 'SELLER_REPAIR', 'CREDITED_AT_CLOSING', 'DISMISSED']),
-  notes: z.string().trim().min(1).max(1000).nullable(),
-  costCents: z.number().int().min(0).max(1_000_000_000).nullable(),
-}).strict();
-type InspectionResolution = z.infer<typeof InspectionResolutionSchema>;
-const INSPECTION_RESOLUTION_DEFAULT: InspectionResolution = { method: 'CONTRACTOR_WORK', notes: null, costCents: null };
 
-function inspectionResolutionEditableFields(resolution: InspectionResolution) {
-  return [
-    { key: 'method', label: 'How was this resolved?', type: 'SELECT' as const, value: resolution.method, options: [...INSPECTION_RESOLUTION_METHOD_OPTIONS] },
-    { key: 'notes', label: 'Notes (optional)', type: 'TEXTAREA' as const, value: resolution.notes ?? '' },
-    { key: 'costCents', label: 'Cost in dollars (optional)', type: 'MONEY' as const, value: resolution.costCents === null ? '' : (resolution.costCents / 100).toFixed(2) },
-  ];
-}
 
 export async function editInspectionFindingResolveConfirmation(
   execution: AskExecution,
@@ -1348,212 +844,14 @@ export async function editInspectionFindingResolveConfirmation(
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }
 
-const inspectionFindingVersion = (finding: { id: string; status: string; workDisposition: string; updatedAt: Date }) =>
-  createHash('sha256').update(`${finding.id}:${finding.status}:${finding.workDisposition}:${finding.updatedAt.toISOString()}`).digest('hex');
 
-// IW-PRES-015 (FRD v1.75): the card deck's collected decisions, proposed together for ONE confirmation. Only Accept as
-// work and Dismiss can be batched. A decision whose finding is gone, closed or not in an allowed state is left out and
-// named; nothing is written here.
-async function inspectionFindingBatchProposal(propertyId: string, decisions: Array<{ entityId: string; actionId: string }>): Promise<AskOperationResult> {
-  const latest = new Map<string, string>();
-  decisions.forEach((decision) => latest.set(decision.entityId, decision.actionId));
-  const findings = await prisma.inspectionFinding.findMany({
-    where: { propertyId, id: { in: [...latest.keys()] }, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } },
-    select: { id: true, reportId: true, homeSystem: true, inspectorDescription: true, status: true, workDisposition: true, updatedAt: true },
-  });
-  const byId = new Map(findings.map((finding) => [finding.id, finding]));
-  const included: Array<{ finding: typeof findings[number]; action: 'ACCEPT' | 'DISMISS' }> = [];
-  const leftOut: string[] = [];
-  latest.forEach((actionId, findingId) => {
-    const finding = byId.get(findingId);
-    const action = INSPECTION_FINDING_BATCH_ACTIONS[actionId];
-    const title = finding ? `${finding.homeSystem}: ${finding.inspectorDescription}` : 'A finding';
-    if (!finding) leftOut.push(`${title} is no longer open, or is no longer on a confirmed report for this home.`);
-    else if (!action) leftOut.push(`${title}: that action needs its own confirmation.`);
-    else if (!inspectionFindingActionAllowed(action, finding)) leftOut.push(`${title} can no longer be ${action === 'ACCEPT' ? 'accepted as work' : 'dismissed'}.`);
-    else included.push({ finding, action });
-  });
-  const href = inspectionHubHref(propertyId);
-  const leftOutBlock = leftOut.length ? [{ type: 'LIMITATION' as const, id: 'inspection-finding-batch-left-out', title: `${leftOut.length} decision${leftOut.length === 1 ? ' was' : 's were'} left out`, body: leftOut.slice(0, 10).join(' '), severity: 'CAUTION' as const }] : [];
-  if (included.length === 0) return {
-    status: 'BLOCKED', reasonCode: 'INSPECTION_FINDING_BATCH_EMPTY',
-    blocks: [{ type: 'SUMMARY', id: 'inspection-finding-batch-empty', title: 'Nothing to confirm', body: 'None of these decisions can be applied to the findings as they are now. Nothing was changed.', tone: 'CAUTION', actions: [] }, ...leftOutBlock],
-    suggestions: ['Show remaining inspection findings'],
-  };
-  const entries = included.map(({ finding, action }) => ({ findingId: finding.id, reportId: finding.reportId, action, contextVersion: inspectionFindingVersion(finding) }));
-  const contextVersion = createHash('sha256').update(entries.map((entry) => `${entry.findingId}:${entry.action}:${entry.contextVersion}`).join('|')).digest('hex');
-  const accepts = included.filter((entry) => entry.action === 'ACCEPT');
-  const dismissals = included.filter((entry) => entry.action === 'DISMISS');
-  const count = (n: number) => `${n} finding${n === 1 ? '' : 's'}`;
-  const reviewItem = ({ finding }: typeof included[number]) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: null, meta: [], status: String(finding.status), href: inspectionHubHref(propertyId, finding), entityType: 'INSPECTION_FINDING', parentId: finding.reportId });
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_BATCH_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { inspectionFindingBatch: entries },
-    blocks: [
-      { type: 'SUMMARY', id: 'inspection-finding-batch-review', title: `Review ${count(included.length)}`, body: `${accepts.length ? `Accepting as work creates or reuses tracked work for ${count(accepts.length)}. ` : ''}${dismissals.length ? `Dismissing closes ${count(dismissals.length)} without work. ` : ''}Nothing changes until you confirm. Each finding is checked again when you confirm.`, tone: 'DEFAULT', actions: [] },
-      { type: 'GROUPED_LIST', filters: [], id: 'inspection-finding-batch-decisions', title: 'Your decisions', description: null, sections: [
-        ...(accepts.length ? [{ id: 'accept', title: 'Accept as work', count: accepts.length, items: accepts.map(reviewItem) }] : []),
-        ...(dismissals.length ? [{ id: 'dismiss', title: 'Dismiss', count: dismissals.length, items: dismissals.map(reviewItem) }] : []),
-      ], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] },
-      ...leftOutBlock,
-    ],
-    confirmation: {
-      confirmationId: `inspection-finding-batch-${contextVersion.slice(0, 16)}`, version: 1,
-      title: `Confirm ${count(included.length)}?`,
-      description: 'These changes are saved to the canonical inspection record, one finding at a time.',
-      fields: [
-        ...(accepts.length ? [{ label: 'Accept as work', value: count(accepts.length) }] : []),
-        ...(dismissals.length ? [{ label: 'Dismiss', value: count(dismissals.length) }] : []),
-      ],
-      editableFields: [], confirmLabel: `Confirm ${included.length} change${included.length === 1 ? '' : 's'}`,
-      consentText: 'I have reviewed these inspection finding decisions and want them saved.',
-      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-    },
-    suggestions: [],
-  };
-}
 
-async function inspectionFindingUpdateResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  if (launchContext?.batchDecisions?.length) return inspectionFindingBatchProposal(propertyId, launchContext.batchDecisions);
-  const findings = await prisma.inspectionFinding.findMany({ where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } }, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, reportId: true, homeSystem: true, inspectorDescription: true, severity: true, status: true, workDisposition: true, updatedAt: true } });
-  const selected = exactEntityMatch(findings.map((finding) => ({ ...finding, title: `${finding.homeSystem}: ${finding.inspectorDescription}` })), message, launchContext);
-  const action = inspectionFindingAction(message);
-  const href = selected ? inspectionHubHref(propertyId, selected) : inspectionHubHref(propertyId);
-  if (!selected || !action) return {
-    status: 'NEEDS_ENTITY', reasonCode: 'INSPECTION_FINDING_TARGET_REQUIRED',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'inspection-finding-targets', title: 'Choose a finding and action', description: 'Use the finding id or exact system/description and say accept, dismiss, or resolve.', sections: [{ id: 'findings', title: 'Open confirmed findings', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: String(finding.severity).toLowerCase(), meta: [], status: String(finding.status), href })) }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href, style: 'SECONDARY' }] }], suggestions: [],
-  };
-  const contextVersion = createHash('sha256').update(`${selected.id}:${selected.status}:${selected.workDisposition}:${selected.updatedAt.toISOString()}`).digest('hex');
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { inspectionFindingId: selected.id, inspectionReportId: selected.reportId, inspectionFindingAction: action, inspectionFindingContextVersion: contextVersion, ...(action === 'RESOLVE' ? { inspectionResolution: INSPECTION_RESOLUTION_DEFAULT } : {}), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
-    blocks: [{ type: 'SUMMARY', id: 'inspection-finding-review', title: `Review ${action.toLowerCase()} action`, body: action === 'ACCEPT' ? 'Accepting creates or reuses canonical Operational Work and routes it to the appropriate maintenance, guidance, or project workflow.' : action === 'DISMISS' ? 'Dismissing marks this canonical finding not active and reconciles linked work.' : 'Resolving records a homeowner-confirmed outcome on this canonical finding.', tone: 'CAUTION', actions: [{ id: 'open-finding', label: 'Review in Inspection Hub', href, style: 'SECONDARY' }] }],
-    confirmation: { confirmationId: `inspection-finding-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} this finding?`, description: selected.inspectorDescription, fields: [{ label: 'System', value: selected.homeSystem }, { label: 'Severity', value: String(selected.severity).toLowerCase() }, { label: 'Action', value: action.toLowerCase() }], editableFields: action === 'RESOLVE' ? inspectionResolutionEditableFields(INSPECTION_RESOLUTION_DEFAULT) : [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} finding`, consentText: 'I reviewed this inspection finding and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString() }, suggestions: [],
-  };
-}
 
-type DocumentPromotionCandidate = { id: string; kind: 'MATERIAL_EXTRACTION_REVIEW' | 'INSPECTION_REPORT' | 'INSURANCE_POLICY_FACT'; title: string; description: string; updatedAt: Date; parentId: string; candidateFields?: Record<string, unknown> };
 
-async function pendingDocumentPromotionCandidates(propertyId: string): Promise<DocumentPromotionCandidate[]> {
-  const [materialReviews, inspectionReports, policyFacts] = await Promise.all([
-    prisma.materialExtractionReview.findMany({ where: { propertyId, status: 'NEEDS_REVIEW' }, orderBy: { updatedAt: 'desc' }, take: 25, include: { materialSpec: { select: { id: true, label: true } } } }),
-    prisma.inspectionReport.findMany({ where: { propertyId, status: 'REVIEW_PENDING' }, orderBy: { updatedAt: 'desc' }, take: 25, select: { id: true, reportType: true, inspectionDate: true, totalFindings: true, updatedAt: true } }),
-    prisma.insurancePolicyFact.findMany({ where: { confirmationStatus: 'PENDING', policyTerm: { propertyId } }, orderBy: { updatedAt: 'desc' }, take: 25, include: { policyTerm: { include: { insurancePolicy: { select: { id: true, carrierName: true, homeownerProfileId: true } } } } } }),
-  ]);
-  return [
-    ...materialReviews.map((review): DocumentPromotionCandidate => ({ id: review.id, kind: 'MATERIAL_EXTRACTION_REVIEW', title: `Material review: ${review.materialSpec.label}`, description: `${Object.keys(review.candidateFields as Record<string, unknown>).length} extracted fields awaiting review`, updatedAt: review.updatedAt, parentId: review.materialSpecId, candidateFields: review.candidateFields as Record<string, unknown> })),
-    ...inspectionReports.map((report): DocumentPromotionCandidate => ({ id: report.id, kind: 'INSPECTION_REPORT', title: `${String(report.reportType).toLowerCase().replace(/_/g, ' ')} inspection report`, description: `${report.totalFindings} extracted findings · ${humanDate(report.inspectionDate) ?? 'date unavailable'}`, updatedAt: report.updatedAt, parentId: report.id })),
-    ...policyFacts.map((fact): DocumentPromotionCandidate => {
-      const value = fact.amountValue?.toString() ?? fact.textValue ?? (fact.booleanValue == null ? 'extracted value' : String(fact.booleanValue));
-      return { id: fact.id, kind: 'INSURANCE_POLICY_FACT', title: `${fact.policyTerm.insurancePolicy.carrierName}: ${fact.factKey.toLowerCase().replace(/_/g, ' ')}`, description: `Candidate value: ${value}`, updatedAt: fact.updatedAt, parentId: fact.policyTerm.insurancePolicy.id, candidateFields: { homeownerProfileId: fact.policyTerm.insurancePolicy.homeownerProfileId, factKey: fact.factKey } };
-    }),
-  ].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-}
 
-async function documentPromotionReviewResult(propertyId: string): Promise<AskOperationResult> {
-  const candidates = await pendingDocumentPromotionCandidates(propertyId);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
-  if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }], suggestions: [] };
-  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: candidates.slice(0, 2).map((candidate) => `Confirm document candidate ${candidate.id}`) };
-}
 
-async function documentPromotionConfirmResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  const candidates = await pendingDocumentPromotionCandidates(propertyId);
-  const selected = exactEntityMatch(candidates, message, launchContext);
-  const decision = /\breject|discard\b/i.test(message) ? 'REJECT' : /\bconfirm|promote|apply\b/i.test(message) ? 'CONFIRM' : null;
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
-  if (!selected || !decision) return { status: 'NEEDS_ENTITY', reasonCode: 'DOCUMENT_PROMOTION_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotion-targets', title: 'Choose an exact candidate and decision', description: 'Use the candidate id or exact title and say confirm or reject.', sections: [{ id: 'pending', title: 'Pending candidates', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Review Documents', href, style: 'SECONDARY' }] }], suggestions: [] };
-  if (selected.kind === 'INSPECTION_REPORT' && decision === 'REJECT') return { status: 'BLOCKED', reasonCode: 'INSPECTION_REPORT_REJECTION_REQUIRES_REVIEW_UI', blocks: [{ type: 'BOUNDARY', id: 'inspection-report-rejection-boundary', title: 'Review corrections in Inspection Hub', severity: 'INFO', body: 'Ask can confirm the reviewed report, but rejecting or correcting individual extracted findings requires the report review screen so the exact edits and evidence remain visible.', suggestions: [] }], suggestions: [] };
-  const contextVersion = createHash('sha256').update(`${selected.kind}:${selected.id}:${selected.updatedAt.toISOString()}`).digest('hex');
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
-  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'DOCUMENT_PROMOTION_CONFIRMATION_REQUIRED', contextVersion, parameters: { documentPromotionKind: selected.kind, documentPromotionId: selected.id, documentPromotionParentId: selected.parentId, documentPromotionDecision: decision, documentPromotionCandidateFields: selected.candidateFields ?? null, documentPromotionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'document-promotion-confirm-review', title: `Review document ${decision.toLowerCase()}`, body: decision === 'CONFIRM' ? 'Confirming writes the reviewed candidate through its canonical domain adapter and records the promotion outcome.' : 'Rejecting preserves the source evidence but prevents these candidate values from becoming canonical facts.', tone: 'CAUTION', actions: [{ id: 'open-documents', label: 'Review source', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `document-promotion-${selected.id}-1`, version: 1, title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} ${selected.title}?`, description: selected.description, fields: [{ label: 'Candidate', value: selected.title }, { label: 'Decision', value: decision.toLowerCase() }], editableFields: [], confirmLabel: decision === 'CONFIRM' ? 'Confirm and promote' : 'Reject candidate', consentText: 'I reviewed this exact document-derived candidate and authorize the selected decision.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
-}
 
-// Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31 "documents"
-// candidate). Reads the Document vault itself (prisma.document, grouped
-// by type and verification status) -- distinct from
-// documentPromotionReviewResult/documentPromotionConfirmResult above,
-// which only ever read pendingDocumentPromotionCandidates (a queue of
-// pending extraction candidates), never prisma.document directly
-// (confirmed by reading both handlers before writing this one).
-const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  INSPECTION_REPORT: 'Inspection reports', ESTIMATE: 'Estimates', INVOICE: 'Invoices', CONTRACT: 'Contracts',
-  PERMIT: 'Permits', PHOTO: 'Photos', VIDEO: 'Videos', INSURANCE_CERTIFICATE: 'Insurance certificates',
-  LICENSE: 'Licenses', HOME_REPORT_PDF: 'Home report PDFs', OTHER: 'Other',
-};
 
-async function documentLookupResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
-  const documents = await prisma.document.findMany({
-    where: { propertyId, deletedAt: null },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  if (documents.length === 0) {
-    return {
-      status: 'ANSWERED',
-      reasonCode: 'NO_DOCUMENTS_ON_FILE',
-      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no uploaded documents recorded for this home yet.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }],
-      suggestions: [],
-    };
-  }
-
-  const grouped = new Map<string, typeof documents>();
-  for (const document of documents) {
-    const existing = grouped.get(document.type) ?? [];
-    existing.push(document);
-    grouped.set(document.type, existing);
-  }
-  const unverifiedCount = documents.filter((document) => document.verificationStatus === 'UNVERIFIED' || document.verificationStatus === 'PENDING').length;
-
-  const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY',
-    id: 'document-lookup-summary',
-    title: `${documents.length} document${documents.length === 1 ? '' : 's'} on file`,
-    body: unverifiedCount ? `${unverifiedCount} not yet verified.` : 'All recorded documents are verified.',
-    tone: unverifiedCount ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }],
-  }, {
-    // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType lets
-    // GroupedListBlock.tsx route this block through DocumentResultList
-    // instead of the generic renderer's bare href. Detail is fetched via
-    // GET /api/documents/property/:propertyId/:documentId
-    // (propertyAuthMiddleware, VIEWER floor matching this operation's own
-    // floor) -- deliberately NOT the existing GET /api/documents/:id
-    // (requireDocumentOwnership, CONTRIBUTOR floor for a non-uploaded
-    // document), which would 404 for every VIEWER-role household member
-    // opening a document they didn't personally upload.
-    type: 'GROUPED_LIST', filters: [],
-    id: 'document-lookup-groups',
-    title: 'Documents by type',
-    description: 'Uploaded documents recorded for this property, grouped by type.',
-    sections: [...grouped.entries()].sort(([left], [right]) => (DOCUMENT_TYPE_LABELS[left] ?? left).localeCompare(DOCUMENT_TYPE_LABELS[right] ?? right)).map(([type, docs]) => ({
-      id: `document-lookup-${type.toLowerCase()}`,
-      title: DOCUMENT_TYPE_LABELS[type] ?? type,
-      count: docs.length,
-      items: docs.slice(0, 20).map((document) => ({
-        id: document.id,
-        title: document.name,
-        entityType: 'DOCUMENT',
-        description: document.description ?? null,
-        meta: [document.verificationStatus.toLowerCase().replace(/_/g, ' '), humanDate(document.createdAt)].filter((value): value is string => Boolean(value)),
-        status: document.verificationStatus,
-        href,
-      })),
-    })),
-    actions: [],
-  }];
-
-  return {
-    status: 'ANSWERED',
-    reasonCode: unverifiedCount ? 'DOCUMENTS_INCLUDE_UNVERIFIED' : 'DOCUMENTS_ALL_VERIFIED',
-    contextVersion: createHash('sha256').update(JSON.stringify(documents.map((document) => ({ id: document.id, verificationStatus: document.verificationStatus, updatedAt: document.updatedAt })))).digest('hex'),
-    blocks,
-    suggestions: ['Open Documents'],
-  };
-}
 
 function operationalWorkAction(message: string): 'ACCEPT' | 'DEFER' | 'SNOOZE' | 'COMPLETE' | null {
   if (/\bcomplete|done|finished\b/i.test(message)) return 'COMPLETE';
@@ -1691,1630 +989,116 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
 
 
 
-// IW-PRES-017 (FRD v1.90): the upcoming capital windows on a timeline track. A window is a planning range, so it sits
-// at its start month (never an invented day) with the full window, cost range and confidence in its facts; the live
-// canonical window detail (CapitalWindowDetail) is kept by the frontend under the same block id. When more windows
-// exist than are shown, the description says so and the summary's Open capital timeline link reaches the rest.
-export function capitalTimelineBlock(
-  upcoming: ReadonlyArray<{
-    id: string; category: unknown; windowStart: Date | string; windowEnd: Date | string; confidence: unknown;
-    estimatedCostMinCents: number | null; estimatedCostMaxCents: number | null; inventoryItem?: { name?: string | null } | null;
-  }>,
-  totalCount: number,
-  href: string,
-): Extract<AskPresentationBlock, { type: 'TIMELINE' }> {
-  const words = (value: unknown) => String(value).toLowerCase().replace(/_/g, ' ');
-  const sentence = (value: unknown) => words(value).replace(/^\w/, (letter) => letter.toUpperCase());
-  const month = (value: Date | string) => {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', timeZone: getAskPropertyTimezone() })
-      .formatToParts(date).map((part) => [part.type, part.value]));
-    return `${parts.year}-${parts.month}`;
-  };
-  return {
-    type: 'TIMELINE', id: 'capital-timeline-table', title: 'Upcoming capital windows',
-    description: `Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes. Each sits at the start of its window.${totalCount > upcoming.length ? ` Showing the ${upcoming.length} soonest of ${totalCount} windows.` : ''}`,
-    items: upcoming.map((item) => ({
-      id: item.id,
-      label: item.inventoryItem?.name ?? words(item.category),
-      date: month(item.windowStart),
-      datePrecision: 'MONTH' as const,
-      description: null,
-      status: `${sentence(item.confidence)} confidence`,
-      href,
-      category: { id: String(item.category), label: sentence(item.category).slice(0, 60) },
-      meta: [
-        `Window ${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`,
-        item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null
-          ? 'Cost range not available'
-          : `Estimated ${money(item.estimatedCostMinCents / 100)}–${money(item.estimatedCostMaxCents / 100)}`,
-      ],
-    })),
-  };
-}
-
-async function capitalReservePlanResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/capital-timeline`;
-  const reserveHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/reserve-fund`;
-  const requestedHorizon = parseCapitalTimelineHorizonRequest(message);
-  const [access, capitalContext, reserveContext, property, inventoryCount, capitalTimelineFinancialContext] = await Promise.all([
-    ensurePropertyAccess(userId, propertyId),
-    evaluateFeatureContext(propertyId, userId, { featureKey: 'CAPITAL_TIMELINE', operationKey: 'RUN_TIMELINE' }),
-    evaluateFeatureContext(propertyId, userId, { featureKey: 'RESERVE_FUND', operationKey: 'RECALCULATE' }),
-    prisma.property.findUnique({ where: { id: propertyId }, select: { homeownerProfileId: true } }),
-    prisma.inventoryItem.count({ where: { propertyId } }),
-    // F05 fix (docs/architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md):
-    // the SAME contextVersion computation homeCapitalTimelineService.runTimeline
-    // itself uses to stamp inputsSnapshot._propertyContextVersion when a
-    // createdByUserId is supplied (confirmed by direct read of that function) --
-    // NOT evaluateFeatureContext's own contextVersion above, which is a
-    // different hash over a narrower fact set and would never match what
-    // runTimeline actually persisted. Comparing the wrong two versions would
-    // make every analysis look stale (or never stale) by construction.
-    getFinancialContextDecisions(propertyId, userId, 'CAPITAL_TIMELINE'),
-  ]);
-  const activeRequirement = reserveContext.requirements[0] ?? capitalContext.requirements[0];
-  const captureFeature = reserveContext.requirements[0] ? 'RESERVE_FUND' as const : 'CAPITAL_TIMELINE' as const;
-  const captureRequests = access.role !== HouseholdRole.VIEWER && activeRequirement
-    ? [askCaptureRequest(activeRequirement, activeRequirement === reserveContext.requirements[0] ? reserveContext.contextVersion : capitalContext.contextVersion, 'Saved to the Living Home Record and reused by capital planning', `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`)]
-    : [];
-  let analysis: any = await homeCapitalTimelineService.getLatestTimeline(propertyId);
-  // F05 fix: previously only recomputed when no analysis existed at all, so a
-  // timeline was served unchanged forever regardless of later inventory or
-  // property changes (no staleness check anywhere in
-  // homeCapitalTimeline.service.ts, confirmed by direct read). Now also
-  // recomputes when the stored snapshot's own contextVersion no longer
-  // matches the current one -- the same "digest mismatch -> recompute"
-  // pattern already used by sellHoldRentDecisionFamilyAdapter's selectThread.
-  const isStale = isCapitalTimelineAnalysisStale(analysis, capitalTimelineFinancialContext.contextVersion);
-  // Horizon re-run: an explicit "5-year"/"10-year" request that doesn't match
-  // the currently stored horizon also forces a recompute, same as staleness --
-  // otherwise a homeowner asking for a different horizon would silently keep
-  // seeing the old one.
-  const horizonMismatch = requestedHorizon != null && analysis?.horizonYears !== requestedHorizon;
-  if ((!analysis || isStale || horizonMismatch) && property && inventoryCount > 0) {
-    // Carry the stored run's assumption set forward, as the traditional page's
-    // doRun does (CapitalTimelineClient.tsx defaults to activeAssumptionSetId)
-    // -- without it resolveForTool falls back to canonical default rates and a
-    // horizon switch would silently discard the homeowner's assumptions.
-    const priorAssumptionSetId = typeof analysis?.inputsSnapshot?.assumptionSetId === 'string' ? analysis.inputsSnapshot.assumptionSetId : undefined;
-    analysis = await homeCapitalTimelineService.runTimeline(propertyId, property.homeownerProfileId, requestedHorizon ?? analysis?.horizonYears ?? 10, { assumptionSetId: priorAssumptionSetId, createdByUserId: userId, propertyContextVersion: capitalContext.contextVersion, awaitReserveFundSync: true });
-  }
-  const fund: any = await homeReserveFundService.getSummary(propertyId);
-  const lineItems: any[] = await homeReserveFundService.listLineItems(propertyId, { status: 'ACTIVE' });
-  if (!analysis || !Array.isArray(analysis.items) || analysis.items.length === 0) return {
-    status: 'NEEDS_CONTEXT', reasonCode: 'CAPITAL_PLAN_INVENTORY_REQUIRED', contextVersion: capitalContext.contextVersion, parameters: { phase5CaptureFeature: captureFeature }, captureRequests,
-    blocks: [{ type: 'SUMMARY', id: 'capital-plan-empty', title: 'Add at least one major appliance or system to build a capital plan', body: 'A reserve target without recorded systems would be a generic guess. Add the roof, HVAC, water heater, appliances, or other capital items and Ask will calculate a property-specific timeline.', tone: 'CAUTION', actions: [{ id: 'open-inventory', label: 'Add home systems', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }] }],
-    suggestions: ['Show my home inventory'],
-  };
-  const items: any[] = analysis.items;
-  const upcoming = items.slice().sort((a, b) => new Date(a.windowStart).getTime() - new Date(b.windowStart).getTime()).slice(0, 12);
-  const totalLow = upcoming.reduce((sum, item) => sum + (item.estimatedCostMinCents ?? 0), 0);
-  const totalHigh = upcoming.reduce((sum, item) => sum + (item.estimatedCostMaxCents ?? 0), 0);
-  const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'capital-reserve-summary', title: `${upcoming.length} upcoming capital event${upcoming.length === 1 ? '' : 's'} are in the current plan`,
-    body: `The modeled cost range for the displayed ${analysis.horizonYears ?? 10}-year horizon is ${money(totalLow / 100)}–${money(totalHigh / 100)}. The canonical reserve plan currently suggests ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month and records a ${money((fund.currentShortfallCents ?? 0) / 100)} shortfall.`,
-    tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT', actions: [
-      { id: 'open-timeline', label: 'Open capital timeline', href, style: 'PRIMARY' }, { id: 'open-reserve', label: 'Open reserve fund', href: reserveHref, style: 'SECONDARY' },
-      // Horizon re-run (FRD Appendix D planning/refinement follow-up): re-invokes this same CAPITAL_RESERVE_PLAN
-      // operation with an explicit horizon in the message, mirroring the traditional page's own 5yr/10yr toggle --
-      // only offers the horizon NOT currently shown, same as a two-state toggle rather than two redundant buttons.
-      ...(analysis.horizonYears !== 5 ? [{ id: 'rerun-horizon-5', label: 'Show 5-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 5-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
-      ...(analysis.horizonYears !== 10 ? [{ id: 'rerun-horizon-10', label: 'Show 10-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 10-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
-    ],
-  }, capitalTimelineBlock(upcoming, items.length, href),
-  // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: entityType routes these
-  // through ReserveAllocationResultList (GroupedListBlock.tsx) instead of the generic href-only renderer, opening
-  // canonical detail inline -- a fresh re-fetch via the existing GET .../reserve-fund/line-items list endpoint
-  // (there is no single-line-item GET, so a removed allocation is a data-absence "no longer exists" state, the
-  // same pattern already used for Household/Warranty detail). Read-only: no per-item mutation operation exists
-  // yet, so no item `actions` are declared -- "planning/refinement" writes remain a separate, unscoped follow-up.
-  { type: 'GROUPED_LIST', filters: [], id: 'reserve-allocations', title: 'Active reserve allocations', description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.', sections: [{ id: 'allocations', title: 'Funding plan', count: lineItems.length, items: lineItems.slice(0, 20).map((line) => ({ id: line.id, title: line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' '), description: `${money(line.allocatedMonthlyCents / 100)}/month toward ${money(line.targetCostCents / 100)}`, meta: [String(line.status).toLowerCase()], status: line.status, href: reserveHref, entityType: 'RESERVE_LINE_ITEM' })) }],
-    // Was `actions: []` -- no traditional-navigation secondary action existed for this block at all before
-    // this slice, unlike every other Property Records collection. Added alongside inline detail.
-    actions: [{ id: 'open-reserve-fund', label: 'Open Reserve Fund', href: reserveHref, style: 'SECONDARY' }] },
-  { type: 'EVIDENCE', id: 'capital-plan-evidence', title: 'Planning sources and freshness', items: upcoming.map((item) => ({ label: item.inventoryItem?.name ?? String(item.category), source: `Home Capital Timeline · ${String(item.confidence).toLowerCase()} confidence`, observedAt: analysis.computedAt?.toISOString?.() ?? String(analysis.computedAt) })) },
-  { type: 'BOUNDARY', id: 'capital-plan-boundary', title: 'Planning range—not a guaranteed expense schedule', body: 'Actual condition, inspections, maintenance, local labor and material prices, financing, insurance, and homeowner choices can move timing and cost. Keep emergency savings and capital reserves conceptually separate.', severity: 'INFO', suggestions: [] }];
-  return { status: captureRequests.length || analysis.confidence === 'LOW' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: captureRequests.length ? 'CAPITAL_PLAN_CONTEXT_OPTIONAL' : analysis.confidence === 'LOW' ? 'CAPITAL_PLAN_LOW_CONFIDENCE' : undefined, contextVersion: capitalContext.contextVersion, parameters: { phase5CaptureFeature: captureFeature }, captureRequests, blocks, suggestions: ['Which expense is coming first?', 'Should I repair or replace my oldest system?'] };
-}
-
-async function propertyTaxAppealReadinessResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  const ground = /\b(?:tax class|classification)\b/i.test(message) ? 'TAX_CLASS' as const : /\bexemption\b/i.test(message) ? 'EXEMPTION' as const : 'ASSESSED_VALUE' as const;
-  const context = await evaluateFeatureContext(propertyId, userId, { featureKey: 'TAX_APPEAL', operationKey: 'RUN_ANALYSIS' });
-  const requirement = context.requirements[0];
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/property-tax`;
-  const captureRequests = access.role !== HouseholdRole.VIEWER && requirement
-    ? [askCaptureRequest(requirement, context.contextVersion, 'Saved to the canonical property-tax and Property Context records', href)] : [];
-  const readiness: any = await propertyTaxAppealReadinessService.evaluate(propertyId, userId, ground);
-  if (readiness.status === 'NOT_COVERED') return {
-    status: 'READY_WITH_LIMITATIONS', reasonCode: 'PROPERTY_TAX_RULE_COVERAGE_UNAVAILABLE', contextVersion: context.contextVersion, captureRequests,
-    blocks: [{ type: 'SUMMARY', id: 'tax-readiness-not-covered', title: 'Reviewed appeal rules are not available for this property', body: readiness.reason ?? 'Ask cannot determine filing readiness without an active reviewed jurisdiction rule.', tone: 'CAUTION', actions: [{ id: 'open-property-tax', label: 'Open Property Tax Center', href, style: 'PRIMARY' }] }, { type: 'BOUNDARY', id: 'tax-coverage-boundary', title: 'Verify with the official authority', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] }], suggestions: ['Show my recorded property-tax facts'],
-  };
-  const atStake = readiness.taxAtStake;
-  const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'tax-readiness-summary', title: readiness.status === 'READY' ? `${readiness.ground?.label ?? ground}: preparation requirements are present` : readiness.status === 'NO_SUPPORTED_GROUND' ? 'The current evidence does not support this reviewed ground' : `${readiness.gaps.length} readiness gap${readiness.gaps.length === 1 ? '' : 's'} remain`,
-    body: `${readiness.reason ?? ''}${atStake ? ` The sourced planning range for annual tax at stake is ${money(atStake.low)}–${money(atStake.high)}.` : ''} Readiness does not predict appeal success.`,
-    tone: readiness.status === 'READY' ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-property-tax', label: 'Open appeal readiness', href: `${href}?section=appeal-readiness&ground=${ground}`, style: 'PRIMARY' }],
-  }];
-  if (readiness.canonical) blocks.push({ type: 'TABLE', id: 'tax-canonical-facts', title: 'Canonical tax facts used', description: 'Unknown facts remain unknown and are never treated as zero.', columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }], rows: [
-    ['Tax year', readiness.canonical.taxYear], ['Classification', readiness.canonical.classification], ['Assessed value', readiness.canonical.totalAssessedValue == null ? null : money(readiness.canonical.totalAssessedValue)], ['Taxable value', readiness.canonical.taxableValue == null ? null : money(readiness.canonical.taxableValue)], ['Effective tax rate', readiness.canonical.effectiveTaxRate == null ? null : `${(readiness.canonical.effectiveTaxRate * 100).toFixed(3)}%`],
-  ].map(([fact, value], index) => ({ id: `tax-fact-${index}`, values: { fact: String(fact), value: value == null ? 'Not confirmed' : String(value) } })), actions: [] });
-  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'tax-readiness-gaps', title: readiness.gaps.length ? 'What is still needed' : 'Evidence package', description: `Estimated preparation effort: ${String(readiness.effort).toLowerCase()}.`, sections: [{ id: 'gaps', title: readiness.gaps.length ? 'Readiness gaps' : 'Confirmed evidence', count: readiness.gaps.length || readiness.evidence.length, items: readiness.gaps.length ? readiness.gaps.map((gap: string, index: number) => ({ id: `tax-gap-${index}`, title: gap, description: null, meta: [], status: 'OPEN', href })) : readiness.evidence.map((evidence: any) => ({ id: evidence.id, title: evidence.title, description: evidence.description ?? null, meta: [String(evidence.type).toLowerCase().replace(/_/g, ' ')], status: 'CONFIRMED', href })) }], actions: [] });
-  if (readiness.evidence.length || readiness.ruleProfile) blocks.push({ type: 'EVIDENCE', id: 'tax-readiness-evidence', title: 'Rule and evidence provenance', items: [{ label: readiness.ruleProfile?.title ?? 'Reviewed appeal rule', source: readiness.ruleProfile ? `Rule ${readiness.ruleProfile.version}` : 'Property Tax Center', observedAt: readiness.ruleProfile?.reviewedAt?.toISOString?.() ?? readiness.ruleProfile?.reviewedAt ?? readiness.evaluatedAt }, ...readiness.evidence.slice(0, 15).map((evidence: any) => ({ label: evidence.title, source: evidence.sourceUrl ? 'Sourced appeal evidence' : 'Vault-supported appeal evidence', observedAt: evidence.confirmedAt }))] });
-  blocks.push({ type: 'BOUNDARY', id: 'tax-readiness-boundary', title: 'Preparation support—not tax, appraisal, or legal advice', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] });
-  return { status: readiness.status === 'READY' && !captureRequests.length ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: readiness.status === 'READY' ? (captureRequests.length ? 'PROPERTY_TAX_CONTEXT_OPTIONAL' : undefined) : `PROPERTY_TAX_${readiness.status}`, contextVersion: context.contextVersion, captureRequests, blocks, suggestions: ['Which tax facts are missing?', 'Open Property Tax Center'] };
-}
-
-// IW-PRES-020 (FRD v1.94): the renovation case's blocking readiness items as a ring. The renovation readiness service
-// keeps a state and counts (total, open, blocking, acknowledged) but no percent, so this defines one, on the domain's own
-// rule for what blocks a start: a blocking item is settled when it is satisfied or its open state was acknowledged
-// (`READY_WITH_ACKNOWLEDGED_OPEN_ITEMS`); only blocking items are counted, other open items are listed but not counted.
-// With no blocking items there is no ring, since nothing recorded says the case is ready.
-export function renovationReadinessProgress(
-  items: ReadonlyArray<{ id: string; title: string; status: string; isBlocking: boolean; overrideAcknowledgedAt?: Date | string | null; reason?: string | null; exactNextAction?: string | null }>,
-  caseHref: string,
-): Extract<AskPresentationBlock, { type: 'PROGRESS' }> | null {
-  const blocking = items.filter((item) => item.isBlocking);
-  if (!blocking.length) return null;
-  const isOpen = (item: { status: string; overrideAcknowledgedAt?: Date | string | null }) => item.status !== 'SATISFIED' && !item.overrideAcknowledgedAt;
-  const blockingOpen = blocking.filter(isOpen);
-  const settled = blocking.length - blockingOpen.length;
-  const acknowledged = blocking.filter((item) => item.status !== 'SATISFIED' && Boolean(item.overrideAcknowledgedAt)).length;
-  const otherOpen = items.filter((item) => !item.isBlocking && item.status !== 'SATISFIED').length;
-  return {
-    type: 'PROGRESS', id: 'renovation-readiness-progress', title: 'Ready to start',
-    description: 'Counts the items that block starting the work: a blocking item counts once it is satisfied or its open state was acknowledged. Other open items are listed but not counted, and this does not establish legal compliance.',
-    percent: Math.round((settled / blocking.length) * 100),
-    basis: `${settled} of ${blocking.length} blocking item${blocking.length === 1 ? '' : 's'} satisfied or acknowledged`,
-    metrics: [
-      { label: 'Blocking', value: String(blockingOpen.length), tone: blockingOpen.length ? 'CAUTION' : 'DEFAULT' },
-      { label: 'Acknowledged', value: String(acknowledged), tone: 'DEFAULT' },
-      { label: 'Other open', value: String(otherOpen), tone: 'DEFAULT' },
-    ],
-    nextSteps: blockingOpen.slice(0, 3).map((item) => ({
-      id: item.id, title: item.title, description: [item.reason, item.exactNextAction].filter(Boolean).join(' · ') || 'Blocking item still open',
-      meta: [], status: item.status, href: caseHref, entityType: null,
-    })),
-    actions: [],
-  };
-}
-
-async function renovationPermitReadinessResult(propertyId: string, message: string): Promise<AskOperationResult> {
-  const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
-  // FRD v1.47: renovation cases live on /renovations (the Renovations page reads the same cases and readiness). Both
-  // links pointed at /projects, whose list page reads neither a case nor ?renovationCaseId=.
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/renovations`;
-  const permitsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/permits`;
-  if (!cases.length) return {
-    status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
-    blocks: [{ type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'Start a governed renovation case before checking readiness', body: `No active renovation case is recorded. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work.`, tone: 'CAUTION', actions: [{ id: 'start-renovation', label: 'Start renovation planning', href, style: 'PRIMARY' }, { id: 'open-permits', label: 'Review permits', href: permitsHref, style: 'SECONDARY' }] }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: ['What permits are already recorded?'],
-  };
-  const lower = message.toLowerCase();
-  const selected = cases.find((candidate) => lower.includes(candidate.name.toLowerCase())) ?? cases[0];
-  let readiness: any;
-  try { readiness = await getRenovationReadiness(propertyId, selected.id); } catch { readiness = { summary: { state: 'NOT_EVALUATED', disclaimer: 'Readiness has not been evaluated for the current scope.' }, items: [], project: null }; }
-  const summary = readiness.summary ?? {};
-  const items: any[] = readiness.items ?? [];
-  const blockers = items.filter((item) => item.isBlocking && item.status !== 'SATISFIED');
-  const open = items.filter((item) => item.status !== 'SATISFIED');
-  const caseHref = `${href}/${encodeURIComponent(selected.id)}/readiness`;
-  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-case', label: 'Open renovation case', href: caseHref, style: 'PRIMARY' }, { id: 'open-permits', label: 'Open Permit Tracker', href: permitsHref, style: 'SECONDARY' }] }];
-  // IW-PRES-020 (FRD v1.94): the blocking items as a ring, ahead of the checklist.
-  const ring = renovationReadinessProgress(items, caseHref);
-  if (ring) blocks.push(ring);
-  if (items.length) blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'renovation-readiness-items', title: 'Readiness checklist', description: 'Blocking state is owned by the canonical renovation scope, requirement, compliance, quote, schedule, and evidence records.', sections: [{ id: 'blocking', title: 'Blocking', count: blockers.length, items: blockers.slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction, item.evidenceRequired].filter(Boolean), status: item.status, href: caseHref })) }, { id: 'other-open', title: 'Other open items', count: Math.max(0, open.length - blockers.length), items: open.filter((item) => !item.isBlocking).slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction].filter(Boolean), status: item.status, href: caseHref })) }].filter((section) => section.count > 0), actions: [] });
-  blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });
-  blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization—not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A “ready” app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
-  return { status: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: summary.state === 'READY' ? (permitSummary.openFlags ? 'PERMIT_FLAGS_OPEN' : undefined) : `RENOVATION_${summary.state ?? 'NOT_READY'}`, contextVersion: selected.updatedAt.toISOString(), blocks, suggestions: cases.length > 1 ? cases.slice(1, 4).map((candidate) => `Is ${candidate.name} ready to start?`) : ['What is blocking this renovation?'] };
-}
-
-async function majorEventEntryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const event = /\b(?:sell|selling|home sale)\b/i.test(message) ? 'SELLING'
-    : /\b(?:renovation|remodel)\b/i.test(message) ? 'RENOVATION'
-      : /\b(?:claim|storm damage)\b/i.test(message) ? 'CLAIM'
-        : /\b(?:aging in place)\b/i.test(message) ? 'AGING_IN_PLACE' : 'MOVING';
-  const goal = event === 'SELLING' ? 'prepare my home to sell and organize seller records'
-    : event === 'RENOVATION' ? 'plan a renovation, permits, and project tracking'
-      : event === 'CLAIM' ? 'review insurance coverage and organize claim evidence'
-        : event === 'AGING_IN_PLACE' ? 'plan home improvements and maintenance for aging in place'
-          : 'organize home records and prepare for moving';
-  const result = await capabilityResult(userId, propertyId, goal);
-  result.blocks.unshift({ type: 'SUMMARY', id: 'major-event-entry', title: `${event.toLowerCase().replace(/_/g, ' ')} plan for this home`, body: 'Start with the governed tools below. They reuse the selected home’s verified records and keep material decisions in their owning workflows; nothing has been started or shared automatically.', tone: 'DEFAULT', actions: [] });
-  result.blocks.push({ type: 'BOUNDARY', id: 'major-event-boundary', title: 'A guided entry point—not a complete professional checklist', body: 'Legal, tax, insurance, accessibility, safety, transaction, permit, and disclosure requirements can vary. Verify material obligations with the appropriate authority or qualified professional.', severity: 'INFO', suggestions: [] });
-  return { ...result, reasonCode: `MAJOR_EVENT_${event}`, suggestions: event === 'SELLING' ? ['Should I sell, hold, or rent?', 'Check sale readiness'] : event === 'RENOVATION' ? ['Is my renovation ready to start?', 'Do I need a permit?'] : ['Summarize my home record', 'What should I do next?'] };
-}
-
-
-
-
-
-
-
-function readablePropertyValue(value: unknown): string {
-  if (value === null || value === undefined || value === '' || value === 'UNKNOWN') return 'Not recorded';
-  if (typeof value === 'number') return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
-  return String(value).toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-const PROPERTY_SCOPE_LABELS: Record<string, string> = {
-  CORE: 'Core property details', LOCATION: 'Location', STRUCTURE: 'Structure', EXTERIOR: 'Exterior and utilities',
-  RESPONSIBILITY: 'Maintenance responsibility', SYSTEMS: 'Home systems', SAFETY: 'Safety', ROOMS: 'Rooms',
-  INVENTORY: 'Inventory', OPTIONAL_HOUSEHOLD: 'Optional household context',
-};
-
-// IW-PRES-020 (FRD v1.91): the Property Context's own completeness as a ring. The percent is the domain's
-// (`completenessPercent`, known facts of all applicable facts across the areas); the basis says exactly that. The tiles are
-// the domain's own counts of missing, conflicted and stale facts, and the next steps are the three least complete areas
-// with the capture actions the list below already declares. Nothing is recomputed here beyond the sums of what the
-// domain reports; with no applicable facts there is no ring.
-export function propertyCompletenessProgress(
-  completeness: { completenessPercent: number; scopes: Array<{ scope: string; totalFacts: number; knownFacts: number; completenessPercent: number; missingFactKeys: string[]; conflictedFactKeys: string[]; staleFactKeys: string[] }> },
-  incompleteScopes: ReadonlyArray<{ scope: string; totalFacts: number; knownFacts: number; completenessPercent: number; missingFactKeys: string[]; conflictedFactKeys: string[]; staleFactKeys: string[] }>,
-  propertyId: string,
-  canManage: boolean,
-): Extract<AskPresentationBlock, { type: 'PROGRESS' }> | null {
-  const total = completeness.scopes.reduce((sum, scope) => sum + scope.totalFacts, 0);
-  if (total === 0) return null;
-  const known = completeness.scopes.reduce((sum, scope) => sum + scope.knownFacts, 0);
-  const sum = (pick: (scope: typeof completeness.scopes[number]) => number) => completeness.scopes.reduce((count, scope) => count + pick(scope), 0);
-  const metric = (label: string, value: number) => ({ label, value: String(value), tone: value ? 'CAUTION' as const : 'DEFAULT' as const });
-  return {
-    type: 'PROGRESS', id: 'property-completeness-progress', title: 'Property record completeness',
-    description: 'Counts the governed property facts that apply to this home and are known. Facts that are missing, conflicted or out of date are not counted as known.',
-    percent: completeness.completenessPercent,
-    basis: `${known} of ${total} applicable facts known across ${completeness.scopes.length} area${completeness.scopes.length === 1 ? '' : 's'}`,
-    metrics: [
-      metric('Missing', sum((scope) => scope.missingFactKeys.length)),
-      metric('Conflicted', sum((scope) => scope.conflictedFactKeys.length)),
-      metric('Stale', sum((scope) => scope.staleFactKeys.length)),
-    ],
-    nextSteps: incompleteScopes.slice(0, 3).map((scope) => ({
-      id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
-      description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
-      meta: [], status: `${scope.completenessPercent}% COMPLETE`, href: areaCaptureFallbackHref(propertyId, scope.scope),
-      entityType: 'PROPERTY_CONTEXT_AREA',
-      actions: areaCaptureRowActions(scope.scope, canManage, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
-    })),
-    actions: [],
-  };
-}
-
-async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const propertyHref = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
-  const completenessFocus = isPropertyCompletenessRequest(message);
-  const [access, overview, evaluation, property] = await Promise.all([
-    ensurePropertyAccess(userId, propertyId),
-    getPropertyRecordOverview(propertyId, userId, 'ASK'),
-    evaluateFeatureContext(propertyId, userId, { featureKey: 'PROPERTY_RECORD_SUMMARY', operationKey: 'VIEW_SUMMARY' }),
-    prisma.property.findUnique({
-      where: { id: propertyId },
-      select: {
-        id: true, name: true, address: true, city: true, state: true, zipCode: true, dwellingType: true,
-        propertyUse: true, occupancyStatus: true, propertySize: true, yearBuilt: true, bedrooms: true,
-        bathrooms: true, heatingType: true, coolingType: true, roofType: true, updatedAt: true,
-      },
-    }),
-  ]);
-  if (!property) throw new Error('Property not found.');
-
-  const activeRequirement = evaluation.requirements[0];
-  const canImproveContext = access.role !== HouseholdRole.VIEWER;
-  const captureSupported = activeRequirement
-    && canImproveContext
-    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
-    && activeRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
-  const captureRequests: AskCaptureRequest[] = captureSupported ? [{
-    requirementId: activeRequirement.requirementId,
-    captureKey: activeRequirement.capture.captureKey,
-    classification: activeRequirement.classification,
-    state: activeRequirement.state,
-    title: activeRequirement.capture.title,
-    question: activeRequirement.capture.question,
-    helpText: activeRequirement.capture.helpText ?? null,
-    inputSchema: activeRequirement.capture.inputSchema,
-    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
-    allowNotSure: activeRequirement.capture.allowNotSure,
-    sensitivity: activeRequirement.capture.sensitivity,
-    destinationLabel: 'Saved to this home’s Property Context',
-    confirmationText: null,
-    expectedContextVersion: evaluation.contextVersion,
-  }] : [];
-
-  const context = overview.context.status === 'AVAILABLE' ? overview.context : null;
-  const completeness = context?.completeness;
-  const percent = completeness?.completenessPercent ?? null;
-  const rooms = overview.sections.rooms.status === 'AVAILABLE' ? overview.sections.rooms.data : null;
-  const inventory = overview.sections.inventory.status === 'AVAILABLE' ? overview.sections.inventory.data : null;
-  const documents = overview.sections.documents.status === 'AVAILABLE' ? overview.sections.documents.data : null;
-  const household = overview.sections.household.status === 'AVAILABLE' ? overview.sections.household.data : null;
-  const warranties = overview.sections.warranties.status === 'AVAILABLE' ? overview.sections.warranties.data : null;
-  const timeline = overview.tools.homeTimeline.status === 'AVAILABLE' ? overview.tools.homeTimeline.data : null;
-  const incompleteScopes = (completeness?.scopes ?? [])
-    .filter((scope) => scope.completenessPercent < 100
-      || scope.missingFactKeys.length > 0
-      || scope.conflictedFactKeys.length > 0
-      || scope.staleFactKeys.length > 0)
-    .sort((left, right) => left.completenessPercent - right.completenessPercent || left.scope.localeCompare(right.scope));
-  const completenessCounts = (completeness?.scopes ?? []).reduce((counts, scope) => ({
-    missing: counts.missing + scope.missingFactKeys.length,
-    conflicted: counts.conflicted + scope.conflictedFactKeys.length,
-    stale: counts.stale + scope.staleFactKeys.length,
-  }), { missing: 0, conflicted: 0, stale: 0 });
-  const pendingDetailCount = completenessCounts.missing + completenessCounts.conflicted + completenessCounts.stale;
-  const degradedSections = [
-    rooms ? null : 'Rooms', inventory ? null : 'Inventory', documents ? null : 'Documents', household ? null : 'Household', context ? null : 'Property Context',
-  ].filter((value): value is string => Boolean(value));
-  const propertyName = property.name?.trim() || `${property.address}, ${property.city}`;
-
-  const completenessBody = context
-    ? percent === 100 && pendingDetailCount === 0
-      ? 'No pending governed property details were identified. The available Property Context is complete and current.'
-      : `${completenessCounts.missing} missing, ${completenessCounts.conflicted} conflicted, and ${completenessCounts.stale} stale detail${pendingDetailCount === 1 ? '' : 's'} were found across ${incompleteScopes.length} area${incompleteScopes.length === 1 ? '' : 's'}. ${captureRequests.length ? 'The highest-priority detail is ready to answer below.' : 'Open the property record to review the affected areas.'}`
-    : 'Property Context details are temporarily unavailable, so Ask cannot reliably determine which details are pending.';
-  const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'property-summary',
-    title: completenessFocus && percent != null
-      ? `${propertyName}’s Property Context is ${percent}% complete`
-      : `Here is the current Living Home Record for ${propertyName}`,
-    body: completenessFocus
-      ? completenessBody
-      : `${context ? `${context.knownFactCount} governed property facts are currently known.` : 'Property Context details are temporarily unavailable.'} The record contains ${rooms?.count ?? 'an unknown number of'} room${rooms?.count === 1 ? '' : 's'}, ${inventory?.totalCount ?? 'an unknown number of'} inventory item${inventory?.totalCount === 1 ? '' : 's'}, and ${documents?.totalCount ?? 'an unknown number of'} document${documents?.totalCount === 1 ? '' : 's'}. ${degradedSections.length ? `${degradedSections.join(', ')} could not be fully loaded, so this is a partial summary.` : 'All summary sections loaded successfully.'}`,
-    tone: degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100) ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-property-record', label: completenessFocus && pendingDetailCount > 0 ? 'Review missing details' : completenessFocus ? 'Review home details' : 'Open property record', href: propertyHref, style: 'PRIMARY' }],
-  }];
-
-  if (!completenessFocus) {
-    blocks.push({
-      type: 'TABLE', id: 'property-core-facts', title: 'Core property facts',
-      description: 'Values come from the canonical property record. “Not recorded” is not inferred from other fields.',
-      columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }],
-      rows: [
-        { id: 'address', values: { fact: 'Address', value: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` } },
-        { id: 'dwelling', values: { fact: 'Dwelling type', value: readablePropertyValue(property.dwellingType) } },
-        { id: 'use', values: { fact: 'Property use', value: readablePropertyValue(property.propertyUse) } },
-        { id: 'occupancy', values: { fact: 'Occupancy', value: readablePropertyValue(property.occupancyStatus) } },
-        { id: 'year-built', values: { fact: 'Year built', value: readablePropertyValue(property.yearBuilt) } },
-        { id: 'size', values: { fact: 'Living area', value: property.propertySize == null ? 'Not recorded' : `${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft` } },
-        { id: 'beds-baths', values: { fact: 'Bedrooms / bathrooms', value: `${property.bedrooms == null ? 'Not recorded' : property.bedrooms} / ${property.bathrooms == null ? 'Not recorded' : property.bathrooms}` } },
-        { id: 'heating-cooling', values: { fact: 'Heating / cooling', value: `${readablePropertyValue(property.heatingType)} / ${readablePropertyValue(property.coolingType)}` } },
-        { id: 'roof', values: { fact: 'Roof type', value: readablePropertyValue(property.roofType) } },
-      ],
-      actions: [],
-    });
-    if (inventory) {
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-inventory', title: 'Systems and inventory',
-        description: inventory.totalCount > 50
-          ? 'Showing the first 50 canonical inventory records. Open home inventory for the full collection.'
-          : 'Select an item to inspect its current canonical details without leaving Ask Cozy.',
-        sections: [{
-          id: 'inventory', title: 'Recorded items', count: inventory.totalCount,
-          items: inventory.items.slice(0, 50).map((item) => ({
-            id: item.id, title: item.name, description: null, entityType: 'INVENTORY_ITEM', href: null, actions: inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
-            status: item.isVerified ? 'VERIFIED' : null,
-            meta: [readablePropertyValue(item.category), readablePropertyValue(item.condition), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`],
-          })),
-        }],
-        actions: [
-          ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
-          { id: 'open-inventory', label: 'Open home inventory', href: `${propertyHref}/inventory`, style: 'SECONDARY' as const },
-        ],
-      });
-    }
-    if (household) {
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-household', title: 'Household access',
-        description: household.totalCount > 50
-          ? 'Showing the first 50 canonical household members. Open household access for the full collection.'
-          : 'Select a household member to inspect their current canonical role without leaving Ask Cozy.',
-        sections: [{
-          id: 'household', title: 'Household members', count: household.totalCount,
-          items: household.items.slice(0, 50).map((member) => ({
-            id: member.id, title: member.displayName?.trim() || `${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email,
-            description: null, entityType: 'HOUSEHOLD_MEMBER', href: null,
-            status: member.isPrimaryOwner ? 'PRIMARY OWNER' : null,
-            meta: [readablePropertyValue(member.role), `Joined ${humanDate(member.joinedAt) ?? 'date unavailable'}`],
-          })),
-        }],
-        actions: [{ id: 'open-household', label: 'Open household access', href: `${propertyHref}/household`, style: 'SECONDARY' }],
-      });
-    }
-    if (warranties) {
-      // Owner-only corrections: actions only on warranties the requester's own
-      // homeownerProfile added (see WARRANTY_CORRECTION_FIELDS).
-      const ownedWarrantyIds = access.role !== HouseholdRole.VIEWER
-        ? new Set((await prisma.warranty.findMany({ where: { propertyId, homeownerProfile: { userId } }, select: { id: true } })).map((row) => row.id))
-        : new Set<string>();
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-warranties', title: 'Warranties',
-        description: warranties.totalCount > 50
-          ? 'Showing the first 50 canonical warranty records. Open Warranties for the full collection.'
-          : 'Select a warranty to inspect its current canonical details without leaving Ask Cozy.',
-        sections: [{
-          id: 'warranties', title: 'Recorded warranties', count: warranties.totalCount,
-          items: warranties.items.slice(0, 50).map((warranty) => ({
-            id: warranty.id, title: warranty.providerName, description: null, entityType: 'WARRANTY', href: null, actions: warrantyCorrectionItemActions(access.role !== HouseholdRole.VIEWER, ownedWarrantyIds.has(warranty.id)),
-            status: warranty.expiryDate > new Date() ? 'ACTIVE' : 'EXPIRED',
-            meta: [readablePropertyValue(warranty.category), `Expires ${humanDate(warranty.expiryDate) ?? 'date unavailable'}`],
-          })),
-        }],
-        actions: [
-          ...(access.role !== HouseholdRole.VIEWER ? [{ id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW' as const, message: WARRANTY_ADD_MESSAGE, operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const }] : []),
-          { id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' as const },
-        ],
-      });
-    }
-    if (rooms) {
-      // IW-PRES-019 (FRD v1.79): the rooms render as a room map by stored floor level, even when no floor is recorded
-      // (then with a hint); each room carries its recorded item count and open maintenance tasks.
-      const anyFloor = rooms.items.slice(0, 50).some((room) => typeof room.floorLevel === 'number');
-      const canManageRooms = access.role !== HouseholdRole.VIEWER;
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-rooms', title: 'Rooms',
-        description: [
-          rooms.count > 50
-            ? 'Showing the first 50 canonical room records. Open Rooms for the full collection.'
-            : 'Select a room to inspect its current canonical details without leaving Ask Cozy.',
-          rooms.items.length && !anyFloor ? `Floors aren't recorded yet${canManageRooms ? '; open a room to set its floor' : ''}.` : null,
-        ].filter(Boolean).join(' '),
-        presentation: { pattern: 'ROOM_MAP' },
-        sections: [{
-          id: 'rooms', title: 'Recorded rooms', count: rooms.count,
-          items: rooms.items.slice(0, 50).map((room) => {
-            const facts = roomMapFacts(room._count);
-            return {
-              id: room.id, title: room.name, description: null, entityType: 'INVENTORY_ROOM', href: null, status: null, actions: roomRenameItemActions(access.role !== HouseholdRole.VIEWER),
-              floorLevel: typeof room.floorLevel === 'number' ? room.floorLevel : null,
-              countLabel: facts.countLabel,
-              ...(facts.badgeLabel ? { badgeLabel: facts.badgeLabel, tone: 'CAUTION' as const } : {}),
-              meta: [readablePropertyValue(room.type), facts.countLabel, ...(facts.badgeLabel ? [facts.badgeLabel] : []), `Updated ${humanDate(room.updatedAt) ?? 'date unavailable'}`],
-            };
-          }),
-        }],
-        actions: [
-          ...(access.role !== HouseholdRole.VIEWER ? [{ id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW' as const, message: ROOM_ADD_MESSAGE, operationId: 'ROOM_CREATE', style: 'PRIMARY' as const }] : []),
-          { id: 'open-rooms', label: 'Open Rooms', href: `${propertyHref}/rooms`, style: 'SECONDARY' as const },
-        ],
-      });
-    }
-    if (documents) {
-      const documentsHref = `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`;
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-documents', title: 'Documents',
-        description: documents.totalCount > 50
-          ? 'Showing the 50 most recent canonical document records. Open Documents for the full collection.'
-          : 'Select a document to inspect its current canonical details without leaving Ask Cozy.',
-        sections: [{
-          id: 'documents', title: 'Recorded documents', count: documents.totalCount,
-          items: documents.items.slice(0, 50).map((document) => ({
-            id: document.id, title: document.name, description: null, entityType: 'DOCUMENT', href: null,
-            status: document.verificationStatus,
-            meta: [readablePropertyValue(document.type), `Uploaded ${humanDate(document.createdAt) ?? 'date unavailable'}`],
-          })),
-        }],
-        actions: [{ id: 'open-documents', label: 'Open Documents', href: documentsHref, style: 'SECONDARY' }],
-      });
-    }
-  }
-
-  if (incompleteScopes.length) {
-    // IW-PRES-020 (FRD v1.91): the ring leads the list of areas that can improve.
-    const ring = completeness ? propertyCompletenessProgress(completeness, incompleteScopes, propertyId, canImproveContext) : null;
-    if (ring) blocks.push(ring);
-    blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve',
-      description: 'Internal fact keys are intentionally hidden. Open the property record or answer the inline prompt to add canonical information.',
-      sections: [{
-        id: 'incomplete-scopes', title: 'Property Context completeness', count: incompleteScopes.length,
-        items: incompleteScopes.map((scope) => ({
-          id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
-          description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
-          meta: [`${scope.missingFactKeys.length} missing`, `${scope.conflictedFactKeys.length} conflicted`, `${scope.staleFactKeys.length} stale`],
-          status: `${scope.completenessPercent}% COMPLETE`, href: areaCaptureFallbackHref(propertyId, scope.scope),
-          entityType: 'PROPERTY_CONTEXT_AREA',
-          actions: areaCaptureRowActions(scope.scope, canImproveContext, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
-        })),
-      }],
-      actions: [],
-    });
-  }
-
-  const recentEvents = timeline?.recent ?? [];
-  const canAddEvent = access.role !== HouseholdRole.VIEWER;
-  // The block also appears on a home with no confirmed events yet, so a contributor still has the Add entry point.
-  if (!completenessFocus && timeline && (recentEvents.length > 0 || canAddEvent)) {
-    blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'property-recent-events', title: 'Recent verified home activity',
-      description: recentEvents.length
-        ? `${timeline.confirmedCount} current confirmed or evidence-verified event${timeline.confirmedCount === 1 ? '' : 's'} are visible to you. Showing the most recent records.`
-        : 'No confirmed or evidence-verified events are recorded for this home yet.',
-      sections: [{
-        id: 'recent-events', title: 'Home Timeline', count: recentEvents.length,
-        items: recentEvents.map((event) => ({
-          id: event.id, title: event.title, description: null,
-          meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
-          status: event.verificationStatus, href: null, entityType: 'HOME_EVENT', actions: homeEventCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
-        })),
-      }],
-      actions: [
-        ...(canAddEvent ? [{ id: 'add-timeline-event', label: 'Add a timeline event', interactionType: 'START_WORKFLOW' as const, message: EVENT_ADD_MESSAGE, operationId: 'CAPTURE_EVENT_CONFIRM', style: 'PRIMARY' as const }] : []),
-        { id: 'open-home-timeline', label: 'Open home timeline', href: `${propertyHref}/timeline`, style: 'SECONDARY' as const },
-      ],
-    });
-  }
-
-  const freshness = [
-    { label: 'Core property record', source: 'Property', observedAt: property.updatedAt.toISOString() },
-    ...(documents?.latest ? [{ label: 'Latest document', source: `Documents · ${documents.latest.name}`, observedAt: documents.latest.createdAt.toISOString() }] : []),
-    ...(overview.tools.statusBoard.status === 'AVAILABLE' && overview.tools.statusBoard.data.updatedAt
-      ? [{ label: 'Systems and inventory', source: 'Home Inventory', observedAt: overview.tools.statusBoard.data.updatedAt.toISOString() }]
-      : []),
-  ];
-  blocks.push({ type: 'EVIDENCE', id: 'property-summary-evidence', title: 'Record freshness', items: freshness });
-
-  const permissionLimited = Boolean(activeRequirement && !canImproveContext);
-  const limited = captureRequests.length > 0 || degradedSections.length > 0 || permissionLimited || pendingDetailCount > 0 || (percent != null && percent < 100);
-  return {
-    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: captureRequests.length
-      ? 'PROPERTY_SUMMARY_CONTEXT_OPTIONAL'
-      : permissionLimited
-        ? 'PROPERTY_SUMMARY_CONTEXT_WRITE_PERMISSION_REQUIRED'
-        : degradedSections.length
-          ? 'PROPERTY_SUMMARY_PARTIAL'
-          : pendingDetailCount > 0 || (percent != null && percent < 100)
-            ? 'PROPERTY_SUMMARY_INCOMPLETE'
-            : undefined,
-    contextVersion: evaluation.contextVersion,
-    captureRequests,
-    blocks,
-    suggestions: completenessFocus
-      ? ['Summarize my home record', 'Show incomplete inventory records', 'List pending maintenance tasks']
-      : ['How complete is my property profile?', 'Show incomplete inventory records', 'What maintenance is pending?'],
-  };
-}
-
-function homeActionEmptyCopy(reason: HomeActionEmptyStateReason | null): { title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' } {
-  switch (reason) {
-    case 'DATA_UNAVAILABLE': return { title: 'Home Actions could not confirm what needs attention', body: 'One or more governed action sources are unavailable. An empty feed is not treated as an all-clear.', tone: 'CAUTION' };
-    case 'RECOMMENDATIONS_PAUSED': return { title: 'Personalized Home Actions are paused', body: 'No eligible action is currently surfaced while personalization is paused. Existing home records remain available in their domain workspaces.', tone: 'DEFAULT' };
-    case 'SOURCE_EVALUATION_PENDING': return { title: 'Home Action sources are still being evaluated', body: 'No eligible action is ready yet. Ask will not turn pending source evaluation into a recommendation.', tone: 'DEFAULT' };
-    case 'MISSING_FACTS': return { title: 'The home record needs more context before actions can be prioritized', body: 'Foundational property facts are incomplete. Add the next detail below and Ask will reevaluate the governed feed.', tone: 'CAUTION' };
-    case 'NO_ACCEPTED_WORK': return { title: 'No action is currently ready to surface', body: 'No eligible action or previously accepted operational work is available. This does not guarantee that the home needs nothing.', tone: 'DEFAULT' };
-    case 'ALL_CAUGHT_UP': return { title: 'No active Home Action is currently surfaced', body: 'The governed feed found no eligible active action. This is a feed state, not a guarantee that every possible home issue has been ruled out.', tone: 'POSITIVE' };
-    default: return { title: 'No Home Action is currently surfaced', body: 'The governed feed is empty. Ask will not interpret system silence as proof that the home needs nothing.', tone: 'DEFAULT' };
-  }
-}
-
-// FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md §14.2 ATT-104 / T03
-// fix (docs/architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md):
-// no operation in the 77-operation registry supported an all-property
-// attention view at all -- every attention operation is requiresProperty:
-// true, and no all-property/portfolio concept existed anywhere in the ask
-// services directory. Rather than changing HOME_ACTIONS's registry
-// contract (a `requiresProperty: false` change would ripple through
-// routing/execution creation and every other assumption that a Home
-// Actions turn always has exactly one property), this keeps the anchor
-// property required to invoke the operation at all, and adds an explicit,
-// message-detected "all my properties" mode inside the handler itself that
-// aggregates every property the homeowner can access -- additive and
-// backward compatible; an ordinary single-property ask is unaffected.
-const ALL_PROPERTY_ATTENTION_MAX_PROPERTIES = 10;
-
-export function isAllPropertyAttentionRequest(message: string): boolean {
-  return /\b(?:all (?:my |our )?(?:propert(?:y|ies)|homes)|across (?:all )?(?:my |our )?(?:propert(?:y|ies)|homes)|every propert(?:y|ies))\b/i.test(message);
-}
-
-// Deliberately the SAME owned+household-member access boundary
-// property.service.ts's own getUserProperties uses, but without its heavy
-// hydration (appliance/health-score/warranty enrichment this attention
-// view has no use for) -- the query itself is the access check, so no
-// separate per-property recheck is needed.
-async function accessiblePropertiesForAllPropertyAttention(userId: string): Promise<{ properties: { id: string; label: string }[]; totalAccessibleCount: number }> {
-  const homeownerProfile = await prisma.homeownerProfile.findFirst({ where: { userId }, select: { id: true } });
-  const [owned, memberships] = await Promise.all([
-    homeownerProfile
-      ? prisma.property.findMany({ where: { homeownerProfileId: homeownerProfile.id }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }], select: { id: true, name: true, address: true, city: true, state: true } })
-      : Promise.resolve([]),
-    prisma.householdMember.findMany({
-      where: { userId, ...(homeownerProfile ? { property: { homeownerProfileId: { not: homeownerProfile.id } } } : {}) },
-      select: { property: { select: { id: true, name: true, address: true, city: true, state: true } } },
-    }),
-  ]);
-  const all = [...owned, ...memberships.map((membership) => membership.property)];
-  return {
-    properties: all.slice(0, ALL_PROPERTY_ATTENTION_MAX_PROPERTIES).map((property) => ({ id: property.id, label: propertyLabel(property) })),
-    totalAccessibleCount: all.length,
-  };
-}
-
-// ATT-104: "All-property mode must label property on every item and cannot
-// merge records across properties." Each property's feed is computed via
-// its OWN full governed getHomeActionFeed call (the same canonical
-// pipeline the single-property view uses) and kept in its own GROUPED_LIST
-// section -- never re-ranked, re-deduplicated, or combined with another
-// property's items. Every item's href comes directly from that property's
-// own primaryCta, already scoped to its originating propertyId by
-// construction (confirmed true for the single-property view below), so no
-// cross-property action retargeting is possible. Returns null when there's
-// nothing distinct to aggregate (0 or 1 accessible property), letting the
-// caller fall through to the ordinary single-property read.
-// T03 fix (ATT-104 "labels property on every item"): every item below --
-// including the unavailable/empty/degraded placeholders, not just real
-// actions -- gets the property's own label as the FIRST entry of its own
-// meta array, not only as the section's title. A section title is lost the
-// moment an item is read or displayed independent of its GROUPED_LIST
-// wrapper (a flattened list, a screen reader landing directly on a result);
-// each item now carries its own property attribution regardless.
-// T08 fix (all-property mode): the single-property path's
-// diagnostics.unavailableProducers disclosure never got reached here
-// because allPropertyHomeActionsResult is an early return, before that code
-// runs. Each property's own feed.diagnostics.unavailableProducers is now
-// read directly (same field, same formatUnavailableHomeActionProducers
-// helper T08 already built) and surfaced as an explicit CAUTION item, so a
-// property whose feed call SUCCEEDS but has a degraded producer no longer
-// renders as indistinguishable from a fully healthy one.
-// Extracted as a pure function (feed already fetched, no I/O) so this logic
-// is directly unit-testable without DB mocking, same convention as
-// mergeEvidence/isCapitalTimelineAnalysisStale/formatUnavailableHomeActionProducers.
-export function buildAllPropertyHomeActionSection(
-  property: { id: string; label: string },
-  feed: Awaited<ReturnType<typeof getHomeActionFeed>> | null,
-) {
-  if (!feed) {
-    return {
-      id: `property-${property.id}`, title: property.label, count: 1,
-      items: [{ id: `property-${property.id}-unavailable`, title: "This property's actions are temporarily unavailable", description: 'Ask about this property individually to try again.', meta: [property.label], status: 'UNAVAILABLE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
-    };
-  }
-  const degradedItems = feed.diagnostics.unavailableProducers.length ? [{
-    id: `property-${property.id}-degraded`,
-    title: 'Some information for this property is temporarily limited',
-    description: `${formatUnavailableHomeActionProducers(feed.diagnostics.unavailableProducers)} could not be checked for this property right now. The items below still reflect every other source.`,
-    meta: [property.label],
-    status: 'CAUTION',
-    href: `/dashboard?propertyId=${encodeURIComponent(property.id)}`,
-  }] : [];
-  if (!feed.actions.length) {
-    return {
-      id: `property-${property.id}`, title: property.label, count: 1 + degradedItems.length,
-      items: [...degradedItems, { id: `property-${property.id}-empty`, title: 'No governed actions are currently surfaced', description: null, meta: [property.label], status: 'NONE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
-    };
-  }
-  return {
-    id: `property-${property.id}`, title: property.label, count: feed.actions.length,
-    items: [
-      ...degradedItems,
-      ...feed.actions.slice(0, MAX_RESULT_ITEMS).map((action) => ({
-        id: action.id,
-        title: action.presentation?.headline ?? action.recommendedAction,
-        description: action.presentation?.summary ?? action.whyItMatters,
-        meta: [
-          property.label,
-          action.priority === 'NOW' ? 'Now' : action.priority === 'SOON' ? 'Soon' : action.priority === 'PLAN' ? 'Plan' : 'Consider',
-          action.timing.dueAt ? `Due ${humanDate(new Date(action.timing.dueAt))}` : action.timing.rationale,
-          `${action.confidence.label.toLowerCase()} confidence`,
-        ].filter((value): value is string => Boolean(value)),
-        status: action.state,
-        href: action.primaryCta.href,
-      })),
-    ],
-  };
-}
-
-async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: string): Promise<AskOperationResult | null> {
-  const { properties, totalAccessibleCount } = await accessiblePropertiesForAllPropertyAttention(userId);
-  if (properties.length <= 1) return null;
-
-  const perProperty = await Promise.all(properties.map(async (property) => {
-    try {
-      return { property, feed: await getHomeActionFeed(property.id, userId) };
-    } catch (error) {
-      logger.warn({ error, propertyId: property.id }, "[ask-orchestrator] all-property Home Actions: one property's feed failed, excluding it rather than failing the whole read");
-      return { property, feed: null };
-    }
-  }));
-
-  const sections = perProperty.map(({ property, feed }) => buildAllPropertyHomeActionSection(property, feed));
-
-  const totalCount = perProperty.reduce((sum, { feed }) => sum + (feed?.actions.length ?? 0), 0);
-  const unavailableCount = perProperty.filter(({ feed }) => !feed).length;
-  const degradedCount = perProperty.filter(({ feed }) => feed && feed.diagnostics.unavailableProducers.length > 0).length;
-  const truncated = totalAccessibleCount > properties.length;
-
-  return {
-    status: unavailableCount > 0 || degradedCount > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: unavailableCount > 0 ? 'HOME_ACTION_ALL_PROPERTY_PARTIAL' : degradedCount > 0 ? 'HOME_ACTION_ALL_PROPERTY_PRODUCER_UNAVAILABLE' : 'HOME_ACTION_ALL_PROPERTY_VIEW',
-    contextVersion: createHash('sha256').update(JSON.stringify(perProperty.map(({ property, feed }) => ({ id: property.id, count: feed?.actions.length ?? null, generatedAt: feed?.generatedAt ?? null, unavailableProducers: feed?.diagnostics.unavailableProducers ?? null })))).digest('hex'),
-    blocks: [{
-      type: 'SUMMARY', id: 'home-actions-all-property-summary',
-      title: totalCount > 0 ? `${totalCount} governed Home Action${totalCount === 1 ? '' : 's'} across ${properties.length} propert${properties.length === 1 ? 'y' : 'ies'}` : `No Home Actions are currently surfaced across your ${properties.length} properties`,
-      body: [
-        "Each property's actions come from that property's own governed feed and are never merged or reranked together.",
-        unavailableCount ? `${unavailableCount} propert${unavailableCount === 1 ? 'y is' : 'ies are'} temporarily unavailable and excluded above.` : null,
-        degradedCount ? `${degradedCount} propert${degradedCount === 1 ? 'y has' : 'ies have'} some information temporarily limited (see the notes in that property's own section).` : null,
-        truncated ? `Showing the first ${properties.length} of ${totalAccessibleCount} accessible properties.` : null,
-      ].filter(Boolean).join(' '),
-      tone: unavailableCount > 0 || degradedCount > 0 ? 'CAUTION' : 'DEFAULT',
-      actions: [{ id: 'open-home', label: 'Open Home', href: `/dashboard?propertyId=${encodeURIComponent(anchorPropertyId)}`, style: 'PRIMARY' }],
-    }, {
-      type: 'GROUPED_LIST', filters: [], id: 'home-actions-all-property-list', title: 'By property',
-      description: 'Grouped strictly by property. Items from different properties are never combined, deduplicated together, or reranked against each other; opening or acting on an item always applies to the specific property it belongs to.',
-      sections, actions: [],
-    }, {
-      type: 'BOUNDARY', id: 'home-actions-all-property-boundary', title: 'All-property view',
-      body: "This combines each property's own governed action feed for display only. It does not create a new ranked view, merge records across properties, or change which property an action applies to.",
-      severity: 'INFO', suggestions: [],
-    }],
-    suggestions: [],
-  };
-}
-
-// T08 fix, extracted as a pure function for direct unit testing (same
-// convention as mergeEvidence/isCapitalTimelineAnalysisStale -- the DB-heavy
-// orchestration around it, getHomeActionFeed, is not independently testable
-// without a live database).
-const HOME_ACTION_PRODUCER_LABELS: Record<string, string> = {
-  ENVIRONMENT_REPORT: 'environment and severe-weather insight',
-  PERSONALIZATION: 'personalized recommendation',
-};
-
-export function formatUnavailableHomeActionProducers(unavailableProducers: readonly string[]): string {
-  return unavailableProducers.map((producer) => HOME_ACTION_PRODUCER_LABELS[producer] ?? producer.toLowerCase()).join(' and ');
-}
-
-// IW-PRES-014 (FRD v1.82): the shelf-card facts for one Home Action, from the same fields as its meta line. Only a
-// "Now" action is coloured; the timing is the due date, else the feed's own timing rationale (no cost is recorded).
-export function homeActionShelfFacts(action: {
-  priority: string;
-  timing: { dueAt?: string | Date | null; rationale?: string | null };
-}, formatDate: (value: Date) => string): { tone: 'DEFAULT' | 'CAUTION'; timingLabel: string | null } {
-  const raw = action.timing.dueAt ? `Due ${formatDate(new Date(action.timing.dueAt))}` : action.timing.rationale?.trim() || null;
-  const timingLabel = raw && raw.length > 80 ? `${raw.slice(0, 79).trimEnd()}…` : raw;
-  return { tone: action.priority === 'NOW' ? 'CAUTION' : 'DEFAULT', timingLabel };
-}
-
-async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
-  const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
-  const [access, buyerContextValue] = await Promise.all([
-    ensurePropertyAccess(userId, propertyId),
-    buyerPlanContextProvider.load({
-      userId,
-      propertyId,
-      operationId: 'HOME_ACTIONS',
-      signal: new AbortController().signal,
-    }),
-  ]);
-  const buyerResult = buyerContextValue.status === 'AVAILABLE' && buyerContextValue.data
-    ? buildBuyerPlanHomeActionsResult(buyerContextValue.data)
-    : null;
-  if (buyerResult) return buyerResult;
-
-  if (!focusedActionId && isAllPropertyAttentionRequest(message)) {
-    const allPropertyResult = await allPropertyHomeActionsResult(userId, propertyId);
-    if (allPropertyResult) return allPropertyResult;
-  }
-
-  const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: 'HOME_ACTIONS', operationKey: 'VIEW_FEED' });
-  const activeRequirement = evaluation.requirements[0];
-  const canImproveContext = access.role !== HouseholdRole.VIEWER;
-  const captureSupported = activeRequirement
-    && canImproveContext
-    && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
-    && activeRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
-  const captureRequests: AskCaptureRequest[] = captureSupported ? [{
-    requirementId: activeRequirement.requirementId,
-    captureKey: activeRequirement.capture.captureKey,
-    classification: activeRequirement.classification,
-    state: activeRequirement.state,
-    title: activeRequirement.capture.title,
-    question: activeRequirement.capture.question,
-    helpText: activeRequirement.capture.helpText ?? null,
-    inputSchema: activeRequirement.capture.inputSchema,
-    ...(activeRequirement.currentAnswer === undefined ? {} : { currentAnswer: activeRequirement.currentAnswer }),
-    allowNotSure: activeRequirement.capture.allowNotSure,
-    sensitivity: activeRequirement.capture.sensitivity,
-    destinationLabel: 'Saved to this home’s Property Context',
-    confirmationText: null,
-    expectedContextVersion: evaluation.contextVersion,
-  }] : [];
-
-  let feed: Awaited<ReturnType<typeof getHomeActionFeed>>;
-  try {
-    feed = await getHomeActionFeed(propertyId, userId);
-  } catch {
-    return {
-      status: 'UNAVAILABLE', reasonCode: 'HOME_ACTION_FEED_UNAVAILABLE', contextVersion: evaluation.contextVersion,
-      captureRequests,
-      blocks: [{
-        type: 'SUMMARY', id: 'home-actions-unavailable', title: 'Home Actions are temporarily unavailable',
-        body: 'Ask could not load the final governed action feed. It will not substitute raw signals, model memory, or an unfiltered recommendation.',
-        tone: 'CAUTION', actions: [{ id: 'open-home', label: 'Open Home', href: homeHref, style: 'PRIMARY' }],
-      }],
-      suggestions: ['Summarize my home record', 'What maintenance is pending?'],
-    };
-  }
-
-  if (focusedActionId) {
-    const focusedAction = feed.actions.find((action) => action.id === focusedActionId);
-    if (!focusedAction) {
-      return {
-        status: 'NOT_APPLICABLE',
-        reasonCode: 'HOME_ACTION_SUBJECT_NOT_ACTIVE',
-        contextVersion: evaluation.contextVersion,
-        blocks: [{
-          type: 'SUMMARY',
-          id: 'focused-home-action-not-active',
-          title: 'This Home Action is no longer active',
-          body: 'The selected action is no longer present in the current governed feed. Ask will not substitute another action or use a stale title match.',
-          tone: 'DEFAULT',
-          actions: [{ id: 'open-home-actions', label: 'View current Home Actions', href: homeHref, style: 'PRIMARY' }],
-        }],
-        suggestions: ['What else needs my attention?'],
-      };
-    }
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion);
-  }
-
-  const urgentFocus = /\b(?:urgent|right now|immediately|priority now)\b/i.test(message);
-  const soonFocus = /\bsoon\b/i.test(message);
-  const planFocus = /\b(?:should i plan|planning|plan for|later)\b/i.test(message);
-  const waitFocus = /\b(?:can wait|consider)\b/i.test(message);
-  const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);
-  const priorityFilter = urgentFocus ? ['NOW'] : soonFocus ? ['SOON'] : planFocus ? ['PLAN'] : waitFocus ? ['PLAN', 'CONSIDER'] : null;
-  const selectedActions = (priorityFilter
-    ? feed.actions.filter((action) => priorityFilter.includes(action.priority))
-    : feed.actions).slice(0, topFocus ? 5 : MAX_RESULT_ITEMS);
-  const empty = feed.actions.length === 0 ? homeActionEmptyCopy(feed.diagnostics.emptyStateReason) : null;
-  const filteredEmpty = feed.actions.length > 0 && selectedActions.length === 0;
-  const lowConfidence = selectedActions.some((action) => action.confidence.label === 'LOW');
-  const permissionLimited = Boolean(activeRequirement && !canImproveContext);
-  const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'home-actions-summary',
-    title: empty?.title
-      ?? (filteredEmpty
-        ? `No ${priorityFilter?.map((value) => value.toLowerCase()).join(' or ')} Home Action is currently surfaced`
-        : selectedActions.length === 1
-          ? selectedActions[0].presentation?.headline ?? selectedActions[0].recommendedAction
-          : `${selectedActions.length} governed Home Actions are ready to review`),
-    body: empty?.body
-      ?? (filteredEmpty
-        ? `The full governed feed contains ${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'}, but none match this timing filter.`
-        : `These are the final grounded, deduplicated, lifecycle-eligible actions from Unified Home. ${feed.buckets.NOW.length} need attention now, ${feed.buckets.SOON.length} are due soon, ${feed.buckets.PLAN.length} are for planning, and ${feed.buckets.CONSIDER.length} are optional considerations.`),
-    tone: empty?.tone ?? (feed.diagnostics.unavailableProducers.length > 0 || selectedActions.some((action) => action.priority === 'NOW') ? 'CAUTION' : 'DEFAULT'),
-    actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: homeHref, style: 'PRIMARY' }],
-  }];
-
-  // T08 fix (docs/architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md):
-  // a source producer this feed depends on can fail without throwing (the
-  // feed itself degrades gracefully and still returns), but nothing here
-  // used to disclose that -- feed.diagnostics.personalization.status was
-  // tracked internally and never read by this function at all. Disclosed
-  // the same way INTELLIGENCE_ENVELOPE_QUERY's page.diagnostics already is:
-  // named per producer, never collapsed into a generic "something's wrong."
-  // Pushed regardless of whether the feed is otherwise empty, mirroring
-  // Envelope's own unconditional-on-diagnostics-presence placement.
-  if (feed.diagnostics.unavailableProducers.length > 0) {
-    blocks.push({
-      type: 'BOUNDARY', id: 'home-actions-producer-unavailable',
-      title: 'Some Home Action sources were unavailable',
-      body: `${formatUnavailableHomeActionProducers(feed.diagnostics.unavailableProducers)} coverage was unavailable when this feed was generated. The actions below still reflect every other source; this is not a complete "nothing else needs attention" read.`,
-      severity: 'INFO', suggestions: ['Ask again to retry'],
-    });
-  }
-
-  // Phase 9B (FRD §17/§21.2): the versioned, explainable channel view of the
-  // full governed feed -- independent of this message's ad hoc timing
-  // filter (urgentFocus/soonFocus/etc.), since PRIORITY_LIST is meant to be
-  // a stable "what matters now" view, not a query-shaped one. Omitted when
-  // the feed itself is empty; the SUMMARY block above already carries the
-  // honest empty-state copy, and an empty PRIORITY_LIST block risks reading
-  // as "nothing needs attention" rather than "feed has no eligible items".
-  if (feed.actions.length) {
-    const suppressedHomeActionIds = await getSuppressedHomeActionIds({
-      userId, propertyId, homeActionIds: feed.actions.map((action) => action.id),
-    }).catch(() => new Set<string>());
-    blocks.push({
-      type: 'PRIORITY_LIST',
-      id: 'home-actions-priority-list',
-      title: 'What matters now',
-      ...buildPriorityListView(feed, 'ASK', { suppressedHomeActionIds }),
-    });
-  }
-
-  if (selectedActions.length) {
-    const priorities = ['NOW', 'SOON', 'PLAN', 'CONSIDER'] as const;
-    blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'home-actions-list', title: 'Prioritized actions',
-      // IW-PRES-014 / IW-PRES-022: Home Actions render as shelves (FRD v1.82); the cards are read-only.
-      presentation: { pattern: 'SHELVES' },
-      description: 'Priority and order come from the canonical Home Action feed. Ask does not independently rerank them.',
-      sections: priorities.map((priority) => {
-        const actions = selectedActions.filter((action) => action.priority === priority);
-        return {
-          id: priority.toLowerCase(), title: priority === 'NOW' ? 'Now' : priority === 'SOON' ? 'Soon' : priority === 'PLAN' ? 'Plan' : 'Consider', count: actions.length,
-          items: actions.map((action) => ({
-            id: action.id,
-            title: action.presentation?.headline ?? action.recommendedAction,
-            description: action.presentation?.summary ?? action.whyItMatters,
-            meta: [
-              action.presentation?.eyebrow,
-              action.timing.dueAt ? `Due ${humanDate(new Date(action.timing.dueAt))}` : action.timing.rationale,
-              `${action.confidence.label.toLowerCase()} confidence`,
-              action.source.kind.toLowerCase().replace(/_/g, ' '),
-              action.workItem ? `Work ${action.workItem.state.toLowerCase().replace(/_/g, ' ')}` : null,
-              action.ranking.explanation,
-            ].filter((value): value is string => Boolean(value)),
-            status: action.state,
-            href: action.primaryCta.href,
-            ...homeActionShelfFacts(action, (value) => humanDate(value) ?? ''),
-          })),
-        };
-      }).filter((section) => section.count > 0),
-      actions: [],
-    });
-
-    const evidenceById = new Map<string, { label: string; source: string | null; observedAt: string | null }>();
-    for (const action of selectedActions) {
-      for (const evidence of action.evidence) {
-        if (!evidenceById.has(evidence.id)) evidenceById.set(evidence.id, { label: evidence.label, source: evidence.source, observedAt: evidence.observedAt });
-        if (evidenceById.size >= 30) break;
-      }
-      if (evidenceById.size >= 30) break;
-    }
-    blocks.push({ type: 'EVIDENCE', id: 'home-actions-evidence', title: 'Evidence used by these actions', items: [...evidenceById.values()] });
-    blocks.push({
-      type: 'BOUNDARY', id: 'home-actions-boundary', title: 'Review before acting',
-      body: 'Ask is showing governed recommendations, not performing the underlying work. Financial, coverage, provider, purchase, scheduling, and other material actions continue in their dedicated workflows with their required review and confirmation controls.',
-      severity: 'INFO', suggestions: [],
-    });
-  }
-
-  const producersUnavailable = feed.diagnostics.unavailableProducers.length > 0;
-  const limited = captureRequests.length > 0 || permissionLimited || lowConfidence || producersUnavailable || feed.diagnostics.emptyStateReason === 'DATA_UNAVAILABLE' || feed.diagnostics.emptyStateReason === 'MISSING_FACTS';
-  return {
-    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: captureRequests.length
-      ? 'HOME_ACTION_CONTEXT_OPTIONAL'
-      : permissionLimited
-        ? 'HOME_ACTION_CONTEXT_WRITE_PERMISSION_REQUIRED'
-        : lowConfidence
-          ? 'HOME_ACTION_LOW_CONFIDENCE'
-          : producersUnavailable
-            ? 'HOME_ACTION_PRODUCER_UNAVAILABLE'
-            : feed.diagnostics.emptyStateReason ? `HOME_ACTION_${feed.diagnostics.emptyStateReason}` : undefined,
-    contextVersion: evaluation.contextVersion,
-    captureRequests,
-    blocks,
-    suggestions: ['Anything urgent?', 'What should I plan?', 'What can wait?'],
-  };
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md Phase 3 exit
-// criterion / F02 fix (docs/architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md):
-// REFINANCE_ANALYSIS previously had no way to edit a scenario assumption at
-// all -- the handler took no `message` parameter, so nothing a homeowner
-// typed could reach a what-if calculation, and the only writable input
-// (captureRequests) is a canonical-fact write, not a revisable assumption.
-// Gated on an explicit edit-intent framing ("what if"/"suppose"/"instead
-// of"/"if i refinanced") PLUS a parseable rate or term, deliberately
-// narrower than a bare number mention -- a homeowner asking "is refinancing
-// worth it at 6%" is asking a question about THIS number being relevant,
-// not necessarily requesting a recalculation, so an explicit hypothetical
-// framing is required before this reinterprets the turn as an edit.
-export function parseRefinanceScenarioEdit(message: string): { targetRatePct: number | null; targetTerm: RefinanceScenarioTerm | null } | null {
-  const isScenarioFraming = /\b(?:what if|suppose|hypothetically|instead of my (?:current|recorded) (?:rate|term|loan)|if i (?:refinanc(?:e|ed)?|got|get|took|take))\b/i.test(message);
-  if (!isScenarioFraming) return null;
-  const rateMatch = message.match(/(\d{1,2}(?:\.\d{1,3})?)\s*%/);
-  const targetRatePct = rateMatch ? Number(rateMatch[1]) : null;
-  const targetTerm = /\b(?:15|fifteen)[- ]?year\b/i.test(message)
-    ? RefinanceScenarioTerm.FIFTEEN_YEAR
-    : /\b(?:20|twenty)[- ]?year\b/i.test(message)
-      ? RefinanceScenarioTerm.TWENTY_YEAR
-      : /\b(?:30|thirty)[- ]?year\b/i.test(message)
-        ? RefinanceScenarioTerm.THIRTY_YEAR
-        : null;
-  if (targetRatePct == null && !targetTerm) return null;
-  return { targetRatePct, targetTerm };
-}
-
-// Mortgage-refinance-radar capability-card slice (FRD v1.45). The MONITOR block both the monitor confirmation and the
-// refinance analysis show. MonitorBlock renders its own Pause / Resume / Stop (PATCH /api/ask/monitors/:id), so the
-// block carries only the delivery-settings link. The earlier "Pause" and "Stop" links added ?monitorAction=, which no
-// page reads, and "Edit settings" pointed at ?section=alerts, which the radar page does not read either; the radar page
-// has no monitor controls, only the alert delivery preferences in its settings section.
-export function refinanceMonitorBlock(monitor: RefinanceRateMonitorDTO, title: string): AskPresentationBlock {
-  return {
-    type: 'MONITOR', id: `rate-monitor-${monitor.id}`, monitorId: monitor.id,
-    title, status: monitor.status,
-    threshold: `${monitor.thresholdPct.toFixed(3)}% or lower`,
-    product: monitor.product === 'FIXED_15_YEAR' ? '15-year fixed national benchmark' : '30-year fixed national benchmark',
-    channel: 'Email plus in-app', cadence: monitor.cadence,
-    quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
-    sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
-    actions: [{ id: 'edit-monitor', label: 'Alert delivery settings', href: `/dashboard/properties/${encodeURIComponent(monitor.propertyId)}/tools/mortgage-refinance-radar#refinance-evidence-settings`, style: 'SECONDARY' }],
-  };
-}
-
-// FRD v1.45: the refinance analysis also shows the homeowner's own ACTIVE or PAUSED rate monitors for this home, so
-// they can be paused, resumed or stopped from Ask (and from the alert email, which continues into this analysis).
-// Before this, a monitor was reachable only from the conversation that created it. A failed monitor read does not
-// fail the analysis.
-// Break-even capability-card slice (FRD v1.48): the first new operation for a capability the Appendix D audit found
-// with no Ask operation. Reads BreakEvenService.compute, the same call the Break-Even page's route makes, for the
-// 5- or 10-year horizon the page offers (default 10, as the service). The page's assumption overrides are not exposed.
-const breakEvenService = new BreakEvenService();
-
-export function breakEvenHorizonYears(message: string): 5 | 10 {
-  return /\b(?:5|five)[- ]?years?\b/i.test(message) ? 5 : 10;
-}
-
-export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string): AskOperationResult {
-  const years = dto.input.years;
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/break-even`;
-  const { breakEven, rollup, sensitivity } = dto;
-  const yearLabel = (index: number | null) => index == null ? `Not within ${years} years` : `Year ${index}`;
-  const title = breakEven.status === 'ALREADY_BREAKEVEN'
-    ? 'This home has already broken even'
-    : breakEven.status === 'PROJECTED'
-      ? `Projected to break even in ${breakEven.breakEvenCalendarYear} (year ${breakEven.breakEvenYearIndex} of ${years})`
-      : `Not projected to break even within ${years} years`;
-  const body = breakEven.status === 'NOT_REACHED'
-    ? `Over ${years} years, projected ownership costs of ${money(rollup.cumulativeExpensesAtHorizon)} stay ahead of projected appreciation of ${money(rollup.cumulativeAppreciationAtHorizon)}, a net of ${money(rollup.netAtHorizon)}.`
-    : `Over ${years} years, projected appreciation of ${money(rollup.cumulativeAppreciationAtHorizon)} against ownership costs of ${money(rollup.cumulativeExpensesAtHorizon)} leaves a net of ${money(rollup.netAtHorizon)}. Across the conservative-to-optimistic range: ${sensitivity.rangeLabel}.`;
-  // The service's own disclosures, e.g. the labeled $350,000 fallback it uses when no purchase price is recorded.
-  const notes = dto.meta.notes.filter((note) => note.trim());
-  const limited = notes.length > 0 || dto.meta.confidence === 'LOW';
-  const otherYears = years === 10 ? 5 : 10;
-  const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'break-even-summary', title, body: `${body} Confidence: ${dto.meta.confidence.toLowerCase()}.`,
-    tone: breakEven.status === 'NOT_REACHED' ? 'CAUTION' : 'DEFAULT',
-    actions: [
-      { id: 'open-break-even', label: 'Open Break-Even', href: pageHref, style: 'PRIMARY' },
-      { id: `rerun-break-even-${otherYears}`, label: `Show ${otherYears}-year horizon`, interactionType: 'START_WORKFLOW' as const, message: `Show my home break-even analysis for a ${otherYears}-year horizon.`, operationId: 'BREAK_EVEN_ANALYSIS', style: 'SECONDARY' as const },
-    ],
-  }];
-  if (notes.length) {
-    blocks.push({ type: 'LIMITATION', id: 'break-even-limitations', title: 'What this projection is missing', body: notes.join(' '), severity: 'CAUTION' });
-  }
-  blocks.push({
-    type: 'TABLE', id: 'break-even-sensitivity', title: 'Break-even range',
-    description: `Conservative, base and optimistic assumptions over ${years} years.`,
-    columns: [{ key: 'scenario', label: 'Scenario' }, { key: 'breakEven', label: 'Breaks even' }, { key: 'net', label: `Net at year ${years}` }],
-    rows: (['conservative', 'base', 'optimistic'] as const).map((key) => ({
-      id: `break-even-${key}`,
-      values: { scenario: key.charAt(0).toUpperCase() + key.slice(1), breakEven: yearLabel(sensitivity[key].breakEvenYearIndex), net: money(sensitivity[key].netAtHorizon) },
-    })),
-    actions: [],
-  }, {
-    type: 'TABLE', id: 'break-even-projection', title: 'Year-by-year projection',
-    description: 'Cumulative ownership costs against cumulative projected appreciation.',
-    columns: [{ key: 'year', label: 'Year' }, { key: 'expenses', label: 'Cumulative costs' }, { key: 'appreciation', label: 'Cumulative appreciation' }, { key: 'net', label: 'Net' }],
-    rows: dto.projection.map((row) => ({
-      id: `break-even-year-${row.year}`,
-      values: { year: String(row.year), expenses: money(row.cumulativeExpenses), appreciation: money(row.cumulativeAppreciationGain), net: money(row.netCumulative) },
-    })),
-    actions: [],
-  });
-  if (dto.drivers.length) {
-    blocks.push({
-      type: 'TABLE', id: 'break-even-drivers', title: 'What drives the result',
-      columns: [{ key: 'factor', label: 'Factor' }, { key: 'impact', label: 'Impact' }, { key: 'explanation', label: 'Why' }],
-      rows: dto.drivers.map((driver, index) => ({ id: `break-even-driver-${index + 1}`, values: { factor: driver.factor, impact: driver.impact.toLowerCase(), explanation: driver.explanation } })),
-      actions: [],
-    });
-  }
-  blocks.push({
-    type: 'EVIDENCE', id: 'break-even-evidence', title: 'Sources used',
-    items: dto.meta.dataSources.map((source) => ({ label: source, source: 'Break-Even', observedAt: dto.meta.generatedAt })),
-  }, {
-    type: 'BOUNDARY', id: 'break-even-boundary', title: 'Planning projection, not an appraisal or financial advice',
-    body: 'Appreciation and cost growth are modeled assumptions. Actual value, taxes, insurance, maintenance and selling costs will differ; an appraisal or a professional can tell you what the home is worth today.',
-    severity: 'INFO', suggestions: [],
-  });
-  return {
-    status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: `BREAK_EVEN_${breakEven.status}`,
-    contextVersion: dto.ownershipCostContext.calculationFingerprint,
-    blocks,
-    suggestions: ['Should I sell, hold, or rent this home?', 'What does this home cost me each year?'],
-  };
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-async function breakEvenAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const dto = await breakEvenService.compute(propertyId, { years: breakEvenHorizonYears(message) }, userId);
-  return breakEvenAnalysisFromDto(dto, propertyId);
-}
-
-async function refinanceAnalysisWithMonitorsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const result = await refinanceAnalysisResult(userId, propertyId, message);
-  const monitors = await listRefinanceRateMonitors(userId, propertyId).catch((error) => {
-    logger.warn({ err: error, propertyId }, '[ask] refinance monitor read failed; analysis returned without it');
-    return [];
-  });
-  if (!monitors.length) return result;
-  // A neutral title: MonitorBlock shows the live status and updates it after an inline pause / resume / stop.
-  const monitorBlocks = monitors.map((monitor) => refinanceMonitorBlock(monitor, 'Your mortgage-rate monitor'));
-  const boundaryIndex = result.blocks.findIndex((block) => block.type === 'BOUNDARY');
-  const blocks = boundaryIndex < 0 ? [...result.blocks, ...monitorBlocks] : [...result.blocks.slice(0, boundaryIndex), ...monitorBlocks, ...result.blocks.slice(boundaryIndex)];
-  return { ...result, blocks };
-}
-
-// IW-PRES-016 (FRD v1.87): the hypothetical rate and term next to the canonical comparison it was run against, as a
-// two-option strip. Each option reads only its own source: the current option reads the canonical evaluation
-// (`current`), never the hypothetical, and the scenario option reads only the recalculation (`scenario`), so the
-// unchanged comparison stays exactly what the property reports. No badge, amount or leading mark: the two are
-// different questions (the market benchmark against a rate the homeowner picked), not a ranking.
-export function refinanceScenarioComparison(
-  current: { currentRatePct: number; marketRatePct: number; monthlySavings: number; lifetimeSavings: number; breakEvenMonths: number | null },
-  scenario: { monthlySavings: number; lifetimeSavings: number; closingCostUsd: number; breakEvenMonths: number | null },
-  targetRatePct: number,
-  termLabel: string,
-): Extract<AskPresentationBlock, { type: 'COMPARISON' }> {
-  const breakEven = (months: number | null) => (months == null ? 'Not reached' : `${months} months`);
-  const attribute = (label: string, value: string) => ({ label, value, tone: 'DEFAULT' as const });
-  return {
-    type: 'COMPARISON', id: 'refinance-scenario-table', title: 'Illustrative scenario vs. your current loan',
-    description: 'A hypothetical revision, not a lender quote or a saved plan. Your recorded mortgage facts are not changed by asking this, and the current comparison was not recalculated or saved.',
-    options: [{
-      id: 'current-comparison', label: 'Your current comparison (unchanged)', summary: 'The canonical comparison this scenario was run against',
-      attributes: [
-        attribute('Your recorded mortgage rate', `${current.currentRatePct.toFixed(3)}%`),
-        attribute('Market benchmark rate', `${current.marketRatePct.toFixed(3)}%`),
-        attribute('Modeled monthly savings', money(current.monthlySavings)),
-        attribute('Modeled lifetime savings', money(current.lifetimeSavings)),
-        attribute('Estimated break-even', breakEven(current.breakEvenMonths)),
-      ],
-      actions: [],
-    }, {
-      id: 'illustrative-scenario', label: 'Illustrative scenario', summary: `A hypothetical ${termLabel} loan at ${targetRatePct.toFixed(3)}%`,
-      attributes: [
-        attribute('Illustrative target rate', `${targetRatePct.toFixed(3)}%`),
-        attribute('Illustrative target term', termLabel),
-        attribute('Modeled monthly savings', money(scenario.monthlySavings)),
-        attribute('Modeled lifetime savings', money(scenario.lifetimeSavings)),
-        attribute('Modeled closing costs', money(scenario.closingCostUsd)),
-        attribute('Estimated break-even', breakEven(scenario.breakEvenMonths)),
-      ],
-      actions: [],
-    }],
-    actions: [],
-  };
-}
-
-async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const [profile, financialContext, marketSnapshot] = await Promise.all([
-    getProfile(propertyId),
-    getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR'),
-    mortgageRateService.getLatestSnapshot(),
-  ]);
-  if (profile?.mortgageStatus === 'NO_MORTGAGE') {
-    return {
-      status: 'NOT_APPLICABLE', reasonCode: 'NO_MORTGAGE',
-      blocks: [{ type: 'SUMMARY', id: 'refinance-not-applicable', title: 'No mortgage is recorded for this home', body: 'A mortgage refinance analysis does not apply unless the financing profile is corrected to show an active mortgage.', tone: 'DEFAULT', actions: [{ id: 'review-financing', label: 'Review financing profile', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'SECONDARY' }] }],
-      suggestions: ['Show other home savings opportunities'],
-    };
-  }
-
-  const missing = [
-    profile?.currentMortgageBalanceCents == null ? 'currentMortgageBalanceUsd' : null,
-    profile?.interestRateBps == null ? 'interestRatePct' : null,
-    profile?.remainingTermMonths == null ? 'remainingTermYears' : null,
-  ].filter((value): value is string => Boolean(value));
-  if (missing.length) {
-    const fields = [
-      ...(missing.includes('currentMortgageBalanceUsd') ? [{ key: 'currentMortgageBalanceUsd', label: 'Current mortgage balance', helpText: 'An approximate current principal balance is acceptable.', required: true, inputSchema: { type: 'DECIMAL' as const, min: 1_000, max: 100_000_000, unit: 'USD' } }] : []),
-      ...(missing.includes('interestRatePct') ? [{ key: 'interestRatePct', label: 'Current interest rate', helpText: 'Enter the note rate on your existing mortgage, not a market quote.', required: true, inputSchema: { type: 'DECIMAL' as const, min: 0.01, max: 30, unit: '%' } }] : []),
-      ...(missing.includes('remainingTermYears') ? [{ key: 'remainingTermYears', label: 'Remaining loan term', helpText: 'An estimate in years is fine.', required: true, inputSchema: { type: 'DECIMAL' as const, min: 0.1, max: 50, unit: 'years' } }] : []),
-      ...(profile?.monthlyPaymentCents == null ? [{ key: 'monthlyPaymentUsd', label: 'Monthly principal and interest payment', helpText: 'Optional. Leave blank and the analysis will calculate an amortized estimate.', required: false, inputSchema: { type: 'DECIMAL' as const, min: 1, max: 1_000_000, unit: 'USD/month' } }] : []),
-    ];
-    return {
-      status: 'NEEDS_CONTEXT', reasonCode: 'MORTGAGE_PROFILE_INCOMPLETE', contextVersion: financialContext.contextVersion,
-      parameters: { captureOwner: 'PropertyFinancingProfile' },
-      blocks: [{
-        type: 'SUMMARY', id: 'refinance-needs-context', title: 'A few mortgage details are needed for a meaningful comparison',
-        body: marketSnapshot
-          ? `The latest governed 30-year benchmark is ${marketSnapshot.rate30yr.toFixed(3)}% as of ${marketSnapshot.date}. I won’t compare it with an assumed current loan rate or treat missing balances as zero.`
-          : 'Your mortgage profile is incomplete, and no governed market-rate snapshot is currently available. Save the loan details now and Ask can use them when a benchmark becomes available.',
-        tone: 'CAUTION', actions: [],
-      }],
-      captureRequests: [{
-        requirementId: `refinance-profile-${financialContext.contextVersion.slice(0, 20)}`,
-        captureKey: 'FINANCING_PROFILE_REFINANCE_INPUTS', classification: 'REQUIRED_CALCULATION', state: 'UNKNOWN',
-        title: 'Complete mortgage details', question: 'Add only the current-loan details needed to compare refinancing options.',
-        helpText: 'These values are stored in this home’s Financing Profile and are not sent to an LLM.',
-        inputSchema: { type: 'GROUP', fields },
-        currentAnswer: {}, allowNotSure: false, sensitivity: 'FINANCIAL',
-        destinationLabel: 'Saved to this home’s Financing Profile',
-        confirmationText: 'I confirm these mortgage details are accurate enough to save to this home’s Financing Profile.',
-        expectedContextVersion: financialContext.contextVersion,
-      }],
-      suggestions: ['Use the full Financing Profile instead'],
-    };
-  }
-
-  if (!marketSnapshot) {
-    return {
-      status: 'UNAVAILABLE', reasonCode: 'MARKET_RATE_UNAVAILABLE', contextVersion: financialContext.contextVersion,
-      blocks: [{ type: 'SUMMARY', id: 'refinance-market-unavailable', title: 'A current governed mortgage-rate benchmark is unavailable', body: 'Your loan details are ready, but Ask will not use model knowledge or an undated rate as the market benchmark. Try again after the Mortgage Refinance Radar receives a dated source snapshot.', tone: 'CAUTION', actions: [{ id: 'open-radar', label: 'Open Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] }],
-      suggestions: ['What rate would make refinancing worth reviewing?'],
-    };
-  }
-
-  const result = await refinanceRadarService.evaluateProperty(propertyId, financialContext.contextVersion);
-  if (!result.available) {
-    return { status: 'UNAVAILABLE', reasonCode: result.reason, contextVersion: financialContext.contextVersion, blocks: [{ type: 'SUMMARY', id: 'refinance-analysis-unavailable', title: 'The refinance analysis is not ready', body: 'The Mortgage Refinance Radar could not complete a property-specific comparison. Review the financing profile and try again.', tone: 'CAUTION', actions: [{ id: 'open-profile', label: 'Review financing profile', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'PRIMARY' }] }], suggestions: [] };
-  }
-
-  // F02 fix (see parseRefinanceScenarioEdit above): a real, isolated what-if
-  // recalculation -- RefinanceRadarService.runScenario with saveScenario:
-  // false, confirmed by direct read, never writes RefinanceScenarioSnapshot
-  // and never touches PropertyFinancingProfile; it only READS the canonical
-  // mortgage context. This branch returns entirely separately from the
-  // canonical comparison below -- nothing here is combined with or
-  // overwrites it, mirroring HVAC_DECISION_SCENARIO's own isolated-scenario
-  // shape (verified in the Phase 7 Decisions document, D02). The canonical
-  // analysis remains exactly as-is and is reproduced unchanged by simply
-  // asking again without the hypothetical framing.
-  const scenarioEdit = parseRefinanceScenarioEdit(message);
-  if (scenarioEdit) {
-    try {
-      const targetRatePct = scenarioEdit.targetRatePct ?? marketSnapshot.rate30yr;
-      const targetTerm = scenarioEdit.targetTerm ?? RefinanceScenarioTerm.THIRTY_YEAR;
-      const termLabel = targetTerm === RefinanceScenarioTerm.FIFTEEN_YEAR ? '15-year' : targetTerm === RefinanceScenarioTerm.TWENTY_YEAR ? '20-year' : '30-year';
-      const scenario = await refinanceRadarService.runScenario(propertyId, {
-        targetRate: targetRatePct,
-        targetTerm,
-        borrowerCreditBand: 'UNKNOWN',
-        objective: 'BALANCED',
-        saveScenario: false,
-        propertyContextVersion: financialContext.contextVersion,
-      });
-      return {
-        status: 'ANSWERED', contextVersion: financialContext.contextVersion,
-        blocks: [{
-          type: 'SUMMARY', id: 'refinance-scenario-summary',
-          title: `Illustrative ${termLabel} scenario at ${targetRatePct.toFixed(3)}%`,
-          body: 'This is a hypothetical recalculation only. Nothing was saved, and your recorded mortgage rate and term are unchanged. The current comparison is shown below, unchanged, alongside it.',
-          tone: 'DEFAULT',
-          actions: [{ id: 'open-radar', label: 'Explore in Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }],
-        }, refinanceScenarioComparison(
-          result, scenario, targetRatePct, termLabel,
-        ), {
-          type: 'EVIDENCE', id: 'refinance-scenario-evidence', title: 'Sources used',
-          items: [{ label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() }],
-        }, {
-          type: 'BOUNDARY', id: 'refinance-scenario-boundary', title: 'Illustrative scenario—not a lender quote or a saved plan',
-          body: 'This models a hypothetical rate and term only. Actual eligibility, APR, and closing costs depend on lender underwriting. Nothing here changes your recorded mortgage facts or enables rate monitoring.',
-          severity: 'INFO', suggestions: [],
-        }],
-        suggestions: ['Is refinancing worth it right now?', 'Notify me when rates reach this level'],
-      };
-    } catch (error) {
-      // Best-effort: a scenario computation failure must not break the
-      // ordinary canonical-analysis read this turn would otherwise return.
-      logger.warn({ error, propertyId }, '[ask-orchestrator] refinance scenario computation failed, falling back to the canonical analysis');
-    }
-  }
-
-  const favorable = result.radarState === 'OPEN';
-  const rows = [
-    { id: 'current-rate', values: { metric: 'Your recorded mortgage rate', value: `${result.currentRatePct.toFixed(3)}%`, meaning: 'Existing loan note rate' } },
-    { id: 'market-rate', values: { metric: 'Market benchmark rate', value: `${result.marketRatePct.toFixed(3)}%`, meaning: `National 30-year benchmark as of ${marketSnapshot.date}` } },
-    { id: 'target-rate', values: { metric: 'Modeled target scenario rate', value: `${result.marketRatePct.toFixed(3)}%`, meaning: 'Illustrative target set to the latest benchmark—not a lender quote' } },
-    { id: 'rate-gap', values: { metric: 'Rate difference', value: `${result.rateGapPct.toFixed(3)} percentage points`, meaning: result.rateGapPct > 0 ? 'Existing rate is higher' : 'Existing rate is not higher' } },
-    ...(result.triggerRatePct == null ? [] : [{ id: 'trigger-rate', values: { metric: 'Radar review threshold', value: `${result.triggerRatePct.toFixed(3)}% or lower`, meaning: result.triggerRateExplanation } }]),
-    { id: 'monthly-savings', values: { metric: 'Modeled monthly savings', value: money(result.monthlySavings), meaning: 'Principal-and-interest estimate' } },
-    { id: 'lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(result.lifetimeSavings), meaning: 'Interest difference after modeled closing costs' } },
-    { id: 'closing-cost', values: { metric: 'Modeled closing costs', value: money(result.closingCostAssumptionUsd), meaning: 'Planning assumption' } },
-    { id: 'break-even', values: { metric: 'Estimated break-even', value: result.breakEvenMonths == null ? 'Not reached' : `${result.breakEvenMonths} months`, meaning: 'Time to recover modeled costs' } },
-    { id: 'confidence', values: { metric: 'Opportunity confidence', value: result.confidenceLevel ?? 'Not qualified', meaning: 'Based on modeled savings and break-even' } },
-  ];
-  return {
-    status: 'ANSWERED', contextVersion: financialContext.contextVersion,
-    blocks: [{
-      type: 'SUMMARY', id: 'refinance-analysis-summary', title: favorable ? 'Refinancing may be worth comparing now' : 'Current conditions do not meet the radar’s actionable threshold',
-      body: result.radarSummary, tone: favorable ? 'POSITIVE' : 'DEFAULT',
-      actions: [{ id: 'open-radar', label: 'Explore refinance scenarios', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }],
-    }, {
-      type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
-      description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',
-      columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }, { key: 'meaning', label: 'What it represents' }], rows, actions: [],
-    }, {
-      type: 'EVIDENCE', id: 'refinance-evidence', title: 'Sources used', items: [
-        { label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() },
-        { label: '30-year market benchmark', source: `${marketSnapshot.source}${marketSnapshot.sourceRef ? ` · ${marketSnapshot.sourceRef}` : ''}`, observedAt: `${marketSnapshot.date}T00:00:00.000Z` },
-      ],
-    }, {
-      type: 'BOUNDARY', id: 'refinance-boundary', title: 'Planning estimate—not a loan offer', body: 'Actual eligibility, APR, closing costs, taxes, insurance, points, credits, and available rates depend on lender underwriting and a formal Loan Estimate. Compare offers before making a financial commitment.', severity: 'INFO', suggestions: [],
-    }],
-    suggestions: ['What rate would open a stronger opportunity?', 'Show me the Mortgage Refinance Radar'],
-  };
-}
-
-function parseRateThreshold(message: string): number | null {
-  const match = message.match(/(?:below|under|to|reaches?|hits?)\s*(\d{1,2}(?:\.\d{1,3})?)\s*%/i)
-    ?? message.match(/(\d{1,2}(?:\.\d{1,3})?)\s*%/);
-  if (!match) return null;
-  const value = Number(match[1]);
-  return Number.isFinite(value) && value > 0 && value <= 30 ? value : null;
-}
-
-async function refinanceRateMonitorResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const thresholdPct = parseRateThreshold(message);
-  if (thresholdPct === null) {
-    return {
-      status: 'NEEDS_CLARIFICATION', reasonCode: 'RATE_THRESHOLD_REQUIRED',
-      ...durableFreeTextClarification('REFINANCE_RATE_MONITOR', 'What mortgage-rate threshold and term should trigger the alert?'),
-      blocks: [{ type: 'SUMMARY', id: 'rate-monitor-threshold-needed', title: 'What rate should trigger the alert?', body: 'Enter a mortgage benchmark threshold such as “Notify me when 30-year rates reach 5.5%.”', tone: 'CAUTION', actions: [] }],
-      suggestions: ['Notify me when 30-year rates reach 5.5%', 'Notify me when 15-year rates reach 4.75%'],
-    };
-  }
-  const product = /\b15[ -]?year\b/i.test(message) ? RefinanceRateMonitorProduct.FIXED_15_YEAR : RefinanceRateMonitorProduct.FIXED_30_YEAR;
-  const preference = await getRefinanceAlertPreference(userId, propertyId);
-  if (!preference.recipientInRolloutCohort || !preference.externalDeliveryEnabled) {
-    return {
-      status: 'UNAVAILABLE', reasonCode: !preference.recipientInRolloutCohort ? 'REFINANCE_ALERT_ROLLOUT_UNAVAILABLE' : 'REFINANCE_ALERT_DELIVERY_UNAVAILABLE',
-      blocks: [{ type: 'SUMMARY', id: 'rate-monitor-unavailable', title: 'Email rate alerts are not available for this account yet', body: 'Mortgage Refinance Radar can still show the latest governed benchmark and personalized review threshold in the app. Ask will not claim an external notification is active until delivery eligibility is confirmed.', tone: 'CAUTION', actions: [{ id: 'open-radar', label: 'Open Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] }],
-      suggestions: ['Is refinancing worth reviewing now?'],
-    };
-  }
-  const confirmationVersion = 1;
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  const quietStart = preference.quietStart ?? '21:00';
-  const quietEnd = preference.quietEnd ?? '07:00';
-  const contextVersion = await refinanceMonitorContextVersion(userId, propertyId);
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'MONITOR_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: {
-      thresholdPct, product, channel: 'EMAIL', cadence: 'IMMEDIATE', quietStart, quietEnd,
-      timezone: preference.timezone || 'UTC', refinanceMonitorContextVersion: contextVersion, confirmationVersion, confirmationExpiresAt: expiresAt.toISOString(),
-    },
-    blocks: [{ type: 'SUMMARY', id: 'rate-monitor-review', title: 'Review this mortgage-rate monitor', body: 'No monitor has been created yet. Confirm the settings below to activate governed benchmark monitoring and email delivery.', tone: 'DEFAULT', actions: [] }],
-    confirmation: {
-      confirmationId: `rate-monitor-${propertyId}-${confirmationVersion}`,
-      version: confirmationVersion,
-      title: 'Start mortgage-rate monitoring?',
-      description: 'ContractToCozy will evaluate newly ingested governed mortgage-rate snapshots and notify you when the selected benchmark is at or below your threshold.',
-      fields: [
-        { label: 'Benchmark', value: product === RefinanceRateMonitorProduct.FIXED_15_YEAR ? '15-year fixed national benchmark' : '30-year fixed national benchmark' },
-        { label: 'Threshold', value: `${thresholdPct.toFixed(3)}% or lower` },
-        { label: 'Channel', value: 'Email plus in-app notification' },
-        { label: 'Cadence', value: 'Immediate when a newly ingested snapshot qualifies' },
-        { label: 'Quiet hours', value: `${quietStart}–${quietEnd} (${preference.timezone || 'UTC'})` },
-        { label: 'Source boundary', value: 'Governed national benchmark—not a personalized lender quote' },
-      ],
-      editableFields: [], confirmLabel: 'Start monitor',
-      consentText: 'I consent to receive refinance threshold notifications by email using these settings.',
-      expiresAt: expiresAt.toISOString(),
-    },
-    suggestions: [],
-  };
-}
-
-async function capabilityResult(userId: string, propertyId: string | null | undefined, message: string): Promise<AskOperationResult> {
-  const exploreToolsHref = propertyId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools`
-    : '/dashboard/home-tools';
-  const availability = createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry);
-  const catalog = buildCapabilityCatalog({
-    registry: canonicalCapabilityRegistry,
-    availability,
-    userId,
-    propertyId: propertyId ?? undefined,
-    includeWorkflowContext: false,
-  });
-  const catalogById = new Map(catalog.capabilities.map((capability) => [capability.id, capability]));
-  const availableDefinitions = availability.listAvailable({ userId, includeWorkflowOnly: false });
-  const allMatches = matchCapabilityGoal({ registry: canonicalCapabilityRegistry, goal: message, limit: 5 });
-  const availableMatches = matchCapabilityGoal({
-    registry: canonicalCapabilityRegistry,
-    goal: message,
-    capabilities: availableDefinitions,
-    limit: 5,
-  });
-  const strongest = allMatches.matches[0];
-  const strongestAvailable = availableMatches.matches[0];
-  const requestedUnavailable = strongest
-    && !catalogById.has(strongest.capabilityId)
-    && (!strongestAvailable || strongest.score - strongestAvailable.score >= 8);
-
-  if (requestedUnavailable) {
-    const capability = canonicalCapabilityRegistry.getById(strongest.capabilityId)!;
-    const decision = availability.resolve(capability.id, userId);
-    const workflowOnly = capability.destination.workflowOnly;
-    return {
-      status: 'UNAVAILABLE',
-      reasonCode: workflowOnly ? 'CAPABILITY_REQUIRES_WORKFLOW_CONTEXT' : decision.reason ?? 'CAPABILITY_UNAVAILABLE',
-      contextVersion: catalog.registryVersion,
-      blocks: [{
-        type: 'SUMMARY',
-        id: 'requested-capability-unavailable',
-        title: `${capability.presentation.label} is not available here`,
-        body: workflowOnly
-          ? 'This capability is offered only from an eligible home workflow where the required source context is present. I will not provide a stale or non-launchable shortcut.'
-          : 'This capability is currently disabled, outside your rollout, or has failed a launch-readiness check. I will not recommend a tool that cannot be opened safely.',
-        tone: 'CAUTION',
-        actions: [{ id: 'explore-available-tools', label: 'Explore available tools', href: exploreToolsHref, style: 'SECONDARY' }],
-      }],
-      suggestions: ['Show me another available option', 'What can help with this goal instead?'],
-    };
-  }
-
-  if (!availableMatches.matches.length) {
-    return {
-      status: 'ANSWERED',
-      blocks: [{
-        type: 'SUMMARY', id: 'no-capability-match', title: 'Tell me what outcome you want',
-        body: 'I could not identify one specific tool yet. Describe the decision, task, risk, savings goal, or major home moment you want help with.',
-        tone: 'DEFAULT', actions: [{ id: 'explore-tools', label: 'Explore home tools', href: exploreToolsHref, style: 'SECONDARY' }],
-      }],
-      suggestions: ['Help me compare contractor quotes', 'I want to plan future replacements', 'Can you monitor refinance rates?'],
-    };
-  }
-
-  const readiness = propertyId
-    ? await getCapabilityDiscoveryReadiness({ propertyId, userId })
-    : null;
-  const ranked = availableMatches.matches
-    .slice(0, availableMatches.ambiguous ? 3 : 2)
-    .flatMap((match) => {
-      const capability = catalogById.get(match.capabilityId);
-      return capability ? [{ capability, match }] : [];
-    });
-  const card = (capability: CapabilityCatalogItem) => {
-    const requiresProperty = capability.readinessRequirements.some((requirement) => requirement.kind === 'PROPERTY');
-    const policyReadiness = readiness?.readinessByCapabilityId[capability.id];
-    const state = !propertyId && requiresProperty
-      ? 'NEEDS_PROPERTY' as const
-      : policyReadiness ?? 'READY' as const;
-    const reasons = state === 'NEEDS_PROPERTY'
-      ? ['Select a home so the capability can use the correct property context.']
-      : readiness?.reasonsByCapabilityId[capability.id] ?? [];
-    const readinessLabel = state === 'READY'
-      ? 'Ready for this home'
-      : state === 'NEEDS_PROPERTY'
-        ? 'Home selection required'
-        : state === 'NEEDS_CONTEXT'
-          ? 'More home details will improve the result'
-          : 'Not ready for the current context';
-    return {
-      id: capability.id,
-      label: capability.label,
-      description: capability.shortDescription,
-      expectedOutput: capability.expectedOutput,
-      href: capability.href,
-      ...capabilityCardLaunch(capability.id),
-      readiness: state,
-      readinessLabel,
-      readinessReasons: reasons.slice(0, 5),
-      releaseStage: capability.releaseStage,
-    };
-  };
-  const blocks: AskPresentationBlock[] = [{
-    type: 'CAPABILITY_LIST',
-    id: 'capability-matches',
-    title: availableMatches.ambiguous ? 'A few tools could fit—choose the closest goal' : 'Best match for your goal',
-    description: availableMatches.ambiguous
-      ? 'These are close matches from the live capability registry. Nothing was chosen on your behalf.'
-      : 'Ranked from reviewed homeowner language, current availability, and canonical readiness policy.',
-    capabilities: ranked.map(({ capability }) => card(capability)),
-  }];
-
-  if (propertyId && ranked[0]) {
-    try {
-      const related = await getRelatedCapabilities({
-        propertyId,
-        userId,
-        currentCapabilityId: ranked[0].capability.id,
-        limit: 3,
-      });
-      const selectedIds = new Set(ranked.map(({ capability }) => capability.id));
-      const relatedCards = related.suggestions
-        .filter((suggestion) => !selectedIds.has(suggestion.capabilityId))
-        .slice(0, 3)
-        .flatMap((suggestion) => {
-          const capability = catalogById.get(suggestion.capabilityId);
-          return capability ? [card(capability)] : [];
-        });
-      if (relatedCards.length) {
-        blocks.push({
-          type: 'CAPABILITY_LIST',
-          id: 'related-capabilities',
-          title: 'Related tools for what comes next',
-          description: 'Related through the canonical capability lifecycle and filtered for this home.',
-          capabilities: relatedCards,
-        });
-      }
-    } catch {
-      // Discovery remains useful if optional continuity context is temporarily unavailable.
-    }
-  }
-
-  return {
-    status: 'ANSWERED',
-    contextVersion: readiness?.contextVersion ?? catalog.registryVersion,
-    blocks,
-    suggestions: availableMatches.ambiguous
-      ? ['Help me narrow these options', 'Show only tools ready for this home']
-      : ['What information does this tool need?', 'What result will I get?', 'Show another option'],
-  };
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function emergencyResult(): AskOperationResult {
   return {
@@ -3946,22 +1730,8 @@ const launchMaintenanceTaskId = (envelope: CapabilityInvocationEnvelope): string
   envelope.launchContext?.entityType === 'MAINTENANCE_TASK' ? envelope.launchContext.entityId ?? null : null;
 registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, (envelope.suppliedInput as MaintenanceCompletionWorkflowInput | undefined) ?? (launchMaintenanceTaskId(envelope) ? { taskId: launchMaintenanceTaskId(envelope)! } : undefined), envelope.launchContext?.sourceExecutionId ?? null));
 registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, launchMaintenanceTaskId(envelope), envelope.launchContext?.sourceExecutionId ?? null));
-registerCapabilityHandler('property.summary', async (envelope) => propertySummaryResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('intelligence-envelope.query', async (envelope) => intelligenceEnvelopeQueryResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor, envelope.suppliedInput as RadarEnvelopeQuerySuppliedInput | undefined));
-registerCapabilityHandler('home-actions.feed', async (envelope) => homeActionsResult(
-  envelope.userId,
-  envelope.propertyId!,
-  envelope.message,
-  envelope.launchContext?.entityType === 'HOME_ACTION'
-    ? envelope.launchContext.actionId ?? envelope.launchContext.entityId
-    : null,
-));
 registerCapabilityHandler('home-operations.update', async (envelope) => operationalWorkUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
-registerCapabilityHandler('inspection-findings.review', async (envelope) => inspectionFindingsResult(envelope.userId, envelope.propertyId!));
-registerCapabilityHandler('inspection-findings.update', async (envelope) => inspectionFindingUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
-registerCapabilityHandler('document-promotion.review', async (envelope) => documentPromotionReviewResult(envelope.propertyId!));
-registerCapabilityHandler('document-promotion.confirm', async (envelope) => documentPromotionConfirmResult(envelope.propertyId!, envelope.message, envelope.launchContext));
-registerCapabilityHandler('documents.lookup', async (envelope) => documentLookupResult(envelope.userId, envelope.propertyId!));
 registerCapabilityHandler('inventory.replacement', async (envelope) => replacementGuidanceResult(
   envelope.userId,
   envelope.propertyId!,
@@ -3969,9 +1739,6 @@ registerCapabilityHandler('inventory.replacement', async (envelope) => replaceme
   envelope.launchContext?.entityType === 'INVENTORY_ITEM' ? envelope.launchContext.entityId : null,
   envelope.executionId,
 ));
-registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisWithMonitorsResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRateMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('break-even.analysis', async (envelope) => breakEvenAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message));
 
 
 
@@ -3989,380 +1756,34 @@ registerCapabilityHandler('break-even.analysis', async (envelope) => breakEvenAn
 
 
 
-// Sentinel written into the SELECT dropdown to mean "no room" / "no item" (parallel to INVENTORY_ITEM_CREATE's
-// INVENTORY_NO_ROOM_VALUE) -- an editable field's value is always a non-empty string, never JSON null.
-const HOME_EVENT_LINK_NONE_VALUE = 'NONE';
-const HOME_EVENT_LINK_FIELDS = new Set<HomeEventCorrectionField>(['roomId', 'inventoryItemId']);
-
-const HomeEventCorrectionInputSchema = z.object({
-  eventId: z.string().trim().min(1).max(160),
-  field: z.enum(['title', 'occurredAt', 'summary', 'amount', 'type', 'importance', 'roomId', 'inventoryItemId']),
-  value: z.string().max(2000).nullable(),
-}).strict();
-
-// "amount"/"cost"/"price" are checked before "type" and "date" only to keep the parse order explicit; the
-// fields do not overlap in practice.
-function homeEventCorrectionField(message: string): HomeEventCorrectionField | null {
-  if (/\binventory\s+item\b/i.test(message)) return 'inventoryItemId';
-  if (/\broom\b/i.test(message)) return 'roomId';
-  if (/\b(?:amount|cost|price)\b/i.test(message)) return 'amount';
-  if (/\b(?:summary|description)\b/i.test(message)) return 'summary';
-  if (/\bimportance\b/i.test(message)) return 'importance';
-  if (/\btype\b/i.test(message)) return 'type';
-  if (/\b(?:title|name)\b/i.test(message)) return 'title';
-  if (/\bdate\b/i.test(message)) return 'occurredAt';
-  return null;
-}
-
-// Async (unlike every other correction's value check) because the two link fields must be re-verified against live,
-// property-scoped data -- a static option list cannot tell a stale or cross-property id from a real one.
-async function homeEventCorrectionValueError(propertyId: string, field: HomeEventCorrectionField, value: unknown): Promise<string | null> {
-  if (field === 'roomId' || field === 'inventoryItemId') {
-    if (value === HOME_EVENT_LINK_NONE_VALUE) return null;
-    if (typeof value !== 'string' || !value.trim()) return field === 'roomId' ? 'Choose a room, or "No room".' : 'Choose an item, or "No item".';
-    const found = field === 'roomId'
-      ? await prisma.inventoryRoom.findFirst({ where: { id: value, propertyId }, select: { id: true } })
-      : await prisma.inventoryItem.findFirst({ where: { id: value, propertyId, ...visibleInventoryItemWhere() }, select: { id: true } });
-    return found ? null : (field === 'roomId' ? 'That room is not in this home. Choose a recorded room, or "No room".' : 'That item is not in this home. Choose a recorded item, or "No item".');
-  }
-  return correctionValueError(HOME_EVENT_CORRECTION_FIELDS[field], value);
-}
-
-// The value currently recorded for a field, in the canonical string form the card edits.
-function homeEventFieldCurrent(event: object, field: HomeEventCorrectionField): string | null {
-  const raw = (event as Record<string, unknown>)[field === 'occurredAt' ? 'occurredAt' : field];
-  const kind = HOME_EVENT_CORRECTION_FIELDS[field].kind;
-  if (kind === 'DATE') return correctionDateString(raw);
-  if (kind === 'MONEY') return correctionMoneyFromDollars(raw);
-  return typeof raw === 'string' && raw.trim() ? raw : null;
-}
-
-function homeEventFieldPatch(field: HomeEventCorrectionField, normalized: string): Record<string, unknown> {
-  if (field === 'occurredAt') return { occurredAt: `${normalized}T00:00:00.000Z`, datePrecision: 'EXACT_DATE' };
-  if (field === 'amount') return { amount: Number(normalized) };
-  if (HOME_EVENT_LINK_FIELDS.has(field)) return { [field]: normalized === HOME_EVENT_LINK_NONE_VALUE ? null : normalized };
-  return { [field]: normalized };
-}
-
-// The property's own rooms (or visible, non-deleted inventory items), as SELECT options for a link field, with a
-// leading "No room"/"No item" entry -- capped like every other inline room/item picker in this file.
-async function homeEventLinkOptions(propertyId: string, field: 'roomId' | 'inventoryItemId'): Promise<CorrectionOption[]> {
-  if (field === 'roomId') {
-    const rooms = await prisma.inventoryRoom.findMany({ where: { propertyId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: 50, select: { id: true, name: true } });
-    return [{ label: 'No room', value: HOME_EVENT_LINK_NONE_VALUE }, ...rooms.map((room) => ({ label: room.name, value: room.id }))];
-  }
-  const items = await prisma.inventoryItem.findMany({ where: { propertyId, ...visibleInventoryItemWhere() }, orderBy: { name: 'asc' }, take: 50, select: { id: true, name: true } });
-  return [{ label: 'No item', value: HOME_EVENT_LINK_NONE_VALUE }, ...items.map((item) => ({ label: item.name, value: item.id }))];
-}
-
-// Why this event cannot take this correction, or null.
-function homeEventCorrectionBlocker(event: { datePrecision: string; type?: string }, field: HomeEventCorrectionField): string | null {
-  if (field === 'occurredAt' && event.datePrecision === 'RANGE') return 'This event is recorded as a date range and cannot be corrected here.';
-  if (field === 'type' && event.type === 'VERIFIED_RESOLUTION') return 'This event was created automatically when a guided plan was completed, so its type cannot be changed here.';
-  return null;
-}
-
-function homeEventContextVersion(event: { id: string; revision: number }): string {
-  return createHash('sha256').update(`${event.id}:${event.revision}`).digest('hex');
-}
 
 
-function homeEventCorrectionConfirmation(event: { id: string; title: string }, field: HomeEventCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date, dynamicOptions?: readonly CorrectionOption[]) {
-  // A link field's options come from the property's live rooms/items, not a static list; substituting them into
-  // `meta` lets the "Current value" display and the editable field's own options share the exact same lookup.
-  const meta = dynamicOptions ? { ...HOME_EVENT_CORRECTION_FIELDS[field], options: dynamicOptions } : HOME_EVENT_CORRECTION_FIELDS[field];
-  return {
-    confirmationId: `home-event-correct-${event.id}-${version}`, version, title: `Correct the ${meta.label} of "${event.title}"?`,
-    description: 'This records a new revision on the canonical home timeline; the original is preserved as history. An evidence-verified event returns to pending confirmation until it is verified again.',
-    fields: [{ label: 'Event', value: event.title }, { label: 'Field', value: meta.label }, { label: 'Current value', value: correctionDisplay(meta, current) },
-      ...(field === 'occurredAt' ? [{ label: 'Date precision', value: 'Recorded as an exact date' }] : [])],
-    editableFields: [{
-      key: 'value', label: `Corrected ${meta.label}`, type: meta.kind, value: proposed ?? '',
-      ...(meta.kind === 'SELECT' ? { options: [...(meta.options ?? [])] } : {}),
-    }],
-    confirmLabel: `Save ${meta.label}`, consentText: 'I authorize this correction to the shared home timeline.', expiresAt: expiresAt.toISOString(),
-  };
-}
 
-async function homeEventCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
-  const events = await prisma.homeEvent.findMany({
-    where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
-    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
-    select: { id: true, title: true, revision: true, occurredAt: true, datePrecision: true, summary: true, amount: true, type: true, importance: true, roomId: true, inventoryItemId: true },
-  });
-  const selected = exactEntityMatch(events, message, launchContext);
-  if (!selected) {
-    return {
-      status: 'NEEDS_ENTITY', reasonCode: 'HOME_EVENT_TARGET_REQUIRED',
-      ...durableFreeTextClarification('HOME_EVENT_CORRECT', 'Which timeline event should Ask correct? Use its exact title.'),
-      blocks: [{
-        type: 'GROUPED_LIST', filters: [], id: 'home-event-selection', title: 'Choose the event to correct',
-        description: 'Use the exact event title in your next message; nothing has changed.',
-        sections: [{ id: 'events', title: 'Timeline events', count: events.length, items: events.slice(0, 20).map((event) => ({
-          id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
-        })) }],
-        actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }],
-      }],
-      suggestions: events.slice(0, 3).map((event) => `Correct the title of the timeline event ${event.title}`),
-    };
-  }
-  const field = homeEventCorrectionField(message);
-  if (!field) {
-    return {
-      status: 'NEEDS_CLARIFICATION', reasonCode: 'HOME_EVENT_CORRECTION_FIELD_REQUIRED',
-      ...durableFreeTextClarification('HOME_EVENT_CORRECT', `Which detail of "${selected.title}" should change? Ask can correct its title, date, summary, amount, type, importance, room, or inventory item.`),
-      blocks: [{ type: 'SUMMARY', id: 'home-event-correct-field', title: 'Which detail should change?', body: 'Say title, date, summary, amount, type, importance, room, or inventory item. Nothing has changed.', tone: 'CAUTION', actions: [] }],
-      suggestions: [`Correct the title of the timeline event ${selected.title}`, `Correct the date of the timeline event ${selected.title}`],
-    };
-  }
-  const blocker = homeEventCorrectionBlocker(selected, field);
-  if (blocker) {
-    return {
-      status: 'NOT_APPLICABLE', reasonCode: field === 'type' ? 'HOME_EVENT_TYPE_LOCKED' : 'HOME_EVENT_DATE_RANGE_UNSUPPORTED',
-      blocks: [{ type: 'SUMMARY', id: 'home-event-correction-unsupported', title: 'This detail cannot be corrected here', body: `${blocker} Nothing has changed.`, tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'PRIMARY' }] }],
-      suggestions: [],
-    };
-  }
-  const current = homeEventFieldCurrent(selected, field);
-  const isLinkField = HOME_EVENT_LINK_FIELDS.has(field);
-  const dynamicOptions = isLinkField ? await homeEventLinkOptions(propertyId, field as 'roomId' | 'inventoryItemId') : undefined;
-  const stated = field === 'occurredAt' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
-  // A link field always pre-selects its current value (or "No room"/"No item") rather than extracting one from free
-  // text -- a raw id typed into a message would mean nothing, and the dropdown is the only supported way to choose one.
-  const proposed = isLinkField ? (current ?? HOME_EVENT_LINK_NONE_VALUE) : (stated && isValidDateEditInput(stated) ? stated : current);
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const contextVersion = homeEventContextVersion(selected);
-  const input = HomeEventCorrectionInputSchema.parse({ eventId: selected.id, field, value: proposed });
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_CORRECTION_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: {
-      homeEventCorrection: input, homeEventCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
-      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
-    },
-    blocks: [{ type: 'SUMMARY', id: 'home-event-correct-review', title: `Review this ${HOME_EVENT_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
-    confirmation: homeEventCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt, dynamicOptions),
-    suggestions: [],
-  };
-}
 
-registerCapabilityHandler('home-event.correct', async (envelope) => homeEventCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-const HOME_EVENT_VISIBILITY_OPTIONS: readonly CorrectionOption[] = [
-  { label: 'Private (only you)', value: 'PRIVATE' },
-  { label: 'Household (everyone with access to this home)', value: 'HOUSEHOLD' },
-  { label: 'Resale pack (also shared in resale summaries for buyers and listing agents)', value: 'RESALE_PACK' },
-];
-const HOME_EVENT_VISIBILITY_LABELS: Record<string, string> = {
-  PRIVATE: 'Private (only you)', HOUSEHOLD: 'Household (everyone with access to this home)', RESALE_PACK: 'Resale pack (shared with buyers and listing agents)',
-};
-const HomeEventVisibilityInputSchema = z.object({
-  eventId: z.string().trim().min(1).max(160),
-  value: z.enum(['PRIVATE', 'HOUSEHOLD', 'RESALE_PACK']).nullable(),
-}).strict();
 
-// Homeowner-facing reason this contributor cannot set this value on this event, or null. `current` is the event's
-// visibility as recorded now (re-read at confirm, not trusted from the proposal).
-function homeEventVisibilityBlocker(userId: string, createdById: string | null, current: string, proposed: string | null): string | null {
-  const changesPrivacy = proposed !== null && (current === 'PRIVATE' || proposed === 'PRIVATE') && current !== proposed;
-  if (changesPrivacy && createdById !== userId) return 'Only the person who added this event can change it to or from private.';
-  return null;
-}
 
-function homeEventVisibilityConfirmation(event: { id: string; title: string }, current: string, proposed: string | null, version: number, expiresAt: Date) {
-  return {
-    confirmationId: `home-event-visibility-${event.id}-${version}`, version, title: `Change who can see "${event.title}"?`,
-    description: 'This changes the timeline event in place; it does not create a new revision.',
-    fields: [{ label: 'Event', value: event.title }, { label: 'Current visibility', value: HOME_EVENT_VISIBILITY_LABELS[current] ?? current }],
-    editableFields: [{ key: 'value', label: 'New visibility', type: 'SELECT' as const, value: proposed ?? '', options: [...HOME_EVENT_VISIBILITY_OPTIONS] }],
-    confirmLabel: 'Save visibility',
-    consentText: proposed === 'RESALE_PACK'
-      ? 'I authorize sharing this event with buyers and listing agents in resale summaries.'
-      : 'I authorize this visibility change to the shared home timeline.',
-    expiresAt: expiresAt.toISOString(),
-  };
-}
 
-async function homeEventVisibilityResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
-  const events = await prisma.homeEvent.findMany({
-    where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
-    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
-    select: { id: true, title: true, revision: true, visibility: true, createdById: true, occurredAt: true },
-  });
-  const selected = exactEntityMatch(events, message, launchContext);
-  if (!selected) {
-    return {
-      status: 'NEEDS_ENTITY', reasonCode: 'HOME_EVENT_TARGET_REQUIRED',
-      ...durableFreeTextClarification('HOME_EVENT_VISIBILITY', 'Which timeline event should Ask change the visibility of? Use its exact title.'),
-      blocks: [{
-        type: 'GROUPED_LIST', filters: [], id: 'home-event-selection', title: 'Choose the event to change',
-        description: 'Use the exact event title in your next message; nothing has changed.',
-        sections: [{ id: 'events', title: 'Timeline events', count: events.length, items: events.slice(0, 20).map((event) => ({
-          id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
-        })) }],
-        actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }],
-      }],
-      suggestions: events.slice(0, 3).map((event) => `Change the visibility of the timeline event ${event.title}`),
-    };
-  }
-  const proposed = selected.visibility;
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const contextVersion = homeEventContextVersion(selected);
-  const input = HomeEventVisibilityInputSchema.parse({ eventId: selected.id, value: proposed });
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_VISIBILITY_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: {
-      homeEventVisibility: input, homeEventVisibilityContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
-      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
-    },
-    blocks: [{ type: 'SUMMARY', id: 'home-event-visibility-review', title: `Review who can see ${selected.title}`, body: 'No shared-home record has changed yet. Choose the visibility, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
-    confirmation: homeEventVisibilityConfirmation(selected, selected.visibility, proposed, 1, expiresAt),
-    suggestions: [],
-  };
-}
 
-registerCapabilityHandler('home-event.visibility', async (envelope) => homeEventVisibilityResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-// Phase 3 write slice 3: provider / expiry-date correction on a Warranty.
-// OWNER-ONLY: a Warranty belongs to one member's homeownerProfile and the
-// canonical updateWarranty is scoped to it (the traditional Warranties page
-// has the same rule), so actions are declared only for warranties the
-// requester added and confirm re-verifies ownership.
-const WARRANTY_CATEGORY_OPTIONS: readonly CorrectionOption[] = [
-  { label: 'Appliance', value: 'APPLIANCE' }, { label: 'HVAC', value: 'HVAC' }, { label: 'Roofing', value: 'ROOFING' }, { label: 'Plumbing', value: 'PLUMBING' },
-  { label: 'Electrical', value: 'ELECTRICAL' }, { label: 'Structural', value: 'STRUCTURAL' }, { label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'Other', value: 'OTHER' },
-];
-type WarrantyCorrectionMeta = CorrectionFieldSpec & { action: string; message: string };
-const WARRANTY_CORRECTION_FIELDS: Record<'providerName' | 'expiryDate' | 'startDate' | 'category' | 'policyNumber' | 'cost' | 'coverageDetails', WarrantyCorrectionMeta> = {
-  providerName: { label: 'provider', action: 'Correct provider', message: 'Correct the provider of this warranty.', kind: 'TEXT', min: 2, max: 120 },
-  expiryDate: { label: 'expiry date', action: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', kind: 'DATE' },
-  startDate: { label: 'start date', action: 'Correct start date', message: 'Correct the start date of this warranty.', kind: 'DATE' },
-  category: { label: 'coverage type', action: 'Correct coverage type', message: 'Correct the coverage type of this warranty.', kind: 'SELECT', options: WARRANTY_CATEGORY_OPTIONS },
-  policyNumber: { label: 'policy number', action: 'Correct policy number', message: 'Correct the policy number of this warranty.', kind: 'TEXT', max: 160 },
-  cost: { label: 'cost', action: 'Correct cost', message: 'Correct the cost of this warranty.', kind: 'MONEY' },
-  coverageDetails: { label: 'coverage details', action: 'Correct coverage details', message: 'Correct the coverage details of this warranty.', kind: 'TEXTAREA', max: 2000 },
-};
-type WarrantyCorrectionField = keyof typeof WARRANTY_CORRECTION_FIELDS;
 
-const WarrantyCorrectionInputSchema = z.object({
-  warrantyId: z.string().trim().min(1).max(160),
-  field: z.enum(['providerName', 'expiryDate', 'startDate', 'category', 'policyNumber', 'cost', 'coverageDetails']),
-  value: z.string().max(2000).nullable(),
-}).strict();
 
-// Order matters where words overlap: "coverage details" before "coverage type", and the dates before "provider".
-function warrantyCorrectionField(message: string): WarrantyCorrectionField | null {
-  if (/\b(?:coverage details|details)\b/i.test(message)) return 'coverageDetails';
-  if (/\b(?:coverage type|category)\b/i.test(message)) return 'category';
-  if (/\bpolicy\b/i.test(message)) return 'policyNumber';
-  if (/\b(?:cost|price|premium)\b/i.test(message)) return 'cost';
-  if (/\bstart(?:s|ed|ing)?\b/i.test(message)) return 'startDate';
-  if (/\bexpir(?:y|ation|es)\b/i.test(message)) return 'expiryDate';
-  if (/\b(?:provider|name)\b/i.test(message)) return 'providerName';
-  return null;
-}
 
-// Field-level validation plus the one cross-field rule: the start date must stay before the expiry date.
-function warrantyCorrectionValueError(field: WarrantyCorrectionField, value: unknown, row: { startDate: Date; expiryDate: Date }): string | null {
-  const base = correctionValueError(WARRANTY_CORRECTION_FIELDS[field], value);
-  if (base || typeof value !== 'string') return base;
-  if (field === 'expiryDate' && new Date(`${value.trim()}T00:00:00Z`) < row.startDate) return 'The expiry date cannot be before the warranty start date.';
-  if (field === 'startDate' && new Date(`${value.trim()}T00:00:00Z`) >= row.expiryDate) return 'The start date must be before the warranty expiry date.';
-  return null;
-}
 
-function warrantyFieldCurrent(warranty: object, field: WarrantyCorrectionField): string | null {
-  const raw = (warranty as Record<string, unknown>)[field];
-  const kind = WARRANTY_CORRECTION_FIELDS[field].kind;
-  if (kind === 'DATE') return correctionDateString(raw);
-  if (kind === 'MONEY') return correctionMoneyFromDollars(raw);
-  return typeof raw === 'string' && raw.trim() ? raw : null;
-}
 
-// Narrowed patch: only the one confirmed field, never a request body.
-function warrantyFieldPatch(field: WarrantyCorrectionField, normalized: string): Record<string, unknown> {
-  const kind = WARRANTY_CORRECTION_FIELDS[field].kind;
-  if (kind === 'DATE') return { [field]: new Date(`${normalized}T00:00:00Z`) };
-  if (kind === 'MONEY') return { [field]: Number(normalized) };
-  return { [field]: normalized };
-}
 
-function warrantyContextVersion(warranty: { id: string; updatedAt: Date }): string {
-  return createHash('sha256').update(`${warranty.id}:${warranty.updatedAt.toISOString()}`).digest('hex');
-}
 
-// `owned` is decided by the caller from the requester's own homeownerProfile
-// -- never from role alone.
-function warrantyCorrectionItemActions(canManage: boolean, owned: boolean) {
-  if (!canManage || !owned) return undefined;
-  return (Object.keys(WARRANTY_CORRECTION_FIELDS) as WarrantyCorrectionField[]).map((field) => ({
-    id: `correct-${field}`, label: WARRANTY_CORRECTION_FIELDS[field].action, message: WARRANTY_CORRECTION_FIELDS[field].message,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'WARRANTY_CORRECT',
-  }));
-}
 
-function warrantyCorrectionConfirmation(warranty: { id: string; providerName: string }, field: WarrantyCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
-  const meta = WARRANTY_CORRECTION_FIELDS[field];
-  return {
-    confirmationId: `warranty-correct-${warranty.id}-${version}`, version, title: `Correct the ${meta.label} of the ${warranty.providerName} warranty?`,
-    description: 'This writes through the canonical warranty service, the same record the Warranties page edits, and refreshes dependent coverage analysis.',
-    fields: [{ label: 'Warranty', value: warranty.providerName }, { label: 'Field', value: meta.label }, { label: 'Current value', value: correctionDisplay(meta, current) }],
-    editableFields: [{
-      key: 'value', label: `Corrected ${meta.label}`, type: meta.kind, value: proposed ?? '',
-      ...(meta.kind === 'SELECT' ? { options: [...(meta.options ?? [])] } : {}),
-    }],
-    confirmLabel: `Save ${meta.label}`, consentText: 'I authorize this correction to the warranty record.', expiresAt: expiresAt.toISOString(),
-  };
-}
 
-// Phase 3 add slice: start a user-initiated warranty add. Returns the empty form; submitting it resumes through
-// the existing CAPTURE_WARRANTY_EDIT path (validation, ISO date normalisation, confirmation card) and confirming
-// writes through the existing confirmCaptureWarranty / captureWarranty writer.
-async function warrantyAddResult(userId: string, propertyId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  const warrantiesHref = '/dashboard/warranties';
-  if (access.role === HouseholdRole.VIEWER) {
-    return {
-      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'warranty-add-permission', title: 'A contributor or owner can add a warranty', body: 'Your role can view warranties but not add them. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'SECONDARY' }] }],
-      suggestions: [],
-    };
-  }
-  const contextVersion = createHash('sha256').update(`warranty-add:${propertyId}`).digest('hex');
-  return {
-    status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_ADD_INPUT_REQUIRED', contextVersion,
-    parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
-    blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Add a warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [{ id: 'open-warranties', label: 'Open Warranties instead', href: warrantiesHref, style: 'SECONDARY' }] }],
-    captureRequests: [warrantyAddCaptureRequest(contextVersion)],
-    suggestions: [],
-  };
-}
 
-// Start a user-initiated timeline event add: returns the empty form. Submitting it (CAPTURE_EVENT_ADD) builds the
-// review card with the parameters extraction produces, and confirming writes through the existing
-// confirmCaptureEvent / createHomeEvent path keyed on this execution.
-async function eventAddResult(userId: string, propertyId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
-  if (access.role === HouseholdRole.VIEWER) {
-    return {
-      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'event-add-permission', title: 'A contributor or owner can add a timeline event', body: 'Your role can view the timeline but not add to it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
-      suggestions: [],
-    };
-  }
-  const contextVersion = createHash('sha256').update(`event-add:${propertyId}`).digest('hex');
-  return {
-    status: 'NEEDS_CONTEXT', reasonCode: 'EVENT_ADD_INPUT_REQUIRED', contextVersion,
-    parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
-    blocks: [{ type: 'SUMMARY', id: 'event-add-input', title: 'Add a timeline event', body: 'Nothing has been saved yet. Enter the details, then review them before the event is added.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline instead', href: timelineHref, style: 'SECONDARY' }] }],
-    captureRequests: [eventAddCaptureRequest(contextVersion)],
-    suggestions: [],
-  };
-}
+
+
+
+
+
+
+
+
 
 // Phase 3 evidence-upload add slice (design approved 2026-09-22): a homeowner-initiated evidence attach, reached
 // only from the declared "Attach evidence" control on a HomeEvent's inline detail. Unlike CAPTURE_EVIDENCE_CONFIRM's
@@ -4375,279 +1796,23 @@ async function eventAddResult(userId: string, propertyId: string, sourceExecutio
 // since the "form" (picking and uploading a file) already happened client-side before this call.
 export const EVIDENCE_ATTACH_MESSAGE = 'Attach evidence to this home timeline entry.';
 
-function evidenceAttachConfirmation(document: { id: string; name: string }, event: { id: string; title: string }, version: number, expiresAt: Date) {
-  return {
-    confirmationId: `evidence-attach-${event.id}-${version}`, version, title: 'Attach this document as evidence?',
-    description: 'You are attaching a document you just uploaded to this home timeline entry. No change is saved until you confirm.',
-    fields: [{ label: 'Document', value: document.name }, { label: 'Attach to', value: event.title }],
-    editableFields: [], confirmLabel: 'Attach document',
-    consentText: 'I confirm this document is evidence for this home record entry.',
-    expiresAt: expiresAt.toISOString(),
-  };
-}
 
-async function evidenceAttachResult(userId: string, propertyId: string, eventId: string, documentId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
-  if (access.role === HouseholdRole.VIEWER) {
-    return {
-      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-permission', title: 'A contributor or owner can attach evidence', body: 'Your role can view the timeline but not attach documents to it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
-      suggestions: [],
-    };
-  }
-  // Same PRIVATE-creator-only scoping as HOME_EVENT_CORRECT/HOME_EVENT_VISIBILITY: a PRIVATE event this requester
-  // did not create is excluded here rather than surfacing a distinct permission message, matching every other
-  // event read/write producer's existing behaviour (the event simply never reaches a contributor who cannot see it).
-  const event = await prisma.homeEvent.findFirst({
-    where: { id: eventId, propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
-    select: { id: true, title: true },
-  });
-  if (!event) {
-    return {
-      status: 'NOT_APPLICABLE', reasonCode: 'HOME_EVENT_NOT_FOUND',
-      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-event-missing', title: 'This timeline event is no longer available', body: 'It may have been corrected, removed, or you no longer have access. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'PRIMARY' }] }],
-      suggestions: [],
-    };
-  }
-  // The document was just uploaded (property-scoped) by POST .../evidence-upload; re-verified here rather than
-  // trusted from launchContext, same "never trust the client's id" pattern as every dynamic room/item dropdown.
-  const document = await prisma.document.findFirst({ where: { id: documentId, propertyId }, select: { id: true, name: true } });
-  if (!document) {
-    return {
-      status: 'NOT_APPLICABLE', reasonCode: 'DOCUMENT_NOT_FOUND',
-      blocks: [{ type: 'SUMMARY', id: 'evidence-attach-document-missing', title: 'The uploaded document could not be found', body: 'Upload the file again from this event.', tone: 'CAUTION', actions: [] }],
-      suggestions: [],
-    };
-  }
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'EVIDENCE_ATTACH_CONFIRMATION_REQUIRED',
-    parameters: {
-      documentId: document.id, eventId: event.id, captureOrigin: USER_ADD_ORIGIN, sourceExecutionId,
-      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
-    },
-    blocks: [{ type: 'SUMMARY', id: 'evidence-attach-review', title: `Attach this document to "${event.title}"?`, body: 'Nothing has been saved yet. Review, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline instead', href: timelineHref, style: 'SECONDARY' }] }],
-    confirmation: evidenceAttachConfirmation(document, event, 1, expiresAt),
-    suggestions: [],
-  };
-}
 
-async function warrantyCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
-  const warrantiesHref = '/dashboard/warranties';
-  const warranties = await prisma.warranty.findMany({
-    where: { propertyId }, orderBy: { expiryDate: 'asc' }, take: 200,
-    select: { id: true, providerName: true, startDate: true, expiryDate: true, updatedAt: true, category: true, policyNumber: true, cost: true, coverageDetails: true, homeownerProfile: { select: { userId: true } } },
-  });
-  const selected = exactEntityMatch(warranties.map((warranty) => ({ ...warranty, title: warranty.providerName })), message, launchContext);
-  if (!selected) {
-    const mine = warranties.filter((warranty) => warranty.homeownerProfile.userId === userId);
-    return {
-      status: 'NEEDS_ENTITY', reasonCode: 'WARRANTY_TARGET_REQUIRED',
-      ...durableFreeTextClarification('WARRANTY_CORRECT', 'Which warranty should Ask correct? Use its exact provider name.'),
-      blocks: [{
-        type: 'GROUPED_LIST', filters: [], id: 'warranty-selection', title: 'Choose the warranty to correct',
-        description: 'Only warranties you added can be corrected here. Use the exact provider name in your next message; nothing has changed.',
-        sections: [{ id: 'warranties', title: 'Your warranties', count: mine.length, items: mine.slice(0, 20).map((warranty) => ({
-          id: warranty.id, title: warranty.providerName, description: null, meta: [`Expires ${humanDate(warranty.expiryDate) ?? 'date unavailable'}`], status: null, href: null,
-        })) }],
-        actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'SECONDARY' }],
-      }],
-      suggestions: mine.slice(0, 3).map((warranty) => `Correct the expiry date of the ${warranty.providerName} warranty`),
-    };
-  }
-  if (selected.homeownerProfile.userId !== userId) {
-    return {
-      status: 'NOT_APPLICABLE', reasonCode: 'WARRANTY_NOT_OWNED_BY_REQUESTER',
-      blocks: [{ type: 'SUMMARY', id: 'warranty-not-owned', title: 'Only the member who added this warranty can change it', body: 'This warranty belongs to another household member\'s profile, so it cannot be corrected here. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'PRIMARY' }] }],
-      suggestions: [],
-    };
-  }
-  const field = warrantyCorrectionField(message);
-  if (!field) {
-    return {
-      status: 'NEEDS_CLARIFICATION', reasonCode: 'WARRANTY_CORRECTION_FIELD_REQUIRED',
-      ...durableFreeTextClarification('WARRANTY_CORRECT', `Which detail of the ${selected.providerName} warranty should change? Ask can correct its provider, dates, coverage type, policy number, cost, or coverage details.`),
-      blocks: [{ type: 'SUMMARY', id: 'warranty-correct-field', title: 'Which detail should change?', body: 'Say provider, expiry date, start date, coverage type, policy number, cost, or coverage details. Nothing has changed.', tone: 'CAUTION', actions: [] }],
-      suggestions: [`Correct the provider of the ${selected.providerName} warranty`, `Correct the expiry date of the ${selected.providerName} warranty`],
-    };
-  }
-  const current = warrantyFieldCurrent(selected, field);
-  const stated = WARRANTY_CORRECTION_FIELDS[field].kind === 'DATE' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
-  const proposed = stated && isValidDateEditInput(stated) ? stated : current;
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const contextVersion = warrantyContextVersion(selected);
-  const input = WarrantyCorrectionInputSchema.parse({ warrantyId: selected.id, field, value: proposed });
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'WARRANTY_CORRECTION_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: {
-      warrantyCorrection: input, warrantyCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
-      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
-    },
-    blocks: [{ type: 'SUMMARY', id: 'warranty-correct-review', title: `Review this ${WARRANTY_CORRECTION_FIELDS[field].label} correction`, body: 'No warranty record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'SECONDARY' }] }],
-    confirmation: warrantyCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt),
-    suggestions: [],
-  };
-}
 
-registerCapabilityHandler('warranty.correct', async (envelope) => warrantyCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-// Phase 3 write slice 4: correct an InventoryRoom -- its name (the original rename), and its type and floor level. The
-// operation keeps the ROOM_RENAME id so nothing already registered has to move; the input's `field` says which one. The room
-// id is stable across a correction, so an open inline detail stays valid.
-const ROOM_TYPE_VALUES = ['KITCHEN', 'LIVING_ROOM', 'BEDROOM', 'BATHROOM', 'DINING', 'LAUNDRY', 'GARAGE', 'OFFICE', 'BASEMENT', 'OTHER'] as const;
-const roomTypeLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
-const ROOM_FLOOR_MIN = -5;
-const ROOM_FLOOR_MAX = 50;
-type RoomCorrectionMeta = CorrectionFieldSpec & { action: string; message: string };
-const ROOM_CORRECTION_FIELDS: Record<'name' | 'type' | 'floorLevel', RoomCorrectionMeta> = {
-  name: { label: 'name', action: 'Rename room', message: 'Rename this room.', kind: 'TEXT', min: 1, max: 80 },
-  type: { label: 'type', action: 'Change room type', message: 'Change the type of this room.', kind: 'SELECT', options: ROOM_TYPE_VALUES.map((value) => ({ label: roomTypeLabel(value), value })) },
-  // Whole number of storeys from the ground floor (0); a basement is negative. Validated in roomCorrectionValueError.
-  floorLevel: { label: 'floor level', action: 'Change floor level', message: 'Change the floor level of this room.', kind: 'TEXT', min: 1, max: 3 },
-};
-type RoomCorrectionField = keyof typeof ROOM_CORRECTION_FIELDS;
-const RoomRenameInputSchema = z.object({
-  roomId: z.string().trim().min(1).max(160),
-  // Defaults to the name so a proposal stored before type and floor level existed still confirms as a rename.
-  field: z.enum(['name', 'type', 'floorLevel']).default('name'),
-  value: z.string().max(200).nullable(),
-}).strict();
 
-// Which field a message asks to change. The declared row actions send an exact canned message, and "rename" always means the
-// name (so a room called "Floor 2 office" is not mistaken for a floor-level request); only free text falls back to keywords.
-function roomCorrectionField(message: string): RoomCorrectionField {
-  const exact = (Object.keys(ROOM_CORRECTION_FIELDS) as RoomCorrectionField[]).find((field) => ROOM_CORRECTION_FIELDS[field].message === message);
-  if (exact) return exact;
-  if (/\brename\b/i.test(message)) return 'name';
-  if (/\bfloor\b|\bstor(?:e)?y\b/i.test(message)) return 'floorLevel';
-  if (/\b(?:type|kind)\b/i.test(message)) return 'type';
-  return 'name';
-}
 
-function roomFieldCurrent(room: { name: string; type: string | null; floorLevel: number | null }, field: RoomCorrectionField): string | null {
-  if (field === 'name') return room.name;
-  if (field === 'type') return room.type;
-  return room.floorLevel === null || room.floorLevel === undefined ? null : String(room.floorLevel);
-}
 
-function roomFieldDisplay(field: RoomCorrectionField, value: string | null): string {
-  if (value === null || value === '') return 'Not recorded';
-  if (field === 'type') return roomTypeLabel(value);
-  if (field === 'floorLevel') return value === '0' ? '0 (ground floor)' : Number(value) < 0 ? `${value} (below ground)` : value;
-  return value;
-}
 
-function roomContextVersion(room: { id: string; updatedAt: Date }): string {
-  return createHash('sha256').update(`${room.id}:${room.updatedAt.toISOString()}`).digest('hex');
-}
 
-// Returns a homeowner-facing reason the proposed name is unusable, else null.
-async function roomRenameNameError(propertyId: string, roomId: string, value: unknown): Promise<string | null> {
-  if (typeof value !== 'string' || !value.trim()) return 'Enter the new room name.';
-  const name = value.trim();
-  if (name.length > 80) return 'A room name can be at most 80 characters.';
-  const clash = await prisma.inventoryRoom.findFirst({ where: { propertyId, name, id: { not: roomId } }, select: { id: true } });
-  return clash ? 'Another room in this home already has that name.' : null;
-}
 
-// A homeowner-facing reason the proposed value is unusable for this field, else null.
-async function roomCorrectionValueError(propertyId: string, roomId: string, field: RoomCorrectionField, value: unknown): Promise<string | null> {
-  if (field === 'name') return roomRenameNameError(propertyId, roomId, value);
-  if (field === 'type') return correctionValueError(ROOM_CORRECTION_FIELDS.type, value);
-  if (typeof value !== 'string' || !/^-?\d{1,2}$/.test(value.trim())) return `Enter a whole number from ${ROOM_FLOOR_MIN} to ${ROOM_FLOOR_MAX}: 0 is the ground floor, -1 a basement.`;
-  const level = Number(value.trim());
-  return level >= ROOM_FLOOR_MIN && level <= ROOM_FLOOR_MAX ? null : `The floor level must be from ${ROOM_FLOOR_MIN} to ${ROOM_FLOOR_MAX}.`;
-}
 
-// Canonical stored form of a value: trimmed text; a floor level is a plain integer string ("01" and "-0" are "1" and "0").
-function roomCorrectionNormalized(field: RoomCorrectionField, value: string): string {
-  const text = value.trim();
-  return field === 'floorLevel' ? String(Number(text)) : text;
-}
 
-export function roomRenameItemActions(canManage: boolean) {
-  if (!canManage) return undefined;
-  return (Object.keys(ROOM_CORRECTION_FIELDS) as RoomCorrectionField[]).map((field) => ({
-    id: field === 'name' ? 'rename-room' : `correct-room-${field}`, label: ROOM_CORRECTION_FIELDS[field].action, message: ROOM_CORRECTION_FIELDS[field].message,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'ROOM_RENAME',
-  }));
-}
 
-function roomRenameConfirmation(room: { id: string; name: string }, field: RoomCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
-  const meta = ROOM_CORRECTION_FIELDS[field];
-  return {
-    confirmationId: `room-${field === 'name' ? 'rename' : `correct-${field}`}-${room.id}-${version}`, version,
-    title: field === 'name' ? `Rename "${room.name}"?` : `Change the ${meta.label} of "${room.name}"?`,
-    description: 'This writes through the canonical inventory service, the same record the Rooms page edits, and refreshes dependent coverage analysis.',
-    fields: [{ label: 'Room', value: room.name }, ...(field === 'name' ? [{ label: 'Current name', value: room.name }] : [{ label: 'Field', value: meta.label }, { label: 'Current value', value: roomFieldDisplay(field, current) }])],
-    editableFields: [{
-      key: 'value', label: field === 'name' ? 'New room name' : `New ${meta.label}`, type: meta.kind, value: proposed ?? '',
-      ...(meta.kind === 'SELECT' ? { options: [...(meta.options ?? [])] } : {}),
-    }],
-    confirmLabel: field === 'name' ? 'Save room name' : `Save ${meta.label}`,
-    consentText: field === 'name' ? 'I authorize this rename of the shared home record.' : `I authorize this ${meta.label} change to the shared home record.`,
-    expiresAt: expiresAt.toISOString(),
-  };
-}
 
-async function roomRenameResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
-  const roomsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/rooms`;
-  const rooms = await prisma.inventoryRoom.findMany({
-    where: { propertyId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: 200,
-    select: { id: true, name: true, type: true, floorLevel: true, updatedAt: true },
-  });
-  const field = roomCorrectionField(message);
-  const selected = exactEntityMatch(rooms.map((room) => ({ ...room, title: room.name })), message, launchContext);
-  if (!selected) {
-    return {
-      status: 'NEEDS_ENTITY', reasonCode: 'ROOM_TARGET_REQUIRED',
-      ...durableFreeTextClarification('ROOM_RENAME', `Which room should Ask ${field === 'name' ? 'rename' : `change the ${ROOM_CORRECTION_FIELDS[field].label} of`}? Use its exact current name.`),
-      blocks: [{
-        type: 'GROUPED_LIST', filters: [], id: 'room-selection', title: field === 'name' ? 'Choose the room to rename' : `Choose the room whose ${ROOM_CORRECTION_FIELDS[field].label} to change`,
-        description: 'Use the exact room name in your next message; nothing has changed.',
-        sections: [{ id: 'rooms', title: 'Rooms', count: rooms.length, items: rooms.slice(0, 20).map((room) => ({
-          id: room.id, title: room.name, description: null, meta: [readablePropertyValue(room.type)], status: null, href: null,
-        })) }],
-        actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }],
-      }],
-      suggestions: rooms.slice(0, 3).map((room) => (field === 'name' ? `Rename ${room.name}` : `Change the ${ROOM_CORRECTION_FIELDS[field].label} of ${room.name}`)),
-    };
-  }
-  const current = roomFieldCurrent(selected, field);
-  // The new name comes from the confirmation card's editable field; a name
-  // quoted in the message ("rename X to Y") only pre-fills it.
-  const stated = field === 'name' ? message.match(/\brename\b.+?\bto\s+["']?([^"'.]{1,80}?)["']?\s*$/i)?.[1]?.trim() ?? null : null;
-  // A type or floor level is always picked on the card, starting from what is recorded now.
-  const proposed = field === 'name' ? (stated && stated.toLowerCase() !== selected.name.toLowerCase() ? stated : selected.name) : current;
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const contextVersion = roomContextVersion(selected);
-  const input = RoomRenameInputSchema.parse({ roomId: selected.id, field, value: proposed });
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'ROOM_RENAME_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: {
-      roomRename: input, roomRenameContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
-      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
-    },
-    blocks: [{ type: 'SUMMARY', id: 'room-rename-review', title: field === 'name' ? `Review renaming ${selected.name}` : `Review the ${ROOM_CORRECTION_FIELDS[field].label} of ${selected.name}`, body: `No shared-home record has changed yet. ${field === 'name' ? 'Enter the new name' : 'Choose the corrected value'}, then confirm.`, tone: 'DEFAULT', actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }] }],
-    confirmation: roomRenameConfirmation(selected, field, current, proposed, 1, expiresAt),
-    suggestions: [],
-  };
-}
 
-registerCapabilityHandler('room.rename', async (envelope) => roomRenameResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
-registerCapabilityHandler('household.invitation', async (envelope) => householdInvitationResult(envelope.userId, envelope.propertyId!, envelope.message));
 registerCapabilityHandler('guidance.journey.create', async (envelope) => guidanceJourneyCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteComparisonCreateResult(envelope.propertyId!, envelope.message));
-registerCapabilityHandler('quote-comparison.review', async (envelope) => quoteComparisonReviewResult(envelope.propertyId!));
 registerCapabilityHandler('home-deadline.monitor', async (envelope) => homeDeadlineMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('capital-reserve.plan', async (envelope) => capitalReservePlanResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('property-tax.appeal-readiness', async (envelope) => propertyTaxAppealReadinessResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('renovation-permit.readiness', async (envelope) => renovationPermitReadinessResult(envelope.propertyId!, envelope.message));
-registerCapabilityHandler('major-event.entry', async (envelope) => majorEventEntryResult(envelope.userId, envelope.propertyId!, envelope.message));
-registerCapabilityHandler('capability.discovery', async (envelope) => capabilityResult(envelope.userId, envelope.propertyId, envelope.message));
 // Passthrough category (FRD §16): receives the whole envelope, plus the
 // trace object groundedGuidanceResult needs but which the envelope itself
 // deliberately never carries (Stage 2 §11 correction).
@@ -4676,9 +1841,6 @@ function captureNotDirectlyRoutableResult(kind: 'fact' | 'event' | 'warranty' | 
   };
 }
 registerCapabilityHandler('capture.fact.confirm', async () => captureNotDirectlyRoutableResult('fact'));
-// A timeline event is added inline only from the declared "Add a timeline event" action (same guard as the warranty
-// add: never for an ASK_REFRESH re-run of a pending extraction-created confirmation, never for a bare message).
-const EVENT_ADD_MESSAGE = 'Add an event to my home timeline.';
 registerCapabilityHandler('capture.event.confirm', async (envelope) => {
   const declaredAddAction = envelope.launchContext?.operationId === 'CAPTURE_EVENT_CONFIRM'
     && envelope.launchContext.surface !== 'ASK_REFRESH'
@@ -4687,11 +1849,6 @@ registerCapabilityHandler('capture.event.confirm', async (envelope) => {
     ? eventAddResult(envelope.userId, envelope.propertyId!, envelope.launchContext?.sourceExecutionId ?? null)
     : captureNotDirectlyRoutableResult('event');
 });
-// A warranty is added inline only from the declared "Add a warranty" action on the warranties list. Every other
-// call for this operation (an ASK_REFRESH re-run of a pending, extraction-created confirmation, or a message that
-// merely names it) keeps the original not-directly-routable boundary, so a pending candidate is never replaced
-// by an empty form.
-const WARRANTY_ADD_MESSAGE = 'Add a warranty to my home record.';
 registerCapabilityHandler('capture.warranty.confirm', async (envelope) => {
   const declaredAddAction = envelope.launchContext?.operationId === 'CAPTURE_WARRANTY_CONFIRM'
     && envelope.launchContext.surface !== 'ASK_REFRESH'
@@ -8355,100 +5512,10 @@ async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<Confirm
 }
 registerConfirmCapabilityHandler('room.rename', confirmRoomRename);
 
-// ── Add a room (user-initiated) ──────────────────────────────────────────────────────────────────────────
-// A room is added inline only from the declared "Add a room" action. The form asks for a type, a REQUIRED name (the
-// service would otherwise derive a default name from the type, which could silently collide) and an optional floor
-// level. Submitting builds the review card; confirming creates the room through inventoryService.createRoom and
-// repeats the three stale-analysis markers the traditional POST controller calls.
-const ROOM_ADD_MESSAGE = 'Add a room to my home record.';
-const ROOM_CREATE_CAPTURE_KEY = 'ROOM_CREATE_INPUTS';
-const RoomCreateInputSchema = z.object({
-  type: z.enum(ROOM_TYPE_VALUES),
-  name: z.string().trim().min(1).max(80),
-  floorLevel: z.number().int().min(-5).max(50).nullish().transform((value) => value ?? null),
-}).strict();
-type RoomCreateInput = z.infer<typeof RoomCreateInputSchema>;
 
-const roomCreateContextVersion = (propertyId: string): string => createHash('sha256').update(`room-create:${propertyId}`).digest('hex');
 
-function roomCreateCaptureRequest(contextVersion: string, entered?: Partial<RoomCreateInput>): AskCaptureRequest {
-  return {
-    requirementId: 'room-create-inputs', captureKey: ROOM_CREATE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
-    title: 'Add a room', question: 'Which room would you like to add to your home record?',
-    helpText: 'Give the room a name that is not already used. The floor level is optional. You will review everything before it is added.',
-    inputSchema: { type: 'GROUP', fields: [
-      { key: 'type', label: 'Room type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: ROOM_TYPE_VALUES.map((value) => ({ label: roomTypeLabel(value), value })) } },
-      { key: 'name', label: 'Room name', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 80 } },
-      { key: 'floorLevel', label: 'Floor level', helpText: 'Optional: 0 is the ground floor, -1 a basement.', required: false, inputSchema: { type: 'INTEGER', min: -5, max: 50 } },
-    ] },
-    currentAnswer: { type: entered?.type ?? null, name: entered?.name ?? null, floorLevel: entered?.floorLevel ?? null },
-    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this room; nothing is added until you confirm', confirmationText: null,
-    expectedContextVersion: contextVersion,
-  };
-}
 
-export async function roomCreateResult(userId: string, propertyId: string, suppliedInput: RoomCreateInput | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  const roomsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/rooms`;
-  if (access.role === HouseholdRole.VIEWER) {
-    return {
-      status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'room-add-permission', title: 'A contributor or owner can add a room', body: 'Your role can view rooms but not add them. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }] }],
-      suggestions: [],
-    };
-  }
-  const contextVersion = roomCreateContextVersion(propertyId);
-  const openRooms = { id: 'open-rooms', label: 'Open Rooms instead', href: roomsHref, style: 'SECONDARY' as const };
-  if (!suppliedInput) {
-    return {
-      status: 'NEEDS_CONTEXT', reasonCode: 'ROOM_CREATE_INPUT_REQUIRED', contextVersion,
-      parameters: { sourceExecutionId },
-      blocks: [{ type: 'SUMMARY', id: 'room-create-input', title: 'Add a room', body: 'Nothing has been added yet. Enter the details, then review them before the room is added.', tone: 'DEFAULT', actions: [openRooms] }],
-      captureRequests: [roomCreateCaptureRequest(contextVersion)], suggestions: [],
-    };
-  }
-  const clash = await prisma.inventoryRoom.findFirst({ where: { propertyId, name: suppliedInput.name }, select: { id: true } });
-  if (clash) {
-    return {
-      status: 'NEEDS_CONTEXT', reasonCode: 'ROOM_NAME_ALREADY_USED', contextVersion,
-      parameters: { sourceExecutionId },
-      blocks: [{ type: 'SUMMARY', id: 'room-create-name-used', title: `A room named "${suppliedInput.name}" already exists`, body: 'Choose a different name. Nothing has been added.', tone: 'CAUTION', actions: [openRooms] }],
-      captureRequests: [roomCreateCaptureRequest(contextVersion, suppliedInput)], suggestions: [],
-    };
-  }
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'ROOM_CREATE_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { roomCreate: suppliedInput, roomCreateContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
-    blocks: [{ type: 'SUMMARY', id: 'room-create-review', title: 'Review this room', body: 'You entered these details. Nothing is added until you confirm.', tone: 'DEFAULT', actions: [openRooms] }],
-    confirmation: {
-      confirmationId: `room-create-${createHash('sha256').update(`${propertyId}:${suppliedInput.name}`).digest('hex').slice(0, 12)}-1`, version: 1,
-      title: `Add the room "${suppliedInput.name}"?`,
-      description: 'This adds the room through the canonical inventory service, the same record the Rooms page edits, and refreshes dependent coverage analysis.',
-      fields: [
-        { label: 'Room name', value: suppliedInput.name }, { label: 'Type', value: roomTypeLabel(suppliedInput.type) },
-        ...(suppliedInput.floorLevel !== null ? [{ label: 'Floor level', value: String(suppliedInput.floorLevel) }] : []),
-      ],
-      editableFields: [], confirmLabel: 'Add room', consentText: 'I authorize adding this room to the shared home record.', expiresAt: expiresAt.toISOString(),
-    },
-    // Kept so the entry can be changed and resubmitted before confirming.
-    captureRequests: [roomCreateCaptureRequest(contextVersion, suppliedInput)],
-    suggestions: [],
-  };
-}
 
-registerCapabilityHandler('room.create', async (envelope) => {
-  const declaredAddAction = envelope.launchContext?.operationId === 'ROOM_CREATE'
-    && envelope.launchContext.surface !== 'ASK_REFRESH'
-    && envelope.message === ROOM_ADD_MESSAGE;
-  if (declaredAddAction) return roomCreateResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null);
-  // A refresh of an in-progress add, or a bare message: never start (or reset) a form here.
-  return {
-    status: 'NOT_APPLICABLE', reasonCode: 'ASK_ROOM_CREATE_NOT_DIRECTLY_ROUTABLE',
-    blocks: [{ type: 'SUMMARY', id: 'room-create-not-routable', title: 'Use the Add a room button', body: 'Rooms are added from the Rooms list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
-    suggestions: ['Show my rooms'],
-  };
-});
 
 async function confirmRoomCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
@@ -8569,237 +5636,17 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
 }
 registerConfirmCapabilityHandler('inventory.create', confirmInventoryItemCreate);
 
-// ── Property Summary per-area capture ──────────────────────────────────────────────────────────────────────
-// A completeness row on the Property Summary opens an inline flow for ONE area. Each answer goes form -> review card ->
-// confirm -> receipt (IW-CONF-001); nothing is written by the form. The questions come from the versioned Property Context
-// contract PROPERTY_RECORD_SUMMARY:CAPTURE_AREA, and the write is captureFeatureContext -- the same canonical capture the
-// rest of Property Context uses -- so this adds no new form and no new writer.
-//
-// Skipping ("Skip for now", or an answer that is "not sure" for everything) is kept in the execution's server-controlled
-// parameters (`skipFactKeys`) and is used ONLY to choose the next question: it writes nothing and never makes a fact
-// complete, and the completeness numbers shown afterwards come from the live facts. The client never supplies the skip
-// list. A fresh workflow from a row starts with no skips; the receipt's "Continue" carries them from that execution.
-const AREA_CAPTURE_MESSAGES: Record<PropertyAreaCaptureScope, string> = {
-  CORE: 'Fill in the missing core property details.',
-  LOCATION: 'Fill in the missing location details.',
-  STRUCTURE: 'Fill in the missing structure details.',
-  EXTERIOR: 'Fill in the missing exterior details.',
-  RESPONSIBILITY: 'Fill in the missing maintenance responsibility details.',
-  SYSTEMS: 'Fill in the missing home systems details.',
-  SAFETY: 'Fill in the missing safety details.',
-};
-const AREA_CAPTURE_ANCHORS: Record<PropertyAreaCaptureScope, string> = {
-  CORE: 'property-type', LOCATION: 'address', STRUCTURE: 'structure', EXTERIOR: 'exterior', RESPONSIBILITY: 'responsibility', SYSTEMS: 'systems', SAFETY: 'safety',
-};
-// Facts an answer here cannot fill: they are set from the address, calculated, or read from other records.
-const AREA_OTHER_SURFACE_LABELS: Record<string, string> = {
-  'core.activationStatus': 'Activation status (set by Cozy)',
-  'location.county': 'County (from your address)', 'location.countyFips': 'County code (from your address)',
-  'location.geocoded': 'Map location (from your address)', 'location.climateRegion': 'Climate region (from your location)',
-  'structure.roofAgeYears': 'Roof age (calculated from the replacement year)',
-  'systems.hasCooling': 'Cooling present (from your cooling type and inventory)', 'systems.installedItemTypes': 'Installed system types (from your inventory)',
-};
-const AREA_SKIP_MARKER = '$skip';
-const AREA_CAPTURE_MAX_SKIPPED = 200;
-const isAreaCaptureScope = (value: unknown): value is PropertyAreaCaptureScope => (PROPERTY_AREA_CAPTURE_SCOPES as readonly string[]).includes(String(value));
 const areaScopeForMessage = (message: string): PropertyAreaCaptureScope | null =>
   PROPERTY_AREA_CAPTURE_SCOPES.find((scope) => AREA_CAPTURE_MESSAGES[scope] === message) ?? null;
-const areaLabel = (scope: string): string => PROPERTY_SCOPE_LABELS[scope] ?? readablePropertyValue(scope);
-const areaFallbackAnchor = (scope: string): string | null => isAreaCaptureScope(scope) ? AREA_CAPTURE_ANCHORS[scope] : null;
 
-function areaCaptureFallbackHref(propertyId: string, scope: string): string {
-  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
-  const anchor = areaFallbackAnchor(scope);
-  return anchor ? `${base}/edit#${anchor}` : base;
-}
 
-// Row actions: the eligible areas open the inline flow; the rooms and inventory rows reuse the existing Add actions.
-export function areaCaptureRowActions(scope: string, canManage: boolean, unmetCount: number) {
-  if (!canManage || unmetCount === 0) return undefined;
-  const action = (id: string, label: string, message: string, operationId: string) => ({ id, label, message, style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId });
-  if (isAreaCaptureScope(scope)) return [action(`fill-area-${scope.toLowerCase()}`, 'Fill in missing details', AREA_CAPTURE_MESSAGES[scope], 'PROPERTY_CONTEXT_AREA_CAPTURE')];
-  if (scope === 'ROOMS') return [action('add-room-from-completeness', 'Add a room', ROOM_ADD_MESSAGE, 'ROOM_CREATE')];
-  if (scope === 'INVENTORY') return [action('add-item-from-completeness', 'Add an item', INVENTORY_ADD_MESSAGE, 'INVENTORY_ITEM_CREATE')];
-  return undefined;
-}
 
-const AreaCaptureStateSchema = z.object({
-  areaScope: z.enum(PROPERTY_AREA_CAPTURE_SCOPES),
-  skipFactKeys: z.array(z.string().max(120)).max(AREA_CAPTURE_MAX_SKIPPED).default([]),
-  sourceExecutionId: z.string().nullable().default(null),
-});
-function areaCaptureStateFrom(parametersJson: unknown): { scope: PropertyAreaCaptureScope; skipFactKeys: string[]; sourceExecutionId: string | null } | null {
-  const parsed = AreaCaptureStateSchema.safeParse(parametersJson);
-  return parsed.success ? { scope: parsed.data.areaScope, skipFactKeys: parsed.data.skipFactKeys, sourceExecutionId: parsed.data.sourceExecutionId } : null;
-}
-const AreaCaptureAnswerSchema = z.object({
-  scope: z.enum(PROPERTY_AREA_CAPTURE_SCOPES),
-  requirementId: z.string().min(1).max(100),
-  captureKey: z.string().min(1).max(100),
-  answer: z.record(z.string(), z.unknown()),
-  expectedContextVersion: z.string().min(1).max(128),
-  rows: z.array(z.object({ label: z.string(), value: z.string() })).max(40).default([]),
-  areas: z.array(z.string()).max(10).default([]),
-}).strict();
 
-function areaCaptureError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code });
-}
 
-function areaValueDisplay(schema: { type: string; [key: string]: unknown }, value: unknown): string {
-  if (value === null || value === undefined || value === 'UNKNOWN') return 'Not sure';
-  if (schema.type === 'BOOLEAN') return value === true ? String(schema.trueLabel ?? 'Yes') : String(schema.falseLabel ?? 'No');
-  const options = Array.isArray(schema.options) ? schema.options as Array<{ label: string; value: string }> : [];
-  if (schema.type === 'SINGLE_SELECT') return options.find((option) => option.value === value)?.label ?? String(value);
-  if (schema.type === 'MULTI_SELECT') {
-    const values = Array.isArray(value) ? value : [];
-    return values.length ? values.map((entry) => options.find((option) => option.value === entry)?.label ?? String(entry)).join(', ') : 'None';
-  }
-  if ((schema.type === 'INTEGER' || schema.type === 'DECIMAL') && typeof schema.unit === 'string' && schema.unit) return `${value} ${schema.unit}`;
-  return String(value);
-}
 
-async function areaCaptureProgress(userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>) {
-  // Every area scope is loaded: fact applicability (for example a condo not owning a private fence) reads facts from other areas.
-  const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] });
-  const entry = getContextCompleteness(snapshot).scopes.find((candidate) => candidate.scope === scope);
-  const unmet = entry ? [...entry.missingFactKeys, ...entry.conflictedFactKeys, ...entry.staleFactKeys] : [];
-  const writable = new Set<string>(PROPERTY_FACT_CATALOG.filter((fact) => fact.scope === scope && fact.writable).map((fact) => fact.key));
-  return {
-    percent: entry?.completenessPercent ?? 100,
-    askable: unmet.filter((key) => writable.has(key) && !skip.has(key)),
-    skipped: unmet.filter((key) => writable.has(key) && skip.has(key)),
-    otherSurface: unmet.filter((key) => !writable.has(key)),
-  };
-}
 
-function areaProgressBlock(propertyId: string, scope: PropertyAreaCaptureScope, progress: Awaited<ReturnType<typeof areaCaptureProgress>>, terminal: boolean, continueAction: boolean): AskPresentationBlock {
-  const parts = [`${areaLabel(scope)} is ${progress.percent}% complete on the home record.`];
-  if (progress.skipped.length) parts.push(`${progress.skipped.length} detail${progress.skipped.length === 1 ? ' was' : 's were'} skipped or marked not sure this session and ${progress.skipped.length === 1 ? 'is' : 'are'} still incomplete.`);
-  const otherLabels = progress.otherSurface.map((key) => AREA_OTHER_SURFACE_LABELS[key]).filter(Boolean);
-  if (progress.otherSurface.length) parts.push(`${progress.otherSurface.length} detail${progress.otherSurface.length === 1 ? '' : 's'} cannot be filled in here${otherLabels.length ? `: ${otherLabels.join('; ')}` : ''}.`);
-  return {
-    type: 'SUMMARY', id: 'area-capture-progress',
-    title: terminal ? 'No more questions in this session' : `${areaLabel(scope)}: ${progress.askable.length} detail${progress.askable.length === 1 ? '' : 's'} left to answer`,
-    body: parts.join(' '), tone: terminal && (progress.skipped.length || progress.otherSurface.length || progress.percent < 100) ? 'CAUTION' : 'DEFAULT',
-    actions: [
-      ...(continueAction && progress.askable.length ? [{ id: 'continue-area-capture', label: `Continue with ${areaLabel(scope)}`, interactionType: 'START_WORKFLOW' as const, message: AREA_CAPTURE_MESSAGES[scope], operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', style: 'PRIMARY' as const }] : []),
-      { id: 'open-property-record', label: 'Open property record', href: areaCaptureFallbackHref(propertyId, scope), style: 'SECONDARY' as const },
-    ],
-  };
-}
 
-async function areaCapturePrompt(
-  userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, sourceExecutionId: string | null, notice?: string,
-): Promise<AskOperationResult> {
-  const [evaluation, progress] = await Promise.all([
-    evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: [...skip] } }),
-    areaCaptureProgress(userId, propertyId, scope, skip),
-  ]);
-  const parameters = { areaScope: scope, skipFactKeys: [...skip], sourceExecutionId };
-  const noticeBlock: AskPresentationBlock[] = notice ? [{ type: 'SUMMARY', id: 'area-capture-notice', title: notice, body: 'Nothing was saved. You can come back to it any time.', tone: 'DEFAULT', actions: [] }] : [];
-  const requirement = evaluation.requirements[0];
-  if (!requirement || requirement.capture.inputSchema.type === 'RELATIONAL_SELECT_CREATE' || requirement.capture.inputSchema.type === 'RELATIONAL_UPDATE') {
-    return {
-      status: 'ANSWERED', reasonCode: 'AREA_CAPTURE_NO_MORE_QUESTIONS', contextVersion: evaluation.contextVersion, parameters,
-      blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, true, false)], suggestions: ['How complete is my home record?'],
-    };
-  }
-  const capture = requirement.capture;
-  const areas = [...new Set(capture.factKeys.map((key) => areaLabel(getFactDefinition(key).scope)))];
-  const alsoUpdates = areas.length > 1 ? ` This answer updates: ${areas.join(', ')}.` : '';
-  const request: AskCaptureRequest = {
-    requirementId: requirement.requirementId, captureKey: capture.captureKey, classification: 'WORKFLOW_INPUT', state: requirement.state,
-    title: capture.title, question: capture.question,
-    helpText: `${capture.helpText ? `${capture.helpText} ` : ''}You will review it before anything is saved.${alsoUpdates}`.trim(),
-    inputSchema: capture.inputSchema, ...(requirement.currentAnswer === undefined ? {} : { currentAnswer: requirement.currentAnswer }),
-    allowNotSure: capture.allowNotSure, sensitivity: capture.sensitivity,
-    destinationLabel: 'Used to prepare this answer; nothing is saved until you confirm', confirmationText: null,
-    expectedContextVersion: evaluation.contextVersion, skippable: true,
-  };
-  return {
-    status: 'NEEDS_CONTEXT', reasonCode: 'AREA_CAPTURE_INPUT_REQUIRED', contextVersion: evaluation.contextVersion, parameters,
-    blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, false, false)], captureRequests: [request], suggestions: [],
-  };
-}
 
-export async function areaCaptureSubmitResult(
-  userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, sourceExecutionId: string | null,
-  submitted: { requirementId: string; captureKey: string; answer: Record<string, unknown>; expectedContextVersion: string; sensitiveDataConfirmed: boolean },
-): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  if (access.role === HouseholdRole.VIEWER) throw areaCaptureError('ASK_PERMISSION_REQUIRED', 'A contributor or owner is required to add home details.');
-  const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: [...skip] } });
-  const active = evaluation.requirements[0];
-  if (!active || active.requirementId !== submitted.requirementId || active.capture.captureKey !== submitted.captureKey) {
-    throw areaCaptureError('ASK_CAPTURE_NOT_ACTIVE', 'This question is no longer the current one. Start again from the area.');
-  }
-  if (evaluation.contextVersion !== submitted.expectedContextVersion) {
-    throw areaCaptureError('ASK_CONTEXT_VERSION_CONFLICT', 'The home record changed while this question was open. Start again from the area.');
-  }
-  const withSkipped = (): Set<string> => {
-    if (skip.size + active.capture.factKeys.length > AREA_CAPTURE_MAX_SKIPPED) throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', 'Too many details were skipped in this session. Start again from the area.');
-    return new Set([...skip, ...active.capture.factKeys]);
-  };
-  if (Object.keys(submitted.answer).length === 1 && submitted.answer[AREA_SKIP_MARKER] === true) {
-    return areaCapturePrompt(userId, propertyId, scope, withSkipped(), sourceExecutionId, 'Skipped for now');
-  }
-  const definition = getCaptureDefinition(submitted.captureKey);
-  if (definition.mode === 'RELATIONAL') throw areaCaptureError('ASK_CAPTURE_NOT_ACTIVE', 'This question cannot be answered here.');
-  if (definition.sensitivity !== 'STANDARD' && !submitted.sensitiveDataConfirmed) {
-    throw areaCaptureError('ASK_CAPTURE_CONFIRMATION_REQUIRED', 'Confirm that you want to save this sensitive home information.');
-  }
-  let answers: Array<{ factKey: string; value: unknown }>;
-  try {
-    answers = normalizeAnswers(definition, submitted.answer, active.capture.allowNotSure);
-  } catch (error) {
-    throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', error instanceof Error ? error.message : 'Check the answer and try again.');
-  }
-  if (!answers.length) throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', 'Answer at least one question, or skip it.');
-  // "Not sure" for everything saves nothing: it is treated as a skip so the same question does not come straight back.
-  if (answers.every(({ value }) => value === null || value === 'UNKNOWN')) {
-    return areaCapturePrompt(userId, propertyId, scope, withSkipped(), sourceExecutionId, 'Marked not sure for this session');
-  }
-  const fieldSchemas: Array<{ factKey: string; label: string; schema: { type: string; [key: string]: unknown } }> = definition.mode === 'SCALAR'
-    ? [{ factKey: definition.factKeys[0], label: definition.title, schema: definition.inputSchema as { type: string } }]
-    : (definition.inputSchema.type === 'GROUP' ? definition.inputSchema.fields : []).map((field) => ({
-      factKey: definition.answerBindings?.[field.key] ?? '', label: field.label, schema: field.inputSchema as { type: string },
-    }));
-  const rows = answers.map(({ factKey, value }) => {
-    const field = fieldSchemas.find((candidate) => candidate.factKey === factKey);
-    return { label: field?.label ?? definition.title, value: field ? areaValueDisplay(field.schema, value) : String(value) };
-  });
-  const areas = [...new Set(answers.map(({ factKey }) => areaLabel(getFactDefinition(factKey).scope)))];
-  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, address: true, city: true } });
-  const propertyName = property?.name?.trim() || (property ? `${property.address}, ${property.city}` : 'This property');
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  const contextVersion = evaluation.contextVersion;
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'AREA_CAPTURE_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: {
-      areaScope: scope, skipFactKeys: [...skip], sourceExecutionId,
-      areaCapture: { scope, requirementId: active.requirementId, captureKey: submitted.captureKey, answer: submitted.answer, expectedContextVersion: contextVersion, rows, areas },
-      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
-    },
-    blocks: [areaProgressBlock(propertyId, scope, await areaCaptureProgress(userId, propertyId, scope, skip), false, false)],
-    confirmation: {
-      confirmationId: `area-capture-${createHash('sha256').update(`${propertyId}:${scope}:${active.requirementId}`).digest('hex').slice(0, 12)}-1`, version: 1,
-      title: `Save "${definition.title}" to your home record?`,
-      description: 'This saves the answer to the shared home record through Property Context, the same record the property page and recommendations read. Nothing is saved until you confirm.',
-      fields: [{ label: 'Property', value: propertyName }, ...rows, { label: 'Areas updated', value: areas.join(', ') }],
-      editableFields: [], confirmLabel: 'Save details', consentText: 'I authorize saving these details to the shared home record.', expiresAt: expiresAt.toISOString(),
-    },
-    // Kept so the answer can be changed and resubmitted before confirming.
-    captureRequests: [{
-      requirementId: active.requirementId, captureKey: submitted.captureKey, classification: 'WORKFLOW_INPUT', state: active.state,
-      title: active.capture.title, question: active.capture.question, helpText: null, inputSchema: active.capture.inputSchema,
-      currentAnswer: definition.mode === 'SCALAR' ? { value: answers[0]?.value ?? null } : Object.fromEntries(Object.entries(definition.answerBindings ?? {}).map(([key, factKey]) => [key, answers.find((answer) => answer.factKey === factKey)?.value ?? null])),
-      allowNotSure: active.capture.allowNotSure, sensitivity: active.capture.sensitivity,
-      destinationLabel: 'Used to prepare this answer; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion, skippable: true,
-    }],
-    suggestions: [],
-  };
-}
 
 registerCapabilityHandler('property-context.area-capture', async (envelope) => {
   const launch = envelope.launchContext;
@@ -8917,15 +5764,6 @@ registerConfirmCapabilityHandler('home-deadline.monitor', confirmHomeDeadlineMon
 registerConfirmCapabilityHandler('household.invitation', confirmHouseholdInvitation);
 registerConfirmCapabilityHandler('refinance.monitor', confirmRefinanceRateMonitor);
 
-// Ask Cozy Stage 3, Phase 2 (implementation plan §8; FRD §19/§20/§22). The
-// two new capture-confirm write handlers -- the actual functional core this
-// phase's acceptance criterion is about (a synthetic candidate can be
-// confirmed, retried under a lease-reclaim race, rejected, and persisted
-// exactly once). Both delegate the real write to an existing, idempotent
-// writer (capturePropertyFact / HomeEventsService.createHomeEvent) keyed on
-// this execution's own id -- captureExecutionId / idempotencyKey
-// respectively -- rather than reimplementing idempotency here.
-const homeEventsServiceForCapture = new HomeEventsService();
 
 async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, command } = ctx;

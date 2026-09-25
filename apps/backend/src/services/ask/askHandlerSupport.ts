@@ -1,7 +1,7 @@
 // Shared support for the Ask handlers, moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98).
 import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, type AskCaptureRequest, type AskExecutionResponse, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../productFramework/ask/ask.contract';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
-import { AskExecution, AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, Prisma, RecurrenceFrequency } from '@prisma/client';
+import { AskExecution, AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, Prisma, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { z } from 'zod';
 import { isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
@@ -26,6 +26,74 @@ import { radarQueryService } from '../../modules/homeEventRadar/services/radarQu
 import { RADAR_FEEDBACK_COMMENT_MAX_LENGTH } from '../../modules/homeEventRadar/domain/radarInteraction';
 import { RADAR_ACTION_CODES } from '../../modules/homeEventRadar/domain/radarActionRegistry';
 import { type CorrectionFieldSpec, type CorrectionOption } from './askCorrectionFields';
+import { buildCapabilityCatalog, canonicalCapabilityRegistry, matchCapabilityGoal, type CapabilityCatalogItem } from '../../productFramework/capabilities';
+import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../toolDiscoveryAvailability.service';
+import { getCapabilityDiscoveryReadiness, getRelatedCapabilities } from '../capabilityRelated.service';
+import { registerCapabilityHandler } from './capabilityHandlerRegistry';
+import { capabilityCardLaunch } from './askCapabilityCardLaunch';
+import { PROPERTY_AREA_CAPTURE_SCOPES, type PropertyAreaCaptureScope } from '../../modules/propertyContext/catalog/featureRequirementRegistry';
+import { PROPERTY_FACT_CATALOG } from '../../modules/propertyContext/catalog/factCatalog';
+import { getContextCompleteness } from '../../modules/propertyContext/application/getContextCompleteness';
+import { getPropertyContext } from '../../modules/propertyContext/application/getPropertyContext';
+
+export const isAreaCaptureScope = (value: unknown): value is PropertyAreaCaptureScope => (PROPERTY_AREA_CAPTURE_SCOPES as readonly string[]).includes(String(value));
+
+export const AREA_CAPTURE_ANCHORS: Record<PropertyAreaCaptureScope, string> = {
+  CORE: 'property-type', LOCATION: 'address', STRUCTURE: 'structure', EXTERIOR: 'exterior', RESPONSIBILITY: 'responsibility', SYSTEMS: 'systems', SAFETY: 'safety',
+};
+
+export const areaFallbackAnchor = (scope: string): string | null => isAreaCaptureScope(scope) ? AREA_CAPTURE_ANCHORS[scope] : null;
+
+export function areaCaptureFallbackHref(propertyId: string, scope: string): string {
+  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
+  const anchor = areaFallbackAnchor(scope);
+  return anchor ? `${base}/edit#${anchor}` : base;
+}
+
+export async function areaCaptureProgress(userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>) {
+  // Every area scope is loaded: fact applicability (for example a condo not owning a private fence) reads facts from other areas.
+  const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] });
+  const entry = getContextCompleteness(snapshot).scopes.find((candidate) => candidate.scope === scope);
+  const unmet = entry ? [...entry.missingFactKeys, ...entry.conflictedFactKeys, ...entry.staleFactKeys] : [];
+  const writable = new Set<string>(PROPERTY_FACT_CATALOG.filter((fact) => fact.scope === scope && fact.writable).map((fact) => fact.key));
+  return {
+    percent: entry?.completenessPercent ?? 100,
+    askable: unmet.filter((key) => writable.has(key) && !skip.has(key)),
+    skipped: unmet.filter((key) => writable.has(key) && skip.has(key)),
+    otherSurface: unmet.filter((key) => !writable.has(key)),
+  };
+}
+
+export const PROPERTY_SCOPE_LABELS: Record<string, string> = {
+  CORE: 'Core property details', LOCATION: 'Location', STRUCTURE: 'Structure', EXTERIOR: 'Exterior and utilities',
+  RESPONSIBILITY: 'Maintenance responsibility', SYSTEMS: 'Home systems', SAFETY: 'Safety', ROOMS: 'Rooms',
+  INVENTORY: 'Inventory', OPTIONAL_HOUSEHOLD: 'Optional household context',
+};
+
+// ── Property Summary per-area capture ──────────────────────────────────────────────────────────────────────
+// A completeness row on the Property Summary opens an inline flow for ONE area. Each answer goes form -> review card ->
+// confirm -> receipt (IW-CONF-001); nothing is written by the form. The questions come from the versioned Property Context
+// contract PROPERTY_RECORD_SUMMARY:CAPTURE_AREA, and the write is captureFeatureContext -- the same canonical capture the
+// rest of Property Context uses -- so this adds no new form and no new writer.
+//
+// Skipping ("Skip for now", or an answer that is "not sure" for everything) is kept in the execution's server-controlled
+// parameters (`skipFactKeys`) and is used ONLY to choose the next question: it writes nothing and never makes a fact
+// complete, and the completeness numbers shown afterwards come from the live facts. The client never supplies the skip
+// list. A fresh workflow from a row starts with no skips; the receipt's "Continue" carries them from that execution.
+export const AREA_CAPTURE_MESSAGES: Record<PropertyAreaCaptureScope, string> = {
+  CORE: 'Fill in the missing core property details.',
+  LOCATION: 'Fill in the missing location details.',
+  STRUCTURE: 'Fill in the missing structure details.',
+  EXTERIOR: 'Fill in the missing exterior details.',
+  RESPONSIBILITY: 'Fill in the missing maintenance responsibility details.',
+  SYSTEMS: 'Fill in the missing home systems details.',
+  SAFETY: 'Fill in the missing safety details.',
+};
+
+// Phase 3 write slice 4: correct an InventoryRoom -- its name (the original rename), and its type and floor level. The
+// operation keeps the ROOM_RENAME id so nothing already registered has to move; the input's `field` says which one. The room
+// id is stable across a correction, so an open inline detail stays valid.
+export const ROOM_TYPE_VALUES = ['KITCHEN', 'LIVING_ROOM', 'BEDROOM', 'BATHROOM', 'DINING', 'LAUNDRY', 'GARAGE', 'OFFICE', 'BASEMENT', 'OTHER'] as const;
 
 export const INVENTORY_CATEGORY_VALUES = ['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'SAFETY', 'SMART_HOME', 'FURNITURE', 'ELECTRONICS', 'INTERIOR', 'STRUCTURAL', 'EXTERIOR', 'SITE', 'OTHER'] as const;
 
@@ -737,3 +805,248 @@ export const HOME_EVENT_CORRECTION_FIELDS: Record<'title' | 'occurredAt' | 'summ
 
 export type HomeEventCorrectionField = keyof typeof HOME_EVENT_CORRECTION_FIELDS;
 
+export const HouseholdInvitationInputSchema = z.object({
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+  role: z.enum([HouseholdRole.CONTRIBUTOR, HouseholdRole.VIEWER]),
+}).strict();
+
+export function invitationRoleCopy(role: InvitableHouseholdRole): string {
+  return role === HouseholdRole.CONTRIBUTOR
+    ? 'Contributor — can view records, complete tasks, log events, and add inventory'
+    : 'Viewer — read-only access; cannot create or modify home records';
+}
+
+export function readablePropertyValue(value: unknown): string {
+  if (value === null || value === undefined || value === '' || value === 'UNKNOWN') return 'Not recorded';
+  if (typeof value === 'number') return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
+  return String(value).toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export const HOME_EVENT_LINK_FIELDS = new Set<HomeEventCorrectionField>(['roomId', 'inventoryItemId']);
+
+export const HomeEventCorrectionInputSchema = z.object({
+  eventId: z.string().trim().min(1).max(160),
+  field: z.enum(['title', 'occurredAt', 'summary', 'amount', 'type', 'importance', 'roomId', 'inventoryItemId']),
+  value: z.string().max(2000).nullable(),
+}).strict();
+
+export const HOME_EVENT_VISIBILITY_LABELS: Record<string, string> = {
+  PRIVATE: 'Private (only you)', HOUSEHOLD: 'Household (everyone with access to this home)', RESALE_PACK: 'Resale pack (shared with buyers and listing agents)',
+};
+
+export const HomeEventVisibilityInputSchema = z.object({
+  eventId: z.string().trim().min(1).max(160),
+  value: z.enum(['PRIVATE', 'HOUSEHOLD', 'RESALE_PACK']).nullable(),
+}).strict();
+
+export const WarrantyCorrectionInputSchema = z.object({
+  warrantyId: z.string().trim().min(1).max(160),
+  field: z.enum(['providerName', 'expiryDate', 'startDate', 'category', 'policyNumber', 'cost', 'coverageDetails']),
+  value: z.string().max(2000).nullable(),
+}).strict();
+
+export const RoomRenameInputSchema = z.object({
+  roomId: z.string().trim().min(1).max(160),
+  // Defaults to the name so a proposal stored before type and floor level existed still confirms as a rename.
+  field: z.enum(['name', 'type', 'floorLevel']).default('name'),
+  value: z.string().max(200).nullable(),
+}).strict();
+
+export const RoomCreateInputSchema = z.object({
+  type: z.enum(ROOM_TYPE_VALUES),
+  name: z.string().trim().min(1).max(80),
+  floorLevel: z.number().int().min(-5).max(50).nullish().transform((value) => value ?? null),
+}).strict();
+
+export const QuoteWorkspaceCommandInputSchema = z.object({
+  serviceCategory: z.nativeEnum(ServiceCategory),
+  scopeSummary: z.string().trim().min(3).max(1000),
+}).strict();
+
+export type InspectionResolution = z.infer<typeof InspectionResolutionSchema>;
+
+export type InvitableHouseholdRole = z.infer<typeof HouseholdInvitationInputSchema>['role'];
+
+export const InspectionResolutionSchema = z.object({
+  method: z.enum(['CONTRACTOR_WORK', 'DIY', 'SELLER_REPAIR', 'CREDITED_AT_CLOSING', 'DISMISSED']),
+  notes: z.string().trim().min(1).max(1000).nullable(),
+  costCents: z.number().int().min(0).max(1_000_000_000).nullable(),
+}).strict();
+
+export async function capabilityResult(userId: string, propertyId: string | null | undefined, message: string): Promise<AskOperationResult> {
+  const exploreToolsHref = propertyId
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools`
+    : '/dashboard/home-tools';
+  const availability = createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry);
+  const catalog = buildCapabilityCatalog({
+    registry: canonicalCapabilityRegistry,
+    availability,
+    userId,
+    propertyId: propertyId ?? undefined,
+    includeWorkflowContext: false,
+  });
+  const catalogById = new Map(catalog.capabilities.map((capability) => [capability.id, capability]));
+  const availableDefinitions = availability.listAvailable({ userId, includeWorkflowOnly: false });
+  const allMatches = matchCapabilityGoal({ registry: canonicalCapabilityRegistry, goal: message, limit: 5 });
+  const availableMatches = matchCapabilityGoal({
+    registry: canonicalCapabilityRegistry,
+    goal: message,
+    capabilities: availableDefinitions,
+    limit: 5,
+  });
+  const strongest = allMatches.matches[0];
+  const strongestAvailable = availableMatches.matches[0];
+  const requestedUnavailable = strongest
+    && !catalogById.has(strongest.capabilityId)
+    && (!strongestAvailable || strongest.score - strongestAvailable.score >= 8);
+
+  if (requestedUnavailable) {
+    const capability = canonicalCapabilityRegistry.getById(strongest.capabilityId)!;
+    const decision = availability.resolve(capability.id, userId);
+    const workflowOnly = capability.destination.workflowOnly;
+    return {
+      status: 'UNAVAILABLE',
+      reasonCode: workflowOnly ? 'CAPABILITY_REQUIRES_WORKFLOW_CONTEXT' : decision.reason ?? 'CAPABILITY_UNAVAILABLE',
+      contextVersion: catalog.registryVersion,
+      blocks: [{
+        type: 'SUMMARY',
+        id: 'requested-capability-unavailable',
+        title: `${capability.presentation.label} is not available here`,
+        body: workflowOnly
+          ? 'This capability is offered only from an eligible home workflow where the required source context is present. I will not provide a stale or non-launchable shortcut.'
+          : 'This capability is currently disabled, outside your rollout, or has failed a launch-readiness check. I will not recommend a tool that cannot be opened safely.',
+        tone: 'CAUTION',
+        actions: [{ id: 'explore-available-tools', label: 'Explore available tools', href: exploreToolsHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['Show me another available option', 'What can help with this goal instead?'],
+    };
+  }
+
+  if (!availableMatches.matches.length) {
+    return {
+      status: 'ANSWERED',
+      blocks: [{
+        type: 'SUMMARY', id: 'no-capability-match', title: 'Tell me what outcome you want',
+        body: 'I could not identify one specific tool yet. Describe the decision, task, risk, savings goal, or major home moment you want help with.',
+        tone: 'DEFAULT', actions: [{ id: 'explore-tools', label: 'Explore home tools', href: exploreToolsHref, style: 'SECONDARY' }],
+      }],
+      suggestions: ['Help me compare contractor quotes', 'I want to plan future replacements', 'Can you monitor refinance rates?'],
+    };
+  }
+
+  const readiness = propertyId
+    ? await getCapabilityDiscoveryReadiness({ propertyId, userId })
+    : null;
+  const ranked = availableMatches.matches
+    .slice(0, availableMatches.ambiguous ? 3 : 2)
+    .flatMap((match) => {
+      const capability = catalogById.get(match.capabilityId);
+      return capability ? [{ capability, match }] : [];
+    });
+  const card = (capability: CapabilityCatalogItem) => {
+    const requiresProperty = capability.readinessRequirements.some((requirement) => requirement.kind === 'PROPERTY');
+    const policyReadiness = readiness?.readinessByCapabilityId[capability.id];
+    const state = !propertyId && requiresProperty
+      ? 'NEEDS_PROPERTY' as const
+      : policyReadiness ?? 'READY' as const;
+    const reasons = state === 'NEEDS_PROPERTY'
+      ? ['Select a home so the capability can use the correct property context.']
+      : readiness?.reasonsByCapabilityId[capability.id] ?? [];
+    const readinessLabel = state === 'READY'
+      ? 'Ready for this home'
+      : state === 'NEEDS_PROPERTY'
+        ? 'Home selection required'
+        : state === 'NEEDS_CONTEXT'
+          ? 'More home details will improve the result'
+          : 'Not ready for the current context';
+    return {
+      id: capability.id,
+      label: capability.label,
+      description: capability.shortDescription,
+      expectedOutput: capability.expectedOutput,
+      href: capability.href,
+      ...capabilityCardLaunch(capability.id),
+      readiness: state,
+      readinessLabel,
+      readinessReasons: reasons.slice(0, 5),
+      releaseStage: capability.releaseStage,
+    };
+  };
+  const blocks: AskPresentationBlock[] = [{
+    type: 'CAPABILITY_LIST',
+    id: 'capability-matches',
+    title: availableMatches.ambiguous ? 'A few tools could fit—choose the closest goal' : 'Best match for your goal',
+    description: availableMatches.ambiguous
+      ? 'These are close matches from the live capability registry. Nothing was chosen on your behalf.'
+      : 'Ranked from reviewed homeowner language, current availability, and canonical readiness policy.',
+    capabilities: ranked.map(({ capability }) => card(capability)),
+  }];
+
+  if (propertyId && ranked[0]) {
+    try {
+      const related = await getRelatedCapabilities({
+        propertyId,
+        userId,
+        currentCapabilityId: ranked[0].capability.id,
+        limit: 3,
+      });
+      const selectedIds = new Set(ranked.map(({ capability }) => capability.id));
+      const relatedCards = related.suggestions
+        .filter((suggestion) => !selectedIds.has(suggestion.capabilityId))
+        .slice(0, 3)
+        .flatMap((suggestion) => {
+          const capability = catalogById.get(suggestion.capabilityId);
+          return capability ? [card(capability)] : [];
+        });
+      if (relatedCards.length) {
+        blocks.push({
+          type: 'CAPABILITY_LIST',
+          id: 'related-capabilities',
+          title: 'Related tools for what comes next',
+          description: 'Related through the canonical capability lifecycle and filtered for this home.',
+          capabilities: relatedCards,
+        });
+      }
+    } catch {
+      // Discovery remains useful if optional continuity context is temporarily unavailable.
+    }
+  }
+
+  return {
+    status: 'ANSWERED',
+    contextVersion: readiness?.contextVersion ?? catalog.registryVersion,
+    blocks,
+    suggestions: availableMatches.ambiguous
+      ? ['Help me narrow these options', 'Show only tools ready for this home']
+      : ['What information does this tool need?', 'What result will I get?', 'Show another option'],
+  };
+}
+
+registerCapabilityHandler('capability.discovery', async (envelope) => capabilityResult(envelope.userId, envelope.propertyId, envelope.message));
+
+// Facts an answer here cannot fill: they are set from the address, calculated, or read from other records.
+export const AREA_OTHER_SURFACE_LABELS: Record<string, string> = {
+  'core.activationStatus': 'Activation status (set by Cozy)',
+  'location.county': 'County (from your address)', 'location.countyFips': 'County code (from your address)',
+  'location.geocoded': 'Map location (from your address)', 'location.climateRegion': 'Climate region (from your location)',
+  'structure.roofAgeYears': 'Roof age (calculated from the replacement year)',
+  'systems.hasCooling': 'Cooling present (from your cooling type and inventory)', 'systems.installedItemTypes': 'Installed system types (from your inventory)',
+};
+
+export const areaLabel = (scope: string): string => PROPERTY_SCOPE_LABELS[scope] ?? readablePropertyValue(scope);
+
+export function areaProgressBlock(propertyId: string, scope: PropertyAreaCaptureScope, progress: Awaited<ReturnType<typeof areaCaptureProgress>>, terminal: boolean, continueAction: boolean): AskPresentationBlock {
+  const parts = [`${areaLabel(scope)} is ${progress.percent}% complete on the home record.`];
+  if (progress.skipped.length) parts.push(`${progress.skipped.length} detail${progress.skipped.length === 1 ? ' was' : 's were'} skipped or marked not sure this session and ${progress.skipped.length === 1 ? 'is' : 'are'} still incomplete.`);
+  const otherLabels = progress.otherSurface.map((key) => AREA_OTHER_SURFACE_LABELS[key]).filter(Boolean);
+  if (progress.otherSurface.length) parts.push(`${progress.otherSurface.length} detail${progress.otherSurface.length === 1 ? '' : 's'} cannot be filled in here${otherLabels.length ? `: ${otherLabels.join('; ')}` : ''}.`);
+  return {
+    type: 'SUMMARY', id: 'area-capture-progress',
+    title: terminal ? 'No more questions in this session' : `${areaLabel(scope)}: ${progress.askable.length} detail${progress.askable.length === 1 ? '' : 's'} left to answer`,
+    body: parts.join(' '), tone: terminal && (progress.skipped.length || progress.otherSurface.length || progress.percent < 100) ? 'CAUTION' : 'DEFAULT',
+    actions: [
+      ...(continueAction && progress.askable.length ? [{ id: 'continue-area-capture', label: `Continue with ${areaLabel(scope)}`, interactionType: 'START_WORKFLOW' as const, message: AREA_CAPTURE_MESSAGES[scope], operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', style: 'PRIMARY' as const }] : []),
+      { id: 'open-property-record', label: 'Open property record', href: areaCaptureFallbackHref(propertyId, scope), style: 'SECONDARY' as const },
+    ],
+  };
+}
