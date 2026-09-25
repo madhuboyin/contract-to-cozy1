@@ -25,7 +25,7 @@ import type { Geo } from '../lib/geocodeZip';
 import { getPropertyGeo } from '../lib/propertyGeo';
 import { iterateAllProperties } from '../lib/paginateProperties';
 import { logger, type AppLogger } from '../lib/logger';
-import { nwsFetchOutcomeTotal } from '../lib/metrics';
+import { nwsFetchOutcomeTotal, nwsIgnoredEventTotal } from '../lib/metrics';
 import { nwsRadarAdapter } from '../radar/nwsRadarAdapter';
 import {
   nwsLifecycleConvergenceService,
@@ -181,6 +181,7 @@ export async function severeWeatherAlertsJob(
   >();
   const uniqueAlerts = new Map<string, { alert: SevereWeatherAlert; geo: Geo }>();
   let propertiesEvaluated = 0;
+  const ignoredEvents = new Map<string, number>();
 
   for await (const property of deps.iterateAllProperties()) {
     const p = property as PropertyRow;
@@ -200,6 +201,10 @@ export async function severeWeatherAlertsJob(
         (value) => {
           outcome = value;
           nwsFetchOutcomeTotal.inc({ outcome: value });
+        },
+        (event) => {
+          nwsIgnoredEventTotal.inc({ event });
+          ignoredEvents.set(event, (ignoredEvents.get(event) ?? 0) + 1);
         },
       );
       cached = { alerts, outcome, geo };
@@ -357,6 +362,7 @@ export async function severeWeatherAlertsJob(
         fetchSucceeded,
         fetchFailed,
         queryPoints: alertsCache.size,
+        ignoredEvents: Object.fromEntries(ignoredEvents),
         observationsQueued: createdOrUpdated,
         lifecycleObservations,
         lifecycleReasonCounts,

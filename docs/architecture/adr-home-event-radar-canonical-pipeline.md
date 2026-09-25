@@ -100,3 +100,14 @@ maintaining two canonical models or adding migration compatibility code.
   experience.
 - Provider lifecycle tests prove that failed fetches cannot resolve active signals and that dummy
   ingestion cannot run in production.
+
+## Addendum (2026-09-25): NWS event allowlist and ignored-event visibility
+
+- The NWS provider only ingests event types listed in `EVENT_TO_HAZARD_FAMILY`
+  (`severeWeatherAlert.service.ts`). Anything else is dropped before Radar sees it.
+- Incident: from Sep 15 no `radar_events` were created while the job reported `successful_empty` on every
+  run, because the alerts NWS was issuing for NJ (Coastal Flood Warning, Wind Advisory) were not in the list.
+- Added Coastal Flood and Lakeshore Flood Warning/Watch/Advisory (`FLOOD`) and Wind Advisory (`STORM`).
+- Dropped events are now counted (`nws_ignored_event_total{event}`) and recorded per run in
+  `radar_source_runs.metadataJson.ignoredEvents`, so an allowlist gap is visible instead of looking like an
+  empty NWS response. Other NWS products (High Surf, Rip Current, Special Weather Statement) remain out of scope.

@@ -268,6 +268,13 @@ export const nwsFetchOutcomeTotal = new Counter({
   registers: [register],
 });
 
+export const nwsIgnoredEventTotal = new Counter({
+  name: 'nws_ignored_event_total',
+  help: 'NWS alerts returned for a property but dropped because the event type is not in the hazard allowlist',
+  labelNames: ['event'] as const,
+  registers: [register],
+});
+
 export const severeWeatherIncidentsTotal = new Counter({
   name: 'severe_weather_incidents_total',
   help: 'Severe-weather incidents created/updated or resolved by severeWeatherAlertsJob',

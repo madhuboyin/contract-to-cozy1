@@ -102,6 +102,14 @@ const EVENT_TO_HAZARD_FAMILY: Record<string, HazardFamily> = {
   'Flood Warning': 'FLOOD',
   'Flash Flood Watch': 'FLOOD',
   'Flood Watch': 'FLOOD',
+  // Coastal/lakeshore flooding is a distinct NWS product from river/flash
+  // flooding; without these a Coastal Flood Warning was silently dropped.
+  'Coastal Flood Warning': 'FLOOD',
+  'Coastal Flood Watch': 'FLOOD',
+  'Coastal Flood Advisory': 'FLOOD',
+  'Lakeshore Flood Warning': 'FLOOD',
+  'Lakeshore Flood Watch': 'FLOOD',
+  'Lakeshore Flood Advisory': 'FLOOD',
 
   'Severe Thunderstorm Warning': 'STORM',
   'Tornado Warning': 'STORM',
@@ -109,6 +117,7 @@ const EVENT_TO_HAZARD_FAMILY: Record<string, HazardFamily> = {
   'Severe Thunderstorm Watch': 'STORM',
   'Tornado Watch': 'STORM',
   'High Wind Watch': 'STORM',
+  'Wind Advisory': 'STORM',
 
   // Distinct from STORM: the guidance journey (guidanceTemplateRegistry.ts)
   // already declares a separate `hurricane_risk` signal intent family.
@@ -154,7 +163,10 @@ export class SevereWeatherAlertService {
   async getActiveAlerts(
     lat: number,
     lon: number,
-    onOutcome?: (outcome: NwsFetchOutcome) => void
+    onOutcome?: (outcome: NwsFetchOutcome) => void,
+    // Called once per NWS alert whose event type is not in the allowlist, so a
+    // coverage gap is observable instead of looking like an empty NWS response.
+    onIgnoredEvent?: (event: string) => void,
   ): Promise<SevereWeatherAlert[]> {
     if (typeof lat !== 'number' || typeof lon !== 'number' || Number.isNaN(lat) || Number.isNaN(lon)) {
       logger.warn('[NWS] getActiveAlerts called with invalid lat/lon');
@@ -190,7 +202,7 @@ export class SevereWeatherAlertService {
         clearTimeout(timeout);
       }
 
-      const alerts = this.mapResponseToAlerts(data);
+      const alerts = this.mapResponseToAlerts(data, onIgnoredEvent);
       logger.info(
         `[NWS] Fetched ${alerts.length} in-scope alert(s) for point=${lat},${lon}: [${alerts
           .map(a => a.event)
@@ -212,7 +224,10 @@ export class SevereWeatherAlertService {
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  private mapResponseToAlerts(data: NwsAlertsResponse): SevereWeatherAlert[] {
+  private mapResponseToAlerts(
+    data: NwsAlertsResponse,
+    onIgnoredEvent?: (event: string) => void,
+  ): SevereWeatherAlert[] {
     const features = data?.features ?? [];
     const alerts: SevereWeatherAlert[] = [];
 
@@ -222,7 +237,10 @@ export class SevereWeatherAlertService {
       if (!event) continue;
 
       const hazardFamily = EVENT_TO_HAZARD_FAMILY[event];
-      if (!hazardFamily) continue; // not a hazard family we act on
+      if (!hazardFamily) {
+        onIgnoredEvent?.(event); // not a hazard family we act on
+        continue;
+      }
 
       const nwsAlertId = props?.id ?? feature?.id;
       if (!nwsAlertId) continue;

@@ -90,6 +90,24 @@ test('maps Watch-tier events to the same hazard family as their Warning counterp
   assert.equal(alerts.find(a => a.event === 'Winter Storm Watch').hazardFamily, 'SNOW');
 });
 
+test('maps coastal flood and wind advisory events, and reports events outside the allowlist', async () => {
+  mockFetch({
+    features: [
+      alertFeature({ id: 'urn:oid:c1', event: 'Coastal Flood Warning' }),
+      alertFeature({ id: 'urn:oid:c2', event: 'Coastal Flood Advisory' }),
+      alertFeature({ id: 'urn:oid:w1', event: 'Wind Advisory' }),
+      alertFeature({ id: 'urn:oid:i1', event: 'Rip Current Statement' }),
+    ],
+  });
+  const ignored = [];
+  const alerts = await severeWeatherAlertService.getActiveAlerts(40.0, -75.0, undefined, (event) => ignored.push(event));
+  assert.equal(alerts.length, 3);
+  assert.equal(alerts.find(a => a.event === 'Coastal Flood Warning').hazardFamily, 'FLOOD');
+  assert.equal(alerts.find(a => a.event === 'Coastal Flood Advisory').hazardFamily, 'FLOOD');
+  assert.equal(alerts.find(a => a.event === 'Wind Advisory').hazardFamily, 'STORM');
+  assert.deepEqual(ignored, ['Rip Current Statement']);
+});
+
 test('maps hurricane/tropical/storm-surge events to the HURRICANE hazard family', async () => {
   mockFetch({
     features: [
