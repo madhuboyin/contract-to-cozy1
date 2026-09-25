@@ -16,3 +16,6 @@ export function money(value: number): string {
 
 /** An internal code as words, for example "REPLACE_SOON" as "replace soon". */
 export const readableCode = (value: string | null | undefined) => (value ? value.toLowerCase().replace(/_/g, ' ') : '');
+
+/** An internal code as capitalised words, for example "REPLACE_SOON" as "Replace Soon". */
+export const titleCase = (value: string) => readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase());
