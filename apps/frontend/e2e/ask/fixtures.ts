@@ -933,9 +933,11 @@ function seasonalShelvesExecution() {
 function statusBoardShelvesExecution() {
   const base = maintenanceExecution();
   const boardHref = `/dashboard/properties/${propertyId}/status-board`;
-  const row = (id: string, title: string, description: string | null, condition: string, timingLabel: string, tone: 'DEFAULT' | 'CAUTION') => ({
-    id, title, description, meta: ['Replace soon', timingLabel, 'Kitchen'], status: condition, href: `/dashboard/properties/${propertyId}/inventory?openItemId=${id}`, timingLabel, tone,
+  const row = (id: string, title: string, description: string | null, condition: string, timingLabel: string, tone: 'DEFAULT' | 'CAUTION', extra: Record<string, unknown> = {}) => ({
+    id, title, description, meta: ['Replace soon', timingLabel, 'Kitchen'], status: condition, href: `/dashboard/properties/${propertyId}/inventory?openItemId=${id}`, timingLabel, tone, ...extra,
   });
+  // P1 inline capture (FRD v1.100): an item with no install date carries an "Add install date" action on the inventory item id.
+  const installDateCapture = { entityType: 'INVENTORY_ITEM', actions: [{ id: 'correct-installedOn', label: 'Add install date', message: 'Correct the install date of this inventory item.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' }] };
   return {
     ...base, executionId: 'execution-status-board-shelves', question: 'Show my status board', viewState: null,
     operation: { id: 'HOME_STATUS_BOARD', version: '1.0', family: 'READ' },
@@ -949,7 +951,7 @@ function statusBoardShelvesExecution() {
             row('item-water-heater', 'Water heater', 'Past expected life (10yr)', 'ACTION_NEEDED', '12 yr old', 'CAUTION'),
             row('item-furnace', 'Furnace', 'Past expected life (15yr)', 'ACTION_NEEDED', '16 yr old', 'CAUTION'),
           ] },
-          { id: 'status-board-monitor', title: 'Monitor', count: 1, items: [row('item-dishwasher', 'Dishwasher', 'Near the end of expected life', 'MONITOR', '8 yr old', 'DEFAULT')] },
+          { id: 'status-board-monitor', title: 'Monitor', count: 1, items: [row('item-dishwasher', 'Dishwasher', 'Near the end of expected life', 'MONITOR', 'Install date needed', 'DEFAULT', installDateCapture)] },
           { id: 'status-board-good', title: 'In good shape', count: 1, items: [row('item-fridge', 'Refrigerator', null, 'GOOD', '3 yr old', 'DEFAULT')] },
         ], actions: [{ id: 'open-status-board', label: 'Open Status Board', href: boardHref, style: 'SECONDARY' }] },
     ],

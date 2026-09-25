@@ -29,6 +29,17 @@ export function statusBoardShelfFacts(item: { condition?: unknown; ageYears?: nu
   };
 }
 
+// P1 inline capture (FRD v1.100): an item whose install date is missing gets an "Add install date" capture, the same
+// INVENTORY_ITEM_CORRECT flow the Appliance Oracle uses for a missing purchase date. The action dispatches with the
+// card's id, so such a card carries the inventory item's id (not the board row's) and the INVENTORY_ITEM entity type.
+export function statusBoardCaptureFields(item: { id: string; inventoryItemId?: string | null; needsInstallDateForPrediction?: boolean | null }): { id: string; entityType?: string; actions?: Array<{ id: string; label: string; message: string; style: 'PRIMARY'; interactionType: 'MUTATE_RECORD'; operationId: string }> } {
+  if (!item.needsInstallDateForPrediction || !item.inventoryItemId) return { id: item.id };
+  return {
+    id: item.inventoryItemId, entityType: 'INVENTORY_ITEM',
+    actions: [{ id: 'correct-installedOn', label: 'Add install date', message: 'Correct the install date of this inventory item.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' }],
+  };
+}
+
 export function statusBoardMeta(item: any): string[] {
   const entries = [
     readableCode(item.recommendation),
@@ -70,7 +81,6 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
     return {
       id: `status-board-${key.toLowerCase().replace(/_/g, '-')}`, title, count: rows.length,
       items: rows.slice(0, 25).map((item) => ({
-        id: item.id,
         title: item.displayName || readableCode(item.category),
         description: (item.computedReasons ?? []).filter((reason: any) => reason?.code !== 'ALL_CLEAR' && reason?.detail).map((reason: any) => reason.detail).join('; ') || null,
         // A card's meta holds at most six entries (the contract's limit). A fully recorded item has seven, and the
@@ -79,6 +89,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
         status: String(item.condition),
         href: item.deepLinks?.viewItem ?? pageHref,
         ...statusBoardShelfFacts(item),
+        ...statusBoardCaptureFields(item),
       })),
     };
   }).filter((section) => section.count > 0);

@@ -143,3 +143,28 @@ test('the full answer checker, with answer relevance on, keeps the shelves answe
   const checked = validateAskAnswerTrustPipeline({ question: 'Show my status board', operationId: 'HOME_STATUS_BOARD', propertyId: 'p1', semanticEnabled: true, result });
   assert.equal(checked.result.status, 'ANSWERED', JSON.stringify(checked.semantic));
 });
+
+test('an item missing its install date carries an inline "Add install date" capture on the inventory item id, and survives the answer checker', () => {
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const items = [
+    item('a', 'MONITOR', { ageYears: null, needsInstallDateForPrediction: true, inventoryItemId: 'inv-a' }),
+    item('b', 'GOOD', { ageYears: null, needsInstallDateForPrediction: true, inventoryItemId: null }),
+    item('c', 'GOOD'),
+  ];
+  const raw = statusBoardFromView(view({ items, pagination: { page: 1, limit: 100, total: 3, totalPages: 1 } }), 'p1');
+  const list = raw.blocks.find((block) => block.id === 'status-board-items');
+  require('../../src/productFramework/ask/ask.contract.ts').AskPresentationBlockSchema.parse(list);
+  const cards = list.sections.flatMap((section) => section.items);
+  const [a, b, c] = ['inv-a', 'b', 'c'].map((id) => cards.find((card) => card.id === id));
+  assert.equal(a.entityType, 'INVENTORY_ITEM');
+  assert.deepEqual(a.actions.map((action) => [action.label, action.operationId, action.interactionType, action.message]), [['Add install date', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD', 'Correct the install date of this inventory item.']]);
+  assert.equal(b.actions, undefined, 'without an inventory item there is nothing to correct');
+  assert.equal(c.actions, undefined, 'a dated item has no capture');
+  assert.equal(c.entityType, undefined);
+  const result = attachAskAuthoritativeSourceEvidence(raw, [completedAskAuthoritativeSourceEvidence('HOME_STATUS_BOARD')]);
+  const checked = validateAskAnswerTrustPipeline({ question: 'Show my status board', operationId: 'HOME_STATUS_BOARD', propertyId: 'p1', semanticEnabled: true, result });
+  // The missing-date limitation makes the answer READY_WITH_LIMITATIONS; the checker must still pass it.
+  assert.equal(checked.result.status, 'READY_WITH_LIMITATIONS', JSON.stringify(checked.semantic));
+  assert.equal(checked.semantic.outcome, 'PASS');
+});

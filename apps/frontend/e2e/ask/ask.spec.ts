@@ -2242,6 +2242,43 @@ test('on a phone, status board shelves stay inside the screen and an item opens 
   await expect(sheet).toBeHidden();
 });
 
+test('a status board card with no install date offers Add install date, which asks to correct that inventory item (FRD v1.100)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const response = page.locator('#ask-execution-execution-status-board-shelves');
+  const card = response.getByRole('button', { name: /Dishwasher/ });
+  await expect(card).toContainText('Install date needed');
+  await card.click();
+  const drawer = page.getByRole('dialog', { name: 'Dishwasher' });
+  await drawer.getByRole('button', { name: /Add install date/ }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Correct the install date of this inventory item.'
+    && (body.launchContext as { entityType?: string } | undefined)?.entityType === 'INVENTORY_ITEM'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'item-dishwasher'
+    && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'INVENTORY_ITEM_CORRECT')).toBe(true);
+  // A dated item offers no capture.
+  await response.getByRole('button', { name: /Water heater/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Water heater' }).getByRole('button', { name: /Add install date/ })).toHaveCount(0);
+});
+
+test('on a phone, Add install date on a status board card is reachable in the bottom sheet (FRD v1.100)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const response = page.locator('#ask-execution-execution-status-board-shelves');
+  await response.getByRole('button', { name: /Dishwasher/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Dishwasher' });
+  const button = sheet.getByRole('button', { name: /Add install date/ });
+  await expect(button).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await button.click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Correct the install date of this inventory item.')).toBe(true);
+});
+
 test('the buyer plan shows the next task and blockers as shelves whose cards open a read-only detail in a side drawer (FRD v1.84)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
