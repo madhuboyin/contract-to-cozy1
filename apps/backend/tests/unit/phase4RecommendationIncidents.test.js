@@ -41,7 +41,11 @@ test('feedback, admin operations, and reporting share the recommendation inciden
   const service = source('../../src/services/recommendationIncident.service.ts');
   const quality = source('../../src/services/personalizationQuality.service.ts');
   const homeowner = source('../../../frontend/src/app/(dashboard)/dashboard/personalization/page.tsx');
-  const admin = source('../../../frontend/src/app/(dashboard)/dashboard/admin/personalization/page.tsx');
+  const admin = (() => {
+    // The admin page renders extracted cards (components/ops/personalization); the strings live in the page or a card.
+    const dir = path.resolve(__dirname, '../../../frontend/src/components/ops/personalization');
+    return [source('../../../frontend/src/app/(dashboard)/dashboard/admin/personalization/page.tsx'), ...fs.readdirSync(dir).map((name) => fs.readFileSync(path.join(dir, name), 'utf8'))].join('\n');
+  })();
 
   assert.match(schema, /model RecommendationIncident \{/);
   assert.match(schema, /sourceFeedbackId\s+String\?\s+@unique/);

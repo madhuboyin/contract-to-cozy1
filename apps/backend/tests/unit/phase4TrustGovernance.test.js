@@ -49,7 +49,11 @@ test('admin trust queue supports beta advisory activation and enforced launch de
   const service = read('../../src/services/personalizationCatalogAdmin.service.ts');
   const controller = read('../../src/controllers/adminPersonalization.controller.ts');
   const routes = read('../../src/routes/adminPersonalization.routes.ts');
-  const adminPage = read('../../../frontend/src/app/(dashboard)/dashboard/admin/personalization/page.tsx');
+  const adminPage = (() => {
+    // The admin page renders extracted cards (components/ops/personalization); the strings live in the page or a card.
+    const dir = path.resolve(__dirname, '../../../frontend/src/components/ops/personalization');
+    return [read('../../../frontend/src/app/(dashboard)/dashboard/admin/personalization/page.tsx'), ...fs.readdirSync(dir).map((name) => fs.readFileSync(path.join(dir, name), 'utf8'))].join('\n');
+  })();
   for (const contract of [
     'GOVERNANCE_NOT_READY',
     'evaluateRecommendationLaunchReadiness',
@@ -58,8 +62,8 @@ test('admin trust queue supports beta advisory activation and enforced launch de
   assert.match(controller, /Tier-specific governance review is incomplete/);
   assert.match(routes, /governance-reviews/);
   assert.match(adminPage, /Trust review/);
-  assert.match(adminPage, /REVIEW REQUIRED/);
-  assert.match(adminPage, /BETA ADVISORY/);
+  assert.match(adminPage, /Review required/);
+  assert.match(adminPage, /Beta advisory/);
   assert.match(adminPage, /Reject/);
 });
 

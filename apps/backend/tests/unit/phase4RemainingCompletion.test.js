@@ -136,8 +136,13 @@ test('Grounded Ask isolates model sessions by user, property, and context versio
   assert.match(gemini, /userId.*sessionId.*propertyId.*contextVersion/);
   assert.match(gemini, /CHAT_SESSION_TTL_MS/);
   assert.match(gemini, /\[fact:FACT_KEY\]/);
-  assert.match(chat, /previousPropertyIdRef/);
-  assert.match(chat, /setSessionId\(createChatSessionId\(\)\)/);
+  // The chat surface is the Ask workspace now; a property change starts a new session there (useSessionLifecycle's
+  // initialisation effect is keyed on the selected property and mints a fresh session id).
+  assert.match(chat, /AskWorkspace/);
+  const lifecycle = source('../../../frontend/src/components/ask/workspace/useSessionLifecycle.ts');
+  assert.match(lifecycle, /\[selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch, availabilityEpoch\]/);
+  assert.match(lifecycle, /\|\| newId\(\)/);
+  assert.match(lifecycle, /activeSessionPropertyRef\.current === selectedPropertyId/);
 });
 
 test('remaining Phase 4 schema is greenfield and introduces no migration script', () => {
