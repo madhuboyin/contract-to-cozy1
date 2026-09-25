@@ -3,6 +3,18 @@ import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 // Homeowners search by the hazard, not the product name ("weather", "storm").
 // Without these the default aliases (just the label and id) never match.
 const INTENT_ALIASES_BY_ID: Record<string, string[]> = {
+  'environment-report': [
+    'environment report',
+    'weather',
+    'weather forecast',
+    'weather report',
+    'air quality',
+    'flood risk',
+    'drought',
+    'radon',
+    'climate',
+    'environmental hazards',
+  ],
   'home-event-radar': [
     'home event radar',
     'weather',
@@ -21,6 +33,7 @@ export const PROTECT_MONITOR_CAPABILITIES = buildCapabilityDefinitions(([
   ['appreciation', 'Value Tracker', 'Monitor home value and trendlines.', '/dashboard/appreciation', 'VALUE_TRACKER', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['claims', 'Claims', 'Review the status of filed insurance and incident claims for this home.', '/dashboard/properties/[id]/claims', 'CLAIMS', 'ACTIVE', 'REGULATED_COVERAGE', 'CONTEXTUAL'],
   ['energy', 'Energy Audit', 'Review efficiency and utility optimization opportunities.', '/dashboard/energy', 'ENERGY_AUDIT', 'BETA', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
+  ['environment-report', 'Environment Report', 'Check current weather, air quality, flood, drought, radon, hazard, and climate conditions for this home.', '/dashboard/properties/[id]/environment-report', 'ENVIRONMENT_REPORT', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['guidance-overview', 'Guidance Overview', 'Work through an active home decision step by step.', '/dashboard/properties/[id]/tools/guidance-overview', 'GUIDANCE_OVERVIEW', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['home-event-radar', 'Home Event Radar', 'Track current signals affecting this home.', '/dashboard/properties/[id]/tools/home-event-radar', 'HOME_EVENT_RADAR', 'ACTIVE', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],
   ['home-briefing', 'Home Briefing', 'Review meaningful changes since the last engagement, with canonical actions and source health.', '/dashboard/properties/[id]/tools/home-briefing', 'HOME_BRIEFING', 'BETA', 'LOW_CONSEQUENCE', 'CONTEXTUAL'],

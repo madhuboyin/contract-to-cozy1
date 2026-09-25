@@ -82,6 +82,7 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   ENERGY_AUDIT:              { label: 'Energy Audit',                defaultPct: 25  },
   APPLIANCE_ORACLE:          { label: 'Appliance Oracle',            defaultPct: 100 },
   VALUE_TRACKER:             { label: 'Value Tracker',               defaultPct: 100 },
+  ENVIRONMENT_REPORT:        { label: 'Environment Report',          defaultPct: 100 },
   HOME_EVENT_RADAR:          { label: 'Home Event Radar',            defaultPct: 100 },
   HOME_RISK_REPLAY:          { label: 'Past Hazard Exposure',        defaultPct: 100 },
   SERVICE_PRICE_RADAR:       { label: 'Service Price Radar',         defaultPct: 100 },

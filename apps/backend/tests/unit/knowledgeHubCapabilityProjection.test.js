@@ -39,9 +39,9 @@ const EXISTING_STABLE_KEYS = {
 
 test('Knowledge Hub projection includes every canonical capability exactly once', () => {
   const seeds = buildCapabilityProductToolSeeds();
-  assert.equal(seeds.length, 48);
-  assert.equal(new Set(seeds.map((seed) => seed.key)).size, 48);
-  assert.equal(new Set(seeds.map((seed) => seed.slug)).size, 48);
+  assert.equal(seeds.length, 49);
+  assert.equal(new Set(seeds.map((seed) => seed.key)).size, 49);
+  assert.equal(new Set(seeds.map((seed) => seed.slug)).size, 49);
   assert.deepEqual(
     seeds.map((seed) => seed.slug).sort(),
     canonicalCapabilityRegistry.capabilities.map((capability) => capability.id),
@@ -77,7 +77,7 @@ test('registry-owned ProductTool fields match canonical capability metadata', ()
 });
 
 test('Knowledge Hub seed preserves explicit platform entries without reviving retired capabilities', () => {
-  assert.equal(PRODUCT_TOOL_SEEDS.length, 50);
+  assert.equal(PRODUCT_TOOL_SEEDS.length, 51);
   const keys = new Set(PRODUCT_TOOL_SEEDS.map((seed) => seed.key));
   assert.equal(keys.size, PRODUCT_TOOL_SEEDS.length);
   assert.equal(keys.has('SEASONAL_MAINTENANCE'), true);

@@ -1435,3 +1435,7 @@ old registry is permitted only after all consumers use the canonical capability 
 - The scoped "Property tools" view (`/dashboard/home-tools?toolIds=…`) searches only its allowlisted
   tools. When a search returns no match there, it shall offer "Search all tools" (the unscoped catalog)
   rather than a dead end.
+- The Environment Report (weather, air quality, flood, drought, radon, hazards, climate) is a registered
+  `PROTECT_MONITOR` capability (`environment-report`, rollout key `ENVIRONMENT_REPORT`, catalog-only). It
+  was previously reachable only from the property page card, so it never appeared in Explore/Property tools.
+  Its route is `/dashboard/properties/[id]/environment-report` (not under `/tools`).

@@ -18,3 +18,12 @@ test('other Protect & Monitor capabilities keep their default aliases', () => {
   const claims = PROTECT_MONITOR_CAPABILITIES.find((capability) => capability.id === 'claims');
   assert.deepEqual(claims.presentation.intentAliases, ['claims', 'claims']);
 });
+
+test('the Environment Report (weather, air quality, flood) is a registered, searchable capability', () => {
+  const report = PROTECT_MONITOR_CAPABILITIES.find((capability) => capability.id === 'environment-report');
+  assert.ok(report);
+  assert.equal(report.destination.routeTemplate, '/dashboard/properties/[id]/environment-report');
+  for (const term of ['weather', 'air quality', 'flood risk']) {
+    assert.ok(report.presentation.intentAliases.includes(term), `missing alias: ${term}`);
+  }
+});
