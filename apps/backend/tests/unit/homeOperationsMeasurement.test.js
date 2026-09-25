@@ -5,9 +5,11 @@ const path = require('node:path');
 
 require('ts-node/register');
 
-const {
-  summarizeHomeOperationsMeasurement,
-} = require('../../src/services/adminAnalytics/homeOperationsMeasurementService.ts');
+const measurement = require('../../src/services/adminAnalytics/homeOperationsMeasurementService.ts');
+
+// The snapshot also carries `evidence` (verification evidence per work item) and `events`; most cases here do not care,
+// so they default to empty and a case that does can pass its own.
+const summarizeHomeOperationsMeasurement = (snapshot, at) => measurement.summarizeHomeOperationsMeasurement({ evidence: [], events: [], ...snapshot }, at);
 
 // Item #23 (§14 "Measurement"). Pure-function tests, same style as
 // renovationOperationalHealth.test.js.
@@ -42,8 +44,13 @@ test('empty snapshot returns nulls, not fabricated zeros-as-rates, and populates
   assert.equal(result.northStar.perPropertyRate, null, 'zero-property denominator must not divide into a fake 0');
   assert.equal(result.funnel.acceptanceRate, null);
   assert.equal(result.funnel.recommendationUnderstoodRate, null);
-  assert.ok(result.gaps.length >= 8, 'every documented gap must be listed');
-  assert.ok(result.gaps.some((g) => g.startsWith('recommendationUnderstoodRate:')));
+  // Metrics that are now measured (for example recommendationUnderstoodRate, from WORK_UNDERSTOOD events) are no longer
+  // gaps; these five still cannot be computed from anything the codebase records, and must stay listed.
+  assert.deepEqual(
+    result.gaps.map((gap) => gap.split(':')[0]).sort(),
+    ['accessibilityDefects', 'factCorrectionCompletion', 'guardrailContext.remindersSent', 'incorrectMergesAndDuplicateSplits', 'workHiddenWhileSourceOpen'],
+  );
+  assert.ok(!result.gaps.some((gap) => gap.startsWith('recommendationUnderstoodRate:')), 'it is measured now, so it is not a gap');
 });
 
 test('north star counts VERIFIED NOW/SOON items across distinct properties', () => {

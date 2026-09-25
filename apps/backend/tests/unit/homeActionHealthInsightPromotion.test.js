@@ -33,7 +33,7 @@ function baseProperty(overrides = {}) {
     // A recorded, recently-installed appliance so the aggregate "Appliances"
     // factor scores 'Complete' by default — tests that care about the
     // appliance branches override this explicitly.
-    inventoryItems: [{ id: 'dishwasher-1', name: 'Dishwasher', category: 'APPLIANCE', installedOn: new Date('2024-01-01') }],
+    inventoryItems: [{ id: 'dishwasher-1', name: 'Dishwasher', category: 'APPLIANCE', purchasedOn: new Date('2024-01-01') }],
     warranties: [],
     ...overrides,
   };
@@ -56,9 +56,9 @@ function stubSources({ property, documentCount = 0, bookings = [] } = {}) {
   };
 }
 
-test('an appliance missing its installation year produces a SYSTEM Home Action', async () => {
+test('an appliance missing its purchase date produces a SYSTEM Home Action', async () => {
   const property = baseProperty({
-    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: null }],
+    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', purchasedOn: null }],
   });
   const db = stubSources({ property });
   const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
@@ -70,7 +70,7 @@ test('an appliance missing its installation year produces a SYSTEM Home Action',
   // signal is the canonical health factor (grounding subject); the
   // homeowner-facing task lives in presentation.headline / recommendedAction.
   assert.equal(action.signal, 'Appliances');
-  assert.match(action.recommendedAction, /installation year for your Refrigerator/i);
+  assert.match(action.recommendedAction, /purchase date for your Refrigerator/i);
   assert.equal(action.presentation.variant, 'HEALTH_FACTOR_REVIEW');
   assert.equal(action.priority, 'PLAN');
   assert.equal(action.governance.safetyTier, 'LOW_CONSEQUENCE');
@@ -160,7 +160,7 @@ test('factor-page links use canonical slugs without punctuation-generated edge h
 test('a named factor tied to a specific appliance links to the matched inventory item', async () => {
   const property = baseProperty({
     inventoryItems: [
-      { id: 'fridge-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: new Date('2005-01-01') },
+      { id: 'fridge-1', name: 'Refrigerator', category: 'APPLIANCE', purchasedOn: new Date('2005-01-01') },
     ],
   });
   const db = stubSources({ property });
@@ -192,7 +192,7 @@ test('a missing property record produces no actions', async () => {
 // stable-version requirement).
 test('sourceVersion is deterministic across two evaluations of identical inputs', async () => {
   const property = baseProperty({
-    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: null }],
+    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', purchasedOn: null }],
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   });
   const db = stubSources({ property, documentCount: 3 });
@@ -207,7 +207,7 @@ test('sourceVersion is deterministic across two evaluations of identical inputs'
 
 test('sourceVersion changes when a contributing fact (documentCount) changes', async () => {
   const property = baseProperty({
-    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: null }],
+    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', purchasedOn: null }],
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   });
   const before = await getPromotedHomeActions('property-1', stubSources({ property, documentCount: 3 }), { evaluatedAt: NOW, includePersonalization: false });
@@ -228,13 +228,13 @@ test('sourceVersion changes when a warranty\'s expiryDate changes, even when has
   // expiryDate from any visible change in the score/action itself.
   const before = await getPromotedHomeActions('property-1', stubSources({
     property: baseProperty({
-      inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: new Date('2005-01-01') }],
+      inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', purchasedOn: new Date('2005-01-01') }],
       warranties: [{ id: 'w-1', expiryDate: new Date('2019-01-01') }],
     }),
   }), { evaluatedAt: NOW, includePersonalization: false });
   const after = await getPromotedHomeActions('property-1', stubSources({
     property: baseProperty({
-      inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: new Date('2005-01-01') }],
+      inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', purchasedOn: new Date('2005-01-01') }],
       warranties: [{ id: 'w-1', expiryDate: new Date('2020-06-01') }],
     }),
   }), { evaluatedAt: NOW, includePersonalization: false });
@@ -247,7 +247,7 @@ test('sourceVersion changes when a warranty\'s expiryDate changes, even when has
 
 test('sourceVersion changes when an existing active booking\'s insightFactor changes', async () => {
   const property = baseProperty({
-    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', installedOn: null }],
+    inventoryItems: [{ id: 'item-1', name: 'Refrigerator', category: 'APPLIANCE', purchasedOn: null }],
   });
   const before = await getPromotedHomeActions('property-1', stubSources({ property, bookings: [{ id: 'booking-1', insightFactor: 'Roof Age' }] }), { evaluatedAt: NOW, includePersonalization: false });
   const after = await getPromotedHomeActions('property-1', stubSources({ property, bookings: [{ id: 'booking-1', insightFactor: 'HVAC Age' }] }), { evaluatedAt: NOW, includePersonalization: false });
@@ -257,10 +257,10 @@ test('sourceVersion changes when an existing active booking\'s insightFactor cha
 
 test('sourceVersion changes when an inventory item\'s name changes (feeds the generated action title/id directly)', async () => {
   const before = await getPromotedHomeActions('property-1', stubSources({
-    property: baseProperty({ inventoryItems: [{ id: 'item-1', name: 'Fridge', category: 'APPLIANCE', installedOn: new Date('2005-01-01') }] }),
+    property: baseProperty({ inventoryItems: [{ id: 'item-1', name: 'Fridge', category: 'APPLIANCE', purchasedOn: new Date('2005-01-01') }] }),
   }), { evaluatedAt: NOW, includePersonalization: false });
   const after = await getPromotedHomeActions('property-1', stubSources({
-    property: baseProperty({ inventoryItems: [{ id: 'item-1', name: 'Kitchen Refrigerator', category: 'APPLIANCE', installedOn: new Date('2005-01-01') }] }),
+    property: baseProperty({ inventoryItems: [{ id: 'item-1', name: 'Kitchen Refrigerator', category: 'APPLIANCE', purchasedOn: new Date('2005-01-01') }] }),
   }), { evaluatedAt: NOW, includePersonalization: false });
 
   const versionBefore = before.actions.find((a) => a.id.includes('aging'))?.source.version;

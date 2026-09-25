@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // bookingWorkReconciliation.service.ts's functions all take `tx` as an
 // explicit first parameter (never default to the global prisma import), so
 // this is pure dependency injection against an in-memory fake — no
@@ -201,6 +203,7 @@ function makeFakeTx() {
     },
   };
 
+  addTransactionalEmission(tx);
   return tx;
 }
 

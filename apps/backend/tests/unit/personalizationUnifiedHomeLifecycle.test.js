@@ -8,7 +8,14 @@ function loadUseCase(existingSuppression = null) {
   const updates = [];
   const orchestrationEvents = [];
   const snoozes = [];
+  const typedFeedback = [];
   const db = {
+    // The lifecycle also records the homeowner's action as typed feedback (one row per user, target and surface).
+    feedback: {
+      findFirst: async () => null,
+      create: async ({ data }) => { typedFeedback.push(data); return { id: `typed-${typedFeedback.length}` }; },
+      update: async ({ data }) => ({ id: 'typed-1', ...data }),
+    },
     personalizedRecommendation: {
       findFirst: async () => ({ id: 'rec-1', definitionId: 'def-1' }),
       update: async ({ data }) => { updates.push(data); return { id: 'rec-1', ...data }; },
@@ -51,6 +58,7 @@ function loadUseCase(existingSuppression = null) {
     updates,
     orchestrationEvents,
     snoozes,
+    typedFeedback,
   };
 }
 

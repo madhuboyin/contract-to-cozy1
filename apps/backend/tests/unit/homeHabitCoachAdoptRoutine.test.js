@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Home Operations Slice 3: adoptHabit creates/links a recurring
 // PropertyMaintenanceTask so a habit becomes real, tracked work only on
 // adoption — idempotent on PropertyHabit.linkedMaintenanceTaskId.
@@ -83,7 +85,7 @@ function habitFixture(overrides = {}) {
     titleOverride: null,
     descriptionOverride: null,
     dueAt: null,
-    habitTemplate: { title: 'Test smoke detectors', description: 'Press the test button on each unit.', cadence: 'MONTHLY' },
+    habitTemplate: { title: 'Test smoke detectors', description: 'Press the test button on each unit.', cadence: 'MONTHLY', safetyTier: 'LOW_CONSEQUENCE' },
     ...overrides,
   };
 }
@@ -135,6 +137,8 @@ const prismaMock = {
       return row;
     },
   },
+  // A task that came from a recommendation is found through its execution link; a habit's task has none.
+  operationalWorkExecution: { findMany: async () => [] },
   operationalWorkSource: { upsert: async ({ create }) => ({ id: crypto.randomUUID(), ...create }) },
   operationalWorkEvent: {
     create: async ({ data }) => ({ id: crypto.randomUUID(), createdAt: new Date(), ...data }),
@@ -143,6 +147,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = {
   id: prismaPath,
   filename: prismaPath,
@@ -168,8 +173,8 @@ test('adopting a MONTHLY-cadence habit creates a recurring task with the mapped 
 
 test('DAILY and WEEKLY cadences map losslessly', async () => {
   reset();
-  habits.set('habit-daily', habitFixture({ id: 'habit-daily', habitTemplate: { title: 'Check thermostat', description: null, cadence: 'DAILY' } }));
-  habits.set('habit-weekly', habitFixture({ id: 'habit-weekly', habitTemplate: { title: 'Test GFCI outlets', description: null, cadence: 'WEEKLY' } }));
+  habits.set('habit-daily', habitFixture({ id: 'habit-daily', habitTemplate: { title: 'Check thermostat', description: null, cadence: 'DAILY', safetyTier: 'LOW_CONSEQUENCE' } }));
+  habits.set('habit-weekly', habitFixture({ id: 'habit-weekly', habitTemplate: { title: 'Test GFCI outlets', description: null, cadence: 'WEEKLY', safetyTier: 'LOW_CONSEQUENCE' } }));
 
   const daily = await service.adoptHabit('property-1', 'habit-daily', 'owner-1');
   const weekly = await service.adoptHabit('property-1', 'habit-weekly', 'owner-1');
@@ -178,15 +183,26 @@ test('DAILY and WEEKLY cadences map losslessly', async () => {
   assert.equal(tasks.get(weekly.habit.linkedMaintenanceTaskId).frequency, 'WEEKLY');
 });
 
-test('AD_HOC cadence creates a non-recurring task', async () => {
+test('a one-time (AD_HOC) obligation is refused as a habit, and creates no task', async () => {
   reset();
-  habits.set('habit-1', habitFixture({ habitTemplate: { title: 'One-time inspection', description: null, cadence: 'AD_HOC' } }));
+  habits.set('habit-1', habitFixture({ habitTemplate: { title: 'One-time inspection', description: null, cadence: 'AD_HOC', safetyTier: 'LOW_CONSEQUENCE' } }));
 
-  const { habit } = await service.adoptHabit('property-1', 'habit-1', 'owner-1');
+  await assert.rejects(
+    () => service.adoptHabit('property-1', 'habit-1', 'owner-1'),
+    (error) => error.code === 'HABIT_NOT_ROUTINE_ELIGIBLE' && error.statusCode === 409,
+  );
+  assert.equal(tasks.size, 0);
+});
 
-  const task = tasks.get(habit.linkedMaintenanceTaskId);
-  assert.equal(task.isRecurring, false);
-  assert.equal(task.frequency, undefined ?? null, 'AD_HOC must not set a RecurrenceFrequency');
+test('a safety-sensitive obligation is refused as a habit even when it is recurring', async () => {
+  reset();
+  habits.set('habit-1', habitFixture({ habitTemplate: { title: 'Service furnace', description: null, cadence: 'MONTHLY', safetyTier: 'SAFETY_EMERGENCY' } }));
+
+  await assert.rejects(
+    () => service.adoptHabit('property-1', 'habit-1', 'owner-1'),
+    (error) => error.code === 'HABIT_NOT_ROUTINE_ELIGIBLE',
+  );
+  assert.equal(tasks.size, 0);
 });
 
 test('adopting twice is idempotent — the second call returns the existing link, not a new task', async () => {

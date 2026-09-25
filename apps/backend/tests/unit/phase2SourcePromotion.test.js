@@ -9,7 +9,8 @@ const {
 } = require('../../src/services/homeActionSourcePromotion.service.ts');
 
 const NOW = new Date('2026-07-18T12:00:00.000Z');
-const LATER = new Date('2026-08-18T12:00:00.000Z');
+// The weather incident is dropped once it expires against the real clock, so its expiry is always 30 days ahead.
+const LATER = new Date(Math.ceil((Date.now() + 30 * 86_400_000) / 3_600_000) * 3_600_000);
 
 function environmentInsight(overrides = {}) {
   return {
