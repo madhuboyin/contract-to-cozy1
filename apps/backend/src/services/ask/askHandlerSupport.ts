@@ -1,5 +1,5 @@
 // Shared support for the Ask handlers, moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98).
-import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, type AskCaptureRequest, type AskExecutionResponse, type AskPresentationBlock } from '../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, type AskCaptureRequest, type AskExecutionResponse, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../productFramework/ask/ask.contract';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
 import { AskExecution, AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, Prisma, RecurrenceFrequency } from '@prisma/client';
 import { z } from 'zod';
@@ -18,6 +18,16 @@ import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
 import { resolveAskAudienceContext } from './askAudienceContext';
 import { validateAskAnswerTrustPipeline } from './askAnswerTrustValidator';
 import { requiredAskTargetEntity } from './askEntityResolution';
+import { createHash } from 'node:crypto';
+import * as outcomeObservationService from '../decisionPlatform/outcomeObservationService';
+import { sourceTypeLabel as outcomeSourceTypeLabel } from '../decisionPlatform/outcomeObservationService';
+import { APIError } from '../../middleware/error.middleware';
+import { radarQueryService } from '../../modules/homeEventRadar/services/radarQuery.service';
+import { RADAR_FEEDBACK_COMMENT_MAX_LENGTH } from '../../modules/homeEventRadar/domain/radarInteraction';
+import { RADAR_ACTION_CODES } from '../../modules/homeEventRadar/domain/radarActionRegistry';
+import { type CorrectionFieldSpec, type CorrectionOption } from './askCorrectionFields';
+
+export const INVENTORY_CATEGORY_VALUES = ['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'SAFETY', 'SMART_HOME', 'FURNITURE', 'ELECTRONICS', 'INTERIOR', 'STRUCTURAL', 'EXTERIOR', 'SITE', 'OTHER'] as const;
 
 export function askCaptureRequest(requirement: any, contextVersion: string, destinationLabel: string, fallbackHref: string): AskCaptureRequest {
   return {
@@ -542,3 +552,188 @@ export async function expireIfSkillBindingChanged(execution: AskExecution): Prom
   });
   return mapPersistedExecution(expired, await propertySummary(execution.propertyId));
 }
+
+export function askContextFingerprint(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 24);
+}
+
+export function formatOutcomeCents(cents: number | null): string | null {
+  return cents == null ? null : `$${(cents / 100).toFixed(2)}`;
+}
+
+// Ask Intelligence FRD §21.5, Phase 10A. `comparable` is always false and
+// `predictedCostLabel` always null for this slice -- the HVAC engine does not
+// yet emit a normalized predicted cost to compare against, and §21.5
+// requires the block hide the delta rather than show a non-comparable one.
+export function outcomeSummaryBlock(id: string, decisionThreadId: string, rows: outcomeObservationService.OutcomeSummaryAttribution[]): AskPresentationBlock {
+  return {
+    type: 'OUTCOME_SUMMARY', id, title: 'Outcome for this decision', decisionThreadId,
+    entries: rows.map((row) => {
+      const payload = row.observation.observedPayload as { costCents?: number | null; note?: string | null } | null;
+      return {
+        outcomeObservationId: row.observation.id,
+        recommendationSnapshotId: row.attribution.recommendationSnapshotId,
+        observedType: row.observation.observedType,
+        occurredAt: row.observation.occurredAt.toISOString(),
+        verificationStatus: row.observation.verificationStatus,
+        sourceLabel: outcomeSourceTypeLabel(row.observation.sourceType),
+        relationshipType: row.attribution.relationshipType,
+        attributionConfidence: row.attribution.confidence,
+        reviewStatus: row.attribution.reviewStatus,
+        comparable: false,
+        observedCostLabel: formatOutcomeCents(typeof payload?.costCents === 'number' ? payload.costCents : null),
+        predictedCostLabel: null,
+        note: typeof payload?.note === 'string' ? payload.note : null,
+      };
+    }),
+    limitation: 'A different outcome or homeowner choice does not by itself prove the recommendation was incorrect.',
+  };
+}
+
+export const RadarFeedbackInputSchema = z.object({
+  matchId: z.string().trim().min(1).max(160),
+  feedbackType: z.enum(['wrong_location', 'not_relevant', 'duplicate', 'stale', 'other']).nullable(),
+  comment: z.string().trim().max(RADAR_FEEDBACK_COMMENT_MAX_LENGTH).nullable(),
+}).strict();
+
+// Canonical re-read of one match for this user; null when it no longer exists for this property.
+export async function loadRadarMatchForWrite(propertyId: string, matchId: string, userId: string): Promise<Record<string, any> | null> {
+  try {
+    return await radarQueryService.getDetail(propertyId, matchId, userId) as Record<string, any>;
+  } catch (error) {
+    if (error instanceof APIError && error.code === 'RADAR_MATCH_NOT_FOUND') return null;
+    throw error;
+  }
+}
+
+export const RADAR_CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+export const RadarTaskTargetSchema = z.object({ matchId: z.string().trim().min(1).max(160), actionCode: z.enum(RADAR_ACTION_CODES) }).strict();
+
+// The inline form's answer. dueDate is the shared APPROXIMATE_DATE value ({ precision, value }), limited to an exact date.
+export const RadarTaskAnswerSchema = z.object({
+  operation: z.enum(['create_task', 'create_reminder', 'link_existing_task']),
+  maintenanceTaskId: z.string().trim().max(128).nullish(),
+  dueDate: z.object({ precision: z.literal('EXACT_DATE'), value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).nullish(),
+  dueTime: z.string().regex(RADAR_CLOCK_TIME).nullish().or(z.literal('')),
+  assigneeUserId: z.string().trim().min(1).max(128).nullish(),
+});
+
+// What confirming sends to radarTaskIntegrationService.createOrLink (the traditional POST body, plus its target).
+export const RadarTaskInputSchema = z.object({
+  matchId: z.string().trim().min(1).max(160),
+  actionCode: z.enum(RADAR_ACTION_CODES),
+  operation: z.enum(['create_task', 'create_reminder', 'link_existing_task']),
+  maintenanceTaskId: z.string().trim().min(1).max(128).nullable(),
+  dueAt: z.string().datetime({ offset: true }).nullable(),
+  assigneeUserId: z.string().trim().min(1).max(128).nullable(),
+}).strict();
+
+export function exactEntityMatch<T extends { id: string }>(rows: readonly T[], message: string, launchContext?: CreateAskExecutionRequest['launchContext']): T | null {
+  const launched = launchContext?.entityId ? rows.find((row) => row.id === launchContext.entityId) : null;
+  if (launched) return launched;
+  const normalized = message.toLowerCase();
+  const matches = rows.filter((row) => {
+    const label = 'title' in row && typeof row.title === 'string' ? row.title : 'homeSystem' in row && typeof row.homeSystem === 'string' ? row.homeSystem : '';
+    return normalized.includes(row.id.toLowerCase()) || (label.length >= 3 && normalized.includes(label.toLowerCase()));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+export const InventoryItemCorrectionInputSchema = z.object({
+  itemId: z.string().trim().min(1).max(160),
+  field: z.enum(['installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model', 'serialNo', 'purchaseCostCents', 'replacementCostCents', 'notes', 'category', 'roomId']),
+  // null until the homeowner supplies (or edits in) a value; confirm rejects null.
+  value: z.string().max(2000).nullable(),
+}).strict();
+
+export function homeEventCorrectionItemActions(canManage: boolean) {
+  if (!canManage) return undefined;
+  const fields = (Object.keys(HOME_EVENT_CORRECTION_FIELDS) as HomeEventCorrectionField[]).map((field) => ({
+    id: `correct-${field}`, label: HOME_EVENT_CORRECTION_FIELDS[field].action, message: HOME_EVENT_CORRECTION_FIELDS[field].message,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT',
+  }));
+  // Whether this contributor may go on to choose PRIVATE, or move a PRIVATE event to something else, is re-checked
+  // against live data (createdById) in homeEventVisibilityResult/confirmHomeEventVisibility -- the action itself is
+  // offered to any contributor exactly like the other event corrections, since a PRIVATE event a non-creator cannot
+  // even see never reaches this list in the first place.
+  return [...fields, {
+    id: 'correct-visibility', label: 'Change visibility', message: HOME_EVENT_VISIBILITY_MESSAGE,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_VISIBILITY',
+  }];
+}
+
+// Phase 3 write slice 7: change who can see a HomeEvent (PRIVATE / HOUSEHOLD / RESALE_PACK). Written in place through the
+// existing setVisibility writer -- unlike HOME_EVENT_CORRECT this does not supersede the event with a new revision, so the
+// event id and every other field are untouched. STRICTER than the traditional PATCH route (any contributor, no ownership
+// check): a change TO or FROM PRIVATE is creator-only, matching the read-side rule that a PRIVATE event is visible only to
+// its creator (ensureHomeEventVisible below; every event query elsewhere in this file applies the same OR filter).
+export const HOME_EVENT_VISIBILITY_MESSAGE = 'Change the visibility of this timeline event.';
+
+export const optionalShortText = (max: number) => z.string().trim().max(max).nullish().transform((value) => (value ? value : null));
+
+export const InventoryCreateInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  category: z.enum(INVENTORY_CATEGORY_VALUES),
+  roomId: z.string().min(1).max(64),
+  brand: optionalShortText(80),
+  model: optionalShortText(80),
+}).strict();
+
+// ASK_COZY_INTERACTION_MODEL_UI_FRD §8 (CONF-002/CONF-003): edits a
+// declared field on an open confirmation, bumping its version rather than
+// mutating in place -- a stale confirmationVersion (already superseded by
+// a prior edit, or already claimed by confirmAskExecution's own claim
+// transaction) is rejected exactly like an out-of-date confirm attempt is.
+// This never performs the domain write itself; confirmAskExecution's own
+// freshness re-check (confirmMaintenanceTaskUpdate's task-version compare)
+// still runs when the edited proposal is actually confirmed. Scoped to the
+// one editable-field case that exists (maintenance reschedule) rather than
+// a generic per-operation registry -- extend this when a second case is
+// actually implemented.
+// Shared by both editAskConfirmation branches (Maintenance and, as of the
+// B04 fix, Buyer) -- extracted so the exact-yyyy-mm-dd-plus-real-calendar-
+// date validation is defined once and directly unit-testable, rather than
+// duplicated inline in each operation's own edit path.
+export function isValidDateEditInput(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
+}
+
+// Phase 3 write slice 2: title/date correction on an exact current HomeEvent.
+// updateHomeEvent supersedes the row and creates a replacement with a NEW id,
+// so the target is always re-resolved as (id, isCurrent, !deletedAt) and the
+// receipt/artifact carries the replacement's id.
+// VERIFIED_RESOLUTION is created by the system when a guidance journey completes, so it is not offered as a type
+// and an event that already has it cannot have its type changed here.
+export const HOME_EVENT_TYPE_OPTIONS: readonly CorrectionOption[] = [
+  { label: 'Purchase', value: 'PURCHASE' }, { label: 'Document', value: 'DOCUMENT' }, { label: 'Repair', value: 'REPAIR' },
+  { label: 'Maintenance', value: 'MAINTENANCE' }, { label: 'Claim', value: 'CLAIM' }, { label: 'Improvement', value: 'IMPROVEMENT' },
+  { label: 'Value update', value: 'VALUE_UPDATE' }, { label: 'Inspection', value: 'INSPECTION' }, { label: 'Note', value: 'NOTE' },
+  { label: 'Milestone', value: 'MILESTONE' }, { label: 'Other', value: 'OTHER' },
+];
+
+export const HOME_EVENT_IMPORTANCE_OPTIONS: readonly CorrectionOption[] = [
+  { label: 'Low', value: 'LOW' }, { label: 'Normal', value: 'NORMAL' }, { label: 'High', value: 'HIGH' }, { label: 'Highlight', value: 'HIGHLIGHT' },
+];
+
+export type HomeEventCorrectionMeta = CorrectionFieldSpec & { action: string; message: string };
+
+export const HOME_EVENT_CORRECTION_FIELDS: Record<'title' | 'occurredAt' | 'summary' | 'amount' | 'type' | 'importance' | 'roomId' | 'inventoryItemId', HomeEventCorrectionMeta> = {
+  title: { label: 'title', action: 'Correct title', message: 'Correct the title of this timeline event.', kind: 'TEXT', min: 3, max: 140 },
+  occurredAt: { label: 'date', action: 'Correct date', message: 'Correct the date of this timeline event.', kind: 'DATE' },
+  summary: { label: 'summary', action: 'Correct summary', message: 'Correct the summary of this timeline event.', kind: 'TEXTAREA', max: 500 },
+  amount: { label: 'amount', action: 'Correct amount', message: 'Correct the amount of this timeline event.', kind: 'MONEY' },
+  type: { label: 'type', action: 'Correct type', message: 'Correct the type of this timeline event.', kind: 'SELECT', options: HOME_EVENT_TYPE_OPTIONS },
+  importance: { label: 'importance', action: 'Correct importance', message: 'Correct the importance of this timeline event.', kind: 'SELECT', options: HOME_EVENT_IMPORTANCE_OPTIONS },
+  // The two link fields below have no static option list -- homeEventLinkOptions builds it from the property's own
+  // rooms/items at propose and edit time, and homeEventCorrectionConfirmation substitutes it in as `dynamicOptions`.
+  // A raw id would mean nothing to a homeowner, so unlike every other field these are never message-extracted from
+  // free text; the confirmation card's dropdown is the only way to choose a value.
+  roomId: { label: 'room', action: 'Correct room', message: 'Correct the room of this timeline event.', kind: 'SELECT', options: [] },
+  inventoryItemId: { label: 'inventory item', action: 'Correct inventory item', message: 'Correct the inventory item of this timeline event.', kind: 'SELECT', options: [] },
+};
+
+export type HomeEventCorrectionField = keyof typeof HOME_EVENT_CORRECTION_FIELDS;
+
