@@ -2279,6 +2279,64 @@ test('on a phone, Add install date on a status board card is reachable in the bo
   await expect.poll(() => api.executionBodies.some((body) => body.message === 'Correct the install date of this inventory item.')).toBe(true);
 });
 
+async function installFakeSpeech(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => {
+    class FakeSpeech {
+      onresult: ((event: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((event: unknown) => void) | null = null;
+      lang = ''; continuous = false; interimResults = false;
+      start() { (window as unknown as { __speech: FakeSpeech }).__speech = this; }
+      stop() { this.onend?.(); }
+      abort() { /* nothing */ }
+    }
+    // Chromium has both names natively; replace both so the fake is the one the page finds.
+    Object.assign(window, { SpeechRecognition: FakeSpeech, webkitSpeechRecognition: FakeSpeech });
+  });
+}
+
+test('the microphone dictates into the question box and does not send until the person does (FRD v1.102)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installFakeSpeech(page);
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const input = page.getByPlaceholder('Ask anything about your home…');
+  await input.fill('Show my');
+  await page.getByRole('button', { name: 'Dictate your question' }).click();
+  await expect(page.getByRole('button', { name: 'Stop dictation' })).toHaveAttribute('aria-pressed', 'true');
+  await page.evaluate(() => (window as any).__speech.onresult({ results: [{ 0: { transcript: 'status' }, isFinal: false }] }));
+  await expect(input).toHaveValue('Show my status');
+  await page.evaluate(() => (window as any).__speech.onresult({ results: [{ 0: { transcript: 'status board' }, isFinal: true }] }));
+  await expect(input).toHaveValue('Show my status board');
+  await page.getByRole('button', { name: 'Stop dictation' }).click();
+  await expect(page.getByRole('button', { name: 'Dictate your question' })).toBeVisible();
+  expect(api.executionBodies).toHaveLength(0);
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  expect(api.executionBodies[0].message).toBe('Show my status board');
+});
+
+test('on a phone, the microphone sits beside Send without pushing the composer off screen (FRD v1.102)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installFakeSpeech(page);
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const mic = page.getByRole('button', { name: 'Dictate your question' });
+  const send = page.getByRole('button', { name: 'Send question' });
+  await expect(mic).toBeVisible();
+  const [m, s] = [await mic.boundingBox(), await send.boundingBox()];
+  expect(m && s && m.x + m.width <= s.x && s.x + s.width <= 390).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('without browser speech support there is no microphone (FRD v1.102)', async ({ page }) => {
+  await page.addInitScript(() => { Object.assign(window, { SpeechRecognition: undefined, webkitSpeechRecognition: undefined }); });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Dictate your question/ })).toHaveCount(0);
+});
+
 test('the buyer plan shows the next task and blockers as shelves whose cards open a read-only detail in a side drawer (FRD v1.84)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
