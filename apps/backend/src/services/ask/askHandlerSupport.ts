@@ -1050,3 +1050,66 @@ export function areaProgressBlock(propertyId: string, scope: PropertyAreaCapture
     ],
   };
 }
+
+export function captureEventResult(propertyId: string, event: { id: string; title: string }, corrected: boolean): AskOperationResult {
+  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
+  return {
+    status: 'COMPLETED', reasonCode: corrected ? 'EVENT_CORRECTED' : 'EVENT_CAPTURED',
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `event-${corrected ? 'corrected' : 'captured'}-${event.id}`, title: corrected ? 'Home timeline event corrected' : 'Added to your home timeline', status: 'COMPLETED',
+      description: corrected
+        ? 'A new revision replaces the prior entry on your home\'s canonical timeline; the original is preserved as history.'
+        : 'This event is now part of your home\'s canonical timeline.',
+      details: [{ label: 'Event', value: event.title }],
+      actions: [{ id: 'open-timeline', label: 'Open timeline', href: timelineHref, style: 'PRIMARY' }],
+    }],
+    confirmation: null, suggestions: [],
+  };
+}
+
+export const GuidanceJourneyCommandInputSchema = z.object({
+  scopeCategory: z.enum(['ITEM', 'SERVICE']),
+  scopeId: z.string().trim().min(1).max(160),
+  issueType: z.string().trim().min(1).max(160),
+  inventoryItemId: z.string().trim().min(1).max(160).nullable(),
+  serviceKey: z.string().trim().min(1).max(160).nullable(),
+  label: z.string().trim().min(1).max(240),
+}).strict();
+
+export const HomeDeadlineMonitorInputSchema = z.object({
+  sourceType: z.enum(['WARRANTY', 'INSURANCE_POLICY', 'MAINTENANCE']),
+  sourceId: z.string().trim().min(1).max(160),
+  title: z.string().trim().min(3).max(160),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  leadDays: z.number().int().min(1).max(90),
+}).strict();
+
+export async function guidanceJourneyContextVersion(propertyId: string, input: z.infer<typeof GuidanceJourneyCommandInputSchema>): Promise<string> {
+  if (input.inventoryItemId) {
+    const item = await prisma.inventoryItem.findFirst({ where: { id: input.inventoryItemId, propertyId }, select: { id: true, updatedAt: true } });
+    return askContextFingerprint(item ? [item.id, item.updatedAt.toISOString()] : ['missing', input.inventoryItemId]);
+  }
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, updatedAt: true } });
+  return askContextFingerprint([property?.id ?? propertyId, property?.updatedAt?.toISOString() ?? 'missing', input.serviceKey]);
+}
+
+export function homeDeadlineSourceVersion(source: { id: string; expiryDate: Date | null; updatedAt: Date }): string {
+  return createHash('sha256').update(JSON.stringify({ id: source.id, expiryDate: source.expiryDate, updatedAt: source.updatedAt })).digest('hex');
+}
+
+// Ask Intelligence FRD Phase 9A ("What changed?", §16). Reads the existing
+// PropertyChange ledger (FRD §16's HomeChangeView, see propertyChange.service.ts)
+// rather than a new store -- this operation is a thin presentation layer over
+// already-governed materiality/dedup/supersession, not a second change system.
+export const HOME_CHANGE_SUMMARY_WINDOW_DAYS = 30;
+
+// External review [P1]: Radar's own proactive continuation carries a real
+// `radarMatchId` (radarNotificationDelivery.service.ts's own `parameters:
+// { radarEventId, radarMatchId, ... }`), and the envelope producer's own
+// `source.sourceRecordId` for a PropertyRadarMatch-sourced item IS that
+// same match row's id (`intelligenceEnvelopeQuery.service.ts`'s
+// `sourceRecordId: row.id` inside its `PropertyRadarMatch` reader) -- so
+// this can scope precisely to the exact triggering match without the
+// broader entityRef-on-Radar-producers gap (Phase 0 §4.6, tracked
+// separately into Phase 7) ever coming into play.
+export type RadarEnvelopeQuerySuppliedInput = { radarMatchId?: string | null; radarEventId?: string | null };

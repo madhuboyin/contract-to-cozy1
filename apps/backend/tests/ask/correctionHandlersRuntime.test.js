@@ -546,7 +546,11 @@ test('HOME_EVENT_CORRECT edit re-validates a link value against live data and re
   const { readFileSync } = require('node:fs');
   const { resolve } = require('node:path');
   const source = readAskOrchestratorSources();
-  const body = (startMarker, endMarker) => source.slice(source.indexOf(startMarker), source.indexOf(endMarker, source.indexOf(startMarker)));
+  const body = (startMarker, endMarker) => {
+    const start = source.indexOf(startMarker);
+    const marked = source.indexOf(endMarker, start);
+    return source.slice(start, marked > start ? marked : source.indexOf('\n}\n', start) + 2);
+  };
   const edit = body('async function editHomeEventCorrectConfirmation(', 'const EDIT_CONFIRMATION_HANDLERS');
   assert.match(edit, /await homeEventCorrectionValueError\(execution\.propertyId!, existing\.data\.field, input\.edits\.value\)/, 'the edited value is re-validated against live data, not the stale proposal');
   assert.match(edit, /HOME_EVENT_LINK_FIELDS\.has\(existing\.data\.field\)/, 'a link field fetches a fresh option list on every edit');
@@ -557,7 +561,11 @@ test('the room/item existence check and the option list are both scoped to this 
   const { readFileSync } = require('node:fs');
   const { resolve } = require('node:path');
   const source = readAskOrchestratorSources();
-  const body = (startMarker, endMarker) => source.slice(source.indexOf(startMarker), source.indexOf(endMarker, source.indexOf(startMarker)));
+  const body = (startMarker, endMarker) => {
+    const start = source.indexOf(startMarker);
+    const marked = source.indexOf(endMarker, start);
+    return source.slice(start, marked > start ? marked : source.indexOf('\n}\n', start) + 2);
+  };
   const valueError = body('async function homeEventCorrectionValueError(', 'async function homeEventLinkOptions(');
   assert.match(valueError, /prisma\.inventoryRoom\.findFirst\(\{ where: \{ id: value, propertyId \}/, 'a room id from another property must be rejected, not just any existing room id');
   assert.match(valueError, /prisma\.inventoryItem\.findFirst\(\{ where: \{ id: value, propertyId, \.\.\.visibleInventoryItemWhere\(\) \}/, 'an item id from another property must be rejected, not just any existing item id');
@@ -799,7 +807,9 @@ test('INVENTORY_ITEM_CORRECT edit re-validates a room value against live data (s
   const body = (startMarker, endMarker) => {
     const start = source.indexOf(startMarker);
     assert.ok(start > 0, `${startMarker} not found`);
-    const end = source.indexOf(endMarker, start);
+    // The end marker may now live in another file (the code moved); then the function ends at its closing brace.
+    const marked = source.indexOf(endMarker, start);
+    const end = marked > start ? marked : source.indexOf('\n}\n', start) + 2;
     assert.ok(end > start, `${endMarker} not found after ${startMarker}`);
     return source.slice(start, end);
   };
@@ -815,7 +825,9 @@ test('the room existence check and the option list for INVENTORY_ITEM_CORRECT ar
   const body = (startMarker, endMarker) => {
     const start = source.indexOf(startMarker);
     assert.ok(start > 0, `${startMarker} not found`);
-    const end = source.indexOf(endMarker, start);
+    // The end marker may now live in another file (the code moved); then the function ends at its closing brace.
+    const marked = source.indexOf(endMarker, start);
+    const end = marked > start ? marked : source.indexOf('\n}\n', start) + 2;
     assert.ok(end > start, `${endMarker} not found after ${startMarker}`);
     return source.slice(start, end);
   };

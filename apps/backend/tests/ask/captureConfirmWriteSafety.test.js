@@ -90,8 +90,11 @@ test('CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM reuse confirmAskExecution\'s on
   // Both must be registered (module load runs top-to-bottom) before the one
   // dispatch call site that could ever invoke them -- same requirement, same
   // ordering, as all 25 pre-existing confirmation-required operations.
-  assert.ok(confirmFactIdx > 0 && confirmFactIdx < dispatchIdx, 'CAPTURE_FACT_CONFIRM must register into the same dispatch confirmAskExecution already calls');
-  assert.ok(confirmEventIdx > 0 && confirmEventIdx < dispatchIdx, 'CAPTURE_EVENT_CONFIRM must register into the same dispatch confirmAskExecution already calls');
+  // The registrations now live in a handler file that the orchestrator imports (imports run before its own body), so they
+  // are in place before the dispatch call site can run; the position in the concatenated source no longer says so.
+  assert.ok(confirmFactIdx > 0, 'CAPTURE_FACT_CONFIRM must register into the same dispatch confirmAskExecution already calls');
+  assert.ok(confirmEventIdx > 0, 'CAPTURE_EVENT_CONFIRM must register into the same dispatch confirmAskExecution already calls');
+  assert.match(orchestratorSource, /^import '\.\/handlers\/captureConfirm\.handler';$/m, 'the orchestrator imports the file that registers them');
 });
 
 // Correction path (implementation plan §8/§4.1; FRD §4.1's finding: build on
