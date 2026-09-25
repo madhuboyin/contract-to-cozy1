@@ -128,7 +128,8 @@ test('the Specialist engage adapter drives the agent runtime and never a second 
   const source = readAskOrchestratorSources();
   const start = source.indexOf('export async function hvacSpecialistEngageResult');
   assert.ok(start >= 0, 'hvacSpecialistEngageResult exists');
-  const body = source.slice(start, source.indexOf('\nasync function dispatchOperationAdapterResult(', start));
+  // The function ends at the first closing brace in column 0 (it used to end where the next function began, which moved).
+  const body = source.slice(start, source.indexOf('\n}\n', start) + 2);
   assert.ok(body.includes('dependencies.invokeRuntime'), 'delegates to the injected Phase 2 agent runtime boundary');
   for (const forbidden of [
     'homeActionSourcePromotion',
