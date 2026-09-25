@@ -155,14 +155,8 @@ export default function ItemCard({
         'transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-lg',
       ].join(' ')}
       onClick={() => onClick?.(item)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick?.(item);
-        }
-      }}
+      // The card is not itself a button: it holds real buttons and links, so keyboard and screen-reader users reach the
+      // item through its title (a button); a click anywhere else on the card still opens it for mouse and touch users.
     >
       <div className={`flex flex-1 flex-col gap-3.5 ${isCompact ? 'p-4' : 'p-5'}`}>
         <div className="flex items-start gap-2.5">
@@ -177,12 +171,15 @@ export default function ItemCard({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-1.5">
-              <p
-                className={`line-clamp-2 min-w-0 flex-1 font-semibold leading-tight text-gray-900 ${isCompact ? 'text-sm' : 'text-base'}`}
+              <button
+                type="button"
+                data-inventory-card-open
+                onClick={(event) => { event.stopPropagation(); onClick?.(item); }}
+                className={`line-clamp-2 block min-w-0 flex-1 text-left font-semibold leading-tight text-gray-900 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600 ${isCompact ? 'text-sm' : 'text-base'}`}
                 title={item.displayName || item.name || 'Untitled'}
               >
                 {item.displayName || item.name || 'Untitled'}
-              </p>
+              </button>
 
               {item.provenanceLabel ? (
                 <TooltipProvider>

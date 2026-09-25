@@ -679,14 +679,7 @@ export function MobileInventoryItemCard({
               : 'border-[hsl(var(--mobile-border-subtle))] bg-white',
       ].join(' ')}
       onClick={() => onClick?.(item)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick?.(item);
-        }
-      }}
+      // Not a button itself (it holds real buttons); the title below is the keyboard and screen-reader way in.
     >
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-2">
@@ -695,9 +688,14 @@ export function MobileInventoryItemCard({
               <ItemIcon className={['h-4 w-4', categoryConfig.iconColor].join(' ')} />
             </div>
             <div className="min-w-0">
-              <p className="mb-0 truncate text-[1.05rem] font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
+              <button
+                type="button"
+                data-inventory-card-open
+                onClick={(event) => { event.stopPropagation(); onClick?.(item); }}
+                className="mb-0 block max-w-full truncate text-left text-[1.05rem] font-semibold leading-tight text-[hsl(var(--mobile-text-primary))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600"
+              >
                 {item.displayName || item.name || 'Untitled'}
-              </p>
+              </button>
               <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
                 {titleCaseCategory(String(item.category || 'OTHER'))} · {getRoomLabel(item)}
               </p>

@@ -25,6 +25,7 @@ import PortfolioIntelligenceStrip, {
 import CoverageHealthBanner from '../../../components/inventory/CoverageHealthBanner';
 import InventoryFilterBar, { type SmartFilterId } from '../../../components/inventory/InventoryFilterBar';
 import CoverageTab from '../../../components/inventory/CoverageTab';
+import BulkCoverageBar from '../../../components/inventory/BulkCoverageBar';
 import {
   CoverageOpportunityCard,
   CoverageSnapshotCard,
@@ -434,6 +435,21 @@ export default function InventoryClient() {
     );
   }
 
+  // Coverage tab: mark an item as not needing coverage, or restore it. The server recomputes the coverage state.
+  async function onSetCoverageNotRequired(item: InventoryItem, coverageNotRequired: boolean) {
+    await updateInventoryItem(propertyId, item.id, { coverageNotRequired });
+    // The coverage state (missing, not required, and so on) is worked out by the server, so the list is read again.
+    setItems(await listInventoryItems(propertyId, {}));
+  }
+
+  // Bulk: mark the shown items that still need coverage details as not needing coverage (one read of the list afterwards).
+  async function onBulkMarkNotRequired(targets: InventoryItem[]) {
+    const results = await Promise.allSettled(targets.map((item) => updateInventoryItem(propertyId, item.id, { coverageNotRequired: true })));
+    setItems(await listInventoryItems(propertyId, {}));
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    return { done: targets.length - failed, failed };
+  }
+
   function toggleSmartFilter(filter: SmartFilterId) {
     setActiveSmartFilter((prev) => (prev === filter ? null : filter));
   }
@@ -563,6 +579,9 @@ export default function InventoryClient() {
               </div>
             </MobileSection>
           ) : null}
+          {activeSmartFilter === 'gaps' || activeSmartFilter === 'incomplete' || activeSmartFilter === 'missing-warranty' ? (
+            <BulkCoverageBar items={filteredItems} onConfirm={onBulkMarkNotRequired} />
+          ) : null}
 
           <MobileSection>
             {loading ? (
@@ -585,6 +604,7 @@ export default function InventoryClient() {
               />
             ) : activeTab === 'coverage' ? (
               <CoverageTab
+                onSetCoverageNotRequired={onSetCoverageNotRequired}
                 items={filteredItems}
                 rooms={rooms}
                 onOpenCoverage={(item) =>
@@ -736,6 +756,9 @@ export default function InventoryClient() {
               </button>
             </div>
           ) : null}
+          {activeSmartFilter === 'gaps' || activeSmartFilter === 'incomplete' || activeSmartFilter === 'missing-warranty' ? (
+            <BulkCoverageBar items={filteredItems} onConfirm={onBulkMarkNotRequired} />
+          ) : null}
 
           {loading ? (
             <div className="text-sm opacity-70">Loading...</div>
@@ -755,6 +778,7 @@ export default function InventoryClient() {
             </div>
           ) : activeTab === 'coverage' ? (
             <CoverageTab
+              onSetCoverageNotRequired={onSetCoverageNotRequired}
               items={filteredItems}
               rooms={rooms}
               onOpenCoverage={(item) =>
