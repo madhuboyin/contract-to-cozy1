@@ -998,6 +998,32 @@ function coverageComparisonStripExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.87): the hypothetical refinance scenario next to the canonical comparison it
+// was run against, as a two-option strip with no badge and no bars.
+function refinanceScenarioStripExecution() {
+  const base = maintenanceExecution();
+  const attribute = (label: string, value: string) => ({ label, value, tone: 'DEFAULT' });
+  return {
+    ...base, executionId: 'execution-refinance-scenario-strip', question: 'What if I refinanced at 5.5% for 15 years?', viewState: null,
+    operation: { id: 'REFINANCE_ANALYSIS', version: '1.0', family: 'DECISION_ANALYSIS' },
+    blocks: [
+      { type: 'SUMMARY', id: 'refinance-scenario-summary', title: 'Illustrative 15-year scenario at 5.500%', tone: 'DEFAULT',
+        body: 'This is a hypothetical recalculation only. Nothing was saved, and your recorded mortgage rate and term are unchanged. The current comparison is shown below, unchanged, alongside it.',
+        actions: [{ id: 'open-radar', label: 'Explore in Mortgage Refinance Radar', href: `/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] },
+      { type: 'COMPARISON', id: 'refinance-scenario-table', title: 'Illustrative scenario vs. your current loan',
+        description: 'A hypothetical revision, not a lender quote or a saved plan. Your recorded mortgage facts are not changed by asking this, and the current comparison was not recalculated or saved.',
+        options: [
+          { id: 'current-comparison', label: 'Your current comparison (unchanged)', summary: 'The canonical comparison this scenario was run against', actions: [], attributes: [
+            attribute('Your recorded mortgage rate', '6.875%'), attribute('Market benchmark rate', '6.125%'), attribute('Modeled monthly savings', '$210'),
+            attribute('Modeled lifetime savings', '$41,000'), attribute('Estimated break-even', '28 months')] },
+          { id: 'illustrative-scenario', label: 'Illustrative scenario', summary: 'A hypothetical 15-year loan at 5.500%', actions: [], attributes: [
+            attribute('Illustrative target rate', '5.500%'), attribute('Illustrative target term', '15-year'), attribute('Modeled monthly savings', '$333'),
+            attribute('Modeled lifetime savings', '$77,000'), attribute('Modeled closing costs', '$6,400'), attribute('Estimated break-even', 'Not reached')] },
+        ], actions: [] },
+    ],
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -1901,6 +1927,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/compare my current insurance policy/i.test(body.message)) {
       const response = coverageComparisonStripExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/what if i refinanced at 5\.5%/i.test(body.message)) {
+      const response = refinanceScenarioStripExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

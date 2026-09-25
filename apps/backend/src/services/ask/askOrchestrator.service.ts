@@ -9639,6 +9639,48 @@ async function refinanceAnalysisWithMonitorsResult(userId: string, propertyId: s
   return { ...result, blocks };
 }
 
+// IW-PRES-016 (FRD v1.87): the hypothetical rate and term next to the canonical comparison it was run against, as a
+// two-option strip. Each option reads only its own source: the current option reads the canonical evaluation
+// (`current`), never the hypothetical, and the scenario option reads only the recalculation (`scenario`), so the
+// unchanged comparison stays exactly what the property reports. No badge, amount or leading mark: the two are
+// different questions (the market benchmark against a rate the homeowner picked), not a ranking.
+export function refinanceScenarioComparison(
+  current: { currentRatePct: number; marketRatePct: number; monthlySavings: number; lifetimeSavings: number; breakEvenMonths: number | null },
+  scenario: { monthlySavings: number; lifetimeSavings: number; closingCostUsd: number; breakEvenMonths: number | null },
+  targetRatePct: number,
+  termLabel: string,
+): Extract<AskPresentationBlock, { type: 'COMPARISON' }> {
+  const breakEven = (months: number | null) => (months == null ? 'Not reached' : `${months} months`);
+  const attribute = (label: string, value: string) => ({ label, value, tone: 'DEFAULT' as const });
+  return {
+    type: 'COMPARISON', id: 'refinance-scenario-table', title: 'Illustrative scenario vs. your current loan',
+    description: 'A hypothetical revision, not a lender quote or a saved plan. Your recorded mortgage facts are not changed by asking this, and the current comparison was not recalculated or saved.',
+    options: [{
+      id: 'current-comparison', label: 'Your current comparison (unchanged)', summary: 'The canonical comparison this scenario was run against',
+      attributes: [
+        attribute('Your recorded mortgage rate', `${current.currentRatePct.toFixed(3)}%`),
+        attribute('Market benchmark rate', `${current.marketRatePct.toFixed(3)}%`),
+        attribute('Modeled monthly savings', money(current.monthlySavings)),
+        attribute('Modeled lifetime savings', money(current.lifetimeSavings)),
+        attribute('Estimated break-even', breakEven(current.breakEvenMonths)),
+      ],
+      actions: [],
+    }, {
+      id: 'illustrative-scenario', label: 'Illustrative scenario', summary: `A hypothetical ${termLabel} loan at ${targetRatePct.toFixed(3)}%`,
+      attributes: [
+        attribute('Illustrative target rate', `${targetRatePct.toFixed(3)}%`),
+        attribute('Illustrative target term', termLabel),
+        attribute('Modeled monthly savings', money(scenario.monthlySavings)),
+        attribute('Modeled lifetime savings', money(scenario.lifetimeSavings)),
+        attribute('Modeled closing costs', money(scenario.closingCostUsd)),
+        attribute('Estimated break-even', breakEven(scenario.breakEvenMonths)),
+      ],
+      actions: [],
+    }],
+    actions: [],
+  };
+}
+
 async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const [profile, financialContext, marketSnapshot] = await Promise.all([
     getProfile(propertyId),
@@ -9735,40 +9777,9 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
           body: 'This is a hypothetical recalculation only. Nothing was saved, and your recorded mortgage rate and term are unchanged. The current comparison is shown below, unchanged, alongside it.',
           tone: 'DEFAULT',
           actions: [{ id: 'open-radar', label: 'Explore in Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }],
-        }, {
-          type: 'TABLE', id: 'refinance-scenario-table', title: 'Illustrative scenario vs. your current loan',
-          description: 'A hypothetical revision, not a lender quote or a saved plan. Your recorded mortgage facts are not changed by asking this.',
-          columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }],
-          rows: [
-            { id: 'scenario-rate', values: { metric: 'Illustrative target rate', value: `${targetRatePct.toFixed(3)}%` } },
-            { id: 'scenario-term', values: { metric: 'Illustrative target term', value: termLabel } },
-            { id: 'scenario-monthly-savings', values: { metric: 'Modeled monthly savings', value: money(scenario.monthlySavings) } },
-            { id: 'scenario-lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(scenario.lifetimeSavings) } },
-            { id: 'scenario-closing-cost', values: { metric: 'Modeled closing costs', value: money(scenario.closingCostUsd) } },
-            { id: 'scenario-break-even', values: { metric: 'Estimated break-even', value: scenario.breakEvenMonths == null ? 'Not reached' : `${scenario.breakEvenMonths} months` } },
-          ],
-          actions: [],
-        }, {
-          // F02 fix, round 2 (external review, docs/architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md):
-          // the review found the scenario returned alone, with only a text
-          // pointer back to the canonical comparison, did not satisfy
-          // "revision shown alongside the original" the way HVAC_DECISION_SCENARIO's
-          // D02 comparator does (current + scenario in one response). `result`
-          // (the canonical evaluateProperty output) is already computed above
-          // this branch -- this table surfaces it unchanged, in the same
-          // response, rather than requiring a separate question to see it.
-          type: 'TABLE', id: 'refinance-scenario-current-comparison', title: 'Your current comparison (unchanged)',
-          description: 'The canonical comparison this scenario was run against. Nothing here was recalculated or saved by this hypothetical.',
-          columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }],
-          rows: [
-            { id: 'current-comparison-rate', values: { metric: 'Your recorded mortgage rate', value: `${result.currentRatePct.toFixed(3)}%` } },
-            { id: 'current-comparison-market-rate', values: { metric: 'Market benchmark rate', value: `${result.marketRatePct.toFixed(3)}%` } },
-            { id: 'current-comparison-monthly-savings', values: { metric: 'Modeled monthly savings', value: money(result.monthlySavings) } },
-            { id: 'current-comparison-lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(result.lifetimeSavings) } },
-            { id: 'current-comparison-break-even', values: { metric: 'Estimated break-even', value: result.breakEvenMonths == null ? 'Not reached' : `${result.breakEvenMonths} months` } },
-          ],
-          actions: [],
-        }, {
+        }, refinanceScenarioComparison(
+          result, scenario, targetRatePct, termLabel,
+        ), {
           type: 'EVIDENCE', id: 'refinance-scenario-evidence', title: 'Sources used',
           items: [{ label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() }],
         }, {

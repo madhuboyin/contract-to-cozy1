@@ -1417,6 +1417,53 @@ test('on a phone, the coverage comparison cards stack within the screen (FRD v1.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('a refinance scenario shows next to the current comparison as a two-option strip with no winner, and the Table view lines up the shared figures (FRD v1.87)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What if I refinanced at 5.5% for 15 years?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-refinance-scenario-strip');
+  const strip = response.getByRole('list', { name: 'Illustrative scenario vs. your current loan options' });
+  await expect(strip.getByRole('listitem')).toHaveCount(2);
+  const current = strip.getByRole('listitem', { name: /Your current comparison/ });
+  await expect(current).toContainText('6.875%');
+  await expect(current).toContainText('28 months');
+  const scenario = strip.getByRole('listitem', { name: /Illustrative scenario/ });
+  await expect(scenario).toContainText('Modeled closing costs');
+  await expect(scenario).toContainText('$77,000');
+  await expect(strip.locator('[data-badge-policy]')).toHaveCount(0);
+  await expect(strip.getByRole('img')).toHaveCount(0);
+
+  await response.getByRole('button', { name: 'Table', exact: true }).click();
+  const table = response.getByRole('table', { name: 'Illustrative scenario vs. your current loan' });
+  await expect(table.getByRole('columnheader')).toHaveText(['Your current comparison (unchanged)', 'Illustrative scenario']);
+  await expect(table.getByRole('row', { name: /Modeled monthly savings/ })).toContainText('$210');
+  await expect(table.getByRole('row', { name: /Modeled monthly savings/ })).toContainText('$333');
+  await expect(table.getByText('Not listed')).toHaveCount(5);
+  await expect(table.locator('[data-leading="true"]')).toHaveCount(0);
+  await expect(response.getByRole('link', { name: /Explore in Mortgage Refinance Radar/ })).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, the refinance scenario and current comparison cards stack within the screen (FRD v1.87)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What if I refinanced at 5.5% for 15 years?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-refinance-scenario-strip');
+  const cards = response.getByRole('list', { name: 'Illustrative scenario vs. your current loan options' }).getByRole('listitem');
+  await expect(cards).toHaveCount(2);
+  for (const card of await cards.all()) {
+    const box = await card.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('home timeline answers on a track: latest event selected, category chips, stepping, undated events listed below, List kept (FRD v1.77)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

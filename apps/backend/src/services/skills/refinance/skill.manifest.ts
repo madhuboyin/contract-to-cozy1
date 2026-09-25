@@ -40,7 +40,7 @@ export const REFINANCE_SKILL = Object.freeze({
   // it or confirmRefinanceRateMonitor's new reconciliation-failure block
   // would hit assertSkillResultBlocksAllowed's hard throw instead of
   // degrading honestly.
-  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'TABLE', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'MONITOR', 'CAPABILITY_LIST', 'LIMITATION', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'TABLE', 'COMPARISON', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'MONITOR', 'CAPABILITY_LIST', 'LIMITATION', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
