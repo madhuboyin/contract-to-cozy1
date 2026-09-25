@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { ElementType } from 'react';
+import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -255,7 +256,16 @@ export function ExploreToolsCatalog({
       {groupedTools.length === 0 && !catalogQuery.isLoading && !catalogQuery.isError && (
         <MobileSection>
           <SummaryCard title="No matching tools" subtitle="Try a broader goal such as cost, coverage, maintenance, risk, or project.">
-            <Button variant="outline" onClick={() => setQuery('')}>Clear search</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setQuery('')}>Clear search</Button>
+              {allowedToolIdSet && normalizedQuery ? (
+                <Button variant="outline" asChild>
+                  <Link href={`/dashboard/home-tools${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ''}`}>
+                    Search all tools
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           </SummaryCard>
         </MobileSection>
       )}

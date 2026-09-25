@@ -1425,3 +1425,13 @@ Existing systems to converge or retire as independent authorities:
 
 The migration shall preserve existing routes and behavior until parity tests pass. Removal of an
 old registry is permitted only after all consumers use the canonical capability service.
+
+## 23. Addendum (2026-09-25): search vocabulary and scoped tool sets
+
+- Catalog search matches only a capability's label, descriptions, `intentAliases`, and category names.
+  A capability whose homeowner-facing name differs from how people describe the need shall declare
+  explicit `intentAliases`; the default (label and id) is not sufficient. Home Event Radar now declares
+  weather, storm, flood, wind, heat wave, freeze, and local-alert aliases.
+- The scoped "Property tools" view (`/dashboard/home-tools?toolIds=…`) searches only its allowlisted
+  tools. When a search returns no match there, it shall offer "Search all tools" (the unscoped catalog)
+  rather than a dead end.

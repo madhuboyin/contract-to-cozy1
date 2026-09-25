@@ -1,5 +1,22 @@
 import { buildCapabilityDefinitions } from './capabilityDefinitionFactory';
 
+// Homeowners search by the hazard, not the product name ("weather", "storm").
+// Without these the default aliases (just the label and id) never match.
+const INTENT_ALIASES_BY_ID: Record<string, string[]> = {
+  'home-event-radar': [
+    'home event radar',
+    'weather',
+    'weather alerts',
+    'severe weather',
+    'storm',
+    'flood',
+    'wind',
+    'heat wave',
+    'freeze',
+    'local alerts',
+  ],
+};
+
 export const PROTECT_MONITOR_CAPABILITIES = buildCapabilityDefinitions(([
   ['appreciation', 'Value Tracker', 'Monitor home value and trendlines.', '/dashboard/appreciation', 'VALUE_TRACKER', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['claims', 'Claims', 'Review the status of filed insurance and incident claims for this home.', '/dashboard/properties/[id]/claims', 'CLAIMS', 'ACTIVE', 'REGULATED_COVERAGE', 'CONTEXTUAL'],
@@ -14,6 +31,7 @@ export const PROTECT_MONITOR_CAPABILITIES = buildCapabilityDefinitions(([
   label,
   description,
   routeTemplate,
+  ...(INTENT_ALIASES_BY_ID[id] ? { intentAliases: INTENT_ALIASES_BY_ID[id] } : {}),
   outcomeCategory: 'PROTECT_MONITOR' as const,
   rolloutKey,
   releaseStage,
