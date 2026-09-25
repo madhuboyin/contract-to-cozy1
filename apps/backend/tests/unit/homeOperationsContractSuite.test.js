@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Home Operations Item #18 (§13.2 "Contract tests"). A dedicated,
 // traceable home for the specific gaps a full audit found in the existing
 // ~20-file Home Operations test suite — not a duplicate of coverage that
@@ -115,6 +117,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = {
   id: prismaPath,
   filename: prismaPath,

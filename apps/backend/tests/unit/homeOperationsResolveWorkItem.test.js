@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Slice 1: resolveAndUpsertWorkItem is the identity resolver. This exercises
 // it against an in-memory fake Prisma client that enforces the same unique
 // constraints as schema.prisma (propertyId+workKey on OperationalWorkItem,
@@ -88,6 +90,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = {
   id: prismaPath,
   filename: prismaPath,

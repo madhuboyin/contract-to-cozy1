@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Item #19 (§5.15) Slice 1: snooze, reschedule, and defer as three genuinely
 // distinct operations. Same test granularity as homeOperationsWriteApi.test.js
 // (usecase level; the controller handlers are thin pass-throughs).
@@ -50,6 +52,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
 const { snoozeWorkItem } = require('../../src/modules/homeOperations/application/snoozeWorkItem.usecase.ts');

@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 process.env.GEMINI_API_KEY ||= 'phase2-test-key';
 
 // Home Operations Slice 2: linkWorkItemsAndReconcile resolves a durable work
@@ -56,6 +58,8 @@ const prismaMock = {
   operationalWorkItem: {
     findMany: async () => acceptedWorkRows.map((row) => ({ ...row, executions: row.executions ?? [] })),
     findUnique: async ({ where }) => {
+      // Looked up by id too (canonical-action scope check on the change emission).
+      if (where.id) return workItems.get(where.id) ?? null;
       const { propertyId, workKey } = where.propertyId_workKey;
       return [...workItems.values()].find((w) => w.propertyId === propertyId && w.workKey === workKey) ?? null;
     },
@@ -101,6 +105,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = {
   id: prismaPath,
   filename: prismaPath,

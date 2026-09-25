@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Home Operations Slice 5: acceptFindingAsWork is the explicit accept gate
 // and policy router (Maintenance/Guidance/Project); resolution propagation
 // closes the loop when a routed execution verifies. guidanceJourneyService
@@ -103,9 +105,14 @@ const prismaMock = {
     create: async ({ data }) => ({ id: crypto.randomUUID(), createdAt: new Date(), ...data }),
     findUnique: async () => null,
   },
+  // A guidance journey counts as resolved only when its required steps carry non-self-reported evidence.
+  guidanceJourneyStep: {
+    findMany: async () => [{ evidences: [{ sourceType: 'DOCUMENT', status: 'VERIFIED' }] }],
+  },
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
 const loggerPath = require.resolve('../../src/lib/logger.ts');
@@ -144,6 +151,22 @@ require.cache[propertyMaintenanceTaskServicePath] = {
         lastMaintenanceCreateInput = { userId, propertyId, data };
         return { id: 'task-fake-1', ...data };
       },
+    },
+  },
+};
+
+// A PROJECT-policy finding now creates its own tracked project (inspectionHub.acceptFindingAsWork); this fake stands
+// in for the project tracker so the test can assert what is created and linked.
+let lastProjectCreateInput = null;
+const projectTrackerServicePath = require.resolve('../../src/services/projectTracker.service.ts');
+require.cache[projectTrackerServicePath] = {
+  id: projectTrackerServicePath,
+  filename: projectTrackerServicePath,
+  loaded: true,
+  exports: {
+    createProject: async (propertyId, input) => {
+      lastProjectCreateInput = { propertyId, input };
+      return { id: 'project-fake-1' };
     },
   },
 };
@@ -244,17 +267,23 @@ test('accepting a low-cost MAJOR finding routes to MAINTENANCE and creates a tas
   assert.equal(links[0].executionEntityId, 'task-fake-1');
 });
 
-test('accepting a high-cost MAJOR finding routes to PROJECT and does not auto-create anything', async () => {
+test('accepting a high-cost MAJOR finding routes to PROJECT, creates one tracked project from it and links it', async () => {
   reset();
+  lastProjectCreateInput = null;
   findingFixture({ severity: 'MAJOR', estimatedCostCentsHigh: 300_000 });
 
   const result = await acceptFindingAsWork('finding-1', 'report-1', 'property-1', 'user-1');
 
   assert.equal(result.policy, 'PROJECT');
-  assert.equal(result.execution, null);
-  assert.equal(result.created, false);
-  assert.equal(result.workItem.state, 'ACCEPTED');
-  assert.equal(workExecutions.size, 0);
+  assert.deepEqual(result.execution, { executionType: 'PROJECT', executionEntityId: 'project-fake-1' });
+  assert.equal(result.workItem.state, 'IN_PROJECT');
+  assert.equal(lastProjectCreateInput.propertyId, 'property-1');
+  assert.equal(lastProjectCreateInput.input.sourceEntityType, 'INSPECTION_FINDING');
+  assert.equal(lastProjectCreateInput.input.sourceEntityId, 'finding-1');
+  const links = [...workExecutions.values()];
+  assert.equal(links.length, 1);
+  assert.equal(links[0].executionType, 'PROJECT');
+  assert.equal(links[0].executionEntityId, 'project-fake-1');
 });
 
 test('accepting twice is idempotent — the second call returns the existing link, not a new one', async () => {

@@ -16,6 +16,8 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 function loadService({ inventoryItems, permits, highFlags, existingHomeEvent = null }) {
   const flagUpserts = [];
   const homeEventCreates = [];
@@ -23,13 +25,16 @@ function loadService({ inventoryItems, permits, highFlags, existingHomeEvent = n
   const prismaMock = {
     inventoryItem: { findMany: async () => inventoryItems },
     propertyPermitRecord: { findMany: async () => permits },
+    // A flag is created only when its dedupe key is new (inside a transaction, with a history event).
     permitUnpermittedFlag: {
-      upsert: async (args) => {
+      findUnique: async () => null,
+      create: async (args) => {
         flagUpserts.push(args);
-        return {};
+        return { id: `created-flag-${flagUpserts.length}` };
       },
       findMany: async () => highFlags,
     },
+    permitHistoricalFindingEvent: { create: async () => ({}) },
     homeEvent: {
       findFirst: async (args) => (existingHomeEvent && existingHomeEvent.idempotencyKey === args.where.idempotencyKey ? existingHomeEvent : null),
       create: async (args) => {
@@ -39,6 +44,7 @@ function loadService({ inventoryItems, permits, highFlags, existingHomeEvent = n
     },
   };
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
+  addTransactionalEmission(prismaMock);
   require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
   const contextServicePath = require.resolve('../../src/services/projectCompliance/permitWorkerContext.service.ts');
@@ -113,7 +119,7 @@ test('emits a new HomeEvent when the open HIGH flag set changes (a new flag appe
   assert.equal(creates[0].data.idempotencyKey, 'permit-unpermitted:flag-a,flag-b');
 });
 
-test('flagReason acknowledges jurisdiction variability instead of asserting unpermitted work as fact', async () => {
+test('flagReason says the search found no record and does not assert unpermitted work as fact', async () => {
   const { permitDetectionService } = loadService({
     inventoryItems: [inventoryItem()],
     permits: [],
@@ -122,13 +128,16 @@ test('flagReason acknowledges jurisdiction variability instead of asserting unpe
 
   let capturedReason = null;
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
-  const originalUpsert = require.cache[prismaPath].exports.prisma.permitUnpermittedFlag.upsert;
-  require.cache[prismaPath].exports.prisma.permitUnpermittedFlag.upsert = async (args) => {
-    capturedReason = args.create.flagReason;
-    return originalUpsert(args);
+  const flagModel = require.cache[prismaPath].exports.prisma.permitUnpermittedFlag;
+  const originalCreate = flagModel.create;
+  flagModel.create = async (args) => {
+    capturedReason = args.data.flagReason;
+    return originalCreate(args);
   };
 
   await permitDetectionService.detectUnpermittedWork('property-1');
 
-  assert.match(capturedReason, /vary by municipality/i);
+  // The wording comes from projectCompliance/retroactiveCompliancePolicy.
+  assert.match(capturedReason, /No matching permit was found in the records currently available/i);
+  assert.match(capturedReason, /does not establish that the work was unpermitted or unlawful/i);
 });

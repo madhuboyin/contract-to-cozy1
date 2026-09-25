@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Item #22 (Slice 8: "batch scheduling for low-risk routine work").
 // batchTransitionWorkItems composes the already-tested transitionWorkItem/
 // rescheduleWorkItem usecases per item, with server-side safetyTier/state
@@ -42,6 +44,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
 const { batchTransitionWorkItems } = require('../../src/modules/homeOperations/application/batchTransitionWorkItems.usecase.ts');

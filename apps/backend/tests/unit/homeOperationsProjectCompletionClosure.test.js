@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Home Operations Slice 6: confirmCompletion's gaps closed — unresolved
 // exceptions become real ProjectIssue rows, future-care tasks get real work
 // items, and Slice 5's deferred PROJECT-policy finding path gets a working
@@ -60,6 +62,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
 const loggerPath = require.resolve('../../src/lib/logger.ts');

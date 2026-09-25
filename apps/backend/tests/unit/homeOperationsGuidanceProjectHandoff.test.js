@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Home Operations Slice 4: a guidance journey and the Project it hands off
 // to must never compete as separate Home actions, and the handoff/verified
 // completion/cancellation lifecycle must reconcile against the SAME shared
@@ -78,6 +80,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = {
   id: prismaPath,
   filename: prismaPath,

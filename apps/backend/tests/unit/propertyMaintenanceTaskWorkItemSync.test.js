@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Home Operations Slice 3: PropertyMaintenanceTaskService now keeps a
 // durable OperationalWorkItem in step with every create/status transition
 // via syncTaskWorkItem — best-effort, wired into the same shared
@@ -156,6 +158,15 @@ const prismaMock = {
       return row;
     },
   },
+  // Completing a task also writes a Home Timeline event (idempotent by key).
+  homeEvent: {
+    upsert: async ({ create }) => ({ id: `event-${create.idempotencyKey}`, ...create }),
+  },
+  // ...and links it to the work item as evidence, once.
+  operationalWorkEvidence: {
+    findFirst: async () => null,
+    create: async ({ data }) => ({ id: crypto.randomUUID(), ...data }),
+  },
   operationalWorkSource: {
     upsert: async ({ where, create, update }) => {
       const k = where.workItemId_sourceType_sourceEntityId_sourceRole;
@@ -201,6 +212,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = {
   id: prismaPath,
   filename: prismaPath,

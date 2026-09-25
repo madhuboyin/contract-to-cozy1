@@ -63,6 +63,12 @@ require.cache[prismaPath] = {
       property: {
         findUnique: async () => ({ propertyUse }),
       },
+      // The readiness sync also looks for aging systems; these tests have none.
+      inventoryItem: { findMany: async () => [] },
+      // Also projected into readiness by the service; none of these tests set them up.
+      propertyMaintenanceTask: { findMany: async () => [] },
+      warranty: { findMany: async () => [], findFirst: async () => null },
+      propertySalePrepProfile: { findUnique: async () => null, upsert: async ({ create }) => create },
       propertySaleCase: {
         findUnique: async ({ where }) => (saleCaseStore && saleCaseStore.propertyId === where.propertyId ? saleCaseStore : null),
         create: async ({ data }) => {

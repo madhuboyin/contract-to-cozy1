@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 
 require('ts-node/register');
 
+const { addTransactionalEmission } = require('../helpers/transactionalEmissionFake');
+
 // Home Operations Slice 8: the write API — usecases Slice 1 already built
 // (assignWorkItemOwner, addWatcher/removeWatcher, recordDuplicateDecision)
 // plus the one new usecase this slice adds (recordEvidence, pairing the
@@ -79,6 +81,7 @@ const prismaMock = {
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
+addTransactionalEmission(prismaMock);
 require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: prismaMock } };
 
 const { assignWorkItemOwner } = require('../../src/modules/homeOperations/application/assignOwner.usecase.ts');
@@ -233,6 +236,7 @@ test('getWorkItem exposes legalNextStates and closureDispositionRule computed fr
   assert.equal(acceptedDto.closureDispositionRule, 'OPTIONAL');
 
   const closedDto = await getWorkItem(closed.id);
-  assert.deepEqual(closedDto.legalNextStates, []);
+  // A disposition-driven close is a reversible homeowner decision, so CLOSED can be reopened (domain/transitions.ts).
+  assert.deepEqual(closedDto.legalNextStates, ['REOPENED']);
   assert.equal(closedDto.closureDispositionRule, null);
 });
