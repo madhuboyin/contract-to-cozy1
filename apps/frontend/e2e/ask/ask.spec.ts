@@ -1931,6 +1931,63 @@ test('on a phone, the continuity plan ring, tiles and steps fit the screen (FRD 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('an earlier result folds to its headline and a result pins to a strip at the top, without re-running anything (FRD v1.95)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const input = page.getByPlaceholder('Ask anything about your home…');
+  await input.fill('Show my status board');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const first = page.locator('#ask-execution-execution-status-board-shelves');
+  await expect(first.getByRole('list', { name: 'Needs action, 2 items' })).toBeVisible();
+  await input.fill('What do I need for closing day?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const second = page.locator('#ask-execution-execution-buyer-closing-day-ring');
+  await expect(second.locator('[data-display-pattern="progress"]')).toBeVisible();
+  expect(api.executionBodies).toHaveLength(2);
+
+  await first.getByRole('button', { name: 'Fold this result' }).click();
+  await expect(first.locator('[data-ask-folded-headline]')).toContainText('2 need action, 1 to monitor, 1 in good shape');
+  await expect(first.getByRole('list', { name: 'Needs action, 2 items' })).toBeHidden();
+  await expect(first.getByRole('button', { name: 'Show this result' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(second.locator('[data-display-pattern="progress"]')).toBeVisible();
+
+  await second.getByRole('button', { name: 'Pin this result' }).click();
+  const strip = page.getByRole('region', { name: 'Pinned results' });
+  await expect(strip).toContainText('1 blocker remains before closing day');
+  await expect(strip).toContainText('Updated');
+  await strip.getByRole('button', { name: /1 blocker remains before closing day/ }).first().click();
+  await expect(second.getByRole('heading', { level: 2 }).first()).toBeFocused();
+
+  await first.getByRole('button', { name: 'Show this result' }).click();
+  await expect(first.getByRole('list', { name: 'Needs action, 2 items' })).toBeVisible();
+  await strip.getByRole('button', { name: /^Unpin/ }).click();
+  await expect(page.getByRole('region', { name: 'Pinned results' })).toHaveCount(0);
+  expect(api.executionBodies).toHaveLength(2);
+  const stored = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith('ctc:ask-conversation-view:v1:')).map(([, value]) => JSON.parse(value)));
+  expect(stored).toEqual([{ folded: [], pinned: [] }]);
+});
+
+test('on a phone, the pinned strip and a folded result fit the screen (FRD v1.95)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const input = page.getByPlaceholder('Ask anything about your home…');
+  await input.fill('Show my status board');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const first = page.locator('#ask-execution-execution-status-board-shelves');
+  await expect(first.getByRole('list', { name: 'Needs action, 2 items' })).toBeVisible();
+  await first.getByRole('button', { name: 'Pin this result' }).click();
+  await first.getByRole('button', { name: 'Fold this result' }).click();
+  const strip = page.getByRole('region', { name: 'Pinned results' });
+  await expect(strip).toBeVisible();
+  for (const element of [strip, first.locator('[data-ask-folded-headline]')]) {
+    const box = await element.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('home actions show their priorities as shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, MutableRefObject, Ref, useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Archive, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Pin, PinOff, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
@@ -26,6 +26,9 @@ import { BlockView } from './blocks/registry';
 // registry in ./blocks/registry.tsx is the actual implementation now.
 export { BlockView };
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
+import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
+import { useConversationView } from '@/features/ask/useConversationView';
+import { PinnedResultsStrip } from './PinnedResultsStrip';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
 
@@ -1029,7 +1032,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
 }
 
 function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, folded = false, pinned = false, onToggleFold, onTogglePin,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -1058,6 +1061,11 @@ function ExecutionCard({
   onAccessLost: (execution: Pick<AskExecutionResponse, 'sessionId' | 'property' | 'executionId'>) => void;
   contextOpen: boolean;
   onOpenContext: (trigger: HTMLButtonElement) => void;
+  // IW-PRES-021 (FRD v1.95): folding and pinning only change what is shown; they never re-run the request.
+  folded?: boolean;
+  pinned?: boolean;
+  onToggleFold?: () => void;
+  onTogglePin?: () => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1178,11 +1186,21 @@ function ExecutionCard({
       <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
-          <button type="button" disabled={refreshing || refreshPending || loading || refreshAccessLost} onClick={() => void refresh()} className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50" aria-label="Refresh this result">
+          <div className="flex shrink-0 items-center gap-1">
+            <button type="button" disabled={refreshing || refreshPending || loading || refreshAccessLost} onClick={() => void refresh()} className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50" aria-label="Refresh this result">
             <RefreshCw className={cn('h-3 w-3', refreshing && 'animate-spin')} />{refreshing || refreshPending ? 'Refreshing…' : 'Refresh'}
           </button>
+            {onTogglePin && <button type="button" aria-pressed={pinned} onClick={onTogglePin} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+              {pinned ? <PinOff className="h-3 w-3" aria-hidden="true" /> : <Pin className="h-3 w-3" aria-hidden="true" />}{pinned ? 'Unpin' : 'Pin'}<span className="sr-only"> this result</span>
+            </button>}
+            {onToggleFold && canFoldResult(execution) && <button type="button" aria-expanded={!folded} onClick={onToggleFold} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+              {folded ? <ChevronDown className="h-3 w-3" aria-hidden="true" /> : <ChevronUp className="h-3 w-3" aria-hidden="true" />}{folded ? 'Show' : 'Fold'}<span className="sr-only"> this result</span>
+            </button>}
+          </div>
         </div>
 
+        {folded && canFoldResult(execution) && <p data-ask-folded-headline="" className="text-sm font-semibold text-slate-900">{resultHeadline(execution)}<span className="ml-2 text-xs font-normal text-slate-500">Updated {new Date(execution.updatedAt).toLocaleString()}</span></p>}
+        <div hidden={folded && canFoldResult(execution)} className="space-y-3">
         <p className="text-xs text-slate-500" role="status" aria-live="polite">
           Updated {new Date(execution.updatedAt).toLocaleString()}
           {execution.viewState && ` · ${execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups' ? block.sections : []).reduce((count, section) => count + section.count, 0)} matching tasks`}
@@ -1225,6 +1243,7 @@ function ExecutionCard({
         })()}
         {visibleSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{visibleSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId, execution.sessionId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
         <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} />
+        </div>
       </div>
     </article></ResultViewContext.Provider></ResultRevalidationBoundary>
   );
@@ -1247,6 +1266,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const effectiveHistoryScope = selectedPropertyId ? historyScope : 'ALL_HOMES';
   const [sessionId, setSessionId] = useState('');
   const [executions, setExecutions] = useState<AskExecutionResponse[]>([]);
+  // IW-PRES-021 (FRD v1.95): folded and pinned results, kept for this browser session.
+  const conversationView = useConversationView(sessionId, executions);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -2226,6 +2247,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                 delete its own question bubble, losing conversation history.
                 Its response content is collapsed (no duplicate list); its
                 question stays visible. */}
+            <PinnedResultsStrip executions={executions.filter((execution) => conversationView.view.pinned.includes(execution.executionId))} onUnpin={conversationView.togglePin} />
             {executions.map((execution) => {
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
               const visibleSuggestions = execution.suggestions.filter((suggestion) => !askedQuestionKeys.has(askSuggestionKey(suggestion)));
@@ -2248,6 +2270,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   onAccessLost={redactAccessLostResult}
                   contextOpen={contextExecutionId === execution.executionId}
                   onOpenContext={(trigger) => openResponseContext(execution, trigger)}
+                  folded={conversationView.view.folded.includes(execution.executionId)}
+                  pinned={conversationView.view.pinned.includes(execution.executionId)}
+                  onToggleFold={() => conversationView.toggleFold(execution.executionId)}
+                  onTogglePin={() => conversationView.togglePin(execution.executionId)}
                 />
               </AskActionReturnContext.Provider>;
             })}
