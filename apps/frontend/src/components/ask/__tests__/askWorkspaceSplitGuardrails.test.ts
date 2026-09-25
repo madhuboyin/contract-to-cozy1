@@ -11,14 +11,14 @@ const workspaceFiles = fs.readdirSync(workspaceDir).filter((name) => /\.tsx?$/.t
 describe('AskWorkspace split guardrails', () => {
   it('AskWorkspace.tsx stays under its ceiling and holds only the AskWorkspace component', () => {
     const source = read(path.join(askDir, 'AskWorkspace.tsx'));
-    expect(source.split('\n').length).toBeLessThanOrEqual(1000);
+    expect(source.split('\n').length).toBeLessThanOrEqual(950);
     const topLevel = source.split('\n').filter((line) => /^(export )?(async )?(function|const|class)\s/.test(line));
     expect(topLevel).toHaveLength(1);
     expect(topLevel[0]).toMatch(/^export function AskWorkspace\(/);
   });
 
   it('no workspace file imports AskWorkspace, and each stays below 700 lines', () => {
-    expect(workspaceFiles.sort()).toEqual(['CaptureCards.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'support.ts', 'useConversationHistory.ts']);
+    expect(workspaceFiles.sort()).toEqual(['CaptureCards.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'support.ts', 'useConversationHistory.ts', 'usePendingWork.ts']);
     for (const name of workspaceFiles) {
       const source = read(path.join(workspaceDir, name));
       expect(source).not.toMatch(/from '(\.\.\/)?(\.\/)?AskWorkspace'/);

@@ -18,6 +18,7 @@ import { hasResponseContext, ResponseContextContent } from './EvidenceContextPan
 import { AskActionReturnContext, AskContextLink } from './blocks/context';
 import { BlockView } from './blocks/registry';
 import { useConversationView } from '@/features/ask/useConversationView';
+import { usePendingWork } from './workspace/usePendingWork';
 import { useConversationHistory } from './workspace/useConversationHistory';
 import { PinnedResultsStrip } from './PinnedResultsStrip';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
@@ -60,14 +61,11 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [pendingWork, setPendingWork] = useState<AskPendingWorkItem[]>([]);
-  const [pendingLoading, setPendingLoading] = useState(false);
-  const [continuingId, setContinuingId] = useState<string | null>(null);
-  const [dismissingPendingId, setDismissingPendingId] = useState<string | null>(null);
   const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [availabilityEpoch, setAvailabilityEpoch] = useState(0);
   const [openingRecentSessionId, setOpeningRecentSessionId] = useState<string | null>(null);
   const [recentSessionsEpoch, setRecentSessionsEpoch] = useState(0);
+  const { pendingWork, setPendingWork, pendingLoading, continuingId, setContinuingId, dismissingPendingId, dismissPendingWork } = usePendingWork({ selectedPropertyId, propertyMismatch, availabilityEpoch, loading, setError, setServiceUnavailable, onDismissed: () => setRecentSessionsEpoch((current) => current + 1) });
   const accessLostRef = useRef<(propertyId: string) => void>(() => {});
   const { recentSessions, setRecentSessions, recentSessionsLoading, setRecentSessionsLoading, recentSessionsLoadingMore, setRecentSessionsLoadingMore, recentSessionsNextCursor, setRecentSessionsNextCursor, recentSessionsIssue, setRecentSessionsIssue, historySearchInput, setHistorySearchInput, historySearchTerm, setHistorySearchTerm, searchSessions, setSearchSessions, searchNextCursor, setSearchNextCursor, searchLoading, setSearchLoading, searchLoadingMore, setSearchLoadingMore, searchIssue, setSearchIssue, historyView, setHistoryView, pinnedSessions, setPinnedSessions, historyPropertyRef, historyRequestEpochRef, searchRequestEpochRef, searchScopeRef, loadMoreRecentSessions, loadMoreSearchSessions } = useConversationHistory({ selectedPropertyId, effectiveHistoryScope, propertyMismatch, availabilityEpoch, recentSessionsEpoch, setServiceUnavailable, onAccessLostRef: accessLostRef });
   const [sessionActionId, setSessionActionId] = useState<string | null>(null);
@@ -118,7 +116,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       clarification: null, captureRequests: [], suggestions: [], skillHandoff: null, viewState: null,
     } : item));
     setPendingWork((current) => current.filter((item) => item.execution.property?.id !== propertyId));
-  }, [setRecentSessions, setPinnedSessions, setRecentSessionsNextCursor, setRecentSessionsIssue, setSearchSessions, setSearchNextCursor, setSearchIssue]);
+  }, [setRecentSessions, setPinnedSessions, setRecentSessionsNextCursor, setRecentSessionsIssue, setSearchSessions, setSearchNextCursor, setSearchIssue, setPendingWork]);
   accessLostRef.current = redactHistoryAccessLoss;
   const landingVisible = executions.length === 0;
   // Also filter on read so conversations persisted before the backend policy
@@ -204,22 +202,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       window.sessionStorage.setItem(`ctc:ask-active-session:${selectedPropertyId ?? 'general'}`, sessionId);
     }
   }, [sessionId, selectedPropertyId]);
-
-  useEffect(() => {
-    if (propertyMismatch) return;
-    const controller = new AbortController();
-    setPendingLoading(true);
-    api.getAskPendingWork(selectedPropertyId, { signal: controller.signal })
-      .then((response) => setPendingWork(response.success && response.data ? response.data.items : []))
-      .catch((caught) => {
-        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-          setPendingWork([]);
-          if (askServiceIsPaused(caught)) setServiceUnavailable(true);
-        }
-      })
-      .finally(() => { if (!controller.signal.aborted) setPendingLoading(false); });
-    return () => controller.abort();
-  }, [selectedPropertyId, propertyMismatch, availabilityEpoch]);
 
 
   useEffect(() => {
@@ -730,22 +712,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         setError(caught instanceof Error ? caught.message : 'Could not resume this request.');
       }
     } finally { setHistoryLoading(false); setContinuingId(null); }
-  };
-
-  const dismissPendingWork = async (item: AskPendingWorkItem) => {
-    if (continuingId || dismissingPendingId || loading || item.pendingKind === 'COMMAND_RECOVERY') return;
-    setDismissingPendingId(item.execution.executionId);
-    setError(null);
-    try {
-      const response = await api.cancelAskExecution(item.execution.executionId);
-      if (!response.success || !response.data || response.data.status !== 'CANCELLED') throw new Error(response.message || 'Could not dismiss this pending action.');
-      setPendingWork((current) => current.filter((pending) => pending.execution.executionId !== item.execution.executionId));
-      setRecentSessionsEpoch((current) => current + 1);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not dismiss this pending action.');
-    } finally {
-      setDismissingPendingId(null);
-    }
   };
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
