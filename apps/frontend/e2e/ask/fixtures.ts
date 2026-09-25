@@ -351,7 +351,8 @@ const SALE_ITEM_ACTIONS = [
   ['sale-item-waive', 'Disclose and waive', 'Waive this seller-prep checklist item.'],
   ['sale-item-reopen', 'Reopen', 'Reopen this seller-prep checklist item.'],
 ].map(([id, label, message]) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'SELLER_PREP_ITEM_DECISION' }));
-function sellerPrepExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
+// `shelves` is the FRD v1.84 answer: the same checklist with the shelves declared and each card's facts.
+function sellerPrepExecution(stage: 'LIST' | 'REVIEW', sessionId?: string, shelves = false) {
   const common = {
     schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', property: { id: propertyId, label: 'Acceptance Home' },
     skill: null, skillHandoff: null, captureRequests: [], clarification: null, childExecutions: [], originalResponse: null,
@@ -359,12 +360,13 @@ function sellerPrepExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
     createdAt: '2026-09-22T12:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z', suggestions: [],
   };
   if (stage === 'LIST') {
-    return { ...common, executionId: 'execution-seller-prep', question: 'Check my sale readiness', status: 'ANSWERED', confirmation: null,
+    return { ...common, executionId: shelves ? 'execution-seller-prep-shelves' : 'execution-seller-prep', question: shelves ? 'What should I fix before listing?' : 'Check my sale readiness', status: 'ANSWERED', confirmation: null,
       operation: { id: 'SELLER_PREP_CHECKLIST', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
-      blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'seller-prep-open-items', title: 'Open items', description: 'Repairs, records, and presentation work recommended before listing, grouped by category.',
+      blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'seller-prep-open-items', title: 'Open items', ...(shelves ? { presentation: { pattern: 'SHELVES' } } : {}), description: 'Repairs, records, and presentation work recommended before listing, grouped by category.',
         actions: [],
         sections: [{ id: 'seller-prep-presentation', title: 'Presentation', count: 1, items: [{
           id: 'item-door', title: 'Paint the front door', description: null, meta: ['$200–$400 estimated'], status: 'OPEN',
+          ...(shelves ? { tone: 'DEFAULT', timingLabel: null, amountLabel: '$200–$400 estimated' } : {}),
           href: `/dashboard/properties/${propertyId}/tools/sale-case?focusItemId=item-door`, entityType: 'SALE_READINESS_ITEM', actions: SALE_ITEM_ACTIONS,
         }] }] }] };
   }
@@ -884,6 +886,59 @@ function seasonalShelvesExecution() {
           ] },
           { id: 'priority-optional', title: 'Optional', count: 1, items: [task('season-vent', 'Clean dryer vent', 'Lint buildup is a fire risk.', 'Optional', 'No recommended date', 'DEFAULT')] },
         ], actions: [] },
+    ],
+  };
+}
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.84): the Status Board answer with appliances and systems as read-only shelves.
+function statusBoardShelvesExecution() {
+  const base = maintenanceExecution();
+  const boardHref = `/dashboard/properties/${propertyId}/status-board`;
+  const row = (id: string, title: string, description: string | null, condition: string, timingLabel: string, tone: 'DEFAULT' | 'CAUTION') => ({
+    id, title, description, meta: ['Replace soon', timingLabel, 'Kitchen'], status: condition, href: `/dashboard/properties/${propertyId}/inventory?openItemId=${id}`, timingLabel, tone,
+  });
+  return {
+    ...base, executionId: 'execution-status-board-shelves', question: 'Show my status board', viewState: null,
+    operation: { id: 'HOME_STATUS_BOARD', version: '1.0', family: 'READ' },
+    blocks: [
+      { type: 'SUMMARY', id: 'status-board-summary', title: '2 need action, 1 to monitor, 1 in good shape', body: 'Across 4 recorded appliances and systems.', tone: 'CAUTION',
+        actions: [{ id: 'open-status-board', label: 'Open Status Board', href: boardHref, style: 'PRIMARY' }] },
+      { type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Appliances and systems by condition', presentation: { pattern: 'SHELVES' },
+        description: 'Each with why, from age, warranty and maintenance records.',
+        sections: [
+          { id: 'status-board-action-needed', title: 'Needs action', count: 2, items: [
+            row('item-water-heater', 'Water heater', 'Past expected life (10yr)', 'ACTION_NEEDED', '12 yr old', 'CAUTION'),
+            row('item-furnace', 'Furnace', 'Past expected life (15yr)', 'ACTION_NEEDED', '16 yr old', 'CAUTION'),
+          ] },
+          { id: 'status-board-monitor', title: 'Monitor', count: 1, items: [row('item-dishwasher', 'Dishwasher', 'Near the end of expected life', 'MONITOR', '8 yr old', 'DEFAULT')] },
+          { id: 'status-board-good', title: 'In good shape', count: 1, items: [row('item-fridge', 'Refrigerator', null, 'GOOD', '3 yr old', 'DEFAULT')] },
+        ], actions: [{ id: 'open-status-board', label: 'Open Status Board', href: boardHref, style: 'SECONDARY' }] },
+    ],
+  };
+}
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.84): the Buyer Plan guidance with the next task and blockers as read-only shelves.
+function buyerPlanShelvesExecution() {
+  const base = maintenanceExecution();
+  const planHref = `/dashboard/properties/${propertyId}/buyer-plan`;
+  const task = (id: string, title: string, description: string, timingLabel: string | null, tone: 'DEFAULT' | 'CAUTION') => ({
+    id, title, description, meta: ['Now', 'closing prep'], status: 'PENDING', href: `${planHref}?taskId=${id}`, timingLabel, tone,
+  });
+  return {
+    ...base, executionId: 'execution-buyer-plan-shelves', question: 'What is left before I close?', viewState: null,
+    operation: { id: 'HOME_ACTIONS', version: '1.0', family: 'READ' },
+    blocks: [
+      { type: 'SUMMARY', id: 'buyer-plan-summary', title: 'Next before closing: Review the Closing Disclosure', body: 'This comes directly from the canonical Buyer Plan. 2 of 10 applicable pre-close tasks remain.', tone: 'CAUTION',
+        actions: [{ id: 'open-next-buyer-task', label: 'Open exact next task', href: `${planHref}?taskId=task-cd`, style: 'PRIMARY' }] },
+      { type: 'GROUPED_LIST', filters: [], id: 'buyer-plan-actions', title: 'Buyer Plan guidance', presentation: { pattern: 'SHELVES' },
+        description: 'Task order, status, and deadlines come from the selected property’s canonical Buyer Plan.',
+        sections: [
+          { id: 'next', title: 'Do this next', count: 1, items: [task('task-cd', 'Review the Closing Disclosure', 'Compare the current revision with the selected Loan Estimate.', 'Due Aug 20, 2026', 'CAUTION')] },
+          { id: 'blockers', title: 'Also watch before closing', count: 2, items: [
+            task('task-lender', 'Send the lender the pay stubs', 'The lender still needs two recent pay stubs.', null, 'DEFAULT'),
+            task('task-insurance', 'Bind homeowners insurance', 'Proof of coverage is due at closing.', 'Due Aug 22, 2026', 'DEFAULT'),
+          ] },
+        ], actions: [{ id: 'open-buyer-plan', label: 'View full Buyer Plan', href: planHref, style: 'SECONDARY' }] },
     ],
   };
 }
@@ -1577,6 +1632,10 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: refinanceMonitorAnalysisExecution(body.sessionId as string | undefined) }, 201);
       return;
     }
+    if (body.message === 'What should I fix before listing?') {
+      await fulfill(route, { success: true, data: sellerPrepExecution('LIST', body.sessionId as string | undefined, true) }, 201);
+      return;
+    }
     if (body.message === 'Check my sale readiness') {
       await fulfill(route, { success: true, data: sellerPrepExecution('LIST', body.sessionId as string | undefined) }, 201);
       return;
@@ -1763,6 +1822,18 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/what seasonal tasks are pending/i.test(body.message)) {
       const response = seasonalShelvesExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/show my status board/i.test(body.message)) {
+      const response = statusBoardShelvesExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/what is left before i close/i.test(body.message)) {
+      const response = buyerPlanShelvesExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

@@ -74,7 +74,8 @@ test('items are grouped by condition with their reasons, age, warranty, maintena
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.id)]), [['Needs action', ['a']], ['Monitor', ['m']], ['In good shape', ['g']]]);
   const [urgent] = list.sections[0].items;
   assert.equal(urgent.description, 'Past expected life (10yr)');
-  assert.deepEqual(urgent.meta, ['replace soon', 'appliance', '12.5 yr old', 'Warranty: expired', '1 open maintenance task', 'Kitchen', 'Pinned']);
+  // Seven facts do not fit a card (six at most), so a fully recorded item drops the category and keeps the rest.
+  assert.deepEqual(urgent.meta, ['replace soon', '12.5 yr old', 'Warranty: expired', '1 open maintenance task', 'Kitchen', 'Pinned']);
   assert.equal(urgent.href, '/dashboard/properties/p1/inventory?openItemId=inv-a');
   assert.equal(list.sections[2].items[0].description, null, 'an all-clear reason is not repeated as a description');
 });
@@ -114,4 +115,31 @@ test('the operation is fully registered: its own skill, the bridge, and the card
   assert.equal(ASK_OPERATION_CAPABILITY.HOME_STATUS_BOARD, 'status-board');
   const launch = capabilityCardLaunch('status-board').inlineLaunch;
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'HOME_STATUS_BOARD');
+});
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.84): the Status Board as read-only shelves by condition.
+test('shelf facts: only Needs action is a caution; timing is the recorded age, or says the install date is missing', () => {
+  const { statusBoardShelfFacts } = require('../../src/services/ask/askOrchestrator.service.ts');
+  assert.deepEqual(statusBoardShelfFacts({ condition: 'ACTION_NEEDED', ageYears: 12.5 }), { tone: 'CAUTION', timingLabel: '12.5 yr old' });
+  assert.deepEqual(statusBoardShelfFacts({ condition: 'MONITOR', ageYears: 0 }), { tone: 'DEFAULT', timingLabel: '0 yr old' });
+  assert.deepEqual(statusBoardShelfFacts({ condition: 'GOOD', ageYears: null, needsInstallDateForPrediction: true }), { tone: 'DEFAULT', timingLabel: 'Install date needed' });
+  assert.deepEqual(statusBoardShelfFacts({ condition: 'GOOD', ageYears: null }), { tone: 'DEFAULT', timingLabel: null });
+});
+
+test('the condition list declares shelves with card facts and a page link for the part not shown, and satisfies the contract', () => {
+  const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  const list = statusBoardFromView(view(), 'p1').blocks.find((block) => block.id === 'status-board-items');
+  assert.deepEqual(list.presentation, { pattern: 'SHELVES' });
+  assert.deepEqual(list.sections.map((section) => section.items[0].tone), ['CAUTION', 'DEFAULT', 'DEFAULT']);
+  assert.equal(list.sections[0].items[0].timingLabel, '12.5 yr old');
+  assert.equal(list.actions[0].href, '/dashboard/properties/p1/status-board');
+  AskPresentationBlockSchema.parse(list);
+});
+
+test('the full answer checker, with answer relevance on, keeps the shelves answer with a code-like item name', () => {
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const result = attachAskAuthoritativeSourceEvidence(statusBoardFromView(view({ items: [item('a', 'ACTION_NEEDED', { displayName: 'HVAC_FURNACE' })], pagination: { page: 1, limit: 100, total: 1, totalPages: 1 } }), 'p1'), [completedAskAuthoritativeSourceEvidence('HOME_STATUS_BOARD')]);
+  const checked = validateAskAnswerTrustPipeline({ question: 'Show my status board', operationId: 'HOME_STATUS_BOARD', propertyId: 'p1', semanticEnabled: true, result });
+  assert.equal(checked.result.status, 'ANSWERED', JSON.stringify(checked.semantic));
 });

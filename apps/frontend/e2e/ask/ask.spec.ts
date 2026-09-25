@@ -1067,6 +1067,54 @@ test('Seller prep: a checklist item opens inline from the sale case, live state 
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('seller-prep checklist items show as category shelves; a card opens the live item in a side drawer with its decision, and the List switch keeps it (FRD v1.84)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What should I fix before listing?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-seller-prep-shelves');
+  await expect(response.getByRole('list', { name: 'Presentation, 1 item' })).toBeVisible();
+  const card = response.getByRole('button', { name: /Paint the front door/ });
+  await expect(card).toContainText('$200–$400 estimated');
+  await card.click();
+  const drawer = page.getByRole('dialog', { name: 'Item detail: Paint the front door' });
+  await expect(drawer.getByText('A fresh front door is a low-cost first impression.')).toBeVisible();
+  // The list said OPEN, but the live item is already pursued, so only "Stop pursuing" is offered.
+  await expect(drawer.locator('[data-sale-item-action]')).toHaveCount(1);
+  const box = await drawer.boundingBox();
+  expect(box && box.x + box.width).toBeGreaterThan(1430);
+  await drawer.getByRole('button', { name: 'Stop pursuing' }).click();
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Stop pursuing this seller-prep checklist item.',
+    launchContext: expect.objectContaining({ entityType: 'SALE_READINESS_ITEM', entityId: 'item-door', operationId: 'SELLER_PREP_ITEM_DECISION', sourceExecutionId: 'execution-seller-prep-shelves' }),
+  }));
+
+  await response.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(response.getByRole('button', { name: 'Paint the front door' })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('on a phone, seller-prep shelves stay inside the screen and an item opens as a bottom sheet (FRD v1.84)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What should I fix before listing?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-seller-prep-shelves');
+  await expect(response.getByRole('list', { name: 'Presentation, 1 item' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await response.getByRole('button', { name: /Paint the front door/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Item detail: Paint the front door' });
+  await expect(sheet.getByText('A fresh front door is a low-cost first impression.')).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
+  await sheet.getByRole('button', { name: 'Close item detail for Paint the front door' }).click();
+  await expect(sheet).toBeHidden();
+});
+
 test('Refinance: the analysis shows the homeowner’s rate monitor, and Pause works inline (FRD v1.45)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -1551,6 +1599,96 @@ test('on a phone, seasonal shelves stay inside the screen and a task opens as a 
   await response.getByRole('button', { name: /Clean dryer vent/ }).click();
   const sheet = page.getByRole('dialog', { name: 'Clean dryer vent' });
   await expect(sheet.getByText('Lint buildup is a fire risk.')).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
+  await sheet.getByRole('button', { name: 'Close details' }).click();
+  await expect(sheet).toBeHidden();
+});
+
+test('the status board shows appliances and systems as condition shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-status-board-shelves');
+  await expect(response.getByRole('list', { name: 'Needs action, 2 items' }).getByRole('listitem')).toHaveCount(2);
+  await expect(response.getByRole('list', { name: 'In good shape, 1 item' })).toBeVisible();
+  const card = response.getByRole('button', { name: /Water heater/ });
+  await expect(card).toContainText('12 yr old');
+  await card.click();
+  const drawer = page.getByRole('dialog', { name: 'Water heater' });
+  await expect(drawer.getByText('Past expected life (10yr)')).toBeVisible();
+  await expect(drawer.getByRole('link', { name: 'Open record' })).toHaveAttribute('href', /inventory/);
+  await expect(drawer.getByRole('button')).toHaveCount(1);
+  const box = await drawer.boundingBox();
+  expect(box && box.x + box.width).toBeGreaterThan(1430);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+
+  await response.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(response.getByRole('link', { name: 'Water heater' })).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, status board shelves stay inside the screen and an item opens as a bottom sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-status-board-shelves');
+  await expect(response.getByRole('list', { name: 'Needs action, 2 items' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await response.getByRole('button', { name: /Refrigerator/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Refrigerator' });
+  await expect(sheet.getByText('3 yr old').first()).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
+  await sheet.getByRole('button', { name: 'Close details' }).click();
+  await expect(sheet).toBeHidden();
+});
+
+test('the buyer plan shows the next task and blockers as shelves whose cards open a read-only detail in a side drawer (FRD v1.84)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What is left before I close?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-buyer-plan-shelves');
+  await expect(response.getByRole('list', { name: 'Do this next, 1 item' })).toBeVisible();
+  await expect(response.getByRole('list', { name: 'Also watch before closing, 2 items' }).getByRole('listitem')).toHaveCount(2);
+  const card = response.getByRole('button', { name: /Review the Closing Disclosure/ });
+  await expect(card).toContainText('Due Aug 20, 2026');
+  await card.click();
+  const drawer = page.getByRole('dialog', { name: 'Review the Closing Disclosure' });
+  await expect(drawer.getByText('Compare the current revision with the selected Loan Estimate.')).toBeVisible();
+  await expect(drawer.getByRole('link', { name: 'Open record' })).toHaveAttribute('href', /buyer-plan\?taskId=task-cd/);
+  await expect(drawer.getByRole('button')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+
+  await response.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(response.getByRole('link', { name: 'Bind homeowners insurance' })).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, buyer plan shelves stay inside the screen and a task opens as a bottom sheet (FRD v1.84)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What is left before I close?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-buyer-plan-shelves');
+  await expect(response.getByRole('list', { name: 'Also watch before closing, 2 items' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await response.getByRole('button', { name: /Send the lender the pay stubs/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Send the lender the pay stubs' });
+  await expect(sheet.getByText('The lender still needs two recent pay stubs.')).toBeVisible();
   const box = await sheet.boundingBox();
   expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
   await sheet.getByRole('button', { name: 'Close details' }).click();

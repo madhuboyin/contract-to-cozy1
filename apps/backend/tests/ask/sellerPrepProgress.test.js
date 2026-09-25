@@ -117,3 +117,31 @@ test('relevance: the checklist envelope passes as a typed answer (it used to com
   const headless = { ...result, blocks: result.blocks.filter((block) => block.id !== 'seller-prep-summary') };
   assert.notDeepEqual(relevance(headless).reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
 });
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.84): the checklist as shelves, with card facts.
+test('shelf facts: a blocker is critical and the other must-address kinds cautions while open; nothing is coloured once decided or for optional and presentation work', () => {
+  const { sellerPrepShelfFacts } = require('../../src/services/ask/askOrchestrator.service.ts');
+  const facts = (overrides) => sellerPrepShelfFacts({ status: 'OPEN', requirementClass: 'MATERIAL_BLOCKER', category: 'SAFETY_STRUCTURAL', estimatedCostMinCents: null, estimatedCostMaxCents: null, ...overrides });
+  assert.deepEqual(facts({}), { tone: 'CRITICAL', timingLabel: 'Blocks a sale', amountLabel: null });
+  assert.deepEqual(facts({ requirementClass: 'VERIFICATION_NEEDED', estimatedCostMinCents: 50000, estimatedCostMaxCents: 90000 }), { tone: 'CAUTION', timingLabel: 'Needs verifying', amountLabel: '$500–$900 estimated' });
+  assert.equal(facts({ requirementClass: 'PROFESSIONAL_DECISION' }).tone, 'CAUTION');
+  assert.equal(facts({ status: 'PURSUING' }).tone, 'DEFAULT');
+  assert.deepEqual(facts({ requirementClass: 'OPTIONAL_IMPROVEMENT' }), { tone: 'DEFAULT', timingLabel: null, amountLabel: null });
+  assert.deepEqual(facts({ category: 'PRESENTATION' }), { tone: 'DEFAULT', timingLabel: null, amountLabel: null });
+});
+
+test('the real handler declares shelves for the checklist, keeping every item decision, and the answer checker still passes', async () => {
+  install(sixMustAddress());
+  const result = await invoke();
+  const list = result.blocks.find((block) => block.id === 'seller-prep-open-items');
+  assert.deepEqual(list.presentation, { pattern: 'SHELVES' });
+  AskPresentationBlockSchema.parse(list);
+  const blocker = list.sections.flatMap((section) => section.items).find((entry) => entry.id === 'blocker-open');
+  assert.deepEqual([blocker.tone, blocker.timingLabel, blocker.amountLabel], ['CRITICAL', 'Blocks a sale', '$5,000–$9,000 estimated']);
+  assert.ok(blocker.actions.length > 0, 'the item decisions stay on the item');
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'Check my sale readiness', operationId: 'SELLER_PREP_CHECKLIST', propertyId: 'p1', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('SELLER_PREP_CHECKLIST')]),
+  });
+  assert.equal(checked.result.status, 'ANSWERED', JSON.stringify(checked.semantic));
+});

@@ -106,3 +106,18 @@ test('the registry routes seller-prep-open-items here and wires item actions thr
   fireEvent.click(screen.getByRole('button', { name: 'Pursue before listing' }));
   expect(onItemAction).toHaveBeenCalledWith('SALE_READINESS_ITEM', 'item-1', 'Pursue this seller-prep checklist item.', 'SELLER_PREP_ITEM_DECISION', 'MUTATE_RECORD');
 });
+
+// FRD v1.84 (IW-PRES-014): the same component as shelves; the live item and its decisions are unchanged.
+test('as shelves, a card opens the live item in a sheet with its decision, and sending it closes the sheet', async () => {
+  const onAction = jest.fn();
+  mockedGet.mockResolvedValueOnce(overview([item()]));
+  render(<SellerPrepItemResultList block={block()} propertyId="home" onAction={onAction} onAccessLost={jest.fn()} link={link} layout="SHELVES" onChooseLayout={jest.fn()} />);
+  expect(screen.getByRole('list', { name: 'Presentation, 1 item' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Paint the front door/ }));
+  const sheet = await screen.findByRole('dialog', { name: 'Item detail: Paint the front door' });
+  await waitFor(() => expect(sheet).toHaveTextContent('A fresh front door is a low-cost first impression.'));
+  expect(shown()).toEqual(['sale-item-pursue']);
+  fireEvent.click(screen.getByRole('button', { name: 'Pursue before listing' }));
+  expect(onAction).toHaveBeenCalledWith('SALE_READINESS_ITEM', 'item-1', 'Pursue this seller-prep checklist item.', 'SELLER_PREP_ITEM_DECISION', 'MUTATE_RECORD');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+});

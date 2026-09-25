@@ -7119,6 +7119,22 @@ function sellerPrepCostRangeMeta(item: { estimatedCostMinCents: number | null; e
   return [`${min}–${money(item.estimatedCostMaxCents / 100)} estimated`];
 }
 
+// IW-PRES-014 (FRD v1.84): the shelf-card facts for one checklist item. The lead fact is what kind of item it is (a
+// blocker, one to verify, a professional decision; other items have none), a blocker is critical and the other two
+// must-address kinds are cautions while the item is still open, and the amount is the recorded cost estimate.
+export function sellerPrepShelfFacts(item: {
+  status: string; requirementClass: string; category: string;
+  estimatedCostMinCents: number | null; estimatedCostMaxCents: number | null;
+}): { tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL'; timingLabel: string | null; amountLabel: string | null } {
+  const mustAddress = item.category !== 'PRESENTATION' && item.requirementClass in SALE_READINESS_CLASS_LABELS;
+  const open = item.status === 'OPEN';
+  return {
+    tone: !mustAddress || !open ? 'DEFAULT' : item.requirementClass === 'MATERIAL_BLOCKER' ? 'CRITICAL' : 'CAUTION',
+    timingLabel: mustAddress ? SALE_READINESS_CLASS_LABELS[item.requirementClass] : null,
+    amountLabel: sellerPrepCostRangeMeta(item)[0] ?? null,
+  };
+}
+
 // Seller-prep capability-card slice (FRD v1.44). The four confirmed SELLER_PREP_ITEM_DECISION decisions, declared on
 // each checklist row; the inline detail (SellerPrepItemResultList) shows only those the traditional sale-case page
 // offers for the item's LIVE state. sellerPrepItemAction parses each message back to exactly its own decision.
@@ -7186,6 +7202,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     href: saleCaseHref(propertyId, item.id),
     entityType: 'SALE_READINESS_ITEM',
     actions: itemActions,
+    ...sellerPrepShelfFacts(item),
   });
 
   const blocks: AskPresentationBlock[] = [{
@@ -7238,6 +7255,8 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
       type: 'GROUPED_LIST', filters: [],
       id: 'seller-prep-open-items',
       title: openItems.length ? 'Open items' : 'Checklist items',
+      // IW-PRES-014 / IW-PRES-022: the checklist renders as shelves (FRD v1.84); the live item detail keeps its decisions.
+      presentation: { pattern: 'SHELVES' },
       description: 'Repairs, records, and presentation work recommended before listing, grouped by category. Open an item to see it and decide on it.',
       sections: [
         ...[...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([category, items]) => ({
@@ -7693,6 +7712,28 @@ const STATUS_BOARD_CONDITIONS = [
 ] as const;
 export const STATUS_BOARD_ASK_LIMIT = 100;
 
+// IW-PRES-014 (FRD v1.84): the shelf-card facts for one Status Board item. Only "Needs action" is a caution; the
+// timing line is the recorded age, or says the install date is missing. No cost is recorded here.
+export function statusBoardShelfFacts(item: { condition?: unknown; ageYears?: number | null; needsInstallDateForPrediction?: boolean | null }): { tone: 'DEFAULT' | 'CAUTION'; timingLabel: string | null } {
+  return {
+    tone: item.condition === 'ACTION_NEEDED' ? 'CAUTION' : 'DEFAULT',
+    timingLabel: item.ageYears != null ? `${item.ageYears} yr old` : item.needsInstallDateForPrediction ? 'Install date needed' : null,
+  };
+}
+
+export function statusBoardMeta(item: any): string[] {
+  const entries = [
+    readableCode(item.recommendation),
+    readableCode(item.category),
+    ...(item.ageYears != null ? [`${item.ageYears} yr old`] : []),
+    ...(item.warrantyStatus ? [`Warranty: ${readableCode(item.warrantyStatus)}`] : []),
+    ...(item.pendingMaintenance ? [`${item.pendingMaintenance} open maintenance task${item.pendingMaintenance === 1 ? '' : 's'}`] : []),
+    ...(item.room?.name ? [item.room.name] : []),
+    ...(item.isPinned ? ['Pinned'] : []),
+  ];
+  return entries.length > 6 ? entries.filter((_, index) => index !== 1) : entries;
+}
+
 export function statusBoardFromView(view: StatusBoardView, propertyId: string): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/status-board`;
   const items: any[] = view.items ?? [];
@@ -7724,22 +7765,19 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
         id: item.id,
         title: item.displayName || readableCode(item.category),
         description: (item.computedReasons ?? []).filter((reason: any) => reason?.code !== 'ALL_CLEAR' && reason?.detail).map((reason: any) => reason.detail).join('; ') || null,
-        meta: [
-          readableCode(item.recommendation),
-          readableCode(item.category),
-          ...(item.ageYears != null ? [`${item.ageYears} yr old`] : []),
-          ...(item.warrantyStatus ? [`Warranty: ${readableCode(item.warrantyStatus)}`] : []),
-          ...(item.pendingMaintenance ? [`${item.pendingMaintenance} open maintenance task${item.pendingMaintenance === 1 ? '' : 's'}`] : []),
-          ...(item.room?.name ? [item.room.name] : []),
-          ...(item.isPinned ? ['Pinned'] : []),
-        ],
+        // A card's meta holds at most six entries (the contract's limit). A fully recorded item has seven, and the
+        // category is the one a card can do without (FRD v1.84: before, such an item failed the contract).
+        meta: statusBoardMeta(item),
         status: String(item.condition),
         href: item.deepLinks?.viewItem ?? pageHref,
+        ...statusBoardShelfFacts(item),
       })),
     };
   }).filter((section) => section.count > 0);
   if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Appliances and systems by condition', description: 'Each with why, from age, warranty and maintenance records.', sections, actions: [] });
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Appliances and systems by condition', // IW-PRES-014 / IW-PRES-022: the Status Board renders as shelves (FRD v1.84); the cards are read-only.
+      presentation: { pattern: 'SHELVES' }, description: 'Each with why, from age, warranty and maintenance records.', sections,
+      actions: [{ id: 'open-status-board', label: 'Open Status Board', href: pageHref, style: 'SECONDARY' }] });
   }
   blocks.push({
     type: 'BOUNDARY', id: 'status-board-boundary', title: 'Estimated condition, not an inspection',

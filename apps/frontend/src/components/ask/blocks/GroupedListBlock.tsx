@@ -194,6 +194,15 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       } : null}
       onChooseLayout={declaresDeck && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
   }
+  // Seller-prep keeps its own component in both layouts, so the live item detail and its decisions stay (FRD v1.84).
+  if (props.block.id === 'seller-prep-open-items') {
+    const { block, propertyId, itemActionsDisabled, onItemAction, onAccessLost } = props;
+    const declaresShelves = block.presentation?.pattern === 'SHELVES';
+    return <SellerPrepItemResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
+      layout={decision.pattern === 'SHELVES' ? 'SHELVES' : 'LIST'}
+      onChooseLayout={declaresShelves && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
+  }
   if (decision.pattern) {
     const { block, itemActionsDisabled, onFilterClick, onItemAction, onBatchItemAction } = props;
     return (
@@ -266,11 +275,6 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // Buyer-closing capability-card slice (FRD v1.46): blocking tasks open inline, with Mark complete while open.
   if (block.id === 'buyer-deadlines-list') {
     return <BuyerTaskResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
-      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
-  }
-  // Seller-prep capability-card slice (FRD v1.44): checklist items open inline, re-read from the sale case.
-  if (block.id === 'seller-prep-open-items') {
-    return <SellerPrepItemResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // Inspection-hub capability-card slice (FRD v1.43): findings open inline, re-read through their report.

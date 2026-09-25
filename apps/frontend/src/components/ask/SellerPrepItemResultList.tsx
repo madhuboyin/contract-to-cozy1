@@ -7,6 +7,8 @@ import { ResultViewContext } from '@/features/ask/useResultView';
 import { getSaleCase } from '@/app/(dashboard)/dashboard/properties/[id]/tools/sale-case/saleCaseApi';
 import { CATEGORY_LABELS, REQUIREMENT_CLASS_LABELS, type SaleReadinessItem } from '@/app/(dashboard)/dashboard/properties/[id]/tools/sale-case/types';
 import { cn } from '@/lib/utils';
+import { DetailSheetFrame } from './patterns/PatternParts';
+import { HorizontalTrack, ShelfCard, shelfCountLabel } from './patterns/ShelvesView';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -132,13 +134,17 @@ function SaleItemDetail({ item, expectedPropertyId, disabled, onAction, onAccess
 }
 
 // Renders SELLER_PREP_CHECKLIST's seller-prep-open-items block (FRD v1.44).
-export function SellerPrepItemResultList({ block, propertyId, disabled, onAction, onAccessLost, link }: {
+export function SellerPrepItemResultList({ block, propertyId, disabled, onAction, onAccessLost, link, layout = 'LIST', onChooseLayout }: {
   block: Block;
   propertyId?: string;
   disabled?: boolean;
   onAction?: OnAction;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
+  // IW-PRES-014 / IW-PRES-022 (FRD v1.84): the server-declared shelves layout, and the homeowner's switch between it
+  // and the list. The live item detail (re-read from the sale case, with its decisions) is the same in both.
+  layout?: 'LIST' | 'SHELVES';
+  onChooseLayout?: (layout: 'LIST' | 'SHELVES') => void;
 }) {
   const controls = useContext(ResultViewContext);
   const [localDetailId, setLocalDetailId] = useState<string | null>(null);
@@ -155,12 +161,24 @@ export function SellerPrepItemResultList({ block, propertyId, disabled, onAction
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-sale-item-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-display-pattern={layout === 'SHELVES' ? 'shelves' : undefined}>
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {onChooseLayout && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+        {(['SHELVES', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={layout === option} onClick={() => onChooseLayout(option)}
+          className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'SHELVES' ? 'Shelves' : 'List'}</button>)}
+      </div>}
     </div>
-    {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
+    {layout === 'SHELVES' && block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4" data-sale-item-shelf={section.id}>
+      <HorizontalTrack label={section.title} countLabel={shelfCountLabel(section)}>
+        {section.items.map((item) => <ShelfCard key={item.id} item={item} disabled={disabled} selected={detailId === item.id}
+          triggerProps={{ 'data-sale-item-detail-trigger': item.id, 'data-ask-detail-trigger': item.id, 'data-ask-detail-block': block.id }}
+          onOpen={() => openDetail(item)} />)}
+        {section.count > section.items.length && <div role="listitem" className="flex w-32 shrink-0 snap-start items-center justify-center rounded-xl border border-dashed border-slate-300 p-3 text-center text-xs text-slate-500">{section.count - section.items.length} more on the checklist page</div>}
+      </HorizontalTrack>
+    </div>)}
+    {layout === 'LIST' && block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>
       <ul className="mt-3 space-y-3">
         {section.items.map((item) => <li key={item.id} className={cn('rounded-xl border p-3', detailId === item.id ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
@@ -170,7 +188,11 @@ export function SellerPrepItemResultList({ block, propertyId, disabled, onAction
         </li>)}
       </ul>
     </div>)}
-    {detailId && detailItem && <SaleItemDetail key={detailId} item={detailItem} expectedPropertyId={propertyId} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
+    {layout === 'LIST' && detailId && detailItem && <SaleItemDetail key={detailId} item={detailItem} expectedPropertyId={propertyId} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
+    {layout === 'SHELVES' && <DetailSheetFrame open={Boolean(detailId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Item detail: ${detailItem.title}` : 'Item detail'}>
+      {/* A decision opens its confirmation at the end of the conversation, so the sheet closes when one is sent. */}
+      {detailId && detailItem && <SaleItemDetail key={detailId} item={detailItem} expectedPropertyId={propertyId} disabled={disabled} onAction={onAction && ((...args) => { onAction(...args); closeDetail(); })} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
+    </DetailSheetFrame>}
     <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : null)}</div>
   </section>;
 }

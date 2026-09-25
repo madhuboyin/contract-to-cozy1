@@ -16,6 +16,13 @@ function dateLabel(value: string | null): string | null {
     .format(new Date(value));
 }
 
+// IW-PRES-014 (FRD v1.84): the shelf-card facts for one Buyer Plan task. A task due now is a caution; the timing is its
+// due date. The plan records no cost per task.
+export function buyerPlanShelfFacts(task: { priority: string; dueAt: string | null }): { tone: 'DEFAULT' | 'CAUTION'; timingLabel: string | null } {
+  const due = dateLabel(task.dueAt);
+  return { tone: task.priority === 'NOW' ? 'CAUTION' : 'DEFAULT', timingLabel: due ? `Due ${due}` : null };
+}
+
 export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskOperationResult | null {
   if (
     context.presentationMode === 'HOMEOWNER'
@@ -61,6 +68,7 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
         meta: [nextAction.priority === 'NOW' ? 'Now' : nextAction.priority, dueLabel ? `Due ${dueLabel}` : null, nextAction.phase.toLowerCase().replace(/_/g, ' ')].filter((value): value is string => Boolean(value)),
         status: nextAction.status,
         href: nextHref,
+        ...buyerPlanShelfFacts(nextAction),
       }],
     });
   }
@@ -76,6 +84,7 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
         meta: [task.priority === 'NOW' ? 'Now' : task.priority, dateLabel(task.dueAt) ? `Due ${dateLabel(task.dueAt)}` : null].filter((value): value is string => Boolean(value)),
         status: task.status,
         href: buyerTaskHref(context.propertyId, task),
+        ...buyerPlanShelfFacts(task),
       })),
     });
   }
@@ -95,6 +104,8 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
       type: 'GROUPED_LIST', filters: [],
       id: 'buyer-plan-actions',
       title: 'Buyer Plan guidance',
+      // IW-PRES-014 / IW-PRES-022: the guidance renders as shelves (FRD v1.84); the cards are read-only.
+      presentation: { pattern: 'SHELVES' },
       description: 'Task order, status, and deadlines come from the selected property’s canonical Buyer Plan.',
       sections,
       actions: [{ id: 'open-buyer-plan', label: 'View full Buyer Plan', href: planHref, style: 'SECONDARY' }],

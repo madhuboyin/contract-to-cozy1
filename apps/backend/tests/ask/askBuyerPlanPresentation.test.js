@@ -144,3 +144,25 @@ test('owned, recent-owner, and new-home presentations preserve the existing Home
   assert.equal(buildBuyerPlanHomeActionsResult(context({ presentationMode: 'RECENT_OWNER', overview: null })), null);
   assert.equal(buildBuyerPlanHomeActionsResult(context({ presentationMode: 'NEW_HOME', overview: null })), null);
 });
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.84): the Buyer Plan guidance as read-only shelves.
+test('buyer plan shelf facts: a Now task is a caution; timing is its due date', () => {
+  const { buyerPlanShelfFacts } = require('../../src/services/ask/askBuyerPlanPresentation.ts');
+  assert.deepEqual(buyerPlanShelfFacts({ priority: 'NOW', dueAt: '2026-10-03T00:00:00.000Z' }), { tone: 'CAUTION', timingLabel: 'Due Oct 3, 2026' });
+  assert.deepEqual(buyerPlanShelfFacts({ priority: 'SOON', dueAt: null }), { tone: 'DEFAULT', timingLabel: null });
+});
+
+test('the buyer guidance declares shelves with card facts on the next task and every blocker, and satisfies the contract', () => {
+  const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  const base = context();
+  const withBlockers = context({ overview: { ...base.overview, blockers: [task({ id: 'task-lender', title: 'Send the lender the pay stubs', priority: 'SOON', dueAt: null }), task()] } });
+  const list = buildBuyerPlanHomeActionsResult(withBlockers).blocks.find((block) => block.id === 'buyer-plan-actions');
+  assert.deepEqual(list.presentation, { pattern: 'SHELVES' });
+  assert.deepEqual(list.sections.map((section) => section.id), ['next', 'blockers']);
+  assert.deepEqual(list.sections[1].items.map((entry) => [entry.id, entry.tone, entry.timingLabel]), [['task-lender', 'DEFAULT', null]]);
+  for (const entry of list.sections.flatMap((section) => section.items)) {
+    assert.ok(['DEFAULT', 'CAUTION'].includes(entry.tone), entry.id);
+    assert.ok('timingLabel' in entry, entry.id);
+  }
+  AskPresentationBlockSchema.parse(list);
+});
