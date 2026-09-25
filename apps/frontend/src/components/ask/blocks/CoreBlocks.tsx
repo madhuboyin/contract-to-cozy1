@@ -4,7 +4,7 @@ import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatib
 import { timelinePoint } from '@/features/ask/displayPatterns';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
-import { useCalmAnswer } from './calmContext';
+import { useCalmAnswer, useCalmChrome } from './calmContext';
 import type { AskBlockRenderer } from './types';
 
 function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBlock, { type: 'SUMMARY' }>['chips']> }) {
@@ -83,7 +83,7 @@ export const ProactiveInsightBlock: AskBlockRenderer<'PROACTIVE_INSIGHT'> = ({ b
 // IW-CALM-005 (FRD v1.111): an informational limit is a muted footnote, not a warning card. Cautions and emergencies keep
 // their warning treatment because the homeowner may need to act on them.
 export const BoundaryBlock: AskBlockRenderer<'BOUNDARY'> = ({ block }) => {
-  const calm = useCalmAnswer();
+  const calm = useCalmChrome();
   if (calm && block.severity === 'INFO' && block.suggestions.length === 0 && !block.actions?.length) {
     return <p data-calm-footnote="" className="text-xs leading-5 text-slate-500"><span className="font-medium text-slate-600">{block.title}.</span> {block.body}</p>;
   }
@@ -164,8 +164,21 @@ export const AssumptionsBlock: AskBlockRenderer<'ASSUMPTIONS'> = ({ block, onOpe
 
 type StateBlockType = Extract<AskPresentationBlock, { type: 'LIMITATION' | 'EMPTY_STATE' | 'ERROR_STATE' }>;
 
+const CALM_STATE_RULE = { ERROR_STATE: 'border-red-300', LIMITATION: 'border-amber-300', EMPTY_STATE: 'border-slate-300' } as const;
+
 function StateBlock({ block }: { block: StateBlockType }) {
   const actions = 'actions' in block ? block.actions : [];
+  // IW-CALM-002/004/005 (FRD v1.111): a state is plain text with a thin colored rule, not a tinted card. Its actions stay.
+  const calm = useCalmChrome();
+  if (calm) {
+    return (
+      <section data-calm-state={block.type.toLowerCase()} className={cn('border-l-2 pl-3', CALM_STATE_RULE[block.type])}>
+        <h3 className="text-base font-medium text-slate-900">{block.title}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600">{block.body}</p>
+        {actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+      </section>
+    );
+  }
   return (
     <section className={cn('rounded-2xl border p-4', block.type === 'ERROR_STATE' ? 'border-red-200 bg-red-50' : block.type === 'LIMITATION' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')}>
       <h3 className="font-semibold text-slate-950">{block.title}</h3>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useCalmChrome } from './blocks/calmContext';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
@@ -167,6 +168,8 @@ export function HomeEventResultList({ block, propertyId, disabled, onAction, onF
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
   const controls = useContext(ResultViewContext);
+  // IW-CALM-009 (FRD v1.111): the paging note says "Showing", not "Server results", inside a calm answer.
+  const calmChrome = useCalmChrome();
   const [localDetailEventId, setLocalDetailEventId] = useState<string | null>(null);
   const detailEventId = controls ? controls.detailIdFor(block.id) : localDetailEventId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailEventId);
@@ -211,7 +214,7 @@ export function HomeEventResultList({ block, propertyId, disabled, onAction, onF
         </ul>
         {controls && visible < section.items.length && <button type="button" className="mt-3 min-h-10 text-sm font-semibold text-teal-800" onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 5) } }))}>Show more {section.title.toLowerCase()} events ({offset + Math.min(visible, section.items.length)} of {section.count} reached)</button>}
         {(offset > 0 || offset + section.items.length < section.count) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
-          <p className="text-xs text-slate-500">Server results {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
+          <p className="text-xs text-slate-500">{calmChrome ? 'Showing' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
           <div className="flex gap-2">
             {offset > 0 && <button type="button" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous page<span className="sr-only"> of {section.title}</span></button>}
             {offset + section.items.length < section.count && <button type="button" className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white" onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}

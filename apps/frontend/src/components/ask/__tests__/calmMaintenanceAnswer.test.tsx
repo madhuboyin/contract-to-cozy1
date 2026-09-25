@@ -82,10 +82,11 @@ describe('calm Maintenance answer', () => {
     expect(container.querySelector('[data-calm-summary]')).toBeNull();
   });
 
-  it('does not change another domain\'s answer even when the setting is on', async () => {
+  it('gives another domain the calm shell but not the calm answer anatomy', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
-    card(execution({ blocks: [blocks[0], { ...blocks[1], id: 'inventory-results', title: 'Inventory' }] } as Partial<AskExecutionResponse>));
-    expect(await screen.findByRole('button', { name: /Refresh this result/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Response options' })).toBeNull();
+    const { container } = card(execution({ blocks: [blocks[0], { ...blocks[1], id: 'inventory-results', title: 'Inventory' }] } as Partial<AskExecutionResponse>));
+    expect(await screen.findByRole('button', { name: 'Response options' })).toBeInTheDocument();
+    expect(screen.getByText('9 maintenance records match this request')).toBeInTheDocument();
+    expect(container.querySelector('[data-calm-summary]')).toBeNull();
   });
 });

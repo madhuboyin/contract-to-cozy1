@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, act, waitFor } from '@testing-library/react';
 import { ResultRevalidationBoundary } from '../ResultRevalidationBoundary';
 import { MaintenanceResultList } from '../MaintenanceResultList';
+import { CalmChromeContext } from '../blocks/calmContext';
 import { BlockView } from '../AskWorkspace';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
@@ -157,6 +158,15 @@ test('server-paged maintenance sections navigate inline and retain the tradition
   expect(onPage).toHaveBeenNthCalledWith(2, 'open', 'NEXT');
   expect(screen.getByText('Server results 51–58 of 120')).toBeInTheDocument();
   expect(screen.getByText('View all in Maintenance')).toBeInTheDocument();
+});
+
+test('the paging note drops "Server results" inside a calm answer (IW-CALM-009)', () => {
+  const response = execution();
+  const block = response.blocks.find((candidate) => candidate.type === 'GROUPED_LIST' && candidate.id === 'maintenance-groups') as Extract<AskExecutionResponse['blocks'][number], { type: 'GROUPED_LIST' }>;
+  response.blocks = [{ ...block, sections: [{ ...block.sections[0], count: 120, offset: 50 }] }];
+  render(<CalmChromeContext.Provider value><List response={response} onPage={jest.fn()} /></CalmChromeContext.Provider>);
+  expect(screen.getByText('Showing 51–58 of 120')).toBeInTheDocument();
+  expect(screen.queryByText(/Server results/)).toBeNull();
 });
 
 test('session deletion removes view state without affecting another session', () => {

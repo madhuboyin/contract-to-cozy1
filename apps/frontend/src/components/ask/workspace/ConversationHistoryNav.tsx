@@ -33,7 +33,13 @@ export function recentSessionStatus(status: AskRecentSessionSummary['latestStatu
   if (status === 'NEEDS_CONFIRMATION') return 'Awaiting confirmation';
   if (status === 'RUNNING') return 'In progress';
   if (['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'].includes(status)) return 'Completed';
-  return status.toLowerCase().replace(/_/g, ' ');
+  // IW-CALM-008/009 (FRD v1.111): a state the homeowner can act on says so; no raw status name is ever shown.
+  if (['FAILED_RETRYABLE', 'UNAVAILABLE'].includes(status)) return 'Needs a retry';
+  if (['FAILED_TERMINAL', 'BLOCKED'].includes(status)) return 'Could not finish';
+  if (['RECEIVED', 'ROUTING'].includes(status)) return 'In progress';
+  if (status === 'CANCELLED') return 'Cancelled';
+  if (status === 'EXPIRED') return 'Expired';
+  return 'Not available';
 }
 
 export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel }: {

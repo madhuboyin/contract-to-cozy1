@@ -11,7 +11,7 @@ import { hasResponseContext, ResponseContextSummary } from '../EvidenceContextPa
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
 import { AskBlockActionContext } from '../blocks/context';
-import { CalmAnswerContext } from '../blocks/calmContext';
+import { CalmAnswerContext, CalmChromeContext } from '../blocks/calmContext';
 import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
@@ -131,10 +131,11 @@ export function ExecutionCard({
   const refreshAccessLost = Boolean(refreshIssue?.accessLost);
   const controls = useResultView(execution, !isSuperseded && !refreshAccessLost);
   // FRD v1.111 §11.11: the calm anatomy applies only to a domain that has adopted it, and only when the setting is on.
-  const calm = useCalmAnswers() && isCalmAdopter(execution);
+  const calmChrome = useCalmAnswers();
+  const calm = calmChrome && isCalmAdopter(execution);
   const [showOriginal, setShowOriginal] = useState(false);
   // IW-CALM-004: a retry the card already offers as its primary action is not repeated as a second suggestion chip.
-  const shownSuggestions = calm && execution.correctionCapabilities.retryResponse ? visibleSuggestions.filter((suggestion) => !/^try again\b/i.test(suggestion.trim())) : visibleSuggestions;
+  const shownSuggestions = calmChrome && execution.correctionCapabilities.retryResponse ? visibleSuggestions.filter((suggestion) => !/^try again\b/i.test(suggestion.trim())) : visibleSuggestions;
   const refresh = async () => {
     if (refreshing || refreshAccessLost) return;
     setRefreshing(true);
@@ -221,7 +222,7 @@ export function ExecutionCard({
       <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
         <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
         <details className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-          <summary className="cursor-pointer text-xs font-semibold text-slate-500">Superseded by a refinement below · view original response</summary>
+          <summary className="cursor-pointer text-xs font-semibold text-slate-500">{calmChrome ? 'Replaced by a newer view below · show this view' : 'Superseded by a refinement below · view original response'}</summary>
           <div className="mt-3 space-y-3 opacity-75">
             {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />)}
           </div>
@@ -231,7 +232,7 @@ export function ExecutionCard({
   }
 
   return (
-    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}><ResultViewContext.Provider value={controls}><CalmAnswerContext.Provider value={calm}><article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32" onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
+    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}><ResultViewContext.Provider value={controls}><CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}><article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32" onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
       const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
       if (!link) return;
       const url = new URL(link.href, window.location.origin);
@@ -241,8 +242,8 @@ export function ExecutionCard({
     }}>
       <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
       {onEditQuestion && <div className="flex justify-end"><button type="button" disabled={loading} onClick={() => onEditQuestion(execution.question)} aria-label="Change and resend this question" className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100">Change and resend</button></div>}
-      <div className={calm ? 'space-y-3' : 'space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4'}>
-        {calm ? <div className="flex items-center justify-between gap-2">
+      <div className={calmChrome ? 'space-y-3' : 'space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4'}>
+        {calmChrome ? <div className="flex items-center justify-between gap-2">
           <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-teal-700 text-[11px] font-bold text-white">C</span><span>Cozy<span className="sr-only"> response</span></span></h2>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><button type="button" aria-label="Response options" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></button></DropdownMenuTrigger>
@@ -272,17 +273,17 @@ export function ExecutionCard({
 
         {folded && canFoldResult(execution) && <p data-ask-folded-headline="" className="text-sm font-semibold text-slate-900">{resultHeadline(execution)}<span className="ml-2 text-xs font-normal text-slate-500">Updated {new Date(execution.updatedAt).toLocaleString()}</span></p>}
         <div hidden={folded && canFoldResult(execution)} className="space-y-3">
-        {(!calm || execution.updatedAt !== execution.createdAt) && <p className="text-xs text-slate-500" role="status" aria-live="polite">
-          {calm ? 'Refreshed' : 'Updated'} {new Date(execution.updatedAt).toLocaleString()}
-          {!calm && execution.viewState && ` · ${execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups' ? block.sections : []).reduce((count, section) => count + section.count, 0)} matching tasks`}
+        {(!calmChrome || execution.updatedAt !== execution.createdAt) && <p className="text-xs text-slate-500" role="status" aria-live="polite">
+          {calmChrome ? 'Refreshed' : 'Updated'} {new Date(execution.updatedAt).toLocaleString()}
+          {!calmChrome && execution.viewState && ` · ${execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups' ? block.sections : []).reduce((count, section) => count + section.count, 0)} matching tasks`}
         </p>}
         {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: `execution.blocks` is
             always current data; this discloses what Cozy originally
             answered whenever the two have actually diverged (this result
             was refreshed, completed, or edited at least once since it was
             first created), without cluttering the common one-shot case. */}
-        {execution.originalResponse && execution.updatedAt !== execution.createdAt && (calm ? showOriginal : true) && (
-          <details open={calm || undefined} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+        {execution.originalResponse && execution.updatedAt !== execution.createdAt && (calmChrome ? showOriginal : true) && (
+          <details open={calmChrome || undefined} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <summary className="cursor-pointer text-[11px] font-semibold text-slate-500">Originally answered {new Date(execution.originalResponse.observedAt).toLocaleString()} · view original response</summary>
             <div className="mt-3 space-y-3 opacity-75">
               <ResultViewContext.Provider value={null}>{execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />)}</ResultViewContext.Provider>
@@ -313,9 +314,9 @@ export function ExecutionCard({
           return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" disabled={loading} onClick={() => void ask(handoffPrompt, undefined, { propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500 disabled:opacity-50">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
         })()}
         {shownSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{shownSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId, execution.sessionId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
-        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calm} />
+        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} />
         </div>
       </div>
-    </article></CalmAnswerContext.Provider></ResultViewContext.Provider></ResultRevalidationBoundary>
+    </article></CalmAnswerContext.Provider></CalmChromeContext.Provider></ResultViewContext.Provider></ResultRevalidationBoundary>
   );
 }

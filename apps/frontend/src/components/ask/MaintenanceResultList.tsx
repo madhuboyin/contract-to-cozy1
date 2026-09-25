@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
 import { DetailSheetFrame } from './patterns/PatternParts';
 import { HorizontalTrack, ShelfCard } from './patterns/ShelvesView';
-import { useCalmAnswer } from './blocks/calmContext';
+import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import type { PropertyMaintenanceTask } from '@/types';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -146,6 +146,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   const controls = useContext(ResultViewContext);
   // IW-CALM-002/009/010 (FRD v1.111): inside a calm answer this list drops its own frame, title, paging note and dividers.
   const calm = useCalmAnswer();
+  const calmChrome = useCalmChrome();
   const sectionFrame = calm ? 'py-1' : 'border-b border-slate-100 p-4';
   const [localDetailTaskId, setLocalDetailTaskId] = useState<string | null>(null);
   const [unavailableTaskIds, setUnavailableTaskIds] = useState<Set<string>>(() => new Set());
@@ -236,7 +237,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         </ul>
         {controls && visible < section.items.length && <button type="button" disabled={disabled} className="mt-3 min-h-10 text-sm font-semibold text-teal-800" onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 5) } }))}>Show more {section.title.toLowerCase()} tasks ({offset + Math.min(visible, section.items.length)} of {section.count} reached)</button>}
         {(offset > 0 || offset + section.items.length < section.count) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
-          <p className="text-xs text-slate-500">{calm ? 'Tasks' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
+          <p className="text-xs text-slate-500">{calmChrome ? 'Showing' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
           <div className="flex gap-2">
             {offset > 0 && <button type="button" disabled={disabled} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous page<span className="sr-only"> of {section.title}</span></button>}
             {offset + section.items.length < section.count && <button type="button" disabled={disabled} className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
