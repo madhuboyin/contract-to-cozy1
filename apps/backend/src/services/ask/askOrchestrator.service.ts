@@ -10717,7 +10717,6 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     existing.push(item);
     grouped.set(family, existing);
   }
-  const itemActions = radarEventItemActions(access.role);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'home-event-radar-summary',
@@ -10732,6 +10731,8 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     filters: radarFeedFilterChips(filters, [...grouped.keys()]),
     id: 'home-event-radar-feed',
     title: 'Home Event Radar feed',
+    // IW-PRES-015 / IW-PRES-022 (FRD v1.92): the feed is a card deck; Save is a right swipe and Dismiss a left swipe.
+    presentation: { pattern: 'DECK', swipeRightActionId: 'radar-save', swipeLeftActionId: 'radar-dismiss' },
     description: `This is the same canonical feed the Home Event Radar page reads, grouped by source.${filters.includeDismissed ? '' : ' Dismissed events are hidden.'}`,
     sections: items.length ? [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([family, sectionItems]) => ({
       id: `radar-${family}`,
@@ -10745,7 +10746,7 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
         status: item.userState ? String(item.userState) : null,
         href: radarHref(String(item.id)),
         entityType: 'RADAR_MATCH',
-        actions: itemActions,
+        actions: radarEventItemActions(access.role, item.userState ? String(item.userState) : null),
       })),
     })) : [{ id: 'radar-no-match', title: 'No matching events', count: 0, items: [] }],
     actions: [...radarFeedBlockActions(access.role), { id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' }],
@@ -10820,9 +10821,9 @@ function radarEventHref(propertyId: string, matchId?: string): string {
 
 // Every action a member of this role may take on a feed event. The inline detail (RadarEventDetail) shows only the
 // ones valid for the event's LIVE canonical userState, so the feed row itself never needs refreshing to stay correct.
-export function radarEventItemActions(role: HouseholdRole) {
+export function radarEventItemActions(role: HouseholdRole, recordedState?: string | null) {
   const action = (id: string, label: string, message: string, operationId: string, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({ id, label, message, style, interactionType: 'MUTATE_RECORD' as const, operationId });
-  return [
+  const all = [
     action('radar-save', 'Save', RADAR_STATE_MESSAGES.save, 'HOME_EVENT_RADAR_STATE'),
     action('radar-unsave', 'Remove from saved', RADAR_STATE_MESSAGES.unsave, 'HOME_EVENT_RADAR_STATE'),
     action('radar-dismiss', 'Dismiss', RADAR_STATE_MESSAGES.dismiss, 'HOME_EVENT_RADAR_STATE'),
@@ -10836,6 +10837,21 @@ export function radarEventItemActions(role: HouseholdRole) {
       action('radar-plan-task', 'Plan this action', RADAR_TASK_MESSAGE, 'HOME_EVENT_RADAR_TASK'),
     ] : []),
   ];
+  // IW-PRES-015 (FRD v1.92): with the event's recorded state, only the actions that state allows are declared, so a card
+  // deck never offers Save on a saved event or anything but Restore on a dismissed one (the same rules as the detail's
+  // live-state filter and the server's own transition). Without a state every action is declared, as before.
+  if (recordedState === undefined) return all;
+  const state = recordedState ?? 'new';
+  return all.filter((entry) => {
+    switch (entry.id) {
+      case 'radar-save': return state !== 'saved' && state !== 'acted_on';
+      case 'radar-unsave': return state === 'saved';
+      case 'radar-dismiss': return state !== 'dismissed' && state !== 'acted_on';
+      case 'radar-restore': return state === 'dismissed';
+      case 'radar-mark-done': return state !== 'acted_on';
+      default: return true;
+    }
+  });
 }
 
 // Feed-level actions (FRD v1.41). Notification settings are per-user and per-property, like the traditional page's

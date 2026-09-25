@@ -203,6 +203,15 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       layout={decision.pattern === 'SHELVES' ? 'SHELVES' : 'LIST'}
       onChooseLayout={declaresShelves && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
   }
+  // Home Event Radar keeps its own component in both layouts, so the filters and the live event detail stay (FRD v1.92).
+  if (props.block.id === 'home-event-radar-feed') {
+    const { block, propertyId, itemActionsDisabled, onFilterClick, onItemAction, onAccessLost } = props;
+    const declaresDeck = block.presentation?.pattern === 'DECK';
+    return <RadarEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
+      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
+      deck={decision.pattern === 'DECK' ? { swipeRightActionId: decision.swipeRightActionId, swipeLeftActionId: decision.swipeLeftActionId } : null}
+      onChooseLayout={declaresDeck && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
+  }
   if (decision.pattern) {
     const { block, itemActionsDisabled, onFilterClick, onItemAction, onBatchItemAction } = props;
     return (
@@ -262,14 +271,6 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // capability separately -- see ./TableBlock.tsx, not this file.
   if (block.id === 'reserve-allocations') {
     return <ReserveAllocationResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
-      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
-  }
-  // Home Event Radar reference journey (FRD Appendix D), second inline-detail
-  // slice: home-event-radar-feed's items get canonical detail via the real
-  // radarQueryService.getDetail read (a genuine per-match GET, unlike the
-  // reserve-allocations/warranty/household list-scan exception above).
-  if (block.id === 'home-event-radar-feed') {
-    return <RadarEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // Buyer-closing capability-card slice (FRD v1.46): blocking tasks open inline, with Mark complete while open.

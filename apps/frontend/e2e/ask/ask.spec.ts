@@ -901,6 +901,57 @@ test('Home Event Radar: filter chips re-ask with their own message, and Save wri
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('Home Event Radar deck: events one at a time with the actions their state allows, Save sent at once, live detail in a sheet, and the filters and List kept (FRD v1.92)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What is on my home radar right now?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const feed = page.locator('#ask-execution-execution-home-event-radar-deck');
+  await expect(feed.locator('[data-display-pattern="deck"]')).toBeVisible();
+  await expect(feed.getByRole('button', { name: 'Any time' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(feed.getByText('1 of 2')).toBeVisible();
+  await expect(feed.getByRole('button', { name: 'Remove from saved' })).toHaveCount(0);
+  await feed.getByRole('button', { name: 'Details' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Event detail: severe thunderstorm warning' });
+  await expect(sheet.getByText('This storm cell tracks over your recorded property location.')).toBeVisible();
+  // A decision sent from the sheet closes it, so its result is seen at the end of the conversation.
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(sheet).toBeHidden();
+  await expect.poll(() => api.executionBodies.at(-1)?.message).toBe('Save this monitored event.');
+
+  await feed.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => api.executionBodies.at(-1)).toEqual(expect.objectContaining({
+    message: 'Save this monitored event.',
+    launchContext: expect.objectContaining({ entityType: 'RADAR_MATCH', entityId: 'match-property-summary', operationId: 'HOME_EVENT_RADAR_STATE' }),
+  }));
+  await expect(feed.getByText('2 of 2')).toBeVisible();
+  await expect(feed.getByRole('button', { name: 'Remove from saved' })).toBeVisible();
+  await expect(feed.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+
+  await feed.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(feed.getByRole('button', { name: 'excessive heat watch' })).toBeVisible();
+  await expect(page).toHaveURL(/\/acceptance\/ask\?/);
+});
+
+test('on a phone, the radar card fits the screen and Details opens as a bottom sheet (FRD v1.92)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What is on my home radar right now?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const feed = page.locator('#ask-execution-execution-home-event-radar-deck');
+  await expect(feed.getByText('1 of 2')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await feed.getByRole('button', { name: 'Details' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Event detail: severe thunderstorm warning' });
+  await expect(sheet.getByText('This storm cell tracks over your recorded property location.')).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
+});
+
 test('Home Event Radar: "Plan this action" sends the recommended action\'s code, then form -> review -> receipt (FRD v1.41)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

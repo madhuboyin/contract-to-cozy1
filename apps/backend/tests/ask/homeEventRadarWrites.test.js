@@ -146,15 +146,37 @@ test('an empty unfiltered feed keeps its coverage copy and offers to include dis
 
 // ───────────────────────────── item actions ─────────────────────────────
 
-test('feed items carry every role-allowed action; viewers get the four direct state actions only', async () => {
+test('feed items declare the role-allowed actions their recorded state allows; viewers get the direct state actions only (FRD v1.92)', async () => {
   feedPage = { ...feedPage, items: [feedItem('match-1')], totalCount: 1, feedState: 'ACTIVE' };
   const contributor = await capabilityInvoke('HOME_EVENT_RADAR_FEED', { userId: 'u1', propertyId: 'p1', message: 'Show my home event radar feed' });
   const ids = (result) => result.blocks.find((block) => block.id === 'home-event-radar-feed').sections[0].items[0].actions.map((action) => action.id);
-  // + radar-plan-task (FRD v1.41), rendered per recommended action rather than as its own button.
-  assert.deepEqual(ids(contributor), ['radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task']);
+  // A new event: Save and Dismiss (not Remove from saved or Restore), + radar-plan-task (FRD v1.41), rendered per
+  // recommended action rather than as its own button.
+  assert.deepEqual(ids(contributor), ['radar-save', 'radar-dismiss', 'radar-mark-done', 'radar-feedback', 'radar-plan-task']);
   accessRole = 'VIEWER';
   const viewer = await capabilityInvoke('HOME_EVENT_RADAR_FEED', { userId: 'u1', propertyId: 'p1', message: 'Show my home event radar feed' });
-  assert.deepEqual(ids(viewer), ['radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore']);
+  assert.deepEqual(ids(viewer), ['radar-save', 'radar-dismiss']);
+});
+
+test('the declared actions follow the recorded state, and without a state every action is declared as before', () => {
+  const ids = (role, state) => radarEventItemActions(role, state).map((action) => action.id);
+  assert.deepEqual(ids('OWNER', 'saved'), ['radar-unsave', 'radar-dismiss', 'radar-mark-done', 'radar-feedback', 'radar-plan-task']);
+  assert.deepEqual(ids('OWNER', 'dismissed'), ['radar-save', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task']);
+  assert.deepEqual(ids('OWNER', 'acted_on'), ['radar-feedback', 'radar-plan-task']);
+  assert.deepEqual(ids('OWNER', null), ids('OWNER', 'new'));
+  assert.deepEqual(ids('VIEWER', 'saved'), ['radar-unsave', 'radar-dismiss']);
+  assert.deepEqual(ids('OWNER'), ['radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task']);
+});
+
+test('the feed declares a card deck with Save on a right swipe and Dismiss on a left swipe, and satisfies the contract', async () => {
+  const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  feedPage = { ...feedPage, items: [feedItem('match-1'), feedItem('match-2', 'weather', 'dismissed')], totalCount: 2, feedState: 'ACTIVE' };
+  accessRole = 'OWNER';
+  const result = await capabilityInvoke('HOME_EVENT_RADAR_FEED', { userId: 'u1', propertyId: 'p1', message: 'Show my home event radar feed' });
+  const block = result.blocks.find((entry) => entry.id === 'home-event-radar-feed');
+  assert.deepEqual(block.presentation, { pattern: 'DECK', swipeRightActionId: 'radar-save', swipeLeftActionId: 'radar-dismiss' });
+  assert.deepEqual(block.sections[0].items[1].actions.slice(0, 2).map((action) => action.id), ['radar-save', 'radar-restore']);
+  AskPresentationBlockSchema.parse(block);
 });
 
 test('every item action and the include-dismissed action survive the answer-trust whitelist', () => {

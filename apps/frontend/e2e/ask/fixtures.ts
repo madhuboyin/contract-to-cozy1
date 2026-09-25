@@ -444,6 +444,38 @@ function homeEventRadarFeedExecution({ happeningNow = false } = {}) {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.92): the radar feed as a card deck. Each event declares the actions its
+// recorded state allows: the first is new (Save, Dismiss, Mark done), the second is already saved (Remove from saved, ...).
+function homeEventRadarDeckExecution() {
+  const action = (id: string, label: string, message: string, operationId: string, style = 'SECONDARY') => ({ id, label, message, style, interactionType: 'MUTATE_RECORD', operationId });
+  const save = action('radar-save', 'Save', 'Save this monitored event.', 'HOME_EVENT_RADAR_STATE');
+  const unsave = action('radar-unsave', 'Remove from saved', 'Remove this monitored event from saved.', 'HOME_EVENT_RADAR_STATE');
+  const dismiss = action('radar-dismiss', 'Dismiss', 'Dismiss this monitored event.', 'HOME_EVENT_RADAR_STATE');
+  const done = action('radar-mark-done', 'Mark done', 'Mark this monitored event done.', 'HOME_EVENT_RADAR_MARK_DONE', 'PRIMARY');
+  const href = `/dashboard/properties/${propertyId}/tools/home-event-radar`;
+  return {
+    schemaVersion: '1.0', executionId: 'execution-home-event-radar-deck', sessionId: 'ask-acceptance-session',
+    question: 'What is on my home radar right now?', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'HOME_EVENT_RADAR_FEED', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: null,
+    blocks: [{
+      type: 'SUMMARY', id: 'home-event-radar-summary', title: 'Monitored home events', body: '2 monitored events from Home Event Radar.', tone: 'DEFAULT', actions: [],
+    }, {
+      type: 'GROUPED_LIST', id: 'home-event-radar-feed', title: 'Home Event Radar feed', filters: radarFilterChips(false),
+      presentation: { pattern: 'DECK', swipeRightActionId: 'radar-save', swipeLeftActionId: 'radar-dismiss' },
+      description: 'This is the same canonical feed the Home Event Radar page reads, grouped by source. Dismissed events are hidden.',
+      sections: [{ id: 'radar-weather', title: 'Weather', count: 2, items: [
+        { id: 'match-property-summary', title: 'severe thunderstorm warning', entityType: 'RADAR_MATCH', description: 'A severe thunderstorm warning is in effect for this area.', meta: ['high', 'National Weather Service'], status: 'new', href, actions: [save, dismiss, done] },
+        { id: 'match-heat', title: 'excessive heat watch', entityType: 'RADAR_MATCH', description: 'Dangerous heat is expected later this week.', meta: ['medium', 'National Weather Service'], status: 'saved', href, actions: [unsave, dismiss, done] },
+      ] }],
+      actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href, style: 'SECONDARY' }],
+    }],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false },
+    suggestions: [], createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: INVENTORY_LOOKUP's own disambiguation shape (askOrchestrator.service.ts's
 // 'inventory-entity-selection' block) when a free-text question matches more than one item. Routed through the
 // same InventoryResultList as 'inventory-results' (IW-PRIN-002) -- selecting an ambiguous match opens inline
@@ -2080,6 +2112,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/what do i need for closing day/i.test(body.message)) {
       const response = buyerClosingDayRingExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/what is on my home radar right now/i.test(body.message)) {
+      const response = homeEventRadarDeckExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

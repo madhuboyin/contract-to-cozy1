@@ -8,6 +8,8 @@ import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
 import type { RadarCanonicalDetail } from '@/types';
+import { CardDeckView } from './patterns/CardDeckView';
+import { DetailSheetFrame } from './patterns/PatternParts';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -217,7 +219,12 @@ function RadarEventDetail({ matchId, expectedPropertyId, fallbackItem, disabled,
 // FRD v1.40 added filter chips and the per-user writes (item actions shown in
 // the detail); FRD v1.41 added task create-or-link (per recommended action) and
 // notification settings (a feed-level START_WORKFLOW action, rendered below).
-export function RadarEventResultList({ block, propertyId, disabled, onFilter, onAction, onAccessLost, link }: {
+// IW-PRES-015 (FRD v1.92): the feed as a card deck. Each card declares the actions the event's recorded state allows;
+// Save and Dismiss are direct, per-user and reversible, so each is sent at once (no batch). Details opens the same live
+// canonical event in a drawer or bottom sheet, with the same actions.
+export type RadarFeedDeck = { swipeRightActionId: string | null; swipeLeftActionId: string | null };
+
+export function RadarEventResultList({ block, propertyId, disabled, onFilter, onAction, onAccessLost, link, deck = null, onChooseLayout }: {
   block: Block;
   propertyId?: string;
   disabled?: boolean;
@@ -225,6 +232,8 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
   onAction?: OnAction;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
+  deck?: RadarFeedDeck | null;
+  onChooseLayout?: (layout: 'LIST' | 'DECK') => void;
 }) {
   const controls = useContext(ResultViewContext);
   const [localDetailMatchId, setLocalDetailMatchId] = useState<string | null>(null);
@@ -241,15 +250,38 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-radar-event-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-    <div className="border-b border-slate-100 p-4">
+  const layoutSwitch = onChooseLayout && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+    {(['DECK', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={(deck ? 'DECK' : 'LIST') === option} onClick={() => onChooseLayout(option)}
+      className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', (deck ? 'DECK' : 'LIST') === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'DECK' ? 'One at a time' : 'List'}</button>)}
+  </div>;
+  const header = <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {layoutSwitch}
       {onFilter && block.filters.length > 0 && <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter monitored events">
         {block.filters.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active}
           onClick={() => onFilter(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
       </div>}
-    </div>
+    </div>;
+  const footer = <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : <ActionLink key={action.id} action={action} />)}</div>;
+
+  if (deck && onAction) {
+    // A decision sent from the sheet closes it, so its result is seen at the end of the conversation.
+    const sheetAction: OnAction = (...args) => { onAction(...args); closeDetail(); };
+    return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-display-pattern="deck">
+      {header}
+      <CardDeckView items={block.sections.flatMap((section) => section.items)} swipeRightActionId={deck.swipeRightActionId} swipeLeftActionId={deck.swipeLeftActionId}
+        onItemAction={(entityType, entityId, message, operationId, interactionType) => onAction(entityType, entityId, message, operationId, interactionType)}
+        disabled={Boolean(disabled)} onOpenDetail={openDetail} />
+      <DetailSheetFrame open={Boolean(detailMatchId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Event detail: ${detailItem.title}` : 'Event detail'}>
+        {detailMatchId && detailItem && <RadarEventDetail key={detailMatchId} matchId={detailMatchId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={sheetAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
+      </DetailSheetFrame>
+      {footer}
+    </section>;
+  }
+
+  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    {header}
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>
       {section.items.length === 0 && <p className="mt-2 text-sm text-slate-500">No monitored events in this group.</p>}
@@ -269,6 +301,6 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more monitored events are available through the full Home Event Radar feed.</p>}
     </div>)}
     {detailMatchId && detailItem && <RadarEventDetail key={detailMatchId} matchId={detailMatchId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
+    {footer}
   </section>;
 }
