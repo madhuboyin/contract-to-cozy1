@@ -3,10 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const orchestratorSource = fs.readFileSync(
-  path.join(__dirname, '../../src/services/ask/askOrchestrator.service.ts'),
-  'utf8',
-);
+const { readAskOrchestratorSources } = require('../helpers/askOrchestratorSources.js');
+
+const orchestratorSource = readAskOrchestratorSources();
 
 function functionBody(name) {
   const start = orchestratorSource.indexOf(`function ${name}(`);

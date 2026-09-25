@@ -4,14 +4,14 @@ import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.se
 import { AskExecution, AskExecutionStatus, HouseholdRole, MaintenanceTaskPriority, Prisma, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { z } from 'zod';
 import { isMeaningfulMaintenanceTaskTitle } from './askMaintenanceTaskInput';
-import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResolution, type AskOperationResult } from './askOperationRegistry';
 import { prisma } from '../../lib/prisma';
-import { askAnswerTrustTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal } from '../../lib/metrics';
+import { askAnswerTrustTotal, askResultSynthesisTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillPresentationDurationSeconds } from '../../lib/metrics';
 import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
-import { PROPERTY_JOURNEY_CONTEXT_PROVIDER, type PropertyJourneyContext } from '../skills/context/propertyJourneyContext.contract';
+import { operatingModeForOwnershipState, PROPERTY_JOURNEY_CONTEXT_PROVIDER, type PropertyJourneyContext } from '../skills/context/propertyJourneyContext.contract';
 import type { ComposedSkillContext } from '../skills/context/skillContext.contract';
-import { type AskAudienceApplicabilityDecision } from './askAudiencePolicy';
-import { getSkillForOperation } from '../skills/skillRegistry';
+import { isAskOperationDiscoverableForAudience, type AskAudienceApplicabilityDecision } from './askAudiencePolicy';
+import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../skills/skillRegistry';
 import { validateSkillExecutionBinding } from '../skills/skillExecutionBinding';
 import { type SkillExecutionTimingTrace } from '../skills/skillExecutionTelemetry';
 import { getSkillLineageMetadata } from '../skills/skillLineageRegistry';
@@ -29,12 +29,16 @@ import { type CorrectionFieldSpec, type CorrectionOption } from './askCorrection
 import { buildCapabilityCatalog, canonicalCapabilityRegistry, matchCapabilityGoal, type CapabilityCatalogItem } from '../../productFramework/capabilities';
 import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../toolDiscoveryAvailability.service';
 import { getCapabilityDiscoveryReadiness, getRelatedCapabilities } from '../capabilityRelated.service';
-import { registerCapabilityHandler } from './capabilityHandlerRegistry';
+import { registerCapabilityHandler, skillRuntimeUnavailableReason } from './capabilityHandlerRegistry';
 import { capabilityCardLaunch } from './askCapabilityCardLaunch';
 import { PROPERTY_AREA_CAPTURE_SCOPES, type PropertyAreaCaptureScope } from '../../modules/propertyContext/catalog/featureRequirementRegistry';
 import { PROPERTY_FACT_CATALOG } from '../../modules/propertyContext/catalog/factCatalog';
 import { getContextCompleteness } from '../../modules/propertyContext/application/getContextCompleteness';
 import { getPropertyContext } from '../../modules/propertyContext/application/getPropertyContext';
+import { readAskOperationalControls } from '../../config/askOperationalControls';
+import { ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED, ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED_MESSAGE, assertAskAccountRoleEligible, type AskAccountRole } from './askAccountEligibility';
+import { enterAskExecutionContext } from './askExecutionContext';
+import { synthesizeAskResult } from './askResultSynthesis.service';
 
 export const isAreaCaptureScope = (value: unknown): value is PropertyAreaCaptureScope => (PROPERTY_AREA_CAPTURE_SCOPES as readonly string[]).includes(String(value));
 
@@ -1113,3 +1117,137 @@ export const HOME_CHANGE_SUMMARY_WINDOW_DAYS = 30;
 // broader entityRef-on-Radar-producers gap (Phase 0 §4.6, tracked
 // separately into Phase 7) ever coming into play.
 export type RadarEnvelopeQuerySuppliedInput = { radarMatchId?: string | null; radarEventId?: string | null };
+
+export async function ensureAskServiceAccountEligibility(userId: string, knownRole?: AskAccountRole): Promise<void> {
+  if (!readAskOperationalControls().accountRoleEligibilityEnabled) {
+    const error = new Error(ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED_MESSAGE);
+    (error as Error & { code?: string }).code = ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
+    throw error;
+  }
+  const role = knownRole ?? (await prisma.user.findUnique({ where: { id: userId }, select: { role: true } }))?.role;
+  assertAskAccountRoleEligible(role);
+}
+
+export async function discoverableAskOperationIds(input: {
+  propertyId?: string | null;
+  propertyAccess?: PropertyAccess | null;
+  controls: ReturnType<typeof readAskOperationalControls>;
+}): Promise<AskOperationId[]> {
+  const operatingMode = input.propertyId && input.propertyAccess && input.controls.audienceDiscoveryEnabled
+    ? operatingModeForOwnershipState((await prisma.propertyOnboarding.findUnique({
+      where: { propertyId: input.propertyId }, select: { ownershipState: true },
+    }))?.ownershipState)
+    : 'UNKNOWN';
+  const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
+  return Object.values(ASK_OPERATION_DEFINITIONS)
+    .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
+    .filter((definition) => input.controls.operationEnabled(definition.operationId))
+    .filter((definition) => {
+      const skill = getSkillForOperation(definition.operationId);
+      return !skill || (input.controls.skillEnabled(skill.id) && skillRuntimeUnavailableReason(definition.operationId, input.controls) == null);
+    })
+    .filter((definition) => !input.propertyAccess || !definition.propertyRoleFloor
+      || rank[input.propertyAccess.role] >= rank[definition.propertyRoleFloor])
+    .filter((definition) => {
+      if (!input.propertyId || !input.propertyAccess || !input.controls.audienceDiscoveryEnabled) return true;
+      return isAskOperationDiscoverableForAudience({
+        operationId: definition.operationId, operationVersion: definition.version,
+        accountRole: 'HOMEOWNER', householdRole: input.propertyAccess.role, operatingMode,
+      });
+    })
+    .map((definition) => definition.operationId);
+}
+
+// Sets the property timezone that humanDate() implicitly reads for the
+// remainder of this request, instead of always formatting in UTC.
+export async function enterAskPropertyTimezoneContext(propertyId: string | null | undefined): Promise<void> {
+  const property = propertyId ? await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }) : null;
+  enterAskExecutionContext({ propertyTimezone: property?.timezone });
+}
+
+export function allowedResultBlocksForOperation(operationId: AskOperationId): AskPresentationBlock['type'][] {
+  const operation = getAskOperationDefinition(operationId);
+  const skill = getSkillForOperation(operationId);
+  if (!skill) return operation.allowedBlockTypes;
+  return resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK')?.allowedResultBlocks ?? [];
+}
+
+export function assertSkillResultBlocksAllowed(operationId: AskOperationId, result: AskOperationResult, trace?: SkillExecutionTimingTrace): void {
+  const skill = getSkillForOperation(operationId);
+  const startedAt = process.hrtime.bigint();
+  let status: string = result.status;
+  try {
+    const allowedResultBlocks = allowedResultBlocksForOperation(operationId);
+    const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && block.type !== 'ERROR_STATE' && !allowedResultBlocks.includes(block.type));
+    if (disallowedBlock) {
+      status = 'unsupported_block';
+      throw new Error(`Ask adapter returned undeclared block type ${disallowedBlock.type}.`);
+    }
+  } finally {
+    if (trace) trace.presentationLatencyMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    if (skill) {
+      askSkillPresentationDurationSeconds.observe(
+        { skill: skill.id, operation: operationId, status },
+        Number(process.hrtime.bigint() - startedAt) / 1_000_000_000,
+      );
+    }
+  }
+}
+
+export function askFailureStatus(error: unknown): Extract<AskExecutionStatus, 'FAILED_RETRYABLE' | 'FAILED_TERMINAL'> {
+  const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+  if (error instanceof z.ZodError || code === 'ASK_PERMISSION_REQUIRED' || code === 'ASK_PROPERTY_NOT_FOUND'
+    || (error instanceof Error && /undeclared block type|invalid configuration|invariant/i.test(error.message))) return 'FAILED_TERMINAL';
+  return 'FAILED_RETRYABLE';
+}
+
+// A typed ERROR_STATE block for an execution-phase failure, so the caller
+// gets a durably persisted, renderable response instead of a bare thrown
+// error the homeowner-visible conversation has no record of. Without a
+// stored result, mapPersistedExecution falls back to blocks: [] and a
+// later reload (or the failed attempt never being added to the frontend's
+// conversation state at all, since the request itself failed) renders as
+// an empty card with no way to retry.
+export function askFailureBlocks(error: unknown, retryable: boolean): AskPresentationBlock[] {
+  const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+  const { title, body } = code === 'AI_TIMEOUT'
+    ? { title: 'Ask timed out', body: 'Ask timed out while contacting its guidance provider. Record-based operations remain available.' }
+    : code === 'AI_CIRCUIT_OPEN' || code === 'AI_UPSTREAM_ERROR' || code === 'AI_EMPTY_RESPONSE'
+      ? { title: 'Guidance temporarily unavailable', body: 'Generated guidance is temporarily unavailable. Record-based Ask operations remain available.' }
+      : { title: 'Ask could not complete this request', body: 'No changes were made. Your question is preserved below — you can try again.' };
+  return [{ type: 'ERROR_STATE', id: 'execution-failed', title, body, retryable, actions: [] }];
+}
+
+export async function maybeSynthesizeDeterministicResult(operationId: AskOperationResolution['operationId'], result: AskOperationResult, enabled: boolean, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
+  if (!enabled) return result;
+  const startedAt = process.hrtime.bigint();
+  if (trace) trace.modelUsage = 'NARRATIVE_SYNTHESIS';
+  try {
+    const synthesized = await synthesizeAskResult(operationId, result);
+    askResultSynthesisTotal.inc({ outcome: synthesized === result ? 'ineligible' : 'success' });
+    return synthesized;
+  } catch {
+    askResultSynthesisTotal.inc({ outcome: 'failure_fallback' });
+    return result;
+  } finally {
+    if (trace) trace.modelLatencyMs = (trace.modelLatencyMs ?? 0) + Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+  }
+}
+
+export async function withAskTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => {
+          const error = new Error('Ask execution exceeded its operational timeout.');
+          error.name = 'AskExecutionTimeoutError';
+          reject(error);
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
