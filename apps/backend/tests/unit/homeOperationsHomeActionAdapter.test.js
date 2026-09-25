@@ -31,10 +31,10 @@ function actionFixture(overrides = {}) {
   };
 }
 
-test('WORK_ITEM_ELIGIBLE_SOURCE_KINDS is exactly the 6 work-shaped sources', () => {
+test('WORK_ITEM_ELIGIBLE_SOURCE_KINDS is exactly the 7 work-shaped sources (sale-prep tasks are governed work too)', () => {
   assert.deepEqual(
     [...WORK_ITEM_ELIGIBLE_SOURCE_KINDS].sort(),
-    ['COVERAGE', 'GUIDANCE', 'INCIDENT', 'MAINTENANCE', 'PROJECT', 'RECALL'].sort(),
+    ['COVERAGE', 'GUIDANCE', 'INCIDENT', 'MAINTENANCE', 'PROJECT', 'RECALL', 'SALE_PREP'].sort(),
   );
 });
 

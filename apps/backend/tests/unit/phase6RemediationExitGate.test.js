@@ -89,7 +89,8 @@ function invokeRoleFloor(minimumRole, householdRole) {
     status(code) { statusCode = code; return this; },
     json() { return this; },
   };
-  middleware({ householdRole }, res, () => { nextCalled = true; });
+  // The denial path audits the request, so it needs the fields the real router provides.
+  middleware({ householdRole, params: { propertyId: 'property-1' }, path: '/x', method: 'POST' }, res, () => { nextCalled = true; });
   return { statusCode, nextCalled };
 }
 

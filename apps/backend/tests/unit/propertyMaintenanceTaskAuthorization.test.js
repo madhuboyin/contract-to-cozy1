@@ -68,7 +68,7 @@ const prismaMock = {
   propertyMaintenanceTask: {
     findMany: async () => [],
     findUnique: async () => null,
-    create: async (args) => ({ id: 'task-new', ...args.data }),
+    create: async (args) => ({ id: 'task-new', createdAt: new Date(), updatedAt: new Date(), ...args.data }),
   },
 };
 

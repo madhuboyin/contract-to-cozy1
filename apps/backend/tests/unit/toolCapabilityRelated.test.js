@@ -49,7 +49,9 @@ test('explicit manifest relationships lead and preserve reviewed order', () => {
 
   assert.deepEqual(
     result.suggestions.map(({ capabilityId }) => capabilityId),
-    ['negotiation-shield', 'cost-explainer', 'true-cost'],
+    // The cost-explainer and true-cost tools were folded into ownership-costs (July 28 cutover); the manifest order is
+    // negotiation-shield, then ownership-costs, then coverage-intelligence.
+    ['negotiation-shield', 'ownership-costs', 'coverage-intelligence'],
   );
   assert.ok(result.suggestions.every(({ signals }) => signals.explicit));
   assert.ok(result.suggestions.every(({ capabilityId }) =>

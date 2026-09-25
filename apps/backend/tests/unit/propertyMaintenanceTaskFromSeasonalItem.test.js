@@ -27,7 +27,7 @@ function loadService({ seasonalItem, existingCreateShouldFail = false }) {
       create: async (args) => {
         createCalls.push(args);
         if (existingCreateShouldFail) throw new Error('db unavailable');
-        return { id: 'task-1', ...args.data };
+        return { id: 'task-1', createdAt: new Date(), updatedAt: new Date(), ...args.data };
       },
     },
     serviceCategoryConfig: {

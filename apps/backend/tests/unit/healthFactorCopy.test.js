@@ -137,7 +137,7 @@ test('resolveHealthFactorInsightCopy: a stale "Missing Data" appliance snapshot 
   });
   assert.equal(c.impact, 'neutral');
   assert.match(c.summary, /3 appliances/);
-  assert.match(c.explanation, /installation year/i);
+  assert.match(c.explanation, /purchase date/i);
 });
 
 test('healthFactorImpact classifies the score-util statuses', () => {

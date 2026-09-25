@@ -121,6 +121,10 @@ const TOOL_DEFAULTS: Record<string, { label: string; defaultPct: number }> = {
   HOA_COMPLIANCE:            { label: 'HOA Compliance',              defaultPct: 100 },
   INSPECTION_HUB:            { label: 'Inspection Hub',              defaultPct: 100 },
   PROJECT_TRACKER:           { label: 'Project Tracker',             defaultPct: 100 },
+  // Registered as ACTIVE capabilities by Phase 6 (buyer-closing and incident-claim Ask operations) without a rollout
+  // entry, so their rollout status could never resolve and the tool-discovery configuration reported them as missing.
+  BUYER_CLOSING_PLAN:        { label: 'Buyer & Closing Plan',        defaultPct: 100 },
+  CLAIMS:                    { label: 'Claims',                      defaultPct: 100 },
 
 };
 

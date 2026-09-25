@@ -2,7 +2,7 @@
 title: "Home Intelligence Phase 0 — Registry and Ownership Report"
 document_type: "Implementation status report"
 status: "Phase 0 complete"
-date: "2026-08-25"
+date: "2026-09-25"
 generated_from: "scripts/generate-home-intelligence-phase0-report.ts (npm run report:home-intelligence-phase0)"
 ---
 
@@ -16,7 +16,7 @@ Phase 0 ships seven registries under `apps/backend/src/services/intelligence/`, 
 | --- | --- | --- |
 | Home Action producer ownership | `homeActionProducerOwnership.ts` | Yes — 30/30 producers |
 | Home Action adapter ownership (source-kind rollup) | `homeActionAdapterOwnership.ts` | Yes — derived from the producer registry |
-| Capability/skill/guidance bridge | `capabilitySkillGuidanceBridge.registry.ts` | Yes — 36 capabilities bridged; 0 of 25 sourceKinds-claiming capabilities uncovered |
+| Capability/skill/guidance bridge | `capabilitySkillGuidanceBridge.registry.ts` | Yes — 42 capabilities bridged; 0 of 26 sourceKinds-claiming capabilities uncovered |
 | Completion evidence policy | `completionEvidencePolicy.registry.ts` | Yes — 4/4 safety tiers |
 | Intelligence consumer registry | `intelligenceConsumerRegistry.ts` | Populated — 13 entries |
 | Compound rule registry | `compoundRuleRegistry.contract.ts` | Populated — 8 entries |
@@ -85,46 +85,52 @@ Also re-entering the feed independent of the producers above but included in the
 
 ## 3. Capability/skill/guidance bridge
 
-No formal three-way capability↔skill↔guidance link existed before Phase 0. `apps/backend/src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts` is the code-owned bridge, cross-validated at boot against `canonicalCapabilityRegistry`, the Ask operation registry, and the skill registry. It also now enforces completeness against every capability whose `recommendation.sourceKinds` is non-empty (25 of 48 total capabilities) — a capability reachable only via an Ask operation, with no `sourceKinds` claim, has no independent canonical signal to check against and is not covered by that completeness check.
+No formal three-way capability↔skill↔guidance link existed before Phase 0. `apps/backend/src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts` is the code-owned bridge, cross-validated at boot against `canonicalCapabilityRegistry`, the Ask operation registry, and the skill registry. It also now enforces completeness against every capability whose `recommendation.sourceKinds` is non-empty (26 of 48 total capabilities) — a capability reachable only via an Ask operation, with no `sourceKinds` claim, has no independent canonical signal to check against and is not covered by that completeness check.
 
 | Capability | Operations | Skill(s) resolved | Completion owner | Outcome adapter |
 | --- | --- | --- | --- | --- |
-| `break-even` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `break-even` | BREAK_EVEN_ANALYSIS | break-even | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `budget` | MAINTENANCE_BUDGET_FORECAST | budget-planner | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `buyer-closing` | BUYER_PLAN_STATUS, BUYER_DEADLINES, BUYER_DOCUMENT_READINESS, BUYER_INSPECTION_REVIEW, BUYER_TASK_COMPLETE, BUYER_TASK_CREATE, BUYER_TASK_UPDATE, BUYER_MOVE_STATUS, BUYER_FINANCING_READINESS, BUYER_TITLE_ESCROW_READINESS, BUYER_WALKTHROUGH_READINESS, BUYER_DISCLOSURE_FUNDS_READINESS, BUYER_CLOSING_DAY_READINESS, BUYER_CONTRACT_TIMELINE, BUYER_NEGOTIATION_READINESS, BUYER_COST_READINESS, BUYER_FINDING_DISPOSITION, BUYER_LIFECYCLE_UPDATE | buyer-closing | HomeBuyerTaskService and buyer lifecycle services | Operational Work and Decision Thread outcome adapters |
 | `capital-timeline` | CAPITAL_RESERVE_PLAN | capital-planning | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `claims` | INCIDENT_CLAIM_STATUS, CLAIM_FILE, CLAIM_TRANSITION | incident-claim | ClaimsService / claimWorkReconciliation.service.ts | recordClaimOutcome |
 | `coverage-intelligence` | COVERAGE_GAPS | coverage | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `diy` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `diy` | DIY_PROJECTS | diy | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `do-nothing-simulator` | DO_NOTHING_SIMULATION | do-nothing-simulator | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `emergency` | INCIDENT_CONTINUATION | incident-claim | Incident and Claims Records | recordHomeEventOutcome / recordClaimOutcome |
-| `guidance-overview` | GUIDANCE_JOURNEY_CREATE | home-operations | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `hoa-compliance` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts) |
+| `guidance-overview` | GUIDANCE_JOURNEYS_LIST, GUIDANCE_JOURNEY_CREATE | guidance-overview, home-operations | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `hoa-compliance` | HOA_COMPLIANCE_STATUS | hoa-compliance | Not declared — no single Home Action source kind resolves for this capability today | recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts) |
 | `home-briefing` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `home-digital-twin` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `home-digital-will` | _none — Home Action only_ | — | applyPersonalizationHomeActionLifecycle (modules/personalization/application/applyHomeActionLifecycle.usecase.ts) | No verified adapter declared |
-| `home-event-radar` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `home-habit-coach` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `home-digital-twin` | HOME_UPGRADE_SCENARIOS | home-digital-twin | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `home-digital-will` | HOME_DIGITAL_WILL | home-digital-will | applyPersonalizationHomeActionLifecycle (modules/personalization/application/applyHomeActionLifecycle.usecase.ts) | No verified adapter declared |
+| `home-event-radar` | HOME_EVENT_RADAR_FEED | home-event-radar | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `home-habit-coach` | HOME_HABITS | home-habit-coach | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `home-operations` | HOME_ACTIONS, OPERATIONAL_WORK_UPDATE | home-operations | homeActionCompletion.service.ts / domain reconciliation adapters | recordOperationalWorkOutcome |
 | `home-records` | INVENTORY_LOOKUP | property-record | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `home-renovation-risk-advisor` | RENOVATION_PERMIT_READINESS | renovation | Not declared — no single Home Action source kind resolves for this capability today | recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts) |
-| `home-risk-replay` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `home-risk-replay` | PAST_HAZARD_EXPOSURE | home-risk-replay | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `home-timeline` | HOME_TIMELINE_EVENTS | home-timeline | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `inspection-hub` | INSPECTION_FINDINGS, INSPECTION_FINDING_UPDATE | inspection-findings | InspectionHubService / inspectionFinding.adapter.ts | recordOperationalWorkOutcome |
-| `maintenance` | MAINTENANCE_STATUS, MAINTENANCE_TASK_CREATE, MAINTENANCE_TASK_COMPLETE, MAINTENANCE_TASK_UPDATE, HOME_DEADLINE_MONITOR | maintenance | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `material-specs` | DOCUMENT_PROMOTION_REVIEW, DOCUMENT_PROMOTION_CONFIRM | document-promotion | Document promotion adapters | recordDocumentPromotionOutcome |
+| `maintenance` | MAINTENANCE_STATUS, MAINTENANCE_TASK_CREATE, MAINTENANCE_TASK_COMPLETE, MAINTENANCE_TASK_UPDATE, HOME_DEADLINE_MONITOR | maintenance | applyPersonalizationHomeActionLifecycle (modules/personalization/application/applyHomeActionLifecycle.usecase.ts) | No verified adapter declared |
+| `material-specs` | MATERIAL_SPECS_LIST, DOCUMENT_PROMOTION_REVIEW, DOCUMENT_PROMOTION_CONFIRM | material-specs, document-promotion | Document promotion adapters | recordDocumentPromotionOutcome |
 | `mortgage-refinance-radar` | REFINANCE_ANALYSIS, REFINANCE_RATE_MONITOR | refinance | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `neighborhood-change-radar` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `negotiation-shield` | NEGOTIATION_SHIELD_CASES | negotiation-shield | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `neighborhood-change-radar` | NEIGHBORHOOD_CHANGE_FEED | neighborhood-change-radar | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `oracle` | APPLIANCE_FAILURE_RISK | appliance-oracle | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `ownership-costs` | OWNERSHIP_COSTS | ownership-cost | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `permits` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts) |
-| `plant-advisor` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `project-tracker` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts) |
-| `property-brief` | PROPERTY_SUMMARY, MAJOR_EVENT_ENTRY | property-record, seller-preparation | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `plant-advisor` | PLANT_CARE_OUTLOOK | plant-advisor | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `price-finalization` | PRICE_FINALIZATIONS_LIST | price-finalization | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `project-tracker` | PROJECT_TRACKER_PROJECTS | project-tracker | Not declared — no single Home Action source kind resolves for this capability today | recordOperationalWorkOutcome (services/decisionPlatform/outcomeObservationService.ts) |
+| `property-brief` | PROPERTY_BRIEFS_LIST, PROPERTY_SUMMARY, MAJOR_EVENT_ENTRY | property-brief, property-record, seller-preparation | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `property-tax` | PROPERTY_TAX_APPEAL_READINESS | property-tax | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `quote-comparison` | QUOTE_COMPARISON_CREATE, QUOTE_COMPARISON_REVIEW | quote-comparison | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `replace-repair` | REPLACEMENT_GUIDANCE | repair-replace | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `savings-benefits` | SAVINGS_OPPORTUNITIES | savings | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 | `sell-hold-rent` | SELL_HOLD_RENT_ANALYSIS | sell-hold-rent | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `seller-prep` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `service-price-radar` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
-| `status-board` | _none — Home Action only_ | — | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `seller-prep` | SELLER_PREP_CHECKLIST, SELLER_PREP_ITEM_DECISION | seller-prep | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `service-price-radar` | SERVICE_PRICE_CHECKS | service-price-radar | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
+| `status-board` | HOME_STATUS_BOARD | status-board | Not declared — no single Home Action source kind resolves for this capability today | No verified adapter declared |
 
 **Known limitation:** capabilities without Phase 6 metadata derive completion and outcome ownership only when their canonical recommendation contract resolves to one Home Action source kind. A capability with multiple or empty `sourceKinds` still requires an explicit capability-level mapping; the table says “No verified adapter declared” instead of inventing one.
 

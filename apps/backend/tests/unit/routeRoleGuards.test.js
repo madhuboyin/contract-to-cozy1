@@ -56,17 +56,8 @@ function getRouteRoleGuards(route) {
 test('provider management routes require PROVIDER or ADMIN role', () => {
   installAuthMiddlewareStub();
   installControllerStub('../../src/controllers/provider.controller.ts', {
-    ProviderController: {
-      getMyServices: () => {},
-      createService: () => {},
-      updateService: () => {},
-      deleteService: () => {},
-      searchProviders: () => {},
-      getProviderById: () => {},
-      getProviderServices: () => {},
-      getProviderReviews: () => {},
-      getVerificationSummary: () => {},
-    },
+    // Every handler is a no-op: these tests read the route table, not the controller, so new handlers must not need a stub.
+    ProviderController: new Proxy({}, { get: () => () => {} }),
   });
 
   const router = loadRouter('../../src/routes/provider.routes.ts');
@@ -114,18 +105,8 @@ test('favorites routes require HOMEOWNER role', () => {
 
 test('booking action routes have explicit role guards', () => {
   installAuthMiddlewareStub();
-  installControllerStub('../../src/controllers/booking.controller.ts', {
-    BookingController: {
-      createBooking: () => {},
-      listBookings: () => {},
-      getBookingById: () => {},
-      updateBooking: () => {},
-      confirmBooking: () => {},
-      startBooking: () => {},
-      completeBooking: () => {},
-      cancelBooking: () => {},
-    },
-  });
+  // Every handler is a no-op: the test reads the route table, so new handlers need no stub.
+  installControllerStub('../../src/controllers/booking.controller.ts', { BookingController: new Proxy({}, { get: () => () => {} }) });
 
   const router = loadRouter('../../src/routes/booking.routes.ts');
   const homeownerCreate = getRoute(router, '/', 'post');
