@@ -18,6 +18,9 @@ import { hasResponseContext, ResponseContextContent } from './EvidenceContextPan
 import { AskActionReturnContext, AskContextLink } from './blocks/context';
 import { BlockView } from './blocks/registry';
 import { useConversationView } from '@/features/ask/useConversationView';
+import { useResponseContextPanel } from './workspace/useResponseContextPanel';
+import { useComposerKeys } from './workspace/useComposerKeys';
+import { useSessionLifecycle } from './workspace/useSessionLifecycle';
 import { useResultRefresh } from './workspace/useResultRefresh';
 import { useAskRequest } from './workspace/useAskRequest';
 import { useSessionHistoryActions } from './workspace/useSessionHistoryActions';
@@ -72,11 +75,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const accessLostRef = useRef<(propertyId: string) => void>(() => {});
   const { recentSessions, setRecentSessions, recentSessionsLoading, setRecentSessionsLoading, recentSessionsLoadingMore, setRecentSessionsLoadingMore, recentSessionsNextCursor, setRecentSessionsNextCursor, recentSessionsIssue, setRecentSessionsIssue, historySearchInput, setHistorySearchInput, historySearchTerm, setHistorySearchTerm, searchSessions, setSearchSessions, searchNextCursor, setSearchNextCursor, searchLoading, setSearchLoading, searchLoadingMore, setSearchLoadingMore, searchIssue, setSearchIssue, historyView, setHistoryView, pinnedSessions, setPinnedSessions, historyPropertyRef, historyRequestEpochRef, searchRequestEpochRef, searchScopeRef, loadMoreRecentSessions, loadMoreSearchSessions } = useConversationHistory({ selectedPropertyId, effectiveHistoryScope, propertyMismatch, availabilityEpoch, recentSessionsEpoch, setServiceUnavailable, onAccessLostRef: accessLostRef });
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
-  const [contextExecutionId, setContextExecutionId] = useState<string | null>(null);
-  const contextHeadingRef = useRef<HTMLHeadingElement>(null);
-  const contextReturnFocusRef = useRef<HTMLButtonElement | null>(null);
-  const contextPanelWideViewport = useMediaQuery('(min-width: 1280px)');
-  const wideContextPanel = mode === 'page' && contextPanelWideViewport;
+  const { contextExecutionId, contextHeadingRef, contextExecution, contextContentAvailable, wideContextPanel, closeResponseContext, openResponseContext } = useResponseContextPanel({ mode, sessionId, selectedPropertyId, executions });
   // Marks the execution whose pending card should receive focus: set right
   // after a turn this session actually produced (a new question answered,
   // or an existing execution advancing after a capture/clarification/
@@ -99,7 +98,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const activeSessionRef = useRef('');
   const { refreshIssues, setRefreshIssues, refreshRequests, setRefreshRequests, redactAccessLostResult, refreshResult, updateExecution } = useResultRefresh({ executions, activeSessionRef, requests, deniedProperties, setExecutions, setPendingWork, setJustUpdatedExecutionId });
   const activeSessionPropertyRef = useRef<string | undefined>(undefined);
-  const appliedInitialQuestionRef = useRef('');
+  const { clearHistory, startNewSession } = useSessionLifecycle({ mode, sessionId, executions, selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch, availabilityEpoch, historyLoading, loading, requests, deniedProperties, activeSessionRef, activeSessionPropertyRef, textareaRef, refreshResult, setSessionId, setInput, setExecutions, setRefreshIssues, setRefreshRequests, setHistoryLoading, setError, setLoading, setConfirmClear, setJustUpdatedExecutionId, setServiceUnavailable, setRecentSessionsEpoch, setHistoryDrawerOpen });
   const redactHistoryAccessLoss = useCallback((propertyId: string) => {
     setRecentSessions([]);
     setPinnedSessions([]);
@@ -133,150 +132,21 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     || concierge.failureCode === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
   const safeBackTo = resolveDashboardBackHref(initialBackTo, '');
-  const contextExecution = contextExecutionId ? executions.find((execution) => execution.executionId === contextExecutionId) ?? null : null;
-  const contextContentAvailable = Boolean(contextExecution && hasResponseContext(contextExecution));
 
-  const closeResponseContext = () => {
-    const contextSessionId = contextExecution?.sessionId ?? sessionId;
-    if (contextSessionId) window.sessionStorage.removeItem(contextPanelStorageKey(contextSessionId, contextExecution?.property?.id ?? selectedPropertyId));
-    setContextExecutionId(null);
-    if (window.history.state?.askResponseContext?.sessionId === contextSessionId
-      && window.history.state.askResponseContext.executionId === contextExecution?.executionId) window.history.back();
-    const returnTarget = contextReturnFocusRef.current
-      ?? document.querySelector<HTMLButtonElement>('button[aria-controls="ask-response-context"][aria-expanded="true"]');
-    contextReturnFocusRef.current = null;
-    window.requestAnimationFrame(() => returnTarget?.isConnected && returnTarget.focus({ preventScroll: true }));
-  };
-  const openResponseContext = (execution: AskExecutionResponse, trigger: HTMLButtonElement) => {
-    contextReturnFocusRef.current = trigger;
-    const target = { sessionId: execution.sessionId, propertyId: execution.property?.id ?? null, executionId: execution.executionId };
-    if (window.history.state?.askResponseContext?.executionId !== execution.executionId) {
-      window.history.pushState({ ...window.history.state, askResponseContext: target }, '', window.location.href);
-    }
-    setContextExecutionId(execution.executionId);
-    window.sessionStorage.setItem(contextPanelStorageKey(execution.sessionId, execution.property?.id), execution.executionId);
-  };
 
-  useEffect(() => {
-    const restoreContextLevel = (event: PopStateEvent) => {
-      const target = event.state?.askResponseContext;
-      if (target?.sessionId === sessionId && target.propertyId === (selectedPropertyId ?? null)
-        && executions.some((execution) => execution.executionId === target.executionId && hasResponseContext(execution))) {
-        setContextExecutionId(target.executionId);
-        window.sessionStorage.setItem(contextPanelStorageKey(sessionId, selectedPropertyId), target.executionId);
-      } else {
-        setContextExecutionId(null);
-        if (sessionId) window.sessionStorage.removeItem(contextPanelStorageKey(sessionId, selectedPropertyId));
-        if (new URL(window.location.href).searchParams.get('sessionId') === sessionId) {
-          const trigger = contextReturnFocusRef.current;
-          contextReturnFocusRef.current = null;
-          window.requestAnimationFrame(() => trigger?.isConnected && trigger.focus({ preventScroll: true }));
-        }
-      }
-    };
-    window.addEventListener('popstate', restoreContextLevel);
-    return () => window.removeEventListener('popstate', restoreContextLevel);
-  }, [executions, selectedPropertyId, sessionId]);
 
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
 
-  useEffect(() => {
-    if (contextExecutionId && !contextContentAvailable) setContextExecutionId(null);
-  }, [contextContentAvailable, contextExecutionId]);
-
-  useEffect(() => {
-    if (contextExecution && contextContentAvailable) contextHeadingRef.current?.focus({ preventScroll: true });
-  }, [contextExecution, contextContentAvailable, wideContextPanel]);
-
-  useEffect(() => {
-    if (!sessionId || executions.length === 0 || contextExecutionId) return;
-    const storedExecutionId = window.sessionStorage.getItem(contextPanelStorageKey(sessionId, selectedPropertyId));
-    if (storedExecutionId && executions.some((execution) => execution.executionId === storedExecutionId && hasResponseContext(execution))) {
-      setContextExecutionId(storedExecutionId);
-    }
-  }, [contextExecutionId, executions, selectedPropertyId, sessionId]);
-
-  useEffect(() => {
-    activeSessionRef.current = sessionId;
-    if (sessionId && activeSessionPropertyRef.current === selectedPropertyId) {
-      window.sessionStorage.setItem(`ctc:ask-active-session:${selectedPropertyId ?? 'general'}`, sessionId);
-    }
-  }, [sessionId, selectedPropertyId]);
 
 
-  useEffect(() => {
-    if (propertyMismatch) return;
-    const controller = new AbortController();
-    const explicitSession = initialSessionId.trim() || window.sessionStorage.getItem(`ctc:ask-active-session:${selectedPropertyId ?? 'general'}`) || '';
-    const continuingActiveSession = !explicitSession
-      && Boolean(activeSessionRef.current)
-      && activeSessionPropertyRef.current === selectedPropertyId;
-    const nextSession = explicitSession || (continuingActiveSession ? activeSessionRef.current : '') || newId();
-    activeSessionRef.current = nextSession;
-    activeSessionPropertyRef.current = selectedPropertyId;
-    setSessionId(nextSession);
-    setInput(initialQuestion || window.localStorage.getItem(draftStorageKey(selectedPropertyId, nextSession)) || '');
-    setExecutions([]);
-    setRefreshIssues({});
-    requests.current.clear();
-    setRefreshRequests({});
-    deniedProperties.current.clear();
-    setHistoryLoading(Boolean(explicitSession || continuingActiveSession));
-    if (!explicitSession && !continuingActiveSession) {
-      setHistoryLoading(false);
-      return () => controller.abort();
-    }
-    api.getAskSession(nextSession, { signal: controller.signal })
-      .then((response) => {
-        if (controller.signal.aborted || activeSessionRef.current !== nextSession || deniedProperties.current.has(`${nextSession}:${selectedPropertyId}`)) return;
-        const loaded = 'data' in response ? response.data?.executions ?? [] : [];
-        clearResultViews(window.sessionStorage, nextSession, new Set(loaded.map((item) => resultViewKey(nextSession, item.property?.id ?? 'general', item.viewState?.resultId ?? item.executionId))));
-        setExecutions(loaded);
-        const returnId = initialExecutionId || window.sessionStorage.getItem(`ctc:ask-return-execution:${nextSession}`);
-        if (returnId && loaded.some((execution) => execution.executionId === returnId)) {
-          window.setTimeout(() => {
-            if (!controller.signal.aborted && activeSessionRef.current === nextSession) restoreResultPosition(loaded.find((item) => item.executionId === returnId)!);
-          }, 50);
-          const target = loaded.find((item) => item.executionId === returnId)!;
-          void refreshResult(target);
 
-        }
-      })
-      .catch((caught) => {
-        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
-          if (controller.signal.aborted || activeSessionRef.current !== nextSession) return;
-          setExecutions([]);
-          if (['ASK_SESSION_NOT_FOUND', 'ASK_PERMISSION_REQUIRED', 'ASK_PROPERTY_NOT_FOUND'].includes(askFailureCode(caught) ?? '')) {
-            clearResultViews(window.sessionStorage, nextSession);
-            window.sessionStorage.removeItem(`ctc:ask-active-session:${selectedPropertyId ?? 'general'}`);
-          }
-          if (askServiceIsPaused(caught)) setServiceUnavailable(true);
-        }
-      })
-      .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
-    return () => controller.abort();
-  // Deliberately excludes executions/sessionId: this effect owns session
-  // initialization and should run only when navigation scope changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch, availabilityEpoch]);
 
-  useEffect(() => {
-    if (!initialQuestion || !sessionId || appliedInitialQuestionRef.current === initialQuestion) return;
-    appliedInitialQuestionRef.current = initialQuestion;
-    setInput(initialQuestion);
-    window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), initialQuestion);
-  }, [initialQuestion, selectedPropertyId, sessionId]);
+
+
 
   useEffect(() => {
     if (loading) endRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
   }, [loading]);
-  useEffect(() => {
-    if (mode !== 'page' || historyLoading || !sessionId || executions.length === 0) return;
-    const latest = executions.at(-1)!;
-    const url = new URL(window.location.href);
-    if (url.searchParams.get('sessionId') === sessionId && url.searchParams.get('executionId') === latest.executionId) return;
-    updateAskLocation({ sessionId, propertyId: latest.property?.id ?? selectedPropertyId, executionId: latest.executionId }, 'replace');
-  }, [executions, historyLoading, mode, selectedPropertyId, sessionId]);
   useEffect(() => {
     if (!justUpdatedExecutionId || loading) return;
     const timeout = window.setTimeout(() => {
@@ -290,104 +160,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const { ask, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
 
-  const submit = (event: FormEvent) => { event.preventDefault(); void ask(input); };
-  // Relying only on event.nativeEvent.isComposing is unreliable across
-  // browsers (Safari in particular can report it as already false by the
-  // time the confirming Enter keydown fires), so composition state is
-  // also tracked explicitly via onCompositionStart/End. Without this,
-  // pressing Enter to commit an IME candidate (CJK and other composed
-  // input) sent the half-typed question instead of just committing it.
-  const isComposingRef = useRef(false);
-  const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !isComposingRef.current && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      void ask(input);
-    }
-  };
+  const { submit, keyDown, isComposingRef } = useComposerKeys({ input, ask });
 
-  const clearHistory = async () => {
-    if (!sessionId || loading) return;
-    setLoading(true); setError(null);
-    try {
-      const response = await api.deleteAskSession(sessionId);
-      if (!response.success) throw new Error(response.message || 'Could not clear Ask history.');
-      clearResultViews(window.sessionStorage, sessionId);
-      window.localStorage.removeItem(draftStorageKey(selectedPropertyId, sessionId));
-      const nextSession = newId();
-      activeSessionRef.current = nextSession;
-      activeSessionPropertyRef.current = selectedPropertyId;
-      setSessionId(nextSession); setExecutions([]); setConfirmClear(false);
-      setRecentSessionsEpoch((current) => current + 1);
-      if (mode === 'page') updateAskLocation({ propertyId: selectedPropertyId }, 'replace');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not clear Ask history.');
-    } finally { setLoading(false); }
-  };
 
   const { openingRecentSessionId, sessionActionId, sessionActionIssue, setSessionActionIssue, changeHistorySession, deleteHistorySession, openRecentSession } = useSessionHistoryActions({ selectedPropertyId, mode, loading, activeSessionRef, activeSessionPropertyRef, setRecentSessions, setPinnedSessions, setSearchSessions, setRecentSessionsEpoch, setServiceUnavailable, setSessionId, setExecutions, setConfirmClear, setJustUpdatedExecutionId, setError, setHistoryLoading, setInput, setHistoryDrawerOpen });
 
-  const startNewSession = () => {
-    if (loading) return;
-    const nextSession = newId();
-    activeSessionRef.current = nextSession;
-    activeSessionPropertyRef.current = selectedPropertyId;
-    setSessionId(nextSession);
-    setExecutions([]);
-    setConfirmClear(false);
-    setJustUpdatedExecutionId(null);
-    setInput('');
-    setRecentSessionsEpoch((current) => current + 1);
-    setHistoryDrawerOpen(false);
-    if (mode === 'page') updateAskLocation({ propertyId: selectedPropertyId }, 'push');
-    window.setTimeout(() => textareaRef.current?.focus(), 50);
-  };
 
-  useEffect(() => {
-    if (mode !== 'page') return;
-    const restoreFromBrowserHistory = () => {
-      const url = new URL(window.location.href);
-      const targetSessionId = url.searchParams.get('sessionId')?.trim() ?? '';
-      const targetPropertyId = url.searchParams.get('propertyId')?.trim() ?? '';
-      if (targetSessionId === activeSessionRef.current) return;
-      if (targetPropertyId && targetPropertyId !== selectedPropertyId) {
-        // Let the server-authored page props and PropertyProvider establish a
-        // different property's session atomically instead of briefly showing
-        // it under the current home's label.
-        window.location.reload();
-        return;
-      }
-      if (!targetSessionId) {
-        const nextSession = newId();
-        activeSessionRef.current = nextSession;
-        activeSessionPropertyRef.current = selectedPropertyId;
-        setSessionId(nextSession);
-        setExecutions([]);
-        setJustUpdatedExecutionId(null);
-        setInput(window.localStorage.getItem(draftStorageKey(selectedPropertyId, nextSession)) || '');
-        setHistoryLoading(false);
-        return;
-      }
-      setHistoryLoading(true);
-      setError(null);
-      api.getAskSession(targetSessionId)
-        .then((response) => {
-          if (!response.success || !response.data) throw new Error(response.message || 'Could not restore that Ask Cozy conversation.');
-          activeSessionRef.current = targetSessionId;
-          activeSessionPropertyRef.current = selectedPropertyId;
-          setSessionId(targetSessionId);
-          setExecutions(response.data.executions);
-          setInput(window.localStorage.getItem(draftStorageKey(selectedPropertyId, targetSessionId)) || '');
-          setJustUpdatedExecutionId(null);
-        })
-        .catch((caught) => {
-          if (askServiceIsPaused(caught)) setServiceUnavailable(true);
-          else setError(caught instanceof Error ? caught.message : 'Could not restore that Ask Cozy conversation.');
-        })
-        .finally(() => setHistoryLoading(false));
-    };
-    window.addEventListener('popstate', restoreFromBrowserHistory);
-    return () => window.removeEventListener('popstate', restoreFromBrowserHistory);
-  }, [mode, selectedPropertyId]);
 
   const resumePendingWork = async (item: AskPendingWorkItem) => {
     if (continuingId || loading) return;
