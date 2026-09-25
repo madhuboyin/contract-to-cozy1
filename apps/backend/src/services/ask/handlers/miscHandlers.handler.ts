@@ -18,7 +18,7 @@ import { queryIntelligenceEnvelope } from '../../intelligenceEnvelope';
 import { ReplaceRepairService } from '../../replaceRepairAnalysis.service';
 import { humanDate, money } from '../askFormatting';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HOME_CHANGE_SUMMARY_WINDOW_DAYS, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, MaintenanceCompletionWorkflowInput, RadarEnvelopeQuerySuppliedInput } from '../askHandlerSupport';
-import { EVENT_ADD_MESSAGE, eventAddResult, WARRANTY_ADD_MESSAGE, warrantyAddResult } from '../handlers/homeRecordWrites.handler';
+import { EVENT_ADD_MESSAGE, eventAddResult, evidenceAttachResult, WARRANTY_ADD_MESSAGE, warrantyAddResult } from '../handlers/homeRecordWrites.handler';
 import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
@@ -757,4 +757,32 @@ registerCapabilityHandler('capture.warranty.confirm', async (envelope) => {
   return declaredAddAction
     ? warrantyAddResult(envelope.userId, envelope.propertyId!, envelope.launchContext?.sourceExecutionId ?? null)
     : captureNotDirectlyRoutableResult('warranty');
+});
+
+// Phase 3 evidence-upload add slice (design approved 2026-09-22): a homeowner-initiated evidence attach, reached
+// only from the declared "Attach evidence" control on a HomeEvent's inline detail. Unlike CAPTURE_EVIDENCE_CONFIRM's
+// extraction path below (confirmCaptureEvidence's non-USER_ADD branch, which requires a freshly-confirmed sibling
+// EVENT execution because extraction proposes an EVENT and its EVIDENCE together), this attaches to an EXISTING,
+// already-confirmed event the homeowner chose from the timeline, so eventId is known up front and re-verified
+// directly rather than resolved through a linked execution. The file itself was already uploaded out of band, via
+// POST /api/documents/property/:propertyId/evidence-upload, by the time this runs -- documentId is all this needs.
+// One-shot, like HOME_EVENT_VISIBILITY: propose builds the confirmation card directly, no separate form step,
+// since the "form" (picking and uploading a file) already happened client-side before this call.
+export const EVIDENCE_ATTACH_MESSAGE = 'Attach evidence to this home timeline entry.';
+
+// A document is attached as evidence to an EXISTING event only from the declared "Attach evidence" control (see
+// evidenceAttachResult above), which requires the file to already be uploaded (documentId) and the exact target
+// event pinned (entityId) -- never resolved by fuzzy message matching. Every other call (an ASK_REFRESH re-run,
+// which never carries operationId; a bare message naming the operation) keeps the original not-directly-routable
+// boundary, same guard shape as the warranty/event add actions above.
+registerCapabilityHandler('capture.evidence.confirm', async (envelope) => {
+  const declaredAttachAction = envelope.launchContext?.operationId === 'CAPTURE_EVIDENCE_CONFIRM'
+    && envelope.launchContext.surface !== 'ASK_REFRESH'
+    && envelope.message === EVIDENCE_ATTACH_MESSAGE
+    && envelope.launchContext.entityType === 'HOME_EVENT'
+    && typeof envelope.launchContext.entityId === 'string'
+    && typeof envelope.launchContext.documentId === 'string';
+  return declaredAttachAction
+    ? evidenceAttachResult(envelope.userId, envelope.propertyId!, envelope.launchContext!.entityId as string, envelope.launchContext!.documentId as string, envelope.launchContext?.sourceExecutionId ?? null)
+    : captureNotDirectlyRoutableResult('evidence');
 });

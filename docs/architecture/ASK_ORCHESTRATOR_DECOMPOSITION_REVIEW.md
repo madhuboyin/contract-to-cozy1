@@ -1,6 +1,6 @@
 # Ask orchestrator decomposition: review, pilot and plan
 
-**Date:** September 25, 2026
+**Date:** September 25, 2026 (updated the same day: the plan was carried out; see section 10)
 **Subject:** `apps/backend/src/services/ask/askOrchestrator.service.ts`
 **Governing docs:** `ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md` §12 (the decomposition decision), `ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md` (finding 1, "single-file orchestrator"), `AUDIT_METHODOLOGY.md` (applied below).
 
@@ -117,3 +117,28 @@ Options, in order of preference:
 Proceed with phase 1 in slices. It is where most of the reduction is, it carries the least risk (self-contained read handlers), and it is also where new operations keep landing. After phase 1, the file drops by about a fifth; phases 2 to 4 bring it to the target.
 
 This review did not run the full `test:chunked` against a clean checkout, did not measure how long the type check takes before and after, and did not move any handler whose source a test reads.
+
+## 10. Result (Executed, September 25, 2026)
+
+The phases in section 6 were carried out in ten slices, each gated on `npm run typecheck` and the chunked Ask suite (1,210 tests, 1,209 pass, 1 skipped, unchanged after every slice).
+
+| Measure | Before | After |
+|---|---|---|
+| `askOrchestrator.service.ts` | 20,639 lines | about 100 lines: imports and re-exports only |
+| Handler files (`handlers/*.handler.ts`) | 0 | 44, about 16,100 lines |
+| Lifecycle files (`execution/*.ts`) | 0 | 8, about 4,100 lines |
+| Shared support (`askHandlerSupport.ts`, `askFormatting.ts`) | 0 | about 1,300 lines |
+| Names exported by the orchestrator | 142 | 142 (checked by loading the module against the list taken from the commit before the pilot) |
+| Test files that read the source text | 40, reading one file | 41, reading `tests/helpers/askOrchestratorSources.js` (orchestrator, support, handlers, execution) |
+
+How it was done: a script moved named top-level declarations unchanged, with a closure rule (a helper only the moved code uses moves with it; a helper shared with other code goes to `askHandlerSupport.ts`), then re-exported the moved names from the orchestrator. The scripts are not in the repository; the moves are in git history, one commit per slice.
+
+**Layers.** `execution/executeOperation.ts` (dispatch, refresh and reconcile after a write) sits below the handlers and imports only the registry, so a write handler can import it without a cycle. The handlers import it and the support module. The lifecycle files (create, capture, clarification, confirm) import the handlers where they call one directly.
+
+**Tests changed to survive the move, without weakening them:** two tests that pinned the order of code inside one file (a registration before the dispatch call; a function ending where the next one began) now check the registration exists and is imported, and end a function at its closing brace.
+
+**Full backend `test:chunked`.** After the split: 5,214 tests, 4,951 pass, 237 fail. Before the split, run on a clean copy of the earlier commit: 354 fail, because that copy had no `.env` and several tests behave differently without it. The failing tests are in `tests/unit` and `tests/integration` and do not touch the moved code. Three tests failed only after the split and not before: two database certification tests and an OCR test. With the `.env` copied into the clean copy they fail the same way there (Prisma cannot connect to a database), so they are environmental. **Not investigated:** why about 230 other tests fail in this environment.
+
+**Known leftovers.** `askHandlerSupport.ts` (1,250 lines) is a shared bucket and could be split by subject. `roomMapFacts` and a few other helpers sit in the file of the handler they were found in (for example `homeTimeline.handler.ts`) rather than with their own domain. Some handler files still import each other's exports (`miscHandlers` imports from `homeRecordWrites`); no cycle exists today (the test suite loads everything), but nothing enforces it.
+
+**Guardrail suggested:** a test that fails if `askOrchestrator.service.ts` grows past 300 lines, and one that fails if any file under `handlers/` imports `askOrchestrator.service`.
