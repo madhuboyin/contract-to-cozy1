@@ -1332,6 +1332,47 @@ test('on a phone, quote cards stack within the screen and the table scrolls insi
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('sell, hold and rent show as a comparison strip with no winner badge or price bars, and the Table view lists both facts per path (FRD v1.85)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Should I sell, hold, or rent this home?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-sell-hold-rent-strip');
+  const strip = response.getByRole('list', { name: '5-year scenario snapshot options' });
+  await expect(strip.getByRole('listitem')).toHaveCount(3);
+  await expect(strip.getByRole('listitem', { name: /Sell at the end/ })).toContainText('$412,000 modeled net proceeds');
+  await expect(strip.getByRole('listitem', { name: /Rent the home out/ })).toContainText('-$6,500 modeled net change');
+  await expect(strip.locator('[data-badge-policy]')).toHaveCount(0);
+  await expect(strip.getByRole('img')).toHaveCount(0);
+
+  await response.getByRole('button', { name: 'Table', exact: true }).click();
+  const table = response.getByRole('table', { name: '5-year scenario snapshot' });
+  await expect(table.getByRole('columnheader')).toHaveText(['Sell at the end of the horizon', 'Continue holding', 'Rent the home out']);
+  await expect(table.getByRole('rowheader')).toHaveText(['Modeled outcome', 'Key components']);
+  await expect(table.locator('[data-leading="true"]')).toHaveCount(0);
+  await expect(response.getByRole('link', { name: /Explore and adjust scenarios/ })).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, the sell, hold and rent cards stack within the screen (FRD v1.85)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Should I sell, hold, or rent this home?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-sell-hold-rent-strip');
+  const cards = response.getByRole('list', { name: '5-year scenario snapshot options' }).getByRole('listitem');
+  await expect(cards).toHaveCount(3);
+  for (const card of await cards.all()) {
+    const box = await card.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('home timeline answers on a track: latest event selected, category chips, stepping, undated events listed below, List kept (FRD v1.77)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

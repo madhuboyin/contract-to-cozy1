@@ -943,6 +943,33 @@ function buyerPlanShelvesExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.85): the sell, hold and rent scenarios as a comparison strip, with no
+// badge, no leading value and no price bars.
+function sellHoldRentStripExecution() {
+  const base = maintenanceExecution();
+  const workspaceHref = `/dashboard/properties/${propertyId}/tools/sell-hold-rent`;
+  const option = (id: string, label: string, outcome: string, components: string) => ({
+    id, label, summary: null, actions: [],
+    attributes: [{ label: 'Modeled outcome', value: outcome, tone: 'DEFAULT' }, { label: 'Key components', value: components, tone: 'DEFAULT' }],
+  });
+  return {
+    ...base, executionId: 'execution-sell-hold-rent-strip', question: 'Should I sell, hold, or rent this home?', viewState: null,
+    operation: { id: 'SELL_HOLD_RENT_ANALYSIS', version: '1.0', family: 'DECISION_ANALYSIS' },
+    blocks: [
+      { type: 'SUMMARY', id: 'sell-hold-rent-summary', title: 'Here is the current 5-year sell, hold, and rent comparison', tone: 'DEFAULT',
+        body: 'The model’s directional indicator currently points to selling, but this is not a conclusion that now is the right time to sell.',
+        actions: [{ id: 'open-sell-hold-rent', label: 'Explore and adjust scenarios', href: workspaceHref, style: 'PRIMARY' }] },
+      { type: 'COMPARISON', id: 'sell-hold-rent-comparison', title: '5-year scenario snapshot',
+        description: 'All amounts are planning estimates. Different scenario rows describe different economic outcomes and should be reviewed with the assumptions below.',
+        options: [
+          option('sell', 'Sell at the end of the horizon', '$412,000 modeled net proceeds', '$455,000 projected price · $27,300 selling costs'),
+          option('hold', 'Continue holding', '$18,000 modeled net change', '$90,000 appreciation · $72,000 ownership and modeled interest costs'),
+          option('rent', 'Rent the home out', '-$6,500 modeled net change', '$150,000 gross rent · $21,000 vacancy and management overhead'),
+        ], actions: [] },
+    ],
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -1834,6 +1861,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/what is left before i close/i.test(body.message)) {
       const response = buyerPlanShelvesExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/should i sell, hold, or rent/i.test(body.message)) {
+      const response = sellHoldRentStripExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

@@ -6916,6 +6916,35 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
   };
 }
 
+// IW-PRES-016 (FRD v1.85): the sell, hold and rent scenarios as a comparison strip. The modeled outcomes can be
+// negative and are different kinds of figure (net proceeds against a net change), so no price bars are drawn (no option
+// declares an amount) and no option is badged or marked leading: the summary already says which way the model's
+// indicator points, and the strip does not repeat it as a winner.
+export function sellHoldRentComparison(analysis: Awaited<ReturnType<typeof sellHoldRentService.estimate>>, years: number): Extract<AskPresentationBlock, { type: 'COMPARISON' }> {
+  const { scenarios } = analysis;
+  const option = (id: string, label: string, outcome: string, components: string) => ({
+    id, label, summary: null,
+    attributes: [
+      { label: 'Modeled outcome', value: outcome, tone: 'DEFAULT' as const },
+      { label: 'Key components', value: components, tone: 'DEFAULT' as const },
+    ],
+    actions: [],
+  });
+  return {
+    type: 'COMPARISON', id: 'sell-hold-rent-comparison', title: `${years}-year scenario snapshot`,
+    description: 'All amounts are planning estimates. Different scenario rows describe different economic outcomes and should be reviewed with the assumptions below.',
+    options: [
+      option('sell', 'Sell at the end of the horizon', `${money(scenarios.sell.netProceeds)} modeled net proceeds`,
+        `${money(scenarios.sell.projectedSalePrice)} projected price · ${money(scenarios.sell.sellingCosts)} selling costs`),
+      option('hold', 'Continue holding', `${money(scenarios.hold.net)} modeled net change`,
+        `${money(scenarios.hold.appreciationGain)} appreciation · ${money(scenarios.hold.totalOwnershipCosts)} ownership and modeled interest costs`),
+      option('rent', 'Rent the home out', `${money(scenarios.rent.net)} modeled net change`,
+        `${money(scenarios.rent.totalRentalIncome)} gross rent · ${money(scenarios.rent.rentalOverheads.vacancyLoss + scenarios.rent.rentalOverheads.managementFees)} vacancy and management overhead`),
+    ],
+    actions: [],
+  };
+}
+
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis, threadSelection] = await Promise.all([
@@ -6972,29 +7001,6 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
   const permissionLimited = Boolean(activeRequirement && !canImproveContext);
   const contextLimited = captureRequests.length > 0 || permissionLimited;
 
-  const rows = [{
-    id: 'sell',
-    values: {
-      path: 'Sell at the end of the horizon',
-      primary: `${money(analysis.scenarios.sell.netProceeds)} modeled net proceeds`,
-      details: `${money(analysis.scenarios.sell.projectedSalePrice)} projected price · ${money(analysis.scenarios.sell.sellingCosts)} selling costs`,
-    },
-  }, {
-    id: 'hold',
-    values: {
-      path: 'Continue holding',
-      primary: `${money(analysis.scenarios.hold.net)} modeled net change`,
-      details: `${money(analysis.scenarios.hold.appreciationGain)} appreciation · ${money(analysis.scenarios.hold.totalOwnershipCosts)} ownership and modeled interest costs`,
-    },
-  }, {
-    id: 'rent',
-    values: {
-      path: 'Rent the home out',
-      primary: `${money(analysis.scenarios.rent.net)} modeled net change`,
-      details: `${money(analysis.scenarios.rent.totalRentalIncome)} gross rent · ${money(analysis.scenarios.rent.rentalOverheads.vacancyLoss + analysis.scenarios.rent.rentalOverheads.managementFees)} vacancy and management overhead`,
-    },
-  }];
-
   const limitations = [
     `Home value ${money(analysis.current.homeValueNow)}`,
     `Rent ${money(analysis.current.monthlyRentNow)}/month`,
@@ -7012,15 +7018,7 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     // exists, rather than the generic prompt every homeowner without an
     // active goal thread still sees.
     actions: [{ id: 'open-sell-hold-rent', label: activeThread ? 'Continue your plan' : 'Explore and adjust scenarios', href: workspaceHref, style: 'PRIMARY' }],
-  }, {
-    type: 'TABLE',
-    id: 'sell-hold-rent-comparison',
-    title: `${years}-year scenario snapshot`,
-    description: 'All amounts are planning estimates. Different scenario rows describe different economic outcomes and should be reviewed with the assumptions below.',
-    columns: [{ key: 'path', label: 'Path' }, { key: 'primary', label: 'Modeled outcome' }, { key: 'details', label: 'Key components' }],
-    rows,
-    actions: [],
-  }, {
+  }, sellHoldRentComparison(analysis, years), {
     type: 'GROUPED_LIST', filters: [],
     id: 'sell-hold-rent-assumptions',
     title: 'Assumptions that materially affect the answer',

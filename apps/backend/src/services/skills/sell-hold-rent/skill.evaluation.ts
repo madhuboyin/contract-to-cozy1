@@ -141,6 +141,7 @@ export const SELL_HOLD_RENT_SKILL_EVALUATION = deepFreezeSkillPackage({
     "SUMMARY",
     "GROUPED_LIST",
     "TABLE",
+    "COMPARISON",
     "EVIDENCE",
     "CAPABILITY_LIST",
     "BOUNDARY",

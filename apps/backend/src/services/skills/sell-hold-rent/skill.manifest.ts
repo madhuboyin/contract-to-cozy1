@@ -64,6 +64,7 @@ export const SELL_HOLD_RENT_SKILL = Object.freeze({
     "SUMMARY",
     "GROUPED_LIST",
     "TABLE",
+    "COMPARISON",
     "EVIDENCE",
     "CAPABILITY_LIST",
     "BOUNDARY",
