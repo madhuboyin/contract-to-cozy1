@@ -66,7 +66,7 @@ test('preferences validate cadence, topic, and channel controls', () => {
 
 test('deterministic copy and exact lineage are the trusted editorial baseline', () => {
   const service = readBackend('src/homeBriefing/homeBriefing.service.ts');
-  assert.match(service, /HOME_BRIEFING_BASELINE_VERSION = 'home-briefing-deterministic-v1'/);
+  assert.match(service, /HOME_BRIEFING_BASELINE_VERSION = 'home-briefing-homeowner-v2'/);
   assert.match(service, /function deterministicCopy/);
   assert.match(service, /sourceRevisionOrdinal/);
   assert.match(service, /materialityReasonCodes/);
@@ -80,7 +80,7 @@ test('source health is snapshotted and quiet delivery does not trigger notificat
   assert.match(service, /getPropertyIntelligenceCoverage/);
   assert.match(service, /sourceHealthSnapshot: json/);
   assert.match(service, /comprehensive: false/);
-  assert.match(service, /Canonical domains without a source-health contract are not treated as verified quiet/);
+  assert.match(service, /A source that does not report its availability cannot be treated as fully checked/);
   assert.match(service, /if \(input\.delivery\.itemCount === 0\) return/);
   assert.match(service, /NotificationService\.create/);
   assert.match(service, /requiredChannels/);
@@ -150,9 +150,9 @@ test('Home card renders only for unread material and homeowner UI exposes canoni
   );
   assert.match(dashboard, /unreadMaterialCount === 0\) return null/);
   assert.doesNotMatch(dashboard, /being set up|Quiet week|all-clear/i);
-  assert.match(client, /Open canonical owner/);
-  assert.match(client, /Source lineage/);
+  assert.match(client, /View original source/);
+  assert.match(client, /How we know this/);
   assert.match(client, /Delivery preferences/);
   assert.match(client, /Select to share/);
-  assert.match(client, /This is not automatically an all-clear/);
+  assert.match(client, /Some data sources may be incomplete/);
 });

@@ -93,20 +93,23 @@ test('reserve workers recheck context before recalculation and notification', ()
   const reminder = read('../../../workers/src/jobs/reserveFundBalanceReminder.job.ts');
   assert.ok(
     reminder.indexOf('await checkReserveFundWorkerContext') <
-      reminder.indexOf('await NotificationService.create'),
+      reminder.indexOf('await notificationService.create'),
   );
 
   const reconciliation = read('../../../workers/src/jobs/reserveFundReconciliation.job.ts');
   assert.ok(
     reconciliation.indexOf('await checkReserveFundWorkerContext') <
-      reconciliation.indexOf('await NotificationService.create'),
+      reconciliation.indexOf('await notificationService.create'),
   );
 });
 
 test('worker image packages the Phase 5 financial policy dependency chain', () => {
   const dockerfile = read('../../../../infrastructure/docker/workers/Dockerfile');
-  assert.match(dockerfile, /services\/financialContext\/context\.ts/);
-  assert.match(dockerfile, /reserveFundWorkerContext\.service\.ts/);
+  // The image copies the whole backend source (no per-file list), so the chain is packaged if the files exist.
+  assert.match(dockerfile, /COPY apps\/backend\/src \.\/src/);
+  for (const file of ['financialContext/context.ts', 'financialContext/reserveFundWorkerContext.service.ts']) {
+    assert.ok(fs.existsSync(path.resolve(__dirname, '../../src/services', file)), `${file} must exist`);
+  }
 
   // W5 replaced ~70 hand-maintained `sed -i` import-rewrite rules (the
   // mechanism this test originally checked a literal fragment of) with a

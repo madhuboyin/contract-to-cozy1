@@ -7,30 +7,38 @@ function frontend(relativePath) {
   return fs.readFileSync(path.resolve(__dirname, '../../../frontend/src', relativePath), 'utf8');
 }
 
+// The admin catalog page renders extracted cards; the strings it is checked for live in the page or in one of them.
+const OPS_DIR = path.resolve(__dirname, '../../../frontend/src/components/ops/personalization');
+function adminCatalogSource() {
+  const cards = fs.readdirSync(OPS_DIR).filter((name) => name.endsWith('.tsx') || name.endsWith('.ts'))
+    .map((name) => fs.readFileSync(path.join(OPS_DIR, name), 'utf8'));
+  return [frontend('app/(dashboard)/dashboard/admin/personalization/page.tsx'), ...cards].join('\n');
+}
+
 test('personalization captures bounded explicit feedback reasons with timing treated as temporary dismissal', () => {
   const personalization = frontend('app/(dashboard)/dashboard/personalization/page.tsx');
   assert.match(personalization, /PERSONALIZATION_FEEDBACK_REASONS/);
   assert.match(personalization, /BAD_TIMING[\s\S]*type: 'DISMISSED'/);
   assert.match(personalization, /WRONG_PROFILE/);
   assert.match(personalization, /What made this suggestion less useful\?/);
-  assert.match(personalization, /sendRecommendationFeedback\(propertyId!, recommendationId, type, reasonCode\)/);
+  assert.match(personalization, /sendRecommendationFeedback\(propertyId!, recommendationId, type, reasonCode, comment\)/);
 });
 
 test('admin catalog shows aggregate quality and keeps automatic tuning disabled', () => {
-  const admin = frontend('app/(dashboard)/dashboard/admin/personalization/page.tsx');
+  const admin = adminCatalogSource();
   const api = frontend('lib/api/personalizationAdminApi.ts');
   assert.match(admin, /Personalization quality snapshot/);
-  assert.match(admin, /Homes with default guidance/);
+  assert.match(admin, /Homes, default guidance/);
   assert.match(admin, /Optional profiles enabled/);
   assert.doesNotMatch(admin, /Opted-in homes/);
   assert.match(admin, /minimumRequired/);
-  assert.match(admin, /never automatic weight changes/);
+  assert.match(admin, /never triggers automatic weight changes/);
   assert.match(api, /\/api\/admin\/personalization\/quality/);
   assert.match(api, /onlineTuningAllowed: false/);
 });
 
 test('admin catalog contains only supported definitions and valid lifecycle controls', () => {
-  const admin = frontend('app/(dashboard)/dashboard/admin/personalization/page.tsx');
+  const admin = adminCatalogSource();
   const api = frontend('lib/api/personalizationAdminApi.ts');
 
   assert.match(admin, /Recommendation catalog/);

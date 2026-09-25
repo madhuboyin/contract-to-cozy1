@@ -9,7 +9,7 @@ const component = fs.readFileSync(path.resolve(
 ), 'utf8');
 const page = fs.readFileSync(path.resolve(
   __dirname,
-  '../../../frontend/src/app/(dashboard)/dashboard/maintenance/page.tsx',
+  '../../../frontend/src/app/(dashboard)/dashboard/maintenance/MaintenancePageClient.tsx',
 ), 'utf8');
 
 test('Maintenance consumes the shared personalization module placement', () => {

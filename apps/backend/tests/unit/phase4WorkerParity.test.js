@@ -17,7 +17,7 @@ test('permit workers recheck the shared Phase 4 policy before effects', () => {
   assert.ok(detectionService.indexOf('await checkPermitWorkerContext') < detectionService.indexOf('prisma.inventoryItem.findMany'));
 
   const reminder = read('../../../workers/src/jobs/permitInspectionReminder.job.ts');
-  assert.ok(reminder.indexOf('await checkPermitWorkerContext') < reminder.indexOf('await NotificationService.create'));
+  assert.ok(reminder.indexOf('await checkPermitWorkerContext') < reminder.indexOf('await notificationService.create'));
   assert.match(reminder, /requireOwnerAction|true,/);
 
   const disclosure = read('../../../workers/src/jobs/generatePermitDisclosure.job.ts');
@@ -27,8 +27,11 @@ test('permit workers recheck the shared Phase 4 policy before effects', () => {
 
 test('worker image packages the Phase 4 policy dependency chain', () => {
   const dockerfile = read('../../../../infrastructure/docker/workers/Dockerfile');
-  assert.match(dockerfile, /services\/projectCompliance\/context\.ts/);
-  assert.match(dockerfile, /permitWorkerContext\.service\.ts/);
+  // The image copies the whole backend source (no per-file list), so the chain is packaged if the files exist.
+  assert.match(dockerfile, /COPY apps\/backend\/src \.\/src/);
+  for (const file of ['projectCompliance/context.ts', 'projectCompliance/permitWorkerContext.service.ts']) {
+    assert.ok(fs.existsSync(path.resolve(__dirname, '../../src/services', file)), `${file} must exist`);
+  }
 
   // W5 replaced ~70 hand-maintained `sed -i` import-rewrite rules (the
   // mechanism this test originally checked a literal fragment of) with a

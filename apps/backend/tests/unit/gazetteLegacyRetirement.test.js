@@ -52,8 +52,11 @@ test('worker image packages canonical Home Briefing instead of Gazette generatio
   const workerJob = readRepository('apps/workers/src/jobs/homeBriefingDelivery.job.ts');
   const dockerfile = readRepository('infrastructure/docker/workers/Dockerfile');
   assert.match(workerJob, /generateDueHomeBriefings/);
-  assert.match(dockerfile, /homeBriefing\/homeBriefing\.service\.ts/);
-  assert.match(dockerfile, /propertyIntelligence\/propertyIntelligence\.service\.ts/);
+  // The worker image copies the whole backend source (there is no per-file copy list any more) and the job reaches the
+  // briefing service through the @worker-shared alias, so the canonical service is packaged by construction.
+  assert.match(dockerfile, /COPY apps\/backend\/src \.\/src/);
+  assert.match(workerJob, /@worker-shared\/homeBriefing\/homeBriefing\.service/);
+  assert.ok(fs.existsSync(path.resolve(__dirname, '../../src/homeBriefing/homeBriefing.service.ts')));
   assert.doesNotMatch(dockerfile, /gazetteGenerationJobRunner|GazetteEditorial/);
 });
 

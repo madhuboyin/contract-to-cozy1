@@ -108,7 +108,10 @@ test('Buyer Plan presents applicable modules automatically as a printable buyer 
   assert.doesNotMatch(page, /Add module to plan/);
   assert.match(guide, /Print checklist/);
   assert.match(guide, /STANDARD_CHECKLIST/);
-  assert.match(guide, /window\.print\(\)/);
+  // Printing moved to a dedicated print page that the guide links to (printHref) and that calls window.print().
+  const printPage = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/inspection-checklist/print/page.tsx'), 'utf8');
+  assert.match(guide, /printHref/);
+  assert.match(printPage, /window\.print\(\)/);
   assert.match(page, /module\.status === 'APPLICABLE'/);
   assert.match(page, /module\.status === 'UNKNOWN'/);
 });

@@ -69,6 +69,6 @@ test('Buyer Plan exposes preparation, blocker review, signed copies, access, and
   assert.match(center, /Possession arrangements confirmed/);
   assert.match(center, /I explicitly confirm that the professional closing process is complete/);
   assert.match(center, /scheduled date, signing appointment, funds transfer, or clear-to-close status does not confirm legal closing/i);
-  assert.match(page, /Ownership begins only after explicit professional-close confirmation/);
+  assert.match(page, /Handoff starts only after an explicit professional-close confirmation persists/);
   assert.doesNotMatch(page, /name="ownershipStartedAt"/);
 });

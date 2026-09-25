@@ -7,10 +7,16 @@ function frontend(relativePath) {
   return fs.readFileSync(path.resolve(__dirname, '../../../frontend/src', relativePath), 'utf8');
 }
 
-const dashboard = frontend('app/(dashboard)/dashboard/page.tsx');
-const health = frontend('app/(dashboard)/dashboard/properties/[id]/health-score/page.tsx');
+// The dashboard's Home surface was extracted into UnifiedHomeSurface; the module placement is in the page or that surface.
+const dashboard = [frontend('app/(dashboard)/dashboard/page.tsx'), frontend('components/home/UnifiedHomeSurface.tsx')].join('\n');
+// The Health placement lives on the health factor focus page (moved from the health-score page).
+const health = frontend('app/(dashboard)/dashboard/properties/[id]/focus/health/[factor]/page.tsx');
 const placement = frontend('components/personalization/PersonalizedReadOnlySuggestions.tsx');
-const admin = frontend('app/(dashboard)/dashboard/admin/personalization/page.tsx');
+const OPS_DIR = path.resolve(__dirname, '../../../frontend/src/components/ops/personalization');
+const admin = [
+  frontend('app/(dashboard)/dashboard/admin/personalization/page.tsx'),
+  ...fs.readdirSync(OPS_DIR).map((name) => fs.readFileSync(path.join(OPS_DIR, name), 'utf8')),
+].join('\n');
 const adminNavigation = frontend('lib/navigation/adminNavigation.ts');
 const homeownerNavigation = frontend('lib/navigation/jobsNavigation.ts');
 const bottomNavigation = frontend('components/mobile/BottomNav.tsx');
