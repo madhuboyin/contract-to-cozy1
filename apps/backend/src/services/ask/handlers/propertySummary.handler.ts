@@ -20,7 +20,7 @@ import { humanDate } from '../askFormatting';
 import { AREA_CAPTURE_ANCHORS, AREA_CAPTURE_MESSAGES, areaCaptureFallbackHref, areaCaptureProgress, areaFallbackAnchor, areaLabel, areaProgressBlock, ensurePropertyAccess, homeEventCorrectionItemActions, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
 import { EVENT_ADD_MESSAGE, ROOM_ADD_MESSAGE, roomRenameItemActions, WARRANTY_ADD_MESSAGE, warrantyCorrectionItemActions } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_ADD_MESSAGE, inventoryAddItemAction, inventoryCorrectionItemActions } from '../handlers/inventory.handler';
-import { roomMapFacts } from '../handlers/homeTimeline.handler';
+import { roomMapFacts } from '../support/roomMap';
 
 
 // IW-PRES-020 (FRD v1.91): the Property Context's own completeness as a ring. The percent is the domain's

@@ -43,16 +43,6 @@ const HOME_TIMELINE_CATEGORIES: Record<string, { id: string; label: string }> = 
   CLAIM: { id: 'claims', label: 'Claims' },
   PURCHASE: { id: 'purchases', label: 'Purchases and value' }, VALUE_UPDATE: { id: 'purchases', label: 'Purchases and value' },
 };
-// FRD v1.79: the room tile's facts, from the recorded item count and the open (pending or in-progress) maintenance tasks.
-export function roomMapFacts(counts: { items?: number; maintenanceTasks?: number } | null | undefined): { countLabel: string; badgeLabel: string | null } {
-  const items = counts?.items ?? 0;
-  const open = counts?.maintenanceTasks ?? 0;
-  return {
-    countLabel: `${items} item${items === 1 ? '' : 's'}`,
-    badgeLabel: open > 0 ? `${open} open task${open === 1 ? '' : 's'}` : null,
-  };
-}
-
 export function homeTimelineCategory(type: string | null | undefined): { id: string; label: string } {
   return HOME_TIMELINE_CATEGORIES[type ?? ''] ?? { id: 'records', label: 'Records and notes' };
 }

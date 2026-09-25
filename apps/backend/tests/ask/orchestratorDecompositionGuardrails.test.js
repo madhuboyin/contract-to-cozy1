@@ -24,7 +24,7 @@ test('the orchestrator stays a facade: no more than 300 lines, and no function o
 });
 
 test('no handler, lifecycle or support file imports the orchestrator', () => {
-  const offenders = [...files(join(ASK_DIR, 'handlers')), ...files(join(ASK_DIR, 'execution')), join(ASK_DIR, 'askHandlerSupport.ts'), join(ASK_DIR, 'askFormatting.ts')]
+  const offenders = [...files(join(ASK_DIR, 'handlers')), ...files(join(ASK_DIR, 'execution')), ...files(join(ASK_DIR, 'support')), join(ASK_DIR, 'askHandlerSupport.ts'), join(ASK_DIR, 'askFormatting.ts')]
     .filter((file) => /from\s+'(?:\.\.?\/)+(?:ask\/)?askOrchestrator\.service'/.test(readFileSync(file, 'utf8')));
   assert.deepEqual(offenders, []);
 });
