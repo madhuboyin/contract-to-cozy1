@@ -190,6 +190,7 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
   "expectedBlockTypes": [
     "SUMMARY",
     "GROUPED_LIST",
+    "COMPARISON",
     "EVIDENCE",
     "CAPABILITY_LIST",
     "BOUNDARY"

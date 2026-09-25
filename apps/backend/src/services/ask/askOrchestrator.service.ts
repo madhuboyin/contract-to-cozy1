@@ -2542,6 +2542,51 @@ function coverageComparisonPremiumMeta(option: { annualPremium: unknown; currenc
   return option.currency === 'USD' ? `${money(amount)}/yr` : `${amount.toFixed(0)} ${option.currency}/yr`;
 }
 
+// IW-PRES-016 (FRD v1.86): two to four coverage options (the current policy and its alternatives) as a comparison
+// strip; one option, or five and more, stay a grouped list. The premium is declared as an amount so bars are drawn when
+// every option is in one currency, but no option is badged or marked leading: the cheapest premium is not the better
+// policy when the protection differs, and that is what the equivalence status says.
+export function coverageComparisonStrip(
+  options: Array<{
+    id: string; label: string; optionType: string; carrierName: string | null; annualPremium: unknown; currency: string;
+    equivalenceStatus: string; materialUnknownsJson?: unknown; tradeoffsJson?: unknown;
+  }>,
+): Extract<AskPresentationBlock, { type: 'COMPARISON' }> | null {
+  if (options.length < 2 || options.length > 4) return null;
+  const count = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+  const amountOf = (option: { annualPremium: unknown; currency: string }) => {
+    if (option.annualPremium == null) return null;
+    const value = typeof option.annualPremium === 'number' ? option.annualPremium : Number(option.annualPremium);
+    return Number.isFinite(value) && value >= 0 && /^[A-Za-z]{3}$/.test(option.currency) ? { value, currency: option.currency.toUpperCase() } : null;
+  };
+  return {
+    type: 'COMPARISON', id: 'coverage-comparison-options', title: 'Options',
+    description: 'Your current verified policy alongside any alternative quotes or policy terms compared against it. A lower premium is not a better policy when the protection differs.',
+    options: options.map((option) => {
+      const baseline = option.optionType === 'CURRENT_POLICY';
+      const unknowns = count(option.materialUnknownsJson);
+      const tradeoffs = count(option.tradeoffsJson);
+      const equivalence = COVERAGE_COMPARISON_EQUIVALENCE_LABELS[option.equivalenceStatus] ?? option.equivalenceStatus;
+      const premium = coverageComparisonPremiumMeta(option);
+      return {
+        id: option.id, label: option.label, summary: baseline ? 'Your current verified policy' : option.carrierName ?? null,
+        amount: amountOf(option),
+        attributes: [
+          { label: 'Annual premium', value: premium ?? 'Premium not recorded', tone: premium ? 'DEFAULT' as const : 'CAUTION' as const },
+          { label: 'Protection compared with current', value: equivalence,
+            tone: baseline ? 'DEFAULT' as const : option.equivalenceStatus === 'EQUIVALENT' ? 'POSITIVE' as const : 'CAUTION' as const },
+          ...(baseline ? [] : [
+            { label: 'Differences found', value: tradeoffs ? `${tradeoffs} ${tradeoffs === 1 ? 'difference' : 'differences'}` : 'None recorded', tone: tradeoffs ? 'CAUTION' as const : 'DEFAULT' as const },
+            { label: 'Facts to confirm', value: unknowns ? `${unknowns} unconfirmed` : 'None', tone: unknowns ? 'CAUTION' as const : 'DEFAULT' as const },
+          ]),
+        ],
+        actions: [],
+      };
+    }),
+    actions: [],
+  };
+}
+
 async function coverageComparisonStatusResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/coverage-options`;
@@ -2607,7 +2652,9 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
   }];
 
   const allOptions = currentOption ? [currentOption, ...alternativeOptions] : alternativeOptions;
-  if (allOptions.length) {
+  const strip = coverageComparisonStrip(allOptions);
+  if (strip) blocks.push(strip);
+  else if (allOptions.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [],
       id: 'coverage-comparison-options',

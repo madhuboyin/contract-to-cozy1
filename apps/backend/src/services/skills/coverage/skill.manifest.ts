@@ -76,6 +76,7 @@ export const COVERAGE_SKILL = Object.freeze({
   "allowedResultBlocks": [
     "SUMMARY",
     "GROUPED_LIST",
+    "COMPARISON",
     "EVIDENCE",
     "CAPABILITY_LIST",
     "BOUNDARY"

@@ -970,6 +970,34 @@ function sellHoldRentStripExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.86): the coverage comparison as a strip: premium bars, protection status,
+// no badge and no leading mark.
+function coverageComparisonStripExecution() {
+  const base = maintenanceExecution();
+  const href = `/dashboard/properties/${propertyId}/tools/coverage-options`;
+  const attributes = (premium: string, protection: string, tone: string, extra: Array<Record<string, string>> = []) => [
+    { label: 'Annual premium', value: premium, tone: 'DEFAULT' },
+    { label: 'Protection compared with current', value: protection, tone },
+    ...extra,
+  ];
+  return {
+    ...base, executionId: 'execution-coverage-comparison-strip', question: 'Compare my current insurance policy against alternatives', viewState: null,
+    operation: { id: 'COVERAGE_COMPARISON_STATUS', version: '1.0', family: 'STATUS_SUMMARY' },
+    blocks: [
+      { type: 'SUMMARY', id: 'coverage-comparison-summary', title: '2 options compared against your current policy', body: 'Overall status: Different protection.', tone: 'DEFAULT',
+        actions: [{ id: 'open-coverage-comparison', label: 'Open coverage comparison', href, style: 'SECONDARY' }] },
+      { type: 'COMPARISON', id: 'coverage-comparison-options', title: 'Options',
+        description: 'Your current verified policy alongside any alternative quotes or policy terms compared against it. A lower premium is not a better policy when the protection differs.',
+        options: [
+          { id: 'cur', label: 'Current policy', summary: 'Your current verified policy', amount: { value: 1800, currency: 'USD' }, actions: [],
+            attributes: attributes('$1,800/yr', 'Current policy', 'DEFAULT') },
+          { id: 'q1', label: 'Harbor Insurance quote', summary: 'Harbor Insurance', amount: { value: 1350, currency: 'USD' }, actions: [],
+            attributes: attributes('$1,350/yr', 'Different protection', 'CAUTION', [{ label: 'Differences found', value: '2 differences', tone: 'CAUTION' }, { label: 'Facts to confirm', value: '1 unconfirmed', tone: 'CAUTION' }]) },
+        ], actions: [] },
+    ],
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -1867,6 +1895,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/should i sell, hold, or rent/i.test(body.message)) {
       const response = sellHoldRentStripExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/compare my current insurance policy/i.test(body.message)) {
+      const response = coverageComparisonStripExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

@@ -1373,6 +1373,50 @@ test('on a phone, the sell, hold and rent cards stack within the screen (FRD v1.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('coverage comparison shows the policy and its alternative as a strip with premium bars and no winner, and the Table view lists the facts (FRD v1.86)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare my current insurance policy against alternatives');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-coverage-comparison-strip');
+  const strip = response.getByRole('list', { name: 'Options options' });
+  await expect(strip.getByRole('listitem')).toHaveCount(2);
+  const current = strip.getByRole('listitem', { name: /Current policy/ });
+  await expect(current).toContainText('Your current verified policy');
+  await expect(current.getByRole('img', { name: 'Highest price of these options' })).toBeVisible();
+  const quote = strip.getByRole('listitem', { name: /Harbor Insurance quote/ });
+  await expect(quote).toContainText('Different protection');
+  await expect(quote).toContainText('2 differences');
+  await expect(quote.getByRole('img', { name: '75% of the highest price of these options' })).toBeVisible();
+  await expect(strip.locator('[data-badge-policy]')).toHaveCount(0);
+
+  await response.getByRole('button', { name: 'Table', exact: true }).click();
+  const table = response.getByRole('table', { name: 'Options' });
+  await expect(table.getByRole('columnheader')).toHaveText(['Current policy', 'Harbor Insurance quote']);
+  await expect(table.getByText('Not listed')).toHaveCount(2);
+  await expect(table.locator('[data-leading="true"]')).toHaveCount(0);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, the coverage comparison cards stack within the screen (FRD v1.86)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Compare my current insurance policy against alternatives');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-coverage-comparison-strip');
+  const cards = response.getByRole('list', { name: 'Options options' }).getByRole('listitem');
+  await expect(cards).toHaveCount(2);
+  for (const card of await cards.all()) {
+    const box = await card.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('home timeline answers on a track: latest event selected, category chips, stepping, undated events listed below, List kept (FRD v1.77)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
