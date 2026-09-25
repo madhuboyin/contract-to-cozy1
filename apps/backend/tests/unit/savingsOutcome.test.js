@@ -13,6 +13,7 @@ let opportunities = new Map();
 let opportunityOutcomes = [];
 let documents = [];
 let signals = [];
+let updateManyOverride = null;
 const documentOwnershipQueries = [];
 const signalExpiryQueries = [];
 const publishSavingsRealizationSignalCalls = [];
@@ -100,8 +101,21 @@ require.cache[prismaPath] = {
           }
           const rows = opportunityOutcomes
             .filter((row) => row.opportunityId === where.opportunityId)
+            .filter((row) => where.revokedAt === null ? row.revokedAt == null : true)
             .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
           return rows[0] ?? null;
+        },
+        findUniqueOrThrow: async ({ where }) => {
+          const row = opportunityOutcomes.find((candidate) => candidate.id === where.id);
+          if (!row) throw new Error('not found');
+          return row;
+        },
+        // The service revokes with a guarded write (only while not yet revoked) and checks the count.
+        updateMany: async ({ where, data }) => {
+          if (updateManyOverride) return updateManyOverride;
+          const rows = opportunityOutcomes.filter((row) => row.id === where.id && (where.revokedAt === null ? row.revokedAt == null : true));
+          for (const row of rows) Object.assign(row, data);
+          return { count: rows.length };
         },
         findMany: async ({ where }) =>
           opportunityOutcomes
@@ -195,6 +209,7 @@ test.beforeEach(() => {
     ['opp-1', { id: 'opp-1', userId: 'user-1', homeownerProfileId: 'profile-1', propertyId: 'property-1', currency: 'USD' }],
   ]);
   opportunityOutcomes = [];
+  updateManyOverride = null;
   documents = [];
   signals = [];
   documentOwnershipQueries.length = 0;
@@ -418,4 +433,37 @@ test('revoking a recurring outcome expires its shared realization signal atomica
   assert.ok(revoked.revokedAt instanceof Date);
   assert.equal(signalExpiryQueries.length, 1);
   assert.equal(signals[0].validUntil.getTime(), revoked.revokedAt.getTime());
+});
+
+test('revoking is refused, and changes nothing, when the outcome changed concurrently (the guarded write matched no row)', async () => {
+  await recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', { stage: 'SUBMITTED' });
+  const outcome = opportunityOutcomes[0];
+  updateManyOverride = { count: 0 };
+  await assert.rejects(
+    () => revokeHomeSavingsOpportunityOutcome(outcome.id, 'user-1', 'The recorded result was incorrect.'),
+    (error) => error instanceof SavingsOutcomeGovernanceError && error.code === 'OUTCOME_CHANGED_CONCURRENTLY',
+  );
+  assert.equal(opportunityOutcomes[0].revokedAt ?? null, null);
+  assert.equal(signalExpiryQueries.length, 0);
+});
+
+test('an outcome that is already revoked cannot be revoked again', async () => {
+  await recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', { stage: 'SUBMITTED' });
+  const outcome = opportunityOutcomes[0];
+  await revokeHomeSavingsOpportunityOutcome(outcome.id, 'user-1', 'The recorded result was incorrect.');
+  await assert.rejects(
+    () => revokeHomeSavingsOpportunityOutcome(outcome.id, 'user-1', 'Again.'),
+    (error) => error instanceof SavingsOutcomeGovernanceError && error.code === 'ALREADY_REVOKED',
+  );
+});
+
+test('only the latest outcome can be revoked; an earlier stage is refused until the later one is revoked', async () => {
+  await recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', { stage: 'SUBMITTED' });
+  await recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', { stage: 'APPROVED' });
+  const [first] = opportunityOutcomes;
+  await assert.rejects(
+    () => revokeHomeSavingsOpportunityOutcome(first.id, 'user-1', 'Wrong stage.'),
+    (error) => error instanceof SavingsOutcomeGovernanceError && error.code === 'ONLY_LATEST_CAN_BE_REVOKED',
+  );
+  assert.equal(first.revokedAt ?? null, null);
 });

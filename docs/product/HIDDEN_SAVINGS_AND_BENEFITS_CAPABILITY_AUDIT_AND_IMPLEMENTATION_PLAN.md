@@ -4,7 +4,7 @@
 **Contributing surfaces:** Save / Financial Efficiency, Guidance, Property Context, Home Actions, Coverage, Property Tax, Energy, Refinance, and Reserve Fund  
 **Audit framework:** `CAPABILITY_OUTCOME_AND_EXPERIENCE_AUDIT_FRAMEWORK.md`  
 **Audit date:** July 28, 2026  
-**Status:** Recommended implementation plan  
+**Status:** Slices 0–10 implemented in code between July 28 and July 29, 2026; verified against the repository on September 25, 2026 (see §16.1). Launch gate items that need people rather than code remain open.  
 **Recommended disposition:** **Consolidate, rebuild the truth contract, and temporarily contain unsupported value claims**  
 **Current safety classification:** Low consequence  
 **Recommended safety classification:** Material financial for eligibility, value, application, and realized-savings claims  
@@ -1941,6 +1941,30 @@ Move the family to BETA until:
 ---
 
 ## 16. Recommended Implementation Sequence
+
+### 16.1 Implementation status (verified September 25, 2026)
+
+Each claim is labelled **Executed** (a command was run and its output read) or **Code-traced** (read in the source, not run). Nothing here ran against a real database or a deployed environment.
+
+**Executed.** The 20 backend unit test files for this capability (`tests/unit/hiddenAsset*`, `homeSavings*`, `savings*`, `savingsBenefits*`, `homeActionSavingsBenefitsPromotion`): 102 tests, 102 pass. The two frontend accessibility tests (`savings-benefits-accessibility-*`): 7 pass. `npm run typecheck` in the backend is clean. The golden-fixture suite has all 17 named scenarios (the July 28 commit message said 2 were not yet built; the current test file names 1 through 17). Before this check, one test failed: `savingsOutcome.test.js` used an in-memory fake that lacked the guarded write (`updateMany`) the service uses to revoke an outcome. That was a stale test double, not a product bug; it is fixed, and the revoke guards (already revoked, only the latest outcome, concurrent change) are now each covered and mutation-checked.
+
+**Not executed.** `tests/integration/savingsBenefitsGoldenPath.db.test.js` needs a database and was not run. The clean-schema rehearsal (`tests/fixtures/verify-savings-benefits-closure-migrations.sql`) was not run.
+
+| Slice | State | Evidence (Code-traced unless marked) |
+|---|---|---|
+| 0 Truth containment | Done | `PURSUING` rename, fail-closed freshness, no estimate-as-realized signal (earlier notes; tests above pass). |
+| 1 Canonical capability and route | Done | `tools/savings-benefits/` (page, client, unified panels); `tools/hidden-asset-finder/page.tsx` and `tools/home-savings/page.tsx` redirect into it; the parallel Financial Efficiency dashboard was retired (commit `4b0667c2`). |
+| 2 Reviewed source registry | Done, pilot scope | `HiddenAssetSource`, `HiddenAssetProgram`, `HiddenAssetProgramVersionSnapshot`, `HiddenAssetProgramRule`; admin service, routes and console; publish workflow with roles; `seedSavingsBenefitsPilot.ts` (New Jersey Division of Taxation, two programs); `docs/operations/SAVINGS_BENEFITS_SOURCE_RUNBOOK.md`. Only the one pilot source exists; more sources are operations work. |
+| 3 Eligibility expression and context | Done | Rule engine with mandatory, optional and disqualifying rules, OR groups and unknown handling; `PropertyHiddenAssetCriterionResult`; `PropertyHiddenAssetSensitiveFact` and its service and routes; geography resolver (golden scenario 4). |
+| 4 Opportunity truth and ranking | Done | `savingsBenefitsUnified.service.ts` and route; totals keep one-time and recurring apart and report `exclusionConflicts` rather than summing mutually exclusive values. |
+| 5 Recurring-cost records and comparisons | Done as benchmark-only | Net annual savings and switching cost from labelled category assumptions; `offerSourceKind` defaults to, and a test pins it to, `BENCHMARK_ESTIMATE`. **No address-qualified provider connector exists**, which the slice allows only if the product "clearly remains benchmark-only". |
+| 6 Application and switching lifecycle | Done | `SavingsBenefitAction` model, `savingsBenefitsCanonical.service.ts`, `OutcomeRecorder` with Document Vault attach, partner consent contract. |
+| 7 Realized-value ledger | Done | `HomeSavingsOpportunityOutcome` and `HiddenAssetMatchOutcome` with stages, evidence, revoke and correct; `savingsRealizationProjection` and `savingsOutcome` tests. |
+| 8 Discovery and revisit loop | Done | `savingsBenefitsReevaluation.service.ts`; Home Actions promotion test; `SAVINGS_BENEFITS` notification category. |
+| 9 Commercial and partner governance | Done | `SavingsBenefitPartner`, `SavingsBenefitPartnerComplaint`, partner service with compensation disclosure and consent receipt checks; the unified read model only attaches a partner to an action and does not rank by compensation. |
+| 10 Validation and launch gate | Code side done | Golden fixtures (17), rule-engine, freshness and value-math tests, accessibility tests, DB golden-path test (not run here), runbook. |
+
+**Still open, and not code.** Legal, tax, coverage and commercial review of the copy and disclosures; staffing the source operations the runbook assumes; an analytics truth audit against production events; a responsive pass in a real browser; running the DB golden-path test and the clean-schema rehearsal in a real environment; and any second source or jurisdiction. The one code-side choice left open is a real provider-rate connector (Slice 5), which needs a partner or data contract.
 
 ### Slice 0 — Immediate truth containment
 
