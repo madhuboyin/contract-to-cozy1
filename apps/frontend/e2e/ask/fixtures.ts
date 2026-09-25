@@ -836,6 +836,32 @@ function maintenanceShelvesExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.82): the Home Actions answer with its priorities as read-only shelves.
+function homeActionShelvesExecution() {
+  const base = maintenanceExecution();
+  const card = (id: string, title: string, description: string, timingLabel: string, tone: 'DEFAULT' | 'CAUTION') => ({
+    id, title, description, meta: [timingLabel, 'high confidence'], status: 'OPEN', href: `/dashboard/maintenance?propertyId=${propertyId}`, timingLabel, tone,
+  });
+  return {
+    ...base, executionId: 'execution-home-action-shelves', question: 'What needs my attention now?',
+    operation: { id: 'HOME_ACTIONS', version: '1.0', family: 'READ' },
+    viewState: null,
+    blocks: [
+      { type: 'SUMMARY', id: 'home-actions-summary', title: '4 governed Home Actions are ready to review', body: '2 need attention now, 1 is due soon, 1 is for planning.', tone: 'CAUTION', actions: [] },
+      { type: 'GROUPED_LIST', filters: [], id: 'home-actions-list', title: 'Prioritized actions', presentation: { pattern: 'SHELVES' },
+        description: 'Priority and order come from the canonical Home Action feed. Ask does not independently rerank them.',
+        sections: [
+          { id: 'now', title: 'Now', count: 2, items: [
+            card('action-filter', 'Replace the HVAC filter', 'A clogged filter strains the system.', 'Due Oct 3, 2026', 'CAUTION'),
+            card('action-smoke', 'Test the smoke alarms', 'Alarms are unchecked for over a year.', 'Due Oct 5, 2026', 'CAUTION'),
+          ] },
+          { id: 'soon', title: 'Soon', count: 1, items: [card('action-gutter', 'Clean the gutters', 'Leaves are due to fall.', 'Due Nov 1, 2026', 'DEFAULT')] },
+          { id: 'plan', title: 'Plan', count: 1, items: [card('action-roof', 'Budget for a new roof', 'The recorded roof is near the end of its typical life.', 'Within five years', 'DEFAULT')] },
+        ], actions: [] },
+    ],
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -1699,6 +1725,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
           currentAnswer: {}, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this task; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: 'context-v1',
         }],
       };
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/what needs my attention now/i.test(body.message)) {
+      const response = homeActionShelvesExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

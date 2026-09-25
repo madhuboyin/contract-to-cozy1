@@ -5483,6 +5483,17 @@ export function formatUnavailableHomeActionProducers(unavailableProducers: reado
   return unavailableProducers.map((producer) => HOME_ACTION_PRODUCER_LABELS[producer] ?? producer.toLowerCase()).join(' and ');
 }
 
+// IW-PRES-014 (FRD v1.82): the shelf-card facts for one Home Action, from the same fields as its meta line. Only a
+// "Now" action is coloured; the timing is the due date, else the feed's own timing rationale (no cost is recorded).
+export function homeActionShelfFacts(action: {
+  priority: string;
+  timing: { dueAt?: string | Date | null; rationale?: string | null };
+}, formatDate: (value: Date) => string): { tone: 'DEFAULT' | 'CAUTION'; timingLabel: string | null } {
+  const raw = action.timing.dueAt ? `Due ${formatDate(new Date(action.timing.dueAt))}` : action.timing.rationale?.trim() || null;
+  const timingLabel = raw && raw.length > 80 ? `${raw.slice(0, 79).trimEnd()}…` : raw;
+  return { tone: action.priority === 'NOW' ? 'CAUTION' : 'DEFAULT', timingLabel };
+}
+
 async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const [access, buyerContextValue] = await Promise.all([
@@ -5635,6 +5646,8 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     const priorities = ['NOW', 'SOON', 'PLAN', 'CONSIDER'] as const;
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'home-actions-list', title: 'Prioritized actions',
+      // IW-PRES-014 / IW-PRES-022: Home Actions render as shelves (FRD v1.82); the cards are read-only.
+      presentation: { pattern: 'SHELVES' },
       description: 'Priority and order come from the canonical Home Action feed. Ask does not independently rerank them.',
       sections: priorities.map((priority) => {
         const actions = selectedActions.filter((action) => action.priority === priority);
@@ -5654,6 +5667,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
             ].filter((value): value is string => Boolean(value)),
             status: action.state,
             href: action.primaryCta.href,
+            ...homeActionShelfFacts(action, (value) => humanDate(value) ?? ''),
           })),
         };
       }).filter((section) => section.count > 0),

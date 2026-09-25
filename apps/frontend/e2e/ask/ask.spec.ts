@@ -1465,6 +1465,52 @@ test('on a phone, the sale readiness ring, tiles and next steps fit the screen (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('home actions show their priorities as shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What needs my attention now?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-home-action-shelves');
+  await expect(response.getByRole('list', { name: 'Now, 2 items' }).getByRole('listitem')).toHaveCount(2);
+  await expect(response.getByRole('list', { name: 'Plan, 1 item' })).toBeVisible();
+  const card = response.getByRole('button', { name: /Replace the HVAC filter/ });
+  await expect(card).toContainText('Due Oct 3, 2026');
+  await card.click();
+  const drawer = page.getByRole('dialog', { name: 'Replace the HVAC filter' });
+  await expect(drawer.getByText('A clogged filter strains the system.')).toBeVisible();
+  await expect(drawer.getByRole('link', { name: 'Open record' })).toBeVisible();
+  await expect(drawer.getByRole('button')).toHaveCount(1);
+  const box = await drawer.boundingBox();
+  expect(box && box.x + box.width).toBeGreaterThan(1430);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+
+  await response.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(response.getByRole('link', { name: 'Replace the HVAC filter' })).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, home action shelves stay inside the screen and a card opens as a bottom sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What needs my attention now?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-home-action-shelves');
+  await expect(response.getByRole('list', { name: 'Now, 2 items' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await response.getByRole('button', { name: /Budget for a new roof/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Budget for a new roof' });
+  await expect(sheet.getByText('The recorded roof is near the end of its typical life.')).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
+  await sheet.getByRole('button', { name: 'Close details' }).click();
+  await expect(sheet).toBeHidden();
+});
+
 test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
   await installAskApi(page, { maintenanceDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
