@@ -1179,6 +1179,57 @@ function buyerClosingDayRingExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.94): the renovation case's blocking readiness items as a ring.
+function renovationReadinessRingExecution() {
+  const caseHref = `/dashboard/properties/${propertyId}/renovations/case-1/readiness`;
+  const step = (id: string, title: string, description: string) => ({ id, title, description, meta: [], status: 'OPEN', href: caseHref, entityType: null });
+  return {
+    schemaVersion: '1.0', executionId: 'execution-renovation-readiness-ring', sessionId: 'ask-acceptance-session',
+    question: 'Is my kitchen remodel ready to start?', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'RENOVATION_PERMIT_READINESS', version: '1.0', family: 'DECISION_ANALYSIS' }, contextVersion: null,
+    blocks: [
+      { type: 'SUMMARY', id: 'renovation-readiness-summary', title: '2 blocking items remain for Kitchen remodel', tone: 'CAUTION', body: 'This readiness assessment organizes project records and does not establish legal compliance.',
+        actions: [{ id: 'open-case', label: 'Open renovation case', href: caseHref, style: 'PRIMARY' }] },
+      { type: 'PROGRESS', id: 'renovation-readiness-progress', title: 'Ready to start',
+        description: 'Counts the items that block starting the work: a blocking item counts once it is satisfied or its open state was acknowledged. Other open items are listed but not counted, and this does not establish legal compliance.',
+        percent: 50, basis: '2 of 4 blocking items satisfied or acknowledged',
+        metrics: [{ label: 'Blocking', value: '2', tone: 'CAUTION' }, { label: 'Acknowledged', value: '1', tone: 'DEFAULT' }, { label: 'Other open', value: '1', tone: 'DEFAULT' }],
+        nextSteps: [
+          step('req-permit', 'Building permit', 'Needed before work starts · Upload the permit'),
+          step('req-hoa', 'HOA approval', 'The association must approve exterior changes · Send the HOA form'),
+        ], actions: [] },
+    ],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
+// FRD v1.94: the Home Continuity Plan's handoff requirements as a ring (not the plan's self-reported percent).
+function digitalWillRingExecution() {
+  const page = `/dashboard/properties/${propertyId}/tools/home-digital-will`;
+  const step = (id: string, title: string, description: string) => ({ id, title, description, meta: [], status: 'MISSING', href: page, entityType: null });
+  return {
+    schemaVersion: '1.0', executionId: 'execution-digital-will-ring', sessionId: 'ask-acceptance-session',
+    question: 'Show my home continuity plan', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'HOME_DIGITAL_WILL', version: '1.0', family: 'DECISION_ANALYSIS' }, contextVersion: null,
+    blocks: [
+      { type: 'SUMMARY', id: 'digital-will-summary', title: 'Maple Street plan: In progress, 40% complete', tone: 'CAUTION', body: 'Draft, with 4 entries across 2 sections. Last reviewed Sep 1, 2026.',
+        actions: [{ id: 'open-home-digital-will', label: 'Open Home Continuity Plan', href: page, style: 'PRIMARY' }] },
+      { type: 'PROGRESS', id: 'digital-will-progress', title: 'Ready to hand off',
+        description: 'Counts the three things the plan needs before someone else can take over: an emergency instruction, a primary trusted contact, and a way to reach that contact. Other entries are not counted.',
+        percent: 67, basis: '2 of 3 handoff requirements met',
+        metrics: [{ label: 'Met', value: '2', tone: 'DEFAULT' }, { label: 'Missing', value: '1', tone: 'CAUTION' }, { label: 'Entries', value: '4', tone: 'DEFAULT' }],
+        nextSteps: [step('handoff-primary-contact-method', 'Add an email or phone number for the primary contact.', 'Handoff requirement not met yet')], actions: [] },
+    ],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-09-24T12:00:00.000Z', updatedAt: '2026-09-24T12:00:00.000Z',
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -2118,6 +2169,18 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/what is on my home radar right now/i.test(body.message)) {
       const response = homeEventRadarDeckExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/is my kitchen remodel ready to start/i.test(body.message)) {
+      const response = renovationReadinessRingExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/show my home continuity plan/i.test(body.message)) {
+      const response = digitalWillRingExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

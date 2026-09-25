@@ -63,6 +63,7 @@ export const RENOVATION_SKILL = Object.freeze({
   "allowedResultBlocks": [
     "SUMMARY",
     "GROUPED_LIST",
+    "PROGRESS",
     "EVIDENCE",
     "BOUNDARY",
     "CAPABILITY_LIST"

@@ -4768,6 +4768,40 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
   return { status: readiness.status === 'READY' && !captureRequests.length ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: readiness.status === 'READY' ? (captureRequests.length ? 'PROPERTY_TAX_CONTEXT_OPTIONAL' : undefined) : `PROPERTY_TAX_${readiness.status}`, contextVersion: context.contextVersion, captureRequests, blocks, suggestions: ['Which tax facts are missing?', 'Open Property Tax Center'] };
 }
 
+// IW-PRES-020 (FRD v1.94): the renovation case's blocking readiness items as a ring. The renovation readiness service
+// keeps a state and counts (total, open, blocking, acknowledged) but no percent, so this defines one, on the domain's own
+// rule for what blocks a start: a blocking item is settled when it is satisfied or its open state was acknowledged
+// (`READY_WITH_ACKNOWLEDGED_OPEN_ITEMS`); only blocking items are counted, other open items are listed but not counted.
+// With no blocking items there is no ring, since nothing recorded says the case is ready.
+export function renovationReadinessProgress(
+  items: ReadonlyArray<{ id: string; title: string; status: string; isBlocking: boolean; overrideAcknowledgedAt?: Date | string | null; reason?: string | null; exactNextAction?: string | null }>,
+  caseHref: string,
+): Extract<AskPresentationBlock, { type: 'PROGRESS' }> | null {
+  const blocking = items.filter((item) => item.isBlocking);
+  if (!blocking.length) return null;
+  const isOpen = (item: { status: string; overrideAcknowledgedAt?: Date | string | null }) => item.status !== 'SATISFIED' && !item.overrideAcknowledgedAt;
+  const blockingOpen = blocking.filter(isOpen);
+  const settled = blocking.length - blockingOpen.length;
+  const acknowledged = blocking.filter((item) => item.status !== 'SATISFIED' && Boolean(item.overrideAcknowledgedAt)).length;
+  const otherOpen = items.filter((item) => !item.isBlocking && item.status !== 'SATISFIED').length;
+  return {
+    type: 'PROGRESS', id: 'renovation-readiness-progress', title: 'Ready to start',
+    description: 'Counts the items that block starting the work: a blocking item counts once it is satisfied or its open state was acknowledged. Other open items are listed but not counted, and this does not establish legal compliance.',
+    percent: Math.round((settled / blocking.length) * 100),
+    basis: `${settled} of ${blocking.length} blocking item${blocking.length === 1 ? '' : 's'} satisfied or acknowledged`,
+    metrics: [
+      { label: 'Blocking', value: String(blockingOpen.length), tone: blockingOpen.length ? 'CAUTION' : 'DEFAULT' },
+      { label: 'Acknowledged', value: String(acknowledged), tone: 'DEFAULT' },
+      { label: 'Other open', value: String(otherOpen), tone: 'DEFAULT' },
+    ],
+    nextSteps: blockingOpen.slice(0, 3).map((item) => ({
+      id: item.id, title: item.title, description: [item.reason, item.exactNextAction].filter(Boolean).join(' · ') || 'Blocking item still open',
+      meta: [], status: item.status, href: caseHref, entityType: null,
+    })),
+    actions: [],
+  };
+}
+
 async function renovationPermitReadinessResult(propertyId: string, message: string): Promise<AskOperationResult> {
   const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
   // FRD v1.47: renovation cases live on /renovations (the Renovations page reads the same cases and readiness). Both
@@ -4788,6 +4822,9 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   const open = items.filter((item) => item.status !== 'SATISFIED');
   const caseHref = `${href}/${encodeURIComponent(selected.id)}/readiness`;
   const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-case', label: 'Open renovation case', href: caseHref, style: 'PRIMARY' }, { id: 'open-permits', label: 'Open Permit Tracker', href: permitsHref, style: 'SECONDARY' }] }];
+  // IW-PRES-020 (FRD v1.94): the blocking items as a ring, ahead of the checklist.
+  const ring = renovationReadinessProgress(items, caseHref);
+  if (ring) blocks.push(ring);
   if (items.length) blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'renovation-readiness-items', title: 'Readiness checklist', description: 'Blocking state is owned by the canonical renovation scope, requirement, compliance, quote, schedule, and evidence records.', sections: [{ id: 'blocking', title: 'Blocking', count: blockers.length, items: blockers.slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction, item.evidenceRequired].filter(Boolean), status: item.status, href: caseHref })) }, { id: 'other-open', title: 'Other open items', count: Math.max(0, open.length - blockers.length), items: open.filter((item) => !item.isBlocking).slice(0, 20).map((item) => ({ id: item.id, title: item.title, description: item.reason, meta: [item.exactNextAction].filter(Boolean), status: item.status, href: caseHref })) }].filter((section) => section.count > 0), actions: [] });
   blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization—not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A “ready” app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
@@ -8053,6 +8090,34 @@ const DIGITAL_WILL_MISSING_LABELS: Record<string, string> = {
   'primary-contact-method': 'Add an email or phone number for the primary contact.',
 };
 
+// IW-PRES-020 (FRD v1.94): whether the Home Continuity Plan can be handed off, as a ring over the three requirements the
+// handoff check itself keeps (an emergency instruction, a primary trusted contact, a way to reach that contact). The plan's
+// own `completionPercent` is self-reported (the client sets it and publishing forces it to 100), so it is not used. With
+// no primary contact the contact-method requirement is unmet as well, though the check lists only the first. The next steps
+// are the unmet requirements in the plan's own words; no entry or contact detail is repeated here.
+export function digitalWillHandoffProgress(
+  missingRequirements: readonly string[],
+  entryCount: number,
+  pageHref: string,
+): Extract<AskPresentationBlock, { type: 'PROGRESS' }> {
+  const requirements = ['emergency-instruction', 'primary-trusted-contact', 'primary-contact-method'];
+  const unmet = requirements.filter((code) => missingRequirements.includes(code) || (code === 'primary-contact-method' && missingRequirements.includes('primary-trusted-contact')));
+  const met = requirements.length - unmet.length;
+  return {
+    type: 'PROGRESS', id: 'digital-will-progress', title: 'Ready to hand off',
+    description: 'Counts the three things the plan needs before someone else can take over: an emergency instruction, a primary trusted contact, and a way to reach that contact. Other entries are not counted.',
+    percent: Math.round((met / requirements.length) * 100),
+    basis: `${met} of ${requirements.length} handoff requirements met`,
+    metrics: [
+      { label: 'Met', value: String(met), tone: 'DEFAULT' },
+      { label: 'Missing', value: String(unmet.length), tone: unmet.length ? 'CAUTION' : 'DEFAULT' },
+      { label: 'Entries', value: String(entryCount), tone: 'DEFAULT' },
+    ],
+    nextSteps: unmet.map((code) => ({ id: `handoff-${code}`, title: DIGITAL_WILL_MISSING_LABELS[code] ?? readableCode(code), description: 'Handoff requirement not met yet', meta: [], status: 'MISSING', href: pageHref, entityType: null })),
+    actions: [],
+  };
+}
+
 export function digitalWillFromView(will: DigitalWillView, propertyId: string): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-digital-will`;
   const boundary: AskPresentationBlock = {
@@ -8085,6 +8150,8 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
     tone: handoff.state === 'READY' ? 'DEFAULT' : 'CAUTION',
     actions: [{ id: 'open-home-digital-will', label: 'Open Home Continuity Plan', href: pageHref, style: 'PRIMARY' }],
   }];
+  // IW-PRES-020 (FRD v1.94): the handoff requirements as a ring, ahead of the not-ready note and the plan's sections.
+  blocks.push(digitalWillHandoffProgress(handoff.missingRequirements, entryCount, pageHref));
   if (handoff.state !== 'READY') {
     blocks.push({
       type: 'LIMITATION', id: 'digital-will-handoff', title: 'Not ready to hand off yet',

@@ -1865,6 +1865,72 @@ test('on a phone, the closing-day ring, tiles and steps fit the screen (FRD v1.9
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('renovation readiness answers with a ring over the blocking items only, the open ones as steps linking to the case and none deciding anything (FRD v1.94)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Is my kitchen remodel ready to start?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-renovation-readiness-ring [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: '50% ready. 2 of 4 blocking items satisfied or acknowledged' })).toBeVisible();
+  await expect(ring.locator('dl > div')).toHaveText(['Blocking2', 'Acknowledged1', 'Other open1']);
+  await expect(ring.locator('[data-ask-progress-step]')).toHaveCount(2);
+  await expect(ring.locator('[data-ask-progress-step]').first()).toContainText('Building permit');
+  await expect(ring.locator('[data-ask-progress-step]').first().getByRole('link', { name: /^Open / })).toHaveAttribute('href', /renovations\/case-1\/readiness/);
+  await expect(ring.getByRole('button')).toHaveCount(0);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, the renovation readiness ring, tiles and steps fit the screen (FRD v1.94)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Is my kitchen remodel ready to start?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-renovation-readiness-ring [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: /^50% ready/ })).toBeVisible();
+  for (const element of [...await ring.locator('dl > div').all(), ...await ring.locator('[data-ask-progress-step]').all()]) {
+    const box = await element.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('the home continuity plan answers with a handoff ring over three requirements, in the plan\'s own words, repeating no entry or contact detail (FRD v1.94)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home continuity plan');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-digital-will-ring [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: '67% ready. 2 of 3 handoff requirements met' })).toBeVisible();
+  await expect(ring.locator('dl > div')).toHaveText(['Met2', 'Missing1', 'Entries4']);
+  await expect(ring.locator('[data-ask-progress-step]')).toHaveCount(1);
+  await expect(ring.locator('[data-ask-progress-step]').first()).toContainText('Add an email or phone number for the primary contact.');
+  await expect(ring.locator('[data-ask-progress-step]').first().getByRole('link', { name: /^Open / })).toHaveAttribute('href', /home-digital-will/);
+  await expect(ring.getByRole('button')).toHaveCount(0);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, the continuity plan ring, tiles and steps fit the screen (FRD v1.94)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home continuity plan');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const ring = page.locator('#ask-execution-execution-digital-will-ring [data-display-pattern="progress"]');
+  await expect(ring.getByRole('img', { name: /^67% ready/ })).toBeVisible();
+  for (const element of [...await ring.locator('dl > div').all(), ...await ring.locator('[data-ask-progress-step]').all()]) {
+    const box = await element.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('home actions show their priorities as shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

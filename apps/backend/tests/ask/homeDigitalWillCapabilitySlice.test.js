@@ -128,3 +128,41 @@ test('the operation is fully registered: its own skill, the bridge, and the card
   const launch = capabilityCardLaunch('home-digital-will').inlineLaunch;
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'HOME_DIGITAL_WILL');
 });
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-020, FRD v1.94): the handoff requirements as a progress ring.
+const { digitalWillHandoffProgress } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+
+test('the ring is the handoff check\'s three requirements, not the plan\'s self-reported percent; an unreachable primary or none at all lowers it', () => {
+  const ready = digitalWillHandoffProgress([], 4, PAGE);
+  assert.equal(ready.percent, 100);
+  assert.equal(ready.basis, '3 of 3 handoff requirements met');
+  assert.deepEqual(ready.nextSteps, []);
+  const noMethod = digitalWillHandoffProgress(['primary-contact-method'], 4, PAGE);
+  assert.equal(noMethod.percent, 67);
+  assert.deepEqual(noMethod.nextSteps.map((step) => step.title), ['Add an email or phone number for the primary contact.']);
+  // No primary contact also means there is no way to reach one, though the check lists only the first.
+  const none = digitalWillHandoffProgress(['emergency-instruction', 'primary-trusted-contact'], 0, PAGE);
+  assert.equal(none.percent, 0);
+  assert.deepEqual(none.metrics.map((entry) => [entry.label, entry.value]), [['Met', '0'], ['Missing', '3'], ['Entries', '0']]);
+  assert.deepEqual(none.nextSteps.map((step) => step.id), ['handoff-emergency-instruction', 'handoff-primary-trusted-contact', 'handoff-primary-contact-method']);
+  assert.ok(none.nextSteps.every((step) => step.href === PAGE && (step.actions ?? []).length === 0));
+  AskPresentationBlockSchema.parse(none);
+});
+
+test('the real handler puts the ring after the summary, ignores the self-reported percent, and repeats no entry or contact detail', async () => {
+  HomeDigitalWillService.prototype.getByProperty = async () => will({ completionPercent: 100, trustedContacts: [{ id: 'c1', name: 'Jordan Lee', email: null, phone: null, notes: SECRET, relationship: 'Sibling', role: 'FAMILY_MEMBER', accessLevel: 'EMERGENCY_ONLY', isPrimary: true }] });
+  const result = await capabilityInvoke('HOME_DIGITAL_WILL', { userId: 'u1', propertyId: 'p1', message: 'Show my home continuity plan' }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  assert.deepEqual(result.blocks.map((block) => block.id).slice(0, 3), ['digital-will-summary', 'digital-will-progress', 'digital-will-handoff']);
+  const ring = result.blocks[1];
+  assert.equal(ring.percent, 67);
+  assert.equal(ring.basis, '2 of 3 handoff requirements met');
+  assert.equal(JSON.stringify(ring).includes(SECRET), false);
+  assert.equal(JSON.stringify(ring).includes('Jordan'), false);
+});
+
+test('PROGRESS is allowed for the operation in the registry and the home digital will skill', () => {
+  const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
+  assert.ok(ASK_OPERATION_DEFINITIONS.HOME_DIGITAL_WILL.allowedBlockTypes.includes('PROGRESS'));
+  assert.ok(getSkillForOperation('HOME_DIGITAL_WILL').allowedResultBlocks.includes('PROGRESS'));
+});
