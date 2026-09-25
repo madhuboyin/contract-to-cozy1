@@ -141,4 +141,4 @@ How it was done: a script moved named top-level declarations unchanged, with a c
 
 **Known leftovers.** `askHandlerSupport.ts` (1,250 lines) is a shared bucket and could be split by subject. `roomMapFacts` and a few other helpers sit in the file of the handler they were found in (for example `homeTimeline.handler.ts`) rather than with their own domain. Some handler files still import each other's exports (`miscHandlers` imports from `homeRecordWrites`); no cycle exists today (the test suite loads everything), but nothing enforces it.
 
-**Guardrail suggested:** a test that fails if `askOrchestrator.service.ts` grows past 300 lines, and one that fails if any file under `handlers/` imports `askOrchestrator.service`.
+**Guardrails (added, `tests/ask/orchestratorDecompositionGuardrails.test.js`):** the orchestrator may not exceed 300 lines or declare a function or registration; no handler, lifecycle, support or formatting file may import it; every handler and lifecycle file must be imported by it.
