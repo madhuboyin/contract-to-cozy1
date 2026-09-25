@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
 import { DetailSheetFrame } from './patterns/PatternParts';
 import { HorizontalTrack, ShelfCard } from './patterns/ShelvesView';
+import { useCalmAnswer } from './blocks/calmContext';
 import type { PropertyMaintenanceTask } from '@/types';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -143,6 +144,9 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   onChooseLayout?: (layout: 'LIST' | 'SHELVES') => void;
 }) {
   const controls = useContext(ResultViewContext);
+  // IW-CALM-002/009/010 (FRD v1.111): inside a calm answer this list drops its own frame, title, paging note and dividers.
+  const calm = useCalmAnswer();
+  const sectionFrame = calm ? 'py-1' : 'border-b border-slate-100 p-4';
   const [localDetailTaskId, setLocalDetailTaskId] = useState<string | null>(null);
   const [unavailableTaskIds, setUnavailableTaskIds] = useState<Set<string>>(() => new Set());
   const [canonicalStatuses, setCanonicalStatuses] = useState<Record<string, string>>({});
@@ -166,15 +170,15 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
 
   const taskDetail = (taskId: string, item: Item) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={closeDetail} />;
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-display-pattern={layout === 'SHELVES' ? 'shelves' : undefined}>
-    <div className="border-b border-slate-100 p-4">
-      <h3 className="font-semibold text-slate-950">{block.title}</h3>
-      {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
-      {onChooseLayout && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+  return <section className={calm ? 'space-y-3' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white'} data-display-pattern={layout === 'SHELVES' ? 'shelves' : undefined}>
+    <div className={calm ? 'flex flex-wrap items-center justify-between gap-2' : 'border-b border-slate-100 p-4'}>
+      <h3 className={calm ? 'sr-only' : 'font-semibold text-slate-950'}>{block.title}</h3>
+      {!calm && block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {onChooseLayout && <div className={cn(calm ? 'order-2' : 'mt-3', 'inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1')} role="group" aria-label={`View ${block.title}`}>
         {(['SHELVES', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={layout === option} onClick={() => onChooseLayout(option)}
           className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'SHELVES' ? 'Shelves' : 'List'}</button>)}
       </div>}
-      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Maintenance filters">
+      <div className={cn(!calm && 'mt-3', 'flex flex-wrap gap-2')} role="group" aria-label="Maintenance filters">
         {block.filters.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active}
           onClick={() => onFilter(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
       </div>
@@ -184,9 +188,9 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
       const shown = section.items.slice(0, MAINTENANCE_SHELF_CARD_LIMIT);
       const partial = shown.length < section.count;
       if (section.items.length === 0) {
-        return <div key={section.id} className="border-b border-slate-100 p-4"><h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{section.title}</h4><p className="mt-2 text-sm text-slate-500">No matching tasks.</p></div>;
+        return <div key={section.id} className={sectionFrame}><h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{section.title}</h4><p className="mt-2 text-sm text-slate-500">No matching tasks.</p></div>;
       }
-      return <div key={section.id} className="border-b border-slate-100 p-4" data-maintenance-shelf={section.id}>
+      return <div key={section.id} className={sectionFrame} data-maintenance-shelf={section.id}>
         <HorizontalTrack label={section.title} countLabel={partial ? `Showing ${offset ? `${offset + 1}–${offset + shown.length}` : shown.length} of ${section.count}` : `${section.count} task${section.count === 1 ? '' : 's'}`}>
           {shown.map((item) => <ShelfCard key={item.id} item={item} disabled={disabled} selected={controls?.view.selectedTaskId === item.id}
             triggerProps={{ 'data-ask-task-id': item.id, 'data-maintenance-detail-trigger': item.id, 'data-ask-detail-trigger': item.id, 'data-ask-detail-block': block.id }}
@@ -200,7 +204,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     {layout === 'LIST' && block.sections.map((section) => {
       const offset = section.offset ?? 0;
       const visible = controls?.view.visibleCounts[section.id] ?? 5;
-      return <div key={section.id} className="border-b border-slate-100 p-4">
+      return <div key={section.id} className={sectionFrame}>
         <h4 className="font-semibold">{section.title} · {section.count}</h4>
         {section.items.length === 0 && <p className="mt-2 text-sm text-slate-500">No matching tasks.</p>}
         <ul className="mt-3 space-y-3">
@@ -232,7 +236,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         </ul>
         {controls && visible < section.items.length && <button type="button" disabled={disabled} className="mt-3 min-h-10 text-sm font-semibold text-teal-800" onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 5) } }))}>Show more {section.title.toLowerCase()} tasks ({offset + Math.min(visible, section.items.length)} of {section.count} reached)</button>}
         {(offset > 0 || offset + section.items.length < section.count) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
-          <p className="text-xs text-slate-500">Server results {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
+          <p className="text-xs text-slate-500">{calm ? 'Tasks' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
           <div className="flex gap-2">
             {offset > 0 && <button type="button" disabled={disabled} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous page<span className="sr-only"> of {section.title}</span></button>}
             {offset + section.items.length < section.count && <button type="button" disabled={disabled} className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
@@ -244,6 +248,6 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     {layout === 'SHELVES' && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
       {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
     </DetailSheetFrame>}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
+    <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
   </section>;
 }

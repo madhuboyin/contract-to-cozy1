@@ -64,6 +64,10 @@ const SummaryBlockSchema = z.object({
   // IW-PRES-013 (answer first): up to four number chips taken from the same records as the result. Optional so
   // existing producers are unchanged.
   chips: z.array(AskAnswerChipSchema).max(4).optional(),
+  // IW-CALM-001 (FRD v1.111): a one-sentence answer and one supporting line, composed by the producer from the same
+  // counts as the chips. Optional so existing producers are unchanged; a client falls back to `title` and `body`.
+  headline: z.string().max(200).optional(),
+  supportLine: z.string().max(240).optional(),
 });
 
 // Ask Cozy Stage 3, Phase 5 (implementation plan §11; FRD §28/§29). The one

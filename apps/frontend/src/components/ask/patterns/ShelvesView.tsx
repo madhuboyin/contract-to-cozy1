@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import type { AskAction, AskGroupedListItem, AskPresentationBlock } from '@/features/ask/types';
 import { AskContextLink } from '../blocks/context';
+import { useCalmAnswer } from '../blocks/calmContext';
 import { ItemDetailSheet, TONE_STRIPE, type ItemActionHandler } from './PatternParts';
 
 type Section = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number];
@@ -16,6 +17,8 @@ type Section = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections
  */
 export function HorizontalTrack({ label, countLabel, children }: { label: string; countLabel: string; children: ReactNode }) {
   const trackRef = useRef<HTMLDivElement>(null);
+  // IW-CALM-010: on touch devices the track is swiped, so the arrow buttons appear on pointer devices only.
+  const calm = useCalmAnswer();
   const [edges, setEdges] = useState({ start: true, end: true });
   const sync = useCallback(() => {
     const track = trackRef.current;
@@ -37,7 +40,7 @@ export function HorizontalTrack({ label, countLabel, children }: { label: string
       <div className="mb-2 flex items-center gap-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</h4>
         <span className="text-xs text-slate-500">{countLabel}</span>
-        <span className="ml-auto flex gap-1">
+        <span className={cn('ml-auto flex gap-1', calm && '[@media(hover:none)]:hidden')}>
           <button type="button" disabled={edges.start} onClick={() => move(-1)} aria-label={`Scroll ${label} back`} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-35"><ChevronLeft className="h-4 w-4" /></button>
           <button type="button" disabled={edges.end} onClick={() => move(1)} aria-label={`Scroll ${label} forward`} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-35"><ChevronRight className="h-4 w-4" /></button>
         </span>

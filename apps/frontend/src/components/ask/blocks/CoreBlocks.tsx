@@ -4,27 +4,51 @@ import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatib
 import { timelinePoint } from '@/features/ask/displayPatterns';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
+import { useCalmAnswer } from './calmContext';
 import type { AskBlockRenderer } from './types';
 
-export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => (
-  <section className={cn(
-    'rounded-2xl border p-4',
-    block.tone === 'CAUTION' && 'border-amber-200 bg-amber-50/70',
-    block.tone === 'CRITICAL' && 'border-red-200 bg-red-50/70',
-    block.tone === 'POSITIVE' && 'border-emerald-200 bg-emerald-50/70',
-    block.tone === 'DEFAULT' && 'border-slate-200 bg-white',
-  )}>
-    <h3 className="font-semibold text-slate-950">{block.title}</h3>
-    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
-    {/* IW-PRES-013: answer-first number chips, taken by the server from the same records as the result. */}
-    {block.chips && block.chips.length > 0 && (
-      <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="At a glance">
-        {block.chips.map((chip) => <li key={chip.label} data-ask-answer-chip={chip.tone.toLowerCase()} className={cn('rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums', ANSWER_CHIP_TONES[chip.tone])}>{chip.label}</li>)}
-      </ul>
-    )}
-    {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
-  </section>
-);
+function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBlock, { type: 'SUMMARY' }>['chips']> }) {
+  return (
+    <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="At a glance">
+      {chips.map((chip) => <li key={chip.label} data-ask-answer-chip={chip.tone.toLowerCase()} className={cn('rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums', ANSWER_CHIP_TONES[chip.tone])}>{chip.label}</li>)}
+    </ul>
+  );
+}
+
+// IW-CALM-001/002 (FRD v1.111): the answer as a headline, one supporting line and chips, with no frame or tint. Tone is
+// carried by the chips, not by a tinted container.
+function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const headline = block.headline?.trim() || block.title;
+  const supportLine = block.supportLine?.trim() || (block.headline ? null : block.body);
+  return (
+    <section data-calm-summary="">
+      <h3 className="font-display text-xl font-semibold leading-snug text-slate-950 sm:text-2xl">{headline}</h3>
+      {supportLine && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-500">{supportLine}</p>}
+      {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+      {block.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2 text-sm">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+    </section>
+  );
+}
+
+export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
+  const calm = useCalmAnswer();
+  if (calm) return <CalmSummary block={block} />;
+  return (
+    <section className={cn(
+      'rounded-2xl border p-4',
+      block.tone === 'CAUTION' && 'border-amber-200 bg-amber-50/70',
+      block.tone === 'CRITICAL' && 'border-red-200 bg-red-50/70',
+      block.tone === 'POSITIVE' && 'border-emerald-200 bg-emerald-50/70',
+      block.tone === 'DEFAULT' && 'border-slate-200 bg-white',
+    )}>
+      <h3 className="font-semibold text-slate-950">{block.title}</h3>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
+      {/* IW-PRES-013: answer-first number chips, taken by the server from the same records as the result. */}
+      {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+      {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+    </section>
+  );
+};
 
 const ANSWER_CHIP_TONES = {
   DEFAULT: 'bg-slate-100 text-slate-700',
@@ -56,7 +80,17 @@ export const ProactiveInsightBlock: AskBlockRenderer<'PROACTIVE_INSIGHT'> = ({ b
   </section>
 );
 
-export const BoundaryBlock: AskBlockRenderer<'BOUNDARY'> = ({ block }) => (
+// IW-CALM-005 (FRD v1.111): an informational limit is a muted footnote, not a warning card. Cautions and emergencies keep
+// their warning treatment because the homeowner may need to act on them.
+export const BoundaryBlock: AskBlockRenderer<'BOUNDARY'> = ({ block }) => {
+  const calm = useCalmAnswer();
+  if (calm && block.severity === 'INFO' && block.suggestions.length === 0 && !block.actions?.length) {
+    return <p data-calm-footnote="" className="text-xs leading-5 text-slate-500"><span className="font-medium text-slate-600">{block.title}.</span> {block.body}</p>;
+  }
+  return <WarningBoundary block={block} />;
+};
+
+const WarningBoundary = ({ block }: { block: Extract<AskPresentationBlock, { type: 'BOUNDARY' }> }) => (
   <section className={cn('rounded-2xl border p-4', block.severity === 'EMERGENCY' ? 'border-red-300 bg-red-50 text-red-950' : 'border-amber-200 bg-amber-50/70 text-slate-900')}>
     <div className="flex gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" /><div><h3 className="font-semibold">{block.title}</h3><p className="mt-2 text-sm leading-6">{block.body}</p></div></div>
     {block.suggestions.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-9 text-sm">{block.suggestions.map((item) => <li key={item}>{item}</li>)}</ul>}

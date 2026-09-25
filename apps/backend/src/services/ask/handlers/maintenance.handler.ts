@@ -113,6 +113,34 @@ function maintenanceTaskText(task: MaintenanceTaskContextTask): string {
     .filter(Boolean).join(' ').toLowerCase();
 }
 
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/**
+ * IW-CALM-001/011 (FRD v1.111): the maintenance answer as one sentence and one supporting line. Deterministic, from typed
+ * counts only. The headline states what needs attention; completed work is mentioned once, as hidden, so the numbers in
+ * the headline, the supporting line and the chips never appear to disagree.
+ */
+export function maintenanceCalmCopy(counts: {
+  overdueCount: number; dueSoonCount: number; openCount: number; unscheduledCount: number; hiddenCompletedCount: number;
+}): { headline: string; supportLine?: string } {
+  const { overdueCount, dueSoonCount, openCount, unscheduledCount, hiddenCompletedCount } = counts;
+  let headline: string;
+  if (overdueCount > 0 && dueSoonCount > 0) {
+    headline = `${plural(overdueCount, 'task is', 'tasks are')} overdue, and ${dueSoonCount} more ${dueSoonCount === 1 ? 'is' : 'are'} due in the next 30 days.`;
+  } else if (overdueCount > 0) {
+    headline = `${plural(overdueCount, 'task is', 'tasks are')} overdue.`;
+  } else if (dueSoonCount > 0) {
+    headline = `${plural(dueSoonCount, 'task is', 'tasks are')} due in the next 30 days.`;
+  } else {
+    headline = openCount > 0 ? `${plural(openCount, 'open task', 'open tasks')}, none overdue or due soon.` : 'No open maintenance tasks.';
+  }
+  const notes = [
+    unscheduledCount > 0 ? `${plural(unscheduledCount, 'open task has', 'open tasks have')} no due date.` : null,
+    hiddenCompletedCount > 0 ? `${plural(hiddenCompletedCount, 'completed task is', 'completed tasks are')} hidden.` : null,
+  ].filter((note): note is string => Boolean(note));
+  return notes.length > 0 ? { headline, supportLine: notes.join(' ') } : { headline };
+}
+
 export function maintenanceMoney(value: { toString(): string } | number | null | undefined): string | null {
   if (value == null) return null;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value));
@@ -908,6 +936,12 @@ export async function maintenanceResult(
       // anymore.
       : `${active.length} open, ${completed.length} completed, and ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} are recorded in the selected scope. ${unscheduledCount ? `${unscheduledCount} open task${unscheduledCount === 1 ? ' has' : 's have'} no due date. ` : ''}${includeCancelled ? 'Cancelled records are included.' : 'Cancelled records are excluded by default.'}`,
     tone: overdueCount ? 'CAUTION' : 'DEFAULT',
+    // IW-CALM-001/011 (FRD v1.111): the answer as one sentence and one supporting line, from the same counts as the chips.
+    // Completed work is described once, as hidden, and is not mixed into the headline.
+    ...(!creationFocus && displayed ? maintenanceCalmCopy({
+      overdueCount, dueSoonCount, openCount: active.length, unscheduledCount,
+      hiddenCompletedCount: showCompleted ? 0 : completed.length,
+    }) : {}),
     // IW-PRES-013: answer-first chips, from the same counts as the body above.
     ...(!creationFocus && displayed ? { chips: [
       { label: `${overdueCount} overdue`, tone: overdueCount ? 'CRITICAL' as const : 'DEFAULT' as const },
