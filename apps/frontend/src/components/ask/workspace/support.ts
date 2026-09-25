@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api/client';
-import type { AskCapabilityCategoryId, AskCaptureRequest, AskFeaturedPrompt, ConciergeHomeView } from '@/features/ask/types';
+import type { AskCapabilityCategoryId, AskCaptureRequest, AskExecutionResponse, AskFeaturedPrompt, ConciergeHomeView } from '@/features/ask/types';
+import { readResultView, resultViewKey } from '@/features/ask/resultViewState';
 
 export const fallbackPrompts: AskFeaturedPrompt[] = [
   { id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?', source: 'DISCOVERY' },
@@ -157,4 +158,19 @@ export function humanizeReason(reason: string): string {
     WATCH_THRESHOLD_REACHED: 'A monitored threshold was reached',
   };
   return copy[reason] ?? reason.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+// Puts the reader back where they were in a result after they return to it: on the selected task, else at the saved
+// scroll offset, else at the top of the result.
+export function restoreResultPosition(execution: AskExecutionResponse) {
+  const article = document.getElementById(`ask-execution-${execution.executionId}`);
+  if (!article) return;
+  const view = readResultView(window.sessionStorage, resultViewKey(execution.sessionId, execution.property?.id ?? 'general', execution.viewState?.resultId ?? execution.executionId));
+  const selected = Array.from(article.querySelectorAll<HTMLElement>('[data-ask-task-id]')).find((row) => row.dataset.askTaskId === view.selectedTaskId);
+  if (selected) {
+    selected.scrollIntoView({ block: 'center' });
+    selected.focus({ preventScroll: true });
+  } else if (view.scrollOffset !== null) {
+    window.scrollBy({ top: article.getBoundingClientRect().top - view.scrollOffset });
+  } else article.scrollIntoView({ block: 'start' });
 }
