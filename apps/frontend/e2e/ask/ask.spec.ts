@@ -1988,6 +1988,82 @@ test('on a phone, the pinned strip and a folded result fit the screen (FRD v1.95
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('the composer can stop a slow request, try again after a failure, and bring an earlier question back to change and resend (FRD v1.96)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const input = page.getByPlaceholder('Ask anything about your home…');
+
+  // A request that is held until released: Stop replaces Send, brings the question back, and discards the late answer.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/api/ask/executions', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    await held;
+    return route.fallback();
+  });
+  await input.fill('Show my status board');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.getByRole('button', { name: 'Send question' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Stop' }).click();
+  await expect(input).toHaveValue('Show my status board');
+  await expect(page.locator('form[aria-label="Ask Cozy question"]').getByRole('alert')).toContainText('Stopped.');
+  await expect(page.getByRole('button', { name: 'Send question' })).toBeVisible();
+  release();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  await expect(page.locator('#ask-execution-execution-status-board-shelves')).toHaveCount(0);
+
+  // A failed request comes back into the composer, and Try again sends it.
+  await page.unroute('**/api/ask/executions');
+  let failedOnce = false;
+  await page.route('**/api/ask/executions', async (route) => {
+    if (route.request().method() !== 'POST' || failedOnce) return route.fallback();
+    failedOnce = true;
+    return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'Ask is temporarily unavailable.' }) });
+  });
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.locator('form[aria-label="Ask Cozy question"]').getByRole('alert')).toContainText('Ask is temporarily unavailable.');
+  await expect(input).toHaveValue('Show my status board');
+  await page.getByRole('button', { name: 'Try again' }).click();
+  const first = page.locator('#ask-execution-execution-status-board-shelves');
+  await expect(first.getByRole('list', { name: 'Needs action, 2 items' })).toBeVisible();
+
+  // Change and resend: the question returns to the composer, focused, and the earlier answer stays.
+  await first.getByRole('button', { name: 'Change and resend this question' }).click();
+  await expect(input).toHaveValue('Show my status board');
+  await expect(input).toBeFocused();
+  await input.fill('What do I need for closing day?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.locator('#ask-execution-execution-buyer-closing-day-ring [data-display-pattern="progress"]')).toBeVisible();
+  await expect(first.getByRole('list', { name: 'Needs action, 2 items' })).toBeVisible();
+});
+
+test('on a phone, the Stop button and the Try again banner fit the composer (FRD v1.96)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route('**/api/ask/executions', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    await held;
+    return route.fallback();
+  });
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const stop = page.getByRole('button', { name: 'Stop' });
+  await expect(stop).toBeVisible();
+  const box = await stop.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  await stop.click();
+  const alert = page.locator('form[aria-label="Ask Cozy question"]').getByRole('alert');
+  await expect(alert).toContainText('Stopped.');
+  const alertBox = await alert.boundingBox();
+  expect(alertBox && alertBox.x >= 0 && alertBox.x + alertBox.width <= 390).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  release();
+});
+
 test('home actions show their priorities as shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

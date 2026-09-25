@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, MutableRefObject, Ref, useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Archive, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Pin, PinOff, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, Trash2, Wrench, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, ArrowRight, BellRing, BookOpen, CheckCircle2, CircleDollarSign, ClipboardCheck, Clock3, ExternalLink, History, Loader2, Maximize2, Pin, PinOff, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, Square, ThumbsDown, ThumbsUp, Trash2, Wrench, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
@@ -1032,7 +1032,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
 }
 
 function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, folded = false, pinned = false, onToggleFold, onTogglePin,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, folded = false, pinned = false, onToggleFold, onTogglePin, onEditQuestion,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -1066,6 +1066,8 @@ function ExecutionCard({
   pinned?: boolean;
   onToggleFold?: () => void;
   onTogglePin?: () => void;
+  // FRD v1.96: puts this result's question back in the composer to change and send again.
+  onEditQuestion?: (question: string) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1183,6 +1185,7 @@ function ExecutionCard({
       controls.change((view) => ({ ...view, scrollOffset, selectedTaskId: url.searchParams.get('taskId') ?? view.selectedTaskId }));
     }}>
       <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
+      {onEditQuestion && <div className="flex justify-end"><button type="button" disabled={loading} onClick={() => onEditQuestion(execution.question)} aria-label="Change and resend this question" className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100">Change and resend</button></div>}
       <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><Sparkles className="h-3.5 w-3.5" />{execution.continuesExecutionId ? 'Updated view' : 'Cozy response'}{execution.property ? ` · ${execution.property.label}` : ''}</h2>
@@ -1319,6 +1322,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   // refreshError/retry affordance ExecutionCard's own Refresh button has.
   const [refreshIssues, setRefreshIssues] = useState<Record<string, { message: string; accessLost: boolean }>>({});
   const requests = useRef(createResultRequestTracker());
+  // FRD v1.96 (composer): tokens of requests the homeowner stopped waiting for; their late answers are discarded and never clear a newer request's loading state.
+  const stoppedRequests = useRef(new Set<number>());
+  const inFlight = useRef<{ key: string; token: number; message: string } | null>(null);
   const deniedProperties = useRef(new Set<string>());
   const [refreshRequests, setRefreshRequests] = useState<Record<string, number>>({});
   const endRef = useRef<HTMLDivElement>(null);
@@ -1695,6 +1701,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     const source = executions.find((item) => item.executionId === promptContext?.sourceExecutionId);
     const requestKey = source ? resultRequestKey(source) : `${sessionId}:question`;
     const requestToken = requests.current.begin(requestKey);
+    inFlight.current = { key: requestKey, token: requestToken, message };
     setInput('');
     window.localStorage.removeItem(draftStorageKey(selectedPropertyId, requestedSessionId));
     setError(null);
@@ -1765,8 +1772,35 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       }
       if (attribution) track('ask_prompt_outcome', { propertyId: selectedPropertyId ?? null, ...attribution, status: 'REQUEST_FAILED', succeeded: false });
     } finally {
-      setLoading(false);
+      // A request the homeowner stopped must not clear the loading state of one started after it.
+      if (!stoppedRequests.current.delete(requestToken)) {
+        setLoading(false);
+        if (inFlight.current?.token === requestToken) inFlight.current = null;
+      }
     }
+  };
+
+  // FRD v1.96: stop waiting for the answer. The request cannot be recalled once sent, so it may still complete on the
+  // server (and then shows in the history); its answer is discarded here, and the question comes back into the composer.
+  const stopAsking = () => {
+    const pending = inFlight.current;
+    if (!pending) return;
+    stoppedRequests.current.add(pending.token);
+    // A newer token for the same key makes this request's late answer stale, without touching other requests.
+    requests.current.begin(pending.key);
+    inFlight.current = null;
+    setLoading(false);
+    setInput(pending.message);
+    if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), pending.message);
+    setError('Stopped. If the request had already reached Ask, its answer may still appear in your history.');
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+  // FRD v1.96: bring an earlier question back into the composer to change and send again. The earlier answer stays.
+  const editAndResend = (question: string) => {
+    setError(null);
+    setInput(question);
+    if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), question);
+    window.setTimeout(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(question.length, question.length); }, 0);
   };
 
   const submit = (event: FormEvent) => { event.preventDefault(); void ask(input); };
@@ -2142,10 +2176,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   };
   const renderComposer = (placement: 'hero' | 'footer') => (
     <form onSubmit={submit} className="mx-auto w-full max-w-3xl" aria-label="Ask Cozy question">
-      {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4" />{error}</div>}
+      {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
+        {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
       <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100', placement === 'hero' ? 'rounded-3xl p-3 shadow-[0_12px_40px_-20px_rgba(15,118,110,0.45)]' : 'rounded-2xl')}>
         <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? 2 : 1} maxLength={4000} placeholder="Ask anything about your home…" className={cn('max-h-32 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? 'min-h-14 py-3 text-base' : 'min-h-10 py-2 text-sm')} />
-        <button type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className={cn('grid shrink-0 place-items-center rounded-2xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40', placement === 'hero' ? 'h-12 w-12' : 'h-10 w-10 rounded-xl')}><Send className="h-4 w-4" /></button>
+        {loading && inFlight.current
+          ? <button key="stop" type="button" onClick={stopAsking} aria-label="Stop" className={cn('grid shrink-0 place-items-center bg-slate-800 text-white transition hover:bg-slate-900', placement === 'hero' ? 'h-12 w-12 rounded-2xl' : 'h-10 w-10 rounded-xl')}><Square className="h-4 w-4" /></button>
+          : <button key="send" type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className={cn('grid shrink-0 place-items-center rounded-2xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40', placement === 'hero' ? 'h-12 w-12' : 'h-10 w-10 rounded-xl')}><Send className="h-4 w-4" /></button>}
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>
     </form>
@@ -2274,6 +2311,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   pinned={conversationView.view.pinned.includes(execution.executionId)}
                   onToggleFold={() => conversationView.toggleFold(execution.executionId)}
                   onTogglePin={() => conversationView.togglePin(execution.executionId)}
+                  onEditQuestion={editAndResend}
                 />
               </AskActionReturnContext.Provider>;
             })}
