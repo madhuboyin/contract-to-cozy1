@@ -18,7 +18,7 @@ describe('AskWorkspace split guardrails', () => {
   });
 
   it('no workspace file imports AskWorkspace, and each stays below 700 lines', () => {
-    expect(workspaceFiles.sort()).toEqual(['CaptureCards.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'support.ts', 'useConversationHistory.ts', 'usePendingWork.ts', 'useSessionHistoryActions.ts', 'useAskRequest.ts']);
+    expect(workspaceFiles.sort()).toEqual(['CaptureCards.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'support.ts', 'useAskRequest.ts', 'useConversationHistory.ts', 'usePendingWork.ts', 'useSessionHistoryActions.ts']);
     for (const name of workspaceFiles) {
       const source = read(path.join(workspaceDir, name));
       expect(source).not.toMatch(/from '(\.\.\/)?(\.\/)?AskWorkspace'/);
