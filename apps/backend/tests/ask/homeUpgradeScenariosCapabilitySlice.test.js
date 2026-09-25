@@ -89,21 +89,27 @@ test('options are grouped by system in the page\'s order, with the page\'s label
   assert.equal(result.blocks[0].title, '4 saved upgrade options across 3 systems');
   assert.equal(result.blocks[0].body, '2 with results ready, 1 selected. 1 has results that are out of date because the home\'s records changed; recalculate on the page.');
   assert.equal(result.reasonCode, 'HOME_UPGRADE_RESULTS_STALE');
+  // FRD v1.89: the system with two options is a strip; the systems with one option stay in the list, in the page's order.
   const list = result.blocks.find((block) => block.id === 'home-upgrade-options');
+  const strip = result.blocks.find((block) => block.id === 'home-upgrade-options-wh');
+  assert.deepEqual(result.blocks.map((block) => block.id), ['home-upgrade-summary', 'home-upgrade-options-wh', 'home-upgrade-options', 'home-upgrade-boundary']);
   // Selected first, then a calculation in progress (pinned), then the newest.
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [
-    ['Basement water heater', ['Heat pump water heater', 'Option repair']],
     ['Whole-home plans', ['Add solar']],
     ['Electrical Panel', ['Panel upgrade']],
   ]);
-  const [heatPump, repair] = list.sections[0].items;
-  assert.deepEqual(heatPump.meta, ['Replace Component', 'Selected', 'Upfront $2,800–$4,200', 'Savings $450 a year', 'Payback 6 years']);
-  assert.equal(heatPump.status, 'Results Ready');
-  assert.deepEqual(repair.meta, ['Repair', 'Upfront $400–$700']);
-  assert.equal(list.sections[1].items[0].status, 'Calculating');
-  assert.deepEqual(list.sections[1].items[0].meta, ['Add Feature', 'Pinned']);
-  assert.equal(list.sections[2].items[0].status, 'Results out of date');
-  assert.equal(heatPump.href, PAGE);
+  assert.equal(strip.title, 'Basement water heater options');
+  assert.deepEqual(strip.options.map((option) => option.label), ['Heat pump water heater', 'Option repair']);
+  const attributes = (option) => Object.fromEntries(option.attributes.map((attribute) => [attribute.label, attribute.value]));
+  const [heatPump, repair] = strip.options;
+  assert.deepEqual(attributes(heatPump), { 'Upfront cost': '$2,800–$4,200', 'Annual savings': '$450', Payback: '6 years', Results: 'Results Ready' });
+  assert.deepEqual(heatPump.badges, [{ label: 'Selected', basis: 'You chose this option in the Home Upgrade Planner.', policyCode: 'UPGRADE_SCENARIO_SELECTED' }]);
+  assert.equal(heatPump.summary, 'Replace Component');
+  assert.deepEqual(attributes(repair), { 'Upfront cost': '$400–$700', 'Annual savings': 'Not calculated yet', Payback: 'Not calculated yet', Results: 'Results Ready' });
+  assert.equal(repair.badges, undefined);
+  assert.equal(list.sections[0].items[0].status, 'Calculating');
+  assert.deepEqual(list.sections[0].items[0].meta, ['Add Feature', 'Pinned']);
+  assert.equal(list.sections[1].items[0].status, 'Results out of date');
   assert.equal(JSON.stringify(result).includes('secret assumptions'), false);
   assert.match(result.blocks.at(-1).body, new RegExp(`${ELECTRICAL_NOTE}$`));
 });
@@ -144,4 +150,73 @@ test('the operation is fully registered: its own skill, the bridge, and the card
   assert.equal(ASK_OPERATION_CAPABILITY.HOME_UPGRADE_SCENARIOS, 'home-digital-twin');
   const launch = capabilityCardLaunch('home-digital-twin').inlineLaunch;
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'HOME_UPGRADE_SCENARIOS');
+});
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-016, FRD v1.89): each system's two to four options as a comparison strip.
+const { homeUpgradeComparison } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+const noRun = () => false;
+
+test('only the homeowner\'s own Selected decision is badged; other decisions are shown as a fact, and there is no lowest-cost or fastest-payback badge', () => {
+  const rows = [
+    scenario('a', { decisionStatus: 'SELECTED', impacts: [impact('UPFRONT_COST', { valueNumeric: 500 }), impact('PAYBACK_PERIOD', { unit: 'YEARS', valueNumeric: 2 })] }),
+    scenario('b', { decisionStatus: 'DEFERRED', impacts: [impact('UPFRONT_COST', { valueNumeric: 900 }), impact('PAYBACK_PERIOD', { unit: 'YEARS', valueNumeric: 9 })] }),
+    scenario('c', { decisionStatus: 'REJECTED', status: 'FAILED' }),
+  ];
+  const strip = homeUpgradeComparison('wh', 'Water heater', rows, noRun);
+  assert.deepEqual(strip.options.map((option) => (option.badges ?? []).map((badge) => badge.label)), [['Selected'], [], []]);
+  assert.equal(strip.options[1].attributes.find((attribute) => attribute.label === 'Your decision').value, 'Deferred');
+  assert.equal(strip.options[2].attributes.find((attribute) => attribute.label === 'Results').tone, 'CAUTION');
+  assert.ok(strip.options.every((option) => option.attributes.every((attribute) => attribute.leading === undefined)));
+  AskPresentationBlockSchema.parse(strip);
+});
+
+test('the upfront cost is declared as an amount only when it is one recorded dollar figure, never from a range or a user-supplied value', () => {
+  const single = homeUpgradeComparison('wh', 'Water heater', [
+    scenario('a', { impacts: [impact('UPFRONT_COST', { valueNumeric: 500 })] }),
+    scenario('b', { impacts: [impact('UPFRONT_COST', { valueNumeric: 900, valueLow: 900, valueHigh: 900 })] }),
+  ], noRun);
+  assert.deepEqual(single.options.map((option) => option.amount), [{ value: 500, currency: 'USD' }, { value: 900, currency: 'USD' }]);
+  const mixed = homeUpgradeComparison('wh', 'Water heater', [
+    scenario('a', { impacts: [impact('UPFRONT_COST', { valueNumeric: 550, valueLow: 400, valueHigh: 700 })] }),
+    scenario('b', { impacts: [impact('UPFRONT_COST', { valueNumeric: 900, isUserSupplied: true })] }),
+  ], noRun);
+  assert.deepEqual(mixed.options.map((option) => option.amount), [undefined, undefined]);
+});
+
+test('one option, or five and more, for a system stay in the list', () => {
+  assert.equal(homeUpgradeComparison('wh', 'Water heater', [scenario('a')], noRun), null);
+  assert.equal(homeUpgradeComparison('wh', 'Water heater', ['a', 'b', 'c', 'd', 'e'].map((id) => scenario(id)), noRun), null);
+});
+
+test('several systems each get their own strip in the page\'s order, and a system too big for a strip stays listed', () => {
+  const wh = { id: 'wh', componentType: 'WATER_HEATER', label: 'Water heater' };
+  const roof = { id: 'roof', componentType: 'ROOF', label: 'Roof' };
+  const rows = [
+    scenario('w1', { componentId: 'wh', component: wh }), scenario('w2', { componentId: 'wh', component: wh }),
+    scenario('r1', { componentId: 'roof', component: roof, updatedAt: '2026-09-20T12:00:00.000Z' }), scenario('r2', { componentId: 'roof', component: roof, updatedAt: '2026-09-20T12:00:00.000Z' }),
+    ...['a', 'b', 'c', 'd', 'e'].map((id) => scenario(`h${id}`, { componentId: 'hv', component: { id: 'hv', componentType: 'HVAC', label: 'HVAC' } })),
+  ];
+  const result = homeUpgradeScenariosFromView(rows, 'p1', NOW);
+  assert.deepEqual(result.blocks.map((block) => block.id), ['home-upgrade-summary', 'home-upgrade-options-roof', 'home-upgrade-options-wh', 'home-upgrade-options', 'home-upgrade-boundary']);
+  assert.deepEqual(result.blocks.find((block) => block.id === 'home-upgrade-options').sections.map((section) => section.title), ['HVAC']);
+});
+
+test('the real handler keeps a strip answer through the answer checker with answer relevance on', async () => {
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const result = await capabilityInvoke('HOME_UPGRADE_SCENARIOS', { userId: 'u1', propertyId: 'p1', message: 'Show my upgrade planner options' }, { propertyAccess: { role: 'VIEWER', userId: 'u1', propertyId: 'p1' } });
+  assert.ok(result.blocks.some((block) => block.type === 'COMPARISON'));
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'Show my upgrade planner options', operationId: 'HOME_UPGRADE_SCENARIOS', propertyId: 'p1', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('HOME_UPGRADE_SCENARIOS')]),
+  });
+  assert.equal(checked.result.status, 'ANSWERED', JSON.stringify(checked.semantic));
+  assert.ok(checked.result.blocks.some((block) => block.type === 'COMPARISON'));
+});
+
+test('COMPARISON is allowed for the operation in the registry and the home digital twin skill', () => {
+  const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
+  assert.ok(ASK_OPERATION_DEFINITIONS.HOME_UPGRADE_SCENARIOS.allowedBlockTypes.includes('COMPARISON'));
+  assert.ok(getSkillForOperation('HOME_UPGRADE_SCENARIOS').allowedResultBlocks.includes('COMPARISON'));
 });

@@ -8260,6 +8260,56 @@ function upgradeImpactDisplay(scenario: UpgradeScenarioView, impactType: string)
   return impact.valueText ?? null;
 }
 
+// IW-PRES-016 (FRD v1.89): a system's two to four saved upgrade options as a comparison strip. The only badge is
+// "Selected", the homeowner's own recorded decision. There is no lowest-cost or fastest-payback badge (the figures
+// are ranges that overlap) and no leading mark. The upfront cost is declared as an amount only when it is a single
+// recorded figure in dollars; bars are drawn only when every option has one.
+export function homeUpgradeComparison(
+  key: string,
+  label: string,
+  rows: readonly UpgradeScenarioView[],
+  isActiveRun: (scenario: UpgradeScenarioView) => boolean,
+): Extract<AskPresentationBlock, { type: 'COMPARISON' }> | null {
+  if (rows.length < 2 || rows.length > 4) return null;
+  const amountOf = (scenario: UpgradeScenarioView) => {
+    const impact = scenario.impacts.find((row) => row.impactType === 'UPFRONT_COST' && !row.isUserSupplied);
+    if (!impact || impact.unit !== 'USD' || impact.valueNumeric == null || !Number.isFinite(Number(impact.valueNumeric)) || Number(impact.valueNumeric) < 0) return null;
+    if ((impact.valueLow != null && impact.valueLow !== impact.valueNumeric) || (impact.valueHigh != null && impact.valueHigh !== impact.valueNumeric)) return null;
+    return { value: Number(impact.valueNumeric), currency: 'USD' };
+  };
+  return {
+    type: 'COMPARISON', id: `home-upgrade-options-${key.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, title: `${label} options`,
+    description: 'Saved options for this system, from the Home Upgrade Planner. Costs, savings and payback are planning ranges, not quotes.',
+    options: rows.map((scenario) => {
+      const cost = upgradeImpactDisplay(scenario, 'UPFRONT_COST');
+      const savings = upgradeImpactDisplay(scenario, 'ANNUAL_SAVINGS');
+      const payback = upgradeImpactDisplay(scenario, 'PAYBACK_PERIOD');
+      const stale = scenario.status === 'COMPUTED' && Boolean(scenario.staleAt);
+      const results = isActiveRun(scenario)
+        ? (scenario.latestRun?.status === 'RUNNING' ? 'Calculating' : 'Queued')
+        : stale ? 'Results out of date' : UPGRADE_SCENARIO_STATUS_LABELS[scenario.status] ?? readableCode(scenario.status);
+      const decision = UPGRADE_DECISION_LABELS[scenario.decisionStatus];
+      const amount = amountOf(scenario);
+      return {
+        id: scenario.id, label: scenario.name, summary: UPGRADE_SCENARIO_TYPE_LABELS[scenario.scenarioType] ?? readableCode(scenario.scenarioType),
+        ...(scenario.decisionStatus === 'SELECTED'
+          ? { badges: [{ label: 'Selected', basis: 'You chose this option in the Home Upgrade Planner.', policyCode: 'UPGRADE_SCENARIO_SELECTED' }] }
+          : {}),
+        ...(amount ? { amount } : {}),
+        attributes: [
+          { label: 'Upfront cost', value: cost ?? 'Not calculated yet', tone: 'DEFAULT' as const },
+          { label: 'Annual savings', value: savings ?? 'Not calculated yet', tone: 'DEFAULT' as const },
+          { label: 'Payback', value: payback ?? 'Not calculated yet', tone: 'DEFAULT' as const },
+          { label: 'Results', value: results, tone: stale || scenario.status === 'FAILED' ? 'CAUTION' as const : 'DEFAULT' as const },
+          ...(decision && scenario.decisionStatus !== 'SELECTED' ? [{ label: 'Your decision', value: decision, tone: 'DEFAULT' as const }] : []),
+        ],
+        actions: [],
+      };
+    }),
+    actions: [],
+  };
+}
+
 export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenarioView[] | null, propertyId: string, now = new Date()): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-digital-twin`;
   const openAction = { id: 'open-home-digital-twin', label: 'Open Home Upgrade Planner', href: pageHref, style: 'PRIMARY' as const };
@@ -8308,9 +8358,14 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
     tone: outOfDate ? 'CAUTION' : 'DEFAULT',
     actions: [openAction],
   }];
-  blocks.push({
+  // IW-PRES-016 (FRD v1.89): a system with two to four saved options gets its own comparison strip, in the page's order;
+  // the other systems (one option, or five and more) stay in the list below.
+  const strips = ordered.map((group) => ({ group, strip: homeUpgradeComparison(group.key, group.label, group.rows, activeRun) }));
+  for (const { strip } of strips) if (strip) blocks.push(strip);
+  const listed = strips.filter(({ strip }) => !strip).map(({ group }) => group);
+  if (listed.length) blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-options', title: 'Upgrade options by system', description: 'Grouped by home system, as on the page. Open the planner for the full comparison.',
-    sections: ordered.map((group) => ({
+    sections: listed.map((group) => ({
       id: `home-upgrade-${group.key}`, title: group.label, count: group.rows.length,
       items: group.rows.map((scenario) => {
         const cost = upgradeImpactDisplay(scenario, 'UPFRONT_COST');

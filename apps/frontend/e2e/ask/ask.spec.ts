@@ -1464,6 +1464,56 @@ test('on a phone, the refinance scenario and current comparison cards stack with
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('saved upgrade options show as one strip per system with only the Selected badge, bars only for single figures, and a one-option system left in the list (FRD v1.89)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my upgrade planner options');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-home-upgrade-strip');
+  const water = response.getByRole('list', { name: 'Basement water heater options options' });
+  await expect(water.getByRole('listitem')).toHaveCount(2);
+  const heatPump = water.getByRole('listitem', { name: /Heat pump water heater/ });
+  await expect(heatPump.getByText('Selected')).toHaveAttribute('data-badge-policy', 'UPGRADE_SCENARIO_SELECTED');
+  await expect(heatPump).toContainText('$2,800–$4,200');
+  await expect(heatPump).toContainText('6 years');
+  await expect(water.locator('[data-badge-policy]')).toHaveCount(1);
+  await expect(water.getByRole('img')).toHaveCount(0);
+
+  const roof = response.getByRole('list', { name: 'Roof options options' });
+  await expect(roof.getByRole('listitem', { name: /Full re-roof/ }).getByRole('img', { name: 'Highest price of these options' })).toBeVisible();
+  await expect(roof.getByRole('listitem', { name: /Patch the north slope/ }).getByRole('img', { name: '25% of the highest price of these options' })).toBeVisible();
+  await expect(roof.getByRole('listitem', { name: /Patch the north slope/ })).toContainText('Results out of date');
+
+  await expect(response.getByRole('heading', { name: 'Electrical Panel' })).toBeVisible();
+  await expect(response.getByText('Panel upgrade')).toBeVisible();
+  await response.getByRole('button', { name: 'Table', exact: true }).first().click();
+  const table = response.getByRole('table', { name: 'Basement water heater options' });
+  await expect(table.getByRole('columnheader')).toHaveText(['Heat pump water heater', 'Repair the tank']);
+  await expect(table.locator('[data-leading="true"]')).toHaveCount(0);
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, each upgrade strip stacks its cards within the screen (FRD v1.89)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Show my upgrade planner options');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-home-upgrade-strip');
+  for (const name of ['Basement water heater options options', 'Roof options options']) {
+    const cards = response.getByRole('list', { name }).getByRole('listitem');
+    await expect(cards).toHaveCount(2);
+    for (const card of await cards.all()) {
+      const box = await card.boundingBox();
+      expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+    }
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('home timeline answers on a track: latest event selected, category chips, stepping, undated events listed below, List kept (FRD v1.77)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

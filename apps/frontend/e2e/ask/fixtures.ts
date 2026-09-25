@@ -1024,6 +1024,43 @@ function refinanceScenarioStripExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.89): saved upgrade options as one strip per system (two to four options),
+// the only badge the homeowner's own Selected decision, and a system with one option left in the list.
+function homeUpgradeStripExecution() {
+  const base = maintenanceExecution();
+  const pageHref = `/dashboard/properties/${propertyId}/tools/home-digital-twin`;
+  const option = (id: string, label: string, type: string, upfront: string, savings: string, payback: string, extra: Record<string, unknown> = {}, results = 'Results Ready') => ({
+    id, label, summary: type, actions: [],
+    attributes: [
+      { label: 'Upfront cost', value: upfront, tone: 'DEFAULT' }, { label: 'Annual savings', value: savings, tone: 'DEFAULT' },
+      { label: 'Payback', value: payback, tone: 'DEFAULT' }, { label: 'Results', value: results, tone: results === 'Results out of date' ? 'CAUTION' : 'DEFAULT' },
+    ], ...extra,
+  });
+  const selected = { badges: [{ label: 'Selected', basis: 'You chose this option in the Home Upgrade Planner.', policyCode: 'UPGRADE_SCENARIO_SELECTED' }] };
+  return {
+    ...base, executionId: 'execution-home-upgrade-strip', question: 'Show my upgrade planner options', viewState: null,
+    operation: { id: 'HOME_UPGRADE_SCENARIOS', version: '1.0', family: 'RECORD_QUERY' },
+    blocks: [
+      { type: 'SUMMARY', id: 'home-upgrade-summary', title: '5 saved upgrade options across 3 systems', body: '4 with results ready, 1 selected.', tone: 'DEFAULT',
+        actions: [{ id: 'open-home-digital-twin', label: 'Open Home Upgrade Planner', href: pageHref, style: 'PRIMARY' }] },
+      { type: 'COMPARISON', id: 'home-upgrade-options-wh', title: 'Basement water heater options',
+        description: 'Saved options for this system, from the Home Upgrade Planner. Costs, savings and payback are planning ranges, not quotes.',
+        options: [
+          option('heatpump', 'Heat pump water heater', 'Replace Component', '$2,800–$4,200', '$450', '6 years', selected),
+          option('repair', 'Repair the tank', 'Repair', '$400–$700', 'Not calculated yet', 'Not calculated yet'),
+        ], actions: [] },
+      { type: 'COMPARISON', id: 'home-upgrade-options-roof', title: 'Roof options',
+        description: 'Saved options for this system, from the Home Upgrade Planner. Costs, savings and payback are planning ranges, not quotes.',
+        options: [
+          option('reroof', 'Full re-roof', 'Replace Component', '$18,000', 'Not calculated yet', 'Not calculated yet', { amount: { value: 18000, currency: 'USD' } }),
+          option('patch', 'Patch the north slope', 'Repair', '$4,500', 'Not calculated yet', 'Not calculated yet', { amount: { value: 4500, currency: 'USD' } }, 'Results out of date'),
+        ], actions: [] },
+      { type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-options', title: 'Upgrade options by system', description: 'Grouped by home system, as on the page. Open the planner for the full comparison.',
+        sections: [{ id: 'home-upgrade-ep', title: 'Electrical Panel', count: 1, items: [{ id: 'panel', title: 'Panel upgrade', description: null, meta: ['Upgrade Component'], status: 'Ready', href: pageHref }] }], actions: [] },
+    ],
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -1933,6 +1970,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/what if i refinanced at 5\.5%/i.test(body.message)) {
       const response = refinanceScenarioStripExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/show my upgrade planner options/i.test(body.message)) {
+      const response = homeUpgradeStripExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;
