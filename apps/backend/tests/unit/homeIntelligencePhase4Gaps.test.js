@@ -203,9 +203,9 @@ test('incident work reconciliation closes on genuine resolution vs. no-longer-re
   assert.match(diyCompletionService, /await syncIncidentWorkItem\(project\.incidentId, project\.userId\);/);
 });
 
-test('reopening a work item dispatches a best-effort domain-record reopen that never throws back into the transition itself', () => {
+test('reopening a work item reopens its linked domain records inside the same transaction, so a failure rolls the whole transition back', () => {
   assert.match(transitionWorkItemUsecase, /import \{ reopenLinkedDomainRecords \} from '\.\.\/infrastructure\/domainReopenDispatch'/);
-  assert.match(transitionWorkItemUsecase, /await reopenLinkedDomainRecords\(input\.workItemId\);/);
+  assert.match(transitionWorkItemUsecase, /await reopenLinkedDomainRecords\(input\.workItemId, db\);/);
 
   // MAINTENANCE_TASK/GUIDANCE/PROJECT get a real reopen; BOOKING/CLAIM
   // intentionally have nothing to call (neither domain has a reopen
@@ -216,13 +216,16 @@ test('reopening a work item dispatches a best-effort domain-record reopen that n
   assert.match(domainReopenDispatch, /case 'PROJECT':/);
   assert.match(domainReopenDispatch, /case 'BOOKING':\s*\n\s*case 'CLAIM':/);
   assert.match(domainReopenDispatch, /data:\s*\{ role: 'SUPPORTING' \}/);
-  assert.match(domainReopenDispatch, /recordReconciliationFailure\(\{/);
+  // Atomic, not best-effort: the dispatch neither swallows an error nor records a reconciliation failure and moves on, so
+  // contradictory completion states (work item open, domain record complete) cannot commit.
+  assert.doesNotMatch(domainReopenDispatch, /recordReconciliationFailure/);
+  assert.doesNotMatch(domainReopenDispatch, /catch\s*\(/);
   assert.match(domainReopenDispatch, /const exhaustiveCheck: never = executionType;/);
   // Bypasses the domain service layer with a direct Prisma write -- no call
   // to updateTaskStatus(...) (only mentioned, in prose, as the thing being
   // avoided).
   assert.doesNotMatch(domainReopenDispatch, /PropertyMaintenanceTaskService\.updateTaskStatus\(/, 'must bypass the domain service layer to avoid a circular Home Operations sync');
-  assert.match(domainReopenDispatch, /prisma\.propertyMaintenanceTask\.updateMany\(/);
+  assert.match(domainReopenDispatch, /db\.propertyMaintenanceTask\.updateMany\(/); // the caller's transaction client, not the global prisma
 });
 
 test('booking completion attempts recommendation attribution via the shared decision-family resolver instead of always passing null', () => {

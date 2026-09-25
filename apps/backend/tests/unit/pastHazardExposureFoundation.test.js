@@ -97,7 +97,7 @@ test('API retires manual generation and exposes governed read, outcome, and evid
   assert.match(routes, /past-hazard-exposure\/outcomes\/:outcomeId\/evidence/);
   assert.match(routes, /requireReviewedCoverage/);
   assert.match(routes, /requireHouseholdRole\('CONTRIBUTOR'\)/);
-  assert.match(routes, /LEGACY_RISK_REPLAY_GENERATION_RETIRED/);
+  assert.match(routes, /LEGACY_RISK_REPLAY_RETIRED/);
   assert.doesNotMatch(routes, /validateBody\(generateHomeRiskReplayBodySchema\)/);
 });
 

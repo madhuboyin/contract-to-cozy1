@@ -24,7 +24,8 @@ test('the shared parity boundary delegates to strict PropertyMaintenanceTask rec
 
 test('maintenance and material deadline notifications cannot outrun work reconciliation', () => {
   for (const [relativePath, notificationCall] of [
-    ['../../src/services/maintenanceReminder.service.ts', 'NotificationService.create('],
+    // The maintenance reminder sends through the Ask notification-continuation wrapper (which creates the notification).
+    ['../../src/services/maintenanceReminder.service.ts', 'notifyWithAskContinuation('],
     ['../../src/services/newHomeWarrantyDeadline.service.ts', 'NotificationService.create('],
   ]) {
     const source = read(relativePath);

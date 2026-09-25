@@ -50,11 +50,11 @@ test('inventory creation without a reported purchase date does not fabricate his
   );
 
   const service = readBackend('src/services/homeEvents.service.ts');
-  assert.match(service, /appliance\.installedOn \?\? appliance\.purchasedOn/);
-  assert.doesNotMatch(
-    service,
-    /appliance\.installedOn \?\? appliance\.purchasedOn \?\? appliance\.createdAt/,
-  );
+  // The appliance factor is dated by its purchase date only (September 2026), and a missing date yields no synthetic
+  // event: there is no fallback to installedOn or to the row's createdAt.
+  assert.match(service, /const referenceDate = appliance\.purchasedOn;\s*\n\s*if \(!referenceDate\) return null;/);
+  assert.doesNotMatch(service, /appliance\.purchasedOn \?\? appliance\.createdAt/);
+  assert.doesNotMatch(service, /appliance\.installedOn \?\? appliance\.purchasedOn \?\? appliance\.createdAt/);
 });
 
 test('corrections append a successor while governed deletion is soft and audited', () => {
