@@ -154,7 +154,10 @@ test('TABLE blocks carry a true-vs-shown count like GROUPED_LIST sections alread
   assert.equal(withoutCount.totalCount, undefined);
 
   const orchestrator = readFileSync(resolve(__dirname, '../../src/services/ask/askOrchestrator.service.ts'), 'utf8');
-  assert.match(orchestrator, /id: 'capital-timeline-table'.*totalCount: items\.length/);
+  // The capital windows are a TIMELINE since FRD v1.90, which has no count field: the truncation is disclosed in the
+  // block's own description instead, from the true total (items.length) against the windows shown.
+  assert.match(orchestrator, /capitalTimelineBlock\(upcoming, items\.length, href\)/);
+  assert.match(orchestrator, /Showing the \$\{upcoming\.length\} soonest of \$\{totalCount\} windows/);
 });
 
 test('Property Summary declares recent HomeEvent identity for inline detail and a separate timeline choice', () => {

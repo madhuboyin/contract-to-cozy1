@@ -91,7 +91,13 @@ export const TimelineBlock: AskBlockRenderer<'TIMELINE'> = ({ block }) => (
   </section>
 );
 
-export function TimelineList({ block }: { block: Extract<AskPresentationBlock, { type: 'TIMELINE' }> }) {
+// FRD v1.90: `onOpenDetail` lets a domain that keeps a live record detail under its timeline (the capital windows) open it
+// from the list too; the row's button is marked like the other detail triggers so focus returns to it.
+export function TimelineList({ block, onOpenDetail, openDetailId }: {
+  block: Extract<AskPresentationBlock, { type: 'TIMELINE' }>;
+  onOpenDetail?: (itemId: string) => void;
+  openDetailId?: string | null;
+}) {
   return (
     <ol className="mt-4 border-l-2 border-teal-200 pl-4" data-timeline-list>
       {block.items.map((item) => {
@@ -106,6 +112,8 @@ export function TimelineList({ block }: { block: Extract<AskPresentationBlock, {
             </div>
             {facts.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>}
             {item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}
+            {onOpenDetail && <button type="button" data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={openDetailId === item.id} onClick={() => onOpenDetail(item.id)}
+              className="mt-1 min-h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Details<span className="sr-only"> for {item.label}</span></button>}
           </li>
         );
       })}

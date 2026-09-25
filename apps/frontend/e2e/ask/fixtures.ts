@@ -1061,6 +1061,33 @@ function homeUpgradeStripExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.90): the capital plan with its upcoming windows on a timeline track. The roof
+// window's id is the one the mocked capital-timeline read returns, so its live detail opens; the other window is not in that
+// read, so its detail says it no longer exists.
+function capitalTimelineTrackExecution() {
+  const base = maintenanceExecution();
+  const href = `/dashboard/properties/${propertyId}/tools/capital-timeline`;
+  const window = (id: string, label: string, date: string, category: { id: string; label: string }, confidence: string, cost: string, range: string) => ({
+    id, label, date, datePrecision: 'MONTH', description: null, status: `${confidence} confidence`, href, category, meta: [range, cost],
+  });
+  return {
+    ...base, executionId: 'execution-capital-timeline-track', question: 'What big expenses are coming up for my home?', viewState: null,
+    operation: { id: 'CAPITAL_RESERVE_PLAN', version: '1.0', family: 'DECISION_ANALYSIS' },
+    blocks: [
+      { type: 'SUMMARY', id: 'capital-reserve-summary', title: '2 upcoming capital events are in the current plan', tone: 'DEFAULT',
+        body: 'The modeled cost range for the displayed 10-year horizon is $8,900–$13,600.',
+        actions: [{ id: 'open-timeline', label: 'Open capital timeline', href, style: 'PRIMARY' }] },
+      { type: 'TIMELINE', id: 'capital-timeline-table', title: 'Upcoming capital windows',
+        description: 'Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes. Each sits at the start of its window.',
+        items: [
+          window('timeline-roof-property-summary', 'Asphalt shingle roof', '2027-01', { id: 'ROOFING', label: 'Roofing' }, 'High', 'Estimated $8,000–$12,000', 'Window Jan 1, 2027–Jun 1, 2027'),
+          window('timeline-heater', 'Water heater', '2028-05', { id: 'PLUMBING', label: 'Plumbing' }, 'Medium', 'Estimated $900–$1,600', 'Window May 3, 2028–Apr 30, 2029'),
+        ] },
+      { type: 'BOUNDARY', id: 'capital-plan-boundary', title: 'Planning range—not a guaranteed expense schedule', body: 'Actual condition, inspections and local prices can move timing and cost.', severity: 'INFO', suggestions: [] },
+    ],
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -1976,6 +2003,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/show my upgrade planner options/i.test(body.message)) {
       const response = homeUpgradeStripExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/what big expenses are coming up/i.test(body.message)) {
+      const response = capitalTimelineTrackExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

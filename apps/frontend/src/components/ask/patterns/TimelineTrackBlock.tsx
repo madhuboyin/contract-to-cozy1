@@ -8,6 +8,7 @@ import { AskContextLink } from '../blocks/context';
 import { TimelineBlock, TimelineList } from '../blocks/CoreBlocks';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import type { AskBlockRenderer } from '../blocks/types';
+import { CapitalWindowDetail } from '../CapitalWindowDetail';
 import { ItemActionButtons } from './PatternParts';
 
 // IW-PRES-017 (FRD v1.72). Dated records on a sideways track with year ticks, a Today marker, category filters
@@ -17,8 +18,13 @@ import { ItemActionButtons } from './PatternParts';
 const CATEGORY_COLOURS = ['bg-teal-600', 'bg-sky-600', 'bg-amber-500', 'bg-violet-600', 'bg-rose-600', 'bg-slate-600'];
 const PX_PER_YEAR = 110;
 
+// FRD v1.90: the capital windows keep their live canonical detail (CapitalWindowDetail, re-read from the capital timeline)
+// under the track and in the list, whichever the homeowner picks; any other timeline has no domain detail.
+const CAPITAL_WINDOWS_BLOCK_ID = 'capital-timeline-table';
+
 export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
-  const { block, onItemAction, itemActionsDisabled } = props;
+  const { block, onItemAction, itemActionsDisabled, propertyId, onAccessLost } = props;
+  const hasWindowDetail = block.id === CAPITAL_WINDOWS_BLOCK_ID;
   const points = useMemo(() => resolveTimelineTrack(block), [block]);
   const categories = useMemo(() => {
     const seen = new Map<string, string>();
@@ -28,10 +34,28 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   const [hidden, setHidden] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const controls = useContext(ResultViewContext);
+  const [localDetailId, setLocalDetailId] = useState<string | null>(null);
   const layout = controls?.view.timelineLayouts?.[block.id] ?? 'TRACK';
-  if (!points) return <TimelineBlock {...props} />;
+  const detailId = hasWindowDetail ? (controls ? controls.detailIdFor(block.id) : localDetailId) : null;
+  const detailItem = detailId ? block.items.find((item) => item.id === detailId) : undefined;
+  const openDetail = (itemId: string) => {
+    setSelectedId(itemId);
+    if (controls) controls.openDetail(block.id, itemId);
+    else setLocalDetailId(itemId);
+  };
+  const closeDetail = () => {
+    const closingId = detailId;
+    if (controls) controls.closeDetail();
+    else setLocalDetailId(null);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-ask-detail-trigger="${CSS.escape(closingId ?? '')}"][data-ask-detail-block="${CSS.escape(block.id)}"]`)?.focus());
+  };
+  const windowDetail = detailItem
+    ? <CapitalWindowDetail key={detailItem.id} windowId={detailItem.id} expectedPropertyId={propertyId} fallbackTitle={detailItem.label} onAccessLost={onAccessLost} onClose={closeDetail} />
+    : null;
+  // A single window, or one whose date cannot be read, has no track; the list keeps its detail.
+  if (!points && !hasWindowDetail) return <TimelineBlock {...props} />;
   // FRD v1.77: the same records as a vertical list, kept with the result; the track stays the default.
-  const layoutSwitch = controls && (
+  const layoutSwitch = controls && points && (
     <div className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
       {(['TRACK', 'LIST'] as const).map((choice) => (
         <button key={choice} type="button" aria-pressed={layout === choice}
@@ -51,8 +75,11 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
       {layoutSwitch}
     </div>
   );
-  if (layout === 'LIST') {
-    return <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}<TimelineList block={block} /></section>;
+  if (layout === 'LIST' || !points) {
+    return <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}
+      <TimelineList block={block} onOpenDetail={hasWindowDetail ? openDetail : undefined} openDetailId={detailId} />
+      {windowDetail}
+    </section>;
   }
 
   const ordered = block.items
@@ -120,6 +147,8 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
             {selected.item.meta && selected.item.meta.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{selected.item.meta.join(' · ')}</p>}
             {selected.item.description && <p className="mt-1 text-sm text-slate-600">{selected.item.description}</p>}
             <ItemActionButtons className="mt-2" item={selected.item} actions={selected.item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />
+            {hasWindowDetail && <button type="button" data-ask-detail-trigger={selected.item.id} data-ask-detail-block={block.id} aria-expanded={detailId === selected.item.id} onClick={() => openDetail(selected.item.id)}
+              className="mt-2 mr-3 min-h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Details<span className="sr-only"> for {selected.item.label}</span></button>}
             {selected.item.href && <AskContextLink href={selected.item.href} className="mt-2 inline-block text-xs font-semibold text-teal-700 hover:underline">Open record</AskContextLink>}
           </div>
           <div className="flex shrink-0 gap-1">
@@ -128,6 +157,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
           </div>
         </div>
       ) : <p className="mt-3 text-sm text-slate-500">All types are hidden. Turn one back on to see its events.</p>}
+      {windowDetail}
     </section>
   );
 };

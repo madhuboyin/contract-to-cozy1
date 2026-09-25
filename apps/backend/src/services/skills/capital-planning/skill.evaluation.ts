@@ -141,6 +141,7 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
     "SUMMARY",
     "GROUPED_LIST",
     "TABLE",
+    "TIMELINE",
     "EVIDENCE",
     "BOUNDARY",
     "CAPABILITY_LIST"

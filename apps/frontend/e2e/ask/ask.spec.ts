@@ -1514,6 +1514,55 @@ test('on a phone, each upgrade strip stacks its cards within the screen (FRD v1.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('capital windows sit on a timeline track by start month; a window opens its live canonical detail, and the List view keeps it (FRD v1.90)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What big expenses are coming up for my home?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-capital-timeline-track');
+  const track = response.locator('[data-display-pattern="timeline"]');
+  await expect(track).toBeVisible();
+  await expect(track.getByRole('group', { name: 'Show types' }).getByRole('button')).toHaveText(['Roofing', 'Plumbing']);
+  await expect(track.getByRole('button', { name: /Jan 2027: Asphalt shingle roof \(Roofing\)/ })).toBeVisible();
+  const heater = track.getByRole('button', { name: /May 2028: Water heater/ });
+  await heater.click();
+  const selected = track.locator('[data-ask-timeline-selected="timeline-heater"]');
+  await expect(selected).toContainText('Window May 3, 2028–Apr 30, 2029 · Estimated $900–$1,600');
+  await selected.getByRole('button', { name: /Details for Water heater/ }).click();
+  await expect(track.getByText('Capital window no longer exists')).toBeVisible();
+
+  await track.getByRole('button', { name: 'Previous event' }).click();
+  await track.locator('[data-ask-timeline-selected="timeline-roof-property-summary"]').getByRole('button', { name: /Details for Asphalt shingle roof/ }).click();
+  await expect(track.getByText('Capital window detail')).toBeVisible();
+  await expect(track.getByText('Typical service life for asphalt shingle roofing is 20-25 years; this roof was installed 22 years ago.')).toBeVisible();
+
+  await response.getByRole('button', { name: 'List', exact: true }).click();
+  const list = response.locator('[data-display-pattern="timeline-list"]');
+  await expect(list.getByRole('button', { name: /Details for/ })).toHaveCount(2);
+  await list.getByRole('button', { name: /Details for Asphalt shingle roof/ }).click();
+  await expect(list.getByText('Capital window detail')).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, the capital track scrolls inside its own box and a window opens its detail below (FRD v1.90)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What big expenses are coming up for my home?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-capital-timeline-track');
+  const track = response.locator('[data-display-pattern="timeline"]');
+  await expect(track).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await track.getByRole('button', { name: /Jan 2027: Asphalt shingle roof/ }).click();
+  await track.getByRole('button', { name: /Details for Asphalt shingle roof/ }).click();
+  await expect(track.getByText('Capital window detail')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('home timeline answers on a track: latest event selected, category chips, stepping, undated events listed below, List kept (FRD v1.77)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);

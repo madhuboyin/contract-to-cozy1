@@ -4612,6 +4612,49 @@ export function parseCapitalTimelineHorizonRequest(message: string): 5 | 10 | nu
   return null;
 }
 
+// IW-PRES-017 (FRD v1.90): the upcoming capital windows on a timeline track. A window is a planning range, so it sits
+// at its start month (never an invented day) with the full window, cost range and confidence in its facts; the live
+// canonical window detail (CapitalWindowDetail) is kept by the frontend under the same block id. When more windows
+// exist than are shown, the description says so and the summary's Open capital timeline link reaches the rest.
+export function capitalTimelineBlock(
+  upcoming: ReadonlyArray<{
+    id: string; category: unknown; windowStart: Date | string; windowEnd: Date | string; confidence: unknown;
+    estimatedCostMinCents: number | null; estimatedCostMaxCents: number | null; inventoryItem?: { name?: string | null } | null;
+  }>,
+  totalCount: number,
+  href: string,
+): Extract<AskPresentationBlock, { type: 'TIMELINE' }> {
+  const words = (value: unknown) => String(value).toLowerCase().replace(/_/g, ' ');
+  const sentence = (value: unknown) => words(value).replace(/^\w/, (letter) => letter.toUpperCase());
+  const month = (value: Date | string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', timeZone: getAskPropertyTimezone() })
+      .formatToParts(date).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}`;
+  };
+  return {
+    type: 'TIMELINE', id: 'capital-timeline-table', title: 'Upcoming capital windows',
+    description: `Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes. Each sits at the start of its window.${totalCount > upcoming.length ? ` Showing the ${upcoming.length} soonest of ${totalCount} windows.` : ''}`,
+    items: upcoming.map((item) => ({
+      id: item.id,
+      label: item.inventoryItem?.name ?? words(item.category),
+      date: month(item.windowStart),
+      datePrecision: 'MONTH' as const,
+      description: null,
+      status: `${sentence(item.confidence)} confidence`,
+      href,
+      category: { id: String(item.category), label: sentence(item.category).slice(0, 60) },
+      meta: [
+        `Window ${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`,
+        item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null
+          ? 'Cost range not available'
+          : `Estimated ${money(item.estimatedCostMinCents / 100)}–${money(item.estimatedCostMaxCents / 100)}`,
+      ],
+    })),
+  };
+}
+
 async function capitalReservePlanResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/capital-timeline`;
   const reserveHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/reserve-fund`;
@@ -4681,7 +4724,7 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
       ...(analysis.horizonYears !== 5 ? [{ id: 'rerun-horizon-5', label: 'Show 5-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 5-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
       ...(analysis.horizonYears !== 10 ? [{ id: 'rerun-horizon-10', label: 'Show 10-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 10-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
     ],
-  }, { type: 'TABLE', id: 'capital-timeline-table', title: 'Upcoming capital windows', description: 'Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes.', columns: [{ key: 'item', label: 'Item' }, { key: 'window', label: 'Planning window' }, { key: 'cost', label: 'Estimated range' }, { key: 'confidence', label: 'Confidence' }], rows: upcoming.map((item) => ({ id: item.id, values: { item: item.inventoryItem?.name ?? String(item.category).toLowerCase().replace(/_/g, ' '), window: `${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`, cost: item.estimatedCostMinCents == null || item.estimatedCostMaxCents == null ? 'Not available' : `${money(item.estimatedCostMinCents / 100)}–${money(item.estimatedCostMaxCents / 100)}`, confidence: String(item.confidence).toLowerCase() } })), totalCount: items.length, actions: items.length > upcoming.length ? [{ id: 'open-timeline-table', label: 'Open capital timeline', href, style: 'SECONDARY' }] : [] },
+  }, capitalTimelineBlock(upcoming, items.length, href),
   // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: entityType routes these
   // through ReserveAllocationResultList (GroupedListBlock.tsx) instead of the generic href-only renderer, opening
   // canonical detail inline -- a fresh re-fetch via the existing GET .../reserve-fund/line-items list endpoint

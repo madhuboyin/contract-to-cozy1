@@ -66,9 +66,13 @@ export function clearResultViews(storage: Storage, sessionId: string, keepKeys?:
 export function reconcileResultView(view: ResultView, execution: AskExecutionResponse): ResultView {
   const sections = execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' ? block.sections : []);
   const ids = new Set(sections.flatMap((section) => section.items.map((item) => item.id)));
-  const detailTarget = view.detailTarget && execution.blocks.some((block) => block.type === 'GROUPED_LIST'
+  // A timeline block (the capital windows) can hold a detail target too, so it survives hydration like a list's does.
+  const detailTarget = view.detailTarget && execution.blocks.some((block) => (block.type === 'GROUPED_LIST'
     && block.id === view.detailTarget!.blockId
     && block.sections.some((section) => section.items.some((item) => item.id === view.detailTarget!.entityId)))
+    || (block.type === 'TIMELINE'
+      && block.id === view.detailTarget!.blockId
+      && block.items.some((item) => item.id === view.detailTarget!.entityId)))
     ? view.detailTarget : null;
   const tableIds = new Set(execution.blocks.filter((block) => block.type === 'TABLE').map((block) => block.id));
   const comparisonIds = new Set(execution.blocks.filter((block) => block.type === 'COMPARISON').map((block) => block.id));

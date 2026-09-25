@@ -63,6 +63,7 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
     "SUMMARY",
     "GROUPED_LIST",
     "TABLE",
+    "TIMELINE",
     "EVIDENCE",
     "BOUNDARY",
     "CAPABILITY_LIST"

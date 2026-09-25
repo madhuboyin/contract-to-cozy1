@@ -11,6 +11,7 @@ import { matchesHomeActionsAnswerContract } from './askHomeActionsIntent';
 import { matchesQuoteComparisonReviewAnswerContract } from './askQuoteReviewIntent';
 import { matchesSellerPrepChecklistAnswerContract } from './askSellerPrepIntent';
 import { matchesRefinanceScenarioAnswerContract } from './askRefinanceScenarioIntent';
+import { matchesCapitalPlanAnswerContract } from './askCapitalPlanIntent';
 
 export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.6';
 
@@ -122,6 +123,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'QUOTE_COMPARISON_REVIEW'
     && matchesQuoteComparisonReviewAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'CAPITAL_RESERVE_PLAN'
+    && matchesCapitalPlanAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
