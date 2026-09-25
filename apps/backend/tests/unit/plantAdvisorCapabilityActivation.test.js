@@ -52,9 +52,12 @@ test('CAP-801 catalog search retrieves Plant Advisor from homeowner phrasing', (
     failureMode: 'LAUNCH_FAIL_CLOSED',
     loadPolicy: () => ({
       enabled: true,
-      enforceReleaseGates: false,
+      enforceReleaseGates: true,
       disabledToolIds: [],
-      rollouts: {},
+      rollouts: Object.fromEntries(canonicalCapabilityRegistry.capabilities.map((capability) => [
+        capability.governance.rolloutKey,
+        { enabled: true, cohort: 'FULL', rolloutPct: 100 },
+      ])),
     }),
   });
   const catalog = buildCapabilityCatalog({

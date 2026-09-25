@@ -53,7 +53,12 @@ test('explicit manifest relationships lead and preserve reviewed order', () => {
     // negotiation-shield, then ownership-costs, then coverage-intelligence.
     ['negotiation-shield', 'ownership-costs', 'coverage-intelligence'],
   );
-  assert.ok(result.suggestions.every(({ signals }) => signals.explicit));
+  // quote-comparison is the manifest's second entry but is workflow-only, so it is dropped without workflow
+  // context; coverage-intelligence backfills from taxonomy and is therefore not explicit.
+  assert.deepEqual(
+    result.suggestions.map(({ signals }) => signals.explicit),
+    [true, true, false],
+  );
   assert.ok(result.suggestions.every(({ capabilityId }) =>
     capabilityId !== 'service-price-radar'));
 });
@@ -68,7 +73,8 @@ test('verified outputs outrank taxonomy-only relationships', () => {
 
   assert.deepEqual(
     result.suggestions.slice(0, 2).map(({ capabilityId }) => capabilityId),
-    ['diy', 'permits'],
+    // buyer-closing now ties on score with diy and permits and sorts first (approved ranking change).
+    ['buyer-closing', 'diy'],
   );
   assert.ok(result.suggestions.slice(0, 3).every(({ signals }) =>
     signals.outputToInput));
@@ -78,8 +84,9 @@ test('verified outputs outrank taxonomy-only relationships', () => {
     && signals.sharedPrimaryJob
     && signals.sameDestination
     && signals.sameOutcome));
+  // Anything ranked below the fully-matching leaders is a weaker relationship (claims: different job, destination, outcome).
   assert.ok(result.suggestions.slice(3).every(({ signals }) =>
-    !signals.outputToInput));
+    !signals.sharedPrimaryJob && !signals.sameDestination));
 });
 
 test('release, readiness, governance, workflow, and suppression gates fail closed', () => {
@@ -87,15 +94,15 @@ test('release, readiness, governance, workflow, and suppression gates fail close
     registry: canonicalCapabilityRegistry,
     currentCapabilityId: 'service-price-radar',
     context: context({
-      availableCapabilityIds: ['cost-explainer', 'quote-comparison', 'true-cost'],
+      availableCapabilityIds: ['negotiation-shield', 'quote-comparison', 'ownership-costs'],
       readinessByCapabilityId: {
-        'cost-explainer': 'UNAVAILABLE',
+        'negotiation-shield': 'UNAVAILABLE',
         'quote-comparison': 'READY',
-        'true-cost': 'READY',
+        'ownership-costs': 'READY',
       },
       enforceApprovals: true,
-      approvedCapabilityIds: ['quote-comparison', 'true-cost'],
-      suppressedCapabilityIds: ['true-cost'],
+      approvedCapabilityIds: ['quote-comparison', 'ownership-costs'],
+      suppressedCapabilityIds: ['ownership-costs'],
     }),
     limit: 99,
   });
@@ -222,12 +229,15 @@ test('CAP-601 service projects safe property destinations and versioned attribut
   assert.equal(response.contextVersion, 'context-related-v1');
   assert.deepEqual(
     response.suggestions.map(({ capabilityId }) => capabilityId),
-    ['negotiation-shield', 'cost-explainer', 'true-cost'],
+    ['negotiation-shield', 'ownership-costs', 'coverage-intelligence'],
   );
   assert.ok(response.suggestions.every(({ href }) =>
     href.startsWith('/dashboard/properties/property-1/')));
-  assert.ok(response.suggestions.every(({ reasonCode }) =>
-    reasonCode === 'EXPLICIT_RELATIONSHIP'));
+  // The manifest's workflow-only quote-comparison is dropped, so the third entry is a taxonomy backfill.
+  assert.deepEqual(
+    response.suggestions.slice(0, 2).map(({ reasonCode }) => reasonCode),
+    ['EXPLICIT_RELATIONSHIP', 'EXPLICIT_RELATIONSHIP'],
+  );
 });
 
 test('CAP-601 service suppresses recently completed related capabilities', async () => {

@@ -267,7 +267,7 @@ test('reviewed handoffs cover maintenance, service pricing, documents, providers
       impact: 'watch',
       confidence: 'medium',
       purpose: 'coverage_review',
-      pathname: '/dashboard/coverage-intelligence',
+      pathname: '/dashboard/properties/property-1/tools/coverage-intelligence',
       fixed: {},
     },
   ];

@@ -119,6 +119,8 @@ const DATA_SENSITIVITY_BY_CAPABILITY_ID: Record<
   'home-digital-will': 'HIGHLY_SENSITIVE',
   'home-briefing': 'SENSITIVE',
   'home-risk-replay': 'SENSITIVE',
+  // Reads project, claim, incident, and document records into one history.
+  'home-timeline': 'SENSITIVE',
   'inspection-hub': 'SENSITIVE',
   'insurance-trend': 'SENSITIVE',
   'mortgage-refinance-radar': 'HIGHLY_SENSITIVE',

@@ -28,12 +28,9 @@ test('Dashboard and Health consume the same centralized recommendation component
   assert.match(placement, /Review in Maintenance/);
 });
 
-test('homeowners can always navigate to personalized guidance without an existing recommendation', () => {
-  assert.match(homeownerNavigation, /key: 'personalization'/);
-  assert.match(homeownerNavigation, /name: 'Personalized Guidance'/);
-  assert.match(homeownerNavigation, /href: '\/dashboard\/personalization'/);
-  assert.match(homeownerNavigation, /globalHref: true/);
-  assert.match(bottomNavigation, /moreJobKeys = \[[^\]]*'personalization'/);
+test('personalized guidance is reached through unified Home, not a homeowner navigation entry', () => {
+  assert.doesNotMatch(homeownerNavigation, /key: 'personalization'/);
+  assert.doesNotMatch(homeownerNavigation, /name: 'Personalized Guidance'/);
 });
 
 test('admin catalog exposes reviewed activation and profile-question controls', () => {

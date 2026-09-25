@@ -103,13 +103,13 @@ test('legacy lifecycle ids and browser routes cut over to replacement owners', (
   assert.doesNotMatch(publicGazetteShare, /GazetteShareViewClient/);
 });
 
-test('replacement capabilities fail closed until their implementation foundations are ready', () => {
+test('replacement capabilities are fully rolled out (defaultPct 100) and retired ones stay absent', () => {
   const featureFlags = read('apps/backend/src/config/featureFlags.ts');
 
-  assert.match(featureFlags, /HOME_BRIEFING:[^\n]+defaultPct: 0/);
-  assert.match(featureFlags, /HOME_RISK_REPLAY:[^\n]+defaultPct: 0/);
-  assert.match(featureFlags, /NEIGHBORHOOD_CHANGE_RADAR:[^\n]+defaultPct: 0/);
-  assert.match(featureFlags, /PROPERTY_BRIEF:[^\n]+defaultPct: 0/);
+  assert.match(featureFlags, /HOME_BRIEFING:[^\n]+defaultPct: 100/);
+  assert.match(featureFlags, /HOME_RISK_REPLAY:[^\n]+defaultPct: 100/);
+  assert.match(featureFlags, /NEIGHBORHOOD_CHANGE_RADAR:[^\n]+defaultPct: 100/);
+  assert.match(featureFlags, /PROPERTY_BRIEF:[^\n]+defaultPct: 100/);
   assert.doesNotMatch(featureFlags, /^\s*CLIMATE_RISK:/m);
   assert.doesNotMatch(featureFlags, /^\s*HOME_GAZETTE:/m);
 });

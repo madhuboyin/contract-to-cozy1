@@ -1687,7 +1687,7 @@ test('CAP-405 caps Home at three with deterministic score ordering', () => {
   const { context, baseCandidate } = rankingFixture();
   const candidates = [
     rankingCandidate(baseCandidate, 'coverage-intelligence', { baseScore: 100 }),
-    rankingCandidate(baseCandidate, 'cost-growth', { baseScore: 90 }),
+    rankingCandidate(baseCandidate, 'ownership-costs', { baseScore: 90 }),
     rankingCandidate(baseCandidate, 'break-even', { baseScore: 80 }),
     rankingCandidate(baseCandidate, 'inspection-hub', { baseScore: 60 }),
   ];
@@ -1705,7 +1705,7 @@ test('CAP-405 caps Home at three with deterministic score ordering', () => {
   assert.equal(result.maximumSelected, 3);
   assert.deepEqual(selectedIds, [
     'coverage-intelligence',
-    'cost-growth',
+    'ownership-costs',
     'break-even',
   ]);
   assert.equal(
@@ -2332,7 +2332,7 @@ test('CAP-604 records a verified completion before resolving one next step', asy
   const response = await recordCapabilityCompletionAndResolveNext({
     propertyId: 'property-1',
     userId: 'user-1',
-    capabilityId: 'material-specs',
+    capabilityId: 'documents',
     completionKind: 'ARTIFACT_CREATED',
     outputEntityType: 'DOCUMENT',
     outputEntityId: 'document-1',
@@ -2346,10 +2346,10 @@ test('CAP-604 records a verified completion before resolving one next step', asy
       order.push('record');
       assert.equal(args.events.length, 1);
       assert.deepEqual(args.events[0], {
-        toolId: 'material-specs',
+        toolId: 'documents',
         stage: 'COMPLETED',
         surface: 'workflow',
-        manifestVersion: 2,
+        manifestVersion: 3,
         registryVersion: canonicalCapabilityRegistry.version,
         sourceKind: 'COMPLETION',
         sourceId: 'document-1',
@@ -2402,19 +2402,19 @@ test('CAP-604 records a verified completion before resolving one next step', asy
 
 test('CAP-604 rejects unverified completion kinds and output identities', async () => {
   assert.equal(CapabilityCompletionNextBodySchema.safeParse({
-    capabilityId: 'material-specs',
+    capabilityId: 'documents',
     completionKind: 'ARTIFACT_CREATED',
     outputEntityType: 'DOCUMENT',
     outputEntityId: 'document-1',
   }).success, true);
   assert.equal(CapabilityCompletionNextBodySchema.safeParse({
-    capabilityId: 'material-specs',
+    capabilityId: 'documents',
     completionKind: 'PLAN_CREATED',
     outputEntityType: 'DOCUMENT',
     outputEntityId: 'document-1',
   }).success, false);
   assert.equal(CapabilityCompletionNextBodySchema.safeParse({
-    capabilityId: 'material-specs',
+    capabilityId: 'documents',
     completionKind: 'ARTIFACT_CREATED',
     outputEntityType: 'PROJECT',
     outputEntityId: 'project-1',

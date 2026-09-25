@@ -33,11 +33,11 @@ test('human policy approvals are advisory by default and enforced only by exact 
   }
 });
 
-test('deployment enforces launch approvals while local beta remains advisory', () => {
+test('deployment keeps human approvals advisory during the test phase, as does local beta', () => {
   const configMap = read('../../../../infrastructure/kubernetes/base/configmap.yaml');
   const deployment = read('../../../../infrastructure/kubernetes/apps/backend/deployment.yaml');
   const compose = read('../../../../docker-compose.yml');
-  assert.match(configMap, /ENFORCE_HUMAN_POLICY_APPROVALS: "true"/);
+  assert.match(configMap, /ENFORCE_HUMAN_POLICY_APPROVALS: "false"/);
   assert.match(deployment, /name: ENFORCE_HUMAN_POLICY_APPROVALS[\s\S]+key: ENFORCE_HUMAN_POLICY_APPROVALS/);
   assert.match(compose, /ENFORCE_HUMAN_POLICY_APPROVALS: \$\{ENFORCE_HUMAN_POLICY_APPROVALS:-false\}/);
 });

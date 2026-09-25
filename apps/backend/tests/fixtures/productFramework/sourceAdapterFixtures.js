@@ -9,6 +9,9 @@ const SOURCE_KINDS = [
   'PERSONALIZATION',
   'PROJECT',
   'SYSTEM',
+  'SAVINGS_BENEFITS',
+  'INSPECTION_FINDING',
+  'SALE_PREP',
 ];
 
 const baseAction = goldenTestHomes.find((fixture) => fixture.id === 'existing-home-buyer').action;

@@ -34,28 +34,20 @@ Nothing here is caused by the Ask decomposition: a clean copy of the earlier com
 
 ## What is left (64 failures in 46 files)
 
-### Needs a decision from you, not a test edit (found while triaging)
+### Product decisions (answered 2026-09-25)
 
-These tests fail because the code contradicts what the test says the product should do. Which side is right is a product
-or release call.
-
-1. **`ENFORCE_HUMAN_POLICY_APPROVALS`** (`unit/humanPolicyApprovalMode`). The test says the deployment enforces launch
-   approvals (`"true"` in `infrastructure/kubernetes/base/configmap.yaml`). The configmap and `infrastructure/kubernetes/README.md`
-   both say `"false"`. That looks deliberate for the test phase, but it means human-approval gates are advisory in the
-   deployed environment.
-2. **`HOME_RISK_REPLAY_REVIEWED_COVERAGE_ENABLED`** (`unit/propertyIntelligenceTrustContainment`) is expected to be `"false"`
-   in deployment config and is not present at all.
-3. **`HOME_BRIEFING` rollout** (`unit/propertyIntelligencePortfolioContracts`) is expected to default to 0%; the current
-   default is different (`config/featureFlags.ts`).
-4. **Upgrade planner renders `TwinStatusCard`** (`unit/homeDigitalTwinP0TrustBoundary`) although the P0 product boundary says
-   the planner must not show a competing home-state summary (`HomeDigitalTwinClient.tsx` line 2505).
-5. **Homeowner "Personalized Guidance" navigation entry** (`unit/personalizationPhase2ConsumersUi`) was removed from
-   `lib/navigation/jobsNavigation.ts` in the July 18 unified-Home commit; the test says homeowners must always have it.
-6. **Capability catalog behaviour** (`toolCapabilityRelated`, `toolCapabilityRecommendation`, `knowledgeHubCapabilityProjection`,
-   `materialSpecsCapabilityActivation`, `diyCapabilityActivation`, `plantAdvisorCapabilityActivation`, `productFrameworkContracts`,
-   `capabilityGovernanceDefinition`, `capabilityLaunchReview`, `homeEventRadarActionRegistry`): tools were retired (`cost-explainer`,
-   `true-cost`) and new capabilities added, so related-tool order and ranking changed. Example: `inspection-hub` on an `ISSUE`
-   entity now suggests `buyer-closing` then `diy`, not `diy` then `permits`.
+1. **`ENFORCE_HUMAN_POLICY_APPROVALS`**: kept `"false"` (advisory during the test phase); `humanPolicyApprovalMode` now expects it.
+2. **`HOME_RISK_REPLAY_REVIEWED_COVERAGE_ENABLED`**: OPEN. The earlier note that the key was missing was wrong: the configmap sets it,
+   and `NEIGHBORHOOD_REVIEWED_COVERAGE_ENABLED`, to `"true"` (RentCast readiness commit 77990abe). Setting them to `"false"` would 503
+   both endpoints in production, so nothing was changed; `propertyIntelligenceTrustContainment` still fails on this line.
+3. **Feature-flag rollouts**: current 100% defaults kept for `HOME_BRIEFING`, `HOME_RISK_REPLAY`, `NEIGHBORHOOD_CHANGE_RADAR`, `PROPERTY_BRIEF`; test updated.
+4. **`TwinStatusCard` in the upgrade planner**: kept; the P0 test no longer bans it (stale link-text assertions also updated).
+5. **"Personalized Guidance" nav entry**: stays removed; the test asserts its absence.
+6. **Capability catalog**: new ranking approved. Fixtures fixed (release gates enforced with explicit rollouts, retired `cost-explainer`/
+   `true-cost`/`cost-growth` replaced, counts 48/50). Real defects found and fixed: `home-timeline` was under-classified
+   (`SENSITIVE` now) and blocked launch review; Radar `COMPARE_PROVIDERS` pointed at the non-capability `home-savings` and is now informational.
+   Open defect: capabilities declaring `outputEntityTypes: ['STRUCTURED_RECORD']` (e.g. `material-specs`, `claims`) cannot record a
+   completion, because the completion route's schema only accepts `CAPABILITY_CONTEXT_TYPES`.
 
 ### Environment only (8 files)
 

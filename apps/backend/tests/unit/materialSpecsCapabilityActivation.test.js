@@ -18,7 +18,7 @@ const {
 test('CAP-800 Material Specs exposes reviewed homeowner language and Home Record contracts', () => {
   const capability = canonicalCapabilityRegistry.getById('material-specs');
   assert.ok(capability);
-  assert.equal(capability.version, 2);
+  assert.equal(capability.version, 3);
   assert.ok(capability.presentation.intentAliases.includes('what paint did i use'));
   assert.ok(capability.presentation.intentAliases.includes('match a repair finish'));
   assert.equal(capability.lifecycle.completionKind, 'ARTIFACT_CREATED');
@@ -28,9 +28,9 @@ test('CAP-800 Material Specs exposes reviewed homeowner language and Home Record
     ['material-specification'],
   );
   assert.deepEqual(capability.recommendation.explicitRelatedCapabilityIds, [
+    'home-records',
     'project-tracker',
-    'inspection-hub',
-    'home-digital-twin',
+    'property-brief',
   ]);
 });
 
@@ -40,9 +40,12 @@ test('CAP-800 canonical catalog search can retrieve Material Specs from homeowne
     failureMode: 'LAUNCH_FAIL_CLOSED',
     loadPolicy: () => ({
       enabled: true,
-      enforceReleaseGates: false,
+      enforceReleaseGates: true,
       disabledToolIds: [],
-      rollouts: {},
+      rollouts: Object.fromEntries(canonicalCapabilityRegistry.capabilities.map((capability) => [
+        capability.governance.rolloutKey,
+        { enabled: true, cohort: 'FULL', rolloutPct: 100 },
+      ])),
     }),
   });
   const catalog = buildCapabilityCatalog({
