@@ -95,6 +95,27 @@ function itemMatchesView(item: SeasonalChecklistContextItem, checklist: Seasonal
   return true;
 }
 
+// IW-PRES-014 (FRD v1.83): the shelf-card facts for one checklist task. An open critical task is a caution; the timing
+// is the recommended date (or the snooze date). Seasonal tasks record no cost.
+export function seasonalShelfFacts(input: {
+  priority: 'CRITICAL' | 'RECOMMENDED' | 'OPTIONAL';
+  status: 'PENDING' | 'SNOOZED' | 'COMPLETED' | 'DISMISSED';
+  recommendedDate: Date | null;
+  snoozedUntil: Date | null;
+  formatDate: (value: Date) => string;
+}): { tone: 'DEFAULT' | 'CAUTION'; timingLabel: string } {
+  const timingLabel = input.status === 'SNOOZED' && input.snoozedUntil
+    ? `Snoozed until ${input.formatDate(input.snoozedUntil)}`
+    : input.recommendedDate ? `Recommended ${input.formatDate(input.recommendedDate)}` : 'No recommended date';
+  return { tone: input.priority === 'CRITICAL' && input.status === 'PENDING' ? 'CAUTION' : 'DEFAULT', timingLabel };
+}
+
+const PRIORITY_SHELVES = [
+  { id: 'priority-critical', priority: 'CRITICAL', title: 'Critical' },
+  { id: 'priority-recommended', priority: 'RECOMMENDED', title: 'Recommended' },
+  { id: 'priority-optional', priority: 'OPTIONAL', title: 'Optional' },
+] as const;
+
 export function buildSeasonalMaintenanceResult(input: {
   message: string;
   propertyId: string;
@@ -159,33 +180,42 @@ export function buildSeasonalMaintenanceResult(input: {
     actions: [{ id: 'open-seasonal', label: checklists.length === 1 ? `Open ${titleCase(checklists[0].season)} checklist` : 'Open Seasonal Care', href: seasonalHref, style: 'PRIMARY' }],
   }];
   if (matches.length) {
-    const sections = checklists.map((checklist) => {
-      const records = matches.filter((match) => match.checklist.id === checklist.id);
+    const toItem = (checklist: SeasonalChecklistContextChecklist, item: SeasonalChecklistContextItem) => {
+      const status = effectiveStatus(item);
       return {
-        id: checklist.id,
-        title: `${titleCase(checklist.season)} ${checklist.year}`,
-        count: records.length,
-        items: records.map(({ item }) => {
-          const status = effectiveStatus(item);
-          return {
-            id: item.id,
-            title: item.title,
-            description: item.description ?? undefined,
-            status,
-            meta: [
-              `${titleCase(item.priority)} priority`,
-              item.recommendedDate ? `Recommended ${formatDate(item.recommendedDate, input.propertyTimezone)}` : null,
-              status === 'SNOOZED' && item.snoozedUntil ? `Snoozed until ${formatDate(item.snoozedUntil, input.propertyTimezone)}` : null,
-              item.maintenanceTask ? 'Linked to Maintenance' : 'Seasonal checklist',
-            ].filter((value): value is string => Boolean(value)),
-            href: `${seasonalHref}&checklistId=${encodeURIComponent(checklist.id)}&itemId=${encodeURIComponent(item.id)}`,
-            actions: [],
-          };
+        id: item.id,
+        title: item.title,
+        description: item.description ?? undefined,
+        status,
+        meta: [
+          `${titleCase(item.priority)} priority`,
+          item.recommendedDate ? `Recommended ${formatDate(item.recommendedDate, input.propertyTimezone)}` : null,
+          status === 'SNOOZED' && item.snoozedUntil ? `Snoozed until ${formatDate(item.snoozedUntil, input.propertyTimezone)}` : null,
+          item.maintenanceTask ? 'Linked to Maintenance' : 'Seasonal checklist',
+        ].filter((value): value is string => Boolean(value)),
+        href: `${seasonalHref}&checklistId=${encodeURIComponent(checklist.id)}&itemId=${encodeURIComponent(item.id)}`,
+        actions: [],
+        ...seasonalShelfFacts({
+          priority: item.priority, status, recommendedDate: item.recommendedDate, snoozedUntil: item.snoozedUntil,
+          formatDate: (value) => formatDate(value, input.propertyTimezone),
         }),
       };
-    }).filter((section) => section.count > 0);
+    };
+    // One checklist: shelves by priority (the order the tasks are already sorted in). Several: one shelf per season
+    // and year, so tasks from different checklists are never merged.
+    const sections = checklists.length === 1
+      ? PRIORITY_SHELVES.map((shelf) => {
+        const records = matches.filter(({ item }) => item.priority === shelf.priority);
+        return { id: shelf.id, title: shelf.title, count: records.length, items: records.map(({ checklist, item }) => toItem(checklist, item)) };
+      }).filter((section) => section.count > 0)
+      : checklists.map((checklist) => {
+        const records = matches.filter((match) => match.checklist.id === checklist.id);
+        return { id: checklist.id, title: `${titleCase(checklist.season)} ${checklist.year}`, count: records.length, items: records.map(({ checklist: owner, item }) => toItem(owner, item)) };
+      }).filter((section) => section.count > 0);
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'seasonal-maintenance-items', title: `${explicitLabel} checklist`,
+      // IW-PRES-014 / IW-PRES-022: the seasonal checklist renders as shelves (FRD v1.83); the cards are read-only.
+      presentation: { pattern: 'SHELVES' },
       description: 'Checklist status is used first; a linked canonical Maintenance completion takes precedence when the two sources differ.',
       sections, actions: [],
     });

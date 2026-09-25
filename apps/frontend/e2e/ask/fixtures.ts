@@ -862,6 +862,32 @@ function homeActionShelvesExecution() {
   };
 }
 
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.83): the seasonal checklist answer with its tasks as read-only priority shelves.
+function seasonalShelvesExecution() {
+  const base = maintenanceExecution();
+  const seasonalHref = `/dashboard/seasonal?propertyId=${propertyId}&from=ask`;
+  const task = (id: string, title: string, description: string, priority: string, timingLabel: string, tone: 'DEFAULT' | 'CAUTION') => ({
+    id, title, description, meta: [`${priority} priority`, timingLabel, 'Seasonal checklist'], status: 'PENDING', actions: [],
+    href: `${seasonalHref}&checklistId=summer-2026&itemId=${id}`, timingLabel, tone,
+  });
+  return {
+    ...base, executionId: 'execution-seasonal-shelves', question: 'What seasonal tasks are pending?', viewState: null,
+    blocks: [
+      { type: 'SUMMARY', id: 'seasonal-maintenance-summary', title: '3 summer tasks need attention', body: 'These tasks come from the Summer 2026 checklist.', tone: 'CAUTION',
+        actions: [{ id: 'open-seasonal', label: 'Open Summer checklist', href: seasonalHref, style: 'PRIMARY' }] },
+      { type: 'GROUPED_LIST', filters: [], id: 'seasonal-maintenance-items', title: 'Summer checklist', presentation: { pattern: 'SHELVES' },
+        description: 'Checklist status is used first; a linked canonical Maintenance completion takes precedence when the two sources differ.',
+        sections: [
+          { id: 'priority-critical', title: 'Critical', count: 2, items: [
+            task('season-ac', 'Service air conditioner', 'Prepare the cooling system for sustained heat.', 'Critical', 'Recommended Aug 20, 2026', 'CAUTION'),
+            task('season-drain', 'Inspect exterior drainage', 'Check that water runs away from the foundation.', 'Critical', 'Recommended Aug 25, 2026', 'CAUTION'),
+          ] },
+          { id: 'priority-optional', title: 'Optional', count: 1, items: [task('season-vent', 'Clean dryer vent', 'Lint buildup is a fire risk.', 'Optional', 'No recommended date', 'DEFAULT')] },
+        ], actions: [] },
+    ],
+  };
+}
+
 function maintenanceOutputExecution() {
   return {
     schemaVersion: '1.0', executionId: 'execution-maintenance-output', sessionId: 'ask-acceptance-session',
@@ -1731,6 +1757,12 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     }
     if (/what needs my attention now/i.test(body.message)) {
       const response = homeActionShelvesExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/what seasonal tasks are pending/i.test(body.message)) {
+      const response = seasonalShelvesExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

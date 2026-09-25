@@ -1511,6 +1511,52 @@ test('on a phone, home action shelves stay inside the screen and a card opens as
   await expect(sheet).toBeHidden();
 });
 
+test('seasonal checklist tasks show as priority shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What seasonal tasks are pending?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-seasonal-shelves');
+  await expect(response.getByRole('list', { name: 'Critical, 2 items' }).getByRole('listitem')).toHaveCount(2);
+  await expect(response.getByRole('list', { name: 'Optional, 1 item' })).toBeVisible();
+  const card = response.getByRole('button', { name: /Service air conditioner/ });
+  await expect(card).toContainText('Recommended Aug 20, 2026');
+  await card.click();
+  const drawer = page.getByRole('dialog', { name: 'Service air conditioner' });
+  await expect(drawer.getByText('Prepare the cooling system for sustained heat.')).toBeVisible();
+  await expect(drawer.getByRole('link', { name: 'Open record' })).toHaveAttribute('href', /dashboard\/seasonal/);
+  await expect(drawer.getByRole('button')).toHaveCount(1);
+  const box = await drawer.boundingBox();
+  expect(box && box.x + box.width).toBeGreaterThan(1430);
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+
+  await response.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(response.getByRole('link', { name: 'Service air conditioner' })).toBeVisible();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+});
+
+test('on a phone, seasonal shelves stay inside the screen and a task opens as a bottom sheet', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What seasonal tasks are pending?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+
+  const response = page.locator('#ask-execution-execution-seasonal-shelves');
+  await expect(response.getByRole('list', { name: 'Critical, 2 items' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await response.getByRole('button', { name: /Clean dryer vent/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Clean dryer vent' });
+  await expect(sheet.getByText('Lint buildup is a fire risk.')).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
+  await sheet.getByRole('button', { name: 'Close details' }).click();
+  await expect(sheet).toBeHidden();
+});
+
 test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
   await installAskApi(page, { maintenanceDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);

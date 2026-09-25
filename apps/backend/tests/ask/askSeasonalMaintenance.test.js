@@ -5,6 +5,7 @@ require('ts-node/register');
 
 const {
   buildSeasonalMaintenanceResult,
+  seasonalShelfFacts,
   parseSeasonalMaintenanceIntent,
 } = require('../../src/services/ask/askSeasonalMaintenance.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
@@ -23,7 +24,7 @@ function item(overrides = {}) {
     description: overrides.description ?? 'Prepare the cooling system for sustained heat.',
     priority: overrides.priority ?? 'CRITICAL',
     status: overrides.status ?? 'RECOMMENDED',
-    recommendedDate: overrides.recommendedDate ?? new Date('2026-08-20T00:00:00.000Z'),
+    recommendedDate: 'recommendedDate' in overrides ? overrides.recommendedDate : new Date('2026-08-20T00:00:00.000Z'),
     snoozedUntil: overrides.snoozedUntil ?? null,
     updatedAt: overrides.updatedAt ?? NOW,
     maintenanceTask: overrides.maintenanceTask ?? null,
@@ -69,7 +70,8 @@ test('pending summer questions return actual checklist items instead of an empty
   ] })] });
   assert.equal(response.status, 'ANSWERED');
   assert.equal(response.blocks[0].title, '2 summer tasks need attention');
-  assert.deepEqual(response.blocks[1].sections[0].items.map((entry) => entry.title), [
+  // One checklist renders as priority shelves (FRD v1.83), still in priority order.
+  assert.deepEqual(response.blocks[1].sections.flatMap((section) => section.items.map((entry) => entry.title)), [
     'Service air conditioner', 'Inspect exterior drainage',
   ]);
   assert.match(response.blocks[0].actions[0].href, /dashboard\/seasonal/);
@@ -128,4 +130,50 @@ test('provider failure never becomes a false zero-task answer', () => {
   assert.equal(response.status, 'READY_WITH_LIMITATIONS');
   assert.equal(response.reasonCode, 'SEASONAL_CHECKLIST_CONTEXT_UNAVAILABLE');
   assert.doesNotMatch(response.blocks[0].body, /no tasks exist/i);
+});
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.83): the seasonal checklist as read-only shelves.
+const fmt = (value) => value.toISOString().slice(0, 10);
+
+test('shelf facts: only an open critical task is a caution; timing is the recommended or snooze date', () => {
+  const base = { priority: 'CRITICAL', status: 'PENDING', recommendedDate: new Date('2026-08-20T00:00:00Z'), snoozedUntil: null, formatDate: fmt };
+  assert.deepEqual(seasonalShelfFacts(base), { tone: 'CAUTION', timingLabel: 'Recommended 2026-08-20' });
+  assert.deepEqual(seasonalShelfFacts({ ...base, priority: 'RECOMMENDED' }), { tone: 'DEFAULT', timingLabel: 'Recommended 2026-08-20' });
+  assert.deepEqual(seasonalShelfFacts({ ...base, status: 'SNOOZED', snoozedUntil: new Date('2026-08-30T00:00:00Z') }), { tone: 'DEFAULT', timingLabel: 'Snoozed until 2026-08-30' });
+  assert.deepEqual(seasonalShelfFacts({ ...base, status: 'COMPLETED' }), { tone: 'DEFAULT', timingLabel: 'Recommended 2026-08-20' });
+  assert.deepEqual(seasonalShelfFacts({ ...base, recommendedDate: null }), { tone: 'CAUTION', timingLabel: 'No recommended date' });
+});
+
+test('one checklist declares shelves by priority with card facts, no item actions, and leaves out empty priorities', () => {
+  const response = result('what seasonal tasks are pending', { checklists: [checklist({ items: [
+    item({ id: 'a', title: 'Service air conditioner' }),
+    item({ id: 'b', title: 'Clean dryer vent', priority: 'OPTIONAL', recommendedDate: null }),
+  ] })] });
+  const list = response.blocks[1];
+  assert.deepEqual(list.presentation, { pattern: 'SHELVES' });
+  assert.deepEqual(list.sections.map((section) => [section.id, section.title, section.count]), [['priority-critical', 'Critical', 1], ['priority-optional', 'Optional', 1]]);
+  assert.deepEqual([list.sections[0].items[0].tone, list.sections[0].items[0].timingLabel], ['CAUTION', 'Recommended Aug 19, 2026']);
+  assert.equal(list.sections[1].items[0].timingLabel, 'No recommended date');
+  assert.ok(list.sections.every((section) => section.items.every((entry) => entry.actions.length === 0)));
+  const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  AskPresentationBlockSchema.parse(list);
+});
+
+test('several checklists keep one shelf per season and year, never merging tasks across them', () => {
+  const response = result('Show all seasonal tasks in 2026', { checklists: [
+    checklist({ id: 'summer-2026', items: [item({ id: 's', title: 'Service air conditioner' })] }),
+    checklist({ id: 'fall-2026', season: 'FALL', seasonStartDate: new Date('2026-09-22T00:00:00Z'), seasonEndDate: new Date('2026-12-21T00:00:00Z'), items: [item({ id: 'f', title: 'Clean gutters', priority: 'RECOMMENDED' })] }),
+  ] });
+  assert.deepEqual(response.blocks[1].sections.map((section) => section.title), ['Summer 2026', 'Fall 2026']);
+  assert.deepEqual(response.blocks[1].presentation, { pattern: 'SHELVES' });
+});
+
+test('the full answer checker, with answer relevance on, keeps the shelves answer even with a code-like task title', () => {
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const response = result('what seasonal tasks are pending', { checklists: [checklist({ items: [item({ id: 'c', title: 'HVAC_FILTER_CHANGE' })] })] });
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'what seasonal tasks are pending', operationId: 'MAINTENANCE_STATUS', propertyId: 'property-1', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence(response, [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')]),
+  });
+  assert.equal(checked.result.status, 'ANSWERED', JSON.stringify(checked.semantic));
 });
