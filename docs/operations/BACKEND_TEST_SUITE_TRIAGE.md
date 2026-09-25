@@ -9,7 +9,8 @@
 |---|---|---|
 | Start of this pass | 236 | after the Ask decomposition, before any triage |
 | After the first two batches | 106 | stale test doubles and fixtures fixed |
-| After the third batch | **87** | includes one real configuration fix |
+| After the third batch | 87 | includes one real configuration fix |
+| After the source-text batch | **64** (46 files) | tests pointed at where the code lives now |
 
 Each remaining failure was read only as far as its first error message (**Code-traced**, not root-caused test by test). The
 classification below is therefore a starting point for whoever picks each one up, and labels what each group probably is.
@@ -31,67 +32,49 @@ Nothing here is caused by the Ask decomposition: a clean copy of the earlier com
   passed it.
 - Regenerated `docs/product/HOME_INTELLIGENCE_PHASE0_REGISTRY_REPORT.md`, which a test requires to match the registry.
 
-## What is left (87 failures in 58 files)
+## What is left (64 failures in 46 files)
 
-### A. Environment only, not code (10 files, about 14 failures)
+### Needs a decision from you, not a test edit (found while triaging)
 
-These need a database, secrets or a native module that a clean checkout does not have.
+These tests fail because the code contradicts what the test says the product should do. Which side is right is a product
+or release call.
 
-- `integration/askConversationalCaptureCertification.db`, `integration/askSellHoldRentGoalCertification.db`: no database at
-  `localhost:5433`.
-- `integration/password-reset.integration`, `e2e/password-reset.e2e`: `JWT_SECRET` must be at least 32 characters.
-- `unit/emailVerificationAppConfig`, `integration/adminReviewModeration.integration`: need a real database behind the auth and
-  review services.
-- `unit/refinanceLoanEstimateExtraction`: the `sharp` native module does not load for darwin-arm64 in this install.
+1. **`ENFORCE_HUMAN_POLICY_APPROVALS`** (`unit/humanPolicyApprovalMode`). The test says the deployment enforces launch
+   approvals (`"true"` in `infrastructure/kubernetes/base/configmap.yaml`). The configmap and `infrastructure/kubernetes/README.md`
+   both say `"false"`. That looks deliberate for the test phase, but it means human-approval gates are advisory in the
+   deployed environment.
+2. **`HOME_RISK_REPLAY_REVIEWED_COVERAGE_ENABLED`** (`unit/propertyIntelligenceTrustContainment`) is expected to be `"false"`
+   in deployment config and is not present at all.
+3. **`HOME_BRIEFING` rollout** (`unit/propertyIntelligencePortfolioContracts`) is expected to default to 0%; the current
+   default is different (`config/featureFlags.ts`).
+4. **Upgrade planner renders `TwinStatusCard`** (`unit/homeDigitalTwinP0TrustBoundary`) although the P0 product boundary says
+   the planner must not show a competing home-state summary (`HomeDigitalTwinClient.tsx` line 2505).
+5. **Homeowner "Personalized Guidance" navigation entry** (`unit/personalizationPhase2ConsumersUi`) was removed from
+   `lib/navigation/jobsNavigation.ts` in the July 18 unified-Home commit; the test says homeowners must always have it.
+6. **Capability catalog behaviour** (`toolCapabilityRelated`, `toolCapabilityRecommendation`, `knowledgeHubCapabilityProjection`,
+   `materialSpecsCapabilityActivation`, `diyCapabilityActivation`, `plantAdvisorCapabilityActivation`, `productFrameworkContracts`,
+   `capabilityGovernanceDefinition`, `capabilityLaunchReview`, `homeEventRadarActionRegistry`): tools were retired (`cost-explainer`,
+   `true-cost`) and new capabilities added, so related-tool order and ranking changed. Example: `inspection-hub` on an `ISSUE`
+   entity now suggests `buyer-closing` then `diy`, not `diy` then `permits`.
 
-### B. Source-text tests pinned to refactored files (about 28 files)
+### Environment only (8 files)
 
-These read a source file and match a regular expression that no longer matches because the code moved or was reworded (the
-same class as the Ask decomposition's 41 source-reading tests, which now read through `tests/helpers/askOrchestratorSources.js`).
-Fixing each means finding where the string lives now, not changing behaviour.
+`integration/askConversationalCaptureCertification.db`, `integration/askSellHoldRentGoalCertification.db` (no database at
+`localhost:5433`); `integration/password-reset.integration`, `e2e/password-reset.e2e` (`JWT_SECRET` too short);
+`unit/emailVerificationAppConfig`, `integration/adminReviewModeration.integration` (need a real database);
+`unit/refinanceLoanEstimateExtraction` (`sharp` does not load for darwin-arm64).
 
-`personalizationPhase3Ui`, `personalizationPhase2ConsumersUi`, `personalizationModulePlacementUi`, `homeBriefingFoundation`,
-`gazetteLegacyRetirement`, `homeBuyerSlice4AInspectionModules`, `homeBuyerSlice4CClosingDay`, `homeDigitalTwinP0TrustBoundary`,
-`homeIntelligencePhase4Gaps`, `homeTimelineTruthHardening`, `humanPolicyApprovalMode`, `maintenanceSourceParityBoundary`,
-`pastHazardExposureFoundation`, `phase2HomeActions`, `phase4RecommendationIncidents`, `phase4RemainingCompletion`,
-`phase4TrustGovernance`, `phase4WorkerParity`, `phase5AssetLifecycleSlice`, `phase6RemediationExitGate` (2 of 16),
-`propertyContextJustInTimeSlice4`, `propertyContextJustInTimeSlice4Completion` (a frontend path no longer exists),
-`propertyContextJustInTimeSlice4Planning`, `propertyContextJustInTimeSlice5Tranche2`, `propertyContextRemediation`,
-`propertyIntelligencePortfolioContracts`, `propertyIntelligenceTrustContainment`, `propertySetupSimplification`,
-`sellerPrepTrustContainment`, `coveragePolicyTermProvenance`, `integration/phase5BuyerAcquisition.acceptance`.
+### Older design (2 files)
 
-### C. Catalog behaviour that needs a product decision (10 files, about 22 failures)
+`decisionPlatform/decisionPlatformChangeEmitterGovernance` asserts a best-effort emitter; emission is transactional on
+purpose, so the test needs rewriting for the current design. `decisionPlatform/hvacDecisionRouting` is a known red test
+since August.
 
-The capability registry changed (tools retired into others, new capabilities added) and these tests pin the old related-tool
-order, recommendation ranking or activation state. Updating them means agreeing that the new behaviour is intended, so they
-were not changed blindly. Example: `toolCapabilityRelated` expected `inspection-hub` on an `ISSUE` entity to suggest `diy`
-then `permits`; it now suggests `buyer-closing` then `diy`.
+### Still to read (about 20 files, mostly one failure each)
 
-`toolCapabilityRelated` (4), `toolCapabilityRecommendation` (3), `knowledgeHubCapabilityProjection` (3),
-`materialSpecsCapabilityActivation` (2), `diyCapabilityActivation`, `plantAdvisorCapabilityActivation`,
-`productFrameworkContracts`, `capabilityGovernanceDefinition`, `capabilityLaunchReview`, `homeEventRadarActionRegistry` (2).
-Some of these also use retired tool ids in their fixtures (`cost-explainer`, `true-cost`, `cost-growth`).
-
-### D. Tests that assert an earlier design (3 files)
-
-- `decisionPlatform/decisionPlatformChangeEmitterGovernance` (2): asserts the emitter is best-effort (a `try` block; called
-  after the transaction commits). The Phase 0 remediation made emission transactional on purpose, so the test's premise is
-  out of date; it needs rewriting against the current design, not patching.
-- `decisionPlatform/hvacDecisionRouting`: a non-HVAC water-heater question routes to `HVAC_DECISION_START`. Noted as a known
-  red test since August.
-- `phase8CleanupGuard`, `phase8ArchetypeExitGate`, `phase7AggregationContextPolicy`, `phase3MajorMoment`: guard-style tests
-  whose first error is a deep-equal on a list; not yet read.
-
-### E. Test doubles still missing a member (about 6 files)
-
-`personalizationQuality` (prisma fake has no model the service now reads), `personalizationConvertRecommendationToTask`,
-`homeActionProjectSafetyTier` (a fixture fails `parseHomeAction` validation), `propertyBriefFoundation`, `adminSourceHealth`,
-`propertyContextJustInTimeSlice1`.
-
-## Suggested order
-
-1. Group B: mechanical, and each fix restores a guardrail that currently guards nothing.
-2. Group E: small.
-3. Group D: rewrite the emitter governance test for the transactional design.
-4. Group C: needs the product owner's yes or no per capability.
-5. Group A: leave, but run them in an environment with a database, `JWT_SECRET` and a working `sharp`.
+Source-text tests whose string was reworded or moved and that I have not yet traced: `phase2HomeActions`, `propertySetupSimplification`,
+`propertyContextRemediation`, `propertyContextJustInTimeSlice1`, `...Slice4`, `...Slice4Completion`, `...Slice4Planning`,
+`...Slice5Tranche2`, `sellerPrepTrustContainment`, `coveragePolicyTermProvenance`, `phase3MajorMoment`,
+`phase4ProjectCompliancePolicy`, `phase6RemediationExitGate` (2), `phase7AggregationContextPolicy`, `phase8CleanupGuard`,
+`phase8ArchetypeExitGate`, `propertyBriefFoundation`, `adminSourceHealth`, `integration/phase5BuyerAcquisition.acceptance`, plus
+doubles missing a member: `personalizationQuality` (4), `personalizationConvertRecommendationToTask`, `homeActionProjectSafetyTier`.
