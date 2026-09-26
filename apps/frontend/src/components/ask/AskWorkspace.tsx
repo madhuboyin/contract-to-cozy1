@@ -281,7 +281,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     />
   );
   const renderComposer = (placement: 'hero' | 'footer') => (
-    <form onSubmit={submit} className={cn('group mx-auto w-full', placement === 'hero' ? 'max-w-none' : 'max-w-3xl')} aria-label="Ask Cozy question">
+    <form onSubmit={submit} className={cn('group mx-auto w-full', placement === 'hero' ? 'max-w-none' : calm ? 'max-w-[1140px]' : 'max-w-3xl')} aria-label="Ask Cozy question">
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
       <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100', placement === 'hero' ? cn('rounded-2xl p-3 shadow-[0_12px_28px_-20px_rgba(15,23,42,0.45)]', calm && 'min-h-[120px] border-stone-300 p-4 sm:p-5') : 'rounded-2xl')}>
@@ -394,7 +394,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {!calm && <ConciergeHome propertyId={selectedPropertyId} view={concierge.view} loading={concierge.loading} failed={concierge.failed} onAsk={(prompt, source) => runPrompt(prompt, source)} />}
           </div>
         ) : (
-          <div className={cn('mx-auto max-w-3xl', calm ? 'space-y-5' : 'space-y-7')}>
+          <div className={cn('mx-auto', calm ? 'max-w-[1140px] space-y-5' : 'max-w-3xl space-y-7')}>
             <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} calm={calm} />
             {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
             {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/RES-003/MAINT-003: a

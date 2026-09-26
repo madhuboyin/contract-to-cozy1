@@ -20,7 +20,7 @@ export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onD
 }) {
   if (!items.length) return null;
   if (calm) return (
-    <ul className="mx-auto max-w-3xl space-y-1.5" aria-label="Unfinished work" data-calm-pending="">{items.slice(0, 2).map((item) => {
+    <ul className="mx-auto max-w-[1140px] space-y-1.5" aria-label="Unfinished work" data-calm-pending="">{items.slice(0, 2).map((item) => {
       const busy = loadingId === item.execution.executionId || dismissingId === item.execution.executionId;
       const canDismiss = item.pendingKind !== 'COMMAND_RECOVERY';
       return <li key={item.execution.executionId} className="flex items-center gap-2 rounded-2xl bg-slate-100/70 px-3.5 py-2 text-sm"><span className="min-w-0 flex-1 truncate text-slate-700"><span className="text-slate-500">Unfinished · </span>{item.execution.question}</span>

@@ -40,6 +40,21 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
 
+test('calm width: the landing, the conversation thread and the docked composer share one content width', async ({ page }) => {
+  await installAskApi(page);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const landing = await page.locator('[data-calm-landing]').boundingBox();
+  await page.getByRole('list', { name: 'Suggestions' }).getByRole('button').first().click();
+  const composer = page.getByRole('form', { name: 'Ask Cozy question' });
+  await expect(page.getByRole('button', { name: 'Response options' }).first()).toBeVisible();
+  const docked = await composer.boundingBox();
+  const thread = await page.locator('main article').first().boundingBox();
+  expect(landing && docked && thread).toBeTruthy();
+  expect(Math.abs(docked!.width - landing!.width)).toBeLessThanOrEqual(2);
+  expect(Math.abs(thread!.width - landing!.width)).toBeLessThanOrEqual(2);
+});
+
 test('calm answer: no answer frame, one overflow menu, and the composer stays plain', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
