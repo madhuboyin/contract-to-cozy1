@@ -40,6 +40,8 @@ import { CapabilityCategoryIcon, CapabilityExplorer, ConciergeHome } from './wor
 import { ConfirmationCard } from './workspace/CaptureCards';
 import { ExecutionCard } from './workspace/ExecutionCard';
 import { ConversationHistoryNav, PendingWorkInbox } from './workspace/ConversationHistoryNav';
+import { AttachEvidenceControl } from './AttachEvidenceControl';
+import { deriveComposerAffordances } from '@/features/ask/composerAffordances';
 import { resolveHistoryRailExpanded, useHistoryRailPreference } from '@/features/ask/historyRail';
 import { useSelectedPropertyLabel } from './workspace/useSelectedPropertyLabel';
 import { buildConciergeStateStrip } from '@/features/ask/conciergeStateStrip';
@@ -219,6 +221,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
   const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId && (effectiveHistoryScope === 'ALL_HOMES' || item.property.id === selectedPropertyId));
   const latestExecution = executions.at(-1);
+  // ACUI-004: extra composer inputs, offered only when the conversation has one deterministic evidence target for this home.
+  const composerAffordances = latestExecution && latestExecution.property?.id === selectedPropertyId && !deniedProperties.current.has(`${sessionId}:${latestExecution.property?.id}`) ? deriveComposerAffordances(latestExecution) : [];
   const knownActiveSession = [...pinnedSessions, ...recentSessions, ...searchSessions].find((item) => item.sessionId === sessionId);
   const activeConversation = executions.length > 0 && latestExecution && latestExecution.property?.id === selectedPropertyId && !deniedProperties.current.has(`${sessionId}:${latestExecution.property?.id}`) ? {
     sessionId,
@@ -281,6 +285,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
       <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100', placement === 'hero' ? cn('rounded-3xl p-3 shadow-[0_12px_40px_-20px_rgba(15,118,110,0.45)]', calm && 'border-teal-200 p-4 shadow-[0_18px_50px_-22px_rgba(15,118,110,0.55)]') : 'rounded-2xl')}>
         <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? (calm ? 3 : 2) : 1} maxLength={4000} placeholder={calm && placement === 'hero' && propertyLabel ? `Ask anything about ${propertyLabel}…` : 'Ask anything about your home…'} className={cn('max-h-48 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? (calm ? 'min-h-[5.5rem] py-2.5 text-lg leading-7' : 'min-h-14 py-3 text-base') : 'min-h-10 py-2 text-sm')} />
+        {latestExecution && composerAffordances.map((affordance) => <AttachEvidenceControl key={affordance.id} variant="composer" label={affordance.label}
+          event={{ entityType: affordance.target.entityType, id: affordance.target.id, title: affordance.target.title }} propertyId={selectedPropertyId} disabled={loading || !sessionId}
+          onAttached={(documentId) => void ask(affordance.target.message, undefined, { entityType: affordance.target.entityType, entityId: affordance.target.id, sourceExecutionId: latestExecution.executionId, operationId: 'CAPTURE_EVIDENCE_CONFIRM', documentId })} />)}
         <VoiceInputButton large={placement === 'hero'} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />
         {loading && inFlight.current

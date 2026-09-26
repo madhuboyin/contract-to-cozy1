@@ -1191,6 +1191,30 @@ test('a contributor attaches a document to an inventory item and to a warranty i
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
+test('the composer offers a purpose-named attach only for one deterministic record, and the file still goes through review (ACUI-004)', async ({ page }) => {
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  // Several records in the result: no target is guessed, so no composer attach.
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.getByRole('heading', { name: 'Systems and inventory' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Add a photo or document/ })).toHaveCount(0);
+
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my water heater record only.');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const attach = page.getByRole('button', { name: /Add a photo or document/ });
+  await expect(attach).toBeVisible();
+  await expect(attach).toHaveAttribute('title', 'Add a photo or document for Water heater');
+  await page.getByLabel('Attach evidence file for Water heater').last().setInputFiles({ name: 'receipt.pdf', mimeType: 'application/pdf', buffer: Buffer.from('fixture receipt bytes') });
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Attach this document to this inventory item.'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'item-property-summary'
+    && (body.launchContext as { documentId?: string } | undefined)?.documentId === 'document-evidence-fixture')).toBe(true);
+  // Uploading attaches nothing: the confirmation card comes first, and the composer offer is gone while it is open.
+  await expect(page.getByText('Attach this document as evidence?')).toBeVisible();
+  expect(api.correctionConfirmBodies).toEqual([]);
+  await expect(page.getByRole('button', { name: /Add a photo or document/ })).toHaveCount(0);
+});
+
 test('on a phone, the attach control on an inventory item fits the screen (FRD v1.99)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);

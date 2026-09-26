@@ -266,7 +266,7 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 | ACUI-007 | Guardrail in force: the conversational capture limit was restored to three fields (FRD v1.114). |
 | ACUI-005 | **Implemented in code (FRD v1.117):** calm receipt, review stage line, unknown-outcome wording, record link as continuation. Not browser-verified. |
 | ACUI-003 | **Implemented in code (FRD v1.118):** readable trust line under the answer; the workflow action is the dominant step. Not browser-verified. No client-side ordering guard (handler order already correct). |
-| ACUI-004 | Not started. |
+| ACUI-004 | **Implemented in code (FRD v1.119)** for home events, inventory items and warranties with one deterministic target. Maintenance tasks are not offered: the evidence operation does not support them (backend decision). Playwright-covered; not browser-verified by hand. |
 
 ## 8. Recommended delivery boundary
 

@@ -1935,6 +1935,14 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
       return;
     }
+    // ACUI-004: a result holding exactly one evidence-capable record (the water heater), so the composer has a deterministic target.
+    if (/water heater record only/i.test(body.message)) {
+      const response = correctableSummaryExecution();
+      response.blocks = response.blocks.filter((block: { id?: string }) => block.id === 'property-inventory');
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
     if (/correctable summary of my home record/i.test(body.message)) {
       const response = correctableSummaryExecution();
       if (body.sessionId) response.sessionId = body.sessionId;

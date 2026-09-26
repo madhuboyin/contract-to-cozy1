@@ -18,12 +18,14 @@ export const EVIDENCE_ATTACH_MESSAGES = {
 export const EVIDENCE_UPLOAD_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
 export const EVIDENCE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
-export function AttachEvidenceControl({ event, propertyId, disabled, onAttached, label = 'Attach evidence' }: {
+export function AttachEvidenceControl({ event, propertyId, disabled, onAttached, label = 'Attach evidence', variant = 'inline' }: {
   event: { entityType: string | null | undefined; id: string; title: string };
   propertyId?: string;
   disabled?: boolean;
   onAttached: (documentId: string) => void;
   label?: string;
+  /** ACUI-004: 'composer' is the compact form beside the message box; the upload and validation are the same. */
+  variant?: 'inline' | 'composer';
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<'IDLE' | 'UPLOADING' | 'ERROR'>('IDLE');
@@ -47,7 +49,7 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
   };
 
   return (
-    <div className="mt-3">
+    <div className={variant === 'composer' ? 'relative' : 'mt-3'}>
       <input
         ref={inputRef} type="file" accept={EVIDENCE_UPLOAD_ALLOWED_TYPES.join(',')} className="sr-only" tabIndex={-1}
         aria-label={`Attach evidence file for ${event.title}`}
@@ -55,13 +57,14 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
       />
       <button
         type="button" disabled={disabled || status === 'UPLOADING'}
-        className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
+        title={variant === 'composer' ? `${label} for ${event.title}` : undefined}
+        className={variant === 'composer' ? 'inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50' : 'inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50'}
         onClick={() => inputRef.current?.click()}
       >
         {status === 'UPLOADING' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Paperclip className="h-4 w-4" aria-hidden="true" />}
         {status === 'UPLOADING' ? 'Uploading…' : label}<span className="sr-only"> for {event.title}</span>
       </button>
-      {error && <p className="mt-1 text-xs text-red-700" role="alert">{error}</p>}
+      {error && <p className={variant === 'composer' ? 'absolute bottom-full left-0 mb-1 w-64 rounded-lg bg-red-50 px-2 py-1 text-xs text-red-700' : 'mt-1 text-xs text-red-700'} role="alert">{error}</p>}
     </div>
   );
 }
