@@ -265,13 +265,13 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 
 | Ticket | Status |
 | --- | --- |
-| ACUI-001 | **Implemented in code (FRD v1.115).** Home name, state headline and named composer placeholder; generic prompt only when state is unknown. Not browser-verified. |
-| ACUI-002 | **Implemented in code, frontend-only (FRD v1.115).** Derived in `conciergeStateStrip.ts`; hidden when nothing can be derived. Not browser-verified. |
+| ACUI-001 | **Implemented in code (FRD v1.115).** Home name, state headline and named composer placeholder; generic prompt only when state is unknown. Browser-covered by ACUI-008 (fixture-backed). |
+| ACUI-002 | **Implemented in code, frontend-only (FRD v1.115).** Derived in `conciergeStateStrip.ts`; hidden when nothing can be derived. Browser-covered by ACUI-008 (fixture-backed). |
 | ACUI-006 | **Complete (FRD v1.116).** Collapsible history rail plus quiet unfinished-work lines (`88d3dc2f`). The recent-artifacts row was removed from scope (see ACUI-006). |
 | ACUI-007 | **Future design ticket.** Guardrail in force: the capture limit is three fields (FRD v1.114); grouped capture needs a prototype and review first. |
-| ACUI-005 | **Implemented in code (FRD v1.117):** calm receipt, review stage line, unknown-outcome wording, record link as continuation. Not browser-verified. |
+| ACUI-005 | **Implemented in code (FRD v1.117):** calm receipt, review stage line, unknown-outcome wording, record link as continuation. Browser-covered by ACUI-008 (fixture-backed). |
 | ACUI-003 | **Implemented in code (FRD v1.118):** readable trust line under the answer; the workflow action is the dominant step. Not browser-verified. No client-side ordering guard (handler order already correct). |
-| ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Playwright-covered; not browser-verified by hand. |
+| ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Browser-covered by ACUI-008 (fixture-backed). |
 | ACUI-008 | **Implemented (FRD v1.120):** `e2e/ask/maintenanceJourney.spec.ts`, 9 scenarios at desktop and 390px. Fixture-backed; not a live-backend run. |
 
 ## 8. Recommended delivery boundary
@@ -284,4 +284,28 @@ Do not broaden calm adoption to another domain until maintenance demonstrates al
 
 ## 9. Validation notes
 
-This audit is based on requirements review and static tracing of the current working tree, including uncommitted Ask Cozy changes. It is not a runtime certification. No application code was changed by this audit, and no browser or service environment was started.
+**Basis of the original findings (September 26, 2026):** requirements review and static tracing of the working tree at the time, including uncommitted Ask Cozy changes; not a runtime certification.
+
+**Status after implementation (September 26, 2026, HEAD `63e6ff83`):** ACUI-001 to 006 are implemented and ACUI-008 protects them as an integrated journey: `e2e/ask/maintenanceJourney.spec.ts` plus the calm and ask specs, 159 Playwright scenarios in Chromium at desktop and 390px, backed by 452 jest tests. Screenshots of the launch, rail, explanation, maintenance answer, trust line, composer attach, review and receipt were reviewed on the fixture app, and two visual defects found that way were fixed (`ae2e4a8a`).
+
+**What this still is not:** every run is fixture-backed (a real Next.js build and browser, a mocked API). Nothing was run against the live backend or real household data, and nothing is deployed. Keyboard, live-region, accessible-name and reduced-motion checks are automated; no assistive-technology (screen reader) pass has been done.
+
+## 10. Prototype comparison (engineering pass, September 26, 2026)
+
+Compared with `docs/product/prototypes/ask-cozy-launch-validation.html` (FRDs win over the prototype). This is an engineering comparison; product/design sign-off is separate.
+
+| Area | Prototype | Implementation | Assessment |
+| --- | --- | --- | --- |
+| Launch headline and state | State-specific headline and subhead | State headline from the same Concierge data; unknown state keeps the generic prompt | Aligned |
+| Home identity | Property selector in the top bar | Home name above the headline; multi-home selection stays in the app shell | Aligned in intent |
+| Attention entries | Two cards with kicker, title, copy, link text and "Why this appeared" | Two quieter rows with label, top item, chevron and an inline "Why this appeared" | Deliberate (IW-CONV-017: composer leads); not material |
+| "Why this appeared" | A toast with fixed text | Inline disclosure from governed fields, hidden when nothing can be derived | Better than the prototype |
+| Composer tool row | Three per-state buttons (scan label, add report, describe) on the landing | Only voice on the landing; a purpose-named attach appears when one supported record is resolved | Deliberate (ACUI-004: no bare or unsupported affordances). **Product decision if landing-level photo/report entry is wanted:** it needs a defined upload flow, not just a button |
+| Active work / recent artifacts | Both sections on the landing | Unfinished-work lines; artifacts row out of scope by decision | Deliberate |
+| Stage stepper | Persistent Answer / Review / Confirm / Receipt | Stage wording in headings and verbs, no stepper | Deliberate (section 4.4) |
+| Receipt | "Done", status, "Saved to", two buttons | Receipt label, past-tense title, changed values, one primary link to the record; no "Saved to" row or time unless the producer lists them | Not material; a "Saved to" row would need a governed field on the receipt block |
+| Trust line | "From your home record · refreshed today" | "Based on N sources, latest <date>", opens the evidence panel | Grounded in data; the "refreshed today" phrasing is not derivable |
+| Mobile navigation | Bottom tab bar | Header history button and the existing sheet; the tab bar belongs to the app shell | Out of slice |
+| History | A "History" navigation item | Collapsible rail with a labeled History control | Aligned |
+
+No discrepancy is material to hierarchy, trust, accessibility or usability for the maintenance slice. Open product questions, none of which block it: landing-level photo/report entry, a "Saved to" line on receipts, and the mobile tab bar.
