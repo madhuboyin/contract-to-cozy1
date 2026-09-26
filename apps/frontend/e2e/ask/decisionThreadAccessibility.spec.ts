@@ -149,7 +149,7 @@ test.beforeEach(async ({ context }) => installAskContext(context));
 test('DECISION_PROGRESS (including a STALE context banner) passes accessibility checks', async ({ page }) => {
   await installDecisionPlatformRoutes(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill("What's the status of my HVAC decision?");
+  await page.getByPlaceholder(/^Ask anything about /).fill("What's the status of my HVAC decision?");
   await page.getByRole('button', { name: 'Send question' }).click();
 
   await expect(page.getByRole('heading', { name: 'Repair or replace: Furnace' })).toBeVisible();
@@ -162,7 +162,7 @@ test('DECISION_PROGRESS (including a STALE context banner) passes accessibility 
 test('WHY_NOW, RECOMMENDATION_CHANGE, and PREFERENCE_REFERENCE (rendered together after a recompute) pass accessibility checks', async ({ page }) => {
   await installDecisionPlatformRoutes(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill("What's the status of my recomputed HVAC decision?");
+  await page.getByPlaceholder(/^Ask anything about /).fill("What's the status of my recomputed HVAC decision?");
   await page.getByRole('button', { name: 'Send question' }).click();
 
   await expect(page.getByRole('heading', { name: 'Repair or replace: Furnace' })).toBeVisible();
@@ -181,7 +181,7 @@ test('WHY_NOW, RECOMMENDATION_CHANGE, and PREFERENCE_REFERENCE (rendered togethe
 test('SCENARIO_COMPARISON passes accessibility checks', async ({ page }) => {
   await installDecisionPlatformRoutes(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('I got a new quote for my furnace, please compare it to the decision');
+  await page.getByPlaceholder(/^Ask anything about /).fill('I got a new quote for my furnace, please compare it to the decision');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   await expect(page.getByRole('heading', { name: 'Scenario: Acme HVAC' })).toBeVisible();

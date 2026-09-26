@@ -8,7 +8,7 @@ test('mobile starting surface keeps the composer visible without duplicate headi
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toBeInViewport();
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
   await page.getByRole('button', { name: /Explore everything Ask Cozy can do/ }).click();
   await expect(page.getByRole('dialog', { name: 'What Ask Cozy can help with' })).toBeVisible();
@@ -33,7 +33,7 @@ test('mobile conversation history opens as a drawer and restores a recent sessio
 test('mobile inline capture retains a full-form escape path', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('When should I replace my refrigerator?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('When should I replace my refrigerator?');
   await page.getByRole('button', { name: 'Send question' }).click();
   const fullFormHref = await page.getByRole('link', { name: /Open full form/ }).getAttribute('href');
   expect(fullFormHref).toMatch(/\/inventory\?/);
@@ -44,7 +44,7 @@ test('mobile inline capture retains a full-form escape path', async ({ page }) =
 test('mobile capability discovery keeps readiness and related tools readable', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Is there a tool to help with refinancing?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Is there a tool to help with refinancing?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await expect(page.getByText('More home details will improve the result')).toBeVisible();
   await expect(page.getByRole('link', { name: /Break-Even/ })).toBeVisible();

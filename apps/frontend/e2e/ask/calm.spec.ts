@@ -12,7 +12,7 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toHaveCount(1);
   await expect(page.getByText('Answers use your selected home record')).toHaveCount(0);
   await expect(page.locator('[data-calm-headline]')).toBeVisible();
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toBeInViewport();
   await expect(page.getByText('Enter to send · Shift+Enter for a new line')).toHaveCount(0);
   await expect(page.getByText('Record-based when available')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toHaveCount(0);
@@ -49,7 +49,7 @@ test('calm answer: no answer frame, one overflow menu, and the composer stays pl
 test('calm domain list: the list has no outer frame and the summary leads', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my claims');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my claims');
   await page.keyboard.press('Enter');
   const list = page.locator('article section.overflow-hidden').first();
   await expect(list).toBeVisible();
@@ -60,7 +60,7 @@ test('calm domain list: the list has no outer frame and the summary leads', asyn
 test('calm tool discovery: one compact row for the match, related tools collapsed, no per-tool paragraphs', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Is there a tool to help with refinancing?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Is there a tool to help with refinancing?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await expect(page.getByRole('heading', { name: 'Best match for your goal' })).toBeVisible();
   await expect(page.getByText('More home details will improve the result')).toBeVisible();
@@ -94,7 +94,7 @@ test('?calm=0 returns to the previous presentation and is remembered', async ({ 
 // FRD §11.12 slice G (IW-CONV-004/005): the completion flow is asked one question at a time.
 const startCompletion = async (page: import('@playwright/test').Page, suffix = '') => {
   await page.goto(`/acceptance/ask?propertyId=${propertyId}${suffix}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Complete a maintenance task');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Complete a maintenance task');
   await page.keyboard.press('Enter');
   await expect(page.getByText('Which task did you complete?')).toBeVisible();
 };
@@ -147,7 +147,7 @@ test('calm completion: an earlier answer can be changed before anything is submi
 test('the previous form is unchanged with ?calm=0', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=0`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Complete a maintenance task');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Complete a maintenance task');
   await page.keyboard.press('Enter');
   await expect(page.getByText('Maintenance completion details')).toBeVisible();
   await expect(page.getByText('Which task did you complete?')).toHaveCount(0);
@@ -157,7 +157,7 @@ test('the previous form is unchanged with ?calm=0', async ({ page }) => {
 test('calm pending turn: the question and a status appear at once, and the answer replaces them in place', async ({ page }) => {
   await installAskApi(page, { slowAnswerMs: 1500 });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance tasks are due this month?');
   await page.keyboard.press('Enter');
   const pending = page.locator('[data-pending-turn]');
   await expect(pending).toBeVisible();
@@ -178,18 +178,18 @@ test('calm pending turn: the question and a status appear at once, and the answe
 test('calm pending turn: stopping returns the question to the composer', async ({ page }) => {
   await installAskApi(page, { slowAnswerMs: 4000 });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance tasks are due this month?');
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-pending-turn]')).toBeVisible();
   await page.getByRole('button', { name: 'Stop' }).click();
   await expect(page.locator('[data-pending-turn]')).toHaveCount(0);
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toHaveValue('What maintenance tasks are due this month?');
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toHaveValue('What maintenance tasks are due this month?');
 });
 
 test('with ?calm=0 there is no pending turn: the previous behavior is kept', async ({ page }) => {
   await installAskApi(page, { slowAnswerMs: 1500 });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=0`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance tasks are due this month?');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
   await expect(page.locator('[data-pending-turn]')).toHaveCount(0);

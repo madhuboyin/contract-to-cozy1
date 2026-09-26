@@ -14,7 +14,7 @@ test('starting surface teaches capability breadth without competing CTAs', async
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'What can I help with?' })).toHaveCount(0);
   await expect(page.getByText('Changed recently', { exact: true })).toHaveCount(0);
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toBeInViewport();
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
   await expect(page.getByText('Decide', { exact: true })).toBeVisible();
   await expect(page.getByText('Protect', { exact: true })).toBeVisible();
@@ -73,7 +73,7 @@ test('new conversation returns to a fresh surface and recent sessions can be res
   await conversationNav.getByRole('button', { name: 'New Ask Cozy session' }).click();
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
 
-  await page.getByPlaceholder('Ask anything about your home…').fill('When should I replace my refrigerator?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('When should I replace my refrigerator?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await expect(page.getByRole('heading', { name: 'A little more context will improve this answer' })).toBeVisible();
   await expect(page).toHaveURL(/sessionId=/);
@@ -84,7 +84,7 @@ test('conversation switching restores each session draft without copying it to a
   await installAskApi(page, { recentSessions: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
-  const composer = page.getByPlaceholder('Ask anything about your home…');
+  const composer = page.getByPlaceholder(/^Ask anything about /);
 
   await conversationNav.getByRole('button', { name: /^When should I replace my refrigerator\?/ }).click();
   await composer.fill('Compare the repair estimates first');
@@ -150,7 +150,7 @@ test('a completed question is not repeated as its own follow-up suggestion', asy
   await installAskApi(page, { repeatedSuggestion: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const question = 'Show incomplete inventory records';
-  await page.getByPlaceholder('Ask anything about your home…').fill(question);
+  await page.getByPlaceholder(/^Ask anything about /).fill(question);
   await page.getByRole('button', { name: 'Send question' }).click();
 
   await expect(page.getByRole('article').getByText(question, { exact: true })).toHaveCount(1);
@@ -201,7 +201,7 @@ test('capability explorer progressively reveals registry-backed examples', async
 test('Property Summary timeline events open canonical detail inline with traditional timeline navigation secondary', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
@@ -218,7 +218,7 @@ test('Property Summary timeline events open canonical detail inline with traditi
 test('a contributor corrects a timeline event title inline: exact identity is sent, the text field is edited, and the receipt stays in the conversation', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
@@ -258,7 +258,7 @@ async function correctionFlow(page: import('@playwright/test').Page, api: Awaite
   disclosure?: boolean; select?: boolean; shownValue?: string;
 }) {
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: spec.block, exact: true }) });
@@ -413,7 +413,7 @@ test('a contributor links an inventory item to a room inline through a dropdown'
 test('a contributor adds a timeline event inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
@@ -443,7 +443,7 @@ test('a contributor adds a timeline event inline: the Add action opens the form,
 test('a contributor adds a room inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Rooms', exact: true }) });
@@ -472,7 +472,7 @@ test('a contributor adds a room inline: the Add action opens the form, Continue 
 test('a contributor adds an inventory item inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory', exact: true }) });
@@ -503,7 +503,7 @@ test('a contributor adds an inventory item inline: the Add action opens the form
 test('a contributor fills in a missing area detail inline: the row action opens the question, Continue leads to a review naming every area, and confirming shows the receipt with what is still incomplete', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Areas that can improve', exact: true }) });
@@ -537,7 +537,7 @@ test('a contributor fills in a missing area detail inline: the row action opens 
 test('"Skip for now" on an area question sends only the skip marker, saves nothing and offers the question flow again', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Areas that can improve', exact: true }) });
   await response.getByRole('button', { name: 'Fill in missing details' }).click();
@@ -552,7 +552,7 @@ test('"Skip for now" on an area question sends only the skip marker, saves nothi
 test('a contributor adds a warranty inline: the Add action opens the form, Continue leads to a review, and confirming shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Warranties', exact: true }) });
@@ -589,7 +589,7 @@ test('a contributor adds a warranty inline: the Add action opens the form, Conti
 test('a viewer-shaped result declares no correction actions, so no correction control renders', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
@@ -601,7 +601,7 @@ test('a viewer-shaped result declares no correction actions, so no correction co
 test('Property Summary rooms open canonical detail inline with the full Rooms collection secondary', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Rooms', exact: true }) });
@@ -618,7 +618,7 @@ test('Property Summary rooms open canonical detail inline with the full Rooms co
 test('Property Summary documents open canonical detail inline with the full Documents collection secondary', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Documents', exact: true }) });
@@ -635,7 +635,7 @@ test('Property Summary documents open canonical detail inline with the full Docu
 test('Property Summary household members open canonical detail inline with the full household collection secondary', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Household access', exact: true }) });
@@ -657,7 +657,7 @@ test('Property Summary household members open canonical detail inline with the f
 test('a departed household member shows a distinct "no longer a member" state, not an access-loss redaction', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Household access', exact: true }) });
@@ -675,7 +675,7 @@ test('inventory item detail: item-not-found is scoped to the detail panel, disti
   // error code (ITEM_NOT_FOUND), not status alone. See InventoryResultList.tsx's own errorCode comment.
   await installAskApi(page, { inventoryDetailNotFound: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory', exact: true }) });
@@ -690,7 +690,7 @@ test('inventory item detail: item-not-found is scoped to the detail panel, disti
 test('inventory item detail access loss (a different 404 error code) redacts the whole result, not just the detail panel', async ({ page }) => {
   await installAskApi(page, { inventoryDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-property-summary');
@@ -707,7 +707,7 @@ test('inventory item detail access loss (a different 404 error code) redacts the
 test('an ambiguous inventory question opens the matching item inline instead of ejecting to /inventory before it is confirmed', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Tell me about my smoke detector.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Tell me about my smoke detector.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Which inventory item do you mean?', exact: true }) });
@@ -728,7 +728,7 @@ test('an ambiguous inventory question opens the matching item inline instead of 
 test('a contributor attaches evidence to a timeline event inline: the file uploads out of band, then Ask confirms and shows the receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
@@ -771,7 +771,7 @@ test('a contributor attaches evidence to a timeline event inline: the file uploa
 test('attaching evidence rejects an unsupported file type before ever calling the upload endpoint', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Recent verified home activity' }) });
@@ -788,7 +788,7 @@ test('attaching evidence rejects an unsupported file type before ever calling th
 test('Home Capital Timeline: a reserve allocation opens canonical detail inline, keeping the traditional Reserve Fund page as a secondary option', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Create a capital reserve plan for future replacements.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Create a capital reserve plan for future replacements.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Active reserve allocations', exact: true }) });
@@ -804,7 +804,7 @@ test('Home Capital Timeline: a reserve allocation opens canonical detail inline,
 test('Home Capital Timeline: a TABLE row opens canonical capital-window detail inline (TABLE-block row-click-to-detail platform capability)', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Create a capital reserve plan for future replacements.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Create a capital reserve plan for future replacements.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Upcoming capital windows', exact: true }) });
@@ -827,7 +827,7 @@ test('Home Capital Timeline: a TABLE row opens canonical capital-window detail i
 test('Home Capital Timeline: re-running with a different horizon dispatches the same operation and shows the new result inline (planning/refinement follow-up)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Create a capital reserve plan for future replacements.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Create a capital reserve plan for future replacements.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const firstResponse = page.locator('#ask-execution-execution-capital-reserve-plan');
@@ -856,7 +856,7 @@ test('Home Capital Timeline: re-running with a different horizon dispatches the 
 test('Home Event Radar: a monitored event opens canonical detail inline, keeping the traditional Home Event Radar page as a secondary option', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home event radar feed.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my home event radar feed.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Home Event Radar feed', exact: true }) });
@@ -872,7 +872,7 @@ test('Home Event Radar: a monitored event opens canonical detail inline, keeping
 test('Home Event Radar: filter chips re-ask with their own message, and Save writes the exact event directly with a receipt (FRD v1.40)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home event radar feed.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my home event radar feed.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const feed = page.locator('#ask-execution-execution-home-event-radar-feed');
@@ -905,7 +905,7 @@ test('Home Event Radar deck: events one at a time with the actions their state a
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What is on my home radar right now?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What is on my home radar right now?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const feed = page.locator('#ask-execution-execution-home-event-radar-deck');
@@ -939,7 +939,7 @@ test('on a phone, the radar card fits the screen and Details opens as a bottom s
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What is on my home radar right now?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What is on my home radar right now?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const feed = page.locator('#ask-execution-execution-home-event-radar-deck');
@@ -955,7 +955,7 @@ test('on a phone, the radar card fits the screen and Details opens as a bottom s
 test('Home Event Radar: "Plan this action" sends the recommended action\'s code, then form -> review -> receipt (FRD v1.41)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home event radar feed.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my home event radar feed.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const feed = page.locator('#ask-execution-execution-home-event-radar-feed');
@@ -993,7 +993,7 @@ test('Home Event Radar: "Plan this action" sends the recommended action\'s code,
 test('Claims: a claim opens canonical detail inline and a legal status change pins the exact claim and CLAIM_TRANSITION (FRD v1.42)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my claims');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my claims');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const list = page.locator('#ask-execution-execution-claims');
@@ -1015,7 +1015,7 @@ test('Claims: a claim opens canonical detail inline and a legal status change pi
 test('Inspection hub: a finding opens inline through its report, live state picks the actions, and Resolve asks how it was resolved (FRD v1.43)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my open inspection findings');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my open inspection findings');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const list = page.locator('#ask-execution-execution-inspection-findings');
@@ -1040,7 +1040,7 @@ test('Inspection deck: decisions are made card by card, nothing is sent until th
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Go through my inspection findings');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Go through my inspection findings');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const deck = page.locator('#ask-execution-execution-inspection-deck');
@@ -1079,7 +1079,7 @@ test('Inspection deck on a phone: the card fits the screen and Details opens as 
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Go through my inspection findings');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Go through my inspection findings');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const deck = page.locator('#ask-execution-execution-inspection-deck');
@@ -1098,7 +1098,7 @@ test('Inspection deck on a phone: the card fits the screen and Details opens as 
 test('Seller prep: a checklist item opens inline from the sale case, live state picks the decision, and it proposes a confirmed change (FRD v1.44)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Check my sale readiness');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Check my sale readiness');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const list = page.locator('#ask-execution-execution-seller-prep');
@@ -1122,7 +1122,7 @@ test('seller-prep checklist items show as category shelves; a card opens the liv
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What should I fix before listing?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What should I fix before listing?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-seller-prep-shelves');
@@ -1151,7 +1151,7 @@ test('on a phone, seller-prep shelves stay inside the screen and an item opens a
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What should I fix before listing?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What should I fix before listing?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-seller-prep-shelves');
@@ -1169,7 +1169,7 @@ test('on a phone, seller-prep shelves stay inside the screen and an item opens a
 test('a contributor attaches a document to an inventory item and to a warranty inline, each with its own message and a confirmation naming the record (FRD v1.99)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory' }) });
@@ -1195,7 +1195,7 @@ test('on a phone, the attach control on an inventory item fits the screen (FRD v
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Give me a correctable summary of my home record.');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Systems and inventory' }) });
   await response.getByRole('button', { name: 'Water heater' }).click();
@@ -1209,7 +1209,7 @@ test('on a phone, the attach control on an inventory item fits the screen (FRD v
 test('Refinance: the analysis shows the homeowner’s rate monitor, and Pause works inline (FRD v1.45)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Is refinancing worth reviewing now?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Is refinancing worth reviewing now?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const answer = page.locator('#ask-execution-execution-refinance-monitor-analysis');
@@ -1225,7 +1225,7 @@ test('Refinance: the analysis shows the homeowner’s rate monitor, and Pause wo
 test('Buyer closing: a blocking task opens inline from the Buyer Plan and Mark complete proposes that exact task (FRD v1.46)', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What is due before closing?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What is due before closing?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const list = page.locator('#ask-execution-execution-buyer-deadlines');
@@ -1300,7 +1300,7 @@ test('weather attention answers inline with the complete preparation checklist b
 test('maintenance task titles open canonical detail inline and keep traditional navigation optional', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance tasks are due this month?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-maintenance');
@@ -1319,7 +1319,7 @@ test('maintenance answers lead with chips and show timing shelves whose cards op
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance is pending?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance is pending?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-maintenance-shelves');
@@ -1351,7 +1351,7 @@ test('on a phone, maintenance shelves scroll sideways and the task opens as a bo
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance is pending?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance is pending?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-maintenance-shelves');
@@ -1373,7 +1373,7 @@ test('quote review shows a comparison strip with a declared Lowest price badge, 
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare my roofing quotes');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare my roofing quotes');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-quote-review-strip');
@@ -1404,7 +1404,7 @@ test('on a phone, quote cards stack within the screen and the table scrolls insi
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare my roofing quotes');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare my roofing quotes');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-quote-review-strip');
@@ -1427,7 +1427,7 @@ test('sell, hold and rent show as a comparison strip with no winner badge or pri
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Should I sell, hold, or rent this home?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Should I sell, hold, or rent this home?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-sell-hold-rent-strip');
@@ -1451,7 +1451,7 @@ test('on a phone, the sell, hold and rent cards stack within the screen (FRD v1.
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Should I sell, hold, or rent this home?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Should I sell, hold, or rent this home?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-sell-hold-rent-strip');
@@ -1468,7 +1468,7 @@ test('coverage comparison shows the policy and its alternative as a strip with p
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare my current insurance policy against alternatives');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare my current insurance policy against alternatives');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-coverage-comparison-strip');
@@ -1495,7 +1495,7 @@ test('on a phone, the coverage comparison cards stack within the screen (FRD v1.
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare my current insurance policy against alternatives');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare my current insurance policy against alternatives');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-coverage-comparison-strip');
@@ -1512,7 +1512,7 @@ test('a refinance scenario shows next to the current comparison as a two-option 
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What if I refinanced at 5.5% for 15 years?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What if I refinanced at 5.5% for 15 years?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-refinance-scenario-strip');
@@ -1542,7 +1542,7 @@ test('on a phone, the refinance scenario and current comparison cards stack with
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What if I refinanced at 5.5% for 15 years?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What if I refinanced at 5.5% for 15 years?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-refinance-scenario-strip');
@@ -1559,7 +1559,7 @@ test('saved upgrade options show as one strip per system with only the Selected 
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my upgrade planner options');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my upgrade planner options');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-home-upgrade-strip');
@@ -1590,7 +1590,7 @@ test('on a phone, each upgrade strip stacks its cards within the screen (FRD v1.
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my upgrade planner options');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my upgrade planner options');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-home-upgrade-strip');
@@ -1609,7 +1609,7 @@ test('capital windows sit on a timeline track by start month; a window opens its
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What big expenses are coming up for my home?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What big expenses are coming up for my home?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-capital-timeline-track');
@@ -1641,7 +1641,7 @@ test('on a phone, the capital track scrolls inside its own box and a window open
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What big expenses are coming up for my home?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What big expenses are coming up for my home?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-capital-timeline-track');
@@ -1658,7 +1658,7 @@ test('home timeline answers on a track: latest event selected, category chips, s
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home timeline history');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my home timeline history');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-home-timeline-track');
@@ -1690,7 +1690,7 @@ test('on a phone, the home timeline track scrolls sideways inside its box and th
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home timeline history');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my home timeline history');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const track = page.locator('#ask-execution-execution-home-timeline-track [data-display-pattern="timeline"]');
@@ -1709,7 +1709,7 @@ test('appliance oracle answers as lifespan bars with the Oracle\'s labels, and A
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my appliance lifespans');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my appliance lifespans');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const block = page.locator('#ask-execution-execution-appliance-lifespan [data-display-pattern="lifespan"]');
@@ -1733,7 +1733,7 @@ test('on a phone, lifespan bars and their facts fit the screen with no sideways 
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my appliance lifespans');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my appliance lifespans');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const block = page.locator('#ask-execution-execution-appliance-lifespan [data-display-pattern="lifespan"]');
@@ -1751,7 +1751,7 @@ test('rooms answer as a room map by floor; a tile opens the live room detail in 
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show the rooms in my home record');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show the rooms in my home record');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-room-map');
@@ -1777,7 +1777,7 @@ test('on a phone, the room map tiles fit the screen and a room opens as a bottom
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show the rooms in my home record');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show the rooms in my home record');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-room-map');
@@ -1803,7 +1803,7 @@ test('sale readiness answers with a progress ring: percent and basis, must-addre
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('How ready is my home to sell');
+  await page.getByPlaceholder(/^Ask anything about /).fill('How ready is my home to sell');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-seller-prep-progress [data-display-pattern="progress"]');
@@ -1822,7 +1822,7 @@ test('on a phone, the sale readiness ring, tiles and next steps fit the screen (
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('How ready is my home to sell');
+  await page.getByPlaceholder(/^Ask anything about /).fill('How ready is my home to sell');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-seller-prep-progress [data-display-pattern="progress"]');
@@ -1839,7 +1839,7 @@ test('the home record answers with a completeness ring, its own missing, conflic
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('How complete is my home record?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('How complete is my home record?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-property-completeness-ring [data-display-pattern="progress"]');
@@ -1858,7 +1858,7 @@ test('on a phone, the completeness ring, tiles and next steps fit the screen (FR
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('How complete is my home record?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('How complete is my home record?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-property-completeness-ring [data-display-pattern="progress"]');
@@ -1874,7 +1874,7 @@ test('closing day answers with the workspace\'s five checks as a ring, blockers 
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What do I need for closing day?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What do I need for closing day?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-buyer-closing-day-ring [data-display-pattern="progress"]');
@@ -1893,7 +1893,7 @@ test('on a phone, the closing-day ring, tiles and steps fit the screen (FRD v1.9
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What do I need for closing day?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What do I need for closing day?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-buyer-closing-day-ring [data-display-pattern="progress"]');
@@ -1909,7 +1909,7 @@ test('renovation readiness answers with a ring over the blocking items only, the
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Is my kitchen remodel ready to start?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Is my kitchen remodel ready to start?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-renovation-readiness-ring [data-display-pattern="progress"]');
@@ -1926,7 +1926,7 @@ test('on a phone, the renovation readiness ring, tiles and steps fit the screen 
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Is my kitchen remodel ready to start?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Is my kitchen remodel ready to start?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-renovation-readiness-ring [data-display-pattern="progress"]');
@@ -1942,7 +1942,7 @@ test('the home continuity plan answers with a handoff ring over three requiremen
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home continuity plan');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my home continuity plan');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-digital-will-ring [data-display-pattern="progress"]');
@@ -1959,7 +1959,7 @@ test('on a phone, the continuity plan ring, tiles and steps fit the screen (FRD 
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my home continuity plan');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my home continuity plan');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-digital-will-ring [data-display-pattern="progress"]');
@@ -1975,7 +1975,7 @@ test('an earlier result folds to its headline and a result pins to a strip at th
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  const input = page.getByPlaceholder('Ask anything about your home…');
+  const input = page.getByPlaceholder(/^Ask anything about /);
   await input.fill('Show my status board');
   await page.getByRole('button', { name: 'Send question' }).click();
   const first = page.locator('#ask-execution-execution-status-board-shelves');
@@ -2012,7 +2012,7 @@ test('on a phone, the pinned strip and a folded result fit the screen (FRD v1.95
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  const input = page.getByPlaceholder('Ask anything about your home…');
+  const input = page.getByPlaceholder(/^Ask anything about /);
   await input.fill('Show my status board');
   await page.getByRole('button', { name: 'Send question' }).click();
   const first = page.locator('#ask-execution-execution-status-board-shelves');
@@ -2032,7 +2032,7 @@ test('the composer can stop a slow request, try again after a failure, and bring
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  const input = page.getByPlaceholder('Ask anything about your home…');
+  const input = page.getByPlaceholder(/^Ask anything about /);
 
   // A request that is held until released: Stop replaces Send, brings the question back, and discards the late answer.
   let release: () => void = () => {};
@@ -2089,7 +2089,7 @@ test('on a phone, the Stop button and the Try again banner fit the composer (FRD
     await held;
     return route.fallback();
   });
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my status board');
   await page.getByRole('button', { name: 'Send question' }).click();
   const stop = page.getByRole('button', { name: 'Stop' });
   await expect(stop).toBeVisible();
@@ -2108,7 +2108,7 @@ test('home actions show their priorities as shelves whose cards open a read-only
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What needs my attention now?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What needs my attention now?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-home-action-shelves');
@@ -2135,7 +2135,7 @@ test('on a phone, home action shelves stay inside the screen and a card opens as
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What needs my attention now?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What needs my attention now?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-home-action-shelves');
@@ -2154,7 +2154,7 @@ test('seasonal checklist tasks show as priority shelves whose cards open a read-
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What seasonal tasks are pending?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What seasonal tasks are pending?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-seasonal-shelves');
@@ -2181,7 +2181,7 @@ test('on a phone, seasonal shelves stay inside the screen and a task opens as a 
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What seasonal tasks are pending?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What seasonal tasks are pending?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-seasonal-shelves');
@@ -2200,7 +2200,7 @@ test('the status board shows appliances and systems as condition shelves whose c
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my status board');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-status-board-shelves');
@@ -2227,7 +2227,7 @@ test('on a phone, status board shelves stay inside the screen and an item opens 
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my status board');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-status-board-shelves');
@@ -2246,7 +2246,7 @@ test('a status board card with no install date offers Add install date, which as
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my status board');
   await page.getByRole('button', { name: 'Send question' }).click();
   const response = page.locator('#ask-execution-execution-status-board-shelves');
   const card = response.getByRole('button', { name: /Dishwasher/ });
@@ -2267,7 +2267,7 @@ test('on a phone, Add install date on a status board card is reachable in the bo
   await page.setViewportSize({ width: 390, height: 844 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show my status board');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show my status board');
   await page.getByRole('button', { name: 'Send question' }).click();
   const response = page.locator('#ask-execution-execution-status-board-shelves');
   await response.getByRole('button', { name: /Dishwasher/ }).click();
@@ -2300,7 +2300,7 @@ test('the microphone dictates into the question box and does not send until the 
   await installFakeSpeech(page);
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  const input = page.getByPlaceholder('Ask anything about your home…');
+  const input = page.getByPlaceholder(/^Ask anything about /);
   await input.fill('Show my');
   await page.getByRole('button', { name: 'Dictate your question' }).click();
   await expect(page.getByRole('button', { name: 'Stop dictation' })).toHaveAttribute('aria-pressed', 'true');
@@ -2333,7 +2333,7 @@ test('without browser speech support there is no microphone (FRD v1.102)', async
   await page.addInitScript(() => { Object.assign(window, { SpeechRecognition: undefined, webkitSpeechRecognition: undefined }); });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toBeVisible();
   await expect(page.getByRole('button', { name: /Dictate your question/ })).toHaveCount(0);
 });
 
@@ -2341,7 +2341,7 @@ test('the buyer plan shows the next task and blockers as shelves whose cards ope
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What is left before I close?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What is left before I close?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-buyer-plan-shelves');
@@ -2366,7 +2366,7 @@ test('on a phone, buyer plan shelves stay inside the screen and a task opens as 
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What is left before I close?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What is left before I close?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-buyer-plan-shelves');
@@ -2384,7 +2384,7 @@ test('on a phone, buyer plan shelves stay inside the screen and a task opens as 
 test('maintenance detail access loss redacts the stale result and its actions without leaving Ask', async ({ page }) => {
   await installAskApi(page, { maintenanceDetailAccessLost: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance tasks are due this month?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-maintenance');
@@ -2401,7 +2401,7 @@ test('maintenance detail access loss redacts the stale result and its actions wi
 test('maintenance create starts its capture inline and keeps setup optional', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance tasks are due this month?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-maintenance');
@@ -2415,7 +2415,7 @@ test('maintenance create starts its capture inline and keeps setup optional', as
 test('maintenance collection pages through the full server result without leaving Ask', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('What maintenance tasks are due this month?');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   await page.getByRole('button', { name: /Next page of Pending and in progress/ }).click();
@@ -2432,7 +2432,7 @@ test('maintenance collection pages through the full server result without leavin
 test('adaptive table view switches locally and persists the homeowner choice without duplicating the result', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare ownership costs');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare ownership costs');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-adaptive-table');
@@ -2456,7 +2456,7 @@ test('adaptive table view switches locally and persists the homeowner choice wit
 test('bounded comparison strip explains declared badges and offers a persistent show-all path without leaving Ask', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare repair options');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare repair options');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-comparison-strip');
@@ -2480,7 +2480,7 @@ test('bounded comparison adapts to stacked cards on mobile without losing option
   await page.setViewportSize({ width: 390, height: 844 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare repair options');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare repair options');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-comparison-strip');
@@ -2497,7 +2497,7 @@ test('response sources open beside the desktop conversation without replacing th
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare ownership costs');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare ownership costs');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-adaptive-table');
@@ -2515,7 +2515,7 @@ test('response sources open beside the desktop conversation without replacing th
   await expect(panel.getByText('Supports this claim')).toHaveCount(2);
   await expect(panel.getByText('Recorded insurance premiums remain representative for this planning view.')).toBeVisible();
   await expect(panel.getByText('Future taxes and premiums may differ from the recorded amounts.')).toBeVisible();
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
   await expect.poll(() => api.executionBodies.length).toBe(1);
   await expect.poll(() => page.evaluate((key) => sessionStorage.getItem(key), `ctc:ask-context-panel:v1:${sessionIdOf(page.url())}:ask-property-fixture`)).toBe('execution-adaptive-table');
@@ -2535,7 +2535,7 @@ test('response sources use a dismissible sheet on mobile and restore trigger foc
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Compare ownership costs');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Compare ownership costs');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const sourceTrigger = page.locator('#ask-execution-execution-adaptive-table').getByRole('button', { name: /View sources and context/ });
@@ -2555,7 +2555,7 @@ test('created output records open as authoritative response context while workfl
   await page.setViewportSize({ width: 1440, height: 900 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show the task output');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show the task output');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-maintenance-output');
@@ -2569,7 +2569,7 @@ test('created output records open as authoritative response context while workfl
   await expect(panel.getByText('Replace HVAC filter')).toBeVisible();
   await expect(panel.getByText(/Maintenance task · pending · Created/)).toBeVisible();
   await expect(panel.getByRole('link', { name: 'Open task in Maintenance' })).toBeVisible();
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
@@ -2577,7 +2577,7 @@ test('a reused quote workspace is disclosed as an exact output artifact without 
   await page.setViewportSize({ width: 1440, height: 900 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show the quote workspace output');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show the quote workspace output');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-quote-workspace-output');
@@ -2591,7 +2591,7 @@ test('a reused quote workspace is disclosed as an exact output artifact without 
   await expect(panel.getByText('Plumbing quote comparison')).toBeVisible();
   await expect(panel.getByText(/Quote comparison workspace · draft · Existing record reused · Originally created/)).toBeVisible();
   await expect(panel.getByRole('link', { name: 'Open comparison' })).toHaveAttribute('href', `/dashboard/properties/${propertyId}/tools/quote-comparison?workspaceId=workspace-1`);
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
@@ -2599,7 +2599,7 @@ test('related records show the authoritative document-to-event relationship with
   await page.setViewportSize({ width: 1440, height: 900 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show the evidence relationship');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show the evidence relationship');
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-related-records');
@@ -2614,14 +2614,14 @@ test('related records show the authoritative document-to-event relationship with
   await expect(panel.getByText('Evidence for')).toBeVisible();
   await expect(panel.getByText('Roof replacement')).toBeVisible();
   await expect(panel.getByRole('link', { name: 'Open home timeline' })).toBeVisible();
-  await expect(page.getByPlaceholder('Ask anything about your home…')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Ask anything about /)).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
 });
 
 test('refrigerator capture preserves year precision and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('When should I replace my refrigerator?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('When should I replace my refrigerator?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await page.getByRole('button', { name: 'Good' }).click();
   await page.getByRole('group', { name: 'Purchase date precision' }).getByRole('button', { name: 'Year' }).click();
@@ -2634,7 +2634,7 @@ test('refrigerator capture preserves year precision and resumes automatically', 
 test('refinance capture saves consented profile inputs and resumes automatically', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Is refinancing a good option?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Is refinancing a good option?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await page.getByLabel('Mortgage balance').fill('350000');
   await page.getByLabel('Current interest rate').fill('7.25');
@@ -2648,7 +2648,7 @@ test('refinance capture saves consented profile inputs and resumes automatically
 test('context conflict refreshes inline values and retries without losing the draft', async ({ page }) => {
   const api = await installAskApi(page, { conflictOnce: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('When should I replace my refrigerator?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('When should I replace my refrigerator?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await page.getByRole('button', { name: 'Fair' }).click();
   await page.getByRole('group', { name: 'Purchase date precision' }).getByRole('button', { name: 'Year' }).click();
@@ -2665,7 +2665,7 @@ test('context conflict refreshes inline values and retries without losing the dr
 test('permission denial keeps a safe full-form recovery path', async ({ page }) => {
   await installAskApi(page, { permissionDenied: true });
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('When should I replace my refrigerator?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('When should I replace my refrigerator?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await page.getByRole('button', { name: 'Good' }).click();
   await page.getByRole('group', { name: 'Purchase date precision' }).getByRole('button', { name: 'I’m not sure' }).click();
@@ -2677,7 +2677,7 @@ test('permission denial keeps a safe full-form recovery path', async ({ page }) 
 test('capability discovery shows readiness and related-tool continuity', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Is there a tool to help with refinancing?');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Is there a tool to help with refinancing?');
   await page.getByRole('button', { name: 'Send question' }).click();
   await expect(page.getByRole('heading', { name: 'Best match for your goal' })).toBeVisible();
   await expect(page.getByText('More home details will improve the result')).toBeVisible();
@@ -2691,7 +2691,7 @@ test('capability discovery shows readiness and related-tool continuity', async (
 test('unavailable capability fails honestly without a launch link', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByPlaceholder('Ask anything about your home…').fill('Show the disabled refinance tool');
+  await page.getByPlaceholder(/^Ask anything about /).fill('Show the disabled refinance tool');
   await page.getByRole('button', { name: 'Send question' }).click();
   await expect(page.getByLabel('Mortgage Refinance Radar unavailable')).toBeVisible();
   await expect(page.getByText('This tool is disabled by the current rollout policy.')).toBeVisible();
