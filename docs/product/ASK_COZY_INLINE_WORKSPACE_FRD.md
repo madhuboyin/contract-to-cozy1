@@ -1,6 +1,6 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.113
+**Version:** 1.114
 **Date:** September 25, 2026  
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
@@ -963,7 +963,7 @@ A functionally correct journey fails quality review when it introduces unnecessa
 
 **IW-CONV-017 — The composer leads; context says what is behind a number (FRD v1.113, September 26, 2026).** On the calm landing the composer is the focus (three rows tall, larger type, a teal edge and soft shadow). Below it: at most two "needs you" lines, each a count plus the top item behind it (for example "1 to plan soon — Schedule HVAC service", or the newest important change's summary), then at most three starter questions and "More ideas". A bare count chip with no context is not allowed. Unfinished work from an earlier session is one quiet line ("Unfinished · <question> — Dismiss / Continue"), not a titled card.
 
-**IW-CONV-018 — Capture is asked, not laid out (v1.113).** Every capture whose fields are all scalar (choice, yes/no, number, short text, time), standard sensitivity and workflow input is asked one question at a time, up to seven fields (the limit was three). Creating a maintenance task is now a conversation: task, priority, due date, does it repeat (and how often), estimated cost, notes; the optional ones offer Skip, and nothing is saved before the existing review. Field order in the request changed (required questions first); no schema, validation or confirmation rule changed. Captures with date-precision or relational inputs still use the form.
+**IW-CONV-018 — Capture is asked, not laid out (v1.113; limit restored to three in v1.114).** Every capture whose fields are all scalar (choice, yes/no, number, short text, time), standard sensitivity and workflow input, with at most three fields, is asked one question at a time. v1.113 raised the limit to seven so maintenance-task creation was a conversation; that was reverted on September 26, 2026 because seven sequential questions is a slower form, not a conversation. Longer groups stay one form until grouped/adaptive capture exists (related fields collected together, later questions shown only when earlier answers require them; ACUI-007 in `ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md`). Captures with date-precision or relational inputs still use the form.
 
 ### Phase 0 — Authority and coverage
 
