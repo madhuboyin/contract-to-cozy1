@@ -179,8 +179,9 @@ test('accessibility: with reduced motion requested, the launch and answer run no
   await page.getByRole('button', { name: 'Why this appeared' }).first().click();
   await ask(page, 'Show my maintenance tasks with sources');
   await expect(page.locator('[data-calm-trust-line]')).toBeVisible();
-  const running = await page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === 'running' && !(animation.effect as KeyframeEffect | null)?.target?.closest?.('[role="status"]')).length);
-  expect(running).toBe(0);
+  // Poll rather than sample once: a finite CSS transition that began a frame ago must be allowed to finish; what must never happen is an
+  // animation that keeps running (a spinner, a pulse) once the answer has settled.
+  await expect.poll(() => page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === 'running' && !(animation.effect as KeyframeEffect | null)?.target?.closest?.('[role="status"]')).length), { timeout: 5000 }).toBe(0);
 });
 
 test('a failed request keeps the typed question in the composer, says what happened, and Try again recovers', async ({ page }) => {

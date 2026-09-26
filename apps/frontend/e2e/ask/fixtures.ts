@@ -943,6 +943,82 @@ function inventoryJourneyExecution(state: InventoryJourneyState) {
   };
 }
 
+// Warranties W-3: the WARRANTY_LOOKUP answer as the real producer sends it (calm adopter, governed filters, view state, recorded coverage text
+// and the recorded-information boundary). 'warranty-property-summary' reuses the acceptance record, so inline detail, corrections and evidence
+// work unchanged; 'warranty-removed' is in the answer but not in the canonical list, so its detail shows the removed-record state.
+type WarrantyJourneyStatus = 'ALL' | 'ACTIVE' | 'EXPIRING' | 'EXPIRED' | 'NEEDS_REVIEW';
+type WarrantyJourneyState = { status: WarrantyJourneyStatus; category: string | null; revision: number; sessionId?: string };
+const WARRANTY_JOURNEY_ITEMS = [
+  { id: 'warranty-hvac', title: 'Cool Air', category: 'HVAC', status: 'EXPIRING', description: 'Compressor and parts for 5 years.', meta: ['HVAC', 'Expires Nov 12, 2026 · 47 days', '1 document'] },
+  { id: 'warranty-review', title: 'Dates Unknown Inc', category: 'APPLIANCE', status: 'NEEDS_REVIEW', description: 'No coverage details recorded.', meta: ['Appliance', 'Coverage dates need review', '0 documents'] },
+  { id: 'warranty-property-summary', title: 'Acme Home Warranty', category: 'HOME_WARRANTY_PLAN', status: 'ACTIVE', description: 'Covers HVAC and major appliances.', meta: ['Home warranty plan', 'Expires Dec 1, 2027', '0 documents'] },
+  { id: 'warranty-removed', title: 'Old Roofing Co', category: 'ROOFING', status: 'EXPIRED', description: 'Shingles for 10 years.', meta: ['Roofing', 'Expired Jan 3, 2026', '0 documents'] },
+];
+const WARRANTY_CATEGORY_LABELS: Record<string, string> = { HVAC: 'HVAC', APPLIANCE: 'Appliance', HOME_WARRANTY_PLAN: 'Home warranty plan', ROOFING: 'Roofing' };
+function warrantyJourneyExecution(state: WarrantyJourneyState, options: { viewer?: boolean; empty?: boolean; single?: boolean } = {}) {
+  const pageHref = '/dashboard/warranties';
+  const common = {
+    schemaVersion: '1.0', sessionId: state.sessionId ?? 'ask-acceptance-session', status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'WARRANTY_LOOKUP', version: '1.0', family: 'WARRANTY' }, contextVersion: 'warranty-journey-v1',
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+  const boundary = { type: 'BOUNDARY', id: 'warranty-boundary', title: 'Recorded information only', body: 'This reports the warranty information recorded in your Home Record. It does not determine whether a repair is covered or file a claim.', severity: 'INFO', suggestions: [] };
+  const addAction = { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW', message: 'Add a warranty to my home record.', operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' };
+  if (options.empty) {
+    return { ...common, executionId: 'execution-warranty-journey-empty', question: 'Show my warranty journey', status: 'READY_WITH_LIMITATIONS', viewState: null, blocks: [{
+      type: 'SUMMARY', id: 'warranty-empty', title: 'No warranties are recorded for this home yet',
+      body: 'An empty record does not mean nothing is covered; it only means no warranty has been added here. Add one to see its dates and coverage in this answer.', tone: 'CAUTION',
+      actions: options.viewer ? [{ id: 'open-warranties', label: 'Open Warranties', href: pageHref, style: 'PRIMARY' }] : [addAction, { id: 'open-warranties', label: 'Open Warranties', href: pageHref, style: 'SECONDARY' }],
+    }, boundary] };
+  }
+  const itemActions = (id: string) => options.viewer || id === 'warranty-review' ? undefined : [
+    { id: 'correct-expiryDate', label: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' },
+    { id: 'correct-category', label: 'Correct coverage type', message: 'Correct the coverage type of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' },
+    { id: 'correct-cost', label: 'Correct cost', message: 'Correct the cost of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' },
+    { id: 'correct-coverageDetails', label: 'Correct coverage details', message: 'Correct the coverage details of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' },
+  ];
+  const matched = options.single
+    ? WARRANTY_JOURNEY_ITEMS.filter((item) => item.id === 'warranty-property-summary')
+    : WARRANTY_JOURNEY_ITEMS.filter((item) => (!state.category || item.category === state.category) && (state.status === 'ALL' || item.status === state.status));
+  const count = (key: string) => matched.filter((item) => item.status === key).length;
+  const parts = [
+    count('ACTIVE') ? `${count('ACTIVE')} active` : null, count('EXPIRING') ? `${count('EXPIRING')} expiring within 60 days` : null,
+    count('EXPIRED') ? `${count('EXPIRED')} expired` : null, count('NEEDS_REVIEW') ? `${count('NEEDS_REVIEW')} with dates that need review` : null,
+  ].filter(Boolean);
+  const scope = options.single ? 'Acme ' : state.category ? `${WARRANTY_CATEGORY_LABELS[state.category]} ` : '';
+  const noun = matched.length === 1 ? 'warranty' : 'warranties';
+  const headline = matched.length === 0 ? 'No warranties match these filters.' : `${matched.length} ${scope}${noun}: ${parts.join(', ')}.`;
+  const chips = options.single ? [] : [
+    { id: 'status-all', label: 'All', message: 'Now show all warranties', active: state.status === 'ALL' },
+    { id: 'status-active', label: 'Active', message: 'Only show active warranties', active: state.status === 'ACTIVE' },
+    { id: 'status-expiring', label: 'Expires within 60 days', message: 'Only show warranties expiring within 60 days', active: state.status === 'EXPIRING' },
+    { id: 'status-expired', label: 'Expired', message: 'Only show expired warranties', active: state.status === 'EXPIRED' },
+    { id: 'status-review', label: 'Dates need review', message: 'Only show warranties with dates that need review', active: state.status === 'NEEDS_REVIEW' },
+    { id: 'category-all', label: 'All categories', message: 'Now show all warranty categories', active: state.category === null },
+    ...['HVAC', 'APPLIANCE', 'HOME_WARRANTY_PLAN', 'ROOFING'].map((key) => ({ id: `category-${key.toLowerCase()}`, label: WARRANTY_CATEGORY_LABELS[key], message: `Only show ${key === 'HVAC' ? 'HVAC' : WARRANTY_CATEGORY_LABELS[key].toLowerCase()} warranties`, active: state.category === key })),
+    ...(state.status !== 'ALL' || state.category ? [{ id: 'clear-all', label: 'Clear filters', message: 'Now show all warranties with no filters', active: false }] : []),
+  ];
+  return {
+    ...common, executionId: options.single ? 'execution-warranty-journey-single' : `execution-warranty-journey-${state.revision}`,
+    ...(!options.single && state.revision > 1 ? { continuesExecutionId: `execution-warranty-journey-${state.revision - 1}` } : {}),
+    question: options.single ? 'Show my Acme warranty journey' : state.revision === 1 ? 'Show my warranty journey' : 'Refined warranties',
+    viewState: options.single ? null : { resultId: 'warranty-journey-result', domainScopePhrase: state.category, dateScopePhrase: null, statusFilter: state.status, selectedTaskId: null, revision: state.revision },
+    blocks: [
+      { type: 'SUMMARY', id: 'warranty-summary', title: `${matched.length} recorded warranties match this request`, headline, body: headline, tone: 'DEFAULT',
+        chips: [{ label: `${matched.length} ${noun}`, tone: 'DEFAULT' }, ...(count('EXPIRING') ? [{ label: `${count('EXPIRING')} expire within 60 days`, tone: 'CAUTION' }] : [])],
+        actions: [{ id: 'open-warranties', label: 'Open Warranties', href: pageHref, style: 'PRIMARY' }] },
+      { type: 'GROUPED_LIST', id: 'warranty-results', title: 'Recorded warranties', filters: chips,
+        sections: [{ id: 'warranties', title: 'Recorded warranties', count: matched.length, items: matched.map((item) => ({
+          id: item.id, title: item.title, description: item.description, entityType: 'WARRANTY', href: null, status: item.status, meta: item.meta, actions: itemActions(item.id),
+        })) }],
+        actions: [...(options.viewer ? [] : [addAction]), { id: 'open-warranties-list', label: 'Open Warranties', href: pageHref, style: 'SECONDARY' }] },
+      { type: 'EVIDENCE', id: 'warranty-evidence', title: 'Record freshness', items: matched.map((item) => ({ label: item.title, source: 'Home warranties · recorded', observedAt: '2026-09-01T00:00:00.000Z' })) },
+      boundary,
+    ],
+  };
+}
+
 // ACUI-008: the maintenance answer with a declared filter and evidence, and its refinement (same result, next revision).
 function maintenanceJourneyExecution(refined: boolean, sessionId?: string) {
   const base = maintenanceExecution();
@@ -1725,7 +1801,7 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
@@ -1735,6 +1811,7 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
   let askFailedOnce = false;
   let refinementFailedOnce = false;
   let inventoryJourney: InventoryJourneyState | null = null;
+  let warrantyJourney: WarrantyJourneyState | null = null;
   let unknownOutcomeCalls = 0;
   let correctionSessionId: string | undefined;
   const warrantyAddCaptureBodies: Array<Record<string, unknown>> = [];
@@ -1867,7 +1944,9 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     resolutionContinuity: { state: 'not_started', incidentState: null, guidanceState: null, continueResolution: null },
     userFeedback: null,
   } }));
-  await page.route(`${apiOrigin}/api/properties/${propertyId}/warranties`, (route) => fulfill(route, { success: true, data: { warranties: [{
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/warranties`, (route) => options.warrantyDetailAccessLost
+    ? fulfill(route, { success: false, error: { code: 'PROPERTY_ACCESS_DENIED', message: 'Property not found or access denied.' } }, 404)
+    : fulfill(route, { success: true, data: { warranties: [{
     id: 'warranty-property-summary', homeownerProfileId: 'profile-0', propertyId, inventoryItemId: null, category: 'HOME_WARRANTY_PLAN', providerName: 'Acme Home Warranty',
     policyNumber: 'POL-123', coverageDetails: 'Covers HVAC and major appliances.', cost: 45000, startDate: '2026-01-01T00:00:00.000Z', expiryDate: '2027-12-01T00:00:00.000Z',
     documents: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
@@ -2019,6 +2098,33 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     if (options.askFailsOnce && !askFailedOnce) {
       askFailedOnce = true;
       await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Ask could not answer just now.' } }, 500);
+      return;
+    }
+    // Warranties W-3: a warranty answer, one exact warranty, and declared-filter refinements (merged the way the handler merges them).
+    if (/warranty journey/i.test(body.message) || (warrantyJourney && /^(?:only show|now show all) (?:.*warrant|warrant)/i.test(body.message))) {
+      if (/acme warranty journey/i.test(body.message)) {
+        await fulfill(route, { success: true, data: warrantyJourneyExecution({ status: 'ALL', category: null, revision: 1, sessionId: body.sessionId }, { single: true, viewer: options.warrantyViewer }) }, 201);
+        return;
+      }
+      if (options.refinementFailsOnce && warrantyJourney && !refinementFailedOnce && /^only show/i.test(body.message)) {
+        refinementFailedOnce = true;
+        await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Ask could not refine just now.' } }, 500);
+        return;
+      }
+      const previous = warrantyJourney;
+      if (/warranty journey/i.test(body.message)) warrantyJourney = { status: 'ALL', category: null, revision: 1 };
+      else if (/no filters/i.test(body.message)) warrantyJourney = { status: 'ALL', category: null, revision: previous!.revision + 1 };
+      else if (/dates that need review/i.test(body.message)) warrantyJourney = { ...previous!, status: 'NEEDS_REVIEW', revision: previous!.revision + 1 };
+      else if (/expired warranties/i.test(body.message)) warrantyJourney = { ...previous!, status: 'EXPIRED', revision: previous!.revision + 1 };
+      else if (/expiring within 60 days/i.test(body.message)) warrantyJourney = { ...previous!, status: 'EXPIRING', revision: previous!.revision + 1 };
+      else if (/only show active warranties/i.test(body.message)) warrantyJourney = { ...previous!, status: 'ACTIVE', revision: previous!.revision + 1 };
+      else if (/all warranty categories/i.test(body.message)) warrantyJourney = { ...previous!, category: null, revision: previous!.revision + 1 };
+      else if (/hvac warranties/i.test(body.message)) warrantyJourney = { ...previous!, category: 'HVAC', revision: previous!.revision + 1 };
+      else if (/appliance warranties/i.test(body.message)) warrantyJourney = { ...previous!, category: 'APPLIANCE', revision: previous!.revision + 1 };
+      else if (/roofing warranties/i.test(body.message)) warrantyJourney = { ...previous!, category: 'ROOFING', revision: previous!.revision + 1 };
+      else if (/home warranty plan warranties/i.test(body.message)) warrantyJourney = { ...previous!, category: 'HOME_WARRANTY_PLAN', revision: previous!.revision + 1 };
+      else warrantyJourney = { ...previous!, status: 'ALL', revision: previous!.revision + 1 };
+      await fulfill(route, { success: true, data: warrantyJourneyExecution({ ...warrantyJourney!, sessionId: body.sessionId }, { viewer: options.warrantyViewer, empty: options.warrantyEmpty }) }, 201);
       return;
     }
     // ACUI I-3: an inventory answer and its declared-filter refinements. The fixture merges dimensions the way the handler does.

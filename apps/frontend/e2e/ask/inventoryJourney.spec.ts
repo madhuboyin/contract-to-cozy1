@@ -153,8 +153,9 @@ test('accessibility: with reduced motion requested, the settled Inventory answer
   await startInventory(page);
   await page.getByRole('group', { name: 'Inventory status filters' }).getByRole('button', { name: 'Missing details' }).click();
   await expect(page.getByRole('heading', { name: '2 records are missing details.' })).toBeVisible();
-  const running = await page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === 'running' && !(animation.effect as KeyframeEffect | null)?.target?.closest?.('[role="status"]')).length);
-  expect(running).toBe(0);
+  // Poll rather than sample once: a finite CSS transition that began a frame ago must be allowed to finish; what must never happen is an
+  // animation that keeps running (a spinner, a pulse) once the answer has settled.
+  await expect.poll(() => page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === 'running' && !(animation.effect as KeyframeEffect | null)?.target?.closest?.('[role="status"]')).length), { timeout: 5000 }).toBe(0);
 });
 
 test('recovery: a failed first request keeps the typed question in the composer, and Try again recovers', async ({ page }) => {
