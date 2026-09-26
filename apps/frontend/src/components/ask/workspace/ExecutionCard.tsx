@@ -20,7 +20,7 @@ import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeC
 
 // IW-CALM-002 (FRD v1.111): every domain list draws its own bordered frame; inside a calm answer the outer frame goes and the
 // list's own section dividers stay, so no answer is a card holding cards.
-const FRAMELESS_LISTS = '[&>section.overflow-hidden]:rounded-none [&>section.overflow-hidden]:border-0 [&>section.overflow-hidden]:bg-transparent [&>section.overflow-hidden>div]:px-0';
+const FRAMELESS_LISTS = '[&>section.overflow-hidden]:rounded-none [&>section.overflow-hidden]:border-0 [&>section.overflow-hidden]:bg-transparent [&>section.overflow-hidden>div]:px-0 [&>section.overflow-hidden>div:first-child>h3:first-child]:sr-only [&_section.overflow-hidden_h4]:text-xs [&_section.overflow-hidden_h4]:font-semibold [&_section.overflow-hidden_h4]:uppercase [&_section.overflow-hidden_h4]:tracking-wide [&_section.overflow-hidden_h4]:text-slate-500';
 
 export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false }: {
   executionId: string;
@@ -204,7 +204,8 @@ export function ExecutionCard({
     && !execution.confirmation && !execution.clarification && execution.captureRequests.length === 0;
   useEffect(() => {
     if (!isJustUpdated || !resultSettled) return;
-    const target = bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? headingRef.current;
+    // The calm shell moves focus to the answer's own heading, not to its first button, so no control shows a focus ring on arrival.
+    const target = calmChrome ? headingRef.current : bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? headingRef.current;
     target?.focus({ preventScroll: true });
     // Re-runs only when this execution's own settled content actually
     // changes (a real status/result transition), not on every unrelated

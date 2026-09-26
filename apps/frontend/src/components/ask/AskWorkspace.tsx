@@ -276,7 +276,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   );
 
   return (
-    <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50')}>
+    <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50', calm && 'ask-calm')}>
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
           flush against the device's actual top edge/notch); env() resolves
@@ -328,7 +328,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           </aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
-      <main className={cn('min-h-0 flex-1 overflow-y-auto', mode === 'page' ? 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12' : 'px-4 py-5 sm:px-5')}>
+      <main className={cn('min-h-0 flex-1 overflow-y-auto', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12' : 'px-4 py-5 sm:px-5')}>
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : askUnavailable ? (
           <section className="mx-auto mt-6 max-w-2xl rounded-3xl border border-amber-200 bg-amber-50/80 px-5 py-8 text-center sm:px-8" role="status" aria-labelledby="ask-paused-title">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-amber-700 shadow-sm"><AlertTriangle className="h-5 w-5" /></span>
@@ -339,8 +339,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             </button>
           </section>
         ) : landingVisible ? (
-          <div className="mx-auto max-w-3xl">
-            {calm ? <h2 className="mb-4 font-display text-2xl font-semibold text-slate-950 sm:text-3xl">How can I help with your home?</h2> : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
+          <div className={cn('mx-auto max-w-3xl', calm && 'sm:pt-[5vh]')}>
+            {calm ? <h2 className="mb-5 font-display text-[24px] font-medium leading-tight tracking-[-0.01em] text-slate-950 sm:text-[30px]">How can I help with your home?</h2> : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
             {renderComposer('hero')}
             {calm ? <CalmLanding view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)}>{explorer}</CalmLanding> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
               <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Popular ways to use Ask Cozy</h2>
@@ -404,7 +404,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow suggestions={followUps} disabled={loading} onPick={(question) => void ask(question)} />}{renderComposer('footer')}</footer>}
+      {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow suggestions={followUps} disabled={loading} onPick={(question) => void ask(question)} />}{renderComposer('footer')}</footer>}
         </div>
         {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
           <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />

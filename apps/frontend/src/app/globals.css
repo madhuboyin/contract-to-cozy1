@@ -901,3 +901,17 @@ html {
     grid-template-columns: repeat(2, 1fr) !important;
   }
 }
+
+
+/* Ask Cozy calm surface (FRD ASK_COZY_INLINE_WORKSPACE §11.11): the global h1-h6 rule above sets Poppins at 20-36px with a bottom
+   margin, which made every list title in an answer look like a page heading. Inside the Ask surface headings inherit the body
+   face and size; a utility class on the element (for example the answer headline) still wins because utilities come later. */
+@layer base {
+  :where(.ask-calm) :is(h1, h2, h3, h4, h5, h6) {
+    font-family: var(--font-body);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    margin-bottom: 0;
+  }
+}

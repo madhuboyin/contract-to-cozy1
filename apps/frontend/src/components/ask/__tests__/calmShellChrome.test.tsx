@@ -22,16 +22,37 @@ const view = (overrides: Partial<ConciergeHomeView> = {}): ConciergeHomeView => 
 const starters = ['Maintain', 'Protect', 'Save', 'Plan', 'Extra'].map((label, index) => ({ id: `s${index}`, categoryId: 'MAINTAIN' as const, categoryLabel: label, question: `${label} question?`, source: 'DISCOVERY' as const }));
 
 describe('CalmLanding', () => {
-  it('says what needs attention, opens the matching answer from each chip, and shows one urgent item and four starters', () => {
+  it('shows count chips instead of repeating them as a sentence, opens the matching answer from each, and offers no duplicate starters', () => {
     const onAsk = jest.fn();
-    render(<CalmLanding view={view()} loading={false} failed={false} starters={starters} usingFallbackStarters={false} onAsk={onAsk}><span>explorer</span></CalmLanding>);
-    expect(screen.getByText('1 thing needs attention now, and 1 more to plan soon.')).toBeInTheDocument();
+    const starterList = [{ ...starters[0], id: 'decision-dup', question: 'Help me continue this decision: X' }, ...starters];
+    render(<CalmLanding view={view()} loading={false} failed={false} starters={starterList} usingFallbackStarters={false} onAsk={onAsk}><span>explorer</span></CalmLanding>);
+    // Chips carry the counts; the sentence is only for when there are no chips.
+    expect(screen.queryByText('1 thing needs attention now, and 1 more to plan soon.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '1 to do now' }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'What needs my attention right now?' }), 'ATTENTION');
+    expect(screen.getByText('Top priority')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Heating system inspection/ }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'Tell me about the heating inspection', context: expect.objectContaining({ entityType: 'HOME_ACTION', entityId: 'heat' }) }), 'ATTENTION');
     expect(screen.getAllByRole('list', { name: 'Things you can ask' })[0].querySelectorAll('button')).toHaveLength(4);
     expect(screen.getByText('explorer')).toBeInTheDocument();
+  });
+
+  it('drops a starter that repeats a strip chip or the top priority', () => {
+    const repeated = [
+      { ...starters[0], id: 'a', question: 'Which home actions should I plan for next?' },
+      { ...starters[1], id: 'attention-heat', question: 'Something else?' },
+      { ...starters[2], id: 'c', question: 'what needs my attention right now?' },
+      { ...starters[3], id: 'd', question: 'A genuinely different question?' },
+    ];
+    render(<CalmLanding view={view()} loading={false} failed={false} starters={repeated} usingFallbackStarters={false} onAsk={jest.fn()} />);
+    const buttons = screen.getByRole('list', { name: 'Things you can ask' }).querySelectorAll('button');
+    expect(Array.from(buttons).map((button) => button.textContent)).toEqual(['A genuinely different question?']);
+  });
+
+  it('falls back to a sentence when there are no chips', () => {
+    const quiet = view({ priorityList: { ...view().priorityList, items: [] }, landingSpotlight: null });
+    render(<CalmLanding view={quiet} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    expect(screen.getByText('Nothing needs your attention right now.')).toBeInTheDocument();
   });
 
   it('is honest while loading and when the overview is unavailable, and never claims the home is fine', () => {
