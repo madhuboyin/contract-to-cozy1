@@ -26,8 +26,8 @@ The recommended next implementation is a maintenance-first vertical slice that c
 | “Why this appeared” | **Modify / add** | Result-level `WHY_NOW` blocks and priority reason codes exist. Launch attention entries expose label, detail, tone, prompt, and source but not an explanation payload. | Extend the launch entry view model with a deterministic explanation reference or reason summary derived from existing governed data. Reuse the `WHY_NOW` presentation pattern; do not infer reasons in the client. |
 | Compact trust and provenance | **Reuse / modify** | `ResponseContextSummary` opens the evidence/context surface. Full context supports claims, assumptions, limitations, artifacts, related records, and dates. | Render a quiet, human-readable trust line immediately below calm answers when context exists, with the existing panel as progressive detail. |
 | Answer → Review → Confirm → Receipt | **Reuse / modify** | Inline capture, editable confirmation, consent reset after edit, idempotency, authorization recheck, pending-outcome reconciliation, `WORKFLOW_PROGRESS`, and `OUTPUT_ARTIFACTS` exist. | Make the stage change legible in copy and layout. A permanent stepper is not required. Standardize the post-action receipt anatomy and keep the resulting artifact actionable in the conversation. |
-| Active-work continuity | **Modify** | Pending work can be resumed, cancelled, or dismissed; sessions can be pinned, searched, restored, and deleted. Desktop gives the transcript history a permanent left rail. | Promote active work and saved artifacts above transcript retrieval. Keep history available, but reduce its default visual priority in the calm shell. |
-| Contextual follow-up burden | **Modify** | Inline capture supports conversational field collection; the current worktree raises the maximum sequence from three fields to seven. | Add a UX guardrail: do not turn a seven-field form into seven chat turns by default. Group compatible fields into one compact structured capture or split only when the answer genuinely changes the next question. |
+| Active-work continuity | **Modify** | Pending work can be resumed, cancelled, or dismissed; sessions can be pinned, searched, restored, and deleted. Desktop gives the transcript history a permanent left rail. | Promote active work above transcript retrieval. Keep history available, but reduce its default visual priority in the calm shell. |
+| Contextual follow-up burden | **Modify** | Inline capture supports conversational field collection; an earlier working-tree change had raised the maximum sequence from three fields to seven; it was reverted (FRD v1.114). | Add a UX guardrail: do not turn a seven-field form into seven chat turns by default. Group compatible fields into one compact structured capture or split only when the answer genuinely changes the next question. |
 | Responsive and accessible behavior | **Reuse** | Mobile history/context sheets, safe-area spacing, horizontal suggestion scrolling, focus management, live status, keyboard composition handling, and voice accessibility are implemented. | Preserve these behaviors while changing hierarchy. Add narrow-width acceptance checks for the stateful launch, trust line, confirmation, and receipt. |
 
 ## 3. What should be reused
@@ -79,7 +79,7 @@ Do not globally restyle unsupported domains until their block combinations and a
 
 The product already supports both active work and history, but the default desktop hierarchy favors transcript retrieval. In the calm shell:
 
-- show unfinished work and recently created artifacts near the conversation entry point;
+- show unfinished work near the conversation entry point (a recent-artifacts row is out of scope; see ACUI-006);
 - retain transcript search and restoration behind an explicit History control or a visually quieter rail state;
 - keep pinned results distinct from pinned conversations; and
 - preserve the existing URL-addressable session and browser navigation behavior.
@@ -181,17 +181,19 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 - Refinements create linked executions without duplicating the previous full result.
 - Original questions remain visible when a result is superseded.
 
-### ACUI-004 — Contextual maintenance evidence input
+### ACUI-004 — Contextual evidence input for supported records
 
 **Priority:** P1  
 **Depends on:** ACUI-003  
 **Owners:** composer contract/UI, `AttachEvidenceControl.tsx`, existing evidence upload service
 
-**Outcome:** Ask Cozy offers photo or document input only when it advances the current maintenance task.
+**Outcome:** Ask Cozy offers photo or document input only when the conversation has one deterministically resolved record that evidence can be attached to.
+
+**Scope decision (September 26, 2026):** supported records are home events, inventory items and warranties, because those are the only targets the evidence operation (`CAPTURE_EVIDENCE_CONFIRM`) supports. Maintenance tasks are explicitly excluded: a task button would advertise an unsupported target. Supporting tasks later needs a separate backend proposal covering canonical attachment ownership, authorization, confirmation, related-record output and retrieval.
 
 **Acceptance criteria:**
 
-- Labels name the purpose, for example “Add a photo of the leak” rather than “Upload”.
+- Labels name the purpose, for example “Add a photo or document” for a named record, rather than “Upload”.
 - Affordances appear only for supported intents and deterministically resolved targets.
 - Existing file validation, property authorization, and evidence linking are reused.
 - Capture never executes a consequential action automatically.
@@ -219,20 +221,23 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 
 **Outcome:** Returning users see what they were doing before they are asked to browse old conversations.
 
+**Scope decision (September 26, 2026):** closed without a recent-artifacts row. Pinned results are conversation-local browser state and cannot support a cross-conversation landing row, and a backend endpoint should not be added merely to satisfy that phrase. Cross-conversation artifacts are a separate future product and backend discovery; if pursued, "recent artifacts" means canonical created outputs (not pinned responses) with explicit retention, ordering, property scope, authorization and supported artifact types.
+
 **Acceptance criteria:**
 
 - Pending work is visible near the entry point when present.
-- Recently created or pinned result artifacts are distinct from saved conversations.
 - History remains searchable, pageable, property-safe, and available in one action.
 - Desktop calm launch no longer depends on a permanently dominant transcript rail.
 - Mobile retains the existing accessible sheet behavior.
 
-### ACUI-007 — Conversational-capture burden guardrail
+### ACUI-007 — Conversational-capture burden guardrail (future design ticket)
 
 **Priority:** P1  
 **Owners:** `conversationalCapture.ts`, `InlineCaptureCard`
 
 **Outcome:** Structured work feels conversational without becoming a slow question-by-question form.
+
+**Scope decision (September 26, 2026):** not built. `MAX_CONVERSATIONAL_FIELDS` stays at 3 and longer captures use the existing structured form (conditional fields inside that form are not grouped conversational capture). Grouped or adaptive capture is a new interaction model and requires a prototype and design review before any implementation.
 
 **Acceptance criteria:**
 
@@ -262,17 +267,17 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 | --- | --- |
 | ACUI-001 | **Implemented in code (FRD v1.115).** Home name, state headline and named composer placeholder; generic prompt only when state is unknown. Not browser-verified. |
 | ACUI-002 | **Implemented in code, frontend-only (FRD v1.115).** Derived in `conciergeStateStrip.ts`; hidden when nothing can be derived. Not browser-verified. |
-| ACUI-006 | **Rail collapse implemented in code (FRD v1.116)** on top of the quiet unfinished-work lines (`88d3dc2f`). Remaining: a recent-artifacts / pinned-results row distinct from saved conversations. |
-| ACUI-007 | Guardrail in force: the conversational capture limit was restored to three fields (FRD v1.114). |
+| ACUI-006 | **Complete (FRD v1.116).** Collapsible history rail plus quiet unfinished-work lines (`88d3dc2f`). The recent-artifacts row was removed from scope (see ACUI-006). |
+| ACUI-007 | **Future design ticket.** Guardrail in force: the capture limit is three fields (FRD v1.114); grouped capture needs a prototype and review first. |
 | ACUI-005 | **Implemented in code (FRD v1.117):** calm receipt, review stage line, unknown-outcome wording, record link as continuation. Not browser-verified. |
 | ACUI-003 | **Implemented in code (FRD v1.118):** readable trust line under the answer; the workflow action is the dominant step. Not browser-verified. No client-side ordering guard (handler order already correct). |
-| ACUI-004 | **Implemented in code (FRD v1.119)** for home events, inventory items and warranties with one deterministic target. Maintenance tasks are not offered: the evidence operation does not support them (backend decision). Playwright-covered; not browser-verified by hand. |
+| ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Playwright-covered; not browser-verified by hand. |
 
 ## 8. Recommended delivery boundary
 
 Implement ACUI-001, ACUI-002, ACUI-003, ACUI-005, and their ACUI-008 coverage as the first vertical slice. They produce the complete conversational arc with the least architectural risk because the underlying maintenance, confirmation, evidence, and receipt contracts already exist.
 
-Follow with ACUI-004 and ACUI-006 after the core hierarchy is stable. Treat ACUI-007 as a blocking UX rule for any newly expanded conversational capture, especially before relying on the current seven-field maximum.
+ACUI-004 and ACUI-006 followed and are complete within the scope above. Treat ACUI-007 as a blocking UX rule for any newly expanded conversational capture: the limit stays at three fields until grouped capture has been prototyped and reviewed.
 
 Do not broaden calm adoption to another domain until maintenance demonstrates all of the following in one coherent journey: stateful entry, direct answer, explanation, progressive provenance, conversational refinement, safe confirmation, receipt, and continuity.
 
