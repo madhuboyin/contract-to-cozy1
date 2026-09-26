@@ -14,3 +14,9 @@ export const useCalmAnswer = () => useContext(CalmAnswerContext);
 // shell it is offered collapsed, so a turn has one artifact (IW-CONV-002/003).
 export const CalmSecondaryContext = createContext(false);
 export const useCalmSecondary = () => useContext(CalmSecondaryContext);
+
+// ACUI-005: the created or changed record's own link, offered by a calm receipt when the receipt block carries no action of its own
+// (the record's link otherwise lives only in the context panel).
+export type CalmReceiptContinuation = { label: string; href: string } | null;
+export const CalmReceiptContext = createContext<CalmReceiptContinuation>(null);
+export const useCalmReceiptContinuation = () => useContext(CalmReceiptContext);

@@ -262,6 +262,8 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
   return (
     <section ref={containerRef} data-conversational-review={calm ? '' : undefined} className={calm ? 'space-y-3' : 'rounded-2xl border border-violet-200 bg-violet-50/70 p-4'}>
       {!calm && <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">Confirmation required</p>}
+      {/* ACUI-005: the stage in plain words. The consent box and the confirm button below are the "Confirm" step. */}
+      {calm && <p className="text-xs font-medium text-slate-500" data-conversational-stage="review">Review · nothing is saved until you confirm</p>}
       <h3 className={calm ? 'text-[17px] font-medium leading-snug text-slate-900' : 'mt-1 font-semibold text-slate-950'}>{confirmation.title}</h3><p className={calm ? 'text-sm leading-5 text-slate-600' : 'mt-1 text-sm leading-5 text-slate-700'}>{confirmation.description}</p>
       <dl className={calm ? 'divide-y divide-slate-100 border-y border-slate-100' : 'mt-4 divide-y divide-violet-100 rounded-xl border border-violet-100 bg-white px-3'}>
         {confirmation.fields.map((field) => <div key={field.label} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{field.label}</dt><dd className="font-medium text-slate-800">{field.value}</dd></div>)}
@@ -337,6 +339,16 @@ export function PendingOutcomeCard({ executionId, confirmationVersion, onComplet
       setError(caught instanceof Error ? caught.message : "Could not check this action's status.");
     } finally { setChecking(false); }
   };
+  // ACUI-005: the outcome is reconciled, never re-offered as a second execution. Calm wording is shorter; the safeguard is the same.
+  const calm = useCalmAnswers();
+  if (calm) return (
+    <section data-calm-outcome-unknown="" className="space-y-2 border-l-2 border-amber-300 pl-3">
+      <p className="text-xs font-medium text-slate-500">Outcome not yet known</p>
+      <p className="text-sm leading-5 text-slate-700">This may still be running, or it may have finished. Checking picks up the result and will not apply it twice.</p>
+      <button type="button" disabled={checking} onClick={() => void check()} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{checking ? 'Checking…' : 'Check status'}</button>
+      {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
+    </section>
+  );
   return (
     <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">Outcome not yet known</p>

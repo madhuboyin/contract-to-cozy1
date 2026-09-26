@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
 import { canAskConversationally } from '@/features/ask/conversationalCapture';
 import { AskBlockActionContext } from '../blocks/context';
-import { CalmAnswerContext, CalmChromeContext, CalmSecondaryContext } from '../blocks/calmContext';
+import { CalmAnswerContext, CalmChromeContext, CalmReceiptContext, CalmSecondaryContext } from '../blocks/calmContext';
 import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
@@ -160,6 +160,8 @@ export function ExecutionCard({
   // summary (default tone, no chips) that says the same thing in other words is not drawn above it.
   const cardIsTheMessage = calmChrome && (execution.captureRequests.some(canAskConversationally) || (execution.status === 'NEEDS_CONFIRMATION' && Boolean(execution.confirmation)));
   const shownBlocks = cardIsTheMessage ? execution.blocks.filter((block) => !(block.type === 'SUMMARY' && block.tone === 'DEFAULT' && !block.chips?.length)) : execution.blocks;
+  // ACUI-005: the created record's link, for a calm receipt that has no action of its own.
+  const receiptContinuation = calmChrome ? execution.blocks.flatMap((block) => block.type === 'OUTPUT_ARTIFACTS' ? block.items : []).find((item) => item.navigation)?.navigation ?? null : null;
   const refresh = async () => {
     if (refreshing || refreshAccessLost) return;
     setRefreshing(true);
@@ -320,10 +322,10 @@ export function ExecutionCard({
           </details>
         )}
         <div ref={bodyRef} className={cn('space-y-3', calmChrome && FRAMELESS_LISTS)}>
-          <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
+          <CalmReceiptContext.Provider value={receiptContinuation}><AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
             {shownBlocks.map((block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>)}
             {hasResponseContext(execution) && !calmChrome && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
-          </AskBlockActionContext.Provider>
+          </AskBlockActionContext.Provider></CalmReceiptContext.Provider>
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}

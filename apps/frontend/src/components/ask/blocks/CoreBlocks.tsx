@@ -4,7 +4,7 @@ import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatib
 import { timelinePoint } from '@/features/ask/displayPatterns';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
-import { useCalmAnswer, useCalmChrome } from './calmContext';
+import { useCalmAnswer, useCalmChrome, useCalmReceiptContinuation } from './calmContext';
 import type { AskBlockRenderer } from './types';
 
 function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBlock, { type: 'SUMMARY' }>['chips']> }) {
@@ -106,7 +106,36 @@ const WarningBoundary = ({ block }: { block: Extract<AskPresentationBlock, { typ
   </section>
 );
 
-export const WorkflowProgressBlock: AskBlockRenderer<'WORKFLOW_PROGRESS'> = ({ block }) => (
+// ACUI-005 (FRD v1.117): a calm receipt says what happened in the past tense, lists what changed, and offers one continuation. Only a
+// completed action is a "Receipt"; a pending, cancelled or expired one keeps its own plain status, never a success mark.
+const RECEIPT_RULE = { PENDING: 'border-amber-300', CANCELLED: 'border-slate-300', EXPIRED: 'border-amber-300', COMPLETED: 'border-teal-300' } as const;
+const RECEIPT_STATUS_TEXT = { PENDING: 'In progress', CANCELLED: 'Cancelled', EXPIRED: 'Expired' } as const;
+const receiptStatusText = (status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED') => (status === 'COMPLETED' ? null : RECEIPT_STATUS_TEXT[status]);
+
+function CalmReceipt({ block }: { block: Extract<AskPresentationBlock, { type: 'WORKFLOW_PROGRESS' }> }) {
+  const done = block.status === 'COMPLETED';
+  const continuation = useCalmReceiptContinuation();
+  // One continuation is the primary control; anything else the producer declared stays, quieter. A record link from the turn's output
+  // artifact is offered only when the receipt has no action of its own.
+  const declared = block.actions.map((action, index) => ({ ...action, style: index === 0 ? 'PRIMARY' as const : 'SECONDARY' as const }));
+  const actions = declared.length > 0 ? declared : continuation ? [{ id: 'open-created-record', label: continuation.label, href: continuation.href, style: 'PRIMARY' as const }] : [];
+  return (
+    <section data-calm-receipt={block.status.toLowerCase()} aria-label={done ? 'Receipt' : undefined} className={cn('space-y-3 border-l-2 pl-3', RECEIPT_RULE[block.status])}>
+      <div>
+        <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">{done ? <><CheckCircle2 className="h-3.5 w-3.5 text-teal-700" aria-hidden="true" />Receipt</> : receiptStatusText(block.status)}</p>
+        <h3 className="mt-1 text-[17px] font-medium leading-snug text-slate-900">{block.title}</h3>
+        {block.description && <p className="mt-1 text-sm leading-5 text-slate-600">{block.description}</p>}
+      </div>
+      {block.details.length > 0 && <dl className="divide-y divide-slate-100 border-y border-slate-100">{block.details.map((detail) => <div key={detail.label} className="grid gap-1 py-2 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{detail.label}</dt><dd className="font-medium text-slate-800">{detail.value}</dd></div>)}</dl>}
+      {actions.length > 0 && <div className="flex flex-wrap gap-2">{actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+    </section>
+  );
+}
+
+export const WorkflowProgressBlock: AskBlockRenderer<'WORKFLOW_PROGRESS'> = ({ block }) => {
+  const calm = useCalmChrome();
+  if (calm) return <CalmReceipt block={block} />;
+  return (
   <section className="rounded-2xl border border-teal-200 bg-teal-50/70 p-4">
     <div className="flex items-start gap-3">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-700 text-white"><CheckCircle2 className="h-5 w-5" /></span>
@@ -115,7 +144,8 @@ export const WorkflowProgressBlock: AskBlockRenderer<'WORKFLOW_PROGRESS'> = ({ b
     <dl className="mt-4 divide-y divide-teal-100 rounded-xl border border-teal-100 bg-white px-3">{block.details.map((detail) => <div key={detail.label} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{detail.label}</dt><dd className="font-medium text-slate-800">{detail.value}</dd></div>)}</dl>
     {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
   </section>
-);
+  );
+};
 
 export const MetricRowBlock: AskBlockRenderer<'METRIC_ROW'> = ({ block }) => (
   <section className="rounded-2xl border border-slate-200 bg-white p-4">
