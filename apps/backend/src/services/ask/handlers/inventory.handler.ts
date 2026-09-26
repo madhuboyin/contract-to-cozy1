@@ -2,7 +2,7 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { HouseholdRole } from '@prisma/client';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { type AskCaptureRequest, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
@@ -15,7 +15,9 @@ import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../../inventory.serv
 import { type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, homeEventCorrectionItemActions, INVENTORY_CATEGORY_VALUES, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, isValidDateEditInput, MAX_RESULT_ITEMS } from '../askHandlerSupport';
-import { isIncompleteInventoryRequest } from '../askInventoryIntent';
+import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../askInventoryIntent';
+import { type AskViewState } from '../support/executionState';
+import { loadAskViewState } from './maintenance.handler';
 
 export const inventoryService = new InventoryService();
 
@@ -68,17 +70,20 @@ function inventoryLifecycleHorizon(now = new Date()): Date {
  */
 export function inventoryCalmCopy(counts: {
   matchCount: number; shownCount: number; missingCount: number; lifecycleCount: number; incompleteFocus: boolean; lifecycleFocus: boolean;
+  /** The selected category, in the homeowner's words ("HVAC"), so a filtered headline says what it is about. */
+  categoryLabel?: string | null;
 }): { headline: string; supportLine?: string; chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> } {
-  const { matchCount, shownCount, missingCount, lifecycleCount, incompleteFocus, lifecycleFocus } = counts;
+  const { matchCount, shownCount, missingCount, lifecycleCount, incompleteFocus, lifecycleFocus, categoryLabel } = counts;
+  const scope = categoryLabel ? `${categoryLabel} ` : '';
   let headline: string;
   if (incompleteFocus) {
-    headline = `${inventoryCount(matchCount, 'record is', 'records are')} missing details.`;
+    headline = `${matchCount} ${scope}${matchCount === 1 ? 'record is' : 'records are'} missing details.`;
   } else if (lifecycleFocus) {
-    headline = `${inventoryCount(matchCount, 'item has', 'items have')} a recorded end-of-life date in the next three years.`;
+    headline = `${matchCount} ${scope}${matchCount === 1 ? 'item has' : 'items have'} a recorded end-of-life date in the next three years.`;
   } else if (missingCount > 0) {
-    headline = `${inventoryCount(matchCount, 'item', 'items')} recorded, ${missingCount} with missing details.`;
+    headline = `${matchCount} ${scope}${matchCount === 1 ? 'item' : 'items'} recorded, ${missingCount} with missing details.`;
   } else {
-    headline = `${inventoryCount(matchCount, 'item', 'items')} recorded, none missing the details Ask checks.`;
+    headline = `${matchCount} ${scope}${matchCount === 1 ? 'item' : 'items'} recorded, none missing the details Ask checks.`;
   }
   const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
     { label: inventoryCount(matchCount, 'record', 'records'), tone: 'DEFAULT' },
@@ -90,7 +95,87 @@ export function inventoryCalmCopy(counts: {
     : { headline, chips };
 }
 
-async function inventoryLookupResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+// ACUI I-2 (FRD v1.122): Inventory filters as a governed refinement. Same continuity model as Maintenance and Buyer Deadlines: a
+// declared chip is a fresh authoritative query that carries a stable result id and the next revision, so the earlier result is
+// superseded rather than stacked. Two independent dimensions, each replaced on its own: a status focus and a category.
+export type InventoryStatusFilter = 'ALL' | 'INCOMPLETE' | 'LIFECYCLE';
+export type InventoryCategoryFilter = 'HVAC' | 'APPLIANCE' | 'ROOF_EXTERIOR';
+const INVENTORY_STATUS_FILTERS: ReadonlySet<string> = new Set(['ALL', 'INCOMPLETE', 'LIFECYCLE']);
+const INVENTORY_CATEGORY_FILTERS: ReadonlySet<string> = new Set(['HVAC', 'APPLIANCE', 'ROOF_EXTERIOR']);
+const INVENTORY_CATEGORY_LABELS: Record<InventoryCategoryFilter, string> = { HVAC: 'HVAC', APPLIANCE: 'Appliances', ROOF_EXTERIOR: 'Roof and exterior' };
+// Each declared chip message must be recognized here AND begin with a phrase askFollowUpContext's FILTER_CONTINUATION_PATTERN accepts.
+const INVENTORY_CLEAR_FILTERS_MESSAGE = 'Now show all inventory items with no filters';
+const INVENTORY_CLEAR_PATTERN = /^\s*now show all inventory items with no filters\b/i;
+const INVENTORY_ALL_STATUS_PATTERN = /^\s*now show all inventory items\b/i;
+const INVENTORY_ALL_CATEGORIES_PATTERN = /^\s*now show all inventory categories\b/i;
+
+function detectInventoryCategory(message: string): InventoryCategoryFilter | null {
+  return /\bhvac|furnace|air conditioner|heat pump|boiler\b/i.test(message)
+    ? 'HVAC'
+    : /\bappliances?\b/i.test(message)
+      ? 'APPLIANCE'
+      : /\broof\b/i.test(message)
+        ? 'ROOF_EXTERIOR'
+        : null;
+}
+
+function inventoryMatchesCategory(item: Awaited<ReturnType<InventoryService['listItems']>>[number], category: InventoryCategoryFilter): boolean {
+  return category === 'HVAC'
+    ? item.category === 'HVAC' || /\b(?:hvac|furnace|air conditioner|heat pump|boiler)\b/i.test(inventoryItemSearchText(item))
+    : item.category === category;
+}
+
+/**
+ * Merges this turn's declared filter into the prior view. Only the dimension the message names changes; "no filters" clears both.
+ * Returns null when there is no prior view or the message names no filter, so an ordinary question is answered as a fresh query.
+ */
+export function resolveInventoryRefinement(message: string, prior: AskViewState | null | undefined): { status: InventoryStatusFilter; category: InventoryCategoryFilter | null } | null {
+  if (!prior || !INVENTORY_STATUS_FILTERS.has(prior.statusFilter)) return null;
+  const priorCategory = prior.domainScopePhrase && INVENTORY_CATEGORY_FILTERS.has(prior.domainScopePhrase) ? prior.domainScopePhrase as InventoryCategoryFilter : null;
+  if (INVENTORY_CLEAR_PATTERN.test(message)) return { status: 'ALL', category: null };
+  const status: InventoryStatusFilter | null = isIncompleteInventoryRequest(message) ? 'INCOMPLETE'
+    : isLifecycleInventoryRequest(message) ? 'LIFECYCLE'
+      : INVENTORY_ALL_STATUS_PATTERN.test(message) ? 'ALL' : null;
+  const allCategories = INVENTORY_ALL_CATEGORIES_PATTERN.test(message);
+  const category = allCategories ? null : detectInventoryCategory(message);
+  if (!status && !category && !allCategories) return null;
+  return { status: status ?? prior.statusFilter as InventoryStatusFilter, category: allCategories ? null : category ?? priorCategory };
+}
+
+export function buildInventoryViewState(prior: AskViewState | null | undefined, status: InventoryStatusFilter, category: InventoryCategoryFilter | null): AskViewState {
+  return {
+    resultId: prior?.resultId ?? randomUUID(),
+    // Inventory reuses the generic fields: the category key rides in domainScopePhrase, the status focus in statusFilter.
+    domainScopePhrase: category,
+    dateScopePhrase: null,
+    statusFilter: status,
+    selectedTaskId: prior?.selectedTaskId ?? null,
+    revision: (prior?.revision ?? 0) + 1,
+  };
+}
+
+/** The prior view only when the source execution really was an inventory lookup (another domain's view state must never be continued). */
+async function loadInventoryViewState(sourceExecutionId: string | null | undefined, userId: string): Promise<AskViewState | null> {
+  if (!sourceExecutionId) return null;
+  const source = await prisma.askExecution.findFirst({ where: { id: sourceExecutionId, userId }, select: { operationId: true } });
+  return source?.operationId === 'INVENTORY_LOOKUP' ? loadAskViewState(sourceExecutionId, userId) : null;
+}
+
+/** The declared chips for a collection result; every message round-trips through resolveInventoryRefinement. */
+export function inventoryFilterChips(status: InventoryStatusFilter, category: InventoryCategoryFilter | null) {
+  return [
+    { id: 'status-all', label: 'All items', message: 'Now show all inventory items', active: status === 'ALL' },
+    { id: 'status-incomplete', label: 'Missing details', message: 'Only show items with missing details', active: status === 'INCOMPLETE' },
+    { id: 'status-lifecycle', label: 'Near end of life', message: 'Only show items nearing end of life', active: status === 'LIFECYCLE' },
+    { id: 'category-all', label: 'All categories', message: 'Now show all inventory categories', active: category === null },
+    { id: 'category-hvac', label: 'HVAC', message: 'Only show HVAC items', active: category === 'HVAC' },
+    { id: 'category-appliance', label: 'Appliances', message: 'Only show appliances', active: category === 'APPLIANCE' },
+    { id: 'category-roof', label: 'Roof and exterior', message: 'Only show roof items', active: category === 'ROOF_EXTERIOR' },
+    ...(status !== 'ALL' || category ? [{ id: 'clear-all', label: 'Clear filters', message: INVENTORY_CLEAR_FILTERS_MESSAGE, active: false }] : []),
+  ];
+}
+
+async function inventoryLookupResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
   const allItems = await inventoryService.listItems(propertyId, {});
@@ -108,16 +193,12 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     };
   }
 
-  const historyFocus = /\b(?:history|timeline|what happened|repairs?|service(?:d| history)?|maintenance history)\b/i.test(message);
-  const incompleteFocus = isIncompleteInventoryRequest(message);
-  const lifecycleFocus = /\b(?:end of life|nearing (?:replacement|expiry)|expir(?:e|y|ing)|oldest systems?)\b/i.test(message);
-  const categoryFilter = /\bhvac|furnace|air conditioner|heat pump|boiler\b/i.test(message)
-    ? 'HVAC'
-    : /\bappliances?\b/i.test(message)
-      ? 'APPLIANCE'
-      : /\broof\b/i.test(message)
-        ? 'ROOF_EXTERIOR'
-        : null;
+  // ACUI I-2: a declared filter chip continues the prior result; only the dimension it names changes, and the query is re-run here.
+  const refinement = resolveInventoryRefinement(message, priorViewState);
+  const historyFocus = !refinement && /\b(?:history|timeline|what happened|repairs?|service(?:d| history)?|maintenance history)\b/i.test(message);
+  const incompleteFocus = refinement ? refinement.status === 'INCOMPLETE' : isIncompleteInventoryRequest(message);
+  const lifecycleFocus = refinement ? refinement.status === 'LIFECYCLE' : /\b(?:end of life|nearing (?:replacement|expiry)|expir(?:e|y|ing)|oldest systems?)\b/i.test(message);
+  const categoryFilter = refinement ? refinement.category : detectInventoryCategory(message);
   const specificAliases: Array<{ test: RegExp; terms: string[] }> = [
     { test: /\b(?:refrigerator|fridge)\b/i, terms: ['refrigerator', 'fridge'] },
     { test: /\bwater heater\b/i, terms: ['water heater'] },
@@ -125,15 +206,16 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     { test: /\bdryer\b/i, terms: ['dryer'] },
     { test: /\bdishwasher\b/i, terms: ['dishwasher'] },
   ];
-  const specific = specificAliases.find((candidate) => candidate.test.test(message));
+  const specific = refinement ? undefined : specificAliases.find((candidate) => candidate.test.test(message));
   const genericList = /\b(?:inventory|systems?|equipment|appliances?)\b/i.test(message) && !specific && !categoryFilter;
   const tokens = inventorySearchTokens(message);
 
   let matches = allItems;
-  if (categoryFilter === 'HVAC') {
-    matches = allItems.filter((item) => item.category === 'HVAC' || /\b(?:hvac|furnace|air conditioner|heat pump|boiler)\b/i.test(inventoryItemSearchText(item)));
-  } else if (categoryFilter) {
-    matches = allItems.filter((item) => item.category === categoryFilter);
+  if (categoryFilter) {
+    matches = allItems.filter((item) => inventoryMatchesCategory(item, categoryFilter));
+  } else if (refinement) {
+    // Every item, then the status focus below: a filter never depends on the words of an earlier question.
+    matches = allItems;
   } else if (specific) {
     matches = allItems.filter((item) => specific.terms.some((term) => inventoryItemSearchText(item).includes(term)));
   } else if (!genericList && tokens.length) {
@@ -152,6 +234,30 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     const horizon = inventoryLifecycleHorizon();
     matches = matches.filter((item) => item.expectedExpiryDate && item.expectedExpiryDate <= horizon)
       .sort((left, right) => (left.expectedExpiryDate?.getTime() ?? Number.POSITIVE_INFINITY) - (right.expectedExpiryDate?.getTime() ?? Number.POSITIVE_INFINITY));
+  }
+
+  if (!matches.length && refinement) {
+    // A filter that matches nothing still continues the result and keeps every chip, so the homeowner can widen or clear it.
+    return {
+      status: 'ANSWERED', reasonCode: 'INVENTORY_FILTER_NO_MATCH', contextVersion: recordVersion,
+      parameters: { viewState: buildInventoryViewState(priorViewState, refinement.status, refinement.category) },
+      blocks: [{
+        type: 'SUMMARY', id: 'inventory-summary', title: 'No inventory records match these filters', headline: 'No items match these filters.',
+        supportLine: `This home has ${allItems.length} visible inventory item${allItems.length === 1 ? '' : 's'}. Widen or clear a filter to see them.`,
+        body: `This home has ${allItems.length} visible inventory item${allItems.length === 1 ? '' : 's'}, but none match the selected filters.`, tone: 'DEFAULT',
+        actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'PRIMARY' }],
+      }, {
+        type: 'GROUPED_LIST', id: 'inventory-results',
+        title: isIncompleteInventoryRequest(message) ? 'Incomplete inventory records' : isLifecycleInventoryRequest(message) ? 'Recorded lifecycle dates approaching' : 'Inventory details',
+        filters: inventoryFilterChips(refinement.status, refinement.category),
+        sections: [{ id: 'items', title: 'Living Home Record', count: 0, items: [] }],
+        actions: [
+          ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
+          { id: 'open-inventory-list', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' },
+        ],
+      }],
+      suggestions: [],
+    };
   }
 
   if (!matches.length) {
@@ -196,7 +302,8 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     };
   }
 
-  const selectedItem = matches.length === 1 ? matches[0] : null;
+  // A refined list stays a list even at one row, so its chips (and the way back) never disappear.
+  const selectedItem = !refinement && matches.length === 1 ? matches[0] : null;
   const lifecycleEvaluation = selectedItem
     ? await evaluateFeatureContext(propertyId, userId, {
       featureKey: 'REPAIR_REPLACE', operationKey: 'RUN_ANALYSIS', operationInput: { inventoryItemId: selectedItem.id },
@@ -225,6 +332,13 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
   }] : [];
 
   const shown = matches.slice(0, MAX_RESULT_ITEMS);
+  // The answer-trust contract (askInventoryIntent) keys the list title on the words of THIS question, so a chip like "Only show HVAC
+  // items" is titled "Inventory details" even when a status focus carried over from the prior view; the headline states the real scope.
+  const listTitle = isIncompleteInventoryRequest(message) ? 'Incomplete inventory records' : isLifecycleInventoryRequest(message) ? 'Recorded lifecycle dates approaching' : 'Inventory details';
+  const freshCollection = !specific && !historyFocus && (genericList || Boolean(categoryFilter) || incompleteFocus || lifecycleFocus);
+  const collectionView = !selectedItem && (Boolean(refinement) || freshCollection);
+  const activeStatus: InventoryStatusFilter = incompleteFocus ? 'INCOMPLETE' : lifecycleFocus ? 'LIFECYCLE' : 'ALL';
+  const viewState = collectionView ? buildInventoryViewState(priorViewState, activeStatus, categoryFilter) : null;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'inventory-summary',
     title: selectedItem ? `Here is what the Home Record contains for ${selectedItem.name}` : `${matches.length} inventory records match this request`,
@@ -235,7 +349,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     // I-1: the calm anatomy for a list: a counted headline and chips. A single item keeps its own title and body (the calm answer shows
     // an undeclared summary as title plus plain text, so nothing is dropped). The full-record link also rides on the list (below).
     ...(selectedItem ? {} : inventoryCalmCopy({
-      matchCount: matches.length, shownCount: shown.length, incompleteFocus, lifecycleFocus,
+      matchCount: matches.length, shownCount: shown.length, incompleteFocus, lifecycleFocus, categoryLabel: categoryFilter ? INVENTORY_CATEGORY_LABELS[categoryFilter] : null,
       missingCount: matches.filter((item) => inventoryMissingFacts(item).length > 0).length,
       lifecycleCount: matches.filter((item) => item.expectedExpiryDate && item.expectedExpiryDate <= inventoryLifecycleHorizon()).length,
     })),
@@ -255,7 +369,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     // href (it lists HomeEvent timeline entries, a different entity type
     // with no inline detail component yet) -- a genuine remaining "broader
     // entry points" gap, matching Maintenance's own flagship-first shape.
-    type: 'GROUPED_LIST', filters: [], id: 'inventory-results', title: incompleteFocus ? 'Incomplete inventory records' : lifecycleFocus ? 'Recorded lifecycle dates approaching' : 'Inventory details',
+    type: 'GROUPED_LIST', filters: viewState ? inventoryFilterChips(activeStatus, categoryFilter) : [], id: 'inventory-results', title: listTitle,
     description: lifecycleFocus ? 'Only items with a recorded expected-expiry date within the next three years are included.' : null,
     sections: [{
       id: 'items', title: 'Living Home Record', count: matches.length,
@@ -328,7 +442,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     status: captureRequests.length || (selectedItem ? inventoryMissingFacts(selectedItem).length > 0 : false) ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length ? 'INVENTORY_LIFECYCLE_CONTEXT_OPTIONAL' : selectedItem && inventoryMissingFacts(selectedItem).length ? 'INVENTORY_RECORD_INCOMPLETE' : undefined,
     contextVersion: lifecycleEvaluation?.contextVersion ?? recordVersion,
-    parameters: selectedItem ? { inventoryItemId: selectedItem.id } : undefined,
+    parameters: viewState ? { viewState } : selectedItem ? { inventoryItemId: selectedItem.id } : undefined,
     captureRequests,
     blocks,
     suggestions: selectedItem
@@ -337,7 +451,10 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
   };
 }
 
-registerCapabilityHandler('inventory.lookup', async (envelope) => inventoryLookupResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('inventory.lookup', async (envelope) => inventoryLookupResult(
+  envelope.userId, envelope.propertyId!, envelope.message,
+  await loadInventoryViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
+));
 
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 write slice: corrections on an exact
 // InventoryItem, written through the canonical inventoryService.updateItem.

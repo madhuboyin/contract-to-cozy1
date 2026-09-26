@@ -47,6 +47,8 @@ const FOLLOW_UP_LOOKBACK_MS = 30 * 60 * 1000;
 
 const ENTITY_CONTINUATION_PATTERN = /\b(?:complete|finish|mark|update|reschedule|cancel|archive|reopen)\b.{0,25}\b(it|that one|this one|that task|this task|the other one)\b/i;
 const FILTER_CONTINUATION_PATTERN = /^\s*(?:only|just|now show|now only show|instead show|filter to|show only|and only)\b/i;
+/** True when a declared filter chip's message will be resolved as a continuation of the prior result (used to keep chip wording honest). */
+export const isFilterContinuationMessage = (message: string): boolean => FILTER_CONTINUATION_PATTERN.test(message);
 
 // External review, Phase 5: a proactive continuation card (any producer --
 // `createAskNotificationContinuation` stamps this on every one) opens a

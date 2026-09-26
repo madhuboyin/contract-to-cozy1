@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ExecutionCard } from '../workspace/ExecutionCard';
 import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
 import type { AskExecutionResponse } from '@/features/ask/types';
@@ -21,12 +21,13 @@ const execution = (list = blocks()) => ({
   createdAt: '2026-09-25T19:32:55.000Z', updatedAt: '2026-09-25T19:32:55.000Z', viewState: null, blocks: list,
   captureRequests: [], confirmation: null, clarification: null, correctionCapabilities: { retryResponse: false, intent: false, entity: false, homeRecord: false },
 } as unknown as AskExecutionResponse);
+const askMock = jest.fn();
 const card = (value: AskExecutionResponse) => render(
-  <ExecutionCard execution={value} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={jest.fn()} selectedPropertyId="home"
+  <ExecutionCard execution={value} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={askMock} selectedPropertyId="home"
     setInput={jest.fn()} visibleSuggestions={[]} activeSessionRef={{ current: 'session' }} refreshResult={jest.fn()} refreshPending={false} onAccessLost={jest.fn()}
     contextOpen={false} onOpenContext={jest.fn()} />,
 );
-beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); askMock.mockClear(); });
 
 describe('calm Inventory answer', () => {
   it('leads with the producer sentence and chips, and shows no second copy of the summary link', async () => {
@@ -59,5 +60,47 @@ describe('calm Inventory answer', () => {
     expect(await screen.findByRole('heading', { name: '12 inventory records match this request' })).toBeInTheDocument();
     expect(container.querySelector('[data-calm-summary]')).toBeNull();
     expect(screen.getAllByText('Open home inventory')).toHaveLength(1);
+  });
+});
+
+// ACUI I-2 (FRD v1.122): declared filters replace the result through the source execution, never through the words of the earlier question.
+const filters = (status: 'ALL' | 'INCOMPLETE', category: 'HVAC' | null) => [
+  { id: 'status-all', label: 'All items', message: 'Now show all inventory items', active: status === 'ALL' },
+  { id: 'status-incomplete', label: 'Missing details', message: 'Only show items with missing details', active: status === 'INCOMPLETE' },
+  { id: 'category-all', label: 'All categories', message: 'Now show all inventory categories', active: category === null },
+  { id: 'category-hvac', label: 'HVAC', message: 'Only show HVAC items', active: category === 'HVAC' },
+  ...(status !== 'ALL' || category ? [{ id: 'clear-all', label: 'Clear filters', message: 'Now show all inventory items with no filters', active: false }] : []),
+];
+const withFilters = (list: ReturnType<typeof filters>) => { const value = blocks(); (value[1] as { filters: unknown }).filters = list; return execution(value); };
+
+describe('calm Inventory filters', () => {
+  it('shows status and category as separate groups, marks the applied ones, and sends the chip through the source execution', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    card(withFilters(filters('INCOMPLETE', 'HVAC')));
+    const status = await screen.findByRole('group', { name: 'Inventory status filters' });
+    const category = screen.getByRole('group', { name: 'Inventory category filters' });
+    expect(within(status).getByRole('button', { name: 'Missing details' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(status).getByRole('button', { name: 'All items' })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(category).getByRole('button', { name: 'HVAC' })).toBeDisabled();
+    fireEvent.click(within(category).getByRole('button', { name: 'All categories' }));
+    expect(askMock).toHaveBeenCalledWith('Now show all inventory categories', undefined, { sourceExecutionId: 'execution' });
+  });
+
+  it('offers "Clear filters" only while a filter is applied', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const { unmount } = card(withFilters(filters('INCOMPLETE', null)));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+    expect(askMock).toHaveBeenCalledWith('Now show all inventory items with no filters', undefined, { sourceExecutionId: 'execution' });
+    unmount();
+    card(withFilters(filters('ALL', null)));
+    await screen.findByRole('group', { name: 'Inventory status filters' });
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  });
+
+  it('renders no filter group when the result declares none', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    card(execution());
+    await screen.findByRole('button', { name: /Add an item/ });
+    expect(screen.queryByRole('group', { name: /Inventory .*filters/ })).toBeNull();
   });
 });
