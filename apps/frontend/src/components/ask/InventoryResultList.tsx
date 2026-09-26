@@ -1,6 +1,6 @@
 'use client';
 
-import { useCalmChrome } from './blocks/calmContext';
+import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
@@ -169,6 +169,11 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
   const controls = useContext(ResultViewContext);
   // IW-CALM-009 (FRD v1.111): the paging note says "Showing", not "Server results", inside a calm answer.
   const calmChrome = useCalmChrome();
+  // ACUI I-1 (FRD v1.121): inside an adopted calm answer the first workflow action ("Add an item") is the one dominant step and the
+  // full-inventory link is quiet text. The list's own copy of that link exists for the calm answer only.
+  const calm = useCalmAnswer();
+  const primaryActionId = calm ? block.actions.find((action) => action.interactionType === 'START_WORKFLOW')?.id ?? null : null;
+  const listActions = block.actions.filter((action) => calm || action.id !== 'open-inventory-list');
   const [localDetailItemId, setLocalDetailItemId] = useState<string | null>(null);
   const detailItemId = controls ? controls.detailIdFor(block.id) : localDetailItemId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailItemId);
@@ -216,12 +221,12 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
           <p className="text-xs text-slate-500">{calmChrome ? 'Showing' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
           <div className="flex gap-2">
             {offset > 0 && <button type="button" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous page<span className="sr-only"> of {section.title}</span></button>}
-            {offset + section.items.length < section.count && <button type="button" className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white" onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
+            {offset + section.items.length < section.count && <button type="button" className={cn('min-h-10 rounded-xl px-3 py-2 text-sm font-semibold', calm ? 'border border-slate-200 bg-white text-slate-800' : 'bg-teal-700 text-white')} onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
           </div>
         </nav>}
       </div>;
     })}
     {detailItemId && detailItem && <InventoryItemDetail key={detailItemId} itemId={detailItemId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
+    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{listActions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === primaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>
   </section>;
 }

@@ -52,6 +52,44 @@ function inventoryItemHref(propertyId: string, itemId: string): string {
   return `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&openItemId=${encodeURIComponent(itemId)}`;
 }
 
+const inventoryCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/** The end-of-life horizon used everywhere Ask talks about "nearing end of life": three years out. */
+function inventoryLifecycleHorizon(now = new Date()): Date {
+  const horizon = new Date(now);
+  horizon.setUTCFullYear(horizon.getUTCFullYear() + 3);
+  return horizon;
+}
+
+/**
+ * ACUI I-1 / IW-CALM-001 (FRD v1.121): the calm answer for an inventory list, as one sentence, one optional supporting line and
+ * answer chips, from counts only (no model). Every number in the headline and the chips comes from the same records, so they
+ * never disagree. "None missing" is said only about the records in this result and only for the facts Ask checks.
+ */
+export function inventoryCalmCopy(counts: {
+  matchCount: number; shownCount: number; missingCount: number; lifecycleCount: number; incompleteFocus: boolean; lifecycleFocus: boolean;
+}): { headline: string; supportLine?: string; chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> } {
+  const { matchCount, shownCount, missingCount, lifecycleCount, incompleteFocus, lifecycleFocus } = counts;
+  let headline: string;
+  if (incompleteFocus) {
+    headline = `${inventoryCount(matchCount, 'record is', 'records are')} missing details.`;
+  } else if (lifecycleFocus) {
+    headline = `${inventoryCount(matchCount, 'item has', 'items have')} a recorded end-of-life date in the next three years.`;
+  } else if (missingCount > 0) {
+    headline = `${inventoryCount(matchCount, 'item', 'items')} recorded, ${missingCount} with missing details.`;
+  } else {
+    headline = `${inventoryCount(matchCount, 'item', 'items')} recorded, none missing the details Ask checks.`;
+  }
+  const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
+    { label: inventoryCount(matchCount, 'record', 'records'), tone: 'DEFAULT' },
+    { label: `${missingCount} missing details`, tone: missingCount > 0 ? 'CAUTION' : 'DEFAULT' },
+    { label: `${lifecycleCount} near end of life`, tone: lifecycleCount > 0 ? 'CAUTION' : 'DEFAULT' },
+  ];
+  return shownCount < matchCount
+    ? { headline, supportLine: `Showing the first ${shownCount}. Each row reflects the canonical inventory record.`, chips }
+    : { headline, chips };
+}
+
 async function inventoryLookupResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
@@ -111,8 +149,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
     matches = matches.filter((item) => inventoryMissingFacts(item).length > 0)
       .sort((left, right) => inventoryMissingFacts(right).length - inventoryMissingFacts(left).length);
   } else if (lifecycleFocus) {
-    const horizon = new Date();
-    horizon.setUTCFullYear(horizon.getUTCFullYear() + 3);
+    const horizon = inventoryLifecycleHorizon();
     matches = matches.filter((item) => item.expectedExpiryDate && item.expectedExpiryDate <= horizon)
       .sort((left, right) => (left.expectedExpiryDate?.getTime() ?? Number.POSITIVE_INFINITY) - (right.expectedExpiryDate?.getTime() ?? Number.POSITIVE_INFINITY));
   }
@@ -195,6 +232,13 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
       ? `${inventoryMissingFacts(selectedItem).length ? `${inventoryMissingFacts(selectedItem).length} important detail${inventoryMissingFacts(selectedItem).length === 1 ? ' is' : 's are'} still missing.` : 'The core identity, lifecycle, document, and coverage fields checked by Ask are present.'} Unknown fields remain unknown and are not inferred by a model.`
       : `${shown.length === matches.length ? 'All matching records are shown.' : `Showing the first ${shown.length}.`} Each row reflects the canonical inventory record.`,
     tone: selectedItem && inventoryMissingFacts(selectedItem).length ? 'CAUTION' : 'DEFAULT',
+    // I-1: the calm anatomy for a list: a counted headline and chips. A single item keeps its own title and body (the calm answer shows
+    // an undeclared summary as title plus plain text, so nothing is dropped). The full-record link also rides on the list (below).
+    ...(selectedItem ? {} : inventoryCalmCopy({
+      matchCount: matches.length, shownCount: shown.length, incompleteFocus, lifecycleFocus,
+      missingCount: matches.filter((item) => inventoryMissingFacts(item).length > 0).length,
+      lifecycleCount: matches.filter((item) => item.expectedExpiryDate && item.expectedExpiryDate <= inventoryLifecycleHorizon()).length,
+    })),
     actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'PRIMARY' }],
   }, {
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: block id 'inventory-results' is
@@ -234,7 +278,11 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
         };
       }),
     }],
-    actions: access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : [],
+    // I-1: "Add an item" is the one dominant step; the full inventory page is a quiet secondary link (shown by the calm answer only).
+    actions: [
+      ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
+      { id: 'open-inventory-list', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' },
+    ],
   }];
 
   if (historyFocus && selectedItem) {

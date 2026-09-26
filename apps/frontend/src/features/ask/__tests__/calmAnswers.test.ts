@@ -36,9 +36,11 @@ const summary = (extra = {}) => ({ type: 'SUMMARY', id: 'maintenance-summary', t
 const execution = (blocks: unknown[]) => ({ blocks, question: 'What is due?' } as unknown as AskExecutionResponse);
 
 describe('isCalmAdopter', () => {
-  it('is true only for a result carrying the maintenance list, so other domains keep their rendering', () => {
+  it('is true for a result carrying the maintenance or the inventory list, so other domains keep their rendering', () => {
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'maintenance-groups' }]))).toBe(true);
-    expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'inventory-results' }]))).toBe(false);
+    expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'inventory-results' }]))).toBe(true);
+    // The inventory disambiguation list ("which item do you mean?") is a question, not the adopted answer.
+    expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'inventory-entity-selection' }]))).toBe(false);
     expect(isCalmAdopter(execution([summary()]))).toBe(false);
   });
 });

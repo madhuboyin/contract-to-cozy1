@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { AskExecutionResponse } from './types';
 
-// ASK_COZY_INLINE_WORKSPACE_FRD §11.11 (IW-CALM-001..012, FRD v1.111): calm conversational answers. Slice A adopts the
-// Maintenance answer only; a result of any other domain keeps its current rendering (IW-CALM-012: no half-converted domain).
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.11 (IW-CALM-001..012, FRD v1.111): calm conversational answers. Slice A adopted the
+// Maintenance answer, and Inventory followed (ACUI I-1, FRD v1.121); a result of any other domain keeps its current rendering (IW-CALM-012: no half-converted domain).
 // Default (September 25, 2026): calm is ON for everyone. `?calm=0` returns to the previous presentation and is remembered on that
 // browser; `NEXT_PUBLIC_ASK_CALM_ANSWERS=false` at build time is the release kill switch.
 
@@ -42,7 +42,7 @@ export function useCalmAnswers(): boolean {
 
 /** The domains that have adopted the calm anatomy. Identified by the block the domain's own handler declares. */
 export function isCalmAdopter(execution: Pick<AskExecutionResponse, 'blocks'>): boolean {
-  return execution.blocks.some((block) => block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups');
+  return execution.blocks.some((block) => block.type === 'GROUPED_LIST' && (block.id === 'maintenance-groups' || block.id === 'inventory-results'));
 }
 
 /** IW-CALM-001: the headline is the producer's own sentence, else the result's title. Never generated here. */
