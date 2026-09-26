@@ -93,14 +93,17 @@ describe('calm sources and corrections', () => {
     expect(screen.queryByText('Sources for this response')).toBeNull();
   });
 
-  it('puts the sources chip in the same row as the Helpful and Not helpful buttons, and shows it open', async () => {
+  it('puts the trust line directly under the answer, above the Helpful buttons, and shows it open', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
     const value = execution({ blocks: [plain, evidence] } as Partial<AskExecutionResponse>);
     const { rerender } = card(value);
     const chip = await screen.findByRole('button', { name: 'View sources' });
     const helpful = screen.getByRole('button', { name: 'Helpful response' });
-    expect(chip.parentElement).toBe(helpful.parentElement);
-    expect(screen.getByRole('button', { name: 'Not helpful response' }).parentElement).toBe(chip.parentElement);
+    // ACUI-003: a readable trust line under the core answer, not a chip in the ratings row.
+    expect(chip.closest('[data-calm-trust-line]')).not.toBeNull();
+    expect(chip.parentElement).not.toBe(helpful.parentElement);
+    expect(chip).toHaveTextContent(/^Based on 2 sources/);
+    expect(chip.compareDocumentPosition(helpful) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(chip).toHaveAttribute('aria-expanded', 'false');
     rerender(
       <ExecutionCard execution={value} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={jest.fn()} selectedPropertyId="home"
@@ -144,5 +147,23 @@ describe('session status wording (IW-CALM-008/009)', () => {
     expect(recentSessionStatus('COMPLETED')).toBe('Completed');
     expect(recentSessionStatus('RUNNING')).toBe('In progress');
     expect(recentSessionStatus('NEEDS_CONFIRMATION')).toBe('Awaiting confirmation');
+  });
+});
+
+// ACUI-003: the trust line's wording comes only from the response's own blocks.
+import { latestEvidenceDate, trustLineText } from '../EvidenceContextPanel';
+describe('trust line text', () => {
+  const ev = (items: Array<{ label: string; source: string | null; observedAt: string | null }>) => ({ blocks: [{ type: 'EVIDENCE', id: 'e', title: 'Sources', items }] }) as unknown as Pick<AskExecutionResponse, 'blocks'>;
+  it('names the source count and the newest readable date, and skips an unreadable one', () => {
+    const value = ev([{ label: 'a', source: null, observedAt: '2026-09-10T00:00:00.000Z' }, { label: 'b', source: null, observedAt: '2026-09-18T12:00:00.000Z' }, { label: 'c', source: null, observedAt: 'nope' }]);
+    expect(latestEvidenceDate(value)).toBe('Sep 18, 2026');
+    expect(trustLineText(value)).toBe('Based on 3 sources, latest Sep 18, 2026');
+  });
+  it('omits the date when no source has one, and adds limitations and assumptions', () => {
+    const value = { blocks: [...ev([{ label: 'a', source: null, observedAt: null }]).blocks, { type: 'LIMITATION', id: 'l', title: 'L', body: 'Some data is missing' }, { type: 'ASSUMPTIONS', id: 'as', title: 'A', items: ['x', 'y'] }] } as unknown as Pick<AskExecutionResponse, 'blocks'>;
+    expect(trustLineText(value)).toBe('Based on 1 source · 2 assumptions · 1 limitation');
+  });
+  it('falls back to a plain label when only outputs or relationships exist', () => {
+    expect(trustLineText({ blocks: [] })).toBe('Response context');
   });
 });

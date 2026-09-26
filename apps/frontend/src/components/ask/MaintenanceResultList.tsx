@@ -142,6 +142,12 @@ function calmMaintenanceActions<T extends { id: string; href?: string | null }>(
   });
 }
 
+// ACUI-003: the answer's one dominant next step is the first workflow action it declares (for example "Create a task"); page links such
+// as "View all in Maintenance" stay quiet text. With no workflow action there is no primary, and the links are all there is.
+export function calmPrimaryMaintenanceActionId(actions: Array<{ id: string; interactionType?: string | null }>): string | null {
+  return actions.find((action) => action.interactionType === 'START_WORKFLOW')?.id ?? null;
+}
+
 export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, onAccessLost, link, layout = 'LIST', onChooseLayout }: {
   block: Block;
   propertyId?: string;
@@ -159,6 +165,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   // IW-CALM-002/009/010 (FRD v1.111): inside a calm answer this list drops its own frame, title, paging note and dividers.
   const calm = useCalmAnswer();
   const calmChrome = useCalmChrome();
+  const calmPrimaryActionId = calm ? calmPrimaryMaintenanceActionId(block.actions) : null;
   const sectionFrame = calm ? 'py-1' : 'border-b border-slate-100 p-4';
   const [localDetailTaskId, setLocalDetailTaskId] = useState<string | null>(null);
   const [unavailableTaskIds, setUnavailableTaskIds] = useState<Set<string>>(() => new Set());
@@ -261,6 +268,6 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     {layout === 'SHELVES' && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
       {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
     </DetailSheetFrame>}
-    <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{(calm ? calmMaintenanceActions(block.actions) : block.actions).map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: 'SECONDARY' } : action} /> : null)}</div>
+    <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{(calm ? calmMaintenanceActions(block.actions) : block.actions).map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === calmPrimaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>
   </section>;
 }

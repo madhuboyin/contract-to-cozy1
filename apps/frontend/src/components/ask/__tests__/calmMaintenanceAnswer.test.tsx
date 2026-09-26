@@ -61,6 +61,16 @@ describe('calm Maintenance answer', () => {
     expect(screen.getByRole('button', { name: /Create a task/ })).toBeInTheDocument();
     expect(screen.queryByText('Open Maintenance')).toBeNull();
     expect(screen.queryByText('Maintenance Setup')).toBeNull();
+    // ACUI-003: the workflow action is the one dominant step; the page link stays quiet text.
+    expect(screen.getByRole('button', { name: /Create a task/ }).className).toContain('bg-teal-700');
+    expect(screen.getByText('View all in Maintenance').closest('a')?.className ?? '').not.toContain('bg-teal-700');
+  });
+
+  it('has no dominant action when the answer declares only page links', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    card(execution({ blocks: [blocks[0], { ...blocks[1], actions: [{ id: 'open-maintenance', label: 'Open maintenance', href: '/dashboard/maintenance', style: 'PRIMARY' }] }] } as Partial<AskExecutionResponse>));
+    expect(await screen.findByText('Open maintenance')).toBeInTheDocument();
+    expect(document.querySelector('a.bg-teal-700, button.bg-teal-700')).toBeNull();
   });
 
   it('shows the informational limit as a footnote, not a warning card', async () => {

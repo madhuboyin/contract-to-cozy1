@@ -101,6 +101,33 @@ export function InlineRelatedRecordsBlock({ block, renderNavigation }: { block: 
   </details>;
 }
 
+/** The newest evidence date in the response, as "Sep 18, 2026"; null when no source carries a readable date. */
+export function latestEvidenceDate(execution: Pick<AskExecutionResponse, 'blocks'>): string | null {
+  let latest = 0;
+  for (const block of execution.blocks) {
+    if (block.type !== 'EVIDENCE') continue;
+    for (const item of block.items) {
+      const time = item.observedAt ? new Date(item.observedAt).getTime() : NaN;
+      if (!Number.isNaN(time) && time > latest) latest = time;
+    }
+  }
+  return latest ? new Date(latest).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : null;
+}
+
+/** ACUI-003: the calm trust line in plain words, from the same blocks as the panel it opens. Never claims more than the blocks hold. */
+export function trustLineText(execution: Pick<AskExecutionResponse, 'blocks'>): string {
+  const counts = responseContextCounts(execution);
+  const parts: string[] = [];
+  if (counts.sources > 0) {
+    const latest = latestEvidenceDate(execution);
+    parts.push(`Based on ${counts.sources} ${counts.sources === 1 ? 'source' : 'sources'}${latest ? `, latest ${latest}` : ''}`);
+  }
+  if (counts.assumptions > 0) parts.push(`${counts.assumptions} ${counts.assumptions === 1 ? 'assumption' : 'assumptions'}`);
+  if (counts.limitations > 0) parts.push(`${counts.limitations} ${counts.limitations === 1 ? 'limitation' : 'limitations'}`);
+  if (parts.length === 0) parts.push('Response context');
+  return parts.join(' · ');
+}
+
 function countSummary(counts: ResponseContextCounts): string {
   return [
     counts.sources ? `${counts.sources} ${counts.sources === 1 ? 'source' : 'sources'}` : '',
@@ -120,8 +147,8 @@ export function ResponseContextSummary({ execution, open, onOpen }: { execution:
   // IW-CONV-009 (FRD v1.112): sources are one quiet chip that opens the same panel, not a boxed card with its own heading and button.
   if (calm) {
     return <button type="button" aria-expanded={open} aria-controls="ask-response-context" onClick={(event) => onOpen(event.currentTarget)} data-calm-sources="" aria-label={evidenceOnly ? 'View sources' : hasSources ? 'View sources and context' : 'View response context'}
-      className="inline-flex min-h-9 w-fit items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-200 hover:text-slate-900">
-      <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />{open ? 'Context open' : evidenceOnly ? `${counts.sources} ${counts.sources === 1 ? 'source' : 'sources'}` : hasSources ? 'Sources and context' : 'Response context'}
+      className="inline-flex min-h-9 w-fit max-w-full items-center gap-1.5 rounded-lg px-1 py-1.5 text-left text-[13px] leading-5 text-slate-500 underline-offset-2 transition hover:text-slate-900 hover:underline">
+      <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />{open ? 'Context open' : trustLineText(execution)}
     </button>;
   }
 
