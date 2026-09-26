@@ -884,6 +884,65 @@ function maintenanceExecution() {
   };
 }
 
+// ACUI I-3: the Inventory answer as the real producer now sends it (calm adopter, governed filters, view state). Item ids and the Water
+// heater's canonical detail reuse the existing acceptance record, so inline detail, corrections and evidence work unchanged.
+type InventoryJourneyState = { status: 'ALL' | 'INCOMPLETE'; category: 'HVAC' | null; revision: number; sessionId?: string };
+const INVENTORY_JOURNEY_ITEMS = [
+  { id: 'item-property-summary', name: 'Water heater', category: 'HVAC', missing: true },
+  { id: 'item-furnace', name: 'Furnace', category: 'HVAC', missing: false },
+  { id: 'item-fridge', name: 'Refrigerator', category: 'APPLIANCE', missing: true },
+  { id: 'item-washer', name: 'Washer', category: 'APPLIANCE', missing: false },
+];
+function inventoryJourneyExecution(state: InventoryJourneyState) {
+  const items = INVENTORY_JOURNEY_ITEMS.filter((item) => (!state.category || item.category === state.category) && (state.status === 'ALL' || item.missing));
+  const missing = items.filter((item) => item.missing).length;
+  const scope = state.category ? 'HVAC ' : '';
+  const itemAction = (id: string, label: string, message: string) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' });
+  const chips = [
+    { id: 'status-all', label: 'All items', message: 'Now show all inventory items', active: state.status === 'ALL' },
+    { id: 'status-incomplete', label: 'Missing details', message: 'Only show items with missing details', active: state.status === 'INCOMPLETE' },
+    { id: 'category-all', label: 'All categories', message: 'Now show all inventory categories', active: state.category === null },
+    { id: 'category-hvac', label: 'HVAC', message: 'Only show HVAC items', active: state.category === 'HVAC' },
+    ...(state.status !== 'ALL' || state.category ? [{ id: 'clear-all', label: 'Clear filters', message: 'Now show all inventory items with no filters', active: false }] : []),
+  ];
+  const headline = state.status === 'INCOMPLETE'
+    ? `${items.length} ${scope}${items.length === 1 ? 'record is' : 'records are'} missing details.`
+    : `${items.length} ${scope}items recorded, ${missing} with missing details.`;
+  const listTitle = state.status === 'INCOMPLETE' ? 'Incomplete inventory records' : 'Inventory details';
+  return {
+    schemaVersion: '1.0', executionId: `execution-inventory-journey-${state.revision}`, sessionId: state.sessionId ?? 'ask-acceptance-session',
+    ...(state.revision > 1 ? { continuesExecutionId: `execution-inventory-journey-${state.revision - 1}` } : {}),
+    question: state.revision === 1 ? 'Show my inventory journey' : 'Refined inventory', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'INVENTORY_LOOKUP', version: '1.0', family: 'INVENTORY' }, contextVersion: 'inventory-journey-v1',
+    viewState: { resultId: 'inventory-journey-result', domainScopePhrase: state.category, dateScopePhrase: null, statusFilter: state.status, selectedTaskId: null, revision: state.revision },
+    blocks: [
+      { type: 'SUMMARY', id: 'inventory-summary', title: `${items.length} inventory records match this request`, headline, body: `${items.length} records.`, tone: 'DEFAULT',
+        chips: [{ label: `${items.length} records`, tone: 'DEFAULT' }, { label: `${missing} missing details`, tone: missing ? 'CAUTION' : 'DEFAULT' }],
+        actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${propertyId}/inventory?tab=items`, style: 'PRIMARY' }] },
+      { type: 'GROUPED_LIST', id: 'inventory-results', title: listTitle, filters: chips,
+        sections: [{ id: 'items', title: 'Living Home Record', count: items.length, items: items.map((item) => ({
+          id: item.id, title: item.name, description: item.missing ? 'Missing: Model' : null, entityType: 'INVENTORY_ITEM', href: null, status: 'GOOD',
+          meta: [item.category === 'HVAC' ? 'HVAC' : 'Appliance', 'Kitchen', item.missing ? 'Not verified' : 'Verified record'],
+          // More than three corrections, so the detail folds them behind one "Correct a detail" disclosure.
+          actions: [
+            itemAction('correct-installedOn', 'Correct install date', 'Correct the install date of this inventory item.'),
+            itemAction('correct-condition', 'Correct condition', 'Correct the condition of this inventory item.'),
+            itemAction('correct-purchaseCostCents', 'Correct purchase cost', 'Correct the purchase cost of this inventory item.'),
+            itemAction('correct-notes', 'Correct notes', 'Correct the notes of this inventory item.'),
+          ],
+        })) }],
+        actions: [
+          { id: 'add-inventory-item', label: 'Add an item', interactionType: 'START_WORKFLOW', message: 'Add an item to my home inventory.', operationId: 'INVENTORY_ITEM_CREATE', style: 'PRIMARY' },
+          { id: 'open-inventory-list', label: 'Open home inventory', href: `/dashboard/properties/${propertyId}/inventory?tab=items`, style: 'SECONDARY' },
+        ] },
+      { type: 'EVIDENCE', id: 'inventory-evidence', title: 'Record freshness', items: items.map((item) => ({ label: item.name, source: 'Home Inventory · user added', observedAt: '2026-09-01T00:00:00.000Z' })) },
+    ],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
 // ACUI-008: the maintenance answer with a declared filter and evidence, and its refinement (same result, next revision).
 function maintenanceJourneyExecution(refined: boolean, sessionId?: string) {
   const base = maintenanceExecution();
@@ -1666,7 +1725,7 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
@@ -1674,6 +1733,8 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
   const correctionEditBodies: Array<{ confirmationVersion: number; edits: Record<string, string> }> = [];
   const correctionConfirmBodies: Array<Record<string, unknown>> = [];
   let askFailedOnce = false;
+  let refinementFailedOnce = false;
+  let inventoryJourney: InventoryJourneyState | null = null;
   let unknownOutcomeCalls = 0;
   let correctionSessionId: string | undefined;
   const warrantyAddCaptureBodies: Array<Record<string, unknown>> = [];
@@ -1958,6 +2019,23 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     if (options.askFailsOnce && !askFailedOnce) {
       askFailedOnce = true;
       await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Ask could not answer just now.' } }, 500);
+      return;
+    }
+    // ACUI I-3: an inventory answer and its declared-filter refinements. The fixture merges dimensions the way the handler does.
+    if (/inventory journey/i.test(body.message) || (inventoryJourney && (/^only show (?:items with missing details|hvac items)/i.test(body.message) || /^now show all inventory (?:items|categories)/i.test(body.message)))) {
+      if (options.refinementFailsOnce && inventoryJourney && !refinementFailedOnce && /^only show/i.test(body.message)) {
+        refinementFailedOnce = true;
+        await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Ask could not refine just now.' } }, 500);
+        return;
+      }
+      const previous = inventoryJourney;
+      if (/inventory journey/i.test(body.message)) inventoryJourney = { status: 'ALL', category: null, revision: 1 };
+      else if (/no filters/i.test(body.message)) inventoryJourney = { status: 'ALL', category: null, revision: previous!.revision + 1 };
+      else if (/missing details/i.test(body.message)) inventoryJourney = { ...previous!, status: 'INCOMPLETE', revision: previous!.revision + 1 };
+      else if (/hvac/i.test(body.message)) inventoryJourney = { ...previous!, category: 'HVAC', revision: previous!.revision + 1 };
+      else if (/categories/i.test(body.message)) inventoryJourney = { ...previous!, category: null, revision: previous!.revision + 1 };
+      else inventoryJourney = { ...previous!, status: 'ALL', revision: previous!.revision + 1 };
+      await fulfill(route, { success: true, data: inventoryJourneyExecution({ ...inventoryJourney!, sessionId: body.sessionId }) }, 201);
       return;
     }
     if (/maintenance tasks with sources/i.test(body.message) || /only show overdue tasks/i.test(body.message)) {

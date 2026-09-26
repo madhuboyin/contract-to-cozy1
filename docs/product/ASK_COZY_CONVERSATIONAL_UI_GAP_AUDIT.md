@@ -309,3 +309,7 @@ Compared with `docs/product/prototypes/ask-cozy-launch-validation.html` (FRDs wi
 | History | A "History" navigation item | Collapsible rail with a labeled History control | Aligned |
 
 No discrepancy is material to hierarchy, trust, accessibility or usability for the maintenance slice. Open product questions, none of which block it: landing-level photo/report entry, a "Saved to" line on receipts, and the mobile tab bar.
+
+## 11. Inventory certification (September 26, 2026)
+
+Inventory is the second calm domain, delivered in three slices: I-1 calm adoption with a producer-owned headline, chips and dominant step (FRD v1.121); I-2 governed `viewState` refinement with declared status and category filters, a clear action and an empty-match state (v1.122, backend, reusing the Maintenance and Buyer Deadlines continuity model with no new operation, route or storage); and I-3 the integrated acceptance journey (v1.123). Verified by 9 backend runtime tests of the real handler, the full chunked backend Ask suite (1250 of 1251 pass, 1 pre-existing skip), 459 frontend jest tests and 168 Playwright scenarios. Fixture-backed; not a live-backend or assistive-technology run; not deployed. Warranties is next.
