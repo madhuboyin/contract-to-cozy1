@@ -10,6 +10,7 @@ import { ResultRevalidationBoundary } from '../ResultRevalidationBoundary';
 import { hasResponseContext, ResponseContextSummary } from '../EvidenceContextPanel';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
+import { canAskConversationally } from '@/features/ask/conversationalCapture';
 import { AskBlockActionContext } from '../blocks/context';
 import { CalmAnswerContext, CalmChromeContext, CalmSecondaryContext } from '../blocks/calmContext';
 import { BlockView } from '../blocks/registry';
@@ -140,6 +141,10 @@ export function ExecutionCard({
   const [showOriginal, setShowOriginal] = useState(false);
   // IW-CALM-006 (FRD v1.111): in the calm shell follow-up chips dock above the composer (FollowUpRow), not under each answer.
   const shownSuggestions = calmChrome ? [] : visibleSuggestions;
+  // IW-CONV-001 (FRD v1.112): while Cozy is asking a question or asking for confirmation, that question is the message; a plain lead-in
+  // summary (default tone, no chips) that says the same thing in other words is not drawn above it.
+  const cardIsTheMessage = calmChrome && (execution.captureRequests.some(canAskConversationally) || (execution.status === 'NEEDS_CONFIRMATION' && Boolean(execution.confirmation)));
+  const shownBlocks = cardIsTheMessage ? execution.blocks.filter((block) => !(block.type === 'SUMMARY' && block.tone === 'DEFAULT' && !block.chips?.length)) : execution.blocks;
   const refresh = async () => {
     if (refreshing || refreshAccessLost) return;
     setRefreshing(true);
@@ -301,7 +306,7 @@ export function ExecutionCard({
         )}
         <div ref={bodyRef} className={cn('space-y-3', calmChrome && FRAMELESS_LISTS)}>
           <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
-            {execution.blocks.map((block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>)}
+            {shownBlocks.map((block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>)}
             {hasResponseContext(execution) && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
           </AskBlockActionContext.Provider>
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}

@@ -86,3 +86,65 @@ test('?calm=0 returns to the previous presentation and is remembered', async ({ 
   await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=1`);
   await expect(page.locator('[data-calm-landing]')).toBeVisible();
 });
+
+// FRD §11.12 slice G (IW-CONV-004/005): the completion flow is asked one question at a time.
+const startCompletion = async (page: import('@playwright/test').Page, suffix = '') => {
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}${suffix}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Complete a maintenance task');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Which task did you complete?')).toBeVisible();
+};
+const CHIMNEY = 'Chimney cleaning and inspection · due Sep 23, 2026';
+
+test('calm completion: one question at a time with quick replies, then the review, then done', async ({ page }) => {
+  const api = await installAskApi(page);
+  await startCompletion(page);
+  // The form card and its long helper copy are not drawn.
+  await expect(page.getByText('Maintenance completion details')).toHaveCount(0);
+  await expect(page.getByText(/Which task was completed, and was there an actual cost/)).toHaveCount(0);
+  await expect(page.getByText('Was there an actual cost?')).toHaveCount(0);
+  await page.getByRole('button', { name: CHIMNEY }).click();
+  await expect(page.getByText('Was there an actual cost?')).toBeVisible();
+  await expect(page.getByText('(optional)')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Your answers so far' })).toContainText('Chimney cleaning and inspection');
+  await page.getByLabel('Actual cost').fill('120');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('Mark this maintenance task complete?')).toBeVisible();
+  expect(api.captureBodies.at(-1)).toMatchObject({ captureKey: 'MAINTENANCE_COMPLETION_INPUTS', answer: { taskId: 'task-chimney', actualCostUsd: 120 } });
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Mark complete' }).click();
+  await expect(page.getByText('Task marked complete')).toBeVisible();
+});
+
+test('calm completion: an optional question can be skipped and nothing is invented for it', async ({ page }) => {
+  const api = await installAskApi(page);
+  await startCompletion(page);
+  await page.getByRole('button', { name: CHIMNEY }).click();
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await expect(page.getByText('Mark this maintenance task complete?')).toBeVisible();
+  expect(api.captureBodies.at(-1)?.answer).toEqual({ taskId: 'task-chimney' });
+  await expect(page.getByText('Not recorded')).toBeVisible();
+});
+
+test('calm completion: an earlier answer can be changed before anything is submitted', async ({ page }) => {
+  const api = await installAskApi(page);
+  await startCompletion(page);
+  await page.getByRole('button', { name: CHIMNEY }).click();
+  await expect(page.getByText('Was there an actual cost?')).toBeVisible();
+  await page.getByRole('button', { name: /Change Open task/ }).click();
+  await expect(page.getByText('Which task did you complete?')).toBeVisible();
+  await page.getByRole('button', { name: /HVAC Furnace/ }).click();
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await expect(page.getByText('Mark this maintenance task complete?')).toBeVisible();
+  expect(api.captureBodies).toHaveLength(1);
+  expect(api.captureBodies[0]?.answer).toEqual({ taskId: 'task-furnace' });
+});
+
+test('the previous form is unchanged with ?calm=0', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=0`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Complete a maintenance task');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Maintenance completion details')).toBeVisible();
+  await expect(page.getByText('Which task did you complete?')).toHaveCount(0);
+});

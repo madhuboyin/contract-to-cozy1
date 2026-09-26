@@ -27,6 +27,8 @@ export type ApproximateDateCaptureValue = {
 export type StructuredCaptureField = {
   key: string;
   label: string;
+  /** A plain question for this field, used when the fields are asked one at a time in Ask (FRD §11.12 IW-CONV-004). */
+  prompt?: string;
   helpText?: string;
   required: boolean;
   inputSchema: ScalarCaptureInputSchema;

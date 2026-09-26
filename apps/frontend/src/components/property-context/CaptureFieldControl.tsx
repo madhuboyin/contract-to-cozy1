@@ -12,12 +12,14 @@ const DATE_PRECISION_OPTIONS: Array<{ value: CaptureDatePrecision; label: string
 
 export type CaptureField = { key: string; label: string; helpText?: string; required: boolean; inputSchema: ScalarCaptureInputSchema };
 
-export function CaptureFieldControl({ field, value, disabled, allowNotSure = false, onChange }: {
+export function CaptureFieldControl({ field, value, disabled, allowNotSure = false, onChange, bare = false }: {
   field: CaptureField;
   value: unknown;
   disabled: boolean;
   allowNotSure?: boolean;
   onChange: (value: unknown) => void;
+  // The Ask conversational step draws its own question, so the card frame, legend and help text are dropped (legend kept for assistive tech).
+  bare?: boolean;
 }) {
   const schema = field.inputSchema;
   const approximate = schema.type === 'APPROXIMATE_DATE'
@@ -27,9 +29,9 @@ export function CaptureFieldControl({ field, value, disabled, allowNotSure = fal
     ? (schema.allowedPrecisions ?? DATE_PRECISION_OPTIONS.map((option) => option.value)).filter((precision) => allowNotSure || precision !== 'UNKNOWN')
     : [];
 
-  return <fieldset className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/40">
-    <legend className="px-1 text-sm font-semibold leading-5 text-slate-900">{field.label}{field.required ? ' *' : ''}</legend>
-    {field.helpText ? <p className="mb-3 text-[13px] leading-5 text-slate-500">{field.helpText}</p> : null}
+  return <fieldset className={bare ? 'min-w-0 border-0 p-0' : 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/40'}>
+    <legend className={bare ? 'sr-only' : 'px-1 text-sm font-semibold leading-5 text-slate-900'}>{field.label}{field.required ? ' *' : ''}</legend>
+    {field.helpText && !bare ? <p className="mb-3 text-[13px] leading-5 text-slate-500">{field.helpText}</p> : null}
     <div className="flex flex-wrap gap-2.5">
       {schema.type === 'BOOLEAN' ? [[schema.trueLabel, true], [schema.falseLabel, false]].map(([label, optionValue]) => <button key={String(optionValue)} type="button" aria-pressed={value === optionValue} disabled={disabled} onClick={() => onChange(optionValue)} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${value === optionValue ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{String(label)}</button>) : null}
       {schema.type === 'SINGLE_SELECT' ? schema.options.map((option) => <button key={option.value} type="button" aria-pressed={value === option.value} disabled={disabled} onClick={() => onChange(option.value)} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${value === option.value ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{option.label}</button>) : null}

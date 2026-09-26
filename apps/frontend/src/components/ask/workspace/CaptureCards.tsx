@@ -7,6 +7,9 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskConfirmationEditableField, AskExecutionResponse } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
+import { useCalmAnswers } from '@/features/ask/calmAnswers';
+import { canAskConversationally } from '@/features/ask/conversationalCapture';
+import { ConversationalCapture } from '../calm/ConversationalCapture';
 import { AskContextLink } from '../blocks/context';
 import { ACCESS_LOST_CODES, FOCUSABLE_SELECTOR, askFailureCode, captureDraftStorageKey, capturePolicy, confirmationAttemptStorageKey, newId, useAutoFocusFirstControl } from './support';
 
@@ -149,6 +152,7 @@ export function editableFieldDisplay(field: AskConfirmationEditableField, value:
 }
 
 export function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = false, onAccessLost }: { executionId: string; confirmation: AskConfirmation; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean; onAccessLost: () => void }) {
+  const calm = useCalmAnswers();
   const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
   const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -256,10 +260,10 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
     finally { setSaving(false); }
   };
   return (
-    <section ref={containerRef} className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">Confirmation required</p>
-      <h3 className="mt-1 font-semibold text-slate-950">{confirmation.title}</h3><p className="mt-1 text-sm leading-5 text-slate-700">{confirmation.description}</p>
-      <dl className="mt-4 divide-y divide-violet-100 rounded-xl border border-violet-100 bg-white px-3">
+    <section ref={containerRef} data-conversational-review={calm ? '' : undefined} className={calm ? 'space-y-3' : 'rounded-2xl border border-violet-200 bg-violet-50/70 p-4'}>
+      {!calm && <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">Confirmation required</p>}
+      <h3 className={calm ? 'text-[17px] font-medium leading-snug text-slate-900' : 'mt-1 font-semibold text-slate-950'}>{confirmation.title}</h3><p className={calm ? 'text-sm leading-5 text-slate-600' : 'mt-1 text-sm leading-5 text-slate-700'}>{confirmation.description}</p>
+      <dl className={calm ? 'divide-y divide-slate-100 border-y border-slate-100' : 'mt-4 divide-y divide-violet-100 rounded-xl border border-violet-100 bg-white px-3'}>
         {confirmation.fields.map((field) => <div key={field.label} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{field.label}</dt><dd className="font-medium text-slate-800">{field.value}</dd></div>)}
         {confirmation.editableFields.map((field) => (
           <div key={field.key} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]">
@@ -282,7 +286,7 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
         ))}
       </dl>
       {editError && <p className="mt-2 text-sm text-red-700" role="alert">{editError}</p>}
-      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-violet-200 bg-white p-3 text-sm text-slate-700"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4" /><span>{confirmation.consentText}</span></label>
+      <label className={calm ? 'flex cursor-pointer items-start gap-3 text-sm text-slate-600' : 'mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-violet-200 bg-white p-3 text-sm text-slate-700'}><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4" /><span>{confirmation.consentText}</span></label>
       {expired && <p className="mt-3 text-sm text-amber-700">This review expired. Ask again to use current settings.</p>}{error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
       <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={!consent || saving || expired || Boolean(editingKey)} onClick={() => void confirm()} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Working…' : confirmation.confirmLabel}</button><button type="button" disabled={saving} onClick={() => void cancel()} className="min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Cancel</button></div>
     </section>
@@ -354,7 +358,8 @@ export function InlineCaptureCard({
   onCompleted: (execution: AskExecutionResponse) => void;
   autoFocus?: boolean;
 }) {
-  const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
+  const calm = useCalmAnswers();
+  const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus && !calm);
   const schema = request.inputSchema;
   const policy = capturePolicy[request.classification];
   const scalarCapture = schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' && schema.type !== 'GROUP';
@@ -483,9 +488,9 @@ export function InlineCaptureCard({
   });
 
   // `skipping` answers the question with the reserved skip marker: the server saves nothing and moves to the next question.
-  const save = async (event: FormEvent, skipping = false) => {
-    event.preventDefault();
-    if (saving || (missingRequired && !skipping)) return;
+  const save = async (event: FormEvent | null, skipping = false, override?: Record<string, unknown>) => {
+    event?.preventDefault();
+    if (saving || (missingRequired && !skipping && !override)) return;
     setSaving(true);
     setError(null);
     try {
@@ -494,7 +499,7 @@ export function InlineCaptureCard({
         captureKey: request.captureKey,
         expectedContextVersion: request.expectedContextVersion,
         idempotencyKey,
-        answer: skipping ? { $skip: true } : schema.type === 'RELATIONAL_UPDATE' ? { mode: 'UPDATE', entityId: schema.entityId, values } : values,
+        answer: skipping ? { $skip: true } : schema.type === 'RELATIONAL_UPDATE' ? { mode: 'UPDATE', entityId: schema.entityId, values } : override ?? values,
         sensitiveDataConfirmed: !skipping && (request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') ? sensitiveDataConfirmed : undefined,
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not save this home detail.');
@@ -519,6 +524,12 @@ export function InlineCaptureCard({
       setSaving(false);
     }
   };
+
+  // FRD §11.12 IW-CONV-004: a plain workflow group is asked one question at a time, then submitted as the same single request.
+  if (calm && canAskConversationally(request) && schema.type === 'GROUP') {
+    return <ConversationalCapture request={request} fields={schema.fields} values={values} saving={saving} error={error} autoFocus={autoFocus}
+      onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onSubmit={(final) => void save(null, false, final)} />;
+  }
 
   return (
     <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border p-4', policy.border)} aria-busy={saving}>

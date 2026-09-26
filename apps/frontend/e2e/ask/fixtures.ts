@@ -283,6 +283,40 @@ function claimsExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
     blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: 'claim-transition-claim-kitchen-leak-1', version: 1, title: 'Change Kitchen leak to submitted?', description: 'This changes the shared claim record.', fields: [{ label: 'From', value: 'draft' }, { label: 'To', value: 'submitted' }], editableFields: [], confirmLabel: 'Change status', consentText: 'I authorize this claim status change.', expiresAt } };
 }
+// FRD §11.12 slice G: the "Complete a maintenance task" flow (capture the task and an optional cost, review, confirm).
+function maintenanceCompletionExecution(stage: 'CAPTURE' | 'REVIEW' | 'DONE', sessionId?: string, answer?: Record<string, unknown>) {
+  const common = {
+    schemaVersion: '1.0', executionId: 'execution-maintenance-complete', sessionId: sessionId ?? 'ask-acceptance-session', question: 'Complete a maintenance task', property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'MAINTENANCE_TASK_COMPLETE', version: '1.0', family: 'COMMAND' }, skill: null, skillHandoff: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, createdAt: '2026-09-25T12:00:00.000Z', updatedAt: '2026-09-25T12:00:00.000Z',
+  };
+  if (stage === 'CAPTURE') {
+    return { ...common, status: 'NEEDS_ENTITY', contextVersion: 'maintenance-workflow-v1', confirmation: null, suggestions: ['Open Maintenance instead'],
+      blocks: [{ type: 'SUMMARY', id: 'maintenance-complete-select', title: 'Choose the task to complete', body: 'Nothing will change until you confirm.', tone: 'DEFAULT', actions: [] }],
+      captureRequests: [{
+        requirementId: 'maintenance-complete-v1', captureKey: 'MAINTENANCE_COMPLETION_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+        title: 'Maintenance completion details', question: 'Which task was completed, and was there an actual cost or follow-up outcome?',
+        helpText: 'Actual cost is optional. Project outcome is used only when the selected task is a project follow-up. You will review before saving.',
+        inputSchema: { type: 'GROUP', fields: [
+          { key: 'taskId', label: 'Open task', prompt: 'Which task did you complete?', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+            { label: 'Chimney cleaning and inspection · due Sep 23, 2026', value: 'task-chimney' }, { label: 'Safety Smoke CO Detectors · due Sep 15, 2026', value: 'task-detectors' }, { label: 'HVAC Furnace · due Sep 24, 2026', value: 'task-furnace' },
+          ] } },
+          { key: 'actualCostUsd', label: 'Actual cost', prompt: 'Was there an actual cost?', helpText: 'Optional', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
+        ] },
+        currentAnswer: {}, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this completion; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: 'maintenance-workflow-v1',
+      }] };
+  }
+  const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+  if (stage === 'REVIEW') {
+    return { ...common, status: 'NEEDS_CONFIRMATION', contextVersion: 'task-v1', captureRequests: [], suggestions: [],
+      blocks: [{ type: 'SUMMARY', id: 'maintenance-complete-review', title: 'Review completion for Chimney cleaning and inspection', body: 'No status has changed yet.', tone: 'DEFAULT', actions: [] }],
+      confirmation: { confirmationId: 'maintenance-complete-task-chimney-1', version: 1, title: 'Mark this maintenance task complete?', description: 'This records completion in the canonical Maintenance record.',
+        fields: [{ label: 'Task', value: 'Chimney cleaning and inspection' }, { label: 'Actual cost', value: answer?.actualCostUsd == null ? 'Not recorded' : `$${String(answer.actualCostUsd)}` }], editableFields: [], confirmLabel: 'Mark complete',
+        consentText: 'I authorize completing this task in the shared maintenance list.', expiresAt } };
+  }
+  return { ...common, status: 'COMPLETED', contextVersion: 'task-v2', captureRequests: [], confirmation: null, suggestions: [],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'maintenance-complete-done', title: 'Task marked complete', status: 'COMPLETED', description: 'Chimney cleaning and inspection is complete.', details: [{ label: 'Task', value: 'Chimney cleaning and inspection' }], actions: [] }] };
+}
 // FRD v1.43 inspection-hub capability-card slice: INSPECTION_FINDINGS and an INSPECTION_FINDING_UPDATE resolve review.
 const FINDING_ITEM_ACTIONS = [
   ['finding-accept', 'Accept as work', 'Accept this inspection finding as work.'],
@@ -2206,6 +2240,10 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
       await fulfill(route, { success: true, data: response }, 201);
       return;
     }
+    if (/complete a maintenance task/i.test(body.message)) {
+      await fulfill(route, { success: true, data: maintenanceCompletionExecution('CAPTURE', body.sessionId) }, 201);
+      return;
+    }
     if (/what maintenance is pending/i.test(body.message)) {
       const response = maintenanceShelvesExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
@@ -2276,6 +2314,17 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
     const body = route.request().postDataJSON() as Record<string, unknown>;
     correctionConfirmBodies.push(body);
     await fulfill(route, { success: true, data: evidenceAttachExecution('COMPLETED', 2, 'invoice.pdf', correctionSessionId) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-maintenance-complete/captures`, async (route) => {
+    assertAuthenticated(route.request());
+    const body = route.request().postDataJSON() as { answer?: Record<string, unknown> };
+    captureBodies.push(body as Record<string, unknown>);
+    await fulfill(route, { success: true, data: maintenanceCompletionExecution('REVIEW', undefined, body.answer) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-maintenance-complete/confirm`, async (route) => {
+    assertAuthenticated(route.request());
+    correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfill(route, { success: true, data: maintenanceCompletionExecution('DONE') });
   });
   // Registered after the generic captures route above so it takes precedence for this execution only.
   await page.route(`${apiOrigin}/api/ask/executions/execution-warranty-add/captures`, async (route) => {

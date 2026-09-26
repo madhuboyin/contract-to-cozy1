@@ -141,6 +141,26 @@ export function maintenanceCalmCopy(counts: {
   return notes.length > 0 ? { headline, supportLine: notes.join(' ') } : { headline };
 }
 
+/**
+ * The questions of the completion capture, in the order they are asked (FRD §11.12 IW-CONV-004). Each carries a plain `prompt`.
+ * The project follow-up outcome is asked only for a project follow-up task: picking any other task never shows it, and a task
+ * that turns out to be a project follow-up is asked again with the outcome required.
+ */
+export function maintenanceCompletionFields(
+  openTasks: Array<{ id: string; title: string; nextDueDate?: Date | string | null }>,
+  projectOutcomeRequired: boolean,
+) {
+  return [
+    { key: 'taskId', label: 'Open task', prompt: 'Which task did you complete?', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: openTasks.slice(0, 50).map((task) => ({
+      label: `${task.title}${task.nextDueDate ? ` · due ${humanDate(task.nextDueDate as Date)}` : ''}`, value: task.id,
+    })) } },
+    { key: 'actualCostUsd', label: 'Actual cost', prompt: 'Was there an actual cost?', helpText: 'Optional', required: false, inputSchema: { type: 'DECIMAL' as const, min: 0, max: 10_000_000, unit: 'USD' } },
+    ...(projectOutcomeRequired ? [{ key: 'outcomeHealth', label: 'Project follow-up outcome', prompt: 'How is it working now?', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: [
+      { label: 'Working as expected', value: 'CONFIRMED_HEALTHY' }, { label: 'Needs attention', value: 'NEEDS_ATTENTION' }, { label: 'Failed again', value: 'FAILED' },
+    ] } }] : []),
+  ];
+}
+
 export function maintenanceMoney(value: { toString(): string } | number | null | undefined): string | null {
   if (value == null) return null;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value));
@@ -465,15 +485,7 @@ export async function maintenanceTaskCompleteResult(
         captureKey: 'MAINTENANCE_COMPLETION_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
         title: 'Maintenance completion details', question: 'Which task was completed, and was there an actual cost or follow-up outcome?',
         helpText: 'Actual cost is optional. Project outcome is used only when the selected task is a project follow-up. You will review before saving.',
-        inputSchema: { type: 'GROUP', fields: [
-          { key: 'taskId', label: 'Open task', required: true, inputSchema: { type: 'SINGLE_SELECT', options: openTasks.slice(0, 50).map((task) => ({
-            label: `${task.title}${task.nextDueDate ? ` · due ${humanDate(task.nextDueDate)}` : ''}`, value: task.id,
-          })) } },
-          { key: 'actualCostUsd', label: 'Actual cost', helpText: 'Optional', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
-          { key: 'outcomeHealth', label: 'Project follow-up outcome', helpText: 'Required only for a project follow-up task', required: projectOutcomeRequired, inputSchema: { type: 'SINGLE_SELECT', options: [
-            { label: 'Working as expected', value: 'CONFIRMED_HEALTHY' }, { label: 'Needs attention', value: 'NEEDS_ATTENTION' }, { label: 'Failed again', value: 'FAILED' },
-          ] } },
-        ] },
+        inputSchema: { type: 'GROUP', fields: maintenanceCompletionFields(openTasks, projectOutcomeRequired) },
         currentAnswer, allowNotSure: false, sensitivity: 'STANDARD',
         destinationLabel: 'Used to prepare this completion; nothing is saved until you confirm', confirmationText: null,
         expectedContextVersion: workflowVersion,
