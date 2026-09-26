@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ExecutionCard } from '../workspace/ExecutionCard';
 import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
 import type { AskExecutionResponse } from '@/features/ask/types';
@@ -19,12 +19,13 @@ const execution = () => ({
   createdAt: '2026-09-25T19:32:55.000Z', updatedAt: '2026-09-25T19:32:55.000Z', viewState: null, blocks: blocks(),
   captureRequests: [], confirmation: null, clarification: null, correctionCapabilities: { retryResponse: false, intent: false, entity: false, homeRecord: false },
 } as unknown as AskExecutionResponse);
-const card = () => render(
-  <ExecutionCard execution={execution()} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={jest.fn()} selectedPropertyId="home"
+const askMock = jest.fn();
+const card = (value: AskExecutionResponse = execution()) => render(
+  <ExecutionCard execution={value} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={askMock} selectedPropertyId="home"
     setInput={jest.fn()} visibleSuggestions={[]} activeSessionRef={{ current: 'session' }} refreshResult={jest.fn()} refreshPending={false} onAccessLost={jest.fn()}
     contextOpen={false} onOpenContext={jest.fn()} />,
 );
-beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); askMock.mockClear(); });
 
 describe('calm Claims answer', () => {
   it('leads with the producer sentence and chips, states the boundary as a quiet footnote, and says nothing about approval', async () => {
@@ -53,3 +54,55 @@ describe('calm Claims answer', () => {
     expect(screen.getAllByText('Open incidents')).toHaveLength(1);
   });
 });
+
+// C-2 (FRD v1.128): declared filters replace the result through the source execution, never through the words of the earlier question.
+const filters = (scope: 'BOTH' | 'CLAIMS', state: 'ALL' | 'OPEN') => [
+  { id: 'scope-both', label: 'Incidents and claims', message: 'Now show all incidents and claims', active: scope === 'BOTH' },
+  { id: 'scope-claims', label: 'Claims', message: 'Only show claims', active: scope === 'CLAIMS' },
+  { id: 'state-all', label: 'Open and closed', message: 'Now show open and closed records', active: state === 'ALL' },
+  { id: 'state-open', label: 'Open', message: 'Only show open records', active: state === 'OPEN' },
+  ...(scope !== 'BOTH' || state !== 'ALL' ? [{ id: 'clear-all', label: 'Clear filters', message: 'Now show all records with no filters', active: false }] : []),
+];
+const withFilters = (list: ReturnType<typeof filters>) => { const value = execution(); ((value.blocks as unknown[])[1] as { filters: unknown }).filters = list; return value; };
+
+describe('calm Claims filters', () => {
+  it('shows scope and state as separate groups, marks the applied ones, and sends a chip through the source execution', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    card(withFilters(filters('CLAIMS', 'OPEN')));
+    const scope = await screen.findByRole('group', { name: 'Claim scope filters' });
+    const state = screen.getByRole('group', { name: 'Claim status filters' });
+    expect(within(scope).getByRole('button', { name: 'Claims' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(scope).getByRole('button', { name: 'Claims' })).toBeDisabled();
+    expect(within(state).getByRole('button', { name: 'Open' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(state).getByRole('button', { name: 'Open and closed' }));
+    expect(askMock).toHaveBeenCalledWith('Now show open and closed records', undefined, { sourceExecutionId: 'execution' });
+  });
+
+  it('offers "Clear filters" only while a filter is applied', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const { unmount } = card(withFilters(filters('CLAIMS', 'ALL')));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+    expect(askMock).toHaveBeenCalledWith('Now show all records with no filters', undefined, { sourceExecutionId: 'execution' });
+    unmount();
+    card(withFilters(filters('BOTH', 'ALL')));
+    await screen.findByRole('group', { name: 'Claim scope filters' });
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  });
+
+  it('says so, and keeps the chips, when nothing matches', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const value = withFilters(filters('CLAIMS', 'OPEN'));
+    ((value.blocks as unknown[])[1] as { sections: unknown[] }).sections = [];
+    card(value);
+    expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
+  });
+
+  it('renders no filter group when the result declares none', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    card();
+    await screen.findByRole('heading', { name: '1 active incident and 1 open claim.' });
+    expect(screen.queryByRole('group', { name: /Claim .*filters/ })).toBeNull();
+  });
+});
+

@@ -283,7 +283,7 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // Claims capability-card slice (FRD v1.42): claim rows open the canonical claim inline, with its legal status
   // changes as declared CLAIM_TRANSITION actions; incident rows keep their link.
   if (block.id === 'incident-claim-list') {
-    return <ClaimResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+    return <ClaimResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

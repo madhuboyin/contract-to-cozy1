@@ -35,9 +35,10 @@ function install() {
   updateImpl = async (propertyId, claimId, userId, patch) => ({ ...claims.find((claim) => claim.id === claimId), ...patch });
   const models = {
     askExecution: { findMany: async () => [] },
-    incident: { findMany: async () => [] },
+    incident: { findMany: async () => [], count: async () => 0 },
     claim: {
-      findMany: async () => claims,
+      findMany: async ({ where, take } = {}) => claims.filter((claim) => !where?.status || (where.status.in ? where.status.in.includes(claim.status) : where.status.notIn ? !where.status.notIn.includes(claim.status) : true)).slice(0, take ?? 1000),
+      count: async ({ where } = {}) => claims.filter((claim) => !where?.status || (where.status.in ? where.status.in.includes(claim.status) : where.status.notIn ? !where.status.notIn.includes(claim.status) : true)).length,
       findFirst: async ({ where }) => claims.find((claim) => claim.id === where.id) ?? null,
     },
   };

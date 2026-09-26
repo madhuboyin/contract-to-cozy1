@@ -18,13 +18,15 @@ const originalAccess = propertyAccess.resolvePropertyAccess;
 const BOUNDARY_TEXT = 'This shows the incident and claim records in your Home Record. It does not decide whether a claim will be approved or covered. Filing a claim or changing its status happens only when you ask and confirm.';
 const incident = (id, status, overrides = {}) => ({ id, title: `Incident ${id}`, summary: null, status, severity: 'HIGH', openedAt: new Date('2026-09-01'), resolvedAt: status === 'RESOLVED' ? new Date('2026-09-10') : null, typeKey: 'WATER_LEAK', ...overrides });
 const claim = (id, status, overrides = {}) => ({ id, title: `Claim ${id}`, status, type: 'WATER_DAMAGE', sourceType: 'INSURANCE', providerName: 'Acme', incidentAt: null, openedAt: new Date('2026-09-01'), closedAt: status === 'CLOSED' ? new Date('2026-09-15') : null, updatedAt: new Date('2026-09-20'), ...overrides });
+const matchesStatus = (row, where) => !where?.status || (where.status.in ? where.status.in.includes(row.status) : where.status.notIn ? !where.status.notIn.includes(row.status) : true);
+const readable = (rows) => ({ findMany: async ({ where, take } = {}) => rows().filter((row) => matchesStatus(row, where)).slice(0, take ?? 1000), count: async ({ where } = {}) => rows().filter((row) => matchesStatus(row, where)).length });
 let role; let data;
 function install(incidents = [], claims = []) {
   role = 'CONTRIBUTOR'; data = { incidents, claims };
   prismaModule.prisma = new Proxy({}, { get(_t, model) {
     if (model === 'then') return undefined;
-    if (model === 'incident') return { findMany: async () => data.incidents };
-    if (model === 'claim') return { findMany: async () => data.claims };
+    if (model === 'incident') return readable(() => data.incidents);
+    if (model === 'claim') return readable(() => data.claims);
     throw new Error(`Unexpected prisma.${String(model)} access`);
   } });
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'p1' });

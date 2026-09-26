@@ -2,7 +2,7 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { ClaimType as PrismaClaimType, HouseholdRole } from '@prisma/client';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
@@ -10,6 +10,9 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, readableCode } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
+import { type AskViewState } from '../support/executionState';
+import { containsFilterContinuation } from '../askFollowUpContext';
+import { loadAskViewState } from './maintenance.handler';
 import type { ClaimStatus, ClaimType } from '../../../types/claims.types';
 import { isValidTransition as isValidClaimTransition } from '../../claims/claims.transitions';
 
@@ -244,87 +247,148 @@ const CLAIM_STATUS_BOUNDARY: AskPresentationBlock = {
   severity: 'INFO', suggestions: [],
 };
 
-async function incidentClaimStatusResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+// Claims C-2 (FRD v1.128): the status read's filters are a governed refinement, the same continuity model as Maintenance, Buyer Deadlines,
+// Inventory and Warranties. Two independent dimensions: a scope (incidents and claims, claims only, incidents only) and a state (all, open,
+// closed). A declared chip is a fresh authoritative query: every bucket is read with its own filter and its own exact count, never the
+// filtered subset of an earlier or truncated result. Reading changes nothing; filing and status changes keep their own flows.
+export type ClaimsScope = 'BOTH' | 'CLAIMS' | 'INCIDENTS';
+export type ClaimsState = 'ALL' | 'OPEN' | 'CLOSED';
+const CLAIMS_SCOPES: ReadonlySet<string> = new Set(['BOTH', 'CLAIMS', 'INCIDENTS']);
+const CLAIMS_STATES: ReadonlySet<string> = new Set(['ALL', 'OPEN', 'CLOSED']);
+const OPEN_INCIDENT_STATUSES: string[] = ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED'];
+const OPEN_CLAIM_STATUSES: string[] = ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW'];
+// Each declared chip begins with a phrase askFollowUpContext's FILTER_CONTINUATION_PATTERN accepts (asserted in tests).
+const CLAIMS_CLEAR_MESSAGE = 'Now show all records with no filters';
+// A typed follow-up arrives joined to the prior question ("Show my claims. Only show open records"), so each phrase may follow a sentence break.
+const atStart = (phrase: string) => new RegExp(`(?:^|[.!?]\\s+)\\s*${phrase}\\b`, 'i');
+const CLAIMS_CLEAR_PATTERN = atStart('now show all records with no filters');
+
+/** The scope this question asks about, from its own words (a fresh question; nothing is remembered). */
+export function claimsScopeFromWords(message: string): ClaimsScope {
+  const claims = /\bclaims?\b/i.test(message);
+  const incidents = /\bincidents?\b/i.test(message);
+  return claims && !incidents ? 'CLAIMS' : incidents && !claims ? 'INCIDENTS' : 'BOTH';
+}
+
+export function resolveClaimsRefinement(message: string, prior: AskViewState | null | undefined): { scope: ClaimsScope; state: ClaimsState } | null {
+  if (!prior || !CLAIMS_STATES.has(prior.statusFilter) || !prior.domainScopePhrase || !CLAIMS_SCOPES.has(prior.domainScopePhrase)) return null;
+  // Only a declared chip or a typed filter phrase refines a result; an ordinary question is answered on its own.
+  if (!containsFilterContinuation(message)) return null;
+  if (CLAIMS_CLEAR_PATTERN.test(message)) return { scope: 'BOTH', state: 'ALL' };
+  const scope: ClaimsScope | null = atStart('only show claims').test(message) ? 'CLAIMS' : atStart('only show incidents').test(message) ? 'INCIDENTS' : atStart('now show all incidents and claims').test(message) ? 'BOTH' : null;
+  const state: ClaimsState | null = atStart('only show open records').test(message) ? 'OPEN' : atStart('only show closed records').test(message) ? 'CLOSED' : atStart('now show open and closed records').test(message) ? 'ALL' : null;
+  if (!scope && !state) return null;
+  return { scope: scope ?? prior.domainScopePhrase as ClaimsScope, state: state ?? prior.statusFilter as ClaimsState };
+}
+
+export function buildClaimsViewState(prior: AskViewState | null | undefined, scope: ClaimsScope, state: ClaimsState): AskViewState {
+  return {
+    resultId: prior?.resultId ?? randomUUID(),
+    // Claims reuse the generic fields: the scope rides in domainScopePhrase, the state in statusFilter.
+    domainScopePhrase: scope, dateScopePhrase: null, statusFilter: state, selectedTaskId: null, revision: (prior?.revision ?? 0) + 1,
+  };
+}
+
+/** The declared chips: what to look at (scope), which state, and a way back once anything is applied. */
+export function claimsFilterChips(scope: ClaimsScope, state: ClaimsState) {
+  return [
+    { id: 'scope-both', label: 'Incidents and claims', message: 'Now show all incidents and claims', active: scope === 'BOTH' },
+    { id: 'scope-claims', label: 'Claims', message: 'Only show claims', active: scope === 'CLAIMS' },
+    { id: 'scope-incidents', label: 'Incidents', message: 'Only show incidents', active: scope === 'INCIDENTS' },
+    { id: 'state-all', label: 'Open and closed', message: 'Now show open and closed records', active: state === 'ALL' },
+    { id: 'state-open', label: 'Open', message: 'Only show open records', active: state === 'OPEN' },
+    { id: 'state-closed', label: 'Closed', message: 'Only show closed records', active: state === 'CLOSED' },
+    ...(scope !== 'BOTH' || state !== 'ALL' ? [{ id: 'clear-all', label: 'Clear filters', message: CLAIMS_CLEAR_MESSAGE, active: false }] : []),
+  ];
+}
+
+/** The prior view only when the source execution really was a claim status read (another domain's view state must never be continued). */
+async function loadClaimsViewState(sourceExecutionId: string | null | undefined, userId: string): Promise<AskViewState | null> {
+  if (!sourceExecutionId) return null;
+  const source = await prisma.askExecution.findFirst({ where: { id: sourceExecutionId, userId }, select: { operationId: true } });
+  return source?.operationId === 'INCIDENT_CLAIM_STATUS' ? loadAskViewState(sourceExecutionId, userId) : null;
+}
+
+const CLAIMS_BUCKET_LIMITS = { activeIncidents: 12, resolvedIncidents: 8, openClaims: 12, closedClaims: 8 } as const;
+
+async function incidentClaimStatusResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const claimActions = claimItemActions(access.role);
-  const claimFocus = /\bclaims?\b/i.test(message) && !/\bincidents?\b/i.test(message);
-  const incidentFocus = /\bincidents?\b/i.test(message) && !/\bclaims?\b/i.test(message);
-  const [incidents, claims] = await Promise.all([
-    claimFocus ? Promise.resolve([]) : prisma.incident.findMany({
-      where: { propertyId, isSuppressed: false },
-      orderBy: [{ openedAt: 'desc' }],
-      take: 20,
-      select: { id: true, title: true, summary: true, status: true, severity: true, openedAt: true, resolvedAt: true, typeKey: true },
-    }),
-    incidentFocus ? Promise.resolve([]) : prisma.claim.findMany({
-      where: { propertyId },
-      orderBy: [{ updatedAt: 'desc' }],
-      take: 20,
-      select: { id: true, title: true, status: true, type: true, sourceType: true, providerName: true, incidentAt: true, openedAt: true, closedAt: true },
-    }),
+  const refinement = resolveClaimsRefinement(message, priorViewState);
+  const scope: ClaimsScope = refinement ? refinement.scope : claimsScopeFromWords(message);
+  const state: ClaimsState = refinement ? refinement.state : 'ALL';
+  const claimFocus = scope === 'CLAIMS';
+  const incidentFocus = scope === 'INCIDENTS';
+  const wantIncidents = scope !== 'CLAIMS';
+  const wantClaims = scope !== 'INCIDENTS';
+  const wantOpen = state !== 'CLOSED';
+  const wantClosed = state !== 'OPEN';
+  // One query and one exact count per bucket the question asks about; a bucket it does not ask about is never read.
+  const incidentWhere = (open: boolean) => ({ propertyId, isSuppressed: false, status: open ? { in: OPEN_INCIDENT_STATUSES as never } : { notIn: OPEN_INCIDENT_STATUSES as never } });
+  const claimWhere = (open: boolean) => ({ propertyId, status: open ? { in: OPEN_CLAIM_STATUSES as never } : { notIn: OPEN_CLAIM_STATUSES as never } });
+  const incidentSelect = { id: true, title: true, summary: true, status: true, severity: true, openedAt: true, resolvedAt: true, typeKey: true } as const;
+  const claimSelect = { id: true, title: true, status: true, type: true, sourceType: true, providerName: true, incidentAt: true, openedAt: true, closedAt: true } as const;
+  const readIncidents = (open: boolean, take: number) => Promise.all([
+    prisma.incident.findMany({ where: incidentWhere(open), orderBy: [{ openedAt: 'desc' }], take, select: incidentSelect }),
+    prisma.incident.count({ where: incidentWhere(open) }),
+  ]);
+  const readClaims = (open: boolean, take: number) => Promise.all([
+    prisma.claim.findMany({ where: claimWhere(open), orderBy: [{ updatedAt: 'desc' }], take, select: claimSelect }),
+    prisma.claim.count({ where: claimWhere(open) }),
+  ]);
+  const none = <T,>(): Promise<[T[], number]> => Promise.resolve([[], 0]);
+  const [[activeIncidents, activeIncidentTotal], [resolvedIncidents, resolvedIncidentTotal], [activeClaims, openClaimTotal], [closedClaims, closedClaimTotal]] = await Promise.all([
+    wantIncidents && wantOpen ? readIncidents(true, CLAIMS_BUCKET_LIMITS.activeIncidents) : none<never>(),
+    wantIncidents && wantClosed ? readIncidents(false, CLAIMS_BUCKET_LIMITS.resolvedIncidents) : none<never>(),
+    wantClaims && wantOpen ? readClaims(true, CLAIMS_BUCKET_LIMITS.openClaims) : none<never>(),
+    wantClaims && wantClosed ? readClaims(false, CLAIMS_BUCKET_LIMITS.closedClaims) : none<never>(),
   ]);
 
   const incidentsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/incidents`;
   const claimsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
   const humanizeEnum = (value: string) => value.toLowerCase().replace(/_/g, ' ');
 
-  const openIncidentStatuses: string[] = ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED'];
-  const activeIncidents = incidents.filter((incident) => openIncidentStatuses.includes(incident.status));
-  const resolvedIncidents = incidents.filter((incident) => !openIncidentStatuses.includes(incident.status));
-
-  const openClaimStatuses: string[] = ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW'];
-  const activeClaims = claims.filter((claim) => openClaimStatuses.includes(claim.status));
-  const closedClaims = claims.filter((claim) => !openClaimStatuses.includes(claim.status));
-
   type Section = { id: string; title: string; count: number; items: Array<{ id: string; title: string; description: string | null; meta: string[]; status: string | null; href: string | null; entityType?: string; actions?: ReturnType<typeof claimItemActions> }> };
   const sections: Section[] = [];
-  if (!claimFocus) {
-    sections.push({
-      id: 'active-incidents', title: 'Active incidents', count: activeIncidents.length,
-      items: activeIncidents.slice(0, 12).map((incident) => ({
-        id: incident.id, title: incident.title,
-        description: incident.summary ?? humanizeEnum(incident.typeKey),
-        meta: [humanizeEnum(incident.status), incident.severity ? humanizeEnum(incident.severity) : null, humanDate(incident.openedAt) ? `Opened ${humanDate(incident.openedAt)}` : null].filter((value): value is string => Boolean(value)),
-        status: incident.status, href: `${incidentsHref}/${encodeURIComponent(incident.id)}`,
-      })),
-    });
-    if (resolvedIncidents.length) sections.push({
-      id: 'resolved-incidents', title: 'Resolved incidents', count: resolvedIncidents.length,
-      items: resolvedIncidents.slice(0, 8).map((incident) => ({
-        id: incident.id, title: incident.title,
-        description: incident.summary ?? humanizeEnum(incident.typeKey),
-        meta: [humanizeEnum(incident.status), humanDate(incident.resolvedAt) ? `Resolved ${humanDate(incident.resolvedAt)}` : null].filter((value): value is string => Boolean(value)),
-        status: incident.status, href: `${incidentsHref}/${encodeURIComponent(incident.id)}`,
-      })),
-    });
-  }
-  if (!incidentFocus) {
-    sections.push({
-      id: 'active-claims', title: 'Open claims', count: activeClaims.length,
-      items: activeClaims.slice(0, 12).map((claim) => ({
-        id: claim.id, title: claim.title,
-        description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
-        meta: [humanizeEnum(claim.status), humanDate(claim.openedAt) ? `Opened ${humanDate(claim.openedAt)}` : null].filter((value): value is string => Boolean(value)),
-        status: claim.status, href: `${claimsHref}/${encodeURIComponent(claim.id)}`,
-        entityType: 'CLAIM', actions: claimActions,
-      })),
-    });
-    if (closedClaims.length) sections.push({
-      id: 'closed-claims', title: 'Closed claims', count: closedClaims.length,
-      items: closedClaims.slice(0, 8).map((claim) => ({
-        id: claim.id, title: claim.title,
-        description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
-        meta: [humanizeEnum(claim.status), humanDate(claim.closedAt) ? `Closed ${humanDate(claim.closedAt)}` : null].filter((value): value is string => Boolean(value)),
-        status: claim.status, href: `${claimsHref}/${encodeURIComponent(claim.id)}`,
-        entityType: 'CLAIM', actions: claimActions,
-      })),
-    });
+  const incidentRow = (incident: (typeof activeIncidents)[number], dateLabel: string, date: Date | null) => ({
+    id: incident.id, title: incident.title,
+    description: incident.summary ?? humanizeEnum(incident.typeKey),
+    meta: [humanizeEnum(incident.status), ...(dateLabel === 'Opened' && incident.severity ? [humanizeEnum(incident.severity)] : []), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
+    status: incident.status, href: `${incidentsHref}/${encodeURIComponent(incident.id)}`,
+  });
+  const claimRow = (claim: (typeof activeClaims)[number], dateLabel: string, date: Date | null) => ({
+    id: claim.id, title: claim.title,
+    description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
+    meta: [humanizeEnum(claim.status), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
+    status: claim.status, href: `${claimsHref}/${encodeURIComponent(claim.id)}`, entityType: 'CLAIM', actions: claimActions,
+  });
+  if (wantIncidents && wantOpen) sections.push({ id: 'active-incidents', title: 'Active incidents', count: activeIncidentTotal, items: activeIncidents.map((incident) => incidentRow(incident, 'Opened', incident.openedAt)) });
+  if (wantIncidents && wantClosed && resolvedIncidentTotal > 0) sections.push({ id: 'resolved-incidents', title: 'Resolved incidents', count: resolvedIncidentTotal, items: resolvedIncidents.map((incident) => incidentRow(incident, 'Resolved', incident.resolvedAt)) });
+  if (wantClaims && wantOpen) sections.push({ id: 'active-claims', title: 'Open claims', count: openClaimTotal, items: activeClaims.map((claim) => claimRow(claim, 'Opened', claim.openedAt)) });
+  if (wantClaims && wantClosed && closedClaimTotal > 0) sections.push({ id: 'closed-claims', title: 'Closed claims', count: closedClaimTotal, items: closedClaims.map((claim) => claimRow(claim, 'Closed', claim.closedAt)) });
+
+  const totalActive = activeIncidentTotal + openClaimTotal;
+  const totalRecords = activeIncidentTotal + resolvedIncidentTotal + openClaimTotal + closedClaimTotal;
+  const viewState = buildClaimsViewState(priorViewState, scope, state);
+  const chips = claimsFilterChips(scope, state);
+  const listActions = [
+    ...(claimFocus ? [] : [{ id: 'open-incidents-list', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
+    ...(incidentFocus ? [] : [{ id: 'open-claims-list', label: 'Open claims', href: claimsHref, style: 'SECONDARY' as const }]),
+  ];
+
+  if (totalRecords === 0 && refinement) {
+    // A filter that matches nothing still continues the result and keeps every chip, so it can be widened or cleared.
+    return {
+      status: 'ANSWERED', reasonCode: 'INCIDENT_CLAIM_FILTER_NO_MATCH', parameters: { viewState },
+      blocks: [{
+        type: 'SUMMARY', id: 'incident-claim-summary', title: 'No recorded items match these filters', headline: 'Nothing matches these filters.',
+        supportLine: 'Widen or clear a filter to see the records on file.', body: 'No incidents or claims match the selected filters.', tone: 'DEFAULT', actions: [],
+      }, { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: 'Incidents and claims', sections: [], actions: listActions }, CLAIM_STATUS_BOUNDARY],
+      suggestions: [],
+    };
   }
 
-  const totalActive = activeIncidents.length + activeClaims.length;
-  const nothingRecorded = incidents.length === 0 && claims.length === 0;
-
-  if (nothingRecorded) {
+  if (totalRecords === 0) {
     return {
       status: 'ANSWERED', reasonCode: 'INCIDENT_CLAIM_NONE_RECORDED',
       blocks: [{
@@ -340,37 +404,31 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
     };
   }
 
+  const truncated = activeIncidentTotal > activeIncidents.length || resolvedIncidentTotal > resolvedIncidents.length || openClaimTotal > activeClaims.length || closedClaimTotal > closedClaims.length;
+  const totals = { incidents: activeIncidentTotal + resolvedIncidentTotal, claims: openClaimTotal + closedClaimTotal };
   return {
     status: 'ANSWERED', reasonCode: totalActive > 0 ? 'INCIDENT_CLAIM_ACTIVE' : 'INCIDENT_CLAIM_HISTORICAL',
+    parameters: { viewState },
     blocks: [
       {
         type: 'SUMMARY', id: 'incident-claim-summary',
         title: totalActive > 0 ? `${totalActive} active ${totalActive === 1 ? 'item needs' : 'items need'} attention` : 'No active incidents or claims right now',
-        body: `${incidents.length} recorded incident${incidents.length === 1 ? '' : 's'} and ${claims.length} recorded claim${claims.length === 1 ? '' : 's'} are on file for this home.`,
+        body: `${totals.incidents} recorded incident${totals.incidents === 1 ? '' : 's'} and ${totals.claims} recorded claim${totals.claims === 1 ? '' : 's'} match this request.`,
         tone: totalActive > 0 ? 'CAUTION' : 'DEFAULT',
-        ...claimsCalmCopy({
-          focus: claimFocus ? 'CLAIMS' : incidentFocus ? 'INCIDENTS' : 'BOTH', activeIncidents: activeIncidents.length, resolvedIncidents: resolvedIncidents.length,
-          openClaims: activeClaims.length, closedClaims: closedClaims.length, truncated: incidents.length >= 20 || claims.length >= 20,
-        }),
+        ...claimsCalmCopy({ focus: scope, activeIncidents: activeIncidentTotal, resolvedIncidents: resolvedIncidentTotal, openClaims: openClaimTotal, closedClaims: closedClaimTotal, truncated }),
         actions: [
           ...(claimFocus ? [] : [{ id: 'open-incidents', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
           ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'PRIMARY' as const }]),
         ],
       },
-      {
-        type: 'GROUPED_LIST', filters: [], id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections,
-        // Claims C-1: the calm answer carries no filled step (filing and status changes stay behind their own confirmation flows); the
-        // record pages are quiet links, drawn by the calm answer only so the previous shell still shows each link once.
-        actions: [
-          ...(claimFocus ? [] : [{ id: 'open-incidents-list', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
-          ...(incidentFocus ? [] : [{ id: 'open-claims-list', label: 'Open claims', href: claimsHref, style: 'SECONDARY' as const }]),
-        ],
-      },
+      // The calm answer carries no filled step (filing and status changes stay behind their own confirmation flows); the record pages are
+      // quiet links, drawn by the calm answer only so the previous shell still shows each link once.
+      { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections, actions: listActions },
       {
         type: 'EVIDENCE', id: 'incident-claim-evidence', title: 'Record freshness',
         items: [
-          ...incidents.slice(0, 10).map((incident) => ({ label: incident.title, source: 'Canonical Incident record', observedAt: incident.openedAt.toISOString() })),
-          ...claims.slice(0, 10).map((claim) => ({ label: claim.title, source: claim.sourceType ? `Canonical Claim record · ${humanizeEnum(claim.sourceType)}` : 'Canonical Claim record', observedAt: (claim.openedAt ?? claim.incidentAt)?.toISOString() ?? null })),
+          ...activeIncidents.concat(resolvedIncidents).slice(0, 10).map((incident) => ({ label: incident.title, source: 'Canonical Incident record', observedAt: incident.openedAt.toISOString() })),
+          ...activeClaims.concat(closedClaims).slice(0, 10).map((claim) => ({ label: claim.title, source: claim.sourceType ? `Canonical Claim record · ${humanizeEnum(claim.sourceType)}` : 'Canonical Claim record', observedAt: (claim.openedAt ?? claim.incidentAt)?.toISOString() ?? new Date(0).toISOString() })),
         ],
       },
       CLAIM_STATUS_BOUNDARY,
@@ -379,7 +437,10 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
   };
 }
 
-registerCapabilityHandler('incident-claim.status', async (envelope) => incidentClaimStatusResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('incident-claim.status', async (envelope) => incidentClaimStatusResult(
+  envelope.userId, envelope.propertyId!, envelope.message,
+  await loadClaimsViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
+));
 
 registerCapabilityHandler('incident-claim.file', async (envelope) => claimFileResult(envelope.propertyId!, envelope.message));
 
