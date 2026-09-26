@@ -181,6 +181,9 @@ test('every declared chip is recognised as a filter continuation, round-trips to
     }
     // An ordinary question is not a refinement even with a prior view.
     assert.equal(resolveInventoryRefinement('Tell me about the water heater', prior), null);
+    // A prior view never turns an ordinary question that merely names a category into a refinement: only a filter phrase does.
+    assert.equal(resolveInventoryRefinement('Tell me about my HVAC', prior), null);
+    assert.equal(resolveInventoryRefinement('Show my inventory. Only show HVAC items', prior)?.category, 'HVAC', 'a typed follow-up joined to the prior question still refines');
     assert.equal(resolveInventoryRefinement('Only show HVAC items', null), null);
   } finally { restore(); }
 });

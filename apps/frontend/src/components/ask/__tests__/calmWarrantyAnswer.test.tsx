@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ExecutionCard } from '../workspace/ExecutionCard';
 import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
 import type { AskExecutionResponse } from '@/features/ask/types';
@@ -27,12 +27,13 @@ const execution = (list = blocks()) => ({
   createdAt: '2026-09-25T19:32:55.000Z', updatedAt: '2026-09-25T19:32:55.000Z', viewState: null, blocks: list,
   captureRequests: [], confirmation: null, clarification: null, correctionCapabilities: { retryResponse: false, intent: false, entity: false, homeRecord: false },
 } as unknown as AskExecutionResponse);
+const askMock = jest.fn();
 const card = (value: AskExecutionResponse) => render(
-  <ExecutionCard execution={value} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={jest.fn()} selectedPropertyId="home"
+  <ExecutionCard execution={value} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={askMock} selectedPropertyId="home"
     setInput={jest.fn()} visibleSuggestions={[]} activeSessionRef={{ current: 'session' }} refreshResult={jest.fn()} refreshPending={false} onAccessLost={jest.fn()}
     contextOpen={false} onOpenContext={jest.fn()} />,
 );
-beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); askMock.mockClear(); });
 
 describe('calm Warranties answer', () => {
   it('leads with the producer sentence and chips, states the boundary as a quiet footnote, and shows one Warranties link', async () => {
@@ -73,3 +74,46 @@ describe('calm Warranties answer', () => {
     expect(screen.getAllByText('Open Warranties')).toHaveLength(1);
   });
 });
+
+// W-2 (FRD v1.125): declared filters replace the result through the source execution, never through the words of the earlier question.
+const filters = (status: 'ALL' | 'EXPIRING', category: 'HVAC' | null) => [
+  { id: 'status-all', label: 'All', message: 'Now show all warranties', active: status === 'ALL' },
+  { id: 'status-expiring', label: 'Expires within 60 days', message: 'Only show warranties expiring within 60 days', active: status === 'EXPIRING' },
+  { id: 'category-all', label: 'All categories', message: 'Now show all warranty categories', active: category === null },
+  { id: 'category-hvac', label: 'HVAC', message: 'Only show HVAC warranties', active: category === 'HVAC' },
+  ...(status !== 'ALL' || category ? [{ id: 'clear-all', label: 'Clear filters', message: 'Now show all warranties with no filters', active: false }] : []),
+];
+const withFilters = (list: ReturnType<typeof filters>) => { const value = blocks(); (value[1] as { filters: unknown }).filters = list; return execution(value); };
+
+describe('calm Warranties filters', () => {
+  it('shows status and category as separate groups, marks the applied ones, and sends a chip through the source execution', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    card(withFilters(filters('EXPIRING', 'HVAC')));
+    const status = await screen.findByRole('group', { name: 'Warranty status filters' });
+    const category = screen.getByRole('group', { name: 'Warranty category filters' });
+    expect(within(status).getByRole('button', { name: 'Expires within 60 days' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(status).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(category).getByRole('button', { name: 'HVAC' })).toBeDisabled();
+    fireEvent.click(within(category).getByRole('button', { name: 'All categories' }));
+    expect(askMock).toHaveBeenCalledWith('Now show all warranty categories', undefined, { sourceExecutionId: 'execution' });
+  });
+
+  it('offers "Clear filters" only while a filter is applied', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const { unmount } = card(withFilters(filters('EXPIRING', null)));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+    expect(askMock).toHaveBeenCalledWith('Now show all warranties with no filters', undefined, { sourceExecutionId: 'execution' });
+    unmount();
+    card(withFilters(filters('ALL', null)));
+    await screen.findByRole('group', { name: 'Warranty status filters' });
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  });
+
+  it('renders no filter group when the result declares none', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    card(execution());
+    await screen.findByRole('button', { name: /Add a warranty/ });
+    expect(screen.queryByRole('group', { name: /Warranty .*filters/ })).toBeNull();
+  });
+});
+

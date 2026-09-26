@@ -127,11 +127,13 @@ function WarrantyDetail({ warrantyId, expectedPropertyId, fallbackItem, disabled
   </aside>;
 }
 
-export function WarrantyResultList({ block, propertyId, disabled, onAction, onAccessLost, link }: {
+export function WarrantyResultList({ block, propertyId, disabled, onAction, onFilter, onAccessLost, link }: {
   block: Block;
   propertyId?: string;
   disabled?: boolean;
   onAction?: WarrantyItemActionHandler;
+  /** A declared filter chip (W-2) sends its own message through the source execution. */
+  onFilter?: (message: string) => void;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
@@ -159,6 +161,20 @@ export function WarrantyResultList({ block, propertyId, disabled, onAction, onAc
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {block.filters.length > 0 && (calm
+        // W-2: the two filter dimensions (status, category) and the way back are separate quiet groups, so it is clear which chip replaces
+        // which. A result without the id prefixes falls back to one group.
+        ? <div className="mt-2 space-y-1" data-warranty-filters="">
+          {([['status-', 'Warranty status filters'], ['category-', 'Warranty category filters'], ['clear-', 'Clear warranty filters']] as const).map(([prefix, groupLabel]) => {
+            const group = block.filters.filter((filter) => filter.id.startsWith(prefix));
+            return group.length > 0 ? <div key={prefix} className="flex flex-wrap gap-0.5" role="group" aria-label={groupLabel}>{group.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={prefix === 'clear-' ? undefined : filter.active}
+              onClick={() => onFilter?.(filter.message)} className={cn('min-h-8 rounded-md px-2.5 py-1 text-sm disabled:opacity-100', filter.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900', prefix === 'clear-' && 'underline underline-offset-2')}>{filter.label}</button>)}</div> : null;
+          })}
+        </div>
+        : <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Warranty filters">
+          {block.filters.map((filter) => <button key={filter.id} type="button" aria-pressed={filter.active} disabled={disabled}
+            onClick={() => onFilter?.(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
+        </div>)}
     </div>
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>

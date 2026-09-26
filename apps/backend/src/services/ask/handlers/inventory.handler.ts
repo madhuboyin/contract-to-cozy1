@@ -18,6 +18,7 @@ import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, h
 import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../askInventoryIntent';
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
+import { containsFilterContinuation } from '../askFollowUpContext';
 
 export const inventoryService = new InventoryService();
 
@@ -131,6 +132,8 @@ function inventoryMatchesCategory(item: Awaited<ReturnType<InventoryService['lis
  */
 export function resolveInventoryRefinement(message: string, prior: AskViewState | null | undefined): { status: InventoryStatusFilter; category: InventoryCategoryFilter | null } | null {
   if (!prior || !INVENTORY_STATUS_FILTERS.has(prior.statusFilter)) return null;
+  // Only a declared chip or a typed filter phrase refines a result; an ordinary question is answered on its own.
+  if (!containsFilterContinuation(message)) return null;
   const priorCategory = prior.domainScopePhrase && INVENTORY_CATEGORY_FILTERS.has(prior.domainScopePhrase) ? prior.domainScopePhrase as InventoryCategoryFilter : null;
   if (INVENTORY_CLEAR_PATTERN.test(message)) return { status: 'ALL', category: null };
   const status: InventoryStatusFilter | null = isIncompleteInventoryRequest(message) ? 'INCOMPLETE'

@@ -7,7 +7,10 @@ import { evaluateCoverageRecord } from '../../coverage/contextPolicy';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, readablePropertyValue } from '../askHandlerSupport';
 import { WARRANTY_ADD_MESSAGE, warrantyCorrectionItemActions } from '../handlers/homeRecordWrites.handler';
-import { MAX_RESULT_ITEMS } from '../support/executionState';
+import { MAX_RESULT_ITEMS, type AskViewState } from '../support/executionState';
+import { randomUUID } from 'node:crypto';
+import { loadAskViewState } from './maintenance.handler';
+import { containsFilterContinuation } from '../askFollowUpContext';
 
 // Warranties capability slice, W-1 (FRD v1.124; ACUI Warranties certification). A deterministic record read: what the Home Record
 // says about this home's warranties. It reads the same property-scoped rows the Warranties route does
@@ -60,6 +63,7 @@ const CATEGORY_TERMS: ReadonlyArray<{ category: string; label: string; test: Reg
   { category: 'STRUCTURAL', label: 'structural', test: /\b(?:structural|foundation)\b/i },
   { category: 'APPLIANCE', label: 'appliance', test: /\bappliances?\b/i },
   { category: 'HOME_WARRANTY_PLAN', label: 'home warranty plan', test: /\bhome warranty plan\b/i },
+  { category: 'OTHER', label: 'other', test: /\bother warranties\b/i },
 ];
 // A named item is matched against the linked inventory item, the provider and the recorded coverage text only, never guessed.
 const ITEM_TERMS: ReadonlyArray<{ label: string; test: RegExp; terms: readonly string[] }> = [
@@ -109,6 +113,70 @@ export function warrantyCalmCopy(counts: {
     : { headline, chips };
 }
 
+// W-2 (FRD v1.125): filters as a governed refinement, the same continuity model as Maintenance, Buyer Deadlines and Inventory. A declared
+// chip is a fresh authoritative query over every recorded warranty; it keeps the result identity, increments the revision and
+// replaces only the dimension it names. Two independent dimensions: a status and a category.
+export type WarrantyStatusFilter = 'ALL' | 'ACTIVE' | 'EXPIRING' | 'EXPIRED' | 'NEEDS_REVIEW';
+const STATUS_FILTERS: ReadonlySet<string> = new Set(['ALL', 'ACTIVE', 'EXPIRING', 'EXPIRED', 'NEEDS_REVIEW']);
+const CATEGORY_KEYS: ReadonlySet<string> = new Set(CATEGORY_TERMS.map((entry) => entry.category));
+// Each declared chip message begins with a phrase askFollowUpContext's FILTER_CONTINUATION_PATTERN accepts (asserted in tests).
+const CLEAR_MESSAGE = 'Now show all warranties with no filters';
+const CLEAR_PATTERN = /^\s*now show all warranties with no filters\b/i;
+const ALL_STATUS_PATTERN = /^\s*now show all warranties\b/i;
+const ALL_CATEGORIES_PATTERN = /^\s*now show all warranty categories\b/i;
+
+export function resolveWarrantyRefinement(message: string, prior: AskViewState | null | undefined): { status: WarrantyStatusFilter; category: string | null } | null {
+  if (!prior || !STATUS_FILTERS.has(prior.statusFilter)) return null;
+  // Only a declared chip or a typed filter phrase refines a result; an ordinary question is answered on its own.
+  if (!containsFilterContinuation(message)) return null;
+  const priorCategory = prior.domainScopePhrase && CATEGORY_KEYS.has(prior.domainScopePhrase) ? prior.domainScopePhrase : null;
+  if (CLEAR_PATTERN.test(message)) return { status: 'ALL', category: null };
+  const status: WarrantyStatusFilter | null = /\bdates that need review\b/i.test(message) ? 'NEEDS_REVIEW'
+    : /\bexpired\b/i.test(message) ? 'EXPIRED'
+      : /\bexpir(?:e|es|ing)\b/i.test(message) ? 'EXPIRING'
+        : /\bactive\b/i.test(message) ? 'ACTIVE'
+          : ALL_STATUS_PATTERN.test(message) ? 'ALL' : null;
+  const allCategories = ALL_CATEGORIES_PATTERN.test(message);
+  const category = allCategories ? null : (CATEGORY_TERMS.find((entry) => entry.test.test(message))?.category ?? null);
+  if (!status && !category && !allCategories) return null;
+  return { status: status ?? prior.statusFilter as WarrantyStatusFilter, category: allCategories ? null : category ?? priorCategory };
+}
+
+export function buildWarrantyViewState(prior: AskViewState | null | undefined, status: WarrantyStatusFilter, category: string | null): AskViewState {
+  return {
+    resultId: prior?.resultId ?? randomUUID(),
+    // Warranties reuse the generic fields: the category key rides in domainScopePhrase, the status filter in statusFilter.
+    domainScopePhrase: category, dateScopePhrase: null, statusFilter: status, selectedTaskId: null, revision: (prior?.revision ?? 0) + 1,
+  };
+}
+
+const CATEGORY_WORDS: Record<string, string> = Object.fromEntries(CATEGORY_TERMS.map((entry) => [entry.category, entry.label]));
+const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** The declared chips: only categories this home actually has, "Dates need review" only when some warranty does, and a way back. */
+export function warrantyFilterChips(status: WarrantyStatusFilter, category: string | null, present: { categories: readonly string[]; needsReview: boolean }) {
+  const categories = [...new Set([...present.categories, ...(category ? [category] : [])])];
+  return [
+    { id: 'status-all', label: 'All', message: 'Now show all warranties', active: status === 'ALL' },
+    { id: 'status-active', label: 'Active', message: 'Only show active warranties', active: status === 'ACTIVE' },
+    { id: 'status-expiring', label: `Expires within ${WARRANTY_EXPIRING_DAYS} days`, message: `Only show warranties expiring within ${WARRANTY_EXPIRING_DAYS} days`, active: status === 'EXPIRING' },
+    { id: 'status-expired', label: 'Expired', message: 'Only show expired warranties', active: status === 'EXPIRED' },
+    ...(present.needsReview || status === 'NEEDS_REVIEW' ? [{ id: 'status-review', label: 'Dates need review', message: 'Only show warranties with dates that need review', active: status === 'NEEDS_REVIEW' }] : []),
+    ...(categories.length > 1 || category ? [
+      { id: 'category-all', label: 'All categories', message: 'Now show all warranty categories', active: category === null },
+      ...categories.map((key) => ({ id: `category-${key.toLowerCase()}`, label: key === 'HVAC' ? 'HVAC' : capitalise(CATEGORY_WORDS[key] ?? key.toLowerCase()), message: `Only show ${CATEGORY_WORDS[key] ?? key.toLowerCase()} warranties`, active: category === key })),
+    ] : []),
+    ...(status !== 'ALL' || category ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : []),
+  ];
+}
+
+/** The prior view only when the source execution really was a warranty lookup (another domain's view state must never be continued). */
+async function loadWarrantyViewState(sourceExecutionId: string | null | undefined, userId: string): Promise<AskViewState | null> {
+  if (!sourceExecutionId) return null;
+  const source = await prisma.askExecution.findFirst({ where: { id: sourceExecutionId, userId }, select: { operationId: true } });
+  return source?.operationId === 'WARRANTY_LOOKUP' ? loadAskViewState(sourceExecutionId, userId) : null;
+}
+
 const BOUNDARY: AskPresentationBlock = {
   type: 'BOUNDARY', id: 'warranty-boundary', title: 'Recorded information only',
   body: 'This reports the warranty information recorded in your Home Record. It does not determine whether a repair is covered or file a claim.',
@@ -124,8 +192,10 @@ const truncate = (text: string, max: number) => (text.length > max ? `${text.sli
  */
 export function warrantiesFromRecords(input: {
   message: string; propertyId: string; records: readonly WarrantyRecord[]; canWrite: boolean; ownedIds: ReadonlySet<string>; now?: Date;
+  /** The source result's view state, when a declared filter chip continues it (W-2). */
+  priorViewState?: AskViewState | null;
 }): AskOperationResult {
-  const { message, propertyId, records, canWrite, ownedIds } = input;
+  const { message, propertyId, records, canWrite, ownedIds, priorViewState } = input;
   const now = input.now ?? new Date();
   const pageHref = '/dashboard/warranties';
   const openPage = { id: 'open-warranties', label: 'Open Warranties', href: pageHref, style: 'PRIMARY' as const };
@@ -143,7 +213,12 @@ export function warrantiesFromRecords(input: {
     };
   }
 
-  const focus = warrantyFocus(message);
+  // A declared chip continues the prior result and changes only the dimension it names; any other question is read on its own words.
+  const refinement = resolveWarrantyRefinement(message, priorViewState);
+  const focus: WarrantyFocus = refinement
+    ? { expiring: false, expired: false, category: refinement.category, categoryLabel: refinement.category ? CATEGORY_WORDS[refinement.category] ?? null : null, item: null }
+    : warrantyFocus(message);
+  const statusFilter: WarrantyStatusFilter = refinement ? refinement.status : focus.expiring ? 'EXPIRING' : focus.expired ? 'EXPIRED' : 'ALL';
   const enriched = records.map((record) => ({ record, status: warrantyStatus(record, propertyId, now) }));
   let matched = enriched;
   if (focus.category) matched = matched.filter((entry) => entry.record.category === focus.category);
@@ -154,8 +229,29 @@ export function warrantiesFromRecords(input: {
       return terms.some((term) => haystack.includes(term));
     });
   }
-  if (focus.expiring) matched = matched.filter((entry) => entry.status.key === 'EXPIRING');
-  if (focus.expired) matched = matched.filter((entry) => entry.status.key === 'EXPIRED');
+  if (statusFilter !== 'ALL') matched = matched.filter((entry) => entry.status.key === statusFilter);
+  // The chips reflect every recorded warranty (never the filtered subset), so a filter can always be widened or cleared.
+  const present = { categories: [...new Set(records.map((record) => record.category))], needsReview: enriched.some((entry) => entry.status.key === 'NEEDS_REVIEW') };
+  const isCollection = !focus.item;
+  const viewState = isCollection ? buildWarrantyViewState(priorViewState, statusFilter, focus.category) : null;
+  const chips = viewState ? warrantyFilterChips(statusFilter, focus.category, present) : [];
+
+  if (matched.length === 0 && refinement) {
+    // A filter that matches nothing still continues the result and keeps every chip, so it can be widened or cleared.
+    return {
+      status: 'ANSWERED', reasonCode: 'WARRANTY_FILTER_NO_MATCH', parameters: { viewState },
+      blocks: [{
+        type: 'SUMMARY', id: 'warranty-summary', title: 'No recorded warranties match these filters', headline: 'No warranties match these filters.',
+        supportLine: `This home has ${records.length} recorded ${records.length === 1 ? 'warranty' : 'warranties'}. Widen or clear a filter to see them.`,
+        body: `This home has ${records.length} recorded ${records.length === 1 ? 'warranty' : 'warranties'}, but none match the selected filters.`, tone: 'DEFAULT', actions: [openPage],
+      }, {
+        type: 'GROUPED_LIST', filters: chips, id: 'warranty-results', title: 'Recorded warranties',
+        sections: [{ id: 'warranties', title: 'Recorded warranties', count: 0, items: [] }],
+        actions: [...(canWrite ? [addAction] : []), { id: 'open-warranties-list', label: 'Open Warranties', href: pageHref, style: 'SECONDARY' as const }],
+      }, BOUNDARY],
+      suggestions: [],
+    };
+  }
 
   if (matched.length === 0) {
     const scope = focus.item?.label ?? (focus.categoryLabel ? `${focus.categoryLabel} warranties` : focus.expiring ? `warranties expiring within ${WARRANTY_EXPIRING_DAYS} days` : focus.expired ? 'expired warranties' : 'a matching warranty');
@@ -197,7 +293,7 @@ export function warrantiesFromRecords(input: {
     body: `${copy.headline} ${WARRANTY_EXPIRING_DAYS} days is the window the Warranties page uses.`, tone: count('EXPIRING') || count('NEEDS_REVIEW') ? 'CAUTION' : 'DEFAULT',
     ...copy, actions: [openPage],
   }, {
-    type: 'GROUPED_LIST', filters: [], id: 'warranty-results', title: 'Recorded warranties',
+    type: 'GROUPED_LIST', filters: chips, id: 'warranty-results', title: 'Recorded warranties',
     sections: [{
       id: 'warranties', title: 'Recorded warranties', count: matched.length,
       items: shown.map((entry) => ({
@@ -224,12 +320,13 @@ export function warrantiesFromRecords(input: {
   return {
     status: count('NEEDS_REVIEW') ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: count('NEEDS_REVIEW') ? 'WARRANTY_DATES_NEED_REVIEW' : undefined,
+    ...(viewState ? { parameters: { viewState } } : {}),
     blocks,
     suggestions: ['Which warranties expire within 60 days?'],
   };
 }
 
-async function warrantiesResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function warrantiesResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const canWrite = access.role !== HouseholdRole.VIEWER;
   // The same query the property-scoped Warranties route runs, plus the linked item and document count the answer shows.
@@ -244,7 +341,10 @@ async function warrantiesResult(userId: string, propertyId: string, message: str
   const ownedIds = canWrite
     ? new Set((await prisma.warranty.findMany({ where: { propertyId, homeownerProfile: { userId } }, select: { id: true } })).map((row) => row.id))
     : new Set<string>();
-  return warrantiesFromRecords({ message, propertyId, records: rows, canWrite, ownedIds });
+  return warrantiesFromRecords({ message, propertyId, records: rows, canWrite, ownedIds, priorViewState });
 }
 
-registerCapabilityHandler('warranty.lookup', async (envelope) => warrantiesResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('warranty.lookup', async (envelope) => warrantiesResult(
+  envelope.userId, envelope.propertyId!, envelope.message,
+  await loadWarrantyViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
+));

@@ -14,6 +14,7 @@ const FILTER_CONTINUABLE_OPERATIONS: ReadonlySet<AskOperationId> = new Set([
   'SAVINGS_OPPORTUNITIES',
   'OWNERSHIP_COSTS',
   'INVENTORY_LOOKUP',
+  'WARRANTY_LOOKUP',
   'PROPERTY_SUMMARY',
   'HOME_ACTIONS',
   // B02 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
@@ -49,6 +50,12 @@ const ENTITY_CONTINUATION_PATTERN = /\b(?:complete|finish|mark|update|reschedule
 const FILTER_CONTINUATION_PATTERN = /^\s*(?:only|just|now show|now only show|instead show|filter to|show only|and only)\b/i;
 /** True when a declared filter chip's message will be resolved as a continuation of the prior result (used to keep chip wording honest). */
 export const isFilterContinuationMessage = (message: string): boolean => FILTER_CONTINUATION_PATTERN.test(message);
+const FILTER_CONTINUATION_SENTENCE_PATTERN = new RegExp(`(?:^|[.!?]\\s+)${FILTER_CONTINUATION_PATTERN.source.replace(/^\^\\s\*/, '\\s*')}`, 'i');
+/**
+ * True when the message is, or (after a typed follow-up was joined to the prior question) ends in, a filter continuation. A handler that
+ * continues a prior view checks this so an ordinary question is never mistaken for a refinement just because a source result exists.
+ */
+export const containsFilterContinuation = (message: string): boolean => FILTER_CONTINUATION_SENTENCE_PATTERN.test(message);
 
 // External review, Phase 5: a proactive continuation card (any producer --
 // `createAskNotificationContinuation` stamps this on every one) opens a
