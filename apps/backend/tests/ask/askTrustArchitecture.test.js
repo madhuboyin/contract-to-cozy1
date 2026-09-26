@@ -605,3 +605,25 @@ test('semantic relevance rejects audited wrong-answer false positives without re
     assert.equal(relevance.outcome, 'FAIL', JSON.stringify(relevance));
   }
 });
+
+test('a non-answer result keeps its explanation block even when the operation does not allow that block type', () => {
+  // HOME_CHANGE_SUMMARY only allows CHANGE_SUMMARY/EMPTY_STATE; the required-context failure explains itself with a SUMMARY. Stripping it
+  // left the homeowner a card with no text and a lone retry button.
+  const unavailable = validateAskAnswerTrustPipeline({
+    question: 'What changed around my home lately?', operationId: 'HOME_CHANGE_SUMMARY', propertyId: 'property-1',
+    result: {
+      status: 'UNAVAILABLE', reasonCode: 'ASK_CONTEXT_PROVIDER_UNAVAILABLE',
+      blocks: [{ type: 'SUMMARY', id: 'ask-required-context-unavailable', title: 'Required home context is temporarily unavailable', body: 'Try again shortly.', tone: 'CAUTION', actions: [] }],
+      suggestions: ['Try again'],
+    },
+  });
+  assert.equal(unavailable.result.status, 'UNAVAILABLE');
+  assert.deepEqual(unavailable.result.blocks.map((block) => block.id), ['ask-required-context-unavailable']);
+
+  // An answer-shaped result is still held to the operation's allowed block types.
+  const answered = validateAskAnswerTrust({
+    question: 'What changed around my home lately?', operationId: 'HOME_CHANGE_SUMMARY', propertyId: 'property-1',
+    result: { status: 'ANSWERED', reasonCode: 'X', blocks: [{ type: 'SUMMARY', id: 'stray', title: 'Stray', body: 'Not an allowed answer block.', tone: 'DEFAULT', actions: [] }], suggestions: [] },
+  });
+  assert.equal(answered.result.blocks.some((block) => block.id === 'stray'), false);
+});

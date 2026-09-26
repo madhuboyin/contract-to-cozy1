@@ -116,7 +116,10 @@ export function validateAskAnswerTrust(input: {
 }): { result: AskOperationResult; trust: AskAnswerTrustResult; repaired: boolean } {
   const definition = getAskOperationDefinition(input.operationId);
   const allowed = new Set(definition.allowedBlockTypes);
-  let blocks = input.result.blocks.filter((block) => block.type === 'BOUNDARY' || block.type === 'ERROR_STATE' || allowed.has(block.type));
+  // A result that is not an answer (UNAVAILABLE, BLOCKED, ...) carries the operation-agnostic explanation of why there is no answer, often a
+  // SUMMARY. That block is never one of the operation's answer types, so filtering it would leave the homeowner an empty card and a lone retry button.
+  const answerShaped = SUCCESS_STATUSES.has(input.result.status);
+  let blocks = input.result.blocks.filter((block) => !answerShaped || block.type === 'BOUNDARY' || block.type === 'ERROR_STATE' || allowed.has(block.type));
   const reasonCodes: string[] = [];
   let repaired = blocks.length !== input.result.blocks.length;
   if (repaired) reasonCodes.push('DISALLOWED_BLOCK_REMOVED');
