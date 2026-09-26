@@ -22,7 +22,8 @@ const CONSUMER_LABELS: Record<string, string> = {
   'recommendation-snapshots': 'Decision recommendations',
 };
 
-export function IntelligenceRefreshStatus({ propertyId }: { propertyId: string }) {
+// `compact` (Ask calm shell, IW-CALM-007): a small colored dot; the label is announced and shown on hover or focus.
+export function IntelligenceRefreshStatus({ propertyId, compact = false }: { propertyId: string; compact?: boolean }) {
   const query = useQuery({
     queryKey: ['intelligence-refresh-state', propertyId],
     queryFn: () => api.getPropertyIntelligenceRefreshDetails(propertyId),
@@ -47,11 +48,11 @@ export function IntelligenceRefreshStatus({ propertyId }: { propertyId: string }
 
   return (
     <details className="relative z-20">
-      <summary className="list-none cursor-pointer" aria-label={`${presentation.label}. Show affected capabilities.`}>
-        <Badge variant="outline" className={`rounded-full ${presentation.className}`}>
+      <summary className="list-none cursor-pointer" aria-label={`${presentation.label}. Show affected capabilities.`} title={compact ? presentation.label : undefined}>
+        {compact ? <span aria-hidden="true" className={`block h-2.5 w-2.5 rounded-full ${data.state === 'REFRESHING' ? 'animate-pulse bg-teal-500' : data.state === 'PARTIALLY_REFRESHED' ? 'bg-amber-500' : 'bg-rose-500'}`} /> : <Badge variant="outline" className={`rounded-full ${presentation.className}`}>
           {data.state === 'REFRESHING' && <RefreshCw className="mr-1 h-3 w-3 animate-spin" />}
           {presentation.label}
-        </Badge>
+        </Badge>}
       </summary>
       {affected.length > 0 && (
         <div className="absolute right-0 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs text-slate-700 shadow-lg">

@@ -18,6 +18,10 @@ import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
 import { AskPromptAttribution, FOCUSABLE_SELECTOR, draftStorageKey } from './support';
 import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeCard, PropertySelectionCard } from './CaptureCards';
 
+// IW-CALM-002 (FRD v1.111): every domain list draws its own bordered frame; inside a calm answer the outer frame goes and the
+// list's own section dividers stay, so no answer is a card holding cards.
+const FRAMELESS_LISTS = '[&>section.overflow-hidden]:rounded-none [&>section.overflow-hidden]:border-0 [&>section.overflow-hidden]:bg-transparent [&>section.overflow-hidden>div]:px-0';
+
 export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false }: {
   executionId: string;
   propertyId?: string;
@@ -134,8 +138,8 @@ export function ExecutionCard({
   const calmChrome = useCalmAnswers();
   const calm = calmChrome && isCalmAdopter(execution);
   const [showOriginal, setShowOriginal] = useState(false);
-  // IW-CALM-004: a retry the card already offers as its primary action is not repeated as a second suggestion chip.
-  const shownSuggestions = calmChrome && execution.correctionCapabilities.retryResponse ? visibleSuggestions.filter((suggestion) => !/^try again\b/i.test(suggestion.trim())) : visibleSuggestions;
+  // IW-CALM-006 (FRD v1.111): in the calm shell follow-up chips dock above the composer (FollowUpRow), not under each answer.
+  const shownSuggestions = calmChrome ? [] : visibleSuggestions;
   const refresh = async () => {
     if (refreshing || refreshAccessLost) return;
     setRefreshing(true);
@@ -290,7 +294,7 @@ export function ExecutionCard({
             </div>
           </details>
         )}
-        <div ref={bodyRef} className="space-y-3">
+        <div ref={bodyRef} className={cn('space-y-3', calmChrome && FRAMELESS_LISTS)}>
           <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
             {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} />)}
             {hasResponseContext(execution) && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}

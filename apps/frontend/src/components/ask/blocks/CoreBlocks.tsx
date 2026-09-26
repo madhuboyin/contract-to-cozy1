@@ -4,7 +4,7 @@ import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatib
 import { timelinePoint } from '@/features/ask/displayPatterns';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
-import { useCalmAnswer, useCalmChrome } from './calmContext';
+import { useCalmChrome } from './calmContext';
 import type { AskBlockRenderer } from './types';
 
 function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBlock, { type: 'SUMMARY' }>['chips']> }) {
@@ -15,15 +15,19 @@ function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBloc
   );
 }
 
-// IW-CALM-001/002 (FRD v1.111): the answer as a headline, one supporting line and chips, with no frame or tint. Tone is
-// carried by the chips, not by a tinted container.
+// IW-CALM-001/002 (FRD v1.111): the answer as a headline, one supporting line and chips, with no frame or tint. A producer that
+// declares `headline`/`supportLine` gets the compact form; any other summary keeps its title as the headline and its body as
+// ordinary text (it may be the whole answer, so it is never muted). A caution or critical tone keeps a thin colored rule.
+const CALM_TONE_RULE = { CAUTION: 'border-l-2 border-amber-300 pl-3', CRITICAL: 'border-l-2 border-red-300 pl-3', POSITIVE: '', DEFAULT: '' } as const;
+
 function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const declared = Boolean(block.headline?.trim());
   const headline = block.headline?.trim() || block.title;
-  const supportLine = block.supportLine?.trim() || (block.headline ? null : block.body);
+  const supportLine = declared ? block.supportLine?.trim() || null : block.body;
   return (
-    <section data-calm-summary="">
+    <section data-calm-summary="" className={CALM_TONE_RULE[block.tone]}>
       <h3 className="font-display text-xl font-semibold leading-snug text-slate-950 sm:text-2xl">{headline}</h3>
-      {supportLine && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-500">{supportLine}</p>}
+      {supportLine && <p className={cn('mt-1 whitespace-pre-wrap text-sm leading-6', declared ? 'text-slate-500' : 'text-slate-700')}>{supportLine}</p>}
       {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
       {block.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2 text-sm">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
     </section>
@@ -31,7 +35,7 @@ function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: '
 }
 
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
-  const calm = useCalmAnswer();
+  const calm = useCalmChrome();
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(

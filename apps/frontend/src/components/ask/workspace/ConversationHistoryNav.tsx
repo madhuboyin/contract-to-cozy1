@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Archive, ArrowLeft, Clock3, Plus, Search, Sparkles } from 'lucide-react';
 import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
+import { useCalmAnswers } from '@/features/ask/calmAnswers';
 import { cn } from '@/lib/utils';
 import type { AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
 import { ConversationSessionRow } from '../ConversationSessionRow';
@@ -69,6 +70,8 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
   backHref?: string;
   backLabel?: string;
 }) {
+  // IW-CALM-008 (FRD v1.111): in the calm shell the rail carries no brand block and no explanatory copy.
+  const calm = useCalmAnswers();
   const [calendar, setCalendar] = useState({ now: new Date(), locale: 'en-US', timeZone: 'UTC' });
   useEffect(() => {
     const refresh = () => setCalendar({
@@ -94,10 +97,10 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
   const grouped = [...(showPinned ? [{ label: 'Pinned', items: pinnedItems }] : []), ...periodGroups];
   return (
     <nav className="flex min-h-0 flex-1 flex-col" aria-label="Ask Cozy conversations">
-      <div className="mb-4 flex items-center gap-2 px-1">
+      {!calm && <div className="mb-4 flex items-center gap-2 px-1">
         <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-700 text-white"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
         <div><p className="text-sm font-semibold text-slate-950">Ask Cozy</p><p className="text-[11px] text-slate-500">Your home assistant</p></div>
-      </div>
+      </div>}
       <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-white hover:shadow-sm">
         <Plus className="h-4 w-4" aria-hidden="true" />New conversation
       </button>
@@ -147,7 +150,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
       </div>
       <div className="border-t border-slate-200 pt-3">
         {backHref && <Link href={backHref} className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"><ArrowLeft className="h-4 w-4" />{backLabel || 'Back to Home'}</Link>}
-        <p className="mt-2 px-3 text-[11px] leading-4 text-slate-400">{scope === 'ALL_HOMES' ? 'Conversations across homes you can access.' : 'Recent conversations for the selected home.'} ContractToCozy navigation remains available above.</p>
+        {!calm && <p className="mt-2 px-3 text-[11px] leading-4 text-slate-400">{scope === 'ALL_HOMES' ? 'Conversations across homes you can access.' : 'Recent conversations for the selected home.'} ContractToCozy navigation remains available above.</p>}
       </div>
     </nav>
   );

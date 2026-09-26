@@ -64,13 +64,13 @@ describe('calm Maintenance answer', () => {
     expect(within(menu).getByText(/^Updated /)).toBeInTheDocument();
   });
 
-  it('offers exactly one retry: the "Try again" suggestion chip is not repeated', async () => {
+  it('offers exactly one retry, and leaves follow-up chips to the row above the composer', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
     card(execution({ correctionCapabilities: { retryResponse: true, intent: false, entity: false, homeRecord: false } } as Partial<AskExecutionResponse>), ['Try again', 'Only show overdue tasks']);
     await screen.findByRole('heading', { name: /8 tasks are overdue/ });
     expect(screen.getByRole('button', { name: 'Try again with current records' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Only show overdue tasks' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Only show overdue tasks' })).toBeNull();
   });
 
   it('keeps the current rendering when the setting is off', async () => {
@@ -82,11 +82,15 @@ describe('calm Maintenance answer', () => {
     expect(container.querySelector('[data-calm-summary]')).toBeNull();
   });
 
-  it('gives another domain the calm shell but not the calm answer anatomy', async () => {
+  it('gives another domain the calm shell and a plain summary, without the maintenance list layout', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
-    const { container } = card(execution({ blocks: [blocks[0], { ...blocks[1], id: 'inventory-results', title: 'Inventory' }] } as Partial<AskExecutionResponse>));
+    const other = { ...blocks[0], headline: undefined, supportLine: undefined, title: 'Here is what the home record contains', body: 'The refrigerator was installed in 2019.' };
+    const { container } = card(execution({ blocks: [other, { ...blocks[1], id: 'inventory-results', title: 'Inventory' }] } as Partial<AskExecutionResponse>));
     expect(await screen.findByRole('button', { name: 'Response options' })).toBeInTheDocument();
-    expect(screen.getByText('9 maintenance records match this request')).toBeInTheDocument();
-    expect(container.querySelector('[data-calm-summary]')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Here is what the home record contains' })).toBeInTheDocument();
+    // With no producer headline the body is ordinary text: it may be the whole answer.
+    expect(screen.getByText('The refrigerator was installed in 2019.').className).toContain('text-slate-700');
+    expect(container.querySelector('[data-calm-summary]')).not.toBeNull();
+    expect(screen.getByText(/Showing 50-item server pages/)).toBeInTheDocument();
   });
 });

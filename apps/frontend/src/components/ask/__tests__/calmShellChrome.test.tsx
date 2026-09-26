@@ -1,0 +1,93 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { CalmLanding } from '../calm/CalmLanding';
+import { FollowUpRow } from '../calm/FollowUpRow';
+import { ConversationHistoryNav } from '../workspace/ConversationHistoryNav';
+import { IntelligenceRefreshStatus } from '../../intelligence/IntelligenceRefreshStatus';
+import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
+import type { ConciergeHomeView } from '@/features/ask/types';
+import { api } from '@/lib/api/client';
+
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.11 slice C and D (IW-CALM-006/007/008, FRD v1.111).
+const view = (overrides: Partial<ConciergeHomeView> = {}): ConciergeHomeView => ({
+  propertyId: 'home', generatedAt: '2026-09-25T00:00:00.000Z',
+  journeyContext: { state: 'AVAILABLE', ownershipState: 'ESTABLISHED_OWNER', operatingMode: 'OWNING', entryPath: null, propertyOrigin: null, contextVersion: null, capturedAt: null },
+  priorityList: { state: 'AVAILABLE', rankingPolicyVersion: 'v1', generatedAt: null, href: '/dashboard', truncated: false, items: [
+    { homeActionId: 'washer', title: 'Consider replacing your Washer Dryer.', askQuestion: 'Should I replace my washer dryer?', askCategoryId: 'PLAN_MONITOR', askCategoryLabel: 'Plan', subject: null, consumerPriority: 'PLAN_SOON', comparativeReasonCodes: [], confidenceLabel: 'HIGH', deadlineAt: null, cta: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false },
+    { homeActionId: 'heat', title: 'Heating system inspection', askQuestion: 'Tell me about the heating inspection', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', subject: null, consumerPriority: 'DO_NOW', comparativeReasonCodes: [], confidenceLabel: 'HIGH', deadlineAt: null, cta: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false },
+  ] },
+  changes: { state: 'NO_CHANGE', windowDays: 14, items: [], href: '/dashboard' },
+  decisions: { state: 'NO_DECISIONS', items: [], href: '/dashboard' },
+  landingSpotlight: { kind: 'ATTENTION', entityId: 'heat' }, capabilityGroups: [], featuredPrompts: [], suggestedQuestions: [], ...overrides,
+});
+const starters = ['Maintain', 'Protect', 'Save', 'Plan', 'Extra'].map((label, index) => ({ id: `s${index}`, categoryId: 'MAINTAIN' as const, categoryLabel: label, question: `${label} question?`, source: 'DISCOVERY' as const }));
+
+describe('CalmLanding', () => {
+  it('says what needs attention, opens the matching answer from each chip, and shows one urgent item and four starters', () => {
+    const onAsk = jest.fn();
+    render(<CalmLanding view={view()} loading={false} failed={false} starters={starters} usingFallbackStarters={false} onAsk={onAsk}><span>explorer</span></CalmLanding>);
+    expect(screen.getByText('1 thing needs attention now, and 1 more to plan soon.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '1 to do now' }));
+    expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'What needs my attention right now?' }), 'ATTENTION');
+    fireEvent.click(screen.getByRole('button', { name: /Heating system inspection/ }));
+    expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'Tell me about the heating inspection', context: expect.objectContaining({ entityType: 'HOME_ACTION', entityId: 'heat' }) }), 'ATTENTION');
+    expect(screen.getAllByRole('list', { name: 'Things you can ask' })[0].querySelectorAll('button')).toHaveLength(4);
+    expect(screen.getByText('explorer')).toBeInTheDocument();
+  });
+
+  it('is honest while loading and when the overview is unavailable, and never claims the home is fine', () => {
+    const { rerender } = render(<CalmLanding view={null} loading failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Checking your home…');
+    rerender(<CalmLanding view={null} loading={false} failed starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    expect(screen.getByText(/temporarily unavailable/)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing needs your attention/)).toBeNull();
+    rerender(<CalmLanding view={view({ priorityList: { ...view().priorityList, state: 'UNAVAILABLE' } })} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    expect(screen.getByText('Your priorities are temporarily unavailable.')).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing needs your attention/)).toBeNull();
+  });
+});
+
+describe('FollowUpRow', () => {
+  it('asks the chosen follow-up, and is empty while an answer is pending', () => {
+    const onPick = jest.fn();
+    const { rerender, container } = render(<FollowUpRow suggestions={['Only show overdue tasks', 'Compare the quotes']} disabled={false} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compare the quotes' }));
+    expect(onPick).toHaveBeenCalledWith('Compare the quotes');
+    rerender(<FollowUpRow suggestions={['Only show overdue tasks']} disabled onPick={onPick} />);
+    expect(container.querySelector('[data-follow-up-row]')).toBeNull();
+    rerender(<FollowUpRow suggestions={[]} disabled={false} onPick={onPick} />);
+    expect(container.querySelector('[data-follow-up-row]')).toBeNull();
+  });
+});
+
+const nav = () => render(<ConversationHistoryNav items={[]} activeSessionId="s" loading={false} loadingMore={false} hasMore={false} issue={null} openingId={null} query="" scope="THIS_HOME" selectedHomeAvailable
+  onQueryChange={jest.fn()} onScopeChange={jest.fn()} onOpen={jest.fn()} onNew={jest.fn()} onLoadMore={jest.fn()} backHref="/dashboard" backLabel="Back to Home" />);
+
+describe('ConversationHistoryNav in the calm shell', () => {
+  beforeEach(() => window.localStorage.clear());
+  it('drops the brand block and the explanatory footer, and keeps the controls', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    nav();
+    expect(await screen.findByRole('button', { name: 'New Ask Cozy session' })).toBeInTheDocument();
+    expect(screen.queryByText('Your home assistant')).toBeNull();
+    expect(screen.queryByText(/navigation remains available above/)).toBeNull();
+    expect(screen.getByPlaceholderText('Search conversations')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Back to Home/ })).toBeInTheDocument();
+  });
+  it('keeps the current copy when the setting is off', () => {
+    nav();
+    expect(screen.getByText('Your home assistant')).toBeInTheDocument();
+    expect(screen.getByText(/navigation remains available above/)).toBeInTheDocument();
+  });
+});
+
+describe('IntelligenceRefreshStatus compact', () => {
+  it('shows a dot with the state as its label instead of the badge', async () => {
+    jest.spyOn(api, 'getPropertyIntelligenceRefreshDetails').mockResolvedValue({ state: 'PARTIALLY_REFRESHED', capabilities: [] } as unknown as Awaited<ReturnType<typeof api.getPropertyIntelligenceRefreshDetails>>);
+    const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+    const { container } = render(<QueryClientProvider client={new QueryClient()}><IntelligenceRefreshStatus propertyId="home" compact /></QueryClientProvider>);
+    const summary = await screen.findByLabelText(/Partially refreshed/);
+    expect(summary).toHaveAttribute('title', 'Partially refreshed');
+    expect(container.querySelector('span.rounded-full.bg-amber-500')).not.toBeNull();
+    expect(screen.queryByText('Partially refreshed')).toBeNull();
+  });
+});
