@@ -199,7 +199,7 @@ test('with ?calm=0 there is no pending turn: the previous behavior is kept', asy
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
 });
 
-test('history rail (ACUI-006): collapsed on the fresh landing, opens from History, remembers the choice, and stays open for a search', async ({ page }) => {
+test('history drawer (ACUI-006): primary navigation stays in place while History opens and closes as a secondary surface', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const nav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
@@ -209,15 +209,11 @@ test('history rail (ACUI-006): collapsed on the fresh landing, opens from Histor
   await toggle.click();
   await expect(nav).toBeVisible();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await expect(toggle).toBeFocused();
-  // The choice survives a reload.
-  await page.reload();
-  await expect(nav).toBeVisible();
-  // Hiding it again is remembered too, and focus lands on the control that now opens it.
-  await page.locator('#ask-history-toggle').click();
+  await page.keyboard.press('Escape');
   await expect(nav).toHaveCount(0);
-  await expect(page.locator('#ask-history-toggle')).toBeFocused();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  // The prototype navigation remains present rather than being replaced by history.
+  await expect(page.getByRole('navigation', { name: 'Ask Cozy sections' })).toBeVisible();
   await page.reload();
   await expect(nav).toHaveCount(0);
 });
-

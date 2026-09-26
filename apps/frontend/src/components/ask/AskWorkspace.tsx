@@ -45,6 +45,7 @@ import { deriveComposerAffordances } from '@/features/ask/composerAffordances';
 import { resolveHistoryRailExpanded, useHistoryRailPreference } from '@/features/ask/historyRail';
 import { useSelectedPropertyLabel } from './workspace/useSelectedPropertyLabel';
 import { buildConciergeStateStrip } from '@/features/ask/conciergeStateStrip';
+import { AskShellHeader } from './workspace/AskShellHeader';
 // Re-exported for existing test imports (`from '../AskWorkspace'`); the
 // registry in ./blocks/registry.tsx is the actual implementation now.
 export { BlockView };
@@ -280,7 +281,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     />
   );
   const renderComposer = (placement: 'hero' | 'footer') => (
-    <form onSubmit={submit} className="group mx-auto w-full max-w-3xl" aria-label="Ask Cozy question">
+    <form onSubmit={submit} className={cn('group mx-auto w-full', placement === 'hero' ? 'max-w-none' : 'max-w-3xl')} aria-label="Ask Cozy question">
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
       <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100', placement === 'hero' ? cn('rounded-2xl p-3 shadow-[0_12px_28px_-20px_rgba(15,23,42,0.45)]', calm && 'border-stone-300') : 'rounded-2xl')}>
@@ -300,13 +301,14 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   return (
     <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50', calm && 'ask-calm')}>
+      {calm && mode === 'page' && <AskShellHeader onOpenHistory={() => setHistoryDrawerOpen(true)} />}
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
           flush against the device's actual top edge/notch); env() resolves
           to 0 on the desktop floating panel and the dashboard-embedded page
           view, so it's harmless to apply unconditionally rather than
           threading a separate "is this the mobile sheet" signal through. */}
-      <header className={cn('flex items-center justify-between border-b border-slate-200 bg-white', calm && mode === 'page' && 'lg:hidden', mode === 'page' ? (calm ? 'min-h-12 px-4 sm:px-6' : 'min-h-16 px-4 sm:px-6') : 'px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
+      <header className={cn('flex items-center justify-between border-b border-slate-200 bg-white', calm && mode === 'page' && 'hidden', mode === 'page' ? (calm ? 'min-h-12 px-4 sm:px-6' : 'min-h-16 px-4 sm:px-6') : 'px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
         <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? (calm ? 'h-8 w-8 rounded-xl' : 'h-9 w-9 rounded-xl lg:hidden') : 'h-9 w-9 rounded-xl')}><Sparkles className="h-4 w-4" /></span><div>{mode === 'page' ? <h1 className="text-lg font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}{!calm && <p className="truncate text-xs text-slate-500">{scopeLabel}</p>}</div></div></div>
         <div className="flex items-center gap-1">
           {selectedPropertyId && <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact={calm} />}
@@ -319,7 +321,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
       {mode === 'page' && (
         <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
-          <SheetContent side="left" className="flex w-[min(22rem,92vw)] flex-col bg-slate-50 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] lg:hidden">
+          <SheetContent side="left" className="flex w-[min(22rem,92vw)] flex-col bg-slate-50 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
             <SheetHeader className="pr-12 text-left">
               <SheetTitle>Ask Cozy conversations</SheetTitle>
               <SheetDescription>Start something new or continue a conversation from an accessible home.</SheetDescription>
@@ -346,7 +348,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{askUnavailable ? 'Ask Cozy is temporarily unavailable. Your saved data is unchanged.' : loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
-          railExpanded ? (
+          railExpanded && !calm ? (
           <aside id="ask-history-rail" className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
             {calm && <button type="button" id="ask-history-toggle" onClick={() => { setHistorySearchInput(''); railToggled.current = true; chooseRailPreference('collapsed'); }} aria-expanded="true" aria-controls="ask-history-rail" className="mb-2 inline-flex min-h-8 items-center gap-1.5 self-end rounded-lg px-2 text-xs font-medium text-slate-500 hover:bg-slate-200/60 hover:text-slate-800"><ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />Hide history</button>}
             <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} />
@@ -358,7 +360,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               <button type="button" onClick={startNewSession} aria-current={showLanding ? 'page' : undefined} className={cn('flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', showLanding ? 'bg-emerald-950 text-white' : 'text-slate-700 hover:bg-stone-200/70')}><Home className="h-4 w-4" aria-hidden="true" />Home</button>
               <Link href={`/dashboard/maintenance${selectedPropertyId ? `?propertyId=${encodeURIComponent(selectedPropertyId)}` : ''}`} className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><Wrench className="h-4 w-4" aria-hidden="true" />Work</Link>
               {selectedPropertyId && <Link href={`/dashboard/properties/${encodeURIComponent(selectedPropertyId)}`} className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><BookOpen className="h-4 w-4" aria-hidden="true" />Record</Link>}
-              <button type="button" id="ask-history-toggle" onClick={() => { railToggled.current = true; chooseRailPreference('expanded'); }} aria-expanded="false" className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><History className="h-4 w-4" aria-hidden="true" />History</button>
+              <button type="button" id="ask-history-toggle" onClick={() => setHistoryDrawerOpen(true)} aria-expanded={historyDrawerOpen} className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><History className="h-4 w-4" aria-hidden="true" />History</button>
             </nav>
           </aside>
           )
@@ -380,11 +382,11 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {calm ? <div className="mb-5">
               <p className="mb-3 text-sm text-slate-500" data-calm-date="">{new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</p>
               {propertyLabel && <p className="mb-1 truncate text-xs font-semibold uppercase tracking-[0.12em] text-emerald-900" data-calm-property="">{propertyLabel}</p>}
-              <h2 className="max-w-3xl text-[30px] font-bold leading-[1.08] tracking-[-0.035em] text-[#17231d] sm:text-[42px]" data-calm-headline={landingOpening ? 'state' : 'generic'}>{landingOpening ?? 'How can I help with your home?'}</h2>
+              <h2 className="max-w-3xl text-[29px] font-semibold leading-[1.1] tracking-[-0.03em] text-[#17231d] sm:text-[38px]" data-calm-headline={landingOpening ? 'state' : 'generic'}>{landingOpening ?? 'How can I help with your home?'}</h2>
               <p className="mt-3 max-w-2xl text-[15px] leading-6 text-slate-600">Review what needs attention, or ask about anything connected to your home.</p>
             </div> : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
             {!calm && renderComposer('hero')}
-            {calm ? <CalmLanding composer={renderComposer('hero')} headlineShownAbove={Boolean(landingOpening)} view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)}>{explorer}</CalmLanding> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
+            {calm ? <CalmLanding composer={renderComposer('hero')} headlineShownAbove={Boolean(landingOpening)} view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)} /> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
               <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Popular ways to use Ask Cozy</h2>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">{featuredPrompts.map((prompt) => <button type="button" key={prompt.id} onClick={() => runPrompt(prompt, usingFallbackPrompts ? 'FALLBACK' : prompt.source)} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700"><CapabilityCategoryIcon categoryId={prompt.categoryId} className="h-3.5 w-3.5" />{prompt.categoryLabel}</span><span className="mt-1.5 block text-sm font-medium text-slate-700 group-hover:text-teal-900">{prompt.question}</span></button>)}</div>
               {explorer}

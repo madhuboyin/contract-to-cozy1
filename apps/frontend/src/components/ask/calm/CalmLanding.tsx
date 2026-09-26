@@ -15,7 +15,7 @@ const TONE: Record<StripTone, { chip: string; dot: string }> = {
   DEFAULT: { chip: 'bg-slate-100 text-slate-700 hover:bg-slate-200', dot: 'bg-slate-400' },
 };
 // One line on a phone (scrolls sideways), wrapping on wider screens.
-const ROW = 'flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible';
+const ROW = 'flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible';
 
 export function CalmLanding({ view, loading, failed, starters, usingFallbackStarters, onAsk, headlineShownAbove = false, composer, children }: {
   view: ConciergeHomeView | null;
@@ -76,7 +76,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
       {stripChips.length > 0 && !loading && <ul className="grid gap-3 sm:grid-cols-2" aria-label="Needs your attention">{stripChips.map(contextLine)}</ul>}
       {composer && <div className="mt-4">{composer}</div>}
       {(shownStarters.length > 0 || children) && !loading && <ul className={cn(ROW, 'mt-4')} aria-label="Suggestions">
-        {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-9 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm text-slate-700 transition hover:border-teal-300 hover:text-teal-900">{prompt.question}</button></li>)}
+        {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-10 whitespace-nowrap rounded-full border border-stone-300 bg-transparent px-4 py-2 text-[15px] font-medium text-slate-700 transition hover:border-emerald-700 hover:text-emerald-950">{prompt.question}</button></li>)}
         {children && <li className="shrink-0">{children}</li>}
       </ul>}
     </div>

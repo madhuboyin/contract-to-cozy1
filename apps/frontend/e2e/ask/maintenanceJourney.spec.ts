@@ -30,7 +30,7 @@ test('ACUI-001/002/003: the launch names the home and its state, each entry can 
   expect(firstCard && secondCard && secondCard.x > firstCard.x + firstCard.width).toBe(true);
   expect(firstCard && composerBox && firstCard.y + firstCard.height < composerBox.y).toBe(true);
   expect(composerBox && composerBox.height <= 76).toBe(true);
-  await expect(page.locator('[data-calm-headline="state"]')).toHaveCSS('font-weight', '700');
+  await expect(page.locator('[data-calm-headline="state"]')).toHaveCSS('font-weight', '600');
   await expect(page).toHaveScreenshot('ask-cozy-prototype-desktop.png', { animations: 'disabled', fullPage: true, mask: [page.locator('[data-calm-date]')] });
 
   // ACUI-002: the explanation opens in place and never disturbs what was typed.
@@ -133,10 +133,11 @@ test('ACUI-006: a fresh landing puts unfinished work first and keeps history one
   await expect(nav).toHaveCount(0);
   await toggle.click();
   await expect(nav.getByPlaceholder('Search conversations')).toBeVisible();
-  // Hide history clears the search and collapses; it stays collapsed after a reload.
+  // History is a secondary drawer; closing it leaves the prototype navigation in place.
   await nav.getByPlaceholder('Search conversations').fill('boiler');
-  await page.locator('#ask-history-toggle').click();
+  await page.keyboard.press('Escape');
   await expect(nav).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Ask Cozy sections' })).toBeVisible();
   await page.reload();
   await expect(nav).toHaveCount(0);
   await unfinished.getByRole('button', { name: 'Dismiss' }).click();
