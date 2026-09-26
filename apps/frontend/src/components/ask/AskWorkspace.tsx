@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, History, Loader2, Maximize2, RefreshCw, Send, Sparkles, Square, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronsLeft, History, Loader2, Maximize2, RefreshCw, Send, Sparkles, Square, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -40,6 +40,7 @@ import { CapabilityCategoryIcon, CapabilityExplorer, ConciergeHome } from './wor
 import { ConfirmationCard } from './workspace/CaptureCards';
 import { ExecutionCard } from './workspace/ExecutionCard';
 import { ConversationHistoryNav, PendingWorkInbox } from './workspace/ConversationHistoryNav';
+import { resolveHistoryRailExpanded, useHistoryRailPreference } from '@/features/ask/historyRail';
 import { useSelectedPropertyLabel } from './workspace/useSelectedPropertyLabel';
 import { buildConciergeStateStrip } from '@/features/ask/conciergeStateStrip';
 // Re-exported for existing test imports (`from '../AskWorkspace'`); the
@@ -140,6 +141,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     !historyLoading && landingVisible && !propertyMismatch ? selectedPropertyId : undefined,
     availabilityEpoch,
   );
+  // ACUI-006: on the calm landing the desktop rail starts collapsed; an explicit choice is remembered, and a search keeps it open.
+  const [railPreference, chooseRailPreference] = useHistoryRailPreference();
+  const railToggled = useRef(false);
+  const railExpanded = resolveHistoryRailExpanded({ calm, landingVisible, preference: railPreference, searching: historySearchInput.trim().length > 0 });
+  // The toggle unmounts with the state it changes, so hand focus to its counterpart after an explicit choice.
+  useEffect(() => { if (railToggled.current) { railToggled.current = false; document.getElementById('ask-history-toggle')?.focus(); } }, [railExpanded]);
   // ACUI-001: the launch says which home it is about and leads with that home's state; unknown state keeps the generic prompt.
   const propertyLabel = useSelectedPropertyLabel(selectedPropertyId, calm && landingVisible);
   const landingOpening = calm && !concierge.loading && !concierge.failed && concierge.view ? buildConciergeStateStrip(concierge.view).opening : null;
@@ -332,9 +339,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{askUnavailable ? 'Ask Cozy is temporarily unavailable. Your saved data is unchanged.' : loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
-          <aside className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
+          railExpanded ? (
+          <aside id="ask-history-rail" className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
+            {calm && <button type="button" id="ask-history-toggle" onClick={() => { setHistorySearchInput(''); railToggled.current = true; chooseRailPreference('collapsed'); }} aria-expanded="true" aria-controls="ask-history-rail" className="mb-2 inline-flex min-h-8 items-center gap-1.5 self-end rounded-lg px-2 text-xs font-medium text-slate-500 hover:bg-slate-200/60 hover:text-slate-800"><ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />Hide history</button>}
             <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} />
           </aside>
+          ) : (
+          <aside className="hidden w-14 shrink-0 flex-col items-center border-r border-slate-200 bg-[#f7f7f5] py-4 lg:flex" aria-label="Conversation history">
+            <button type="button" id="ask-history-toggle" onClick={() => { railToggled.current = true; chooseRailPreference('expanded'); }} aria-expanded="false" className="flex min-h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-xl text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"><History className="h-4 w-4" aria-hidden="true" /><span className="text-[10px] font-medium">History</span></button>
+          </aside>
+          )
         )}
         <div className="flex min-w-0 flex-1 flex-col">
       <main className={cn('min-h-0 flex-1 overflow-y-auto', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>

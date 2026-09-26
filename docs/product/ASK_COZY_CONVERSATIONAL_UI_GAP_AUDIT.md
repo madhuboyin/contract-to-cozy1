@@ -262,7 +262,7 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 | --- | --- |
 | ACUI-001 | **Implemented in code (FRD v1.115).** Home name, state headline and named composer placeholder; generic prompt only when state is unknown. Not browser-verified. |
 | ACUI-002 | **Implemented in code, frontend-only (FRD v1.115).** Derived in `conciergeStateStrip.ts`; hidden when nothing can be derived. Not browser-verified. |
-| ACUI-006 | Partial: unfinished work is one quiet line (`88d3dc2f`); history-rail collapse remains. |
+| ACUI-006 | **Rail collapse implemented in code (FRD v1.116)** on top of the quiet unfinished-work lines (`88d3dc2f`). Remaining: a recent-artifacts / pinned-results row distinct from saved conversations. |
 | ACUI-007 | Guardrail in force: the conversational capture limit was restored to three fields (FRD v1.114). |
 | ACUI-003, 004, 005 | Not started. |
 

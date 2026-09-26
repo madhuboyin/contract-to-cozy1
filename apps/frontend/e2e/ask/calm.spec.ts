@@ -23,7 +23,10 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(page.getByRole('button', { name: /More ideas/ })).toBeVisible();
   await expect(page.getByText('Top priority')).toHaveCount(0);
   await expect(page.getByRole('list', { name: 'Suggestions' }).getByRole('button')).not.toHaveCount(0);
+  // ACUI-006: the desktop rail starts collapsed on the fresh landing; the History control opens it.
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
+  await expect(conversationNav).toHaveCount(0);
+  await page.getByRole('button', { name: 'History', exact: true }).click();
   await expect(conversationNav.getByText('Your home assistant')).toHaveCount(0);
   await expect(conversationNav.getByText(/navigation remains available above/)).toHaveCount(0);
   await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
@@ -195,3 +198,26 @@ test('with ?calm=0 there is no pending turn: the previous behavior is kept', asy
   await expect(page.locator('[data-pending-turn]')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
 });
+
+test('history rail (ACUI-006): collapsed on the fresh landing, opens from History, remembers the choice, and stays open for a search', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  const nav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
+  const toggle = page.locator('#ask-history-toggle');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(nav).toHaveCount(0);
+  await toggle.click();
+  await expect(nav).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toBeFocused();
+  // The choice survives a reload.
+  await page.reload();
+  await expect(nav).toBeVisible();
+  // Hiding it again is remembered too, and focus lands on the control that now opens it.
+  await page.locator('#ask-history-toggle').click();
+  await expect(nav).toHaveCount(0);
+  await expect(page.locator('#ask-history-toggle')).toBeFocused();
+  await page.reload();
+  await expect(nav).toHaveCount(0);
+});
+

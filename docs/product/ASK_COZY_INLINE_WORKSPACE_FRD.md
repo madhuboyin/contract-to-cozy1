@@ -1,6 +1,6 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.115
+**Version:** 1.116
 **Date:** September 25, 2026  
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
@@ -966,6 +966,8 @@ A functionally correct journey fails quality review when it introduces unnecessa
 **IW-CONV-018 — Capture is asked, not laid out (v1.113; limit restored to three in v1.114).** Every capture whose fields are all scalar (choice, yes/no, number, short text, time), standard sensitivity and workflow input, with at most three fields, is asked one question at a time. v1.113 raised the limit to seven so maintenance-task creation was a conversation; that was reverted on September 26, 2026 because seven sequential questions is a slower form, not a conversation. Longer groups stay one form until grouped/adaptive capture exists (related fields collected together, later questions shown only when earlier answers require them; ACUI-007 in `ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md`). Captures with date-precision or relational inputs still use the form.
 
 **IW-CONV-019 — The launch opens with the home's state, and every entry can say why (v1.115, September 26, 2026; ACUI-001 and ACUI-002 of `ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md`).** On the calm landing, the selected home's name sits above a headline built from the same Concierge Home payload as the entries (`buildConciergeStateStrip().opening`): "N things need your attention now", "Nothing urgent. N to plan soon", "N important changes to review", or "Nothing needs your attention right now" only when no source is unavailable. When the state is unknown or a source is unavailable and nothing else can be said, the generic "How can I help with your home?" stays. The composer placeholder names the home. Each of the two entries has a collapsed "Why this appeared" control (`aria-expanded`) listing up to four plain sentences derived only from governed fields: ranking priority, `deadlineAt`, mapped `comparativeReasonCodes` (tie-break codes are not shown), `confidenceLabel`, change materiality and dates, and decision lifecycle and update date. If no sentence can be derived the control is not shown; the browser never invents a reason. No backend contract changed. Opening or closing it does not touch the composer or the launch.
+
+**IW-CONV-020 — The history rail steps back on a fresh landing (v1.116, September 26, 2026; ACUI-006).** In the calm shell on desktop, the conversation history rail is a narrow strip with a labeled "History" control while the landing is fresh, so the composer and unfinished work lead. With a conversation active it is open. "History" opens it; "Hide history" collapses it (and clears any search text). An explicit choice is remembered in the browser (`askHistoryRail`) and wins over the default; a search in progress always keeps the rail open. After a toggle, focus moves to the counterpart control (`aria-expanded` reflects the state). Outside the calm shell, and on mobile (the existing sheet), nothing changes. Auto-collapsing on "New conversation" and a recent-artifacts row were considered and not built.
 
 ### Phase 0 — Authority and coverage
 
