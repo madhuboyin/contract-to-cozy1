@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { CorrectionActions } from './CorrectionActions';
 import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from './AttachEvidenceControl';
 import { ActionLink } from './blocks/context';
+import { useCalmAnswer } from './blocks/calmContext';
 import type { Warranty } from '@/types';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -135,6 +136,11 @@ export function WarrantyResultList({ block, propertyId, disabled, onAction, onAc
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
   const controls = useContext(ResultViewContext);
+  // Warranties W-1 (FRD v1.124): inside an adopted calm answer the first workflow action ("Add a warranty") is the one dominant step
+  // and the Warranties page link is quiet text. The list's own copy of that link exists for the calm answer only.
+  const calm = useCalmAnswer();
+  const primaryActionId = calm ? block.actions.find((action) => action.interactionType === 'START_WORKFLOW')?.id ?? null : null;
+  const listActions = block.actions.filter((action) => calm || action.id !== 'open-warranties-list');
   const [localDetailWarrantyId, setLocalDetailWarrantyId] = useState<string | null>(null);
   const detailWarrantyId = controls ? controls.detailIdFor(block.id) : localDetailWarrantyId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailWarrantyId);
@@ -163,15 +169,17 @@ export function WarrantyResultList({ block, propertyId, disabled, onAction, onAc
           return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <button type="button" data-warranty-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailWarrantyId === item.id} aria-controls={`warranty-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
-              {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ')}</span>}
+              {item.status && <span className={cn('text-xs', item.status === 'EXPIRING' || item.status === 'NEEDS_REVIEW' ? 'font-semibold text-amber-800' : 'text-slate-600')}>{item.status.replace(/_/g, ' ')}</span>}
             </div>
             {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-600">{item.meta.join(' · ')}</p>}
+            {/* WARRANTY_LOOKUP declares the recorded coverage text here, shown exactly as recorded. */}
+            {item.description && <p className="mt-2 text-sm text-slate-600">{item.description}</p>}
           </li>;
         })}
       </ul>
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more warranties are available through the full Warranties collection.</p>}
     </div>)}
     {detailWarrantyId && detailItem && <WarrantyDetail key={detailWarrantyId} warrantyId={detailWarrantyId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
+    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{listActions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === primaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>
   </section>;
 }

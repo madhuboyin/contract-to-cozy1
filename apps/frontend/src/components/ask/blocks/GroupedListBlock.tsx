@@ -261,7 +261,8 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
     return <HouseholdResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
-  if (block.id === 'property-warranties') {
+  // 'warranty-results' is the WARRANTY_LOOKUP answer (Warranties W-1); 'property-warranties' is the Property Summary section. Same rows, same detail.
+  if (block.id === 'property-warranties' || block.id === 'warranty-results') {
     return <WarrantyResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }

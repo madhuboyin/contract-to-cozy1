@@ -39,6 +39,9 @@ describe('isCalmAdopter', () => {
   it('is true for a result carrying the maintenance or the inventory list, so other domains keep their rendering', () => {
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'maintenance-groups' }]))).toBe(true);
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'inventory-results' }]))).toBe(true);
+    expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'warranty-results' }]))).toBe(true);
+    // The Property Summary's warranties section is one part of a larger answer, not the adopted warranty answer.
+    expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'property-warranties' }]))).toBe(false);
     // The inventory disambiguation list ("which item do you mean?") is a question, not the adopted answer.
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'inventory-entity-selection' }]))).toBe(false);
     expect(isCalmAdopter(execution([summary()]))).toBe(false);

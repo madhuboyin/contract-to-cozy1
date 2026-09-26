@@ -60,6 +60,7 @@ const TAXONOMY = Object.freeze({
   'hoa-compliance': ['HOA_COMPLIANCE_STATUS'],
   'price-finalization': ['PRICE_FINALIZATIONS_LIST'],
   'do-nothing-simulator': ['DO_NOTHING_SIMULATION'],
+  'warranties': ['WARRANTY_LOOKUP'],
   'appliance-oracle': ['APPLIANCE_FAILURE_RISK'],
   'budget-planner': ['MAINTENANCE_BUDGET_FORECAST'],
 });

@@ -41,6 +41,7 @@ import { GUIDANCE_OVERVIEW_SKILL } from './guidance-overview';
 import { HOA_COMPLIANCE_SKILL } from './hoa-compliance';
 import { PRICE_FINALIZATION_SKILL } from './price-finalization';
 import { DO_NOTHING_SIMULATOR_SKILL } from './do-nothing-simulator';
+import { WARRANTIES_SKILL } from './warranties';
 import { APPLIANCE_ORACLE_SKILL } from './appliance-oracle';
 import { BUDGET_PLANNER_SKILL } from './budget-planner';
 import { SELLER_PREPARATION_SKILL } from './seller-preparation';
@@ -105,6 +106,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
   'hoa-compliance': HOA_COMPLIANCE_SKILL,
   'price-finalization': PRICE_FINALIZATION_SKILL,
   'do-nothing-simulator': DO_NOTHING_SIMULATOR_SKILL,
+  'warranties': WARRANTIES_SKILL,
   'appliance-oracle': APPLIANCE_ORACLE_SKILL,
   'budget-planner': BUDGET_PLANNER_SKILL,
   'seller-preparation': SELLER_PREPARATION_SKILL,

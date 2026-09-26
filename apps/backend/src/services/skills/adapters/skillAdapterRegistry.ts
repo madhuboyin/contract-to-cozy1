@@ -77,6 +77,7 @@ const DEFINITIONS = [
   adapter('appliance-oracle.risk', 'Appliance Oracle failure risk without AI picks (ApplianceOracleService)', 'APPLIANCE_FAILURE_RISK'),
   adapter('budget-planner.forecast', 'Budget Planner forecast without AI tips (BudgetForecasterService)', 'MAINTENANCE_BUDGET_FORECAST'),
   adapter('do-nothing-simulator.latest', 'Do-Nothing Simulator latest run and scenarios (DoNothingSimulatorService)', 'DO_NOTHING_SIMULATION'),
+  adapter('warranty.lookup', 'Recorded warranties (prisma.warranty, the rows GET /properties/:propertyId/warranties returns)', 'WARRANTY_LOOKUP'),
   adapter('seller-prep.checklist', 'PropertySaleCaseService', 'SELLER_PREP_CHECKLIST'),
   adapter('room.create', 'InventoryService', 'ROOM_CREATE', 'MUTATION_PREPARATION'),
   adapter('inventory.create', 'InventoryService', 'INVENTORY_ITEM_CREATE', 'MUTATION_PREPARATION'),

@@ -149,6 +149,7 @@ export type AskOperationId =
   // owner-only (a Warranty belongs to one member's homeownerProfile, and the
   // canonical updateWarranty is scoped to it).
   | 'WARRANTY_CORRECT'
+  | 'WARRANTY_LOOKUP'
   // Phase 3 write slice 4: rename an InventoryRoom via the canonical
   // inventoryService.updateRoom (plus the controller's stale-analysis markers).
   | 'ROOM_RENAME'
@@ -357,6 +358,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   SAVINGS_OPPORTUNITIES: definition('SAVINGS_OPPORTUNITIES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'savings.opportunities', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE']),
   OWNERSHIP_COSTS: definition('OWNERSHIP_COSTS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'ownership.costs', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'BOUNDARY']),
   INVENTORY_LOOKUP: definition('INVENTORY_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inventory.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE']),
+  // FRD v1.124 (Warranties W-1): a deterministic read of the recorded warranties, the same property-scoped rows GET
+  // /properties/:propertyId/warranties returns (any household member, so VIEWER). It reports recorded fields, never decides coverage.
+  WARRANTY_LOOKUP: definition('WARRANTY_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'warranty.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   DOCUMENT_LOOKUP: definition('DOCUMENT_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'documents.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   PROPERTY_SUMMARY: definition('PROPERTY_SUMMARY', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property.summary', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'PROGRESS', 'EVIDENCE']),
   INTELLIGENCE_ENVELOPE_QUERY: definition('INTELLIGENCE_ENVELOPE_QUERY', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'intelligence-envelope.query', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
@@ -718,6 +722,23 @@ const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling read
 // sellerPrepChecklistPattern's own bare "seller prep" alternative.
 const sellerPrepItemDecisionPattern = /\b(?:waive|pursue|reopen|unpursue)\b.{0,60}\b(?:seller[- ]prep|sale readiness|checklist)\b.{0,20}\bitem\b|\b(?:seller[- ]prep|sale readiness|checklist)\b.{0,20}\bitem\b.{0,60}\b(?:waive|pursue|reopen|unpursue)\b/i;
 const majorEventPattern = /\b(?:help|guide|prepare|plan|checklist|what should i do|what do i need)\b.{0,70}\b(?:moving|move in|move out|selling my home|home sale|major renovation|remodeling|insurance claim|storm damage|new baby|aging in place)\b/i;
+// Recorded warranties (the Warranties page): what the Home Record says about them, including "what does my HVAC warranty cover?"
+// (the recorded coverage text, never a coverage decision). Missing protection and coverage gaps stay COVERAGE_GAPS, filing or moving
+// a claim stays CLAIM_FILE / CLAIM_TRANSITION, adding, correcting and monitoring stay with their own commands.
+const warrantyLookupPattern = new RegExp([
+  String.raw`\b(?:show|list|see|view|open|pull up)\b.{0,25}\b(?:my|our|the|all|every)?\s*(?:recorded )?warrant(?:y|ies)\b`,
+  String.raw`\b(?:what|which)\b.{0,12}\bwarrant(?:y|ies)\b`,
+  String.raw`\b(?:my|our)\b.{0,30}\bwarrant(?:y|ies)\b.{0,50}\b(?:still|active|valid|expire[sd]?|expiring|expiry|runs? out|ends?|left|remaining|recorded|on file|status|cover(?:s|ed|age details)?)\b`,
+  String.raw`\bis (?:my|our|the)\b.{0,30}\bwarrant(?:y|ies)\b.{0,30}\b(?:still|active|valid|good|expired)\b`,
+  String.raw`\bunder warranty\b`,
+  String.raw`\bdo (?:i|we)\b.{0,20}\b(?:have|got)\b.{0,30}\b(?:a |an |any )?(?:recorded )?warrant(?:y|ies)\b`,
+  String.raw`\bwarrant(?:y|ies)\b.{0,40}\b(?:expir\w*|running out)\b`,
+  String.raw`\b(?:expir\w*|expired)\b.{0,30}\bwarrant(?:y|ies)\b`,
+  String.raw`\bwarranty information\b`,
+  String.raw`\bhow long\b.{0,40}\bwarrant(?:y|ies)\b`,
+  String.raw`\bwhen (?:does|do|will|is|are)\b.{0,40}\bwarrant(?:y|ies)\b.{0,30}\b(?:end|expire|expires|run out|runs out|up)\b`,
+].join('|'), 'i');
+const warrantyLookupOtherIntentPattern = /\b(?:claims?|file|filing|add|new|create|record a|save|buy|purchase|renew|cancel|extend|extended|register|transfer|correct|fix|change|update|edit|rename|delete|remove|missing|without|uncovered|gaps?|lack(?:s|ing)?|exposure|insurance|policy|premium|repair|replace|worth|should i|remind|notify|alert|warn|monitor|price|cost|quote|compare|coverage (?:analysis|review))\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?))\b/i;
 // Deliberately checked before coveragePattern in the cascade below:
 // "compare my insurance coverage" contains coveragePattern's own bare
@@ -1129,6 +1150,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('COVERAGE_COMPARISON_STATUS', 0.96);
+  }
+  if (warrantyLookupPattern.test(message) && !warrantyLookupOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('WARRANTY_LOOKUP', 0.96);
   }
   if (coveragePattern.test(message)) {
     return resolved('COVERAGE_GAPS', 0.96);

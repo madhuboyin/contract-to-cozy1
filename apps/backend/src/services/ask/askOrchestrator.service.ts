@@ -59,6 +59,7 @@ import './handlers/homeTimeline.handler';
 import './handlers/materialSpecs.handler';
 import './handlers/applianceOracleBudget.handler';
 import './handlers/doNothingSimulator.handler';
+import './handlers/warranties.handler';
 import './handlers/priceFinalization.handler';
 import './handlers/negotiationShield.handler';
 import './handlers/homeUpgradePlanner.handler';

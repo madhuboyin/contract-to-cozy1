@@ -313,3 +313,8 @@ No discrepancy is material to hierarchy, trust, accessibility or usability for t
 ## 11. Inventory certification (September 26, 2026)
 
 Inventory is the second calm domain, delivered in three slices: I-1 calm adoption with a producer-owned headline, chips and dominant step (FRD v1.121); I-2 governed `viewState` refinement with declared status and category filters, a clear action and an empty-match state (v1.122, backend, reusing the Maintenance and Buyer Deadlines continuity model with no new operation, route or storage); and I-3 the integrated acceptance journey (v1.123). Verified by 9 backend runtime tests of the real handler, the full chunked backend Ask suite (1250 of 1251 pass, 1 pre-existing skip), 459 frontend jest tests and 168 Playwright scenarios. Fixture-backed; not a live-backend or assistive-technology run; not deployed. Warranties is next.
+
+## 12. Warranties certification (in progress, September 26, 2026)
+
+Decisions: a dedicated deterministic `WARRANTY_LOOKUP` (Option 1); "expiring" is 60 days (the Warranties page's own window; COVERAGE_GAPS keeps its 90-day horizon); claims are a boundary statement only, no claim action. **W-1 done (FRD v1.124):** the operation, handler, routing ownership, calm answer and boundary; 13 runtime tests with 10 of 10 mutations caught, the full chunked backend Ask suite (1263 of 1264 pass, 1 pre-existing skip), calibration 0 diffs and Skill routing 0 bad. W-2 (viewState filters and continuity) and W-3 (integrated acceptance journey) remain.
+
