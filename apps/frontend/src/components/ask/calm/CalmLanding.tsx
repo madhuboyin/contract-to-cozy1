@@ -10,12 +10,12 @@ import type { AskCapabilityPrompt, AskFeaturedPrompt, ConciergeHomeView } from '
 // count chips that each open the matching answer, at most one urgent item, then a few starter questions. It replaces the
 // "Popular ways" cards and the "For your attention" card; nothing here is a second source of truth (see conciergeStateStrip).
 const TONE: Record<StripTone, { chip: string; dot: string }> = {
-  CRITICAL: { chip: 'bg-red-50 text-red-800 hover:bg-red-100', dot: 'bg-red-500' },
-  CAUTION: { chip: 'bg-amber-50 text-amber-900 hover:bg-amber-100', dot: 'bg-amber-500' },
-  DEFAULT: { chip: 'bg-slate-100 text-slate-700 hover:bg-slate-200', dot: 'bg-slate-400' },
+  CRITICAL: { chip: 'bg-red-50/60 text-red-800 hover:bg-red-50', dot: 'bg-red-500' },
+  CAUTION: { chip: 'bg-amber-50/60 text-amber-900 hover:bg-amber-50', dot: 'bg-amber-500' },
+  DEFAULT: { chip: 'bg-slate-100/70 text-slate-700 hover:bg-slate-100', dot: 'bg-slate-400' },
 };
-// One line on a phone (scrolls sideways), wrapping on wider screens.
-const ROW = 'flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible';
+// The suggestions stay on one row at every width and scroll sideways when they do not fit; they never wrap into a second row.
+const ROW = 'flex flex-nowrap gap-2 overflow-x-auto pb-1 [scrollbar-width:none]';
 
 export function CalmLanding({ view, loading, failed, starters, usingFallbackStarters, onAsk, headlineShownAbove = false, composer, children }: {
   view: ConciergeHomeView | null;
@@ -47,11 +47,11 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
     const whyId = `why-${entry.id}`;
     const open = openWhy === entry.id;
     return (
-      <li key={entry.id} className={cn('min-w-0 rounded-2xl border border-transparent p-4 sm:p-5', open && 'pb-4', TONE[entry.tone].chip.split(' ')[0])}>
+      <li key={entry.id} className={cn('min-w-0 rounded-2xl border border-transparent p-3.5 sm:p-4', open && 'pb-3.5', TONE[entry.tone].chip.split(' ')[0])}>
         <button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className="group block w-full text-left">
           <span className={cn('block text-[11px] font-semibold uppercase tracking-[0.12em]', TONE[entry.tone].chip.split(' ')[1])}>{entry.label}</span>
-          {entry.detail && <span className="mt-2 block text-base font-semibold leading-5 text-slate-950">{entry.detail}</span>}
-          <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-emerald-900">Review <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span>
+          {entry.detail && <span className="mt-1.5 block text-base font-semibold leading-5 text-slate-950">{entry.detail}</span>}
+          <span className="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-emerald-900">Review <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span>
         </button>
         {reasons.length > 0 && <>
           <button type="button" data-why-toggle={entry.id} aria-expanded={open} aria-controls={whyId} onClick={() => setOpenWhy(open ? null : entry.id)} className="mt-1 min-h-8 rounded-lg text-xs font-medium text-slate-600 underline-offset-2 hover:underline">Why this appeared</button>
@@ -62,7 +62,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
   };
   const stripChips = (strip?.chips ?? []).slice(0, 2);
     return (
-    <div className="mt-5" data-calm-landing="">
+    <div data-calm-landing="">
       <section aria-label="Your home today" data-calm-state-strip="">
         {loading && <p className="flex items-center gap-2 text-sm text-slate-500" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Checking your home…</p>}
         {!loading && (failed || !strip) && <p className="text-sm text-slate-500">Your home overview is temporarily unavailable. You can still ask anything above.</p>}
@@ -73,10 +73,10 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
       </section>
       {/* IW-CONV-016 (FRD v1.112): one row of suggestions and nothing else on the landing: what needs attention (with a dot), then a few
           starter questions, then "More ideas". The top priority is one tap away through the first chip, not a second element. */}
-      {stripChips.length > 0 && !loading && <ul className="grid gap-3 sm:grid-cols-2" aria-label="Needs your attention">{stripChips.map(contextLine)}</ul>}
-      {composer && <div className="mt-4">{composer}</div>}
+      {stripChips.length > 0 && !loading && <ul className="grid gap-4 sm:grid-cols-2" aria-label="Needs your attention">{stripChips.map(contextLine)}</ul>}
+      {composer && <div className="mt-6">{composer}</div>}
       {(shownStarters.length > 0 || children) && !loading && <ul className={cn(ROW, 'mt-4')} aria-label="Suggestions">
-        {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-10 whitespace-nowrap rounded-full border border-stone-300 bg-transparent px-4 py-2 text-[15px] font-medium text-slate-700 transition hover:border-emerald-700 hover:text-emerald-950">{prompt.question}</button></li>)}
+        {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-10 whitespace-nowrap rounded-full border border-stone-300 bg-transparent px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-700 hover:text-emerald-950">{prompt.question}</button></li>)}
         {children && <li className="shrink-0">{children}</li>}
       </ul>}
     </div>

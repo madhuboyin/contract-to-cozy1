@@ -68,18 +68,20 @@ describe('buildConciergeStateStrip opening and explanations', () => {
   const withItems = (items: ReturnType<typeof item>[], extra: Partial<ConciergeHomeView> = {}) => view({ priorityList: { ...view().priorityList, items }, ...extra });
   const importantChange = { id: 'c', source: 'Weather', summary: 'Hail reported', materiality: 'IMPORTANT' as const, detectedAt: '2026-09-20T12:00:00.000Z', effectiveAt: '2026-09-28T00:00:00.000Z' };
 
-  it('opens with the state: attention, upcoming, change, or genuinely quiet', () => {
-    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW'), item('b', 'DO_NOW')])).opening).toBe('2 things need your attention now.');
-    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')])).opening).toBe('Nothing urgent. 1 thing to plan soon.');
-    expect(buildConciergeStateStrip(withItems([], { changes: { state: 'AVAILABLE', windowDays: 14, href: '/x', items: [importantChange] } })).opening).toBe('1 important change to review.');
-    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW')], { changes: { state: 'AVAILABLE', windowDays: 14, href: '/x', items: [importantChange] } })).opening).toBe('1 thing needs your attention now. 1 important change to review.');
-    expect(buildConciergeStateStrip(withItems([])).opening).toBe('Nothing needs your attention right now.');
+  it('opens with one line of state: what is urgent, what is coming, and what changed', () => {
+    const changes = { changes: { state: 'AVAILABLE' as const, windowDays: 14, href: '/x', items: [importantChange] } };
+    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW'), item('b', 'DO_NOW')])).opening).toBe('2 to do now');
+    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')])).opening).toBe('Nothing urgent · 1 to plan soon');
+    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON'), item('b', 'PLAN_SOON'), item('c', 'PLAN_SOON'), item('d', 'PLAN_SOON')], { changes: { state: 'AVAILABLE' as const, windowDays: 14, href: '/x', items: [importantChange, { ...importantChange, id: 'd' }, { ...importantChange, id: 'e' }] } })).opening).toBe('Nothing urgent · 4 to plan soon · 3 changes to review');
+    expect(buildConciergeStateStrip(withItems([], changes)).opening).toBe('Nothing urgent · 1 change to review');
+    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW')], changes)).opening).toBe('1 to do now · 1 change to review');
+    expect(buildConciergeStateStrip(withItems([])).opening).toBe('Nothing needs your attention right now');
   });
 
   it('never says nothing or nothing-urgent when a source is unavailable, and leaves the opening unknown when priorities are', () => {
     const changesDown = { changes: { state: 'UNAVAILABLE' as const, windowDays: 14, href: '/x', items: [] } };
     expect(buildConciergeStateStrip(withItems([], changesDown)).opening).toBeNull();
-    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')], changesDown)).opening).toBe('1 thing to plan soon.');
+    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')], changesDown)).opening).toBe('1 to plan soon');
     expect(buildConciergeStateStrip(view({ priorityList: { ...view().priorityList, state: 'UNAVAILABLE' } })).opening).toBeNull();
   });
 

@@ -120,13 +120,14 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
   } : null;
 
   // ACUI-001: the launch headline. Unknown or unavailable state falls back to the generic prompt rather than claiming the home is fine.
+  // The landing's one-line summary ("Nothing urgent · 4 to plan soon · 3 changes to review"), from the same counts as the entries. "Nothing
+  // urgent" is said only when no source is unavailable, and an unknown state leaves the line null so the generic prompt stays.
   const importantChanges = chips.find((chip) => chip.id === 'strip-changes');
-  const changesSentence = importantChanges ? `${importantChanges.label} to review.` : null;
+  const changeCount = view.changes.state === 'AVAILABLE' ? view.changes.items.filter((item) => item.materiality === 'IMPORTANT' || item.materiality === 'URGENT').length : 0;
+  const lead = doNow > 0 ? `${doNow} to do now` : notes.length === 0 && view.priorityList.state !== 'UNAVAILABLE' ? 'Nothing urgent' : null;
+  const summaryParts = [lead, planSoon > 0 ? `${planSoon} to plan soon` : null, changeCount > 0 ? `${changeCount} ${plural(changeCount, 'change', 'changes')} to review` : null].filter((part): part is string => Boolean(part));
   let opening: string | null = null;
-  if (doNow > 0) opening = [`${doNow} ${plural(doNow, 'thing needs', 'things need')} your attention now.`, changesSentence].filter(Boolean).join(' ');
-  else if (planSoon > 0) opening = [notes.length === 0 ? 'Nothing urgent.' : null, `${planSoon} ${plural(planSoon, 'thing', 'things')} to plan soon.`, changesSentence].filter(Boolean).join(' ');
-  else if (changesSentence) opening = changesSentence;
-  else if (notes.length === 0 && view.priorityList.state !== 'UNAVAILABLE') opening = 'Nothing needs your attention right now.';
+  if (summaryParts.length > 0) opening = summaryParts.length === 1 && lead === 'Nothing urgent' ? 'Nothing needs your attention right now' : summaryParts.join(' · ');
 
   return { headline, opening, chips, urgent, notes };
 }

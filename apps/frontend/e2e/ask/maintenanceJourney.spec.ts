@@ -14,14 +14,16 @@ test('ACUI-001/002/003: the launch names the home and its state, each entry can 
   await installAskApi(page);
   await open(page);
   // ACUI-001: home identity, a state headline, and a placeholder that names the home.
-  await expect(page.locator('[data-calm-property]')).toHaveText('Acceptance Home');
+  // The address is not repeated in the content: it is in the property selector and named by the composer placeholder below.
+  await expect(page.locator('[data-calm-property]')).toHaveCount(0);
+  await expect(page.locator('[data-calm-headline="state"]')).toHaveText(/^Nothing urgent · 1 to plan soon/);
   await expect(page.locator('[data-calm-headline="state"]')).toContainText('plan soon');
   await expect(page.getByPlaceholder('Ask anything about Acceptance Home…')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Needs your attention' }).locator('[data-strip-chip]')).not.toHaveCount(0);
   await expect(page.getByRole('list', { name: 'Needs your attention' }).locator('[data-strip-chip]')).toHaveCount(2);
 
   // Prototype-parity visual contract: the desktop cards are side by side,
-  // precede the compact composer, and use a bold sans-serif headline.
+  // precede the large composer, and use a bold sans-serif headline.
   const attentionCards = page.getByRole('list', { name: 'Needs your attention' }).locator(':scope > li');
   const firstCard = await attentionCards.nth(0).boundingBox();
   const secondCard = await attentionCards.nth(1).boundingBox();
@@ -29,7 +31,15 @@ test('ACUI-001/002/003: the launch names the home and its state, each entry can 
   expect(firstCard && secondCard && Math.abs(firstCard.y - secondCard.y) < 2).toBe(true);
   expect(firstCard && secondCard && secondCard.x > firstCard.x + firstCard.width).toBe(true);
   expect(firstCard && composerBox && firstCard.y + firstCard.height < composerBox.y).toBe(true);
-  expect(composerBox && composerBox.height <= 76).toBe(true);
+  // The composer is the centre of the page, not a narrow utility field: 112 to 128px tall, and the same width as the cards.
+  expect(composerBox && composerBox.height >= 112 && composerBox.height <= 128).toBe(true);
+  const cardsBox = await page.getByRole('list', { name: 'Needs your attention' }).boundingBox();
+  expect(cardsBox && composerBox && Math.abs(cardsBox.width - composerBox.width) < 2 && Math.abs(cardsBox.x - composerBox.x) < 2).toBe(true);
+  // The summary is one line above the cards, and the suggestions stay on one row.
+  const headlineBox = await page.locator('[data-calm-headline="state"]').boundingBox();
+  expect(headlineBox && headlineBox.height < 48 && cardsBox && headlineBox.y + headlineBox.height + 24 <= cardsBox.y).toBe(true);
+  const suggestions = await page.getByRole('list', { name: 'Suggestions' }).evaluate((el) => Array.from(el.children).map((child) => Math.round(child.getBoundingClientRect().top)));
+  expect(new Set(suggestions).size).toBe(1);
   await expect(page.locator('[data-calm-headline="state"]')).toHaveCSS('font-weight', '600');
   await expect(page).toHaveScreenshot('ask-cozy-prototype-desktop.png', { animations: 'disabled', fullPage: true, mask: [page.locator('[data-calm-date]')] });
 
