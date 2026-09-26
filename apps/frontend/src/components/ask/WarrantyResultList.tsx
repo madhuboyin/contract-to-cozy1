@@ -25,6 +25,13 @@ function label(value: string | null | undefined): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
+// Warranty dates are stored as calendar days at UTC midnight, and the Ask row states them that way ("Expires Dec 1, 2027"). Formatting in the
+// browser's local zone showed the previous day in the Americas, so the detail disagreed with the row above it.
+function formatDay(value: string | Date): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString(undefined, { timeZone: 'UTC' });
+}
+
 function formatCurrency(value: number | null | undefined): string {
   return value == null ? 'Not recorded' : new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
 }
@@ -107,8 +114,8 @@ function WarrantyDetail({ warrantyId, expectedPropertyId, fallbackItem, disabled
         <div><dt className="text-xs text-slate-500">Category</dt><dd className="mt-0.5 font-medium text-slate-900">{label(warranty.category)}</dd></div>
         <div><dt className="text-xs text-slate-500">Policy number</dt><dd className="mt-0.5 font-medium text-slate-900">{warranty.policyNumber ?? 'Not recorded'}</dd></div>
         <div><dt className="text-xs text-slate-500">Cost</dt><dd className="mt-0.5 font-medium text-slate-900">{formatCurrency(warranty.cost)}</dd></div>
-        <div><dt className="text-xs text-slate-500">Start date</dt><dd className="mt-0.5 font-medium text-slate-900">{new Date(warranty.startDate).toLocaleDateString()}</dd></div>
-        <div><dt className="text-xs text-slate-500">Expires</dt><dd className="mt-0.5 font-medium text-slate-900">{new Date(warranty.expiryDate).toLocaleDateString()}</dd></div>
+        <div><dt className="text-xs text-slate-500">Start date</dt><dd className="mt-0.5 font-medium text-slate-900">{formatDay(warranty.startDate)}</dd></div>
+        <div><dt className="text-xs text-slate-500">Expires</dt><dd className="mt-0.5 font-medium text-slate-900">{formatDay(warranty.expiryDate)}</dd></div>
         <div><dt className="text-xs text-slate-500">Linked documents</dt><dd className="mt-0.5 font-medium text-slate-900">{warranty.documents?.length ?? 0}</dd></div>
       </dl>
       {warranty.coverageDetails && <p className="mt-3 text-sm leading-6 text-slate-700">{warranty.coverageDetails}</p>}

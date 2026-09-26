@@ -132,3 +132,23 @@ test('the warranties list renders its declared START_WORKFLOW block action as a 
   expect(invoke).toHaveBeenCalledWith(addAction);
   expect(screen.getByRole('link', { name: /Open Warranties/ })).toHaveAttribute('href', '/dashboard/warranties');
 });
+
+// A warranty date is a calendar day stored at UTC midnight. The detail must show the same day the Ask row states ("Expires Dec 1, 2027"),
+// not the previous evening of a browser in the Americas. The formatter is stubbed to behave like such a zone (local time = UTC minus one
+// day) so the test fails unless the detail asks for UTC explicitly.
+test('the warranty detail shows the recorded calendar day, not the day before it in a western time zone', async () => {
+  const spy = jest.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function toLocaleDateString(this: Date, _locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) {
+    const day = new Date(this.getTime());
+    if (options?.timeZone !== 'UTC') day.setUTCDate(day.getUTCDate() - 1);
+    return `${day.getUTCMonth() + 1}/${day.getUTCDate()}/${day.getUTCFullYear()}`;
+  });
+  try {
+    mockedGetPropertyWarranties.mockResolvedValueOnce([canonicalWarranty()]);
+    render(<BlockView block={block} executionId="execution" propertyId="home" itemActionsDisabled={false} onItemAction={() => {}} onFilterClick={() => {}} onCollectionPage={() => {}} onAccessLost={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Acme Home Warranty' }));
+    await waitFor(() => expect(screen.getByText('POL-123')).toBeInTheDocument());
+    expect(screen.getByText('12/1/2027')).toBeInTheDocument();
+    expect(screen.getByText('1/1/2026')).toBeInTheDocument();
+    expect(screen.queryByText('11/30/2027')).not.toBeInTheDocument();
+  } finally { spy.mockRestore(); }
+});

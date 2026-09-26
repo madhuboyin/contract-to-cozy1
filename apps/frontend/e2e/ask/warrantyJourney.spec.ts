@@ -254,3 +254,20 @@ test('recovery: a refinement that fails keeps the answer on screen, says so, and
   await chip().click();
   await expect(page.getByRole('heading', { name: '1 warranty: 1 expiring within 60 days.' })).toBeVisible();
 });
+
+test.describe('in a western time zone', () => {
+  test.use({ timezoneId: 'America/Los_Angeles', locale: 'en-US' });
+  test('the detail shows the same calendar day as the row, not the evening before', async ({ page }) => {
+    await installAskApi(page);
+    await startWarranties(page);
+    const response = live(page, 1);
+    await expect(response.getByText('Home warranty plan · Expires Dec 1, 2027 · 0 documents')).toBeVisible();
+    await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
+    const detail = response.getByRole('complementary');
+    await expect(detail.getByText('Current canonical warranty record.')).toBeVisible();
+    await expect(detail.getByText('12/1/2027', { exact: true })).toBeVisible();
+    await expect(detail.getByText('1/1/2026', { exact: true })).toBeVisible();
+    await expect(detail.getByText('11/30/2027')).toHaveCount(0);
+  });
+});
+
