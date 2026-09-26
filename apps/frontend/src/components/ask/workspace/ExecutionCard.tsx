@@ -223,16 +223,20 @@ export function ExecutionCard({
   if (refreshAccessLost) return <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}>{null}</ResultRevalidationBoundary>;
 
   if (isSuperseded) {
+    // IW-CONV-003/008 (FRD v1.112): in the calm shell an older version is a one-line stub that opens the same calm presentation,
+    // in reduced emphasis and without a frame; it is never a second full copy of the previous look.
     return (
-      <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
-        <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
-        <details className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-          <summary className="cursor-pointer text-xs font-semibold text-slate-500">{calmChrome ? 'Replaced by a newer view below · show this view' : 'Superseded by a refinement below · view original response'}</summary>
-          <div className="mt-3 space-y-3 opacity-75">
-            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />)}
-          </div>
-        </details>
-      </article>
+      <CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}>
+        <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
+          <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
+          <details className={calmChrome ? undefined : 'rounded-2xl border border-slate-200 bg-slate-50/70 p-3'}>
+            <summary className={calmChrome ? 'w-fit cursor-pointer list-none rounded-md px-1 text-xs text-slate-500 hover:text-slate-800 [&::-webkit-details-marker]:hidden' : 'cursor-pointer text-xs font-semibold text-slate-500'}>{calmChrome ? 'Earlier version of this answer · show' : 'Superseded by a refinement below · view original response'}</summary>
+            <div className={cn('mt-3 space-y-3 opacity-75', calmChrome && FRAMELESS_LISTS)}>
+              {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />)}
+            </div>
+          </details>
+        </article>
+      </CalmAnswerContext.Provider></CalmChromeContext.Provider>
     );
   }
 

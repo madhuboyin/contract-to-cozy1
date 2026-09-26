@@ -49,7 +49,7 @@ export function IntelligenceRefreshStatus({ propertyId, compact = false }: { pro
   return (
     <details className="relative z-20">
       <summary className="list-none cursor-pointer" aria-label={`${presentation.label}. Show affected capabilities.`} title={compact ? presentation.label : undefined}>
-        {compact ? <span aria-hidden="true" className={`block h-2.5 w-2.5 rounded-full ${data.state === 'REFRESHING' ? 'animate-pulse bg-teal-500' : data.state === 'PARTIALLY_REFRESHED' ? 'bg-amber-500' : 'bg-rose-500'}`} /> : <Badge variant="outline" className={`rounded-full ${presentation.className}`}>
+        {compact ? <span className="flex items-center gap-2"><span aria-hidden="true" className={`block h-2.5 w-2.5 rounded-full ${data.state === 'REFRESHING' ? 'animate-pulse bg-teal-500' : data.state === 'PARTIALLY_REFRESHED' ? 'bg-amber-500' : 'bg-rose-500'}`} /><span aria-hidden="true" className="hidden text-xs text-slate-500 md:inline">{presentation.label}</span></span> : <Badge variant="outline" className={`rounded-full ${presentation.className}`}>
           {data.state === 'REFRESHING' && <RefreshCw className="mr-1 h-3 w-3 animate-spin" />}
           {presentation.label}
         </Badge>}

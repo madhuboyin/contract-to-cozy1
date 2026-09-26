@@ -103,13 +103,16 @@ describe('ConversationHistoryNav in the calm shell', () => {
 });
 
 describe('IntelligenceRefreshStatus compact', () => {
-  it('shows a dot with the state as its label instead of the badge', async () => {
+  it('shows a dot with the state label beside it on wide screens instead of the badge', async () => {
     jest.spyOn(api, 'getPropertyIntelligenceRefreshDetails').mockResolvedValue({ state: 'PARTIALLY_REFRESHED', capabilities: [] } as unknown as Awaited<ReturnType<typeof api.getPropertyIntelligenceRefreshDetails>>);
     const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
     const { container } = render(<QueryClientProvider client={new QueryClient()}><IntelligenceRefreshStatus propertyId="home" compact /></QueryClientProvider>);
     const summary = await screen.findByLabelText(/Partially refreshed/);
     expect(summary).toHaveAttribute('title', 'Partially refreshed');
     expect(container.querySelector('span.rounded-full.bg-amber-500')).not.toBeNull();
-    expect(screen.queryByText('Partially refreshed')).toBeNull();
+    // The plain label shows beside the dot on wide screens (IW-CONV-009/014); it is hidden from assistive tech because the summary already carries it.
+    const label = screen.getByText('Partially refreshed');
+    expect(label).toHaveAttribute('aria-hidden', 'true');
+    expect(label.className).toContain('md:inline');
   });
 });

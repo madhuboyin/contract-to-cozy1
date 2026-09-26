@@ -57,11 +57,15 @@ describe('calm shell, any domain', () => {
     expect(screen.getAllByRole('button', { name: /^Try again/ })).toHaveLength(2);
   });
 
-  it('uses plain wording for a superseded answer', async () => {
+  it('shows a superseded answer as a one-line stub that opens the calm presentation, not the old frame', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
-    card(execution(), [], true);
-    expect(await screen.findByText('Replaced by a newer view below · show this view')).toBeInTheDocument();
+    const { container } = card(execution(), [], true);
+    const stub = await screen.findByText('Earlier version of this answer · show');
     expect(screen.queryByText(/Superseded/)).toBeNull();
+    expect(container.querySelector('details')?.className ?? '').not.toContain('border');
+    fireEvent.click(stub);
+    expect(container.querySelector('[data-calm-state]')).not.toBeNull();
+    expect(container.querySelector('section.bg-amber-50')).toBeNull();
   });
 
   it('renders an error state with its actions and a red rule, not a card', () => {
