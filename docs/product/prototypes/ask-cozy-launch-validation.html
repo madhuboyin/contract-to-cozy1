@@ -1,0 +1,630 @@
+<div id="cozy-prototype">
+  <style>
+    #cozy-prototype {
+      --cozy-bg: light-dark(#f4f2ec, #111714);
+      --cozy-surface: light-dark(#fffef9, #19201c);
+      --cozy-surface-2: light-dark(#f0eee7, #222b26);
+      --cozy-text: light-dark(#1d2721, #eef5f0);
+      --cozy-muted: light-dark(#677169, #aab7ae);
+      --cozy-line: light-dark(#dddcd4, #364139);
+      --cozy-brand: light-dark(#1f5a42, #9bd9b8);
+      --cozy-brand-strong: light-dark(#164531, #b9eccf);
+      --cozy-brand-text: light-dark(#ffffff, #102018);
+      --cozy-soft: light-dark(#e3efe8, #263c31);
+      --cozy-warning: light-dark(#995e18, #f4c06c);
+      --cozy-warning-soft: light-dark(#fff0d8, #3d2e1e);
+      --cozy-danger: light-dark(#a23a35, #ffaba4);
+      --cozy-danger-soft: light-dark(#fde8e5, #412522);
+      --cozy-info-soft: light-dark(#e5edf4, #23323d);
+      --cozy-shadow: light-dark(rgba(31, 48, 39, .12), rgba(0, 0, 0, .28));
+      color: var(--cozy-text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      width: 100%;
+    }
+    #cozy-prototype * { box-sizing: border-box; }
+    #cozy-prototype button,
+    #cozy-prototype input,
+    #cozy-prototype select { font: inherit; }
+    #cozy-prototype button { cursor: pointer; }
+    #cozy-prototype .test-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    #cozy-prototype .state-tabs,
+    #cozy-prototype .view-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    #cozy-prototype .test-label { color: var(--cozy-muted); font-size: 12px; margin-right: 3px; align-self: center; }
+    #cozy-prototype .test-tab {
+      appearance: none;
+      border: 1px solid var(--cozy-line);
+      background: var(--cozy-surface);
+      color: var(--cozy-text);
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+      min-height: 34px;
+    }
+    #cozy-prototype .test-tab[aria-pressed="true"] {
+      background: var(--cozy-text);
+      color: var(--cozy-surface);
+      border-color: var(--cozy-text);
+    }
+    #cozy-prototype .stage { width: 100%; display: flex; justify-content: center; }
+    #cozy-prototype .app-shell {
+      width: 100%;
+      min-height: 720px;
+      background: var(--cozy-bg);
+      border: 1px solid var(--cozy-line);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 18px 54px var(--cozy-shadow);
+      transition: max-width .2s ease;
+    }
+    #cozy-prototype .app-shell.mobile { max-width: 390px; min-height: 760px; }
+    #cozy-prototype .topbar {
+      height: 62px;
+      display: grid;
+      grid-template-columns: 220px 1fr auto;
+      align-items: center;
+      gap: 16px;
+      padding: 0 18px;
+      background: var(--cozy-surface);
+      border-bottom: 1px solid var(--cozy-line);
+    }
+    #cozy-prototype .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -.01em; }
+    #cozy-prototype .brand-mark {
+      width: 31px; height: 31px; border-radius: 10px; display: grid; place-items: center;
+      background: var(--cozy-brand); color: var(--cozy-brand-text);
+    }
+    #cozy-prototype .property-select {
+      justify-self: start; min-height: 36px; border: 1px solid var(--cozy-line); border-radius: 10px;
+      color: var(--cozy-text); background: var(--cozy-surface); padding: 0 30px 0 10px; max-width: 290px;
+    }
+    #cozy-prototype .top-actions { display: flex; gap: 6px; }
+    #cozy-prototype .icon-btn {
+      width: 38px; height: 38px; border: 0; border-radius: 10px; display: grid; place-items: center;
+      color: var(--cozy-muted); background: transparent;
+    }
+    #cozy-prototype .icon-btn:hover { background: var(--cozy-surface-2); color: var(--cozy-text); }
+    #cozy-prototype .body { display: grid; grid-template-columns: 196px minmax(0, 1fr); min-height: 658px; }
+    #cozy-prototype .rail { background: var(--cozy-surface); border-right: 1px solid var(--cozy-line); padding: 18px 12px; display: flex; flex-direction: column; }
+    #cozy-prototype .nav-item {
+      display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; border: 0; border-radius: 10px;
+      color: var(--cozy-muted); background: transparent; padding: 0 11px; text-align: left;
+    }
+    #cozy-prototype .nav-item.active { color: var(--cozy-text); background: var(--cozy-soft); font-weight: 600; }
+    #cozy-prototype .nav-item .count { margin-left: auto; font-size: 12px; }
+    #cozy-prototype .rail-foot { margin-top: auto; color: var(--cozy-muted); font-size: 12px; padding: 10px; line-height: 1.45; }
+    #cozy-prototype .main { padding: 34px clamp(20px, 5vw, 64px) 44px; overflow: hidden; }
+    #cozy-prototype .home-view { max-width: 860px; margin: 0 auto; }
+    #cozy-prototype .eyebrow { color: var(--cozy-muted); font-size: 13px; margin-bottom: 8px; }
+    #cozy-prototype h1 { font-size: clamp(26px, 4vw, 40px); line-height: 1.08; letter-spacing: -.035em; margin: 0; font-weight: 650; max-width: 720px; }
+    #cozy-prototype .subhead { color: var(--cozy-muted); font-size: 15px; margin: 10px 0 22px; max-width: 660px; line-height: 1.5; }
+    #cozy-prototype .attention-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+    #cozy-prototype .attention-card {
+      border: 1px solid var(--cozy-line); background: var(--cozy-surface); border-radius: 15px; padding: 16px;
+      display: flex; flex-direction: column; min-height: 156px; text-align: left; color: var(--cozy-text);
+    }
+    #cozy-prototype .attention-card:hover { border-color: var(--cozy-brand); }
+    #cozy-prototype .attention-card.urgent { background: var(--cozy-danger-soft); border-color: transparent; }
+    #cozy-prototype .attention-card.warning { background: var(--cozy-warning-soft); border-color: transparent; }
+    #cozy-prototype .card-kicker { display: flex; align-items: center; gap: 6px; color: var(--cozy-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+    #cozy-prototype .urgent .card-kicker { color: var(--cozy-danger); }
+    #cozy-prototype .warning .card-kicker { color: var(--cozy-warning); }
+    #cozy-prototype .card-title { font-weight: 650; font-size: 16px; margin-bottom: 5px; }
+    #cozy-prototype .card-copy { color: var(--cozy-muted); font-size: 13px; line-height: 1.45; }
+    #cozy-prototype .card-link { color: var(--cozy-brand-strong); font-weight: 600; font-size: 13px; margin-top: auto; padding-top: 14px; }
+    #cozy-prototype .card-main { border: 0; padding: 0; background: transparent; color: inherit; text-align: left; display: flex; flex-direction: column; flex: 1; }
+    #cozy-prototype .why-btn { border: 0; background: transparent; color: var(--cozy-muted); padding: 8px 0 0; text-align: left; font-size: 11px; }
+    #cozy-prototype .why-btn:hover { color: var(--cozy-text); }
+    #cozy-prototype .composer {
+      background: var(--cozy-surface); border: 1px solid var(--cozy-line); border-radius: 17px; padding: 11px;
+      box-shadow: 0 8px 24px var(--cozy-shadow);
+    }
+    #cozy-prototype .composer-row { display: flex; align-items: center; gap: 8px; }
+    #cozy-prototype .composer input {
+      flex: 1; min-width: 0; height: 42px; border: 0; outline: 0; background: transparent; color: var(--cozy-text); font-size: 15px;
+    }
+    #cozy-prototype .composer input::placeholder { color: var(--cozy-muted); }
+    #cozy-prototype .send-btn {
+      width: 40px; height: 40px; border: 0; border-radius: 12px; background: var(--cozy-brand); color: var(--cozy-brand-text); display: grid; place-items: center;
+    }
+    #cozy-prototype .composer-tools { display: flex; align-items: center; gap: 5px; border-top: 1px solid var(--cozy-line); padding-top: 9px; margin-top: 5px; flex-wrap: wrap; }
+    #cozy-prototype .tool-btn { border: 0; background: transparent; color: var(--cozy-muted); min-height: 32px; border-radius: 8px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; }
+    #cozy-prototype .tool-btn:hover { background: var(--cozy-surface-2); color: var(--cozy-text); }
+    #cozy-prototype .suggestions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 28px; }
+    #cozy-prototype .suggestion {
+      border: 1px solid var(--cozy-line); background: transparent; color: var(--cozy-text); border-radius: 999px; min-height: 38px; padding: 0 13px; font-size: 12px; text-align: left;
+    }
+    #cozy-prototype .suggestion:hover { background: var(--cozy-soft); border-color: var(--cozy-brand); }
+    #cozy-prototype .lower-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; }
+    #cozy-prototype .section-title { font-size: 13px; color: var(--cozy-muted); margin-bottom: 10px; font-weight: 600; }
+    #cozy-prototype .quiet-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--cozy-line); font-size: 13px; }
+    #cozy-prototype .quiet-row:first-of-type { border-top: 0; }
+    #cozy-prototype .quiet-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--cozy-surface-2); color: var(--cozy-muted); }
+    #cozy-prototype .quiet-meta { color: var(--cozy-muted); font-size: 11px; margin-top: 2px; }
+    #cozy-prototype .workspace { max-width: 820px; margin: 0 auto; }
+    #cozy-prototype .back-btn { border: 0; background: transparent; color: var(--cozy-muted); display: flex; gap: 6px; align-items: center; padding: 0; margin-bottom: 26px; }
+    #cozy-prototype .answer-card { background: var(--cozy-surface); border: 1px solid var(--cozy-line); border-radius: 16px; padding: 20px; margin-top: 20px; }
+    #cozy-prototype .answer-head { display: flex; gap: 12px; align-items: flex-start; }
+    #cozy-prototype .answer-icon { width: 38px; height: 38px; border-radius: 12px; background: var(--cozy-soft); color: var(--cozy-brand); display: grid; place-items: center; flex: 0 0 auto; }
+    #cozy-prototype .answer-title { font-weight: 650; margin-bottom: 5px; }
+    #cozy-prototype .answer-copy { color: var(--cozy-muted); font-size: 14px; line-height: 1.5; }
+    #cozy-prototype .result-list { margin: 16px 0 0; padding: 0; list-style: none; }
+    #cozy-prototype .result-item { display: flex; gap: 11px; padding: 13px 0; border-top: 1px solid var(--cozy-line); }
+    #cozy-prototype .result-number { width: 26px; height: 26px; border-radius: 50%; background: var(--cozy-text); color: var(--cozy-surface); display: grid; place-items: center; font-size: 12px; flex: 0 0 auto; }
+    #cozy-prototype .result-item strong { display: block; font-size: 14px; margin-bottom: 3px; }
+    #cozy-prototype .result-item span { color: var(--cozy-muted); font-size: 12px; line-height: 1.4; }
+    #cozy-prototype .answer-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    #cozy-prototype .primary-action, #cozy-prototype .secondary-action {
+      min-height: 40px; border-radius: 10px; padding: 0 13px; font-weight: 600; font-size: 13px;
+    }
+    #cozy-prototype .primary-action { background: var(--cozy-brand); color: var(--cozy-brand-text); border: 1px solid var(--cozy-brand); }
+    #cozy-prototype .secondary-action { background: transparent; color: var(--cozy-text); border: 1px solid var(--cozy-line); }
+    #cozy-prototype .source-line { display: flex; gap: 7px; align-items: center; color: var(--cozy-muted); font-size: 11px; margin-top: 15px; }
+    #cozy-prototype .flow-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 18px 0 4px; }
+    #cozy-prototype .flow-step { color: var(--cozy-muted); font-size: 11px; padding-top: 8px; border-top: 2px solid var(--cozy-line); }
+    #cozy-prototype .flow-step.active { color: var(--cozy-brand-strong); border-color: var(--cozy-brand); font-weight: 600; }
+    #cozy-prototype .flow-step.done { color: var(--cozy-text); border-color: var(--cozy-text); }
+    #cozy-prototype .review-card, #cozy-prototype .receipt-card { background: var(--cozy-surface); border: 1px solid var(--cozy-line); border-radius: 16px; padding: 20px; margin-top: 20px; }
+    #cozy-prototype .review-row { display: flex; justify-content: space-between; gap: 20px; padding: 12px 0; border-top: 1px solid var(--cozy-line); font-size: 13px; }
+    #cozy-prototype .review-row:first-of-type { margin-top: 14px; }
+    #cozy-prototype .review-row span:first-child { color: var(--cozy-muted); }
+    #cozy-prototype .receipt-mark { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--cozy-soft); color: var(--cozy-brand); margin-bottom: 13px; }
+    #cozy-prototype .toast {
+      position: absolute; left: 50%; transform: translateX(-50%); bottom: 24px; padding: 10px 14px; border-radius: 12px;
+      background: var(--cozy-text); color: var(--cozy-surface); font-size: 12px; box-shadow: 0 10px 32px var(--cozy-shadow); z-index: 5;
+    }
+    #cozy-prototype .app-shell { position: relative; }
+    #cozy-prototype .mobile .topbar { grid-template-columns: 1fr auto; height: 58px; padding: 0 12px; }
+    #cozy-prototype .mobile .brand { display: none; }
+    #cozy-prototype .mobile .property-select { max-width: 230px; }
+    #cozy-prototype .mobile .body { display: block; min-height: 700px; }
+    #cozy-prototype .mobile .rail { display: none; }
+    #cozy-prototype .mobile .main { padding: 24px 14px 94px; }
+    #cozy-prototype .mobile h1 { font-size: 28px; }
+    #cozy-prototype .mobile .subhead { margin-bottom: 18px; }
+    #cozy-prototype .mobile .attention-grid { grid-template-columns: 1fr; }
+    #cozy-prototype .mobile .attention-card { min-height: 132px; }
+    #cozy-prototype .mobile .lower-grid { grid-template-columns: 1fr; gap: 20px; }
+    #cozy-prototype .mobile .suggestions { flex-direction: column; align-items: stretch; }
+    #cozy-prototype .mobile .suggestion { border-radius: 11px; min-height: 42px; }
+    #cozy-prototype .mobile .tool-btn span { display: none; }
+    #cozy-prototype .mobile .composer-tools { justify-content: space-around; }
+    #cozy-prototype .mobile .tool-btn { min-width: 42px; min-height: 42px; justify-content: center; }
+    #cozy-prototype .mobile .mobile-nav { display: grid; }
+    #cozy-prototype .mobile-nav {
+      display: none; position: absolute; left: 0; right: 0; bottom: 0; grid-template-columns: repeat(4, 1fr);
+      background: var(--cozy-surface); border-top: 1px solid var(--cozy-line); padding: 7px 4px 8px; z-index: 3;
+    }
+    #cozy-prototype .mobile-nav button { border: 0; background: transparent; color: var(--cozy-muted); display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 48px; justify-content: center; font-size: 10px; }
+    #cozy-prototype .mobile-nav button.active { color: var(--cozy-brand); font-weight: 600; }
+    #cozy-prototype .mobile .answer-card { padding: 16px; }
+    #cozy-prototype [hidden] { display: none !important; }
+    @media (max-width: 720px) {
+      #cozy-prototype .test-bar { align-items: flex-start; }
+      #cozy-prototype .state-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 3px; }
+      #cozy-prototype .test-tab { white-space: nowrap; }
+      #cozy-prototype .app-shell:not(.mobile) .topbar { grid-template-columns: 170px 1fr auto; }
+      #cozy-prototype .app-shell:not(.mobile) .body { grid-template-columns: 158px minmax(0,1fr); }
+      #cozy-prototype .app-shell:not(.mobile) .main { padding-inline: 22px; }
+    }
+    @media (prefers-reduced-motion: reduce) { #cozy-prototype * { transition: none !important; } }
+  </style>
+
+  <div class="test-bar" aria-label="Prototype scenarios">
+    <div class="state-tabs">
+      <span class="test-label">Test state</span>
+      <button class="test-tab" data-state="first" aria-pressed="false">First-time</button>
+      <button class="test-tab" data-state="established" aria-pressed="true">Established</button>
+      <button class="test-tab" data-state="active" aria-pressed="false">Active work</button>
+      <button class="test-tab" data-state="urgent" aria-pressed="false">Urgent issue</button>
+      <button class="test-tab" data-state="portfolio" aria-pressed="false">Multiple properties</button>
+    </div>
+    <div class="view-tabs">
+      <button class="test-tab" data-view="desktop" aria-pressed="true">Desktop</button>
+      <button class="test-tab" data-view="mobile" aria-pressed="false">Mobile</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <section class="app-shell" aria-label="Ask Cozy launch page prototype">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark"><i data-lucide="house" aria-hidden="true"></i></span>Ask Cozy</div>
+        <select class="property-select" aria-label="Active property">
+          <option>18 Maple Avenue</option>
+          <option data-portfolio-only>42 Harbor Road</option>
+          <option data-portfolio-only>7 Pine Lane</option>
+        </select>
+        <div class="top-actions">
+          <button class="icon-btn" aria-label="Search"><i data-lucide="search" aria-hidden="true"></i></button>
+          <button class="icon-btn" aria-label="Notifications"><i data-lucide="bell" aria-hidden="true"></i></button>
+        </div>
+      </header>
+
+      <div class="body">
+        <nav class="rail" aria-label="Primary navigation">
+          <button class="nav-item active"><i data-lucide="home" aria-hidden="true"></i>Home</button>
+          <button class="nav-item"><i data-lucide="list-checks" aria-hidden="true"></i>Work <span class="count" id="work-count">2</span></button>
+          <button class="nav-item"><i data-lucide="notebook-tabs" aria-hidden="true"></i>Record</button>
+          <button class="nav-item"><i data-lucide="bookmark" aria-hidden="true"></i>Saved</button>
+          <button class="nav-item"><i data-lucide="history" aria-hidden="true"></i>History</button>
+          <div class="rail-foot">Facts and actions stay grounded in your home record.</div>
+        </nav>
+
+        <main class="main">
+          <div class="home-view" id="home-view">
+            <div class="eyebrow" id="eyebrow">Saturday, September 26</div>
+            <h1 id="headline">Two things need attention. One changed since Tuesday.</h1>
+            <p class="subhead" id="subhead">Start with the water-damage follow-up, or ask about anything connected to your home.</p>
+
+            <div class="attention-grid" id="attention-grid"></div>
+
+            <form class="composer" id="composer">
+              <div class="composer-row">
+                <input id="ask-input" aria-label="Ask Cozy" placeholder="Ask what changed, compare options, or update your home" autocomplete="off">
+                <button type="submit" class="send-btn" aria-label="Send"><i data-lucide="arrow-up" aria-hidden="true"></i></button>
+              </div>
+              <div class="composer-tools">
+                <button type="button" class="tool-btn" data-tool-index="0"><i data-lucide="camera" aria-hidden="true"></i><span>Scan label</span></button>
+                <button type="button" class="tool-btn" data-tool-index="1"><i data-lucide="paperclip" aria-hidden="true"></i><span>Add report</span></button>
+                <button type="button" class="tool-btn" data-tool-index="2"><i data-lucide="mic" aria-hidden="true"></i><span>Describe it</span></button>
+              </div>
+            </form>
+
+            <div class="suggestions" id="suggestions" aria-label="Suggested actions"></div>
+
+            <div class="lower-grid">
+              <section>
+                <div class="section-title">Active work</div>
+                <div id="active-list"></div>
+              </section>
+              <section>
+                <div class="section-title">Recent artifacts</div>
+                <div id="artifact-list"></div>
+              </section>
+            </div>
+          </div>
+
+          <div class="workspace" id="workspace" hidden>
+            <button class="back-btn" id="back-btn"><i data-lucide="arrow-left" aria-hidden="true"></i>Back to Home</button>
+            <div class="eyebrow" id="workspace-eyebrow">18 Maple Avenue · Home record</div>
+            <h1 id="workspace-title">What needs your attention</h1>
+            <p class="subhead" id="workspace-subhead">Prioritized from current risks, deadlines, and active work.</p>
+            <div class="flow-steps" aria-label="Action progress">
+              <div class="flow-step active" data-flow="answer">Answer</div>
+              <div class="flow-step" data-flow="review">Review</div>
+              <div class="flow-step" data-flow="confirm">Confirm</div>
+              <div class="flow-step" data-flow="receipt">Receipt</div>
+            </div>
+            <section class="answer-card" id="answer-card">
+              <div class="answer-head">
+                <span class="answer-icon"><i data-lucide="sparkles" aria-hidden="true"></i></span>
+                <div>
+                  <div class="answer-title" id="answer-title">Three items are worth handling first.</div>
+                  <div class="answer-copy" id="answer-copy">The first is urgent because it may affect both the home and your coverage documentation.</div>
+                </div>
+              </div>
+              <ol class="result-list" id="result-list"></ol>
+              <div class="answer-actions">
+                <button class="primary-action" id="primary-action">Turn these into a plan</button>
+                <button class="secondary-action" id="secondary-action">Show only urgent</button>
+              </div>
+              <div class="source-line"><i data-lucide="shield-check" aria-hidden="true"></i><span id="source-copy">From your home record · refreshed today</span></div>
+            </section>
+            <section class="review-card" id="review-card" hidden>
+              <div class="answer-title">Review the proposed action</div>
+              <div class="answer-copy">Nothing changes until you confirm. You can still go back or edit the proposal.</div>
+              <div class="review-row"><span>Action</span><strong id="review-action">Create a prioritized home plan</strong></div>
+              <div class="review-row"><span>Property</span><strong>18 Maple Avenue</strong></div>
+              <div class="review-row"><span>Effect</span><strong id="review-effect">Adds three tasks to active work</strong></div>
+              <div class="answer-actions">
+                <button class="primary-action" id="confirm-action">Confirm action</button>
+                <button class="secondary-action" id="edit-action">Back to answer</button>
+              </div>
+              <div class="source-line"><i data-lucide="lock-keyhole" aria-hidden="true"></i><span>Authorization and property access will be checked again</span></div>
+            </section>
+            <section class="receipt-card" id="receipt-card" hidden>
+              <div class="receipt-mark"><i data-lucide="check" aria-hidden="true"></i></div>
+              <div class="answer-title">Done. The result is saved with your home.</div>
+              <div class="answer-copy" id="receipt-copy">Three tasks were added to active work. The original answer and confirmation are preserved in the activity history.</div>
+              <div class="review-row"><span>Status</span><strong>Completed</strong></div>
+              <div class="review-row"><span>Saved to</span><strong>Work · Home plan</strong></div>
+              <div class="answer-actions">
+                <button class="primary-action" id="open-work">Open active work</button>
+                <button class="secondary-action" id="done-action">Back to Home</button>
+              </div>
+              <div class="source-line"><i data-lucide="history" aria-hidden="true"></i><span>Receipt recorded now · action can be reviewed later</span></div>
+            </section>
+          </div>
+        </main>
+      </div>
+
+      <nav class="mobile-nav" aria-label="Mobile navigation">
+        <button class="active"><i data-lucide="home" aria-hidden="true"></i>Home</button>
+        <button><i data-lucide="list-checks" aria-hidden="true"></i>Work</button>
+        <button><i data-lucide="bookmark" aria-hidden="true"></i>Saved</button>
+        <button><i data-lucide="notebook-tabs" aria-hidden="true"></i>Record</button>
+      </nav>
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.getElementById('cozy-prototype');
+      const shell = root.querySelector('.app-shell');
+      const home = root.querySelector('#home-view');
+      const workspace = root.querySelector('#workspace');
+      const toast = root.querySelector('#toast');
+      let currentState = 'established';
+
+      const states = {
+        first: {
+          headline: 'Let’s make this home useful from day one.',
+          subhead: 'I found the basics. Add one thing you care about, or upload a report to build your home record.',
+          placeholder: 'Ask about this home, upload a report, or take a photo',
+          work: '1',
+          cards: [
+            ['Next step', 'Add your inspection report', 'Turn findings into a prioritized plan.', 'Upload report', 'info'],
+            ['Home record', 'Three details are ready to review', 'Year built, heating type, and roof material came from property data.', 'Review details', '']
+          ],
+          suggestions: ['Show my first 30-day priorities', 'Identify an appliance from a photo', 'Add the age of my roof'],
+          tools: ['Scan appliance label', 'Add inspection report', 'Describe your home'],
+          active: [['clipboard-check', 'Home setup', 'One recommended step remaining']],
+          artifacts: [['file-text', 'Property starter summary', 'Created today']]
+        },
+        established: {
+          headline: 'Two things need attention. One changed since Tuesday.',
+          subhead: 'Start with the water-damage follow-up, or ask about anything connected to your home.',
+          placeholder: 'Ask what changed, compare options, or update your home',
+          work: '2',
+          cards: [
+            ['Needs attention', 'Water-damage follow-up', 'A plumber estimate was added; coverage has not been checked.', 'Continue', 'urgent'],
+            ['Due soon', 'HVAC maintenance', 'Annual service is due in 12 days.', 'Review task', 'warning']
+          ],
+          suggestions: ['Check water-damage coverage', 'Compare the two estimates', 'Show what changed'],
+          tools: ['Photograph damage', 'Add supporting document', 'Describe what changed'],
+          active: [['hammer', 'Roof repair', 'Waiting on provider selection'], ['badge-check', 'Policy review', '2 of 3 sections reviewed']],
+          artifacts: [['file-chart-column', 'Spring home briefing', 'Updated 4 days ago'], ['scale', 'Repair vs. replace', 'Saved last month']]
+        },
+        active: {
+          headline: 'Your roof repair is waiting on one decision.',
+          subhead: 'Two estimates are ready to compare. The project timeline remains on track if you choose by October 2.',
+          placeholder: 'Continue this work or ask something else',
+          work: '3',
+          cards: [
+            ['Active project', 'Choose a roofing estimate', 'Two validated estimates differ by $2,450 and warranty scope.', 'Compare estimates', 'warning'],
+            ['Latest update', 'Permit review completed', 'No additional filing is shown for the current scope.', 'See project timeline', '']
+          ],
+          suggestions: ['Compare warranty exclusions', 'Use the second provider', 'Show the project timeline'],
+          tools: ['Add another estimate', 'Add project evidence', 'Describe an update'],
+          active: [['hard-hat', 'Roof replacement', 'Provider decision needed'], ['file-check-2', 'Estimate review', '2 documents validated']],
+          artifacts: [['columns-3', 'Roof estimate comparison', 'Updated today'], ['calendar-range', 'Roof project plan', 'Updated yesterday']]
+        },
+        urgent: {
+          headline: 'First, make the area safe.',
+          subhead: 'A possible active leak can cause more damage. If water is near electricity, leave the area and contact emergency help.',
+          placeholder: 'Describe what happened or add a photo',
+          work: '1',
+          cards: [
+            ['Urgent', 'Possible active water leak', 'Shut off the nearest safe water source. Do not approach wet electrical equipment.', 'Show immediate steps', 'urgent'],
+            ['Next', 'Document the damage', 'Photos can support repair and claim records after the area is safe.', 'Add photos', '']
+          ],
+          suggestions: ['Check water-damage coverage', 'Start a repair plan', 'Add a photo of the damage'],
+          tools: ['Photograph the damage', 'Add policy or receipt', 'Describe what happened'],
+          active: [['triangle-alert', 'Water incident', 'Safety steps in progress']],
+          artifacts: [['camera', 'Damage evidence', 'Not started']]
+        },
+        portfolio: {
+          headline: 'Two homes need attention.',
+          subhead: '18 Maple Avenue has the more urgent issue. Every item stays labeled by property.',
+          placeholder: 'Ask across my properties or choose a home',
+          work: '4',
+          cards: [
+            ['18 Maple Avenue', 'Water-damage follow-up', 'Coverage review is still open.', 'Open this home', 'urgent'],
+            ['42 Harbor Road', 'Storm preparation', 'High winds are forecast tomorrow evening.', 'Prepare this home', 'warning']
+          ],
+          suggestions: ['Compare attention across my homes', 'Show maintenance across all homes', 'Switch to the home with the open claim'],
+          tools: ['Photograph an issue', 'Add property document', 'Describe an update'],
+          active: [['houses', 'Portfolio attention', '2 homes · 4 open items'], ['cloud-sun', 'Weather preparation', '42 Harbor Road']],
+          artifacts: [['table-properties', 'Portfolio briefing', 'Updated today']]
+        }
+      };
+
+      const resultContent = {
+        attention: {
+          title: 'What needs your attention',
+          subhead: 'Prioritized from current risks, deadlines, and active work.',
+          answerTitle: 'Three items are worth handling first.',
+          answerCopy: 'The order comes from urgency, consequence, confidence, and whether you can act now.',
+          items: [['Water-damage follow-up', 'Urgent · Estimate added today · coverage not checked'], ['HVAC maintenance', 'Due in 12 days · annual service'], ['Roof repair', 'Provider selection is blocking the next step']],
+          primary: 'Turn these into a plan', secondary: 'Show only urgent',
+          source: 'From your home record · risks, deadlines, and active work · refreshed today',
+          effect: 'Adds three proposed tasks to active work'
+        },
+        coverage: {
+          title: 'Water-damage coverage',
+          subhead: 'Based on the policy currently attached to 18 Maple Avenue.',
+          answerTitle: 'Sudden water damage appears covered, with important limits.',
+          answerCopy: 'This is a record-backed policy summary, not a claim decision. Gradual leakage and maintenance-related damage are listed separately.',
+          items: [['Sudden discharge', 'Listed as covered, subject to deductible and policy conditions'], ['Gradual leakage', 'Not verified as covered in the current policy text'], ['Your next step', 'Document the source and ask the insurer to confirm this incident']],
+          primary: 'Add this to the incident', secondary: 'Show policy sources',
+          source: 'From your uploaded policy · page 14 · reviewed September 18',
+          effect: 'Links this coverage summary to the open water incident'
+        },
+        estimates: {
+          title: 'Roof estimate comparison',
+          subhead: 'Two homeowner-validated estimates, normalized to comparable scope.',
+          answerTitle: 'The lower bid is $2,450 less, but excludes deck replacement.',
+          answerCopy: 'The second estimate costs more and includes a longer workmanship warranty. Neither is selected for you.',
+          items: [['Greenline Roofing · $18,900', 'Lower price · deck replacement billed separately'], ['North Star Exteriors · $21,350', 'Includes up to 4 sheets · 10-year workmanship warranty'], ['Difference to resolve', 'Ask both providers to price the same deck-repair allowance']],
+          primary: 'Draft questions for both', secondary: 'Compare warranties',
+          source: 'From two homeowner-validated estimates · updated today',
+          effect: 'Creates a draft only; nothing is sent to either provider'
+        },
+        generic: {
+          title: 'Your Ask Cozy workspace',
+          subhead: 'Property context is preserved while you continue.',
+          answerTitle: 'I can help with that from here.',
+          answerCopy: 'This prototype shows how a natural request becomes an addressable result instead of a disposable chat response.',
+          items: [['Property scope', '18 Maple Avenue'], ['Context', 'Known home record and active work'], ['Next step', 'Review the proposed result and choose an action']],
+          primary: 'Continue', secondary: 'Show sources',
+          source: 'Based on confirmed property context · no external action taken',
+          effect: 'Opens the next review step without changing your record'
+        }
+      };
+
+      function icon(name) { return `<i data-lucide="${name}" aria-hidden="true"></i>`; }
+      function renderState(name) {
+        currentState = name;
+        const s = states[name];
+        root.querySelector('#headline').textContent = s.headline;
+        root.querySelector('#subhead').textContent = s.subhead;
+        root.querySelector('#ask-input').placeholder = s.placeholder;
+        root.querySelector('#work-count').textContent = s.work;
+        root.querySelectorAll('[data-tool-index]').forEach((b, i) => {
+          b.dataset.tool = s.tools[i];
+          b.querySelector('span').textContent = s.tools[i];
+          b.setAttribute('aria-label', s.tools[i]);
+        });
+        root.querySelectorAll('[data-portfolio-only]').forEach(o => o.hidden = name !== 'portfolio');
+        root.querySelector('#attention-grid').innerHTML = s.cards.map((c, i) => `
+          <div class="attention-card ${c[4]}" data-card="${i}">
+            <button class="card-main" type="button">
+              <span class="card-kicker">${icon(c[4] === 'urgent' ? 'triangle-alert' : c[4] === 'warning' ? 'clock-3' : 'sparkles')}${c[0]}</span>
+              <span class="card-title">${c[1]}</span>
+              <span class="card-copy">${c[2]}</span>
+              <span class="card-link">${c[3]} →</span>
+            </button>
+            <button class="why-btn" type="button">Why this appeared</button>
+          </div>`).join('');
+        root.querySelector('#suggestions').innerHTML = s.suggestions.map(x => `<button class="suggestion" type="button">${x}</button>`).join('');
+        root.querySelector('#active-list').innerHTML = s.active.map(x => `<div class="quiet-row"><span class="quiet-icon">${icon(x[0])}</span><div><div>${x[1]}</div><div class="quiet-meta">${x[2]}</div></div></div>`).join('');
+        root.querySelector('#artifact-list').innerHTML = s.artifacts.map(x => `<div class="quiet-row"><span class="quiet-icon">${icon(x[0])}</span><div><div>${x[1]}</div><div class="quiet-meta">${x[2]}</div></div></div>`).join('');
+        root.querySelectorAll('[data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === name)));
+        bindDynamic();
+        if (globalThis.lucide) lucide.createIcons({ attrs: { width: 17, height: 17 } });
+        saveState();
+      }
+
+      function chooseResult(label) {
+        const lower = label.toLowerCase();
+        if (lower.includes('coverage') || lower.includes('water')) return resultContent.coverage;
+        if (lower.includes('estimate') || lower.includes('warranty') || lower.includes('provider')) return resultContent.estimates;
+        if (lower.includes('attention') || lower.includes('changed') || lower.includes('priorit')) return resultContent.attention;
+        return resultContent.generic;
+      }
+
+      function openWorkspace(label) {
+        const r = chooseResult(label);
+        root.currentResult = r;
+        root.querySelector('#workspace-title').textContent = r.title;
+        root.querySelector('#workspace-subhead').textContent = r.subhead;
+        root.querySelector('#answer-title').textContent = r.answerTitle;
+        root.querySelector('#answer-copy').textContent = r.answerCopy;
+        root.querySelector('#result-list').innerHTML = r.items.map((item, i) => `<li class="result-item"><span class="result-number">${i + 1}</span><div><strong>${item[0]}</strong><span>${item[1]}</span></div></li>`).join('');
+        root.querySelector('#primary-action').textContent = r.primary;
+        root.querySelector('#secondary-action').textContent = r.secondary;
+        root.querySelector('#source-copy').textContent = r.source;
+        root.querySelector('#review-action').textContent = r.primary;
+        root.querySelector('#review-effect').textContent = r.effect;
+        setFlow('answer');
+        home.hidden = true;
+        workspace.hidden = false;
+        root.querySelector('#workspace-title').focus?.();
+        saveState('workspace');
+      }
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.hidden = false;
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => { toast.hidden = true; }, 2400);
+      }
+
+      function bindDynamic() {
+        root.querySelectorAll('.card-main').forEach(b => b.addEventListener('click', () => openWorkspace(b.textContent)));
+        root.querySelectorAll('.why-btn').forEach((b, i) => b.addEventListener('click', () => {
+          const reasons = {
+            first: ['This report unlocks property-specific priorities.', 'These details came from available property data.'],
+            established: ['A new estimate was added and coverage is still unresolved.', 'The annual service date is 12 days away.'],
+            active: ['Choosing an estimate is blocking the project.', 'The permit state changed since your last visit.'],
+            urgent: ['Your description may indicate an active leak.', 'Evidence is useful after immediate safety steps.'],
+            portfolio: ['This is the highest-urgency item across your homes.', 'A verified weather event is approaching this property.']
+          };
+          showToast(reasons[currentState][i]);
+        }));
+        root.querySelectorAll('.suggestion').forEach(b => b.addEventListener('click', () => openWorkspace(b.textContent)));
+      }
+
+      function setFlow(stage) {
+        const order = ['answer', 'review', 'confirm', 'receipt'];
+        const activeIndex = order.indexOf(stage);
+        root.querySelectorAll('[data-flow]').forEach((el, i) => {
+          el.classList.toggle('active', i === activeIndex);
+          el.classList.toggle('done', i < activeIndex);
+        });
+        root.querySelector('#answer-card').hidden = stage !== 'answer';
+        root.querySelector('#review-card').hidden = !['review', 'confirm'].includes(stage);
+        root.querySelector('#receipt-card').hidden = stage !== 'receipt';
+        if (stage === 'confirm') {
+          root.querySelector('#confirm-action').textContent = 'Confirm now';
+          root.querySelector('#review-card').querySelector('.answer-copy').textContent = 'Confirm this authorized action. Ask Cozy will preserve a receipt and update the owning record.';
+        } else {
+          root.querySelector('#confirm-action').textContent = 'Continue to confirm';
+          root.querySelector('#review-card').querySelector('.answer-copy').textContent = 'Nothing changes until you confirm. You can still go back or edit the proposal.';
+        }
+        saveState(stage);
+      }
+
+      function saveState(view = workspace.hidden ? 'home' : 'workspace') {
+        if (window.openai?.setWidgetState) {
+          window.openai.setWidgetState({ modelContent: { scenario: currentState, view }, privateContent: { mobile: shell.classList.contains('mobile') } }).catch(() => {});
+        }
+      }
+
+      root.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => { workspace.hidden = true; home.hidden = false; renderState(b.dataset.state); }));
+      root.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+        const mobile = b.dataset.view === 'mobile';
+        shell.classList.toggle('mobile', mobile);
+        root.querySelectorAll('[data-view]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        saveState();
+      }));
+      root.querySelector('#composer').addEventListener('submit', e => {
+        e.preventDefault();
+        const input = root.querySelector('#ask-input');
+        const value = input.value.trim();
+        if (!value) { showToast('Type a question or choose an input mode.'); return; }
+        openWorkspace(value);
+        input.value = '';
+      });
+      root.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => showToast(`${b.dataset.tool} input would open here.`)));
+      root.querySelector('#back-btn').addEventListener('click', () => { workspace.hidden = true; home.hidden = false; saveState('home'); });
+      root.querySelector('#primary-action').addEventListener('click', () => setFlow('review'));
+      root.querySelector('#secondary-action').addEventListener('click', () => showToast('The result was refined without changing its source data.'));
+      root.querySelector('#edit-action').addEventListener('click', () => setFlow('answer'));
+      root.querySelector('#confirm-action').addEventListener('click', () => {
+        const isConfirm = root.querySelector('[data-flow="confirm"]').classList.contains('active');
+        if (!isConfirm) { setFlow('confirm'); return; }
+        root.querySelector('#receipt-copy').textContent = `${root.currentResult?.effect || 'The action was completed.'} The answer and confirmation are preserved in activity history.`;
+        setFlow('receipt');
+      });
+      root.querySelector('#open-work').addEventListener('click', () => showToast('Active Work would open with this result selected.'));
+      root.querySelector('#done-action').addEventListener('click', () => { workspace.hidden = true; home.hidden = false; saveState('home'); });
+      root.querySelectorAll('.nav-item, .mobile-nav button').forEach(b => b.addEventListener('click', () => showToast(`${b.textContent.trim()} is represented in the validation flow.`)));
+
+      const restored = window.openai?.widgetState;
+      if (restored?.modelContent?.scenario && states[restored.modelContent.scenario]) currentState = restored.modelContent.scenario;
+      if (restored?.privateContent?.mobile) {
+        shell.classList.add('mobile');
+        root.querySelectorAll('[data-view]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.view === 'mobile')));
+      }
+      renderState(currentState);
+      if (restored?.modelContent?.view === 'workspace') openWorkspace('what needs attention');
+    })();
+  </script>
+</div>

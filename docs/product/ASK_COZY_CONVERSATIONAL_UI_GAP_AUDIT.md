@@ -3,7 +3,7 @@
 **Date:** September 26, 2026  
 **Status:** Implementation planning input  
 **Scope:** Ask Cozy conversational UI only; this is not a review of ContractToCozy's broader feature set  
-**Prototype:** `ask-cozy-launch-validation.html` (validated clickable prototype)  
+**Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
 **Primary requirements:** `ASK_COZY_INLINE_WORKSPACE_FRD.md`, `ASK_COZY_INTERACTION_MODEL_UI_FRD.md`, and `ASK_COZY_PRIMARY_INTERFACE_REDESIGN.md`
 
 ## 1. Executive conclusion
@@ -267,4 +267,3 @@ Do not broaden calm adoption to another domain until maintenance demonstrates al
 ## 9. Validation notes
 
 This audit is based on requirements review and static tracing of the current working tree, including uncommitted Ask Cozy changes. It is not a runtime certification. No application code was changed by this audit, and no browser or service environment was started.
-
