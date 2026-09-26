@@ -20,7 +20,8 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(page.locator('[data-calm-landing]')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Needs your attention' }).getByRole('button', { name: /to plan soon/ })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Needs your attention' }).getByRole('button', { name: /to plan soon/ })).toContainText('Schedule HVAC service');
-  await expect(page.getByRole('button', { name: /More ideas/ })).toBeVisible();
+  // Shell parity (1d3194ec): the calm landing no longer carries the capability-explorer chip.
+  await expect(page.getByRole('button', { name: /More ideas/ })).toHaveCount(0);
   await expect(page.getByText('Top priority')).toHaveCount(0);
   await expect(page.getByRole('list', { name: 'Suggestions' }).getByRole('button')).not.toHaveCount(0);
   // ACUI-006: the desktop rail starts collapsed on the fresh landing; the History control opens it.
@@ -30,6 +31,9 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(conversationNav.getByText('Your home assistant')).toHaveCount(0);
   await expect(conversationNav.getByText(/navigation remains available above/)).toHaveCount(0);
   await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
+  // History is a secondary surface (shell parity): close it before using the landing.
+  await page.keyboard.press('Escape');
+  await expect(conversationNav).toHaveCount(0);
 
   const chip = page.getByRole('list', { name: 'Needs your attention' }).getByRole('button').first();
   await chip.click();
@@ -79,7 +83,9 @@ test('calm desktop: no second title band, the status dot sits in the rail, and t
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toHaveCount(1);
-  await expect(page.locator('header').filter({ hasText: 'Ask Cozy' })).toBeHidden();
+  // The shell header (brand + home selector) is the one visible band; the workspace's own title header stays hidden.
+  await expect(page.getByRole('banner', { name: 'Ask Cozy header' }).or(page.locator('header[aria-label="Ask Cozy header"]'))).toHaveCount(1);
+  await expect(page.locator('header:visible').filter({ hasText: 'Conversations' })).toHaveCount(0);
 });
 
 test('?calm=0 returns to the previous presentation and is remembered', async ({ page }) => {
