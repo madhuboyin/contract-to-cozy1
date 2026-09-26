@@ -20,6 +20,19 @@ test('ACUI-001/002/003: the launch names the home and its state, each entry can 
   await expect(page.getByRole('list', { name: 'Needs your attention' }).locator('[data-strip-chip]')).not.toHaveCount(0);
   await expect(page.getByRole('list', { name: 'Needs your attention' }).locator('[data-strip-chip]')).toHaveCount(2);
 
+  // Prototype-parity visual contract: the desktop cards are side by side,
+  // precede the compact composer, and use a bold sans-serif headline.
+  const attentionCards = page.getByRole('list', { name: 'Needs your attention' }).locator(':scope > li');
+  const firstCard = await attentionCards.nth(0).boundingBox();
+  const secondCard = await attentionCards.nth(1).boundingBox();
+  const composerBox = await composer(page).locator('..').boundingBox();
+  expect(firstCard && secondCard && Math.abs(firstCard.y - secondCard.y) < 2).toBe(true);
+  expect(firstCard && secondCard && secondCard.x > firstCard.x + firstCard.width).toBe(true);
+  expect(firstCard && composerBox && firstCard.y + firstCard.height < composerBox.y).toBe(true);
+  expect(composerBox && composerBox.height <= 76).toBe(true);
+  await expect(page.locator('[data-calm-headline="state"]')).toHaveCSS('font-weight', '700');
+  await expect(page).toHaveScreenshot('ask-cozy-prototype-desktop.png', { animations: 'disabled', fullPage: true, mask: [page.locator('[data-calm-date]')] });
+
   // ACUI-002: the explanation opens in place and never disturbs what was typed.
   await composer(page).fill('half-typed question');
   const why = page.getByRole('button', { name: 'Why this appeared' }).first();
@@ -136,6 +149,11 @@ test('ACUI-001..006 on a phone: nothing scrolls sideways, the explanation, trust
   await open(page);
   await expect(page.locator('[data-calm-headline="state"]')).toBeVisible();
   await noSidewaysScroll(page);
+  const mobileCards = page.getByRole('list', { name: 'Needs your attention' }).locator(':scope > li');
+  const mobileFirst = await mobileCards.nth(0).boundingBox();
+  const mobileSecond = await mobileCards.nth(1).boundingBox();
+  expect(mobileFirst && mobileSecond && mobileSecond.y > mobileFirst.y + mobileFirst.height).toBe(true);
+  await expect(page).toHaveScreenshot('ask-cozy-prototype-mobile.png', { animations: 'disabled', fullPage: true, mask: [page.locator('[data-calm-date]')] });
   await page.getByRole('button', { name: 'Why this appeared' }).first().click();
   await expect(page.locator('[data-why-panel]').first()).toBeVisible();
   await noSidewaysScroll(page);

@@ -17,7 +17,7 @@ const TONE: Record<StripTone, { chip: string; dot: string }> = {
 // One line on a phone (scrolls sideways), wrapping on wider screens.
 const ROW = 'flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible';
 
-export function CalmLanding({ view, loading, failed, starters, usingFallbackStarters, onAsk, headlineShownAbove = false, children }: {
+export function CalmLanding({ view, loading, failed, starters, usingFallbackStarters, onAsk, headlineShownAbove = false, composer, children }: {
   view: ConciergeHomeView | null;
   loading: boolean;
   failed: boolean;
@@ -26,6 +26,8 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
   onAsk: (prompt: AskCapabilityPrompt, source: 'ATTENTION' | 'DECISION' | 'DISCOVERY' | 'FALLBACK' | 'PERSONALIZED') => void;
   /** ACUI-001: the workspace already shows the state headline above the composer, so the landing does not repeat it. */
   headlineShownAbove?: boolean;
+  /** Prototype parity: attention precedes the compact composer. */
+  composer?: ReactNode;
   /** The capability explorer link, rendered last. */
   children?: ReactNode;
 }) {
@@ -37,21 +39,23 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
   for (const entry of strip?.chips ?? []) { covered.add(entry.prompt.id); covered.add(entry.prompt.question.trim().toLowerCase()); }
   if (strip?.urgent) { covered.add(strip.urgent.prompt.id); covered.add(strip.urgent.prompt.question.trim().toLowerCase()); }
   const shownStarters = starters.filter((prompt) => !covered.has(prompt.id) && !covered.has(prompt.question.trim().toLowerCase())).slice(0, 3);
-  // IW-CONV-017 (FRD v1.113): at most two "what needs you" lines, each saying what is behind the count; the composer stays the focus.
+  // Prototype-parity slice: at most two grounded attention cards before the
+  // compact composer. Their actions and explanations retain the same
+  // governed prompts; only hierarchy and presentation change.
   const contextLine = (entry: StripChip) => {
     const reasons = entry.explanation?.reasons.filter(Boolean) ?? [];
     const whyId = `why-${entry.id}`;
     const open = openWhy === entry.id;
     return (
-      <li key={entry.id} className={cn('rounded-2xl', open && 'pb-3', TONE[entry.tone].chip.split(' ')[0])}>
-        <button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className={cn('flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left transition', TONE[entry.tone].chip)}>
-          <span aria-hidden="true" className={cn('h-2 w-2 shrink-0 rounded-full', TONE[entry.tone].dot)} />
-          <span className="min-w-0 flex-1"><span className="block text-sm font-semibold tabular-nums">{entry.label}</span>{entry.detail && <span className="block truncate text-[13px] font-normal opacity-80">{entry.detail}</span>}</span>
-          <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50" />
+      <li key={entry.id} className={cn('min-w-0 rounded-2xl border border-transparent p-4 sm:p-5', open && 'pb-4', TONE[entry.tone].chip.split(' ')[0])}>
+        <button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className="group block w-full text-left">
+          <span className={cn('block text-[11px] font-semibold uppercase tracking-[0.12em]', TONE[entry.tone].chip.split(' ')[1])}>{entry.label}</span>
+          {entry.detail && <span className="mt-2 block text-base font-semibold leading-5 text-slate-950">{entry.detail}</span>}
+          <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-emerald-900">Review <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span>
         </button>
         {reasons.length > 0 && <>
-          <button type="button" data-why-toggle={entry.id} aria-expanded={open} aria-controls={whyId} onClick={() => setOpenWhy(open ? null : entry.id)} className={cn('ml-[2.1rem] min-h-8 rounded-lg px-1 pb-2 text-xs font-medium underline-offset-2 hover:underline', TONE[entry.tone].chip.split(' ')[1])}>Why this appeared</button>
-          <ul id={whyId} hidden={!open} data-why-panel={entry.id} className="mr-3.5 ml-[2.1rem] list-disc space-y-1 pl-4 text-[13px] leading-5 text-slate-700 marker:text-slate-400">{reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+          <button type="button" data-why-toggle={entry.id} aria-expanded={open} aria-controls={whyId} onClick={() => setOpenWhy(open ? null : entry.id)} className="mt-1 min-h-8 rounded-lg text-xs font-medium text-slate-600 underline-offset-2 hover:underline">Why this appeared</button>
+          <ul id={whyId} hidden={!open} data-why-panel={entry.id} className="mt-1 list-disc space-y-1 pl-4 text-[13px] leading-5 text-slate-700 marker:text-slate-400">{reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
         </>}
       </li>
     );
@@ -69,7 +73,8 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
       </section>
       {/* IW-CONV-016 (FRD v1.112): one row of suggestions and nothing else on the landing: what needs attention (with a dot), then a few
           starter questions, then "More ideas". The top priority is one tap away through the first chip, not a second element. */}
-      {stripChips.length > 0 && !loading && <ul className="mt-5 space-y-2" aria-label="Needs your attention">{stripChips.map(contextLine)}</ul>}
+      {stripChips.length > 0 && !loading && <ul className="grid gap-3 sm:grid-cols-2" aria-label="Needs your attention">{stripChips.map(contextLine)}</ul>}
+      {composer && <div className="mt-4">{composer}</div>}
       {(shownStarters.length > 0 || children) && !loading && <ul className={cn(ROW, 'mt-4')} aria-label="Suggestions">
         {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-9 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm text-slate-700 transition hover:border-teal-300 hover:text-teal-900">{prompt.question}</button></li>)}
         {children && <li className="shrink-0">{children}</li>}

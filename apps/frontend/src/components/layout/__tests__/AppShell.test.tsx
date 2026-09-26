@@ -7,7 +7,13 @@ test('full-window workspaces do not reserve space for a missing application side
   const content = screen.getByTestId('app-shell-content');
   expect(content).not.toHaveClass('lg:pl-[64px]');
   expect(content).not.toHaveClass('lg:pl-[246px]');
+  expect(screen.getByTestId('app-shell-main')).not.toHaveClass('lg:pt-[72px]');
   expect(screen.getByText('Ask workspace')).toBeInTheDocument();
+});
+
+test('a top command bar reserves its fixed desktop height', () => {
+  render(<AppShell topBar={<header>Command bar</header>}><div>Dashboard</div></AppShell>);
+  expect(screen.getByTestId('app-shell-main')).toHaveClass('lg:pt-[72px]');
 });
 
 test('ordinary dashboard pages retain their expanded and collapsed sidebar offsets', () => {

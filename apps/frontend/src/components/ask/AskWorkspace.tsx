@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronsLeft, History, Loader2, Maximize2, RefreshCw, Send, Sparkles, Square, Trash2 } from 'lucide-react';
+import { AlertTriangle, BookOpen, CheckCircle2, ChevronsLeft, History, Home, Loader2, Maximize2, RefreshCw, Send, Sparkles, Square, Trash2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -283,16 +283,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     <form onSubmit={submit} className="group mx-auto w-full max-w-3xl" aria-label="Ask Cozy question">
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
-      <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100', placement === 'hero' ? cn('rounded-3xl p-3 shadow-[0_12px_40px_-20px_rgba(15,118,110,0.45)]', calm && 'border-teal-200 p-4 shadow-[0_18px_50px_-22px_rgba(15,118,110,0.55)]') : 'rounded-2xl')}>
-        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? (calm ? 3 : 2) : 1} maxLength={4000} placeholder={calm && placement === 'hero' && propertyLabel ? `Ask anything about ${propertyLabel}…` : 'Ask anything about your home…'} className={cn('max-h-48 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? (calm ? 'min-h-[5.5rem] py-2.5 text-lg leading-7' : 'min-h-14 py-3 text-base') : 'min-h-10 py-2 text-sm')} />
+      <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100', placement === 'hero' ? cn('rounded-2xl p-3 shadow-[0_12px_28px_-20px_rgba(15,23,42,0.45)]', calm && 'border-stone-300') : 'rounded-2xl')}>
+        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={1} maxLength={4000} placeholder={calm && placement === 'hero' && propertyLabel ? `Ask anything about ${propertyLabel}…` : 'Ask anything about your home…'} className={cn('max-h-48 flex-1 resize-none bg-transparent px-1 text-slate-900 outline-none placeholder:text-slate-500', placement === 'hero' ? 'min-h-11 py-2.5 text-base leading-6' : 'min-h-10 py-2 text-sm')} />
         {latestExecution && composerAffordances.map((affordance) => <AttachEvidenceControl key={affordance.id} variant="composer" label={affordance.label}
           event={{ entityType: affordance.target.entityType, id: affordance.target.id, title: affordance.target.title }} propertyId={selectedPropertyId} disabled={loading || !sessionId}
           onAttached={(documentId) => void ask(affordance.target.message, undefined, { entityType: affordance.target.entityType, entityId: affordance.target.id, sourceExecutionId: latestExecution.executionId, operationId: 'CAPTURE_EVIDENCE_CONFIRM', documentId })} />)}
         <VoiceInputButton large={placement === 'hero'} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />
         {loading && inFlight.current
-          ? <button key="stop" type="button" onClick={stopAsking} aria-label="Stop" className={cn('grid shrink-0 place-items-center bg-slate-800 text-white transition hover:bg-slate-900', placement === 'hero' ? 'h-12 w-12 rounded-2xl' : 'h-10 w-10 rounded-xl')}><Square className="h-4 w-4" /></button>
-          : <button key="send" type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className={cn('grid shrink-0 place-items-center rounded-2xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-40', placement === 'hero' ? 'h-12 w-12' : 'h-10 w-10 rounded-xl')}><Send className="h-4 w-4" /></button>}
+          ? <button key="stop" type="button" onClick={stopAsking} aria-label="Stop" className={cn('grid shrink-0 place-items-center bg-slate-800 text-white transition hover:bg-slate-900', placement === 'hero' ? 'h-10 w-10 rounded-xl' : 'h-10 w-10 rounded-xl')}><Square className="h-4 w-4" /></button>
+          : <button key="send" type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className={cn('grid shrink-0 place-items-center bg-emerald-900 text-white transition hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40', placement === 'hero' ? 'h-10 w-10 rounded-xl' : 'h-10 w-10 rounded-xl')}><Send className="h-4 w-4" /></button>}
       </div>
       {calm ? (input.includes('\n') && <p className="mt-1.5 hidden px-1 text-[11px] text-slate-400 group-focus-within:block">Shift+Enter for a new line</p>) : <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>}
     </form>
@@ -352,8 +352,14 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} />
           </aside>
           ) : (
-          <aside className="hidden w-14 shrink-0 flex-col items-center border-r border-slate-200 bg-[#f7f7f5] py-4 lg:flex" aria-label="Conversation history">
-            <button type="button" id="ask-history-toggle" onClick={() => { railToggled.current = true; chooseRailPreference('expanded'); }} aria-expanded="false" className="flex min-h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-xl text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"><History className="h-4 w-4" aria-hidden="true" /><span className="text-[10px] font-medium">History</span></button>
+          <aside className="hidden w-40 shrink-0 flex-col border-r border-stone-200 bg-[#f4f2ed] px-3 py-5 lg:flex" aria-label="Ask Cozy navigation">
+            <p className="px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-950">Ask Cozy</p>
+            <nav className="mt-5 space-y-1" aria-label="Ask Cozy sections">
+              <button type="button" onClick={startNewSession} aria-current={showLanding ? 'page' : undefined} className={cn('flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', showLanding ? 'bg-emerald-950 text-white' : 'text-slate-700 hover:bg-stone-200/70')}><Home className="h-4 w-4" aria-hidden="true" />Home</button>
+              <Link href={`/dashboard/maintenance${selectedPropertyId ? `?propertyId=${encodeURIComponent(selectedPropertyId)}` : ''}`} className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><Wrench className="h-4 w-4" aria-hidden="true" />Work</Link>
+              {selectedPropertyId && <Link href={`/dashboard/properties/${encodeURIComponent(selectedPropertyId)}`} className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><BookOpen className="h-4 w-4" aria-hidden="true" />Record</Link>}
+              <button type="button" id="ask-history-toggle" onClick={() => { railToggled.current = true; chooseRailPreference('expanded'); }} aria-expanded="false" className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><History className="h-4 w-4" aria-hidden="true" />History</button>
+            </nav>
           </aside>
           )
         )}
@@ -370,13 +376,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             </button>
           </section>
         ) : showLanding ? (
-          <div className={cn('mx-auto max-w-3xl', calm && 'sm:pt-[3vh]')}>
+          <div className={cn('mx-auto max-w-4xl', calm && 'sm:pt-[2vh]')}>
             {calm ? <div className="mb-5">
-              {propertyLabel && <p className="mb-1.5 truncate text-sm text-slate-500" data-calm-property="">{propertyLabel}</p>}
-              <h2 className="font-display text-[24px] font-medium leading-tight tracking-[-0.01em] text-slate-950 sm:text-[30px]" data-calm-headline={landingOpening ? 'state' : 'generic'}>{landingOpening ?? 'How can I help with your home?'}</h2>
+              <p className="mb-3 text-sm text-slate-500" data-calm-date="">{new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</p>
+              {propertyLabel && <p className="mb-1 truncate text-xs font-semibold uppercase tracking-[0.12em] text-emerald-900" data-calm-property="">{propertyLabel}</p>}
+              <h2 className="max-w-3xl text-[30px] font-bold leading-[1.08] tracking-[-0.035em] text-[#17231d] sm:text-[42px]" data-calm-headline={landingOpening ? 'state' : 'generic'}>{landingOpening ?? 'How can I help with your home?'}</h2>
+              <p className="mt-3 max-w-2xl text-[15px] leading-6 text-slate-600">Review what needs attention, or ask about anything connected to your home.</p>
             </div> : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
-            {renderComposer('hero')}
-            {calm ? <CalmLanding headlineShownAbove={Boolean(landingOpening)} view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)}>{explorer}</CalmLanding> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
+            {!calm && renderComposer('hero')}
+            {calm ? <CalmLanding composer={renderComposer('hero')} headlineShownAbove={Boolean(landingOpening)} view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)}>{explorer}</CalmLanding> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
               <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Popular ways to use Ask Cozy</h2>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">{featuredPrompts.map((prompt) => <button type="button" key={prompt.id} onClick={() => runPrompt(prompt, usingFallbackPrompts ? 'FALLBACK' : prompt.source)} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700"><CapabilityCategoryIcon categoryId={prompt.categoryId} className="h-3.5 w-3.5" />{prompt.categoryLabel}</span><span className="mt-1.5 block text-sm font-medium text-slate-700 group-hover:text-teal-900">{prompt.question}</span></button>)}</div>
               {explorer}

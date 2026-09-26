@@ -14,7 +14,11 @@ export function useSelectedPropertyLabel(propertyId: string | undefined, enabled
       .then((response) => {
         if (!active || !response?.success || !response.data) return;
         const property = response.data.properties.find((entry) => entry.id === propertyId);
-        const text = property ? (property.name?.trim() || [property.address, property.city].filter(Boolean).join(', ')) : '';
+        // The global property selector identifies a home by address. Use the
+        // same identity here so Ask never says "Main" while the shell says
+        // "94 Ashford Dr" for the very same selected property.
+        const address = property?.address?.trim();
+        const text = property ? (address ? [address, property.city].filter(Boolean).join(', ') : property.name?.trim()) : '';
         setLabel(text ? { id: propertyId, text } : null);
       })
       .catch(() => { if (active) setLabel(null); });

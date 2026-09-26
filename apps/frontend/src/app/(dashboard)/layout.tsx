@@ -733,9 +733,9 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             </aside>
           }
           sidebarCollapsed={isCollapsed}
-          topBar={<CtcTopCommandBar />}
+          topBar={isAskWorkspace ? null : <CtcTopCommandBar />}
           mobileHeader={
-            <header className="md:hidden sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl safe-area-inset-top">
+            isAskWorkspace ? null : <header className="md:hidden sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl safe-area-inset-top">
               <div
                 className="flex h-14 items-center justify-between px-4"
                 style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
