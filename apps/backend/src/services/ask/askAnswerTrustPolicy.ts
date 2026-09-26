@@ -43,7 +43,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   INCIDENT_CONTINUATION: new Set(['incident-continuation-boundary']),
   QUOTE_COMPARISON_REVIEW: new Set(['quote-review-boundary']),
   CAPITAL_RESERVE_PLAN: new Set(['capital-plan-boundary']),
-  HOME_EVENT_RADAR_FEED: new Set(['home-event-radar-partial']),
+  HOME_EVENT_RADAR_FEED: new Set(['home-event-radar-partial', 'radar-feed-boundary']),
   HOME_EVENT_RADAR_STATE: new Set(['radar-write-boundary']),
   HOME_EVENT_RADAR_MARK_DONE: new Set(['radar-write-boundary']),
   HOME_EVENT_RADAR_FEEDBACK: new Set(['radar-write-boundary']),

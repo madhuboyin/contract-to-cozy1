@@ -7,6 +7,7 @@ import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
+import { useCalmAnswer } from './blocks/calmContext';
 import type { RadarCanonicalDetail } from '@/types';
 import { CardDeckView } from './patterns/CardDeckView';
 import { DetailSheetFrame } from './patterns/PatternParts';
@@ -236,9 +237,13 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
   onChooseLayout?: (layout: 'LIST' | 'DECK') => void;
 }) {
   const controls = useContext(ResultViewContext);
+  // Radar R-1 (FRD v1.132): inside an adopted calm answer the feed's top-ranked event (the first item of the first section, which the
+  // producer orders by lifecycle then priority) is the one dominant step and opens its inline detail; the filters are quiet text groups.
+  const calm = useCalmAnswer();
   const [localDetailMatchId, setLocalDetailMatchId] = useState<string | null>(null);
   const detailMatchId = controls ? controls.detailIdFor(block.id) : localDetailMatchId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailMatchId);
+  const topItem = block.sections.find((section) => section.items.length > 0)?.items[0] ?? null;
   const openDetail = (item: Item) => {
     if (controls) controls.openDetail(block.id, item.id);
     else setLocalDetailMatchId(item.id);
@@ -258,7 +263,20 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
       {layoutSwitch}
-      {onFilter && block.filters.length > 0 && <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter monitored events">
+      {onFilter && block.filters.length > 0 && calm && <div className="mt-2 space-y-1" data-radar-filters="">
+        {([['radar-lifecycle-', 'Filter by timing'], ['radar-family-', 'Filter by source'], ['radar-hide-', 'Dismissed events'], ['radar-include-', 'Dismissed events']] as const).reduce<Array<[string, typeof block.filters]>>((groups, [prefix, name]) => {
+          const found = block.filters.filter((filter) => filter.id.startsWith(prefix));
+          if (!found.length) return groups;
+          const existing = groups.find(([groupName]) => groupName === name);
+          if (existing) existing[1] = [...existing[1], ...found]; else groups.push([name, found]);
+          return groups;
+        }, []).map(([name, group]) => <div key={name} className="flex flex-wrap gap-0.5" role="group" aria-label={name}>
+          {group.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active} onClick={() => onFilter(filter.message)}
+            className={cn('min-h-8 rounded-md px-2.5 py-1 text-sm disabled:opacity-100', filter.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900')}>{filter.label}</button>)}
+        </div>)}
+      </div>}
+      {calm && topItem && <button type="button" disabled={disabled} data-radar-review-top="" onClick={() => openDetail(topItem)} className="mt-3 inline-flex min-h-11 max-w-full items-center rounded-xl bg-teal-700 px-4 py-2 text-left text-sm font-semibold text-white disabled:opacity-50">Review: {topItem.title}</button>}
+      {onFilter && block.filters.length > 0 && !calm && <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter monitored events">
         {block.filters.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active}
           onClick={() => onFilter(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
       </div>}

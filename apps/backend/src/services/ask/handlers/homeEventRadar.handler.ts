@@ -91,6 +91,50 @@ function radarFeedFilterChips(state: RadarFeedFilterState, presentFamilies: stri
   ];
 }
 
+const radarCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+const RADAR_LIFECYCLE_ADJECTIVE: Record<RadarFeedLifecycleFilter, string> = { now: 'current', upcoming: 'upcoming', recently_ended: 'recently ended' };
+
+/**
+ * Radar R-1 (FRD v1.132): the calm answer for the monitored-event feed, as one counted sentence, one supporting line and answer chips.
+ * Counts are the feed's own exact total for the filters in force; a lifecycle or priority breakdown is stated only when the page holds the
+ * whole result, so a truncated page never presents a partial tally as the whole. It names the top-ranked event (the feed is already
+ * ordered by lifecycle, then priority) and says nothing about risk beyond what a source recorded.
+ */
+export function radarCalmCopy(input: {
+  filters: RadarFeedFilterState; total: number; shown: number; topTitle: string | null; staleCount: number;
+  lifecycle: Record<RadarFeedLifecycleFilter, number>; highPriority: number; saved: number;
+}): { headline: string; supportLine?: string; chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> } {
+  const { filters, total, shown, topTitle, staleCount, lifecycle, highPriority, saved } = input;
+  const complete = shown >= total;
+  const scope = [filters.lifecycle ? RADAR_LIFECYCLE_ADJECTIVE[filters.lifecycle] : null, filters.sourceFamily ? RADAR_FAMILY_PHRASE[filters.sourceFamily] : null].filter(Boolean).join(' ');
+  const noun = `${scope ? '' : 'monitored '}${total === 1 ? 'event' : 'events'}`;
+  let headline: string;
+  if (total === 0) headline = 'No monitored events match these filters.';
+  else if (!filters.lifecycle && complete && lifecycle.now > 0) headline = `${radarCount(lifecycle.now, 'event is', 'events are')} happening now.`;
+  else if (!filters.lifecycle && complete && lifecycle.now === 0 && (lifecycle.upcoming > 0 || lifecycle.recently_ended > 0)) headline = `Nothing is happening now; ${[lifecycle.upcoming > 0 ? `${lifecycle.upcoming} upcoming` : null, lifecycle.recently_ended > 0 ? `${lifecycle.recently_ended} recently ended` : null].filter(Boolean).join(' and ')}.`;
+  else headline = `${total} ${scope ? `${scope} ` : ''}${noun}.`.replace(/\s+/g, ' ');
+  const notes = [
+    topTitle && total > 0 ? `Most important: ${topTitle}.` : null,
+    staleCount > 0 ? `${radarCount(staleCount, 'source is', 'sources are')} out of date.` : null,
+    !complete ? `Showing the ${shown} most important of ${total}; open Home Event Radar for the rest.` : null,
+  ].filter((note): note is string => Boolean(note));
+  const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = complete && total > 0 ? [
+    ...(highPriority > 0 ? [{ label: `${highPriority} high priority`, tone: 'CRITICAL' as const }] : []),
+    ...(!filters.lifecycle && lifecycle.now > 0 ? [{ label: `${lifecycle.now} happening now`, tone: 'CAUTION' as const }] : []),
+    ...(!filters.lifecycle && lifecycle.upcoming > 0 ? [{ label: `${lifecycle.upcoming} upcoming`, tone: 'DEFAULT' as const }] : []),
+    ...(!filters.lifecycle && lifecycle.recently_ended > 0 ? [{ label: `${lifecycle.recently_ended} recently ended`, tone: 'DEFAULT' as const }] : []),
+    ...(saved > 0 ? [{ label: `${saved} saved`, tone: 'DEFAULT' as const }] : []),
+  ] : [];
+  return notes.length ? { headline, supportLine: notes.join(' '), chips } : { headline, chips };
+}
+
+const RADAR_FEED_BOUNDARY: AskPresentationBlock = {
+  type: 'BOUNDARY', id: 'radar-feed-boundary', title: 'Recorded information only',
+  body: 'These are events from the monitoring sources registered for your property address. This is not an emergency alert service and does not confirm that nothing else is happening. In an emergency, follow official local guidance.',
+  severity: 'INFO', suggestions: [],
+};
+
 async function homeEventRadarFeedResult(userId: string, propertyId: string, message: string, cursor?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const filters = parseRadarFeedFilters(message);
@@ -146,6 +190,17 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
       ? `${items.length} monitored event${items.length === 1 ? '' : 's'} from Home Event Radar${page.totalCount > items.length ? ` (${page.totalCount} total)` : ''}.`
       : 'No monitored events match these filters.',
     tone: items.some((item) => item.isSourceStale) ? 'CAUTION' : 'DEFAULT',
+    ...radarCalmCopy({
+      filters, total: page.totalCount, shown: items.length, topTitle: items[0] ? String(items[0].title) : null,
+      staleCount: new Set(items.filter((item) => item.isSourceStale).map((item) => String(item.sourceName ?? item.sourceFamily ?? item.id))).size,
+      lifecycle: {
+        now: items.filter((item) => item.matchLifecycleStatus === 'now').length,
+        upcoming: items.filter((item) => item.matchLifecycleStatus === 'upcoming').length,
+        recently_ended: items.filter((item) => item.matchLifecycleStatus === 'recently_ended').length,
+      },
+      highPriority: items.filter((item) => item.priorityBand === 'urgent' || item.priorityBand === 'high').length,
+      saved: items.filter((item) => item.userState === 'saved').length,
+    }),
     actions: [],
   }, {
     type: 'GROUPED_LIST',
@@ -155,7 +210,8 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     // IW-PRES-015 / IW-PRES-022 (FRD v1.92): the feed is a card deck; Save is a right swipe and Dismiss a left swipe.
     presentation: { pattern: 'DECK', swipeRightActionId: 'radar-save', swipeLeftActionId: 'radar-dismiss' },
     description: `This is the same canonical feed the Home Event Radar page reads, grouped by source.${filters.includeDismissed ? '' : ' Dismissed events are hidden.'}`,
-    sections: items.length ? [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([family, sectionItems]) => ({
+    // Sections keep the feed's own order (lifecycle, then priority), so the first item of the first section is the top-ranked event.
+    sections: items.length ? [...grouped.entries()].map(([family, sectionItems]) => ({
       id: `radar-${family}`,
       title: RADAR_SOURCE_FAMILY_LABEL[family] ?? family,
       count: sectionItems.length,
@@ -173,6 +229,8 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     actions: [...radarFeedBlockActions(access.role), { id: 'open-radar', label: 'Open Home Event Radar', href: radarHref(), style: 'SECONDARY' }],
   }];
   const degraded = page.feedState === 'PARTIAL_COVERAGE' || page.feedState === 'DEGRADED' || page.feedState === 'UNCOVERED';
+  // A degraded feed already carries its own coverage boundary; the general one is added only when coverage is complete.
+  if (!degraded) blocks.push(RADAR_FEED_BOUNDARY);
   if (degraded) {
     const copy = RADAR_FEED_STATE_COPY[page.feedState];
     blocks.push({
