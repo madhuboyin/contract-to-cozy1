@@ -1,6 +1,6 @@
 'use client';
 
-import { MutableRefObject, useEffect, useRef, useState } from 'react';
+import { MutableRefObject, ReactNode, useEffect, useRef, useState } from 'react';
 import { MoreHorizontal, Pin, PinOff, RefreshCw, Send, Sparkles, ThumbsDown, ThumbsUp, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
@@ -23,9 +23,11 @@ import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeC
 // list's own section dividers stay, so no answer is a card holding cards.
 const FRAMELESS_LISTS = '[&>section.overflow-hidden]:rounded-none [&>section.overflow-hidden]:border-0 [&>section.overflow-hidden]:bg-transparent [&>section.overflow-hidden>div]:px-0 [&>section.overflow-hidden>div:first-child>h3:first-child]:sr-only [&_section.overflow-hidden_h4]:text-xs [&_section.overflow-hidden_h4]:font-semibold [&_section.overflow-hidden_h4]:uppercase [&_section.overflow-hidden_h4]:tracking-wide [&_section.overflow-hidden_h4]:text-slate-500';
 
-export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false }: {
+export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false, leading }: {
   executionId: string;
   propertyId?: string;
+  // IW-CONV-009 (FRD v1.112): the sources chip sits in this row, with the ratings and the corrections menu, as one quiet meta line.
+  leading?: ReactNode;
   // IW-CALM-003 (FRD v1.111): a calm answer shows only the two rating buttons until one is used; no divider or label.
   calm?: boolean;
   capabilities: AskExecutionResponse['correctionCapabilities'];
@@ -62,6 +64,7 @@ export function ExecutionFeedback({ executionId, propertyId, capabilities, calm 
   return (
     <div className={cn('text-xs text-slate-500', !calm && 'border-t border-slate-100 pt-3')}>
       <div className="flex flex-wrap items-center gap-2">
+        {leading}
         <span className={cn(calm && !saved && 'sr-only')}>{saved ? 'Thanks—your feedback was saved.' : 'Was this helpful?'}</span>
         <button type="button" disabled={saving} aria-label="Helpful response" aria-pressed={rating === 'UP'} onClick={() => void submit('UP')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'UP' && 'bg-teal-50 text-teal-700')}><ThumbsUp className="h-4 w-4" /></button>
         {/* Persists a bare "not helpful" vote immediately, the same as the
@@ -319,7 +322,7 @@ export function ExecutionCard({
         <div ref={bodyRef} className={cn('space-y-3', calmChrome && FRAMELESS_LISTS)}>
           <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
             {shownBlocks.map((block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>)}
-            {hasResponseContext(execution) && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
+            {hasResponseContext(execution) && !calmChrome && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
           </AskBlockActionContext.Provider>
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
@@ -340,7 +343,8 @@ export function ExecutionCard({
           return <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" disabled={loading} onClick={() => void ask(handoffPrompt, undefined, { propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500 disabled:opacity-50">{handoffPrompt}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
         })()}
         {shownSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{shownSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId, execution.sessionId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
-        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} />
+        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome}
+          leading={calmChrome && hasResponseContext(execution) ? <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} /> : undefined} />
         </div>
       </div>
     </article></CalmAnswerContext.Provider></CalmChromeContext.Provider></ResultViewContext.Provider></ResultRevalidationBoundary>

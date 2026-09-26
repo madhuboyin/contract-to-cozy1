@@ -93,6 +93,25 @@ describe('calm sources and corrections', () => {
     expect(screen.queryByText('Sources for this response')).toBeNull();
   });
 
+  it('puts the sources chip in the same row as the Helpful and Not helpful buttons, and shows it open', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const value = execution({ blocks: [plain, evidence] } as Partial<AskExecutionResponse>);
+    const { rerender } = card(value);
+    const chip = await screen.findByRole('button', { name: 'View sources' });
+    const helpful = screen.getByRole('button', { name: 'Helpful response' });
+    expect(chip.parentElement).toBe(helpful.parentElement);
+    expect(screen.getByRole('button', { name: 'Not helpful response' }).parentElement).toBe(chip.parentElement);
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+    rerender(
+      <ExecutionCard execution={value} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={jest.fn()} selectedPropertyId="home"
+        setInput={jest.fn()} visibleSuggestions={[]} activeSessionRef={{ current: 'session' }} refreshResult={jest.fn()} refreshPending={false} onAccessLost={jest.fn()}
+        contextOpen onOpenContext={jest.fn()} onToggleFold={jest.fn()} onTogglePin={jest.fn()} />,
+    );
+    const open = screen.getByRole('button', { name: 'View sources' });
+    expect(open).toHaveAttribute('aria-expanded', 'true');
+    expect(open).toHaveTextContent('Context open');
+  });
+
   it('keeps the previous boxed sources card when the setting is off', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '0');
     card(execution({ blocks: [plain, evidence] } as Partial<AskExecutionResponse>));
