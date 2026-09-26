@@ -40,6 +40,8 @@ import { CapabilityCategoryIcon, CapabilityExplorer, ConciergeHome } from './wor
 import { ConfirmationCard } from './workspace/CaptureCards';
 import { ExecutionCard } from './workspace/ExecutionCard';
 import { ConversationHistoryNav, PendingWorkInbox } from './workspace/ConversationHistoryNav';
+import { useSelectedPropertyLabel } from './workspace/useSelectedPropertyLabel';
+import { buildConciergeStateStrip } from '@/features/ask/conciergeStateStrip';
 // Re-exported for existing test imports (`from '../AskWorkspace'`); the
 // registry in ./blocks/registry.tsx is the actual implementation now.
 export { BlockView };
@@ -138,6 +140,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     !historyLoading && landingVisible && !propertyMismatch ? selectedPropertyId : undefined,
     availabilityEpoch,
   );
+  // ACUI-001: the launch says which home it is about and leads with that home's state; unknown state keeps the generic prompt.
+  const propertyLabel = useSelectedPropertyLabel(selectedPropertyId, calm && landingVisible);
+  const landingOpening = calm && !concierge.loading && !concierge.failed && concierge.view ? buildConciergeStateStrip(concierge.view).opening : null;
   const askUnavailable = serviceUnavailable
     || concierge.failureCode === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
@@ -268,7 +273,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
       <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100', placement === 'hero' ? cn('rounded-3xl p-3 shadow-[0_12px_40px_-20px_rgba(15,118,110,0.45)]', calm && 'border-teal-200 p-4 shadow-[0_18px_50px_-22px_rgba(15,118,110,0.55)]') : 'rounded-2xl')}>
-        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? (calm ? 3 : 2) : 1} maxLength={4000} placeholder="Ask anything about your home…" className={cn('max-h-48 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? (calm ? 'min-h-[5.5rem] py-2.5 text-lg leading-7' : 'min-h-14 py-3 text-base') : 'min-h-10 py-2 text-sm')} />
+        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? (calm ? 3 : 2) : 1} maxLength={4000} placeholder={calm && placement === 'hero' && propertyLabel ? `Ask anything about ${propertyLabel}…` : 'Ask anything about your home…'} className={cn('max-h-48 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? (calm ? 'min-h-[5.5rem] py-2.5 text-lg leading-7' : 'min-h-14 py-3 text-base') : 'min-h-10 py-2 text-sm')} />
         <VoiceInputButton large={placement === 'hero'} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />
         {loading && inFlight.current
@@ -345,9 +350,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           </section>
         ) : showLanding ? (
           <div className={cn('mx-auto max-w-3xl', calm && 'sm:pt-[3vh]')}>
-            {calm ? <h2 className="mb-5 font-display text-[24px] font-medium leading-tight tracking-[-0.01em] text-slate-950 sm:text-[30px]">How can I help with your home?</h2> : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
+            {calm ? <div className="mb-5">
+              {propertyLabel && <p className="mb-1.5 truncate text-sm text-slate-500" data-calm-property="">{propertyLabel}</p>}
+              <h2 className="font-display text-[24px] font-medium leading-tight tracking-[-0.01em] text-slate-950 sm:text-[30px]" data-calm-headline={landingOpening ? 'state' : 'generic'}>{landingOpening ?? 'How can I help with your home?'}</h2>
+            </div> : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
             {renderComposer('hero')}
-            {calm ? <CalmLanding view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)}>{explorer}</CalmLanding> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
+            {calm ? <CalmLanding headlineShownAbove={Boolean(landingOpening)} view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)}>{explorer}</CalmLanding> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
               <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Popular ways to use Ask Cozy</h2>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">{featuredPrompts.map((prompt) => <button type="button" key={prompt.id} onClick={() => runPrompt(prompt, usingFallbackPrompts ? 'FALLBACK' : prompt.source)} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700"><CapabilityCategoryIcon categoryId={prompt.categoryId} className="h-3.5 w-3.5" />{prompt.categoryLabel}</span><span className="mt-1.5 block text-sm font-medium text-slate-700 group-hover:text-teal-900">{prompt.question}</span></button>)}</div>
               {explorer}

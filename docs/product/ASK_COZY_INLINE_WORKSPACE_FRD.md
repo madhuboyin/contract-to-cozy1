@@ -1,6 +1,6 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.114
+**Version:** 1.115
 **Date:** September 25, 2026  
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
@@ -964,6 +964,8 @@ A functionally correct journey fails quality review when it introduces unnecessa
 **IW-CONV-017 — The composer leads; context says what is behind a number (FRD v1.113, September 26, 2026).** On the calm landing the composer is the focus (three rows tall, larger type, a teal edge and soft shadow). Below it: at most two "needs you" lines, each a count plus the top item behind it (for example "1 to plan soon — Schedule HVAC service", or the newest important change's summary), then at most three starter questions and "More ideas". A bare count chip with no context is not allowed. Unfinished work from an earlier session is one quiet line ("Unfinished · <question> — Dismiss / Continue"), not a titled card.
 
 **IW-CONV-018 — Capture is asked, not laid out (v1.113; limit restored to three in v1.114).** Every capture whose fields are all scalar (choice, yes/no, number, short text, time), standard sensitivity and workflow input, with at most three fields, is asked one question at a time. v1.113 raised the limit to seven so maintenance-task creation was a conversation; that was reverted on September 26, 2026 because seven sequential questions is a slower form, not a conversation. Longer groups stay one form until grouped/adaptive capture exists (related fields collected together, later questions shown only when earlier answers require them; ACUI-007 in `ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md`). Captures with date-precision or relational inputs still use the form.
+
+**IW-CONV-019 — The launch opens with the home's state, and every entry can say why (v1.115, September 26, 2026; ACUI-001 and ACUI-002 of `ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md`).** On the calm landing, the selected home's name sits above a headline built from the same Concierge Home payload as the entries (`buildConciergeStateStrip().opening`): "N things need your attention now", "Nothing urgent. N to plan soon", "N important changes to review", or "Nothing needs your attention right now" only when no source is unavailable. When the state is unknown or a source is unavailable and nothing else can be said, the generic "How can I help with your home?" stays. The composer placeholder names the home. Each of the two entries has a collapsed "Why this appeared" control (`aria-expanded`) listing up to four plain sentences derived only from governed fields: ranking priority, `deadlineAt`, mapped `comparativeReasonCodes` (tie-break codes are not shown), `confidenceLabel`, change materiality and dates, and decision lifecycle and update date. If no sentence can be derived the control is not shown; the browser never invents a reason. No backend contract changed. Opening or closing it does not touch the composer or the launch.
 
 ### Phase 0 — Authority and coverage
 

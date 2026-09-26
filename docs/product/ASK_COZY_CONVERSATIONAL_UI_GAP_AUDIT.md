@@ -256,6 +256,16 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 - Accessibility checks include focus return, live status, keyboard submission/composition, accessible names, and reduced-motion-safe behavior.
 - Tests verify the optional full Maintenance page action remains secondary and preserves return context.
 
+## 7a. Status at HEAD (September 26, 2026)
+
+| Ticket | Status |
+| --- | --- |
+| ACUI-001 | **Implemented in code (FRD v1.115).** Home name, state headline and named composer placeholder; generic prompt only when state is unknown. Not browser-verified. |
+| ACUI-002 | **Implemented in code, frontend-only (FRD v1.115).** Derived in `conciergeStateStrip.ts`; hidden when nothing can be derived. Not browser-verified. |
+| ACUI-006 | Partial: unfinished work is one quiet line (`88d3dc2f`); history-rail collapse remains. |
+| ACUI-007 | Guardrail in force: the conversational capture limit was restored to three fields (FRD v1.114). |
+| ACUI-003, 004, 005 | Not started. |
+
 ## 8. Recommended delivery boundary
 
 Implement ACUI-001, ACUI-002, ACUI-003, ACUI-005, and their ACUI-008 coverage as the first vertical slice. They produce the complete conversational arc with the least architectural risk because the underlying maintenance, confirmation, evidence, and receipt contracts already exist.

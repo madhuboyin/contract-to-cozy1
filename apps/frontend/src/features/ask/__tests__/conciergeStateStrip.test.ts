@@ -62,3 +62,45 @@ describe('buildConciergeStateStrip', () => {
     expect(strip.urgent).toBeNull();
   });
 });
+
+// ACUI-001 / ACUI-002.
+describe('buildConciergeStateStrip opening and explanations', () => {
+  const withItems = (items: ReturnType<typeof item>[], extra: Partial<ConciergeHomeView> = {}) => view({ priorityList: { ...view().priorityList, items }, ...extra });
+  const importantChange = { id: 'c', source: 'Weather', summary: 'Hail reported', materiality: 'IMPORTANT' as const, detectedAt: '2026-09-20T12:00:00.000Z', effectiveAt: '2026-09-28T00:00:00.000Z' };
+
+  it('opens with the state: attention, upcoming, change, or genuinely quiet', () => {
+    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW'), item('b', 'DO_NOW')])).opening).toBe('2 things need your attention now.');
+    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')])).opening).toBe('Nothing urgent. 1 thing to plan soon.');
+    expect(buildConciergeStateStrip(withItems([], { changes: { state: 'AVAILABLE', windowDays: 14, href: '/x', items: [importantChange] } })).opening).toBe('1 important change to review.');
+    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW')], { changes: { state: 'AVAILABLE', windowDays: 14, href: '/x', items: [importantChange] } })).opening).toBe('1 thing needs your attention now. 1 important change to review.');
+    expect(buildConciergeStateStrip(withItems([])).opening).toBe('Nothing needs your attention right now.');
+  });
+
+  it('never says nothing or nothing-urgent when a source is unavailable, and leaves the opening unknown when priorities are', () => {
+    const changesDown = { changes: { state: 'UNAVAILABLE' as const, windowDays: 14, href: '/x', items: [] } };
+    expect(buildConciergeStateStrip(withItems([], changesDown)).opening).toBeNull();
+    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')], changesDown)).opening).toBe('1 thing to plan soon.');
+    expect(buildConciergeStateStrip(view({ priorityList: { ...view().priorityList, state: 'UNAVAILABLE' } })).opening).toBeNull();
+  });
+
+  it('explains attention chips from governed fields only', () => {
+    const chip = buildConciergeStateStrip(withItems([item('a', 'DO_NOW', { deadlineAt: '2026-09-20T00:00:00.000Z', comparativeReasonCodes: ['SAFETY_FLOOR', 'STABLE_TIE_BREAK'], confidenceLabel: 'LOW' })])).chips[0];
+    expect(chip.explanation?.reasons).toEqual([
+      'It is ranked “do now” in your home priorities.',
+      '“Action a” was due Sep 20.',
+      'Safety-related items are ranked first.',
+      'Confidence in “Action a”: low.',
+    ]);
+  });
+
+  it('explains change and decision entries, and skips an unparseable date instead of guessing', () => {
+    const decisions = { state: 'AVAILABLE' as const, href: '/x', items: [{ decisionThreadId: 't1', title: 'Roof', lifecycleStatus: 'IN_PROGRESS', contextStatus: 'CURRENT', verdict: null, confidenceLabel: null, subject: null, updatedAt: 'not-a-date' }] };
+    const strip = buildConciergeStateStrip(withItems([], { decisions, changes: { state: 'AVAILABLE', windowDays: 14, href: '/x', items: [importantChange] } }));
+    expect(strip.chips.find((chip) => chip.id === 'strip-changes')?.explanation?.reasons).toEqual([
+      'A change in the last 14 days was marked important.',
+      'The latest was detected Sep 20 and takes effect Sep 28.',
+    ]);
+    expect(strip.chips.find((chip) => chip.id === 'strip-decision-t1')?.explanation?.reasons).toEqual(['You have an open decision (in progress).']);
+  });
+});
+

@@ -32,7 +32,7 @@ describe('CalmLanding', () => {
     expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'What needs my attention right now?' }), 'ATTENTION');
     // Two "needs attention" lines, then a short row of starters (the duplicate is dropped) and the explorer entry.
     expect(screen.queryByText('Top priority')).toBeNull();
-    expect(screen.getByRole('list', { name: 'Needs your attention' }).querySelectorAll('button')).toHaveLength(2);
+    expect(screen.getByRole('list', { name: 'Needs your attention' }).querySelectorAll('[data-strip-chip]')).toHaveLength(2);
     const row = screen.getByRole('list', { name: 'Suggestions' });
     expect(row.querySelectorAll('button')).toHaveLength(3);
     expect(row).toHaveTextContent('explorer');
@@ -49,7 +49,7 @@ describe('CalmLanding', () => {
     render(<CalmLanding view={view()} loading={false} failed={false} starters={repeated} usingFallbackStarters={false} onAsk={jest.fn()} />);
     const buttons = screen.getByRole('list', { name: 'Suggestions' }).querySelectorAll('button');
     expect(Array.from(buttons).map((button) => button.textContent)).toEqual(['A genuinely different question?']);
-    expect(screen.getByRole('list', { name: 'Needs your attention' }).querySelectorAll('button')).toHaveLength(2);
+    expect(screen.getByRole('list', { name: 'Needs your attention' }).querySelectorAll('[data-strip-chip]')).toHaveLength(2);
   });
 
   it('falls back to a sentence when there are no chips', () => {
@@ -117,5 +117,41 @@ describe('IntelligenceRefreshStatus compact', () => {
     const label = screen.getByText('Partially refreshed');
     expect(label).toHaveAttribute('aria-hidden', 'true');
     expect(label.className).toContain('md:inline');
+  });
+});
+
+// ACUI-002: "Why this appeared" comes only from governed fields, opens in place, and never touches the launch or the composer.
+describe('CalmLanding "Why this appeared"', () => {
+  const withDeadline = () => view({ priorityList: { ...view().priorityList, items: view().priorityList.items.map((entry) => entry.homeActionId === 'heat' ? { ...entry, deadlineAt: '2026-10-03T00:00:00.000Z', comparativeReasonCodes: ['HIGHER_URGENCY', 'STABLE_TIE_BREAK'] } : entry) } });
+
+  it('is closed by default, opens and closes per entry, and lists the governed reasons', () => {
+    const onAsk = jest.fn();
+    render(<><textarea aria-label="composer" defaultValue="half-typed" /><CalmLanding view={withDeadline()} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={onAsk} /></>);
+    const toggles = screen.getAllByRole('button', { name: 'Why this appeared' });
+    expect(toggles.length).toBeGreaterThan(0);
+    const panel = () => document.querySelector('[data-why-panel]') as HTMLElement;
+    expect(panel()).not.toBeVisible();
+    expect(toggles[0]).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.change(screen.getByLabelText('composer'), { target: { value: 'half-typed question' } });
+    fireEvent.click(toggles[0]);
+    expect(toggles[0]).toHaveAttribute('aria-expanded', 'true');
+    expect(onAsk).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('composer')).toHaveValue('half-typed question');
+    fireEvent.click(toggles[0]);
+    expect(toggles[0]).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('cites the due date and ranking reasons, and drops codes a homeowner cannot use', () => {
+    render(<CalmLanding view={withDeadline()} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    const text = Array.from(document.querySelectorAll('[data-why-panel]')).map((node) => node.textContent).join(' | ');
+    expect(text).toContain('is due Oct 3.');
+    expect(text).toContain('It is more urgent than the next item.');
+    expect(text).not.toMatch(/tie.?break/i);
+  });
+
+  it('shows no toggle when no explanation can be derived', () => {
+    const bare = view({ priorityList: { ...view().priorityList, items: [] }, changes: { state: 'NO_CHANGE', windowDays: 14, items: [], href: '/dashboard' } });
+    render(<CalmLanding view={bare} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Why this appeared' })).toBeNull();
   });
 });

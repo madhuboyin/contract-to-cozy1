@@ -11,7 +11,7 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(page.locator('[data-ask-layout="full-window"]')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toHaveCount(1);
   await expect(page.getByText('Answers use your selected home record')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'How can I help with your home?' })).toBeVisible();
+  await expect(page.locator('[data-calm-headline]')).toBeVisible();
   await expect(page.getByPlaceholder('Ask anything about your home…')).toBeInViewport();
   await expect(page.getByText('Enter to send · Shift+Enter for a new line')).toHaveCount(0);
   await expect(page.getByText('Record-based when available')).toHaveCount(0);

@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buildConciergeStateStrip, type StripChip, type StripTone } from '@/features/ask/conciergeStateStrip';
@@ -17,30 +17,45 @@ const TONE: Record<StripTone, { chip: string; dot: string }> = {
 // One line on a phone (scrolls sideways), wrapping on wider screens.
 const ROW = 'flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible';
 
-export function CalmLanding({ view, loading, failed, starters, usingFallbackStarters, onAsk, children }: {
+export function CalmLanding({ view, loading, failed, starters, usingFallbackStarters, onAsk, headlineShownAbove = false, children }: {
   view: ConciergeHomeView | null;
   loading: boolean;
   failed: boolean;
   starters: AskFeaturedPrompt[];
   usingFallbackStarters: boolean;
   onAsk: (prompt: AskCapabilityPrompt, source: 'ATTENTION' | 'DECISION' | 'DISCOVERY' | 'FALLBACK' | 'PERSONALIZED') => void;
+  /** ACUI-001: the workspace already shows the state headline above the composer, so the landing does not repeat it. */
+  headlineShownAbove?: boolean;
   /** The capability explorer link, rendered last. */
   children?: ReactNode;
 }) {
   const strip = view && !failed ? buildConciergeStateStrip(view) : null;
+  // ACUI-002: which entry's "Why this appeared" is open. Local state, so opening it never touches the composer or the launch.
+  const [openWhy, setOpenWhy] = useState<string | null>(null);
   // A starter that repeats a strip chip, the top priority, or the same question is dropped, so nothing is offered twice.
   const covered = new Set<string>();
   for (const entry of strip?.chips ?? []) { covered.add(entry.prompt.id); covered.add(entry.prompt.question.trim().toLowerCase()); }
   if (strip?.urgent) { covered.add(strip.urgent.prompt.id); covered.add(strip.urgent.prompt.question.trim().toLowerCase()); }
   const shownStarters = starters.filter((prompt) => !covered.has(prompt.id) && !covered.has(prompt.question.trim().toLowerCase())).slice(0, 3);
   // IW-CONV-017 (FRD v1.113): at most two "what needs you" lines, each saying what is behind the count; the composer stays the focus.
-  const contextLine = (entry: StripChip) => (
-    <li key={entry.id}><button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className={cn('flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left transition', TONE[entry.tone].chip)}>
-      <span aria-hidden="true" className={cn('h-2 w-2 shrink-0 rounded-full', TONE[entry.tone].dot)} />
-      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold tabular-nums">{entry.label}</span>{entry.detail && <span className="block truncate text-[13px] font-normal opacity-80">{entry.detail}</span>}</span>
-      <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50" />
-    </button></li>
-  );
+  const contextLine = (entry: StripChip) => {
+    const reasons = entry.explanation?.reasons.filter(Boolean) ?? [];
+    const whyId = `why-${entry.id}`;
+    const open = openWhy === entry.id;
+    return (
+      <li key={entry.id} className={cn('rounded-2xl', TONE[entry.tone].chip.split(' ')[0])}>
+        <button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className={cn('flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left transition', TONE[entry.tone].chip)}>
+          <span aria-hidden="true" className={cn('h-2 w-2 shrink-0 rounded-full', TONE[entry.tone].dot)} />
+          <span className="min-w-0 flex-1"><span className="block text-sm font-semibold tabular-nums">{entry.label}</span>{entry.detail && <span className="block truncate text-[13px] font-normal opacity-80">{entry.detail}</span>}</span>
+          <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50" />
+        </button>
+        {reasons.length > 0 && <>
+          <button type="button" data-why-toggle={entry.id} aria-expanded={open} aria-controls={whyId} onClick={() => setOpenWhy(open ? null : entry.id)} className={cn('ml-[2.1rem] min-h-8 rounded-lg px-1 pb-2 text-xs font-medium underline-offset-2 hover:underline', TONE[entry.tone].chip.split(' ')[1])}>Why this appeared</button>
+          <ul id={whyId} hidden={!open} data-why-panel={entry.id} className="mx-3.5 mb-2.5 ml-[2.1rem] list-disc space-y-1 pl-4 text-[13px] leading-5 text-slate-700 marker:text-slate-400">{reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+        </>}
+      </li>
+    );
+  };
   const stripChips = (strip?.chips ?? []).slice(0, 2);
     return (
     <div className="mt-5" data-calm-landing="">
@@ -48,7 +63,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
         {loading && <p className="flex items-center gap-2 text-sm text-slate-500" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Checking your home…</p>}
         {!loading && (failed || !strip) && <p className="text-sm text-slate-500">Your home overview is temporarily unavailable. You can still ask anything above.</p>}
         {strip && !loading && <>
-          {stripChips.length === 0 && strip.headline && <p className="text-[15px] leading-6 text-slate-600">{strip.headline}</p>}
+          {!headlineShownAbove && stripChips.length === 0 && strip.headline && <p className="text-[15px] leading-6 text-slate-600">{strip.headline}</p>}
           {strip.notes.map((note) => <p key={note} className="mt-2 text-xs text-slate-500">{note}</p>)}
         </>}
       </section>
