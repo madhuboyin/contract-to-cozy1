@@ -3,6 +3,7 @@
 import { useState, type ReactNode, type Ref } from 'react';
 import { ArrowRight, BookOpen, ExternalLink, FileCheck2, Link2 } from 'lucide-react';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
+import { useCalmChrome } from './blocks/calmContext';
 
 // IW-PRES-010 ("progressive density" -- "show the decision-driving attributes first, with expandable detail for
 // secondary data, evidence, assumptions, and provenance"): evidence/output-artifact/related-record lists
@@ -115,6 +116,14 @@ export function ResponseContextSummary({ execution, open, onOpen }: { execution:
   const counts = responseContextCounts(execution);
   const evidenceOnly = counts.sources > 0 && counts.assumptions === 0 && counts.limitations === 0 && counts.outputs === 0 && counts.relationships === 0;
   const hasSources = counts.sources > 0;
+  const calm = useCalmChrome();
+  // IW-CONV-009 (FRD v1.112): sources are one quiet chip that opens the same panel, not a boxed card with its own heading and button.
+  if (calm) {
+    return <button type="button" aria-expanded={open} aria-controls="ask-response-context" onClick={(event) => onOpen(event.currentTarget)} data-calm-sources="" aria-label={evidenceOnly ? 'View sources' : hasSources ? 'View sources and context' : 'View response context'}
+      className="inline-flex min-h-9 w-fit items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-200 hover:text-slate-900">
+      <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />{open ? 'Context open' : evidenceOnly ? `${counts.sources} ${counts.sources === 1 ? 'source' : 'sources'}` : hasSources ? 'Sources and context' : 'Response context'}
+    </button>;
+  }
 
   return <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3" aria-label="Response sources and context">
     <div className="flex min-w-0 items-center gap-3">

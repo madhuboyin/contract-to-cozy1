@@ -21,7 +21,9 @@ export function CapabilityCategoryIcon({ categoryId, className = 'h-4 w-4' }: { 
   return <Icon className={className} aria-hidden="true" />;
 }
 
-export function CapabilityExplorer({ groups, onSelect, onOpen }: {
+export function CapabilityExplorer({ groups, onSelect, onOpen, chip = false }: {
+  /** The calm landing shows the entry as one more suggestion chip instead of a text link. */
+  chip?: boolean;
   groups: AskCapabilityGroup[];
   onSelect: (prompt: AskCapabilityPrompt) => void;
   onOpen: () => void;
@@ -31,9 +33,11 @@ export function CapabilityExplorer({ groups, onSelect, onOpen }: {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) onOpen(); }}>
       <DialogTrigger asChild>
-        <button type="button" className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 hover:text-teal-900">
-          Explore everything Ask Cozy can do <ArrowRight className="h-4 w-4" />
-        </button>
+        {chip
+          ? <button type="button" className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-slate-300 px-3.5 py-1.5 text-sm text-slate-600 transition hover:border-teal-300 hover:text-teal-900">More ideas <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></button>
+          : <button type="button" className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 hover:text-teal-900">
+            Explore everything Ask Cozy can do <ArrowRight className="h-4 w-4" />
+          </button>}
       </DialogTrigger>
       <DialogContent className="flex max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[85dvh] sm:max-w-4xl">
         <DialogHeader className="shrink-0 border-b border-slate-200 px-4 py-4 pr-14 sm:px-5 sm:py-4 sm:pr-16">

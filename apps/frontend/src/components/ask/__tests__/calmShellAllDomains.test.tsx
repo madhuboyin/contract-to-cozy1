@@ -78,6 +78,39 @@ describe('calm shell, any domain', () => {
   });
 });
 
+describe('calm sources and corrections', () => {
+  const evidence = { type: 'EVIDENCE', id: 'evidence', title: 'Sources', items: [
+    { label: 'Maintenance record', source: 'Home Record', observedAt: null }, { label: 'Warranty', source: 'Home Record', observedAt: null },
+  ] } as AskPresentationBlock;
+  const plain = { type: 'SUMMARY', id: 'plain', title: 'Here is the answer', body: 'Details.', tone: 'DEFAULT', actions: [] } as AskPresentationBlock;
+
+  it('draws the sources as one small chip that opens the same context, not a boxed card', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const { container } = card(execution({ blocks: [plain, evidence] } as Partial<AskExecutionResponse>));
+    const chip = await screen.findByRole('button', { name: 'View sources' });
+    expect(chip).toHaveTextContent('2 sources');
+    expect(container.querySelector('[data-calm-sources]')).not.toBeNull();
+    expect(screen.queryByText('Sources for this response')).toBeNull();
+  });
+
+  it('keeps the previous boxed sources card when the setting is off', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '0');
+    card(execution({ blocks: [plain, evidence] } as Partial<AskExecutionResponse>));
+    expect(await screen.findByText('Sources for this response')).toBeInTheDocument();
+  });
+
+  it('puts the correction links in one menu next to the ratings', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    card(execution({ correctionCapabilities: { retryResponse: false, intent: true, entity: true, homeRecord: true } } as Partial<AskExecutionResponse>));
+    expect(screen.queryByRole('button', { name: 'That’s not what I meant' })).toBeNull();
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Something wrong with this answer?' }), { key: 'Enter' });
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: 'That’s not what I meant' })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Wrong item' })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Correct home information' })).toBeInTheDocument();
+  });
+});
+
 describe('session status wording (IW-CALM-008/009)', () => {
   it('never shows a raw status name', () => {
     expect(recentSessionStatus('UNAVAILABLE')).toBe('Needs a retry');

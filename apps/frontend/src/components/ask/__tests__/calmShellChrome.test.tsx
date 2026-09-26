@@ -30,11 +30,12 @@ describe('CalmLanding', () => {
     expect(screen.queryByText('1 thing needs attention now, and 1 more to plan soon.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '1 to do now' }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'What needs my attention right now?' }), 'ATTENTION');
-    expect(screen.getByText('Top priority')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Heating system inspection/ }));
-    expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'Tell me about the heating inspection', context: expect.objectContaining({ entityType: 'HOME_ACTION', entityId: 'heat' }) }), 'ATTENTION');
-    expect(screen.getAllByRole('list', { name: 'Things you can ask' })[0].querySelectorAll('button')).toHaveLength(4);
-    expect(screen.getByText('explorer')).toBeInTheDocument();
+    // One row of suggestions and nothing else: two state chips, then the starters (the duplicate is dropped), then the explorer entry.
+    expect(screen.queryByText('Top priority')).toBeNull();
+    const row = screen.getByRole('list', { name: 'Suggestions' });
+    expect(row.querySelectorAll('button')).toHaveLength(2 + 4);
+    expect(row).toHaveTextContent('explorer');
+    expect(screen.queryByText('Help me continue this decision: X')).not.toBeNull();
   });
 
   it('drops a starter that repeats a strip chip or the top priority', () => {
@@ -45,8 +46,8 @@ describe('CalmLanding', () => {
       { ...starters[3], id: 'd', question: 'A genuinely different question?' },
     ];
     render(<CalmLanding view={view()} loading={false} failed={false} starters={repeated} usingFallbackStarters={false} onAsk={jest.fn()} />);
-    const buttons = screen.getByRole('list', { name: 'Things you can ask' }).querySelectorAll('button');
-    expect(Array.from(buttons).map((button) => button.textContent)).toEqual(['A genuinely different question?']);
+    const buttons = screen.getByRole('list', { name: 'Suggestions' }).querySelectorAll('button');
+    expect(Array.from(buttons).map((button) => button.textContent)).toEqual(['1 to do now', '1 to plan soon', 'A genuinely different question?']);
   });
 
   it('falls back to a sentence when there are no chips', () => {

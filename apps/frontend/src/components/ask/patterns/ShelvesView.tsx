@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import type { AskAction, AskGroupedListItem, AskPresentationBlock } from '@/features/ask/types';
 import { AskContextLink } from '../blocks/context';
-import { useCalmAnswer } from '../blocks/calmContext';
+import { useCalmChrome } from '../blocks/calmContext';
 import { ItemDetailSheet, TONE_STRIPE, type ItemActionHandler } from './PatternParts';
 
 type Section = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number];
@@ -18,7 +18,7 @@ type Section = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections
 export function HorizontalTrack({ label, countLabel, children }: { label: string; countLabel: string; children: ReactNode }) {
   const trackRef = useRef<HTMLDivElement>(null);
   // IW-CALM-010: on touch devices the track is swiped, so the arrow buttons appear on pointer devices only.
-  const calm = useCalmAnswer();
+  const calm = useCalmChrome();
   const [edges, setEdges] = useState({ start: true, end: true });
   const sync = useCallback(() => {
     const track = trackRef.current;
@@ -68,16 +68,20 @@ export function ShelfCard({ item, onOpen, selected = false, disabled = false, tr
   triggerProps?: Record<`data-${string}`, string>;
 }) {
   const tone = item.tone ?? 'DEFAULT';
+  const calm = useCalmChrome();
+  // IW-CONV-016 (FRD v1.112): in the calm shell a card is a fixed size with a one-line meta row, so a shelf reads as an even row; the
+  // year is dropped from a date in the current year.
+  const shortTiming = calm && item.timingLabel ? item.timingLabel.replace(new RegExp(`, ${new Date().getFullYear()}$`), '') : item.timingLabel;
   return (
-    <div role="listitem" className="w-52 shrink-0 snap-start">
+    <div role="listitem" className={cn('shrink-0 snap-start', calm ? 'w-60' : 'w-52')}>
     <button type="button" onClick={onOpen} data-ask-shelf-item={item.id} disabled={disabled} aria-current={selected ? 'true' : undefined} {...triggerProps}
       className={cn('relative flex h-full w-full flex-col gap-2 overflow-hidden rounded-xl border p-3 pl-4 text-left hover:border-teal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600 disabled:opacity-60', selected ? 'border-teal-600 bg-teal-50 ring-1 ring-teal-600' : 'border-slate-200 bg-white')}>
       <span className={cn('absolute inset-y-0 left-0 w-1', TONE_STRIPE[tone])} aria-hidden="true" />
-      <span className="text-sm font-semibold leading-5 text-slate-950">{item.title}</span>
+      <span className={cn('text-sm font-semibold leading-5 text-slate-950', calm && 'line-clamp-2 min-h-[2.5rem]')}>{item.title}</span>
       {!item.timingLabel && !item.amountLabel && item.description && <span className="line-clamp-2 text-xs text-slate-600">{item.description}</span>}
       <span className="mt-auto flex items-center justify-between gap-2 text-xs">
-        {item.timingLabel ? <span className={cn('font-semibold', tone === 'CRITICAL' ? 'text-red-700' : tone === 'CAUTION' ? 'text-amber-800' : 'text-slate-700')}>{item.timingLabel}</span> : <span />}
-        {item.amountLabel && <span className="tabular-nums text-slate-500">{item.amountLabel}</span>}
+        {shortTiming ? <span className={cn('font-semibold', calm && 'truncate', tone === 'CRITICAL' ? 'text-red-700' : tone === 'CAUTION' ? 'text-amber-800' : 'text-slate-700')}>{shortTiming}</span> : <span />}
+        {item.amountLabel && <span className={cn('tabular-nums text-slate-500', calm && 'shrink-0 whitespace-nowrap')}>{item.amountLabel}</span>}
       </span>
     </button>
     </div>

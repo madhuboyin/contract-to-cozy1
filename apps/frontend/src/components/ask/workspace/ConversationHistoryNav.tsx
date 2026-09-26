@@ -104,7 +104,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
         <div><p className="text-sm font-semibold text-slate-950">Ask Cozy</p><p className="text-[11px] text-slate-500">Your home assistant</p></div>
       </div>}
       <div className="flex items-center gap-1">
-        <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-white hover:shadow-sm">
+        <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-white hover:shadow-sm">
           <Plus className="h-4 w-4" aria-hidden="true" />New conversation
         </button>
         {calm && statusSlot && <div className="shrink-0 pr-2">{statusSlot}</div>}

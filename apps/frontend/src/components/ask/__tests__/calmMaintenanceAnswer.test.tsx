@@ -48,6 +48,21 @@ describe('calm Maintenance answer', () => {
     expect(container.querySelector('article > div.rounded-3xl')).toBeNull();
   });
 
+  it('keeps two actions on the list: View all and Create a task, without the generic Open and Setup links', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const listActions = [
+      { id: 'view-all-maintenance', label: 'View all in Maintenance', href: '/dashboard/maintenance?a=1', style: 'SECONDARY' },
+      { id: 'open-maintenance', label: 'Open Maintenance', href: '/dashboard/maintenance', style: 'SECONDARY' },
+      { id: 'create-maintenance', label: 'Create a task', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' },
+      { id: 'open-maintenance-setup', label: 'Maintenance Setup', href: '/dashboard/maintenance-setup', style: 'SECONDARY' },
+    ];
+    card(execution({ blocks: [blocks[0], { ...blocks[1], actions: listActions }] } as Partial<AskExecutionResponse>));
+    expect(await screen.findByText('View all in Maintenance')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create a task/ })).toBeInTheDocument();
+    expect(screen.queryByText('Open Maintenance')).toBeNull();
+    expect(screen.queryByText('Maintenance Setup')).toBeNull();
+  });
+
   it('shows the informational limit as a footnote, not a warning card', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
     const { container } = card(execution());

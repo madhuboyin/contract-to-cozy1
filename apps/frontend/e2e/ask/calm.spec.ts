@@ -5,7 +5,7 @@ import { installAskApi, installAskContext, propertyId } from './fixtures';
 // every other spec in this folder pins the setting off (see installAskContext) so it keeps checking the previous presentation.
 test.beforeEach(async ({ context }) => installAskContext(context, { calm: 'default' }));
 
-test('calm landing: one slim header, a state strip, starter chips, and no helper copy', async ({ page }) => {
+test('calm landing: greeting, composer and one row of suggestions, and no helper copy', async ({ page }) => {
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.locator('[data-ask-layout="full-window"]')).toBeVisible();
@@ -17,14 +17,17 @@ test('calm landing: one slim header, a state strip, starter chips, and no helper
   await expect(page.getByText('Record-based when available')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'For your attention' })).toHaveCount(0);
-  await expect(page.locator('[data-calm-state-strip]')).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Things you can ask' }).getByRole('button')).not.toHaveCount(0);
+  await expect(page.locator('[data-calm-landing]')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Suggestions' }).getByRole('button', { name: /to plan soon/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /More ideas/ })).toBeVisible();
+  await expect(page.getByText('Top priority')).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Suggestions' }).getByRole('button')).not.toHaveCount(0);
   const conversationNav = page.getByRole('navigation', { name: 'Ask Cozy conversations' });
   await expect(conversationNav.getByText('Your home assistant')).toHaveCount(0);
   await expect(conversationNav.getByText(/navigation remains available above/)).toHaveCount(0);
   await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
 
-  const chip = page.getByRole('list', { name: 'Things you can ask' }).getByRole('button').first();
+  const chip = page.getByRole('list', { name: 'Suggestions' }).getByRole('button').first();
   await chip.click();
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
@@ -32,7 +35,7 @@ test('calm landing: one slim header, a state strip, starter chips, and no helper
 test('calm answer: no answer frame, one overflow menu, and the composer stays plain', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByRole('list', { name: 'Things you can ask' }).getByRole('button').first().click();
+  await page.getByRole('list', { name: 'Suggestions' }).getByRole('button').first().click();
   const options = page.getByRole('button', { name: 'Response options' });
   await expect(options.first()).toBeVisible();
   await expect(page.getByRole('button', { name: /Refresh this result/ })).toHaveCount(0);

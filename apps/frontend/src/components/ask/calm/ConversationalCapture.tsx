@@ -90,7 +90,7 @@ export function ConversationalCapture({ request, fields, values, saving, error, 
         </div>
       )}
       {!step && saving && <p className="text-sm text-slate-500" role="status">Preparing your review…</p>}
-      {!step && !saving && !interacted && <button type="button" onClick={() => { setInteracted(true); submittedRef.current = true; onSubmit(values); }} className="min-h-10 rounded-full bg-teal-700 px-4 text-sm font-medium text-white hover:bg-teal-800">Continue</button>}
+      {!step && !saving && (!interacted || Boolean(error)) && <button type="button" onClick={() => { setInteracted(true); submittedRef.current = true; onSubmit(values); }} className="min-h-10 rounded-full bg-teal-700 px-4 text-sm font-medium text-white hover:bg-teal-800">Continue</button>}
       {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
       {request.destinationLabel && <p className="text-xs text-slate-500">{request.destinationLabel}.</p>}
       {request.fallbackHref && <AskContextLink href={request.fallbackHref} className="inline-flex text-sm font-medium text-teal-800 hover:underline">Open the full form instead</AskContextLink>}

@@ -73,6 +73,17 @@ describe('ConversationalCapture', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
+  it('after a rejected save with everything answered, offers Continue again instead of leaving no way forward', () => {
+    const onSubmit = jest.fn();
+    const { rerender } = render(<Harness onSubmit={onSubmit} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Chimney cleaning' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    rerender(<Harness onSubmit={onSubmit} error="Enter a valid estimate." />);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the reassurance line and drops the long form copy', () => {
     render(<Harness />);
     expect(screen.getByText('Nothing is saved until you confirm.')).toBeInTheDocument();

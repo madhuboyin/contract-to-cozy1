@@ -130,6 +130,18 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
 // of the section (and its server pages) are one tap away in the list view.
 export const MAINTENANCE_SHELF_CARD_LIMIT = 12;
 
+// IW-CONV-002 (FRD v1.112): one primary action per turn. A calm answer keeps "View all in Maintenance" and "Create a task"; the
+// generic "Open Maintenance" and "Maintenance Setup" links are dropped when the first two are present, and a repeated link is drawn once.
+function calmMaintenanceActions<T extends { id: string; href?: string | null }>(actions: T[]): T[] {
+  const hasViewAll = actions.some((action) => action.id === 'view-all-maintenance');
+  const seen = new Set<string>();
+  return actions.filter((action) => {
+    if (hasViewAll && (action.id === 'open-maintenance' || action.id === 'open-maintenance-setup')) return false;
+    if (action.href) { if (seen.has(action.href)) return false; seen.add(action.href); }
+    return true;
+  });
+}
+
 export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, onAccessLost, link, layout = 'LIST', onChooseLayout }: {
   block: Block;
   propertyId?: string;
@@ -175,13 +187,13 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     <div className={calm ? 'flex flex-wrap items-center justify-between gap-2' : 'border-b border-slate-100 p-4'}>
       <h3 className={calm ? 'sr-only' : 'font-semibold text-slate-950'}>{block.title}</h3>
       {!calm && block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
-      {onChooseLayout && <div className={cn(calm ? 'order-2' : 'mt-3', 'inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1')} role="group" aria-label={`View ${block.title}`}>
+      {onChooseLayout && <div className={cn(calm ? 'order-2 inline-flex items-center gap-0.5' : 'mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1')} role="group" aria-label={`View ${block.title}`}>
         {(['SHELVES', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={layout === option} onClick={() => onChooseLayout(option)}
-          className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'SHELVES' ? 'Shelves' : 'List'}</button>)}
+          className={cn(calm ? 'min-h-8 rounded-md px-2 text-xs' : 'min-h-8 rounded-lg px-2.5 text-xs font-semibold', calm ? (layout === option ? 'font-semibold text-slate-900' : 'text-slate-500 hover:text-slate-800') : (layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white'))}>{option === 'SHELVES' ? 'Shelves' : 'List'}</button>)}
       </div>}
-      <div className={cn(!calm && 'mt-3', 'flex flex-wrap gap-2')} role="group" aria-label="Maintenance filters">
+      <div className={cn(!calm && 'mt-3', calm ? 'flex flex-wrap gap-0.5' : 'flex flex-wrap gap-2')} role="group" aria-label="Maintenance filters">
         {block.filters.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active}
-          onClick={() => onFilter(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
+          onClick={() => onFilter(filter.message)} className={cn(calm ? 'min-h-8 rounded-md px-2.5 py-1 text-sm disabled:opacity-100' : 'min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', calm ? (filter.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900') : (filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700'))}>{filter.label}</button>)}
       </div>
     </div>
     {layout === 'SHELVES' && block.sections.map((section) => {
@@ -249,6 +261,6 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     {layout === 'SHELVES' && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
       {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
     </DetailSheetFrame>}
-    <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: 'SECONDARY' } : action} /> : null)}</div>
+    <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{(calm ? calmMaintenanceActions(block.actions) : block.actions).map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: 'SECONDARY' } : action} /> : null)}</div>
   </section>;
 }

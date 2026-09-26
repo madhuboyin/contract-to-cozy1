@@ -71,9 +71,21 @@ export function ExecutionFeedback({ executionId, propertyId, capabilities, calm 
             pressed, highlighted) but was silently lost if the user
             navigated away before sending a comment. */}
         <button type="button" disabled={saving} aria-label="Not helpful response" aria-pressed={rating === 'DOWN'} onClick={() => void submit('DOWN')} className={cn('rounded-lg p-2 hover:bg-slate-100', rating === 'DOWN' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-4 w-4" /></button>
+        {calm && (capabilities.intent || capabilities.entity || (capabilities.homeRecord && propertyId)) ? (
+          // IW-CALM-003 (FRD v1.111): the three correction links are one menu next to the ratings, not a row of text links.
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><button type="button" aria-label="Something wrong with this answer?" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></button></DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[13rem]">
+              {capabilities.intent && <DropdownMenuItem disabled={correcting} onSelect={() => void requestCorrection('INTENT')}>That’s not what I meant</DropdownMenuItem>}
+              {capabilities.entity && <DropdownMenuItem disabled={correcting} onSelect={() => void requestCorrection('ENTITY')}>Wrong item</DropdownMenuItem>}
+              {capabilities.homeRecord && propertyId && <DropdownMenuItem disabled={correcting} onSelect={() => void requestCorrection('HOME_RECORD')}>Correct home information</DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : <>
         {capabilities.intent && <button type="button" disabled={correcting} onClick={() => void requestCorrection('INTENT')} className="font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'That’s not what I meant'}</button>}
         {capabilities.entity && <button type="button" disabled={correcting} onClick={() => void requestCorrection('ENTITY')} className="font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">Wrong item</button>}
         {capabilities.homeRecord && propertyId && <button type="button" disabled={correcting} onClick={() => void requestCorrection('HOME_RECORD')} className="ml-auto font-semibold text-teal-700 hover:text-teal-800 disabled:opacity-50">{correcting ? 'Opening…' : 'Correct home information'}</button>}
+        </>}
       </div>
       {rating === 'DOWN' && (
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">

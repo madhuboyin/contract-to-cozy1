@@ -5,6 +5,8 @@ import type { ScalarCaptureInputSchema, StructuredCaptureField } from '@/compone
 // Only the presentation and the order of asking change: the same fields are answered, validated and submitted as one request.
 
 const STEPPABLE = new Set<ScalarCaptureInputSchema['type']>(['SINGLE_SELECT', 'BOOLEAN', 'INTEGER', 'DECIMAL', 'SHORT_TEXT', 'TIME']);
+/** A capture is asked as a conversation only when it is a short set of questions; a longer group stays one form. */
+export const MAX_CONVERSATIONAL_FIELDS = 3;
 /** A bounded choice is offered as chips; a longer list uses a picker. */
 export const QUICK_REPLY_LIMIT = 8;
 
@@ -18,6 +20,7 @@ export function canAskConversationally(request: Pick<AskCaptureRequest, 'classif
     && request.sensitivity === 'STANDARD'
     && schema.type === 'GROUP'
     && schema.fields.length > 0
+    && schema.fields.length <= MAX_CONVERSATIONAL_FIELDS
     && schema.fields.every((field) => STEPPABLE.has(field.inputSchema.type as ScalarCaptureInputSchema['type']));
 }
 
