@@ -259,7 +259,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
           <p className="text-xs text-slate-500">{calmChrome ? 'Showing' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
           <div className="flex gap-2">
             {offset > 0 && <button type="button" disabled={disabled} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous page<span className="sr-only"> of {section.title}</span></button>}
-            {offset + section.items.length < section.count && <button type="button" disabled={disabled} className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
+            {offset + section.items.length < section.count && <button type="button" disabled={disabled} className={cn('min-h-10 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50', calm ? 'border border-slate-200 bg-white text-slate-800' : 'bg-teal-700 text-white')} onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
           </div>
         </nav>}
       </div>;

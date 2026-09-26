@@ -43,7 +43,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
     const whyId = `why-${entry.id}`;
     const open = openWhy === entry.id;
     return (
-      <li key={entry.id} className={cn('rounded-2xl', TONE[entry.tone].chip.split(' ')[0])}>
+      <li key={entry.id} className={cn('rounded-2xl', open && 'pb-3', TONE[entry.tone].chip.split(' ')[0])}>
         <button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className={cn('flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left transition', TONE[entry.tone].chip)}>
           <span aria-hidden="true" className={cn('h-2 w-2 shrink-0 rounded-full', TONE[entry.tone].dot)} />
           <span className="min-w-0 flex-1"><span className="block text-sm font-semibold tabular-nums">{entry.label}</span>{entry.detail && <span className="block truncate text-[13px] font-normal opacity-80">{entry.detail}</span>}</span>
@@ -51,7 +51,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
         </button>
         {reasons.length > 0 && <>
           <button type="button" data-why-toggle={entry.id} aria-expanded={open} aria-controls={whyId} onClick={() => setOpenWhy(open ? null : entry.id)} className={cn('ml-[2.1rem] min-h-8 rounded-lg px-1 pb-2 text-xs font-medium underline-offset-2 hover:underline', TONE[entry.tone].chip.split(' ')[1])}>Why this appeared</button>
-          <ul id={whyId} hidden={!open} data-why-panel={entry.id} className="mx-3.5 mb-2.5 ml-[2.1rem] list-disc space-y-1 pl-4 text-[13px] leading-5 text-slate-700 marker:text-slate-400">{reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+          <ul id={whyId} hidden={!open} data-why-panel={entry.id} className="mr-3.5 ml-[2.1rem] list-disc space-y-1 pl-4 text-[13px] leading-5 text-slate-700 marker:text-slate-400">{reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
         </>}
       </li>
     );
