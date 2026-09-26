@@ -9,3 +9,8 @@ export const CalmChromeContext = createContext(false);
 export const CalmAnswerContext = createContext(false);
 export const useCalmChrome = () => useContext(CalmChromeContext);
 export const useCalmAnswer = () => useContext(CalmAnswerContext);
+
+// A block that supports the main artifact of the turn (for example the "What comes next" tool list after an answer). In the calm
+// shell it is offered collapsed, so a turn has one artifact (IW-CONV-002/003).
+export const CalmSecondaryContext = createContext(false);
+export const useCalmSecondary = () => useContext(CalmSecondaryContext);

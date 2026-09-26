@@ -11,7 +11,7 @@ import { hasResponseContext, ResponseContextSummary } from '../EvidenceContextPa
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
 import { AskBlockActionContext } from '../blocks/context';
-import { CalmAnswerContext, CalmChromeContext } from '../blocks/calmContext';
+import { CalmAnswerContext, CalmChromeContext, CalmSecondaryContext } from '../blocks/calmContext';
 import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
@@ -282,8 +282,8 @@ export function ExecutionCard({
 
         {folded && canFoldResult(execution) && <p data-ask-folded-headline="" className="text-sm font-semibold text-slate-900">{resultHeadline(execution)}<span className="ml-2 text-xs font-normal text-slate-500">Updated {new Date(execution.updatedAt).toLocaleString()}</span></p>}
         <div hidden={folded && canFoldResult(execution)} className="space-y-3">
-        {(!calmChrome || execution.updatedAt !== execution.createdAt) && <p className="text-xs text-slate-500" role="status" aria-live="polite">
-          {calmChrome ? 'Refreshed' : 'Updated'} {new Date(execution.updatedAt).toLocaleString()}
+        {!calmChrome && <p className="text-xs text-slate-500" role="status" aria-live="polite">
+          {'Updated'} {new Date(execution.updatedAt).toLocaleString()}
           {!calmChrome && execution.viewState && ` · ${execution.blocks.flatMap((block) => block.type === 'GROUPED_LIST' && block.id === 'maintenance-groups' ? block.sections : []).reduce((count, section) => count + section.count, 0)} matching tasks`}
         </p>}
         {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: `execution.blocks` is
@@ -301,7 +301,7 @@ export function ExecutionCard({
         )}
         <div ref={bodyRef} className={cn('space-y-3', calmChrome && FRAMELESS_LISTS)}>
           <AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
-            {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} />)}
+            {execution.blocks.map((block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>)}
             {hasResponseContext(execution) && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
           </AskBlockActionContext.Provider>
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}

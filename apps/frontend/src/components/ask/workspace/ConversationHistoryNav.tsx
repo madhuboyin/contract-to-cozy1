@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Archive, ArrowLeft, Clock3, Plus, Search, Sparkles } from 'lucide-react';
 import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
 import { useCalmAnswers } from '@/features/ask/calmAnswers';
@@ -43,7 +43,7 @@ export function recentSessionStatus(status: AskRecentSessionSummary['latestStatu
   return 'Not available';
 }
 
-export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel }: {
+export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel, statusSlot }: {
   items: AskRecentSessionSummary[];
   // IW-HIST-003/011 (FRD v1.71): the pinned group (recent view only) and the explicit archived view.
   pinnedItems?: AskRecentSessionSummary[];
@@ -69,6 +69,8 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
   onLoadMore: () => void;
   backHref?: string;
   backLabel?: string;
+  // IW-CALM-007 (FRD v1.112): the refresh-status dot, shown beside New conversation when the page header is hidden on wide screens.
+  statusSlot?: ReactNode;
 }) {
   // IW-CALM-008 (FRD v1.111): in the calm shell the rail carries no brand block and no explanatory copy.
   const calm = useCalmAnswers();
@@ -101,9 +103,12 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
         <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-700 text-white"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
         <div><p className="text-sm font-semibold text-slate-950">Ask Cozy</p><p className="text-[11px] text-slate-500">Your home assistant</p></div>
       </div>}
-      <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-white hover:shadow-sm">
-        <Plus className="h-4 w-4" aria-hidden="true" />New conversation
-      </button>
+      <div className="flex items-center gap-1">
+        <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-white hover:shadow-sm">
+          <Plus className="h-4 w-4" aria-hidden="true" />New conversation
+        </button>
+        {calm && statusSlot && <div className="shrink-0 pr-2">{statusSlot}</div>}
+      </div>
       <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="Conversation home scope">
         <button type="button" aria-pressed={scope === 'THIS_HOME'} disabled={!selectedHomeAvailable} onClick={() => onScopeChange('THIS_HOME')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold disabled:opacity-50', scope === 'THIS_HOME' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>This home</button>
         <button type="button" aria-pressed={scope === 'ALL_HOMES'} onClick={() => onScopeChange('ALL_HOMES')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold', scope === 'ALL_HOMES' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>All homes</button>
@@ -122,7 +127,8 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
         {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
         {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{archivedView ? 'Loading archived conversations…' : query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
         {grouped.length === 0 && !loading ? (
-          <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{archivedView ? issue ? 'Archived conversations are unavailable right now.' : 'No archived conversations.' : query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversations match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
+          // IW-CALM-008: with no history, no search and no error there is nothing to say, so the calm rail shows nothing.
+          calm && !archivedView && !query.trim() && !issue ? null : <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{archivedView ? issue ? 'Archived conversations are unavailable right now.' : 'No archived conversations.' : query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversations match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
         ) : grouped.map((group) => (
           <section key={group.label} className="mb-5" aria-labelledby={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`}>
             <h3 id={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`} className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.label}</h3>

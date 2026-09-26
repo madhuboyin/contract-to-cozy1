@@ -264,7 +264,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
       <div className={cn('flex items-end gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100', placement === 'hero' ? 'rounded-3xl p-3 shadow-[0_12px_40px_-20px_rgba(15,118,110,0.45)]' : 'rounded-2xl')}>
-        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' ? 2 : 1} maxLength={4000} placeholder="Ask anything about your home…" className={cn('max-h-32 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? 'min-h-14 py-3 text-base' : 'min-h-10 py-2 text-sm')} />
+        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={placement === 'hero' && !calm ? 2 : 1} maxLength={4000} placeholder="Ask anything about your home…" className={cn('max-h-32 flex-1 resize-none bg-transparent px-2 text-slate-900 outline-none placeholder:text-slate-400', placement === 'hero' ? 'min-h-14 py-3 text-base' : 'min-h-10 py-2 text-sm')} />
         <VoiceInputButton large={placement === 'hero'} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />
         {loading && inFlight.current
@@ -283,7 +283,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           to 0 on the desktop floating panel and the dashboard-embedded page
           view, so it's harmless to apply unconditionally rather than
           threading a separate "is this the mobile sheet" signal through. */}
-      <header className={cn('flex items-center justify-between border-b border-slate-200 bg-white', mode === 'page' ? (calm ? 'min-h-12 px-4 sm:px-6' : 'min-h-16 px-4 sm:px-6') : 'px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
+      <header className={cn('flex items-center justify-between border-b border-slate-200 bg-white', calm && mode === 'page' && 'lg:hidden', mode === 'page' ? (calm ? 'min-h-12 px-4 sm:px-6' : 'min-h-16 px-4 sm:px-6') : 'px-4 py-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5')}>
         <div className="min-w-0"><div className="flex items-center gap-3"><span className={cn('grid place-items-center bg-teal-700 text-white', mode === 'page' ? (calm ? 'h-8 w-8 rounded-xl' : 'h-9 w-9 rounded-xl lg:hidden') : 'h-9 w-9 rounded-xl')}><Sparkles className="h-4 w-4" /></span><div>{mode === 'page' ? <h1 className="text-lg font-semibold tracking-tight text-slate-950">Ask Cozy</h1> : <h2 className="font-semibold text-slate-950">Ask Cozy</h2>}{!calm && <p className="truncate text-xs text-slate-500">{scopeLabel}</p>}</div></div></div>
         <div className="flex items-center gap-1">
           {selectedPropertyId && <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact={calm} />}
@@ -324,11 +324,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
           <aside className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
-            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
+            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact /> : undefined} />
           </aside>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
-      <main className={cn('min-h-0 flex-1 overflow-y-auto', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12' : 'px-4 py-5 sm:px-5')}>
+      <main className={cn('min-h-0 flex-1 overflow-y-auto', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
+        {calm && mode === 'page' && <h1 className="sr-only hidden lg:block">Ask Cozy</h1>}
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : askUnavailable ? (
           <section className="mx-auto mt-6 max-w-2xl rounded-3xl border border-amber-200 bg-amber-50/80 px-5 py-8 text-center sm:px-8" role="status" aria-labelledby="ask-paused-title">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-amber-700 shadow-sm"><AlertTriangle className="h-5 w-5" /></span>
@@ -339,7 +340,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             </button>
           </section>
         ) : landingVisible ? (
-          <div className={cn('mx-auto max-w-3xl', calm && 'sm:pt-[5vh]')}>
+          <div className={cn('mx-auto max-w-3xl', calm && 'sm:pt-[3vh]')}>
             {calm ? <h2 className="mb-5 font-display text-[24px] font-medium leading-tight tracking-[-0.01em] text-slate-950 sm:text-[30px]">How can I help with your home?</h2> : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
             {renderComposer('hero')}
             {calm ? <CalmLanding view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)}>{explorer}</CalmLanding> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
@@ -352,7 +353,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {!calm && <ConciergeHome propertyId={selectedPropertyId} view={concierge.view} loading={concierge.loading} failed={concierge.failed} onAsk={(prompt, source) => runPrompt(prompt, source)} />}
           </div>
         ) : (
-          <div className="mx-auto max-w-3xl space-y-7">
+          <div className={cn('mx-auto max-w-3xl', calm ? 'space-y-5' : 'space-y-7')}>
             <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} />
             {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
             {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/RES-003/MAINT-003: a

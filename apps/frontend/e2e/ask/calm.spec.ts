@@ -53,6 +53,28 @@ test('calm domain list: the list has no outer frame and the summary leads', asyn
   await expect(page.locator('[data-calm-summary]').first()).toBeVisible();
 });
 
+test('calm tool discovery: one compact row for the match, related tools collapsed, no per-tool paragraphs', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('Is there a tool to help with refinancing?');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  await expect(page.getByRole('heading', { name: 'Best match for your goal' })).toBeVisible();
+  await expect(page.getByText('More home details will improve the result')).toBeVisible();
+  await expect(page.getByText(/Full tool:/)).toHaveCount(0);
+  const related = page.locator('details[data-calm-secondary]');
+  await expect(related).toHaveCount(1);
+  await expect(related).not.toHaveAttribute('open', '');
+  await related.locator('summary').click();
+  await expect(related.getByRole('link', { name: /Open Break-Even/ })).toBeVisible();
+});
+
+test('calm desktop: no second title band, the status dot sits in the rail, and there is one page heading', async ({ page }) => {
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toHaveCount(1);
+  await expect(page.locator('header').filter({ hasText: 'Ask Cozy' })).toBeHidden();
+});
+
 test('?calm=0 returns to the previous presentation and is remembered', async ({ page }) => {
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=0`);

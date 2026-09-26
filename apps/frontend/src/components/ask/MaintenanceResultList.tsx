@@ -249,6 +249,6 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     {layout === 'SHELVES' && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
       {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
     </DetailSheetFrame>}
-    <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
+    <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: 'SECONDARY' } : action} /> : null)}</div>
   </section>;
 }

@@ -4,7 +4,7 @@ import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatib
 import { timelinePoint } from '@/features/ask/displayPatterns';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
-import { useCalmChrome } from './calmContext';
+import { useCalmAnswer, useCalmChrome } from './calmContext';
 import type { AskBlockRenderer } from './types';
 
 function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBlock, { type: 'SUMMARY' }>['chips']> }) {
@@ -21,6 +21,10 @@ function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBloc
 const CALM_TONE_RULE = { CAUTION: 'border-l-2 border-amber-300 pl-3', CRITICAL: 'border-l-2 border-red-300 pl-3', POSITIVE: '', DEFAULT: '' } as const;
 
 function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  // IW-CONV-002: one primary action per turn. A domain that adopted the headline anatomy carries its actions on its list, so the
+  // summary adds none; any other summary keeps only its first.
+  const adopted = useCalmAnswer();
+  const actions = adopted ? [] : block.actions.slice(0, 1);
   const declared = Boolean(block.headline?.trim());
   const headline = block.headline?.trim() || block.title;
   const supportLine = declared ? block.supportLine?.trim() || null : block.body;
@@ -29,7 +33,7 @@ function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: '
       <h3 className="font-display text-[22px] font-medium leading-snug tracking-[-0.01em] text-slate-950 sm:text-[26px]">{headline}</h3>
       {supportLine && <p className={cn('mt-1 whitespace-pre-wrap text-sm leading-6', declared ? 'text-slate-500' : 'text-slate-700')}>{supportLine}</p>}
       {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
-      {block.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2 text-sm">{block.actions.map((action) => <ActionLink key={action.id} action={{ ...action, style: 'SECONDARY' }} />)}</div>}
+      {actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2 text-sm">{actions.map((action) => <ActionLink key={action.id} action={{ ...action, style: 'SECONDARY' }} />)}</div>}
     </section>
   );
 }

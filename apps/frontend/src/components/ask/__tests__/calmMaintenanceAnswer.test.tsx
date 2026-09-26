@@ -38,6 +38,9 @@ describe('calm Maintenance answer', () => {
     expect(screen.getByText('8 overdue')).toBeInTheDocument();
     expect(screen.queryByText(/Showing 50-item server pages/)).toBeNull();
     expect(screen.queryByText(/matching tasks/)).toBeNull();
+    // One primary action per turn: the list carries the actions, so the summary adds no second "Open maintenance".
+    expect(screen.queryByRole('link', { name: /Open maintenance/ })).toBeNull();
+    expect(screen.queryByText(/^Refreshed /)).toBeNull();
     expect(screen.queryByText(/^Updated /)).toBeNull();
     // The old per-answer card header is gone; the one control is the overflow menu.
     expect(screen.queryByRole('button', { name: /Refresh this result/ })).toBeNull();
