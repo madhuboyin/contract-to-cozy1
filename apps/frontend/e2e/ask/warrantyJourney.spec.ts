@@ -28,6 +28,9 @@ test('a list question: exact counts, one dominant step, a quiet page link, recor
   await expect(pageLink).not.toHaveClass(/bg-teal-700/);
   // The page link carries Ask's own return path, so it comes back to this conversation.
   await expect(pageLink).toHaveAttribute('href', /^\/dashboard\/warranties\?.*backTo=/);
+  // Related domains never lend each other actions: a warranty answer offers nothing that files or starts a claim.
+  await expect(page.locator('#ask-execution-execution-warranty-journey-1').getByRole('button', { name: /claim/i })).toHaveCount(0);
+  await expect(page.locator('#ask-execution-execution-warranty-journey-1').getByRole('link', { name: /claim/i })).toHaveCount(0);
   // Recorded coverage text exactly as recorded, a missing one said to be missing, and no coverage decision anywhere in the answer.
   const answer = page.locator('#ask-execution-execution-warranty-journey-1');
   await expect(answer.getByText('Compressor and parts for 5 years.')).toBeVisible();

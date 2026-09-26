@@ -259,7 +259,7 @@ const CLAIM_ITEM_ACTIONS = [
   ['claim-deny', 'Mark denied', 'Mark this claim denied.'],
   ['claim-close', 'Close claim', 'Close this claim.'],
 ].map(([id, label, message]) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'CLAIM_TRANSITION' }));
-function claimsExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
+function claimsExecution(stage: 'LIST' | 'REVIEW' | 'RUNNING' | 'DONE', sessionId?: string) {
   const common = {
     schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', property: { id: propertyId, label: 'Acceptance Home' },
     skill: null, skillHandoff: null, captureRequests: [], clarification: null, childExecutions: [], originalResponse: null,
@@ -277,8 +277,15 @@ function claimsExecution(stage: 'LIST' | 'REVIEW', sessionId?: string) {
         ] }] },
       ] };
   }
+  if (stage === 'DONE') {
+    return { ...common, executionId: 'execution-claim-transition', question: 'Submit this claim.', status: 'COMPLETED', suggestions: [], confirmation: null,
+      operation: { id: 'CLAIM_TRANSITION', version: '1.0', family: 'COMMAND' }, contextVersion: 'claim-context-v2',
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'claim-transition-done', title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical Claims service applied the change and reconciled the linked work.',
+        details: [{ label: 'Claim', value: 'Kitchen leak' }, { label: 'From', value: 'draft' }, { label: 'To', value: 'submitted' }],
+        actions: [{ id: 'open-claim', label: 'Open claim', href: claimHref, style: 'PRIMARY' }] }] };
+  }
   const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
-  return { ...common, executionId: 'execution-claim-transition', question: 'Submit this claim.', status: 'NEEDS_CONFIRMATION', suggestions: [],
+  return { ...common, executionId: 'execution-claim-transition', question: 'Submit this claim.', status: stage === 'RUNNING' ? 'RUNNING' : 'NEEDS_CONFIRMATION', suggestions: [],
     operation: { id: 'CLAIM_TRANSITION', version: '1.0', family: 'COMMAND' }, contextVersion: 'claim-context-v1',
     blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: 'claim-transition-claim-kitchen-leak-1', version: 1, title: 'Change Kitchen leak to submitted?', description: 'This changes the shared claim record.', fields: [{ label: 'From', value: 'draft' }, { label: 'To', value: 'submitted' }], editableFields: [], confirmLabel: 'Change status', consentText: 'I authorize this claim status change.', expiresAt } };
@@ -1017,6 +1024,90 @@ function warrantyJourneyExecution(state: WarrantyJourneyState, options: { viewer
       boundary,
     ],
   };
+}
+
+// Claims C-3: the incident and claim status answer as the real producer sends it (calm adopter, governed scope and state filters, view
+// state, a recorded-information boundary and no filled step). Claim rows carry the existing status-transition actions; 'claim-kitchen-leak'
+// reuses the acceptance record (canonical detail and the transition flow), 'claim-removed' has no canonical record behind it.
+type ClaimsJourneyScope = 'BOTH' | 'CLAIMS' | 'INCIDENTS';
+type ClaimsJourneyState = 'ALL' | 'OPEN' | 'CLOSED';
+type ClaimsJourneyView = { scope: ClaimsJourneyScope; state: ClaimsJourneyState; revision: number; sessionId?: string };
+const CLAIMS_JOURNEY_INCIDENTS = [
+  { id: 'incident-leak', title: 'Basement leak', status: 'ACTIVE', open: true, meta: ['active', 'High', 'Opened Sep 1, 2026'] },
+  { id: 'incident-old', title: 'Storm damage', status: 'RESOLVED', open: false, meta: ['resolved', 'Resolved Aug 4, 2026'] },
+];
+const CLAIMS_JOURNEY_CLAIMS = [
+  { id: 'claim-kitchen-leak', title: 'Kitchen leak', status: 'DRAFT', open: true, meta: ['draft', 'Opened Sep 1, 2026'] },
+  { id: 'claim-roof', title: 'Roof hail claim', status: 'SUBMITTED', open: true, meta: ['submitted', 'Opened Aug 20, 2026'] },
+  { id: 'claim-removed', title: 'Old fence claim', status: 'CLOSED', open: false, meta: ['closed', 'Closed Jul 2, 2026'] },
+];
+function claimsJourneyExecution(view: ClaimsJourneyView, options: { viewer?: boolean; empty?: boolean; single?: boolean } = {}) {
+  const base = `/dashboard/properties/${propertyId}`;
+  const common = {
+    schemaVersion: '1.0', sessionId: view.sessionId ?? 'ask-acceptance-session', status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'INCIDENT_CLAIM_STATUS', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: 'claims-journey-v1',
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+  const boundary = { type: 'BOUNDARY', id: 'claim-status-boundary', title: 'Recorded information only', body: 'This shows the incident and claim records in your Home Record. It does not decide whether a claim will be approved or covered. Filing a claim or changing its status happens only when you ask and confirm.', severity: 'INFO', suggestions: [] };
+  if (options.empty) {
+    return { ...common, executionId: 'execution-claims-journey-empty', question: 'Show my claims journey', viewState: null, blocks: [{
+      type: 'EMPTY_STATE', id: 'incident-claim-empty', title: 'No incidents or claims are recorded for this home',
+      body: 'This reflects what has been logged in the home record; it is not confirmation that nothing has ever happened at this property.',
+      actions: [{ id: 'open-incidents', label: 'Open incidents', href: `${base}/incidents`, style: 'SECONDARY' }, { id: 'open-claims', label: 'Open claims', href: `${base}/claims`, style: 'SECONDARY' }],
+    }, boundary] };
+  }
+  const single = options.single;
+  const wantIncidents = !single && view.scope !== 'CLAIMS';
+  const wantClaims = single || view.scope !== 'INCIDENTS';
+  const keep = (open: boolean) => view.state === 'ALL' || (view.state === 'OPEN') === open;
+  const activeIncidents = wantIncidents ? CLAIMS_JOURNEY_INCIDENTS.filter((row) => row.open && keep(true)) : [];
+  const resolvedIncidents = wantIncidents ? CLAIMS_JOURNEY_INCIDENTS.filter((row) => !row.open && keep(false)) : [];
+  const openClaims = wantClaims ? CLAIMS_JOURNEY_CLAIMS.filter((row) => row.open && keep(true) && (!single || row.id === 'claim-kitchen-leak')) : [];
+  const closedClaims = wantClaims && !single ? CLAIMS_JOURNEY_CLAIMS.filter((row) => !row.open && keep(false)) : [];
+  const claimActions = options.viewer ? [] : CLAIM_ITEM_ACTIONS;
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const parts = [
+    activeIncidents.length ? count(activeIncidents.length, 'active incident', 'active incidents') : null, openClaims.length ? count(openClaims.length, 'open claim', 'open claims') : null,
+  ].filter(Boolean) as string[];
+  const none = view.scope === 'CLAIMS' || single ? 'No open claims.' : view.scope === 'INCIDENTS' ? 'No active incidents.' : 'No active incidents or open claims.';
+  const onFile = [resolvedIncidents.length ? count(resolvedIncidents.length, 'resolved incident', 'resolved incidents') : null, closedClaims.length ? count(closedClaims.length, 'closed claim', 'closed claims') : null].filter(Boolean) as string[];
+  const total = activeIncidents.length + resolvedIncidents.length + openClaims.length + closedClaims.length;
+  const headline = total === 0 ? 'Nothing matches these filters.' : parts.length ? `${parts.join(' and ')}.` : none;
+  const chips = single ? [] : [
+    { id: 'scope-both', label: 'Incidents and claims', message: 'Now show all incidents and claims', active: view.scope === 'BOTH' },
+    { id: 'scope-claims', label: 'Claims', message: 'Only show claims', active: view.scope === 'CLAIMS' },
+    { id: 'scope-incidents', label: 'Incidents', message: 'Only show incidents', active: view.scope === 'INCIDENTS' },
+    { id: 'state-all', label: 'Open and closed', message: 'Now show open and closed records', active: view.state === 'ALL' },
+    { id: 'state-open', label: 'Open', message: 'Only show open records', active: view.state === 'OPEN' },
+    { id: 'state-closed', label: 'Closed', message: 'Only show closed records', active: view.state === 'CLOSED' },
+    ...(view.scope !== 'BOTH' || view.state !== 'ALL' ? [{ id: 'clear-all', label: 'Clear filters', message: 'Now show all records with no filters', active: false }] : []),
+  ];
+  const incidentRow = (row: (typeof CLAIMS_JOURNEY_INCIDENTS)[number]) => ({ id: row.id, title: row.title, description: 'water leak', meta: row.meta, status: row.status, href: `${base}/incidents/${row.id}` });
+  const claimRow = (row: (typeof CLAIMS_JOURNEY_CLAIMS)[number]) => ({ id: row.id, title: row.title, description: 'Acme Insurance · water damage', meta: row.meta, status: row.status, href: `${base}/claims/${row.id}`, entityType: 'CLAIM', actions: claimActions });
+  const sections = [
+    ...(wantIncidents && view.state !== 'CLOSED' ? [{ id: 'active-incidents', title: 'Active incidents', count: activeIncidents.length, items: activeIncidents.map(incidentRow) }] : []),
+    ...(resolvedIncidents.length ? [{ id: 'resolved-incidents', title: 'Resolved incidents', count: resolvedIncidents.length, items: resolvedIncidents.map(incidentRow) }] : []),
+    ...(wantClaims && view.state !== 'CLOSED' ? [{ id: 'active-claims', title: 'Open claims', count: openClaims.length, items: openClaims.map(claimRow) }] : []),
+    ...(closedClaims.length ? [{ id: 'closed-claims', title: 'Closed claims', count: closedClaims.length, items: closedClaims.map(claimRow) }] : []),
+  ];
+  return {
+    ...common, executionId: single ? 'execution-claims-journey-single' : `execution-claims-journey-${view.revision}`,
+    ...(!single && view.revision > 1 ? { continuesExecutionId: `execution-claims-journey-${view.revision - 1}` } : {}),
+    question: single ? 'Show my kitchen claim journey' : view.revision === 1 ? 'Show my claims journey' : 'Refined records',
+    viewState: single ? null : { resultId: 'claims-journey-result', domainScopePhrase: view.scope, dateScopePhrase: null, statusFilter: view.state, selectedTaskId: null, revision: view.revision },
+    blocks: [
+      { type: 'SUMMARY', id: 'incident-claim-summary', title: `${activeIncidents.length + openClaims.length} active items need attention`, headline, body: headline, tone: parts.length ? 'CAUTION' : 'DEFAULT',
+        ...(onFile.length ? { supportLine: `${onFile.join(' and ')} also on file.` } : {}),
+        chips: [...(activeIncidents.length ? [{ label: count(activeIncidents.length, 'active incident', 'active incidents'), tone: 'CAUTION' }] : []), ...(openClaims.length ? [{ label: count(openClaims.length, 'open claim', 'open claims'), tone: 'CAUTION' }] : []), ...(closedClaims.length ? [{ label: `${closedClaims.length} closed`, tone: 'DEFAULT' }] : [])],
+        actions: [...(!single && wantIncidents ? [{ id: 'open-incidents', label: 'Open incidents', href: `${base}/incidents`, style: 'SECONDARY' }] : []), { id: 'open-claims', label: 'Open claims', href: `${base}/claims`, style: 'PRIMARY' }] },
+      { type: 'GROUPED_LIST', id: 'incident-claim-list', title: 'Incidents and claims', filters: chips, sections,
+        actions: [...(wantIncidents ? [{ id: 'open-incidents-list', label: 'Open incidents', href: `${base}/incidents`, style: 'SECONDARY' }] : []), { id: 'open-claims-list', label: 'Open claims', href: `${base}/claims`, style: 'SECONDARY' }] },
+      { type: 'EVIDENCE', id: 'incident-claim-evidence', title: 'Record freshness', items: [...activeClaims(openClaims), ...closedClaims.map((row) => ({ label: row.title, source: 'Canonical Claim record', observedAt: '2026-09-01T00:00:00.000Z' }))] },
+      boundary,
+    ],
+  };
+  function activeClaims(rows: typeof CLAIMS_JOURNEY_CLAIMS) { return rows.map((row) => ({ label: row.title, source: 'Canonical Claim record', observedAt: '2026-09-01T00:00:00.000Z' })); }
 }
 
 // ACUI-008: the maintenance answer with a declared filter and evidence, and its refinement (same result, next revision).
@@ -1801,7 +1892,7 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
@@ -1812,6 +1903,8 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
   let refinementFailedOnce = false;
   let inventoryJourney: InventoryJourneyState | null = null;
   let warrantyJourney: WarrantyJourneyState | null = null;
+  let claimsJourney: ClaimsJourneyView | null = null;
+  let claimConfirmCalls = 0;
   let unknownOutcomeCalls = 0;
   let correctionSessionId: string | undefined;
   const warrantyAddCaptureBodies: Array<Record<string, unknown>> = [];
@@ -1911,7 +2004,19 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     estimatedCostCentsLow: 30000, estimatedCostCentsHigh: 60000, extractionConfidence: 'HIGH', status: 'OPEN', workDisposition: 'ACCEPTED',
     photoKeys: [], createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z',
   }] } }));
-  await page.route(`${apiOrigin}/api/properties/${propertyId}/claims/claim-kitchen-leak`, (route) => fulfill(route, { success: true, data: {
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/claims/claim-removed`, (route) => fulfill(route, { message: 'Claim not found' }, 404));
+  await page.route(`${apiOrigin}/api/ask/executions/execution-claim-transition/confirm`, async (route) => {
+    assertAuthenticated(route.request());
+    correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    claimConfirmCalls += 1;
+    if (options.claimConfirmDenied) { await fulfill(route, { success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'A contributor or owner must change a claim status.' } }, 403); return; }
+    // The first confirm's outcome is not known (a claim was made, the write may or may not have finished); a status check settles it.
+    if (options.claimUnknownOutcomeOnce && claimConfirmCalls === 1) { await fulfill(route, { success: true, data: claimsExecution('RUNNING') }); return; }
+    await fulfill(route, { success: true, data: claimsExecution('DONE') });
+  });
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/claims/claim-kitchen-leak`, (route) => options.claimDetailAccessLost
+    ? fulfill(route, { message: 'Property not found or access denied.' }, 404)
+    : fulfill(route, { success: true, data: {
     id: 'claim-kitchen-leak', propertyId, title: 'Kitchen leak', description: 'Water under the kitchen sink damaged the cabinet floor.', type: 'WATER_DAMAGE', status: 'DRAFT',
     providerName: 'Acme Insurance', claimNumber: null, incidentAt: '2026-09-01T00:00:00.000Z', submittedAt: null, estimatedLossAmount: '2500', deductibleAmount: '1000', settlementAmount: null,
     createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z', checklistItems: [], timelineEvents: [], documents: [], checklistCompletionPct: 0,
@@ -2098,6 +2203,30 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     if (options.askFailsOnce && !askFailedOnce) {
       askFailedOnce = true;
       await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Ask could not answer just now.' } }, 500);
+      return;
+    }
+    // Claims C-3: a claims answer, one exact claim, and declared-filter refinements (merged the way the handler merges them).
+    if (/claims journey/i.test(body.message) || /kitchen claim journey/i.test(body.message)
+      || (claimsJourney && /^(?:only show (?:claims|incidents|open records|closed records)|now show (?:all incidents and claims|open and closed records|all records with no filters))/i.test(body.message))) {
+      if (/kitchen claim journey/i.test(body.message)) {
+        await fulfill(route, { success: true, data: claimsJourneyExecution({ scope: 'CLAIMS', state: 'ALL', revision: 1, sessionId: body.sessionId }, { single: true, viewer: options.claimsViewer }) }, 201);
+        return;
+      }
+      if (options.refinementFailsOnce && claimsJourney && !refinementFailedOnce && /^only show/i.test(body.message)) {
+        refinementFailedOnce = true;
+        await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Ask could not refine just now.' } }, 500);
+        return;
+      }
+      const previous = claimsJourney;
+      if (/claims journey/i.test(body.message)) claimsJourney = { scope: 'BOTH', state: 'ALL', revision: 1 };
+      else if (/no filters/i.test(body.message)) claimsJourney = { scope: 'BOTH', state: 'ALL', revision: previous!.revision + 1 };
+      else if (/^only show claims/i.test(body.message)) claimsJourney = { ...previous!, scope: 'CLAIMS', revision: previous!.revision + 1 };
+      else if (/^only show incidents/i.test(body.message)) claimsJourney = { ...previous!, scope: 'INCIDENTS', revision: previous!.revision + 1 };
+      else if (/all incidents and claims/i.test(body.message)) claimsJourney = { ...previous!, scope: 'BOTH', revision: previous!.revision + 1 };
+      else if (/only show open records/i.test(body.message)) claimsJourney = { ...previous!, state: 'OPEN', revision: previous!.revision + 1 };
+      else if (/only show closed records/i.test(body.message)) claimsJourney = { ...previous!, state: 'CLOSED', revision: previous!.revision + 1 };
+      else claimsJourney = { ...previous!, state: 'ALL', revision: previous!.revision + 1 };
+      await fulfill(route, { success: true, data: claimsJourneyExecution({ ...claimsJourney!, sessionId: body.sessionId }, { viewer: options.claimsViewer, empty: options.claimsEmpty }) }, 201);
       return;
     }
     // Warranties W-3: a warranty answer, one exact warranty, and declared-filter refinements (merged the way the handler merges them).
