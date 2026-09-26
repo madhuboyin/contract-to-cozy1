@@ -7,6 +7,7 @@ import { ResultViewContext } from '@/features/ask/useResultView';
 import { getClaim } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
 import type { ClaimDTO, ClaimStatus } from '@/types/claims.types';
 import { cn } from '@/lib/utils';
+import { useCalmAnswer } from './blocks/calmContext';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -182,6 +183,10 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onAcces
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
   const controls = useContext(ResultViewContext);
+  // Claims C-1 (FRD v1.127): in an adopted calm answer the summary carries no actions, so the record pages ride here as quiet text links.
+  // The answer has no filled step: filing a claim and changing a status stay behind their own confirmation flows. Outside the calm answer
+  // the summary shows the same links, so this row is not drawn.
+  const calm = useCalmAnswer();
   const [localDetailId, setLocalDetailId] = useState<string | null>(null);
   const detailId = controls ? controls.detailIdFor(block.id) : localDetailId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailId && item.entityType === 'CLAIM');
@@ -219,5 +224,6 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onAcces
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more are available on the full page.</p>}
     </div>)}
     {detailId && detailItem && <ClaimDetail key={detailId} claimId={detailId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
+    {calm && block.actions.some((action) => action.href) && <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.filter((action) => action.href).map((action) => <span key={action.id}>{link(action.href!, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>}
   </section>;
 }

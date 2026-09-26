@@ -5,7 +5,7 @@ import { ClaimType as PrismaClaimType, HouseholdRole } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
-import { type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
+import { type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, readableCode } from '../askFormatting';
@@ -207,6 +207,43 @@ export function claimItemActions(role: HouseholdRole) {
   return CLAIM_TRANSITION_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'CLAIM_TRANSITION' }));
 }
 
+const claimCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/**
+ * Claims C-1 (FRD v1.127): the calm answer for the incident and claim status read, as one sentence, an optional supporting line and answer
+ * chips, from counts only (no model). It states what is recorded and never what a claim will do: nothing about approval, coverage or
+ * eligibility is said here.
+ */
+export function claimsCalmCopy(counts: {
+  focus: 'BOTH' | 'CLAIMS' | 'INCIDENTS'; activeIncidents: number; resolvedIncidents: number; openClaims: number; closedClaims: number; truncated: boolean;
+}): { headline: string; supportLine?: string; chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> } {
+  const { focus, activeIncidents, resolvedIncidents, openClaims, closedClaims, truncated } = counts;
+  const parts = [
+    focus !== 'CLAIMS' && activeIncidents > 0 ? claimCount(activeIncidents, 'active incident', 'active incidents') : null,
+    focus !== 'INCIDENTS' && openClaims > 0 ? claimCount(openClaims, 'open claim', 'open claims') : null,
+  ].filter((part): part is string => Boolean(part));
+  const none = focus === 'CLAIMS' ? 'No open claims.' : focus === 'INCIDENTS' ? 'No active incidents.' : 'No active incidents or open claims.';
+  const headline = parts.length ? `${parts.join(' and ')}.` : none;
+  const onFile = [
+    focus !== 'CLAIMS' && resolvedIncidents > 0 ? claimCount(resolvedIncidents, 'resolved incident', 'resolved incidents') : null,
+    focus !== 'INCIDENTS' && closedClaims > 0 ? claimCount(closedClaims, 'closed claim', 'closed claims') : null,
+  ].filter((part): part is string => Boolean(part));
+  const notes = [onFile.length ? `${onFile.join(' and ')} also on file.` : null, truncated ? 'Showing the most recent records; open the page for the full record.' : null].filter((note): note is string => Boolean(note));
+  const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
+    ...(focus !== 'CLAIMS' && activeIncidents > 0 ? [{ label: claimCount(activeIncidents, 'active incident', 'active incidents'), tone: 'CAUTION' as const }] : []),
+    ...(focus !== 'INCIDENTS' && openClaims > 0 ? [{ label: claimCount(openClaims, 'open claim', 'open claims'), tone: 'CAUTION' as const }] : []),
+    ...(focus !== 'CLAIMS' && resolvedIncidents > 0 ? [{ label: `${resolvedIncidents} resolved`, tone: 'DEFAULT' as const }] : []),
+    ...(focus !== 'INCIDENTS' && closedClaims > 0 ? [{ label: `${closedClaims} closed`, tone: 'DEFAULT' as const }] : []),
+  ];
+  return notes.length ? { headline, supportLine: notes.join(' '), chips } : { headline, chips };
+}
+
+const CLAIM_STATUS_BOUNDARY: AskPresentationBlock = {
+  type: 'BOUNDARY', id: 'claim-status-boundary', title: 'Recorded information only',
+  body: 'This shows the incident and claim records in your Home Record. It does not decide whether a claim will be approved or covered. Filing a claim or changing its status happens only when you ask and confirm.',
+  severity: 'INFO', suggestions: [],
+};
+
 async function incidentClaimStatusResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const claimActions = claimItemActions(access.role);
@@ -298,7 +335,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
           ...(claimFocus ? [] : [{ id: 'open-incidents', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
           ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'SECONDARY' as const }]),
         ],
-      }],
+      }, CLAIM_STATUS_BOUNDARY],
       suggestions: ['What do I need for an insurance claim?'],
     };
   }
@@ -311,12 +348,24 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
         title: totalActive > 0 ? `${totalActive} active ${totalActive === 1 ? 'item needs' : 'items need'} attention` : 'No active incidents or claims right now',
         body: `${incidents.length} recorded incident${incidents.length === 1 ? '' : 's'} and ${claims.length} recorded claim${claims.length === 1 ? '' : 's'} are on file for this home.`,
         tone: totalActive > 0 ? 'CAUTION' : 'DEFAULT',
+        ...claimsCalmCopy({
+          focus: claimFocus ? 'CLAIMS' : incidentFocus ? 'INCIDENTS' : 'BOTH', activeIncidents: activeIncidents.length, resolvedIncidents: resolvedIncidents.length,
+          openClaims: activeClaims.length, closedClaims: closedClaims.length, truncated: incidents.length >= 20 || claims.length >= 20,
+        }),
         actions: [
           ...(claimFocus ? [] : [{ id: 'open-incidents', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
           ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'PRIMARY' as const }]),
         ],
       },
-      { type: 'GROUPED_LIST', filters: [], id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections, actions: [] },
+      {
+        type: 'GROUPED_LIST', filters: [], id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections,
+        // Claims C-1: the calm answer carries no filled step (filing and status changes stay behind their own confirmation flows); the
+        // record pages are quiet links, drawn by the calm answer only so the previous shell still shows each link once.
+        actions: [
+          ...(claimFocus ? [] : [{ id: 'open-incidents-list', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
+          ...(incidentFocus ? [] : [{ id: 'open-claims-list', label: 'Open claims', href: claimsHref, style: 'SECONDARY' as const }]),
+        ],
+      },
       {
         type: 'EVIDENCE', id: 'incident-claim-evidence', title: 'Record freshness',
         items: [
@@ -324,6 +373,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
           ...claims.slice(0, 10).map((claim) => ({ label: claim.title, source: claim.sourceType ? `Canonical Claim record · ${humanizeEnum(claim.sourceType)}` : 'Canonical Claim record', observedAt: (claim.openedAt ?? claim.incidentAt)?.toISOString() ?? null })),
         ],
       },
+      CLAIM_STATUS_BOUNDARY,
     ],
     suggestions: claimFocus ? ['What do I need for an insurance claim?'] : incidentFocus ? ['What should I do next?'] : ['What do I need for an insurance claim?', 'What should I do next?'],
   };
