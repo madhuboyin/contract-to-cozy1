@@ -18,8 +18,9 @@ describe('canAskConversationally', () => {
     expect(canAskConversationally(request({ inputSchema: { type: 'SINGLE_SELECT', options: [] } }))).toBe(false);
     expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [{ ...cost, inputSchema: { type: 'APPROXIMATE_DATE' } }] } }))).toBe(false);
     expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [] } }))).toBe(false);
-    // A long group (for example creating a task with six fields) stays one form.
-    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [task, cost, { ...cost, key: 'a' }, { ...cost, key: 'b' }] } }))).toBe(false);
+    // Creating a task (seven questions, some optional) is a conversation; a group longer than that stays one form.
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [task, cost, ...['a', 'b', 'c', 'd', 'e', 'f'].map((key) => ({ ...cost, key }))] } }))).toBe(false);
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [task, cost, ...['a', 'b', 'c', 'd', 'e'].map((key) => ({ ...cost, key }))] } }))).toBe(true);
     expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [task, cost, { ...cost, key: 'a' }] } }))).toBe(true);
   });
 });

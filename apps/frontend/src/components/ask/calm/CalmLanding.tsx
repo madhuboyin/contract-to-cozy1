@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buildConciergeStateStrip, type StripChip, type StripTone } from '@/features/ask/conciergeStateStrip';
 import type { AskCapabilityPrompt, AskFeaturedPrompt, ConciergeHomeView } from '@/features/ask/types';
@@ -32,14 +32,18 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
   const covered = new Set<string>();
   for (const entry of strip?.chips ?? []) { covered.add(entry.prompt.id); covered.add(entry.prompt.question.trim().toLowerCase()); }
   if (strip?.urgent) { covered.add(strip.urgent.prompt.id); covered.add(strip.urgent.prompt.question.trim().toLowerCase()); }
-  const shownStarters = starters.filter((prompt) => !covered.has(prompt.id) && !covered.has(prompt.question.trim().toLowerCase())).slice(0, 4);
-  const chip = (entry: StripChip) => (
-    <li key={entry.id} className="shrink-0"><button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className={cn('inline-flex min-h-9 items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium tabular-nums transition', TONE[entry.tone].chip)}><span aria-hidden="true" className={cn('h-1.5 w-1.5 rounded-full', TONE[entry.tone].dot)} />{entry.label}</button></li>
+  const shownStarters = starters.filter((prompt) => !covered.has(prompt.id) && !covered.has(prompt.question.trim().toLowerCase())).slice(0, 3);
+  // IW-CONV-017 (FRD v1.113): at most two "what needs you" lines, each saying what is behind the count; the composer stays the focus.
+  const contextLine = (entry: StripChip) => (
+    <li key={entry.id}><button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className={cn('flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left transition', TONE[entry.tone].chip)}>
+      <span aria-hidden="true" className={cn('h-2 w-2 shrink-0 rounded-full', TONE[entry.tone].dot)} />
+      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold tabular-nums">{entry.label}</span>{entry.detail && <span className="block truncate text-[13px] font-normal opacity-80">{entry.detail}</span>}</span>
+      <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50" />
+    </button></li>
   );
-  const stripChips = strip?.chips ?? [];
-  const suggestionCount = stripChips.length + shownStarters.length;
-  return (
-    <div className="mt-4" data-calm-landing="">
+  const stripChips = (strip?.chips ?? []).slice(0, 2);
+    return (
+    <div className="mt-5" data-calm-landing="">
       <section aria-label="Your home today" data-calm-state-strip="">
         {loading && <p className="flex items-center gap-2 text-sm text-slate-500" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Checking your home…</p>}
         {!loading && (failed || !strip) && <p className="text-sm text-slate-500">Your home overview is temporarily unavailable. You can still ask anything above.</p>}
@@ -50,8 +54,8 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
       </section>
       {/* IW-CONV-016 (FRD v1.112): one row of suggestions and nothing else on the landing: what needs attention (with a dot), then a few
           starter questions, then "More ideas". The top priority is one tap away through the first chip, not a second element. */}
-      {(suggestionCount > 0 || children) && !loading && <ul className={cn(ROW, 'mt-1')} aria-label="Suggestions">
-        {stripChips.map(chip)}
+      {stripChips.length > 0 && !loading && <ul className="mt-5 space-y-2" aria-label="Needs your attention">{stripChips.map(contextLine)}</ul>}
+      {(shownStarters.length > 0 || children) && !loading && <ul className={cn(ROW, 'mt-4')} aria-label="Suggestions">
         {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-9 whitespace-nowrap rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm text-slate-700 transition hover:border-teal-300 hover:text-teal-900">{prompt.question}</button></li>)}
         {children && <li className="shrink-0">{children}</li>}
       </ul>}

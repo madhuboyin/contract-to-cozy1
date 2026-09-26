@@ -18,7 +18,8 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'For your attention' })).toHaveCount(0);
   await expect(page.locator('[data-calm-landing]')).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Suggestions' }).getByRole('button', { name: /to plan soon/ })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Needs your attention' }).getByRole('button', { name: /to plan soon/ })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Needs your attention' }).getByRole('button', { name: /to plan soon/ })).toContainText('Schedule HVAC service');
   await expect(page.getByRole('button', { name: /More ideas/ })).toBeVisible();
   await expect(page.getByText('Top priority')).toHaveCount(0);
   await expect(page.getByRole('list', { name: 'Suggestions' }).getByRole('button')).not.toHaveCount(0);
@@ -27,7 +28,7 @@ test('calm landing: greeting, composer and one row of suggestions, and no helper
   await expect(conversationNav.getByText(/navigation remains available above/)).toHaveCount(0);
   await expect(conversationNav.getByPlaceholder('Search conversations')).toBeVisible();
 
-  const chip = page.getByRole('list', { name: 'Suggestions' }).getByRole('button').first();
+  const chip = page.getByRole('list', { name: 'Needs your attention' }).getByRole('button').first();
   await chip.click();
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });

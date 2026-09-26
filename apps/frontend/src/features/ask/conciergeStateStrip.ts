@@ -6,7 +6,7 @@ import { resolveConciergeLandingSpotlight } from './conciergeLandingPolicy';
 // second source of truth. Unavailable sources are said to be unavailable; an empty strip never implies the home is safe.
 
 export type StripTone = 'CRITICAL' | 'CAUTION' | 'DEFAULT';
-export type StripChip = { id: string; label: string; tone: StripTone; prompt: AskCapabilityPrompt; source: 'ATTENTION' | 'DECISION' | 'DISCOVERY' };
+export type StripChip = { id: string; label: string; /** One line of context: the top item behind the count. */ detail?: string | null; tone: StripTone; prompt: AskCapabilityPrompt; source: 'ATTENTION' | 'DECISION' | 'DISCOVERY' };
 export interface ConciergeStateStrip {
   headline: string | null;
   chips: StripChip[];
@@ -39,8 +39,9 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
     headline = 'Nothing needs your attention right now.';
   }
 
-  if (doNow > 0) chips.push({ id: 'strip-do-now', label: `${doNow} to do now`, tone: 'CRITICAL', source: 'ATTENTION', prompt: prompt('strip-do-now', 'What needs my attention right now?', 'PLAN_MONITOR', 'Plan') });
-  if (planSoon > 0) chips.push({ id: 'strip-plan-soon', label: `${planSoon} to plan soon`, tone: 'CAUTION', source: 'ATTENTION', prompt: prompt('strip-plan-soon', 'Which home actions should I plan for next?', 'PLAN_MONITOR', 'Plan') });
+  const topTitle = (priority: 'DO_NOW' | 'PLAN_SOON') => usable.find((item) => item.consumerPriority === priority)?.title ?? null;
+  if (doNow > 0) chips.push({ id: 'strip-do-now', label: `${doNow} to do now`, detail: topTitle('DO_NOW'), tone: 'CRITICAL', source: 'ATTENTION', prompt: prompt('strip-do-now', 'What needs my attention right now?', 'PLAN_MONITOR', 'Plan') });
+  if (planSoon > 0) chips.push({ id: 'strip-plan-soon', label: `${planSoon} to plan soon`, detail: topTitle('PLAN_SOON'), tone: 'CAUTION', source: 'ATTENTION', prompt: prompt('strip-plan-soon', 'Which home actions should I plan for next?', 'PLAN_MONITOR', 'Plan') });
 
   if (view.changes.state === 'UNAVAILABLE') {
     notes.push('Recent changes are temporarily unavailable.');
@@ -49,7 +50,7 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
     if (important.length > 0) {
       const urgent = important.some((item) => item.materiality === 'URGENT');
       chips.push({
-        id: 'strip-changes', label: `${important.length} important ${plural(important.length, 'change', 'changes')}`, tone: urgent ? 'CRITICAL' : 'CAUTION', source: 'DISCOVERY',
+        id: 'strip-changes', label: `${important.length} important ${plural(important.length, 'change', 'changes')}`, detail: important[0].summary, tone: urgent ? 'CRITICAL' : 'CAUTION', source: 'DISCOVERY',
         prompt: prompt('strip-changes', 'What changed around my home lately?', 'UNDERSTAND', 'Understand'),
       });
     }

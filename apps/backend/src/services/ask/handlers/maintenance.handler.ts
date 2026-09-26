@@ -272,20 +272,20 @@ export async function maintenanceTaskCreateResult(
         title: 'Maintenance task details', question: 'What task should be added, and when should it be due?',
         helpText: 'A due date, estimate, and recurrence are optional. You will review everything before the task is created.',
         inputSchema: { type: 'GROUP', fields: [
-          { key: 'title', label: 'Task', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
-          { key: 'description', label: 'Notes', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 1000 } },
-          { key: 'priority', label: 'Priority', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+          { key: 'title', label: 'Task', prompt: 'What task should I add?', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+          { key: 'priority', label: 'Priority', prompt: 'How important is it?', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
             { label: 'Low', value: MaintenanceTaskPriority.LOW }, { label: 'Medium', value: MaintenanceTaskPriority.MEDIUM },
             { label: 'High', value: MaintenanceTaskPriority.HIGH }, { label: 'Urgent', value: MaintenanceTaskPriority.URGENT },
           ] } },
-          { key: 'nextDueDate', label: 'Due date', helpText: 'Optional', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
-          { key: 'estimatedCostUsd', label: 'Estimated cost', helpText: 'Optional', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
-          { key: 'isRecurring', label: 'Does this repeat?', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Recurring', falseLabel: 'One-time' } },
-          { key: 'frequency', label: 'Repeat', required: true, when: { fieldKey: 'isRecurring', operator: 'EQUALS', value: true }, inputSchema: { type: 'SINGLE_SELECT', options: [
+          { key: 'nextDueDate', label: 'Due date', prompt: 'When is it due? (YYYY-MM-DD)', helpText: 'Optional', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+          { key: 'isRecurring', label: 'Does this repeat?', prompt: 'Does it repeat?', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Recurring', falseLabel: 'One-time' } },
+          { key: 'frequency', label: 'Repeat', prompt: 'How often?', required: true, when: { fieldKey: 'isRecurring', operator: 'EQUALS', value: true }, inputSchema: { type: 'SINGLE_SELECT', options: [
             { label: 'Daily', value: RecurrenceFrequency.DAILY }, { label: 'Weekly', value: RecurrenceFrequency.WEEKLY },
             { label: 'Monthly', value: RecurrenceFrequency.MONTHLY }, { label: 'Quarterly', value: RecurrenceFrequency.QUARTERLY },
             { label: 'Twice a year', value: RecurrenceFrequency.SEMI_ANNUALLY }, { label: 'Annually', value: RecurrenceFrequency.ANNUALLY },
           ] } },
+          { key: 'estimatedCostUsd', label: 'Estimated cost', prompt: 'Roughly what will it cost?', helpText: 'Optional', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
+          { key: 'description', label: 'Notes', prompt: 'Anything to note about it?', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 1000 } },
         ] },
         currentAnswer, allowNotSure: false, sensitivity: 'STANDARD',
         destinationLabel: 'Used to prepare this task; nothing is saved until you confirm', confirmationText: null,

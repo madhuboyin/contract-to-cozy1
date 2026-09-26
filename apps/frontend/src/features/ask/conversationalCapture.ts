@@ -6,7 +6,7 @@ import type { ScalarCaptureInputSchema, StructuredCaptureField } from '@/compone
 
 const STEPPABLE = new Set<ScalarCaptureInputSchema['type']>(['SINGLE_SELECT', 'BOOLEAN', 'INTEGER', 'DECIMAL', 'SHORT_TEXT', 'TIME']);
 /** A capture is asked as a conversation only when it is a short set of questions; a longer group stays one form. */
-export const MAX_CONVERSATIONAL_FIELDS = 3;
+export const MAX_CONVERSATIONAL_FIELDS = 7;
 /** A bounded choice is offered as chips; a longer list uses a picker. */
 export const QUICK_REPLY_LIMIT = 8;
 

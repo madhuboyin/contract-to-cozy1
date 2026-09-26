@@ -28,12 +28,13 @@ describe('CalmLanding', () => {
     render(<CalmLanding view={view()} loading={false} failed={false} starters={starterList} usingFallbackStarters={false} onAsk={onAsk}><span>explorer</span></CalmLanding>);
     // Chips carry the counts; the sentence is only for when there are no chips.
     expect(screen.queryByText('1 thing needs attention now, and 1 more to plan soon.')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '1 to do now' }));
+    fireEvent.click(screen.getByRole('button', { name: /^1 to do now/ }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'What needs my attention right now?' }), 'ATTENTION');
-    // One row of suggestions and nothing else: two state chips, then the starters (the duplicate is dropped), then the explorer entry.
+    // Two "needs attention" lines, then a short row of starters (the duplicate is dropped) and the explorer entry.
     expect(screen.queryByText('Top priority')).toBeNull();
+    expect(screen.getByRole('list', { name: 'Needs your attention' }).querySelectorAll('button')).toHaveLength(2);
     const row = screen.getByRole('list', { name: 'Suggestions' });
-    expect(row.querySelectorAll('button')).toHaveLength(2 + 4);
+    expect(row.querySelectorAll('button')).toHaveLength(3);
     expect(row).toHaveTextContent('explorer');
     expect(screen.queryByText('Help me continue this decision: X')).not.toBeNull();
   });
@@ -47,7 +48,8 @@ describe('CalmLanding', () => {
     ];
     render(<CalmLanding view={view()} loading={false} failed={false} starters={repeated} usingFallbackStarters={false} onAsk={jest.fn()} />);
     const buttons = screen.getByRole('list', { name: 'Suggestions' }).querySelectorAll('button');
-    expect(Array.from(buttons).map((button) => button.textContent)).toEqual(['1 to do now', '1 to plan soon', 'A genuinely different question?']);
+    expect(Array.from(buttons).map((button) => button.textContent)).toEqual(['A genuinely different question?']);
+    expect(screen.getByRole('list', { name: 'Needs your attention' }).querySelectorAll('button')).toHaveLength(2);
   });
 
   it('falls back to a sentence when there are no chips', () => {
