@@ -272,6 +272,7 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 | ACUI-005 | **Implemented in code (FRD v1.117):** calm receipt, review stage line, unknown-outcome wording, record link as continuation. Not browser-verified. |
 | ACUI-003 | **Implemented in code (FRD v1.118):** readable trust line under the answer; the workflow action is the dominant step. Not browser-verified. No client-side ordering guard (handler order already correct). |
 | ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Playwright-covered; not browser-verified by hand. |
+| ACUI-008 | **Implemented (FRD v1.120):** `e2e/ask/maintenanceJourney.spec.ts`, 9 scenarios at desktop and 390px. Fixture-backed; not a live-backend run. |
 
 ## 8. Recommended delivery boundary
 

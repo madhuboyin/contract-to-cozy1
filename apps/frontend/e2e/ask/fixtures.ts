@@ -884,6 +884,23 @@ function maintenanceExecution() {
   };
 }
 
+// ACUI-008: the maintenance answer with a declared filter and evidence, and its refinement (same result, next revision).
+function maintenanceJourneyExecution(refined: boolean, sessionId?: string) {
+  const base = maintenanceExecution();
+  const grouped = base.blocks.find((block) => block.type === 'GROUPED_LIST') as { filters: unknown[] };
+  grouped.filters = [
+    { id: 'all', label: 'All open', message: 'Now show all open maintenance tasks', active: refined ? false : true },
+    { id: 'overdue', label: 'Overdue', message: 'Only show overdue tasks', active: refined },
+  ];
+  (base.blocks as unknown[]).push({ type: 'EVIDENCE', id: 'maintenance-evidence', title: 'Task sources and freshness', items: [{ label: 'Service the heat pump', source: 'Maintenance record', observedAt: '2026-09-20T00:00:00.000Z' }] });
+  return {
+    ...base, executionId: refined ? 'execution-maintenance-journey-2' : 'execution-maintenance-journey', sessionId: sessionId ?? base.sessionId,
+    question: refined ? 'Only show overdue tasks' : 'Show my maintenance tasks with sources',
+    ...(refined ? { continuesExecutionId: 'execution-maintenance-journey' } : {}),
+    viewState: { ...base.viewState, resultId: 'maintenance-journey-result', revision: refined ? 2 : 1, statusFilter: refined ? 'OVERDUE' : 'ALL_OPEN' },
+  };
+}
+
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.74): the maintenance answer as the real producer now sends it -- answer
 // chips, timing groups and the declared shelves pattern. maintenance-task-1 reuses the mocked canonical task read.
 function maintenanceShelvesExecution() {
@@ -1649,13 +1666,15 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
   const correctionEditBodies: Array<{ confirmationVersion: number; edits: Record<string, string> }> = [];
   const correctionConfirmBodies: Array<Record<string, unknown>> = [];
+  let askFailedOnce = false;
+  let unknownOutcomeCalls = 0;
   let correctionSessionId: string | undefined;
   const warrantyAddCaptureBodies: Array<Record<string, unknown>> = [];
   const addCaptureBodies: Array<Record<string, unknown>> = [];
@@ -1933,6 +1952,26 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     }
     if (/multi-day heat risk/i.test(body.message)) {
       await fulfill(route, { success: true, data: heatPreparationExecution() }, 201);
+      return;
+    }
+    // ACUI-008: one request fails before any answer, so a spec can check the composer keeps the typed question.
+    if (options.askFailsOnce && !askFailedOnce) {
+      askFailedOnce = true;
+      await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Ask could not answer just now.' } }, 500);
+      return;
+    }
+    if (/maintenance tasks with sources/i.test(body.message) || /only show overdue tasks/i.test(body.message)) {
+      const refined = /only show overdue tasks/i.test(body.message);
+      await fulfill(route, { success: true, data: maintenanceJourneyExecution(refined, body.sessionId) }, 201);
+      return;
+    }
+    // ACUI-008: exactly one home event, and exactly one warranty, so the composer has a deterministic target of each supported type.
+    if (/roof event record only/i.test(body.message) || /warranty record only/i.test(body.message)) {
+      const keep = /warranty/i.test(body.message) ? 'property-warranties' : 'property-recent-events';
+      const response = correctableSummaryExecution();
+      response.blocks = response.blocks.filter((block: { id?: string }) => block.id === keep);
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
       return;
     }
     // ACUI-004: a result holding exactly one evidence-capable record (the water heater), so the composer has a deterministic target.
@@ -2338,6 +2377,12 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
   await page.route(`${apiOrigin}/api/ask/executions/execution-maintenance-complete/confirm`, async (route) => {
     assertAuthenticated(route.request());
     correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    unknownOutcomeCalls += 1;
+    // ACUI-008: the first confirm's outcome is not known (a claim was made, the write may or may not have finished); a status check settles it.
+    if (options.unknownOutcomeOnce && unknownOutcomeCalls === 1) {
+      await fulfill(route, { success: true, data: { ...maintenanceCompletionExecution('REVIEW'), status: 'RUNNING' } });
+      return;
+    }
     await fulfill(route, { success: true, data: maintenanceCompletionExecution('DONE') });
   });
   // Registered after the generic captures route above so it takes precedence for this execution only.
