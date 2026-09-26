@@ -33,6 +33,7 @@ import { IntelligenceRefreshStatus } from '@/components/intelligence/Intelligenc
 import { useCalmAnswers } from '@/features/ask/calmAnswers';
 import { followUpSuggestions } from '@/features/ask/followUps';
 import { CalmLanding } from './calm/CalmLanding';
+import { PendingTurn } from './calm/PendingTurn';
 import { FollowUpRow } from './calm/FollowUpRow';
 import { ACCESS_LOST_CODES, ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED, AskPromptAttribution, AskPromptSource, askFailureCode, askServiceIsPaused, askSuggestionKey, contextPanelStorageKey, draftStorageKey, fallbackPrompts, newId, updateAskLocation, useConciergeHome, useMediaQuery } from './workspace/support';
 import { CapabilityCategoryIcon, CapabilityExplorer, ConciergeHome } from './workspace/ConciergeHome';
@@ -124,6 +125,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const landingVisible = executions.length === 0;
   // FRD v1.111 §11.11: the calm shell (one slim header, no helper copy, state strip, docked follow-ups). Off unless chosen.
   const calm = useCalmAnswers();
+  // IW-CONV-006 (FRD v1.112): from the moment a question is sent, its turn is on screen: the question, then a status line in the answer's place.
+  const pendingMessage = calm && loading ? inFlight.current?.message ?? null : null;
+  const showLanding = landingVisible && !pendingMessage;
   // Also filter on read so conversations persisted before the backend policy
   // shipped do not keep displaying a prompt the homeowner already asked.
   const askedQuestionKeys = new Set(executions.map((execution) => askSuggestionKey(execution.question)));
@@ -339,7 +343,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               <RefreshCw className="h-4 w-4" />Try again
             </button>
           </section>
-        ) : landingVisible ? (
+        ) : showLanding ? (
           <div className={cn('mx-auto max-w-3xl', calm && 'sm:pt-[3vh]')}>
             {calm ? <h2 className="mb-5 font-display text-[24px] font-medium leading-tight tracking-[-0.01em] text-slate-950 sm:text-[30px]">How can I help with your home?</h2> : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
             {renderComposer('hero')}
@@ -399,13 +403,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                 />
               </AskActionReturnContext.Provider>;
             })}
-            {loading && <div className="flex items-center gap-3 rounded-2xl border border-teal-100 bg-white p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin text-teal-700" />Checking your home record…</div>}
+            {pendingMessage ? <PendingTurn message={pendingMessage} /> : loading && <div className="flex items-center gap-3 rounded-2xl border border-teal-100 bg-white p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin text-teal-700" />Checking your home record…</div>}
             <div ref={endRef} />
           </div>
         )}
       </main>
 
-      {executions.length > 0 && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow suggestions={followUps} disabled={loading} onPick={(question) => void ask(question)} />}{renderComposer('footer')}</footer>}
+      {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow suggestions={followUps} disabled={loading} onPick={(question) => void ask(question)} />}{renderComposer('footer')}</footer>}
         </div>
         {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
           <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />

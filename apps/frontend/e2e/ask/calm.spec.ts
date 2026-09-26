@@ -151,3 +151,46 @@ test('the previous form is unchanged with ?calm=0', async ({ page }) => {
   await expect(page.getByText('Maintenance completion details')).toBeVisible();
   await expect(page.getByText('Which task did you complete?')).toHaveCount(0);
 });
+
+// FRD §11.12 slice H (IW-CONV-006/012): the turn is on screen as soon as a question is sent.
+test('calm pending turn: the question and a status appear at once, and the answer replaces them in place', async ({ page }) => {
+  await installAskApi(page, { slowAnswerMs: 1500 });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.keyboard.press('Enter');
+  const pending = page.locator('[data-pending-turn]');
+  await expect(pending).toBeVisible();
+  await expect(pending.getByText('What maintenance tasks are due this month?')).toBeVisible();
+  await expect(pending.getByRole('status')).toHaveText('Checking your maintenance records…');
+  await expect(page.getByRole('heading', { name: 'How can I help with your home?' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
+  const before = await pending.getByText('What maintenance tasks are due this month?').boundingBox();
+  await expect(pending).toHaveCount(0, { timeout: 8000 });
+  // The question bubble only: the history rail also lists the question as the conversation's title.
+  const answered = page.locator('main .bg-slate-900', { hasText: 'What maintenance tasks are due this month?' });
+  await expect(answered).toHaveCount(1);
+  const after = await answered.boundingBox();
+  // The question does not move when the answer arrives.
+  expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThanOrEqual(2);
+});
+
+test('calm pending turn: stopping returns the question to the composer', async ({ page }) => {
+  await installAskApi(page, { slowAnswerMs: 4000 });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-pending-turn]')).toBeVisible();
+  await page.getByRole('button', { name: 'Stop' }).click();
+  await expect(page.locator('[data-pending-turn]')).toHaveCount(0);
+  await expect(page.getByPlaceholder('Ask anything about your home…')).toHaveValue('What maintenance tasks are due this month?');
+});
+
+test('with ?calm=0 there is no pending turn: the previous behavior is kept', async ({ page }) => {
+  await installAskApi(page, { slowAnswerMs: 1500 });
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=0`);
+  await page.getByPlaceholder('Ask anything about your home…').fill('What maintenance tasks are due this month?');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
+  await expect(page.locator('[data-pending-turn]')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
+});

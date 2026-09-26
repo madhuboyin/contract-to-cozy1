@@ -1649,7 +1649,7 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
@@ -1918,6 +1918,8 @@ export async function installAskApi(page: Page, options: { conflictOnce?: boolea
   await page.route(`${apiOrigin}/api/ask/executions`, async (route) => {
     assertAuthenticated(route.request());
     const body = route.request().postDataJSON() as { message: string; sessionId?: string } & Record<string, unknown>;
+    // FRD §11.12 slice H: lets a spec look at the turn while the answer is still being prepared.
+    if (options.slowAnswerMs) await new Promise((resolve) => setTimeout(resolve, options.slowAnswerMs));
     executionBodies.push(body);
     if (typeof body.sessionId === 'string') activeSessionId = body.sessionId;
     executionQuestions.push(body.message);
