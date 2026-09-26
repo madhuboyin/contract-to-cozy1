@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { installAskApi, installAskContext, propertyId } from './fixtures';
 
-// ASK_COZY_INLINE_WORKSPACE_FRD §11.11 slices B to D (FRD v1.111): the calm shell. The setting is off unless `?calm=1` is used,
-// so every other spec in this folder keeps checking the current presentation.
-test.beforeEach(async ({ context }) => installAskContext(context));
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.11 (FRD v1.111): the calm shell is the default for everyone. These specs use the default;
+// every other spec in this folder pins the setting off (see installAskContext) so it keeps checking the previous presentation.
+test.beforeEach(async ({ context }) => installAskContext(context, { calm: 'default' }));
 
 test('calm landing: one slim header, a state strip, starter chips, and no helper copy', async ({ page }) => {
   const api = await installAskApi(page);
-  await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=1`);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await expect(page.locator('[data-ask-layout="full-window"]')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Ask Cozy' })).toHaveCount(1);
   await expect(page.getByText('Answers use your selected home record')).toHaveCount(0);
@@ -31,7 +31,7 @@ test('calm landing: one slim header, a state strip, starter chips, and no helper
 
 test('calm answer: no answer frame, one overflow menu, and the composer stays plain', async ({ page }) => {
   await installAskApi(page);
-  await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=1`);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await page.getByRole('list', { name: 'Things you can ask' }).getByRole('button').first().click();
   const options = page.getByRole('button', { name: 'Response options' });
   await expect(options.first()).toBeVisible();
@@ -44,7 +44,7 @@ test('calm answer: no answer frame, one overflow menu, and the composer stays pl
 
 test('calm domain list: the list has no outer frame and the summary leads', async ({ page }) => {
   await installAskApi(page);
-  await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=1`);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await page.getByPlaceholder('Ask anything about your home…').fill('Show my claims');
   await page.keyboard.press('Enter');
   const list = page.locator('article section.overflow-hidden').first();
@@ -53,10 +53,14 @@ test('calm domain list: the list has no outer frame and the summary leads', asyn
   await expect(page.locator('[data-calm-summary]').first()).toBeVisible();
 });
 
-test('the current presentation is unchanged without the setting', async ({ page }) => {
+test('?calm=0 returns to the previous presentation and is remembered', async ({ page }) => {
   await installAskApi(page);
-  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=0`);
   await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
   await expect(page.getByText('Answers use your selected home record')).toBeVisible();
   await expect(page.locator('[data-calm-landing]')).toHaveCount(0);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await expect(page.getByRole('heading', { name: 'Popular ways to use Ask Cozy' })).toBeVisible();
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}&calm=1`);
+  await expect(page.locator('[data-calm-landing]')).toBeVisible();
 });

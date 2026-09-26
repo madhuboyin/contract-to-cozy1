@@ -1606,7 +1606,12 @@ function execution(kind: 'refrigerator' | 'refinance', captured = false) {
   };
 }
 
-export async function installAskContext(context: BrowserContext) {
+// The calm presentation is the default (FRD v1.111). Every spec that checks the previous presentation pins the setting off
+// for each page load; `calm.spec.ts` asks for the default instead.
+export async function installAskContext(context: BrowserContext, options: { calm?: 'legacy' | 'default' } = {}) {
+  if ((options.calm ?? 'legacy') === 'legacy') {
+    await context.addInitScript(() => { try { window.localStorage.setItem('ctc:ask-calm-answers', '0'); } catch { /* storage unavailable */ } });
+  }
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 

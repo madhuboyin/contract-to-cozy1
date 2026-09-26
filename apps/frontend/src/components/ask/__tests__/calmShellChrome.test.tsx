@@ -74,6 +74,7 @@ describe('ConversationHistoryNav in the calm shell', () => {
     expect(screen.getByRole('link', { name: /Back to Home/ })).toBeInTheDocument();
   });
   it('keeps the current copy when the setting is off', () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '0');
     nav();
     expect(screen.getByText('Your home assistant')).toBeInTheDocument();
     expect(screen.getByText(/navigation remains available above/)).toBeInTheDocument();

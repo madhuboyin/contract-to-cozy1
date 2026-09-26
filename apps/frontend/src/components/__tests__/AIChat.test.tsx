@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AIChat } from '@/components/AIChat';
 import { api } from '@/lib/api/client';
 
@@ -13,6 +14,8 @@ jest.mock('@/lib/api/client', () => ({
     getAskSession: jest.fn().mockResolvedValue({ success: true, data: { executions: [] } }),
     getAskPendingWork: jest.fn().mockResolvedValue({ success: true, data: { items: [] } }),
     getConciergeHome: jest.fn().mockResolvedValue({ success: false }),
+    getRecentAskSessions: jest.fn().mockResolvedValue({ success: true, data: { sessions: [], nextCursor: null } }),
+    getPropertyIntelligenceRefreshDetails: jest.fn().mockResolvedValue({ state: 'CURRENT', capabilities: [] }),
   },
 }));
 
@@ -30,7 +33,7 @@ describe('Ask Cozy global workspace continuity', () => {
   });
 
   it('opens with a suggested question and exposes full-workspace expansion', async () => {
-    render(<AIChat />);
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AIChat /></QueryClientProvider>);
 
     act(() => {
       window.dispatchEvent(new CustomEvent('cozy-chat-open', {
@@ -48,7 +51,7 @@ describe('Ask Cozy global workspace continuity', () => {
   });
 
   it('preserves an unfinished draft when the panel closes and reopens', async () => {
-    render(<AIChat />);
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AIChat /></QueryClientProvider>);
     fireEvent.click(screen.getByRole('button', { name: 'Open Ask Cozy' }));
     const composer = await screen.findByPlaceholderText('Ask anything about your home…');
     fireEvent.change(composer, { target: { value: 'Show overdue roof work' } });

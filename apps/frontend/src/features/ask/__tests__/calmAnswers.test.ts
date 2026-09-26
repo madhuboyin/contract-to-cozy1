@@ -1,4 +1,5 @@
-import { CALM_ANSWERS_STORAGE_KEY, calmHeadline, isCalmAdopter, resolveCalmPreference } from '../calmAnswers';
+import { renderHook } from '@testing-library/react';
+import { CALM_ANSWERS_STORAGE_KEY, calmHeadline, isCalmAdopter, resolveCalmPreference, useCalmAnswers } from '../calmAnswers';
 import type { AskExecutionResponse } from '../types';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.11 (IW-CALM-001/012, FRD v1.111).
@@ -47,5 +48,25 @@ describe('calmHeadline', () => {
     expect(calmHeadline(execution([summary({ headline: ' 8 tasks are overdue. ', supportLine: '8 completed tasks are hidden.' })]))).toEqual({ headline: '8 tasks are overdue.', supportLine: '8 completed tasks are hidden.' });
     expect(calmHeadline(execution([summary()]))).toEqual({ headline: '9 maintenance records match this request', supportLine: null });
     expect(calmHeadline(execution([]))).toBeNull();
+  });
+});
+
+describe('useCalmAnswers default', () => {
+  const original = process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS;
+  afterEach(() => { if (original === undefined) delete process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS; else process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS = original; window.localStorage.clear(); });
+
+  it('is on for everyone unless the release kill switch is set', () => {
+    delete process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS;
+    expect(renderHook(() => useCalmAnswers()).result.current).toBe(true);
+    process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS = 'true';
+    expect(renderHook(() => useCalmAnswers()).result.current).toBe(true);
+    process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS = 'false';
+    expect(renderHook(() => useCalmAnswers()).result.current).toBe(false);
+  });
+
+  it('respects a homeowner who chose the previous presentation, even with the default on', () => {
+    delete process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS;
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '0');
+    expect(renderHook(() => useCalmAnswers()).result.current).toBe(false);
   });
 });

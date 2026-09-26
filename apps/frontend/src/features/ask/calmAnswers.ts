@@ -3,14 +3,16 @@ import type { AskExecutionResponse } from './types';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.11 (IW-CALM-001..012, FRD v1.111): calm conversational answers. Slice A adopts the
 // Maintenance answer only; a result of any other domain keeps its current rendering (IW-CALM-012: no half-converted domain).
+// Default (September 25, 2026): calm is ON for everyone. `?calm=0` returns to the previous presentation and is remembered on that
+// browser; `NEXT_PUBLIC_ASK_CALM_ANSWERS=false` at build time is the release kill switch.
 
 export const CALM_ANSWERS_STORAGE_KEY = 'ctc:ask-calm-answers';
 
 type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 /**
- * The homeowner's setting, so the calm and the current presentation can be compared on the live app. `?calm=1` or
- * `?calm=0` in the address sets and remembers it; otherwise the remembered value applies; otherwise the build default.
+ * The homeowner's setting. `?calm=1` or `?calm=0` in the address sets and remembers it; otherwise the remembered value
+ * applies; otherwise the build default (on).
  */
 export function resolveCalmPreference(search: string, storage: PreferenceStorage | null, buildDefault: boolean): boolean {
   const requested = new URLSearchParams(search).get('calm');
@@ -28,7 +30,7 @@ export function resolveCalmPreference(search: string, storage: PreferenceStorage
 
 /** Reads the setting after mount so the server and first client render agree. */
 export function useCalmAnswers(): boolean {
-  const buildDefault = process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS === 'true';
+  const buildDefault = process.env.NEXT_PUBLIC_ASK_CALM_ANSWERS !== 'false';
   const [calm, setCalm] = useState(buildDefault);
   useEffect(() => {
     let storage: Storage | null = null;
