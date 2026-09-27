@@ -193,11 +193,16 @@ test('Property Summary declares bounded Document identities for inline detail an
   assert.ok(start > 0 && end > start, 'property-documents producer not found');
   const producer = orchestrator.slice(start, end);
   assert.match(producer, /documents\.items\.slice\(0, 50\)/);
-  assert.match(producer, /id: document\.id[\s\S]*entityType: 'DOCUMENT'[\s\S]*href: null/);
-  assert.match(producer, /id: 'open-documents'[\s\S]*label: 'Open Documents'[\s\S]*style: 'SECONDARY'/);
+  // Each row routes to its own inline detail by source: a Home Record through the record route, a transitional legacy document through the
+  // document route (and only the legacy row carries a link to the older vault).
+  assert.match(producer, /id: document\.id[\s\S]*entityType: document\.source === 'HOME_RECORD' \? 'PROPERTY_RECORD' : 'DOCUMENT'[\s\S]*href: document\.transitional \? legacyDocumentsHref : null/);
+  assert.match(producer, /id: 'open-documents'[\s\S]*label: 'Open Home Records'[\s\S]*style: 'SECONDARY'/);
 
   const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
   assert.match(overview, /linkedCount: linkedDocuments,[\s\S]*items: documentRows/);
+  // The overview reads the canonical inventory with the caller's role; it never queries the legacy table itself.
+  assert.match(overview, /listPropertyDocuments\(\{ propertyId, role: access\.role, includeLegacy: true, includeInventoryLinkedLegacy: true \}\)/);
+  assert.doesNotMatch(overview, /prisma\.document\.findMany/);
 });
 
 test('Property Summary declares bounded InventoryItem identities for inline detail and a separate inventory choice', () => {

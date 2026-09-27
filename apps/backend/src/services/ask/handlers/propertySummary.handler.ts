@@ -259,21 +259,27 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       });
     }
     if (documents) {
-      const documentsHref = `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`;
+      // Home Records is the canonical page for documents; a transitional legacy row (still in the older Documents vault) links to that vault.
+      const documentsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
+      const legacyDocumentsHref = `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`;
       blocks.push({
         type: 'GROUPED_LIST', filters: [], id: 'property-documents', title: 'Documents',
         description: documents.totalCount > 50
-          ? 'Showing the 50 most recent canonical document records. Open Documents for the full collection.'
-          : 'Select a document to inspect its current canonical details without leaving Ask Cozy.',
+          ? 'Showing the 50 most recent document records. Open Home Records for the full collection.'
+          : 'Select a document to inspect its current details without leaving Ask Cozy.',
         sections: [{
           id: 'documents', title: 'Recorded documents', count: documents.totalCount,
           items: documents.items.slice(0, 50).map((document) => ({
-            id: document.id, title: document.name, description: null, entityType: 'DOCUMENT', href: null,
-            status: document.verificationStatus,
-            meta: [readablePropertyValue(document.type), `Uploaded ${humanDate(document.createdAt) ?? 'date unavailable'}`],
+            // entityType routes the row to its own inline detail: a Home Record through the record route, a transitional legacy document
+            // through the legacy document route. Each row carries only its own store's status.
+            id: document.id, title: document.title, description: null,
+            entityType: document.source === 'HOME_RECORD' ? 'PROPERTY_RECORD' : 'DOCUMENT',
+            href: document.transitional ? legacyDocumentsHref : null,
+            status: document.verification ?? (document.needsReview ? 'NEEDS_REVIEW' : document.expiry === 'EXPIRED' ? 'EXPIRED' : null),
+            meta: [document.kindLabel, `Added ${humanDate(document.addedAt) ?? 'date unavailable'}`, ...(document.transitional ? ['older vault'] : [])],
           })),
         }],
-        actions: [{ id: 'open-documents', label: 'Open Documents', href: documentsHref, style: 'SECONDARY' }],
+        actions: [{ id: 'open-documents', label: 'Open Home Records', href: documentsHref, style: 'SECONDARY' }],
       });
     }
   }
@@ -326,7 +332,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
 
   const freshness = [
     { label: 'Core property record', source: 'Property', observedAt: property.updatedAt.toISOString() },
-    ...(documents?.latest ? [{ label: 'Latest document', source: `Documents · ${documents.latest.name}`, observedAt: documents.latest.createdAt.toISOString() }] : []),
+    ...(documents?.latest ? [{ label: 'Latest document', source: `Documents · ${documents.latest.title}`, observedAt: documents.latest.addedAt.toISOString() }] : []),
     ...(overview.tools.statusBoard.status === 'AVAILABLE' && overview.tools.statusBoard.data.updatedAt
       ? [{ label: 'Systems and inventory', source: 'Home Inventory', observedAt: overview.tools.statusBoard.data.updatedAt.toISOString() }]
       : []),

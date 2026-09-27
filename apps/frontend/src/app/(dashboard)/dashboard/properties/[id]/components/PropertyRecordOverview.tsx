@@ -1116,7 +1116,7 @@ export default function PropertyRecordOverview({
               ) : latestDocument ? (
                 <div className="flex gap-3 rounded-xl bg-slate-50 p-3">
                   <FileText className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" aria-hidden="true" />
-                  <div className="min-w-0"><p className="mb-0 truncate text-sm font-medium text-slate-900">{latestDocument.name}</p><p className="mt-0.5 mb-0 text-xs text-slate-500">Latest document · {formatDate(latestDocument.createdAt)}</p></div>
+                  <div className="min-w-0"><p className="mb-0 truncate text-sm font-medium text-slate-900">{latestDocument.title}</p><p className="mt-0.5 mb-0 text-xs text-slate-500">Latest document · {formatDate(latestDocument.addedAt)}</p></div>
                 </div>
               ) : (
                 <p className="mb-0 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">Confirmed milestones and evidence-backed updates will appear here.</p>

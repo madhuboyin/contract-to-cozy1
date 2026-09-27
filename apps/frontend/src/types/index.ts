@@ -2111,6 +2111,25 @@ export type PropertyRecordLoadState<T> =
   | { status: 'AVAILABLE'; data: T }
   | { status: 'UNAVAILABLE'; data: null };
 
+// One document in the canonical inventory (Home Records authoritative; a legacy row is `transitional`).
+export interface PropertyRecordDocument {
+  id: string;
+  source: 'HOME_RECORD' | 'LEGACY_DOCUMENT';
+  transitional: boolean;
+  title: string;
+  kind: string;
+  kindLabel: string;
+  description: string | null;
+  addedAt: string;
+  updatedAt: string;
+  verification: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED' | null;
+  needsReview: boolean | null;
+  expiry: 'CURRENT' | 'EXPIRING_SOON' | 'EXPIRED' | null;
+  lifecycle: 'ACTIVE' | 'ARCHIVED' | null;
+  sensitivity: string | null;
+  visibility: string | null;
+}
+
 export interface PropertyRecordOverviewDTO {
   contractVersion: 'property-record-overview-v1';
   registryVersion: string;
@@ -2129,20 +2148,17 @@ export interface PropertyRecordOverviewDTO {
     }>;
     documents: PropertyRecordLoadState<{
       totalCount: number;
+      // Each count states a fact a row's OWN store records: `verifiedCount` is the legacy verification status; `needsReviewCount` adds
+      // Home Records with extracted details awaiting review. Every Home Record belongs to the property, so it counts as linked.
       verifiedCount: number;
       needsReviewCount: number;
       linkedCount: number;
-      items: Array<{
-        id: string;
-        name: string;
-        type: string;
-        verificationStatus: string;
-        propertyId: string | null;
-        inventoryItemId: string | null;
-        createdAt: string;
-      }>;
+      homeRecordCount: number;
+      /** Documents still in the older Documents vault (transitional). */
+      legacyCount: number;
+      items: PropertyRecordDocument[];
       byType: Array<{ type: string; count: number }>;
-      latest: { id: string; name: string; type: string; verificationStatus: string; createdAt: string } | null;
+      latest: PropertyRecordDocument | null;
     }>;
     household: PropertyRecordLoadState<{
       totalCount: number; roles: Array<{ role: string; count: number }>;

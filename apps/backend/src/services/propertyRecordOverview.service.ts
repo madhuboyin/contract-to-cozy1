@@ -7,6 +7,7 @@ import { resolvePropertyAccess, type PropertyAccess } from './propertyAccess.ser
 import { getToolDiscoveryAvailability } from './toolDiscoveryAvailability.service';
 import type { SkillConsumer } from './skills/skill.contract';
 import { invokeReadSkillOperationForConsumer } from './skills/skillConsumerRuntime';
+import { listPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 
 export const PROPERTY_RECORD_CONTEXT_SCOPES: PropertyContextScope[] = [
   'CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY',
@@ -60,14 +61,9 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
         documents: { where: { deletedAt: null }, select: { id: true } },
       },
     })),
-    settled(prisma.document.findMany({
-      where: {
-        deletedAt: null,
-        OR: [{ propertyId }, { inventoryItem: { propertyId } }],
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, type: true, verificationStatus: true, propertyId: true, inventoryItemId: true, createdAt: true },
-    })),
+    // The canonical document inventory: Home Records authoritative (with the caller's role, so record-level visibility applies), plus the
+    // transitional legacy vault, including documents attached to an inventory item, until those areas move to Home Records.
+    settled(listPropertyDocuments({ propertyId, role: access.role, includeLegacy: true, includeInventoryLinkedLegacy: true })),
     settled(prisma.householdMember.findMany({
       where: { propertyId },
       orderBy: [{ isPrimaryOwner: 'desc' }, { joinedAt: 'asc' }],
@@ -124,15 +120,18 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
 
   const roomRows = rooms.data ?? [];
   const itemRows = inventory.data ?? [];
-  const documentRows = documents.data ?? [];
+  const documentRows = documents.data?.items ?? [];
   const householdRows = household.data ?? [];
   const warrantyRows = warranties.data ?? [];
   const majorSystems = itemRows.filter((item) => MAJOR_SYSTEM_CATEGORIES.has(item.category));
   const inventoryUpdatedAt = itemRows
     .map((item) => item.updatedAt)
     .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
-  const verifiedDocuments = documentRows.filter((document) => document.verificationStatus === 'VERIFIED').length;
-  const linkedDocuments = documentRows.filter((document) => Boolean(document.propertyId || document.inventoryItemId)).length;
+  // Each count states a fact the row's OWN store records; no mapping between the two vocabularies is invented. `verified` is the legacy
+  // verification status; a Home Record has needs-review instead. Every Home Record belongs to the property, so it counts as linked.
+  const verifiedDocuments = documentRows.filter((document) => document.verification === 'VERIFIED').length;
+  const needsReviewDocuments = documentRows.filter((document) => document.needsReview === true || (document.verification !== null && document.verification !== 'VERIFIED')).length;
+  const linkedDocuments = documentRows.length;
   const latestDocument = documentRows[0] ?? null;
   const knownFactCount = context.data
     ? Object.values(context.data.facts).filter((fact) => fact.state === 'KNOWN').length
@@ -161,7 +160,7 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
   }));
 
   const newestSourceAt = [
-    latestDocument?.createdAt,
+    latestDocument?.addedAt,
     ...itemRows.map((item) => item.updatedAt),
     ...roomRows.map((room) => room.updatedAt),
   ].filter((value): value is Date => Boolean(value)).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
@@ -189,11 +188,13 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
       documents: documents.status === 'AVAILABLE' ? available({
         totalCount: documentRows.length,
         verifiedCount: verifiedDocuments,
-        needsReviewCount: documentRows.length - verifiedDocuments,
+        needsReviewCount: needsReviewDocuments,
         linkedCount: linkedDocuments,
+        homeRecordCount: documents.data?.totals.homeRecords ?? 0,
+        legacyCount: documents.data?.totals.legacy ?? 0,
         items: documentRows,
         byType: Object.entries(documentRows.reduce<Record<string, number>>((acc, document) => {
-          acc[document.type] = (acc[document.type] ?? 0) + 1;
+          acc[document.kind] = (acc[document.kind] ?? 0) + 1;
           return acc;
         }, {})).map(([type, count]) => ({ type, count })),
         latest: latestDocument,
