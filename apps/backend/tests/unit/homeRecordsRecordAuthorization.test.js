@@ -137,3 +137,33 @@ test('every mutating and extraction route hands the caller\'s household role to 
   assert.equal(calls.length, 16, 'every guarded entry point is called by a route');
   for (const [, , method, args] of calls) assert.match(args, /req\.householdRole!/, `${method} must receive req.householdRole`);
 });
+
+// RECIPIENT_SELECTED has no recipient model behind it (no identity, grant, acceptance, expiry, access log or revocation) and reads treat it as
+// owner-only, so creating a record with it would lock the uploader out while no recipient could ever see it. It is refused server-side.
+test('creating a record with RECIPIENT_SELECTED is refused before anything is read, stored or written', async () => {
+  const { SELECTABLE_RECORD_VISIBILITIES, assertVisibilitySelectable } = require('../../src/services/homeRecordsAccess.ts');
+  assert.deepEqual([...SELECTABLE_RECORD_VISIBILITIES], ['HOUSEHOLD', 'OWNER_ONLY']);
+  assert.doesNotThrow(() => assertVisibilitySelectable('HOUSEHOLD'));
+  assert.doesNotThrow(() => assertVisibilitySelectable('OWNER_ONLY'));
+  assert.throws(() => assertVisibilitySelectable('RECIPIENT_SELECTED'), (error) => error?.statusCode === 422 && error?.code === 'PROPERTY_RECORD_VISIBILITY_UNSUPPORTED');
+  const input = { propertyId: 'p1', userId: 'u1', role: 'OWNER', file, title: 'Shared with lawyer', recordType: 'OTHER', sensitivity: 'STANDARD', visibility: 'RECIPIENT_SELECTED' };
+  await assert.rejects(() => service.create(input), (error) => error?.code === 'PROPERTY_RECORD_VISIBILITY_UNSUPPORTED');
+  assert.deepEqual(writes, []);
+});
+
+test('a batch upload reports RECIPIENT_SELECTED per file and creates nothing', async () => {
+  const result = await service.createBatch({ propertyId: 'p1', userId: 'u1', role: 'OWNER', files: [file, { ...file, originalname: 'b.pdf' }], title: 'Batch', recordType: 'OTHER', sensitivity: 'STANDARD', visibility: 'RECIPIENT_SELECTED' });
+  assert.equal(result.created.length, 0);
+  assert.deepEqual(result.failed.map((entry) => entry.code), ['PROPERTY_RECORD_VISIBILITY_UNSUPPORTED', 'PROPERTY_RECORD_VISIBILITY_UNSUPPORTED']);
+});
+
+test('the create routes only accept the selectable visibilities', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../../src/routes/homeRecords.routes.ts'), 'utf8');
+  assert.match(source, /const visibilitySchema = z\.enum\(SELECTABLE_RECORD_VISIBILITIES\);/);
+  assert.doesNotMatch(source, /z\.enum\(\[[^\]]*RECIPIENT_SELECTED/);
+  const { z } = require('zod');
+  const { SELECTABLE_RECORD_VISIBILITIES } = require('../../src/services/homeRecordsAccess.ts');
+  const schema = z.enum(SELECTABLE_RECORD_VISIBILITIES);
+  assert.equal(schema.safeParse('RECIPIENT_SELECTED').success, false);
+  assert.equal(schema.safeParse('OWNER_ONLY').success, true);
+});

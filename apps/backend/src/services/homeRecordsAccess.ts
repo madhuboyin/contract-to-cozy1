@@ -21,3 +21,20 @@ export async function assertRecordVisible(propertyId: string, recordId: string, 
   });
   if (!record) throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
 }
+
+/**
+ * The visibilities a record can be created with. RECIPIENT_SELECTED is in the schema enum but has no recipient model behind it (no recipient
+ * identity, grant, acceptance, expiry, access log or revocation), so the read rule treats it as owner-only: offering it would let a contributor
+ * lock themselves out of their own upload while no intended recipient could ever see it. It is refused until that foundation exists.
+ */
+export const SELECTABLE_RECORD_VISIBILITIES = ['HOUSEHOLD', 'OWNER_ONLY'] as const;
+
+export function assertVisibilitySelectable(visibility: string): void {
+  if (!(SELECTABLE_RECORD_VISIBILITIES as readonly string[]).includes(visibility)) {
+    throw new APIError(
+      'Recipient-selected visibility is not available yet. Choose Household or Owner only.',
+      422,
+      'PROPERTY_RECORD_VISIBILITY_UNSUPPORTED',
+    );
+  }
+}

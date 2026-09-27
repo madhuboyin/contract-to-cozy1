@@ -3,6 +3,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
+import { SELECTABLE_RECORD_VISIBILITIES } from '../services/homeRecordsAccess';
 import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateDocumentUpload, validateDocumentArrayUpload } from '../utils/documentValidator.util';
 import type { CustomRequest } from '../types';
@@ -36,7 +37,8 @@ const recordTypeSchema = z.enum([
 const sensitivitySchema = z.enum([
   'STANDARD', 'PERSONAL', 'FINANCIAL', 'INSURANCE', 'CLAIM', 'SECURITY', 'LEGAL',
 ]);
-const visibilitySchema = z.enum(['HOUSEHOLD', 'OWNER_ONLY', 'RECIPIENT_SELECTED']);
+// RECIPIENT_SELECTED is refused until a recipient model exists (see homeRecordsAccess.SELECTABLE_RECORD_VISIBILITIES).
+const visibilitySchema = z.enum(SELECTABLE_RECORD_VISIBILITIES);
 const linkEntityTypeSchema = z.enum([
   'HOME_EVENT', 'INVENTORY_ITEM', 'MATERIAL_SPEC', 'PROJECT', 'WARRANTY',
   'INSURANCE_POLICY', 'CLAIM', 'PERMIT', 'PROPERTY_BRIEF', 'EXPENSE', 'OTHER',

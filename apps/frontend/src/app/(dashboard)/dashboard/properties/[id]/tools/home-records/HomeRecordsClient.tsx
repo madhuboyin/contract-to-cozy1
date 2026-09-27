@@ -101,6 +101,8 @@ import type {
   PropertyRecordSummary,
   PropertyRecordType,
   PropertyRecordVisibility,
+  SELECTABLE_RECORD_VISIBILITIES,
+  SelectableRecordVisibility,
 } from './types';
 
 // ─── Display config ─────────────────────────────────────────────────────────
@@ -138,7 +140,8 @@ const SENSITIVITY_LABELS: Record<PropertyRecordSensitivity, string> = {
 const VISIBILITY_LABELS: Record<PropertyRecordVisibility, string> = {
   HOUSEHOLD: 'Household',
   OWNER_ONLY: 'Owner only',
-  RECIPIENT_SELECTED: 'Recipient-selected',
+  // Shown only on an existing record; it cannot be chosen for a new one, and until recipient sharing exists it is visible to owners only.
+  RECIPIENT_SELECTED: 'Recipient-selected (owners only for now)',
 };
 
 const LINK_ENTITY_LABELS: Record<PropertyRecordLinkEntityType, string> = {
@@ -268,7 +271,7 @@ function UploadDialog({
     description?: string;
     recordType: PropertyRecordType;
     sensitivity: PropertyRecordSensitivity;
-    visibility: PropertyRecordVisibility;
+    visibility: SelectableRecordVisibility;
     effectiveTo?: string;
   }) => void;
   isSubmitting: boolean;
@@ -278,7 +281,7 @@ function UploadDialog({
   const [description, setDescription] = React.useState('');
   const [recordType, setRecordType] = React.useState<PropertyRecordType>('OTHER');
   const [sensitivity, setSensitivity] = React.useState<PropertyRecordSensitivity>('STANDARD');
-  const [visibility, setVisibility] = React.useState<PropertyRecordVisibility>('HOUSEHOLD');
+  const [visibility, setVisibility] = React.useState<SelectableRecordVisibility>('HOUSEHOLD');
   const [expiresOn, setExpiresOn] = React.useState('');
   const [fileError, setFileError] = React.useState<string | null>(null);
 
@@ -366,11 +369,11 @@ function UploadDialog({
             </div>
             <div>
               <Label>Visibility</Label>
-              <Select value={visibility} onValueChange={(v) => setVisibility(v as PropertyRecordVisibility)}>
+              <Select value={visibility} onValueChange={(v) => setVisibility(v as SelectableRecordVisibility)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.entries(VISIBILITY_LABELS) as [PropertyRecordVisibility, string][]).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  {SELECTABLE_RECORD_VISIBILITIES.map((value) => (
+                    <SelectItem key={value} value={value}>{VISIBILITY_LABELS[value]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -431,7 +434,7 @@ function BatchScanDialog({
   const [title, setTitle] = React.useState('');
   const [recordType, setRecordType] = React.useState<PropertyRecordType>('OTHER');
   const [sensitivity, setSensitivity] = React.useState<PropertyRecordSensitivity>('STANDARD');
-  const [visibility, setVisibility] = React.useState<PropertyRecordVisibility>('HOUSEHOLD');
+  const [visibility, setVisibility] = React.useState<SelectableRecordVisibility>('HOUSEHOLD');
   const [fileError, setFileError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -546,11 +549,11 @@ function BatchScanDialog({
             </div>
             <div>
               <Label>Visibility</Label>
-              <Select value={visibility} onValueChange={(v) => setVisibility(v as PropertyRecordVisibility)}>
+              <Select value={visibility} onValueChange={(v) => setVisibility(v as SelectableRecordVisibility)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.entries(VISIBILITY_LABELS) as [PropertyRecordVisibility, string][]).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  {SELECTABLE_RECORD_VISIBILITIES.map((value) => (
+                    <SelectItem key={value} value={value}>{VISIBILITY_LABELS[value]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

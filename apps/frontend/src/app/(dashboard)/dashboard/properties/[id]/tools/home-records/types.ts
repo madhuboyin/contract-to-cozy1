@@ -28,6 +28,11 @@ export type PropertyRecordSensitivity =
 
 export type PropertyRecordVisibility = 'HOUSEHOLD' | 'OWNER_ONLY' | 'RECIPIENT_SELECTED';
 
+// What a record can be created with. RECIPIENT_SELECTED can still appear on an existing record (and reads as owner-only), but there is no
+// recipient model behind it (no recipient, grant, acceptance, expiry or revocation), so it is neither offered nor accepted for a new one.
+export const SELECTABLE_RECORD_VISIBILITIES = ['HOUSEHOLD', 'OWNER_ONLY'] as const;
+export type SelectableRecordVisibility = (typeof SELECTABLE_RECORD_VISIBILITIES)[number];
+
 export type PropertyRecordLifecycleStatus = 'ACTIVE' | 'ARCHIVED' | 'TRASHED';
 
 // null: no effectiveTo set (most records — a paint color, a manual — have no
@@ -175,7 +180,7 @@ export interface CreateRecordInput {
   description?: string;
   recordType: PropertyRecordType;
   sensitivity: PropertyRecordSensitivity;
-  visibility: PropertyRecordVisibility;
+  visibility: SelectableRecordVisibility;
   effectiveTo?: string;
 }
 
@@ -193,7 +198,7 @@ export interface CreateBatchInput {
   title: string;
   recordType: PropertyRecordType;
   sensitivity: PropertyRecordSensitivity;
-  visibility: PropertyRecordVisibility;
+  visibility: SelectableRecordVisibility;
 }
 
 export interface CreateBatchResult {

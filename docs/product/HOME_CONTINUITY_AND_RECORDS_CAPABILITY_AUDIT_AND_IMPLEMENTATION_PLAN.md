@@ -1942,3 +1942,13 @@ Timeline, action list, access system, or source of truth.
 
 **Tests.** `homeRecordsRecordAuthorization.test.js` runs against a fake database that honors `where` (so an owner-only record is really invisible) and covers each entry point, the leaks, the owner and household-record paths, and a source assertion that every route passes `req.householdRole`. It fails with any of the checks removed. Existing foundation and extraction tests now pass an explicit role. 221 Home Records tests pass.
 
+### 16.2 RECIPIENT_SELECTED is refused until a recipient model exists (September 26, 2026)
+
+**Finding (P1).** The record form offered "Recipient-selected", the create routes accepted it, and `PropertyRecordVisibility` has the value, but nothing sits behind it: no recipient identity, grant, acceptance, expiry, access log or revocation (§11 requires all of them). Reads treat every non-`HOUSEHOLD` record as owner-only, so a contributor who chose it lost access to their own upload immediately, and no intended recipient could ever receive it.
+
+**Fix.** The selectable visibilities are `HOUSEHOLD` and `OWNER_ONLY` (`SELECTABLE_RECORD_VISIBILITIES`, one constant on each side). The create and batch-create routes validate against it, and `create()` refuses `RECIPIENT_SELECTED` itself with 422 `PROPERTY_RECORD_VISIBILITY_UNSUPPORTED` before reading or storing anything, so a caller that skips the route schema is refused too. Both upload forms no longer list the option. An existing `RECIPIENT_SELECTED` record still displays, labelled "Recipient-selected (owners only for now)", and behaves as owner-only exactly as before. The enum value stays in the schema for the future recipient model; no schema change and no migration were made.
+
+**Open, needs your call.** Any record already saved as `RECIPIENT_SELECTED` remains owner-only, and if a contributor uploaded it they still cannot see it. Owners can. There is no endpoint to change a record's visibility, so correcting those rows is a manual data decision (count them first: `SELECT count(*) FROM "PropertyRecord" WHERE visibility = 'RECIPIENT_SELECTED'`); nothing was run.
+
+**Tests.** `homeRecordsRecordAuthorization.test.js` (service guard, batch reporting, route schema) and `homeRecordsVisibilityOptions.test.ts` (both selects built from the selectable list).
+

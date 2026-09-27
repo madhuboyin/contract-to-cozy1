@@ -13,7 +13,7 @@ import { APIError } from '../middleware/error.middleware';
 import { uploadPropertyRecordVersionBuffer } from './storage/reportStorage';
 import { presignGetObject } from './storage/presign';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
-import { visibleRecordWhere } from './homeRecordsAccess';
+import { assertVisibilitySelectable, visibleRecordWhere } from './homeRecordsAccess';
 
 const TRASH_RECOVERY_DAYS = 30;
 
@@ -443,6 +443,7 @@ export class HomeRecordsService {
   }
 
   async create(input: CreateRecordInput) {
+    assertVisibilitySelectable(input.visibility);
     const checksum = sha256(input.file.buffer);
     const duplicate = await prisma.propertyRecordVersion.findFirst({
       // Duplicate content is judged among the records this role can see: the conflict body carries a record id, which must never be one the caller cannot read.
