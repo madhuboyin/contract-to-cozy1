@@ -8,6 +8,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
+import { listPropertyDocuments, type PropertyDocument } from '../../propertyDocuments/propertyDocumentInventory.service';
 
 type DocumentPromotionCandidate = { id: string; kind: 'MATERIAL_EXTRACTION_REVIEW' | 'INSPECTION_REPORT' | 'INSURANCE_POLICY_FACT'; title: string; description: string; updatedAt: Date; parentId: string; candidateFields?: Record<string, unknown> };
 
@@ -46,36 +47,36 @@ async function documentPromotionConfirmResult(propertyId: string, message: strin
   return { status: 'NEEDS_CONFIRMATION', reasonCode: 'DOCUMENT_PROMOTION_CONFIRMATION_REQUIRED', contextVersion, parameters: { documentPromotionKind: selected.kind, documentPromotionId: selected.id, documentPromotionParentId: selected.parentId, documentPromotionDecision: decision, documentPromotionCandidateFields: selected.candidateFields ?? null, documentPromotionContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'document-promotion-confirm-review', title: `Review document ${decision.toLowerCase()}`, body: decision === 'CONFIRM' ? 'Confirming writes the reviewed candidate through its canonical domain adapter and records the promotion outcome.' : 'Rejecting preserves the source evidence but prevents these candidate values from becoming canonical facts.', tone: 'CAUTION', actions: [{ id: 'open-documents', label: 'Review source', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `document-promotion-${selected.id}-1`, version: 1, title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} ${selected.title}?`, description: selected.description, fields: [{ label: 'Candidate', value: selected.title }, { label: 'Decision', value: decision.toLowerCase() }], editableFields: [], confirmLabel: decision === 'CONFIRM' ? 'Confirm and promote' : 'Reject candidate', consentText: 'I reviewed this exact document-derived candidate and authorize the selected decision.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
 }
 
-// Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31 "documents"
-// candidate). Reads the Document vault itself (prisma.document, grouped
-// by type and verification status) -- distinct from
-// documentPromotionReviewResult/documentPromotionConfirmResult above,
-// which only ever read pendingDocumentPromotionCandidates (a queue of
-// pending extraction candidates), never prisma.document directly
-// (confirmed by reading both handlers before writing this one).
-const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  INSPECTION_REPORT: 'Inspection reports', ESTIMATE: 'Estimates', INVOICE: 'Invoices', CONTRACT: 'Contracts',
-  PERMIT: 'Permits', PHOTO: 'Photos', VIDEO: 'Videos', INSURANCE_CERTIFICATE: 'Insurance certificates',
-  LICENSE: 'Licenses', HOME_REPORT_PDF: 'Home report PDFs', OTHER: 'Other',
-};
-
+// Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31 "documents" candidate). The document lookup reads the canonical property
+// document inventory (Home Records authoritative, the legacy Document vault projected as transitional; see
+// propertyDocuments/propertyDocumentInventory.service.ts) -- distinct from documentPromotionReviewResult/documentPromotionConfirmResult above,
+// which only ever read pendingDocumentPromotionCandidates (a queue of pending extraction candidates).
 const documentCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
 /**
- * Documents D-1 (FRD v1.135): the calm answer for the document lookup, as one counted sentence, one supporting line and answer chips, from the
- * recorded counts only (no model, no document contents). "Not yet verified" is the recorded UNVERIFIED and PENDING statuses; nothing here says
- * what a document means, whether it is complete or whether it is accepted by anyone outside the record.
+ * Documents D-1 (FRD v1.135), extended for the canonical inventory (FRD v1.136): the calm answer for the document lookup, as one counted
+ * sentence, one supporting line and answer chips, from the recorded rows only (no model, no document contents). Each chip states a fact the
+ * row's OWN store records: a Home Record can need review or be expiring; a transitional legacy document has a recorded verification status.
+ * Nothing here says what a document means, whether it is complete, or whether anyone outside the record accepts it.
  */
 export function documentsCalmCopy(input: {
-  total: number; unverified: number; verified: number; rejected: number; newest: { name: string; addedOn: string | null } | null; truncatedTypes: number;
+  total: number; needsReview?: number; expired?: number; expiringSoon?: number; unverified?: number; verified?: number; rejected?: number;
+  legacy?: number; newest: { name: string; addedOn: string | null } | null; truncatedKinds: number;
 }): { headline: string; supportLine?: string; chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> } {
-  const { total, unverified, verified, rejected, newest, truncatedTypes } = input;
+  const { total, newest, truncatedKinds } = input;
+  const needsReview = input.needsReview ?? 0; const expired = input.expired ?? 0; const expiringSoon = input.expiringSoon ?? 0;
+  const unverified = input.unverified ?? 0; const verified = input.verified ?? 0; const rejected = input.rejected ?? 0; const legacy = input.legacy ?? 0;
   const headline = total === 0 ? 'No documents on file.' : `${documentCount(total, 'document', 'documents')} on file.`;
   const notes = [
     newest ? `Most recent: ${newest.name}${newest.addedOn ? `, added ${newest.addedOn}` : ''}.` : null,
-    truncatedTypes > 0 ? 'Showing the most recent of each type; open Documents for the full record.' : null,
+    // Transitional: these live in the older Documents vault until their area moves to Home Records.
+    legacy > 0 ? `${legacy} ${legacy === 1 ? 'is' : 'are'} still in the older Documents vault.` : null,
+    truncatedKinds > 0 ? 'Showing the most recent of each type; open Home Records for the full record.' : null,
   ].filter((note): note is string => Boolean(note));
   const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
+    ...(needsReview > 0 ? [{ label: `${needsReview} need review`, tone: 'CAUTION' as const }] : []),
+    ...(expired > 0 ? [{ label: `${expired} expired`, tone: 'CAUTION' as const }] : []),
+    ...(expiringSoon > 0 ? [{ label: `${expiringSoon} expiring soon`, tone: 'CAUTION' as const }] : []),
     ...(unverified > 0 ? [{ label: `${unverified} not yet verified`, tone: 'CAUTION' as const }] : []),
     ...(rejected > 0 ? [{ label: `${rejected} rejected`, tone: 'CAUTION' as const }] : []),
     ...(verified > 0 ? [{ label: `${verified} verified`, tone: 'DEFAULT' as const }] : []),
@@ -85,87 +86,95 @@ export function documentsCalmCopy(input: {
 
 const DOCUMENT_LOOKUP_BOUNDARY: AskPresentationBlock = {
   type: 'BOUNDARY', id: 'document-lookup-boundary', title: 'Recorded information only',
-  body: 'This shows what is recorded about each document in your Home Record: its type, when it was added and its verification status. Ask has not read or interpreted the documents themselves.',
+  body: 'This shows what is recorded about each document in your Home Record: its type, when it was added and its review or verification status. Ask has not read or interpreted the documents themselves.',
   severity: 'INFO', suggestions: [],
 };
 
+// Kinds are shown in one vocabulary whichever store holds the document; a legacy row keeps its own facts and is marked as transitional.
 async function documentLookupResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  await ensurePropertyAccess(userId, propertyId);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
-  const documents = await prisma.document.findMany({
-    where: { propertyId, deletedAt: null },
-    orderBy: { createdAt: 'desc' },
-  });
+  const access = await ensurePropertyAccess(userId, propertyId);
+  // Home Records is the canonical page for documents; the legacy vault is reachable only for the rows still in it.
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
+  const legacyHref = `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`;
+  // The transitional legacy branch is requested by name: it is removed once no domain still needs it.
+  const inventory = await listPropertyDocuments({ propertyId, role: access.role, includeLegacy: true });
+  const documents = inventory.items;
 
   if (documents.length === 0) {
     return {
       status: 'ANSWERED',
       reasonCode: 'NO_DOCUMENTS_ON_FILE',
-      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no uploaded documents recorded for this home yet.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }, DOCUMENT_LOOKUP_BOUNDARY],
+      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no documents recorded for this home yet.', actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'PRIMARY' }] }, DOCUMENT_LOOKUP_BOUNDARY],
       suggestions: [],
     };
   }
 
-  const grouped = new Map<string, typeof documents>();
+  const grouped = new Map<string, { label: string; docs: PropertyDocument[] }>();
   for (const document of documents) {
-    const existing = grouped.get(document.type) ?? [];
-    existing.push(document);
-    grouped.set(document.type, existing);
+    const existing = grouped.get(document.kind) ?? { label: document.kindLabel, docs: [] };
+    existing.docs.push(document);
+    grouped.set(document.kind, existing);
   }
-  const unverifiedCount = documents.filter((document) => document.verificationStatus === 'UNVERIFIED' || document.verificationStatus === 'PENDING').length;
-  const verifiedCount = documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
-  const rejectedCount = documents.filter((document) => document.verificationStatus === 'REJECTED').length;
+  const count = (predicate: (document: PropertyDocument) => boolean) => documents.filter(predicate).length;
+  const unverifiedCount = count((document) => document.verification === 'UNVERIFIED' || document.verification === 'PENDING');
+  const needsReviewCount = count((document) => document.needsReview === true);
 
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'document-lookup-summary',
     title: `${documents.length} document${documents.length === 1 ? '' : 's'} on file`,
-    body: unverifiedCount ? `${unverifiedCount} not yet verified.` : 'All recorded documents are verified.',
-    tone: unverifiedCount ? 'CAUTION' : 'DEFAULT',
+    body: needsReviewCount || unverifiedCount ? `${needsReviewCount + unverifiedCount} need attention.` : 'Nothing recorded needs review.',
+    tone: needsReviewCount || unverifiedCount ? 'CAUTION' : 'DEFAULT',
     ...documentsCalmCopy({
-      total: documents.length, unverified: unverifiedCount, verified: verifiedCount, rejected: rejectedCount,
-      newest: { name: documents[0].name, addedOn: humanDate(documents[0].createdAt) || null },
-      truncatedTypes: [...grouped.values()].filter((docs) => docs.length > 20).length,
+      total: documents.length,
+      needsReview: needsReviewCount,
+      expired: count((document) => document.expiry === 'EXPIRED'),
+      expiringSoon: count((document) => document.expiry === 'EXPIRING_SOON'),
+      unverified: unverifiedCount,
+      verified: count((document) => document.verification === 'VERIFIED'),
+      rejected: count((document) => document.verification === 'REJECTED'),
+      legacy: inventory.totals.legacy,
+      newest: { name: documents[0].title, addedOn: humanDate(documents[0].addedAt) || null },
+      truncatedKinds: [...grouped.values()].filter((group) => group.docs.length > 20).length,
     }),
-    actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }],
+    actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }],
   }, {
-    // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType lets
-    // GroupedListBlock.tsx route this block through DocumentResultList
-    // instead of the generic renderer's bare href. Detail is fetched via
-    // GET /api/documents/property/:propertyId/:documentId
-    // (propertyAuthMiddleware, VIEWER floor matching this operation's own
-    // floor) -- deliberately NOT the existing GET /api/documents/:id
-    // (requireDocumentOwnership, CONTRIBUTOR floor for a non-uploaded
-    // document), which would 404 for every VIEWER-role household member
-    // opening a document they didn't personally upload.
+    // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType routes each row to its own inline detail. A Home Record is read through the record
+    // route (record-level visibility applies); a transitional legacy document through the legacy property-scoped document route.
     type: 'GROUPED_LIST', filters: [],
     id: 'document-lookup-groups',
     title: 'Documents by type',
-    description: 'Uploaded documents recorded for this property, grouped by type.',
-    sections: [...grouped.entries()].sort(([left], [right]) => (DOCUMENT_TYPE_LABELS[left] ?? left).localeCompare(DOCUMENT_TYPE_LABELS[right] ?? right)).map(([type, docs]) => ({
-      id: `document-lookup-${type.toLowerCase()}`,
-      title: DOCUMENT_TYPE_LABELS[type] ?? type,
-      count: docs.length,
-      items: docs.slice(0, 20).map((document) => ({
+    description: 'Documents recorded for this property, grouped by type.',
+    sections: [...grouped.entries()].sort(([, left], [, right]) => left.label.localeCompare(right.label)).map(([kind, group]) => ({
+      id: `document-lookup-${kind.toLowerCase()}`,
+      title: group.label,
+      count: group.docs.length,
+      items: group.docs.slice(0, 20).map((document) => ({
         id: document.id,
-        title: document.name,
-        entityType: 'DOCUMENT',
-        description: document.description ?? null,
-        meta: [document.verificationStatus.toLowerCase().replace(/_/g, ' '), humanDate(document.createdAt)].filter((value): value is string => Boolean(value)),
-        status: document.verificationStatus,
-        href,
+        title: document.title,
+        entityType: document.source === 'HOME_RECORD' ? 'PROPERTY_RECORD' : 'DOCUMENT',
+        description: document.description,
+        meta: [
+          document.verification ? document.verification.toLowerCase().replace(/_/g, ' ') : null,
+          document.needsReview ? 'needs review' : null,
+          document.expiry === 'EXPIRED' ? 'expired' : document.expiry === 'EXPIRING_SOON' ? 'expiring soon' : null,
+          humanDate(document.addedAt),
+          document.transitional ? 'older vault' : null,
+        ].filter((value): value is string => Boolean(value)),
+        status: document.verification ?? (document.needsReview ? 'NEEDS_REVIEW' : document.expiry === 'EXPIRED' ? 'EXPIRED' : null),
+        href: document.transitional ? legacyHref : href,
       })),
     })),
     // Documents D-1: the record page is a quiet text link in the calm answer only (the summary shows the same link in the previous shell).
-    actions: [{ id: 'open-documents-list', label: 'Open Documents', href, style: 'SECONDARY' }],
+    actions: [{ id: 'open-documents-list', label: 'Open Home Records', href, style: 'SECONDARY' }],
   }, DOCUMENT_LOOKUP_BOUNDARY];
 
   return {
     status: 'ANSWERED',
-    reasonCode: unverifiedCount ? 'DOCUMENTS_INCLUDE_UNVERIFIED' : 'DOCUMENTS_ALL_VERIFIED',
-    contextVersion: createHash('sha256').update(JSON.stringify(documents.map((document) => ({ id: document.id, verificationStatus: document.verificationStatus, updatedAt: document.updatedAt })))).digest('hex'),
+    reasonCode: needsReviewCount || unverifiedCount ? 'DOCUMENTS_INCLUDE_UNVERIFIED' : 'DOCUMENTS_ALL_VERIFIED',
+    contextVersion: createHash('sha256').update(JSON.stringify(documents.map((document) => ({ id: document.id, source: document.source, verification: document.verification, needsReview: document.needsReview, updatedAt: document.updatedAt })))).digest('hex'),
     blocks,
-    suggestions: ['Open Documents'],
+    suggestions: ['Open Home Records'],
   };
 }
 

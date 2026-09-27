@@ -8,6 +8,7 @@ import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import type { Document } from '@/types';
+import { PropertyRecordAskDetail } from './PropertyRecordAskDetail';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -200,7 +201,10 @@ export function DocumentResultList({ block, propertyId, onFilter, onPage, onAcce
         </nav>}
       </div>;
     })}
-    {detailDocumentId && detailItem && <DocumentDetail key={detailDocumentId} documentId={detailDocumentId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />}
+    {/* A Home Record reads through the record route (record-level visibility applies); a transitional legacy document through the document route. */}
+    {detailDocumentId && detailItem && (detailItem.entityType === 'PROPERTY_RECORD'
+      ? <PropertyRecordAskDetail key={detailDocumentId} recordId={detailDocumentId} expectedPropertyId={propertyId} fallbackTitle={detailItem.title} href={detailItem.href ?? null} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />
+      : <DocumentDetail key={detailDocumentId} documentId={detailDocumentId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />)}
     <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.filter((action) => calm || action.id !== 'open-documents-list').map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
   </section>;
 }

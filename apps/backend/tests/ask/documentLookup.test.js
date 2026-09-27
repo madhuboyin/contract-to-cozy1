@@ -75,19 +75,23 @@ function handlerBody() {
   return orchestratorSource.slice(start, end + 2);
 }
 
-test('documentLookupResult reads prisma.document.findMany scoped to propertyId and excludes soft-deleted rows', () => {
+test('documentLookupResult reads the canonical inventory with the caller\'s role and asks for the transitional legacy branch by name', () => {
   const body = handlerBody();
-  assert.match(body, /prisma\.document\.findMany\(/);
-  assert.match(body, /propertyId, deletedAt: null/);
-  assert.match(body, /await ensurePropertyAccess\(userId, propertyId\);/);
+  // Home Records is authoritative; the legacy vault is projected only because the call names it, and never queried directly from here.
+  assert.match(body, /listPropertyDocuments\(\{ propertyId, role: access\.role, includeLegacy: true \}\)/);
+  assert.doesNotMatch(body, /prisma\.document\./);
+  assert.match(body, /const access = await ensurePropertyAccess\(userId, propertyId\);/);
 });
 
-test('documentLookupResult groups by type and surfaces verification status, and never calls a write method', () => {
+test('documentLookupResult groups by type and surfaces each row\'s own store facts, and never writes', () => {
   const body = handlerBody();
   assert.match(body, /type: 'GROUPED_LIST'/);
   assert.match(body, /type: 'EMPTY_STATE'/);
-  assert.match(body, /document\.verificationStatus/);
-  assert.doesNotMatch(body, /prisma\.document\.(create|update|delete|deleteMany|updateMany)\(/);
+  assert.match(body, /document\.verification/);
+  assert.match(body, /document\.needsReview/);
+  assert.match(body, /document\.transitional/);
+  // A database write, not the context-version hash's own .update().
+  assert.doesNotMatch(body, /prisma\.\w+\.(create|update|delete|deleteMany|updateMany|upsert)\(/);
 });
 
 test('the capability handler and captureFallbackHref registrations both exist for DOCUMENT_LOOKUP', () => {
