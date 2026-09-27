@@ -58,3 +58,31 @@ export function buildChangeSummaryText(input: ChangeSummaryTextInput): string {
   const verb = CHANGE_TYPE_VERBS[input.changeType] ?? 'changed';
   return `${label} ${verb}.`;
 }
+
+export function homeChangeDisplayTitle(input: {
+  sourceType: string;
+  canonicalActionTitle?: string | null;
+  canonicalEventTitle?: string | null;
+}): string {
+  return input.canonicalActionTitle ?? input.canonicalEventTitle ?? sourceTypeLabel(input.sourceType);
+}
+
+export function homeChangeLinkedAction(input: {
+  propertyId: string;
+  canonicalActionId?: string | null;
+  canonicalEventId?: string | null;
+}): { label: string; href: string } | null {
+  if (input.canonicalActionId) {
+    return {
+      label: 'Open in Home Operations',
+      href: `/dashboard/properties/${encodeURIComponent(input.propertyId)}/home-operations?focusWorkItemId=${encodeURIComponent(input.canonicalActionId)}&openManage=1`,
+    };
+  }
+  if (input.canonicalEventId) {
+    return {
+      label: 'Open in Home Timeline',
+      href: `/dashboard/properties/${encodeURIComponent(input.propertyId)}/timeline?eventId=${encodeURIComponent(input.canonicalEventId)}`,
+    };
+  }
+  return null;
+}

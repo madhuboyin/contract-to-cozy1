@@ -1,6 +1,8 @@
 import { cn } from '@/lib/utils';
 import { formatLegacyAskCurrency } from '@/features/ask/presentationCompatibility';
-import { ActionLink } from './context';
+import { ChevronDown, ExternalLink } from 'lucide-react';
+import type { AskPresentationBlock } from '@/features/ask/types';
+import { ActionLink, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 
 export const DecisionTraceBlock: AskBlockRenderer<'DECISION_TRACE'> = ({ block }) => (
@@ -142,25 +144,77 @@ export const RecommendationChangeBlock: AskBlockRenderer<'RECOMMENDATION_CHANGE'
   );
 };
 
-export const ChangeSummaryBlock: AskBlockRenderer<'CHANGE_SUMMARY'> = ({ block }) => {
-  const materialityTone = block.materiality === 'URGENT' ? 'border-red-200 bg-red-50'
-    : block.materiality === 'IMPORTANT' ? 'border-amber-200 bg-amber-50/70'
-      : 'border-slate-200 bg-white';
+type ChangeSummary = Extract<AskPresentationBlock, { type: 'CHANGE_SUMMARY' }>;
+
+function changeDate(block: ChangeSummary): Date {
+  return new Date(block.effectiveAt ?? block.detectedAt);
+}
+
+function dateKey(block: ChangeSummary): string {
+  const date = changeDate(block);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function dateHeading(block: ChangeSummary): string {
+  const date = changeDate(block);
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const daysAgo = Math.round((start.getTime() - target.getTime()) / 86_400_000);
+  if (daysAgo === 0) return 'Today';
+  if (daysAgo === 1) return 'Yesterday';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+}
+
+function ChangeSummaryRow({ block }: { block: ChangeSummary }) {
   const materialityBadge = block.materiality === 'URGENT' ? 'bg-red-100 text-red-800'
-    : block.materiality === 'IMPORTANT' ? 'bg-amber-200 text-amber-900'
-      : 'bg-slate-100 text-slate-600';
+    : block.materiality === 'IMPORTANT' ? 'bg-amber-100 text-amber-900'
+      : block.materiality === 'MEANINGFUL' ? 'bg-teal-50 text-teal-800'
+        : 'bg-slate-100 text-slate-600';
+  const sameDate = block.effectiveAt
+    && new Date(block.effectiveAt).toLocaleDateString() === new Date(block.detectedAt).toLocaleDateString();
   return (
-    <section className={cn('rounded-2xl border p-4', materialityTone)}>
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="font-semibold text-slate-950">{block.source}</h3>
-        <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
+    <details className="group border-b border-slate-100 last:border-b-0">
+      <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+        <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', block.materiality === 'URGENT' ? 'bg-red-500' : block.materiality === 'IMPORTANT' ? 'bg-amber-500' : 'bg-teal-500')} aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-slate-950">{block.title}</span>
+          <span className="mt-0.5 block truncate text-xs text-slate-600">{block.summary}</span>
+        </span>
+        <span className="hidden shrink-0 text-xs text-slate-500 sm:inline">{block.source}</span>
+        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="bg-slate-50/70 px-4 py-3 pl-10 text-xs text-slate-600">
+        <p>{sameDate ? `Recorded ${new Date(block.detectedAt).toLocaleDateString()}` : <>Detected {new Date(block.detectedAt).toLocaleDateString()}{block.effectiveAt && ` · Effective ${new Date(block.effectiveAt).toLocaleDateString()}`}</>}</p>
+        {block.linkedAction && (
+          <AskContextLink href={block.linkedAction.href} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg font-semibold text-teal-800 hover:text-teal-950">
+            {block.linkedAction.label}<ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          </AskContextLink>
+        )}
       </div>
-      <p className="mt-2 text-sm leading-5 text-slate-700">{block.summary}</p>
-      <p className="mt-2 text-xs text-slate-600">
-        Detected {new Date(block.detectedAt).toLocaleDateString()}
-        {block.effectiveAt && ` · Effective ${new Date(block.effectiveAt).toLocaleDateString()}`}
-      </p>
-      {block.linkedAction && <div className="mt-3"><ActionLink action={{ id: `${block.id}-linked-action`, label: block.linkedAction.label, href: block.linkedAction.href, style: 'SECONDARY' }} /></div>}
+    </details>
+  );
+}
+
+export function ChangeSummaryList({ blocks }: { blocks: ChangeSummary[] }) {
+  const groups = blocks.reduce<Array<{ key: string; label: string; blocks: ChangeSummary[] }>>((result, block) => {
+    const key = dateKey(block);
+    const group = result[result.length - 1];
+    if (group?.key === key) group.blocks.push(block);
+    else result.push({ key, label: dateHeading(block), blocks: [block] });
+    return result;
+  }, []);
+  return (
+    <section data-testid="change-summary-list" aria-label="Recent home changes" className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      {groups.map((group) => (
+        <div key={group.key}>
+          <h3 className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">{group.label}</h3>
+          {group.blocks.map((block) => <ChangeSummaryRow key={block.id} block={block} />)}
+        </div>
+      ))}
     </section>
   );
-};
+}
+
+export const ChangeSummaryBlock: AskBlockRenderer<'CHANGE_SUMMARY'> = ({ block }) => <ChangeSummaryList blocks={[block]} />;

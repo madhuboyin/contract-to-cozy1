@@ -13,7 +13,7 @@ import { isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
 import { canAskConversationally } from '@/features/ask/conversationalCapture';
 import { AskBlockActionContext } from '../blocks/context';
 import { CalmAnswerContext, CalmChromeContext, CalmReceiptContext, CalmSecondaryContext } from '../blocks/calmContext';
-import { BlockView } from '../blocks/registry';
+import { BlockSequence, BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
 import { AskPromptAttribution, FOCUSABLE_SELECTOR, draftStorageKey } from './support';
@@ -254,7 +254,7 @@ export function ExecutionCard({
           <details className={calmChrome ? undefined : 'rounded-2xl border border-slate-200 bg-slate-50/70 p-3'}>
             <summary className={calmChrome ? 'w-fit cursor-pointer list-none rounded-md px-1 text-xs text-slate-500 hover:text-slate-800 [&::-webkit-details-marker]:hidden' : 'cursor-pointer text-xs font-semibold text-slate-500'}>{calmChrome ? 'Earlier version of this answer · show' : 'Superseded by a refinement below · view original response'}</summary>
             <div className={cn('mt-3 space-y-3 opacity-75', calmChrome && FRAMELESS_LISTS)}>
-              {execution.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />)}
+              <BlockSequence blocks={execution.blocks} renderBlock={(block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />} />
             </div>
           </details>
         </article>
@@ -317,13 +317,13 @@ export function ExecutionCard({
           <details open={calmChrome || undefined} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <summary className="cursor-pointer text-[11px] font-semibold text-slate-500">Originally answered {new Date(execution.originalResponse.observedAt).toLocaleString()} · view original response</summary>
             <div className="mt-3 space-y-3 opacity-75">
-              <ResultViewContext.Provider value={null}>{execution.originalResponse.blocks.map((block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />)}</ResultViewContext.Provider>
+              <ResultViewContext.Provider value={null}><BlockSequence blocks={execution.originalResponse.blocks} renderBlock={(block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />} /></ResultViewContext.Provider>
             </div>
           </details>
         )}
         <div ref={bodyRef} className={cn('space-y-3', calmChrome && FRAMELESS_LISTS)}>
           <CalmReceiptContext.Provider value={receiptContinuation}><AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
-            {shownBlocks.map((block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>)}
+            <BlockSequence blocks={shownBlocks} renderBlock={(block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>} />
             {hasResponseContext(execution) && !calmChrome && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
           </AskBlockActionContext.Provider></CalmReceiptContext.Provider>
           {/* ACUI-003: the trust line sits directly under the core answer, before any capture, review or handoff card. */}

@@ -23,7 +23,10 @@ import {
   WorkflowProgressBlock,
 } from './CoreBlocks';
 import { EvidenceBlock, OutputArtifactsBlock, RelatedRecordsBlock } from './ContextualBlocks';
+import type { ReactNode } from 'react';
+import type { AskPresentationBlock } from '@/features/ask/types';
 import {
+  ChangeSummaryList,
   ChangeSummaryBlock,
   DecisionProgressBlock,
   DecisionTraceBlock,
@@ -83,4 +86,32 @@ export function BlockView(props: AskBlockRendererProps) {
   // honestly rather than throw. See UnsupportedBlock in ./CoreBlocks.
   if (!Renderer) return <UnsupportedBlock block={props.block} />;
   return <Renderer {...props} />;
+}
+
+/** Groups consecutive change blocks into one compact activity list while
+ * preserving the general one-block/one-renderer registry for every other
+ * response type. */
+export function BlockSequence({
+  blocks,
+  renderBlock,
+}: {
+  blocks: AskPresentationBlock[];
+  renderBlock: (block: AskPresentationBlock, index: number) => ReactNode;
+}) {
+  const rendered: ReactNode[] = [];
+  for (let index = 0; index < blocks.length;) {
+    const block = blocks[index];
+    if (block.type !== 'CHANGE_SUMMARY') {
+      rendered.push(renderBlock(block, index));
+      index += 1;
+      continue;
+    }
+    const changes: Extract<AskPresentationBlock, { type: 'CHANGE_SUMMARY' }>[] = [];
+    while (index < blocks.length && blocks[index].type === 'CHANGE_SUMMARY') {
+      changes.push(blocks[index] as Extract<AskPresentationBlock, { type: 'CHANGE_SUMMARY' }>);
+      index += 1;
+    }
+    rendered.push(<ChangeSummaryList key={`change-summary-${changes[0].id}`} blocks={changes} />);
+  }
+  return <>{rendered}</>;
 }

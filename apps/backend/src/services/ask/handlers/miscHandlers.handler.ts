@@ -23,7 +23,7 @@ import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
 import { listPropertyChanges } from '../../../propertyChanges/propertyChange.service';
-import { buildChangeSummaryText, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
+import { buildChangeSummaryText, homeChangeDisplayTitle, homeChangeLinkedAction, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
 import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelemetry';
 import { resolveAskEnvelopeQueryScope } from '../askEnvelopeQueryScope';
 import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
@@ -351,17 +351,19 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
     };
   }
 
-  const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const blocks: AskPresentationBlock[] = await Promise.all(material.map(async (change) => {
     let detailOverride: string | null = null;
     if (change.sourceType === 'DECISION_PREFERENCE_VALUE') {
       const [detail] = await decisionPreferenceService.getPreferenceReferenceDetails([change.sourceRevision]);
       detailOverride = detail?.summary ?? null;
     }
+    const source = sourceTypeLabel(change.sourceType);
+    const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title, canonicalEventTitle: change.canonicalEvent?.title });
+    const linkedAction = homeChangeLinkedAction({ propertyId, canonicalActionId: change.canonicalAction?.id, canonicalEventId: change.canonicalEvent?.id });
     return {
       type: 'CHANGE_SUMMARY', id: `home-change-${change.id}`,
-      title: sourceTypeLabel(change.sourceType),
-      source: sourceTypeLabel(change.sourceType),
+      title,
+      source,
       changeType: change.changeType,
       summary: buildChangeSummaryText({ sourceType: change.sourceType, changeType: change.changeType, detailOverride }),
       effectiveAt: change.occurredAt ? change.occurredAt.toISOString() : null,
@@ -369,7 +371,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       materiality: change.materiality,
       materialityReasonCodes: change.materialityReasonCodes,
       confidence: change.confidence,
-      linkedAction: change.canonicalAction ? { label: 'View home action', href: homeHref } : null,
+      linkedAction,
     };
   }));
 

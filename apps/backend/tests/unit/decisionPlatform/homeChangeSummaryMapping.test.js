@@ -6,6 +6,8 @@ require('ts-node/register');
 const {
   sourceTypeLabel,
   buildChangeSummaryText,
+  homeChangeDisplayTitle,
+  homeChangeLinkedAction,
 } = require('../../../src/services/decisionPlatform/homeChangeSummaryMapping.ts');
 
 test('a known sourceType resolves to its curated label', () => {
@@ -44,4 +46,22 @@ test('an unrecognized changeType still produces a readable sentence, never throw
     buildChangeSummaryText({ sourceType: 'HOME_EVENT', changeType: 'SOME_FUTURE_CHANGE_TYPE' }),
     'Home event changed.',
   );
+});
+
+test('canonical entity titles replace generic source labels in the homeowner-facing row', () => {
+  assert.equal(homeChangeDisplayTitle({ sourceType: 'OPERATIONAL_WORK_EVENT', canonicalActionTitle: 'Chimney cleaning and inspection' }), 'Chimney cleaning and inspection');
+  assert.equal(homeChangeDisplayTitle({ sourceType: 'HOME_EVENT', canonicalEventTitle: 'Kitchen remodel completed' }), 'Kitchen remodel completed');
+  assert.equal(homeChangeDisplayTitle({ sourceType: 'DOCUMENT' }), 'Document');
+});
+
+test('linked changes deep-link to their exact canonical work item or event', () => {
+  assert.deepEqual(homeChangeLinkedAction({ propertyId: 'property 1', canonicalActionId: 'work/1' }), {
+    label: 'Open in Home Operations',
+    href: '/dashboard/properties/property%201/home-operations?focusWorkItemId=work%2F1&openManage=1',
+  });
+  assert.deepEqual(homeChangeLinkedAction({ propertyId: 'property 1', canonicalEventId: 'event/1' }), {
+    label: 'Open in Home Timeline',
+    href: '/dashboard/properties/property%201/timeline?eventId=event%2F1',
+  });
+  assert.equal(homeChangeLinkedAction({ propertyId: 'property-1' }), null);
 });
