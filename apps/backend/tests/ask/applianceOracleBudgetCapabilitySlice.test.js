@@ -201,7 +201,7 @@ test('every block survives the answer-trust validator, and each page link the wh
 
 test('failure-risk and upkeep-budget questions route here; buying, inventory, one-item and ownership-cost questions do not', () => {
   const route = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true });
-  for (const message of ['Show my appliance oracle', 'Which appliances are likely to fail soon?', 'Which of our appliances are closest to failing?', 'Which of our systems are past their expected life?']) {
+  for (const message of ['Show my appliance oracle', 'Which appliances are likely to fail soon?', 'Which of our appliances are closest to failing?', 'Which of our systems are past their expected life?', 'How old are my appliances?', 'What are the ages of our systems?']) {
     assert.equal(route(message).operation?.operationId, 'APPLIANCE_FAILURE_RISK', message);
   }
   for (const message of ['Show my budget planner', 'How much should we budget for home maintenance this year?', 'What does the budget planner say we will spend on maintenance?']) {
@@ -235,7 +235,7 @@ test('both operations are fully registered: own skills, the owner floor, the bri
 test('the full answer checker, with answer relevance on, keeps the lifespan answer and its purchase-date capture (FRD v1.78)', async () => {
   const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
   const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
-  for (const question of ['Show my appliance oracle', 'Which appliances are likely to fail soon?']) {
+  for (const question of ['Show my appliance oracle', 'Which appliances are likely to fail soon?', 'How old are my appliances?']) {
     const result = await invoke('APPLIANCE_FAILURE_RISK', question);
     const checked = validateAskAnswerTrustPipeline({
       question, operationId: 'APPLIANCE_FAILURE_RISK', propertyId: 'p1', semanticEnabled: true,

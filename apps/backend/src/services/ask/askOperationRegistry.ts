@@ -882,7 +882,7 @@ const neighborhoodChangePattern = new RegExp([
 // operations.
 // Appliance Oracle's calculated failure risk by appliance age. When to replace one item is REPLACEMENT_GUIDANCE; which
 // model to buy stays on the page (Gemini recommendations).
-const applianceFailureRiskPattern = /\bappliance oracle\b|\b(?:appliance|system) (?:failure|breakdown) (?:risks?|forecast|predictions?)\b|\b(?:appliances?|systems?)\b.{0,40}\b(?:likely|about|going|expected) to (?:fail|break(?: down)?|die|wear out)\b|\bwhich (?:appliances?|systems?)\b.{0,40}\b(?:fail|break down)\b.{0,20}\b(?:next|first|soon)\b|\b(?:appliances?|systems?)\b.{0,40}\bpast (?:their|its) (?:expected )?(?:life|lifespan)\b|\b(?:appliances?|systems?)\b.{0,40}\b(?:closest|nearest) to (?:failing|failure|breaking(?: down)?)\b/i;
+const applianceFailureRiskPattern = /\bappliance oracle\b|\b(?:appliance|system) (?:failure|breakdown) (?:risks?|forecast|predictions?)\b|\b(?:how old (?:are|is)|what (?:are )?the ages? of|show (?:me )?the ages? of) (?:my|our|the) (?:appliances?|systems?)\b|\b(?:appliances?|systems?)\b.{0,40}\b(?:likely|about|going|expected) to (?:fail|break(?: down)?|die|wear out)\b|\bwhich (?:appliances?|systems?)\b.{0,40}\b(?:fail|break down)\b.{0,20}\b(?:next|first|soon)\b|\b(?:appliances?|systems?)\b.{0,40}\bpast (?:their|its) (?:expected )?(?:life|lifespan)\b|\b(?:appliances?|systems?)\b.{0,40}\b(?:closest|nearest) to (?:failing|failure|breaking(?: down)?)\b/i;
 const applianceFailureRiskOtherIntentPattern = /\b(?:buy|recommend\w*|brand|model|should|repair|fix|add|record|log)\b/i;
 // Budget Planner's calculated yearly and monthly upkeep forecast. Actual ownership costs are OWNERSHIP_COSTS; the
 // maintenance task forecast is MAINTENANCE_FORECAST.
