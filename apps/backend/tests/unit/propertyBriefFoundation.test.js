@@ -73,8 +73,11 @@ test('only confirmed history and explicitly selected verified documents enter th
   const service = readBackend('src/propertyBrief/propertyBrief.service.ts');
   assert.match(service, /HomeEventVerificationStatus\.HOMEOWNER_CONFIRMED/);
   assert.match(service, /HomeEventVerificationStatus\.EVIDENCE_VERIFIED/);
-  assert.match(service, /id:\s*\{\s*in:\s*input\.documentIds\s*\}/);
-  assert.match(service, /DocumentVerificationStatus\.VERIFIED/);
+  // Post-S1/S3 (canonical read interface): documents are resolved through propertyDocumentInventory, not a raw
+  // prisma.document query, and "verified" is the inventory's own store-agnostic verification field, not the
+  // legacy table's enum directly (a Home Record's own verificationStatus reaches this the same way).
+  assert.match(service, /resolvePropertyDocuments\(\{ propertyId: input\.propertyId, role: input\.role, ids: input\.documentIds, includeLegacy: true \}\)/);
+  assert.match(service, /\.filter\(\(document\) => document\.verification === 'VERIFIED'\)/);
   assert.match(service, /Unverified, missing, or non-property documents were excluded/);
 });
 

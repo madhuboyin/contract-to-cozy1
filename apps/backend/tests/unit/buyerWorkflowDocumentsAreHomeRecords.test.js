@@ -30,13 +30,16 @@ test('the converted buyer screens upload to Home Records, and the closing-day sc
   assert.match(readFrontend('BuyerClosingDayCenter.tsx'), /api\.uploadDocument\(/, 'closing day keeps legacy storage until its foreign key is retargeted (S5b-2)');
 });
 
-test('the buyer evidence panel lists Home Records read-only and keeps verify and reject for legacy rows', () => {
+test('the buyer evidence panel links a Home Record row back to Home Records and offers verify/reject on every row', () => {
+  // Post-b462e090 (Home Records verification-status decision): a Home Record row is no longer read-only here —
+  // it gets the same Verify/Reject actions as a legacy row, plus a link back into Home Records.
   const page = readFrontend('page.tsx');
-  assert.match(page, /document\.source === 'HOME_RECORD' \? <Button asChild/);
-  assert.match(page, /Open in Home Records/);
+  assert.match(page, /document\.source === 'HOME_RECORD' && <Button asChild/);
+  assert.match(page, /tools\/home-records\?recordId=\$\{encodeURIComponent\(document\.id\)\}/);
   const service = read('src/services/buyerAcquisition.service.ts');
   assert.match(service, /listPropertyDocuments\(\{ propertyId, role: access\.role, includeLegacy: true \}\)/);
-  // The verify action itself is still a legacy document status update.
+  // Verification routes to the record itself for a Home Record and to the legacy status update otherwise.
+  assert.match(service, /homeRecordsService\.setVerification\(/);
   assert.match(service, /prisma\.document\.update\(/);
 });
 

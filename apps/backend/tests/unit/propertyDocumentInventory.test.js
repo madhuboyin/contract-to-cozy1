@@ -13,7 +13,10 @@ const realPrisma = prismaModule.prisma;
 const realList = homeRecordsService.list;
 const record = (id, recordType, createdAt, extra = {}) => ({
   id, title: `Record ${id}`, description: null, recordType, sensitivity: 'STANDARD', visibility: 'HOUSEHOLD', lifecycleStatus: 'ACTIVE',
-  createdAt: new Date(createdAt), updatedAt: new Date(createdAt), needsReview: false, expiryStatus: null, ...extra,
+  createdAt: new Date(createdAt), updatedAt: new Date(createdAt), needsReview: false, expiryStatus: null,
+  // Real PropertyRecord rows always carry this (schema default UNVERIFIED); a caller can override to test a
+  // homeowner-confirmed/rejected record.
+  verificationStatus: 'UNVERIFIED', verifiedAt: null, ...extra,
 });
 const legacy = (id, type, verificationStatus, createdAt) => ({ id, name: `Legacy ${id}`, type, description: null, verificationStatus, createdAt: new Date(createdAt), updatedAt: new Date(createdAt) });
 
@@ -55,7 +58,9 @@ test('the legacy branch is explicit, marked transitional, and merged newest firs
 test('each row carries only the facts its own store records, with no mapping between the vocabularies', async () => {
   install([record('r1', 'WARRANTY', '2026-09-01', { needsReview: true, expiryStatus: 'EXPIRING_SOON' })], [legacy('l1', 'INVOICE', 'REJECTED', '2026-09-02')]);
   const [legacyRow, recordRow] = (await listPropertyDocuments({ propertyId: 'p1', role: 'OWNER', includeLegacy: true })).items;
-  assert.deepEqual([recordRow.verification, recordRow.needsReview, recordRow.expiry, recordRow.sensitivity, recordRow.visibility], [null, true, 'EXPIRING_SOON', 'STANDARD', 'HOUSEHOLD']);
+  // Home Records now carries its own verification status (post-b462e090) rather than having none at all — a
+  // real PropertyRecord row's default is UNVERIFIED, not null; the legacy store's own vocabulary is untouched.
+  assert.deepEqual([recordRow.verification, recordRow.needsReview, recordRow.expiry, recordRow.sensitivity, recordRow.visibility], ['UNVERIFIED', true, 'EXPIRING_SOON', 'STANDARD', 'HOUSEHOLD']);
   assert.deepEqual([legacyRow.verification, legacyRow.needsReview, legacyRow.expiry, legacyRow.sensitivity, legacyRow.visibility], ['REJECTED', null, null, null, null]);
 });
 

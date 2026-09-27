@@ -871,11 +871,11 @@ export class BuyerAcquisitionService {
           },
         },
       }),
-      // The property's documents: Home Records (read-only here) and the transitional legacy vault, whose rows can still be verified or rejected.
+      // The property's documents: Home Records and the transitional legacy vault, both listed and both verifiable/rejectable here.
       listPropertyDocuments({ propertyId, role: access.role, includeLegacy: true }),
     ]);
-    // Verification (verify or reject with notes) is a legacy document status; a Home Record has no equivalent yet, so a Home Record row is listed
-    // without one and the screen offers no verify or reject for it (see the records plan, section 17: what "verified" means for a Home Record).
+    // Verification (verify or reject with notes) now applies to both stores: a Home Record's own verificationStatus (see verifyDocument
+    // below, which routes to homeRecordsService.setVerification) or a transitional legacy document's status update.
     return {
       reports,
       documents: documents.items.map((document) => ({
