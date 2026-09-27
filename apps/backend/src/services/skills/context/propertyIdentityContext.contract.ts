@@ -1,48 +1,19 @@
-import type { AskOperationId } from '../../ask/askOperationRegistry';
+import {
+  ASK_OPERATION_DEFINITIONS,
+  type AskOperationId,
+} from '../../ask/askOperationRegistry';
 
 export const PROPERTY_IDENTITY_CONTEXT_PROVIDER = Object.freeze({
   id: 'property.identity-context',
   version: '1.0.0',
 });
 
-export const PROPERTY_IDENTITY_CONTEXT_OPERATIONS: readonly AskOperationId[] = Object.freeze([
-  'MAINTENANCE_STATUS',
-  'MAINTENANCE_TASK_CREATE',
-  'MAINTENANCE_TASK_COMPLETE',
-  'MAINTENANCE_TASK_UPDATE',
-  'HOME_DEADLINE_MONITOR',
-  'COVERAGE_GAPS',
-  'SAVINGS_OPPORTUNITIES',
-  'OWNERSHIP_COSTS',
-  'INVENTORY_LOOKUP',
-  'INVENTORY_ITEM_CORRECT',
-  'HOME_EVENT_CORRECT',
-  'HOME_EVENT_VISIBILITY',
-  'WARRANTY_CORRECT',
-  'ROOM_RENAME',
-  'ROOM_CREATE',
-  'INVENTORY_ITEM_CREATE',
-  'PROPERTY_CONTEXT_AREA_CAPTURE',
-  'PROPERTY_SUMMARY',
-  'REPLACEMENT_GUIDANCE',
-  'REFINANCE_ANALYSIS',
-  'REFINANCE_RATE_MONITOR',
-  'SELL_HOLD_RENT_ANALYSIS',
-  'HOUSEHOLD_INVITATION',
-  'GUIDANCE_JOURNEY_CREATE',
-  'QUOTE_COMPARISON_CREATE',
-  'QUOTE_COMPARISON_REVIEW',
-  'CAPITAL_RESERVE_PLAN',
-  'PROPERTY_TAX_APPEAL_READINESS',
-  'RENOVATION_PERMIT_READINESS',
-  'MAJOR_EVENT_ENTRY',
-  'HVAC_DECISION_START',
-  'HVAC_DECISION_CONTINUE',
-  'HVAC_DECISION_SCENARIO',
-  'HVAC_DECISION_ABANDON',
-  'HVAC_PREFERENCE_SAVE',
-  'HVAC_PREFERENCE_FORGET',
-  'HVAC_DECISION_OUTCOME_REPORT',
-  'HVAC_DECISION_OUTCOME_VIEW',
-  'HVAC_DECISION_OUTCOME_UNLINK',
-]);
+// Property identity is the baseline context for every property-scoped operation.
+// Derive this list from the canonical operation registry so adding an operation
+// cannot leave the provider's separate allowlist stale and make valid Skills
+// fail closed as NOT_APPLICABLE at runtime.
+export const PROPERTY_IDENTITY_CONTEXT_OPERATIONS: readonly AskOperationId[] = Object.freeze(
+  Object.values(ASK_OPERATION_DEFINITIONS)
+    .filter((operation) => operation.requiresProperty)
+    .map((operation) => operation.operationId),
+);

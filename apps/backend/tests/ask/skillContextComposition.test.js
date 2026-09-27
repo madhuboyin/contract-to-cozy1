@@ -8,6 +8,7 @@ require('ts-node/register');
 
 const { composeSkillContext } = require('../../src/services/skills/context/skillContextComposer.ts');
 const {
+  getSkillContextProvider,
   REGISTERED_SKILL_CONTEXT_PROVIDER_REFS,
   validateSkillContextProviderDefinitions,
 } = require('../../src/services/skills/context/skillContextProviderRegistry.ts');
@@ -65,6 +66,13 @@ test('the context provider registry and provider-backed Skill manifests validate
     assert.ok(definition.requiredContextProviders.some((provider) => provider.id === 'property.identity-context'), definition.id);
     for (const operation of definition.operations) {
       assert.ok(operation.requiredContextProviders?.some((provider) => provider.id === 'property.identity-context'), `${definition.id}/${operation.operationId}`);
+      for (const reference of [
+        ...(operation.requiredContextProviders ?? []),
+        ...(operation.optionalContextProviders ?? []),
+      ]) {
+        const provider = getSkillContextProvider(reference.id, reference.version);
+        assert.ok(provider?.supportedOperations.includes(operation.operationId), `${definition.id}/${operation.operationId}/${reference.id}`);
+      }
     }
   }
   assert.deepEqual(validateSkillDefinitions(), []);

@@ -54,7 +54,10 @@ import { DOCUMENT_PROMOTION_SKILL } from './document-promotion';
 import { DOCUMENTS_SKILL } from './documents';
 import { QUERY_ENVELOPE_SKILL } from './query-envelope';
 import { HOME_EVENT_RADAR_SKILL } from './home-event-radar';
-import { REGISTERED_SKILL_CONTEXT_PROVIDER_REFS } from './context/skillContextProviderRegistry';
+import {
+  getSkillContextProvider,
+  REGISTERED_SKILL_CONTEXT_PROVIDER_REFS,
+} from './context/skillContextProviderRegistry';
 import { PROPERTY_IDENTITY_CONTEXT_PROVIDER } from './context/propertyIdentityContext.contract';
 import { getSkillAdapter, REGISTERED_SKILL_ADAPTER_REFS } from './adapters/skillAdapterRegistry';
 import { selectSkillDependencyVersion } from './skillDependencyVersion';
@@ -236,6 +239,10 @@ export function validateSkillDefinitions(
       for (const provider of operationProviders) {
         const providerRef = `${provider.id}@${provider.version}`;
         if (!declaredProviders.has(providerRef)) issues.push(`${key}: operation ${operationReference.operationId} uses undeclared context provider ${providerRef}`);
+        const providerDefinition = getSkillContextProvider(provider.id, provider.version);
+        if (providerDefinition && !providerDefinition.supportedOperations.includes(operationReference.operationId)) {
+          issues.push(`${key}: context provider ${providerRef} does not support operation ${operationReference.operationId}`);
+        }
       }
     }
 
