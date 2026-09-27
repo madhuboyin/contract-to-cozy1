@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type HouseholdRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -12,12 +12,14 @@ import {
 } from '../productFramework/buyerAcquisition.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
+import { assertPropertyDocumentsExist, listPropertyDocuments, resolvePropertyDocuments, toWorkflowDocumentSummary } from './propertyDocuments/propertyDocumentInventory.service';
 
 async function assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR') {
   const access = await resolvePropertyAccess(userId, propertyId);
   if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
     throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
   }
+  return access.role;
 }
 
 const dateValue = (value: string | null | undefined) => value === undefined ? undefined : value === null ? null : new Date(value);
@@ -46,7 +48,7 @@ function serialize(workspace: any) {
 
 export class BuyerWalkthroughService {
   static async get(userId: string, propertyId: string) {
-    await assertAccess(userId, propertyId, 'VIEWER');
+    const role = await assertAccess(userId, propertyId, 'VIEWER');
     const [workspace, findings, contractDocuments] = await Promise.all([
       prisma.buyerWalkthroughWorkspace.findUnique({
         where: { propertyId },
@@ -75,25 +77,22 @@ export class BuyerWalkthroughService {
         },
         orderBy: [{ severity: 'desc' }, { createdAt: 'asc' }],
       }),
-      prisma.document.findMany({
-        where: { propertyId, type: 'CONTRACT', deletedAt: null },
-        select: { id: true, name: true, type: true, verificationStatus: true, createdAt: true },
-        orderBy: { createdAt: 'desc' },
-      }),
+      // Contract documents offered as context are Home Records of that kind, read with the caller's role.
+      listPropertyDocuments({ propertyId, role, kinds: ['CONTRACT'] }),
     ]);
     const evidenceIds = workspace
       ? [...workspace.observations.map((item) => item.evidenceDocumentId), ...workspace.issues.map((item) => item.evidenceDocumentId)].filter((value): value is string => Boolean(value))
       : [];
     const evidenceDocuments = evidenceIds.length
-      ? await prisma.document.findMany({ where: { id: { in: evidenceIds }, propertyId, deletedAt: null }, select: { id: true, name: true, type: true, verificationStatus: true, createdAt: true } })
+      ? await resolvePropertyDocuments({ propertyId, role, ids: evidenceIds })
       : [];
     return {
       workspace: workspace ? serialize(workspace) : null,
       context: {
         findings,
-        contractDocuments: contractDocuments.map((document) => ({ ...document, createdAt: document.createdAt.toISOString() })),
+        contractDocuments: contractDocuments.items.map(toWorkflowDocumentSummary),
       },
-      evidenceDocuments: evidenceDocuments.map((document) => ({ ...document, createdAt: document.createdAt.toISOString() })),
+      evidenceDocuments: evidenceDocuments.map(toWorkflowDocumentSummary),
     };
   }
 
@@ -126,9 +125,9 @@ export class BuyerWalkthroughService {
   }
 
   static async createObservation(userId: string, propertyId: string, input: BuyerWalkthroughObservationCreateInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
-    await this.assertDocuments(propertyId, [input.evidenceDocumentId]);
+    await this.assertDocuments(propertyId, role, [input.evidenceDocumentId]);
     const now = new Date();
     await prisma.$transaction(async (tx) => {
       const workspace = await tx.buyerWalkthroughWorkspace.upsert({ where: { propertyId }, create: { checklistId: checklist.id, propertyId, startedAt: now, lastUpdatedByUserId: userId }, update: { completedAt: null, completedByUserId: null, lastUpdatedByUserId: userId } });
@@ -139,8 +138,8 @@ export class BuyerWalkthroughService {
   }
 
   static async updateObservation(userId: string, propertyId: string, observationId: string, input: BuyerWalkthroughObservationUpdateInput) {
-    await assertAccess(userId, propertyId);
-    await this.assertDocuments(propertyId, [input.evidenceDocumentId]);
+    const role = await assertAccess(userId, propertyId);
+    await this.assertDocuments(propertyId, role, [input.evidenceDocumentId]);
     const observation = await prisma.buyerWalkthroughObservation.findFirst({ where: { id: observationId, propertyId } });
     if (!observation) throw new APIError('Walkthrough observation not found.', 404, 'BUYER_WALKTHROUGH_OBSERVATION_NOT_FOUND');
     const now = new Date();
@@ -153,9 +152,9 @@ export class BuyerWalkthroughService {
   }
 
   static async createIssue(userId: string, propertyId: string, input: BuyerWalkthroughIssueCreateInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
-    await this.assertDocuments(propertyId, [input.evidenceDocumentId]);
+    await this.assertDocuments(propertyId, role, [input.evidenceDocumentId]);
     await this.assertLinks(propertyId, input);
     const now = new Date();
     await prisma.$transaction(async (tx) => {
@@ -171,8 +170,8 @@ export class BuyerWalkthroughService {
   }
 
   static async updateIssue(userId: string, propertyId: string, issueId: string, input: BuyerWalkthroughIssueUpdateInput) {
-    await assertAccess(userId, propertyId);
-    await this.assertDocuments(propertyId, [input.evidenceDocumentId]);
+    const role = await assertAccess(userId, propertyId);
+    await this.assertDocuments(propertyId, role, [input.evidenceDocumentId]);
     const issue = await prisma.buyerWalkthroughIssue.findFirst({ where: { id: issueId, propertyId } });
     if (!issue) throw new APIError('Walkthrough issue not found.', 404, 'BUYER_WALKTHROUGH_ISSUE_NOT_FOUND');
     const status = input.status ?? issue.status;
@@ -210,11 +209,11 @@ export class BuyerWalkthroughService {
     return this.get(userId, propertyId);
   }
 
-  private static async assertDocuments(propertyId: string, ids: Array<string | null | undefined>) {
-    const requested = [...new Set(ids.filter((value): value is string => Boolean(value)))];
-    if (!requested.length) return;
-    const count = await prisma.document.count({ where: { id: { in: requested }, propertyId, deletedAt: null } });
-    if (count !== requested.length) throw new APIError('A walkthrough evidence document was not found for this property.', 404, 'DOCUMENT_NOT_FOUND');
+  private static async assertDocuments(propertyId: string, role: HouseholdRole, ids: Array<string | null | undefined>) {
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids },
+      () => new APIError('A walkthrough evidence document was not found for this property.', 404, 'DOCUMENT_NOT_FOUND'),
+    );
   }
 
   private static async assertLinks(propertyId: string, input: BuyerWalkthroughIssueCreateInput) {

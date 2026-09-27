@@ -43,8 +43,11 @@ test('title, contact, and issue contracts are strict and reject clearance author
 test('service reuses canonical contacts and documents and reconciles stable plan records', () => {
   assert.match(service, /buyerJourneyContact\.findFirst/);
   assert.match(service, /buyerJourneyContact\.create/);
-  assert.match(service, /prisma\.document\.count/);
-  assert.match(service, /propertyId, deletedAt: null/);
+  // Title, survey and association documents are Home Records: read and asserted through the canonical inventory with the caller's role,
+  // never the legacy table.
+  assert.match(service, /assertPropertyDocumentsExist\(/);
+  assert.match(service, /resolvePropertyDocuments\(\{ propertyId, role, ids: documentIds \}\)/);
+  assert.doesNotMatch(service, /prisma\.document\./);
   assert.match(service, /BUYER_ACTION_KEYS\.TITLE_CONTACT_CONFIRM/);
   assert.match(service, /BUYER_ACTION_KEYS\.TITLE_DOCUMENT_REVIEW/);
   assert.match(service, /BUYER_ACTION_KEYS\.TITLE_ISSUE_RESOLUTION/);

@@ -29,6 +29,7 @@ import { composeBuyerInspectionModules } from './buyerInspectionModuleCompositio
 import { inspectionFindingSourceAdapter } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
+import { countPropertyDocuments, listPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 
 const DAY_MS = 86_400_000;
 
@@ -834,7 +835,7 @@ export class BuyerAcquisitionService {
   }
 
   static async getEvidenceReview(userId: string, propertyId: string) {
-    await this.assertAccess(userId, propertyId, 'VIEWER');
+    const access = await this.assertAccess(userId, propertyId, 'VIEWER');
     const [reports, documents] = await Promise.all([
       prisma.inspectionReport.findMany({
         where: { propertyId, status: { not: 'ARCHIVED' } },
@@ -869,23 +870,26 @@ export class BuyerAcquisitionService {
           },
         },
       }),
-      prisma.document.findMany({
-        where: { propertyId },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          description: true,
-          verificationStatus: true,
-          verifiedAt: true,
-          parserVersion: true,
-          ocrQualityScore: true,
-          createdAt: true,
-        },
-      }),
+      // The property's documents: Home Records (read-only here) and the transitional legacy vault, whose rows can still be verified or rejected.
+      listPropertyDocuments({ propertyId, role: access.role, includeLegacy: true }),
     ]);
-    return { reports, documents };
+    // Verification (verify or reject with notes) is a legacy document status; a Home Record has no equivalent yet, so a Home Record row is listed
+    // without one and the screen offers no verify or reject for it (see the records plan, section 17: what "verified" means for a Home Record).
+    return {
+      reports,
+      documents: documents.items.map((document) => ({
+        id: document.id,
+        name: document.title,
+        type: document.kind,
+        description: document.description,
+        verificationStatus: document.verification,
+        verifiedAt: null as Date | null,
+        parserVersion: null as string | null,
+        ocrQualityScore: null as number | null,
+        createdAt: document.addedAt,
+        source: document.source,
+      })),
+    };
   }
 
   static async verifyDocument(userId: string, propertyId: string, documentId: string, input: {
@@ -1277,8 +1281,10 @@ export class BuyerAcquisitionService {
       prisma.inspectionFinding.count({ where: { propertyId, buyerDisposition: { not: 'PENDING_REVIEW' } } }),
       prisma.inspectionFinding.count({ where: { propertyId, severity: { in: ['SAFETY', 'MAJOR'] }, buyerDisposition: { in: ['PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION'] } } }),
       prisma.inspectionFinding.count({ where: { propertyId, severity: { in: ['SAFETY', 'MAJOR'] }, buyerDisposition: { in: ['PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION'] }, buyerRepairJourneyId: { not: null } } }),
+      // "Verified" is a legacy verification status (a Home Record has none), so the verified count stays legacy-only until that is decided
+      // (records plan, section 17). The total counts every document on file: Home Records plus the transitional legacy vault.
       prisma.document.count({ where: { propertyId, verificationStatus: 'VERIFIED' } }),
-      prisma.document.count({ where: { propertyId } }),
+      countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
     ]);
     const assignedTasks = plan.tasks.filter((task) => task.assignedToUserId).length;
     const completedTasks = plan.tasks.filter((task) => task.status === 'COMPLETED').length;

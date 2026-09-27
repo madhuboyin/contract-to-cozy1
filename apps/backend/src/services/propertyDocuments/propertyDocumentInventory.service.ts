@@ -15,6 +15,7 @@
 import type { HouseholdRole, PropertyRecordType, DocumentType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { homeRecordsService } from '../homeRecords.service';
+import { visibleRecordWhere } from '../homeRecordsAccess';
 
 export type PropertyDocumentSource = 'HOME_RECORD' | 'LEGACY_DOCUMENT';
 
@@ -77,6 +78,8 @@ export async function listPropertyDocuments(input: {
   includeLegacy?: boolean;
   /** Legacy documents attached to an inventory item of this property rather than to the property itself (legacy branch only). */
   includeInventoryLinkedLegacy?: boolean;
+  /** Only documents of these kinds (kind keys from either store), for a picker such as "contracts". */
+  kinds?: string[];
 }): Promise<PropertyDocumentInventory> {
   const records = await homeRecordsService.list(input.propertyId, input.role, { lifecycleStatus: 'ACTIVE' });
   const fromRecords: PropertyDocument[] = records.map((record) => ({
@@ -111,7 +114,9 @@ export async function listPropertyDocuments(input: {
     });
   }
 
-  const items = [...fromRecords, ...fromLegacy].sort((left, right) => right.addedAt.getTime() - left.addedAt.getTime());
+  const items = [...fromRecords, ...fromLegacy]
+    .filter((item) => !input.kinds || input.kinds.includes(item.kind))
+    .sort((left, right) => right.addedAt.getTime() - left.addedAt.getTime());
   return { items, totals: { total: items.length, homeRecords: fromRecords.length, legacy: fromLegacy.length } };
 }
 
@@ -167,4 +172,66 @@ export async function latestPropertyDocumentOfKind(input: {
     .filter((row): row is { id: string; updatedAt: Date; source: PropertyDocumentSource } => row !== null)
     .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0];
   return winner ? { id: winner.id, source: winner.source, kind: input.kind, updatedAt: winner.updatedAt } : null;
+}
+
+/** A document a workflow refers to by id: enough to name it, show it and link it, nothing store-specific. */
+export interface PropertyDocumentRef {
+  id: string;
+  source: PropertyDocumentSource;
+  title: string;
+  kind: string;
+  kindLabel: string;
+  addedAt: Date;
+}
+
+/**
+ * Resolve the documents a workflow refers to by id (a workspace's title commitment, an insurance binder, walkthrough evidence). Home Records
+ * applies the caller's record-level visibility and never returns a trashed record; an id that is not in this property, or not visible to this
+ * role, simply does not resolve, so a caller that needs every id to exist compares the counts. A workflow whose reader and writer have both
+ * moved to Home Records asks for Home Records only; the legacy branch exists for a workflow still writing legacy storage.
+ */
+export async function resolvePropertyDocuments(input: {
+  propertyId: string;
+  role: HouseholdRole;
+  ids: Array<string | null | undefined>;
+  includeLegacy?: boolean;
+}): Promise<PropertyDocumentRef[]> {
+  const ids = [...new Set(input.ids.filter((value): value is string => Boolean(value)))];
+  if (ids.length === 0) return [];
+  const records = await prisma.propertyRecord.findMany({
+    where: { id: { in: ids }, propertyId: input.propertyId, lifecycleStatus: { not: 'TRASHED' }, ...visibleRecordWhere(input.role) },
+    select: { id: true, title: true, recordType: true, createdAt: true },
+  });
+  const fromRecords: PropertyDocumentRef[] = records.map((record) => ({
+    id: record.id, source: 'HOME_RECORD', title: record.title, kind: record.recordType, kindLabel: propertyDocumentKindLabel(record.recordType), addedAt: record.createdAt,
+  }));
+  let fromLegacy: PropertyDocumentRef[] = [];
+  if (input.includeLegacy) {
+    const found = new Set(fromRecords.map((row) => row.id));
+    const rows = await prisma.document.findMany({
+      where: { id: { in: ids.filter((id) => !found.has(id)) }, propertyId: input.propertyId, deletedAt: null },
+      select: { id: true, name: true, type: true, createdAt: true },
+    });
+    fromLegacy = rows.map((row) => ({ id: row.id, source: 'LEGACY_DOCUMENT', title: row.name, kind: LEGACY_KIND_KEY[row.type], kindLabel: propertyDocumentKindLabel(LEGACY_KIND_KEY[row.type]), addedAt: row.createdAt }));
+  }
+  return [...fromRecords, ...fromLegacy];
+}
+
+/** Throws the caller's own not-found error unless every id resolves (a workflow must not store a reference it could not later show). */
+export async function assertPropertyDocumentsExist(
+  input: { propertyId: string; role: HouseholdRole; ids: Array<string | null | undefined>; includeLegacy?: boolean },
+  notFound: () => Error,
+): Promise<void> {
+  const wanted = new Set(input.ids.filter((value): value is string => Boolean(value)));
+  if (wanted.size === 0) return;
+  const resolved = await resolvePropertyDocuments(input);
+  if (resolved.length !== wanted.size) throw notFound();
+}
+
+/**
+ * The shape the buyer workflow screens read for a document: a name, a kind and a date. A Home Record carries no legacy verification status, so
+ * that field is null; `source` says which store the row came from.
+ */
+export function toWorkflowDocumentSummary(document: { id: string; source: PropertyDocumentSource; title: string; kind: string; addedAt: Date }) {
+  return { id: document.id, name: document.title, type: document.kind, verificationStatus: null, source: document.source, createdAt: document.addedAt.toISOString() };
 }

@@ -1,4 +1,4 @@
-import { Prisma, type BuyerTitleEscrowWorkspace } from '@prisma/client';
+import { Prisma, type BuyerTitleEscrowWorkspace, type HouseholdRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -10,12 +10,14 @@ import {
 } from '../productFramework/buyerAcquisition.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
+import { assertPropertyDocumentsExist, resolvePropertyDocuments, toWorkflowDocumentSummary } from './propertyDocuments/propertyDocumentInventory.service';
 
 async function assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR') {
   const access = await resolvePropertyAccess(userId, propertyId);
   if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
     throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
   }
+  return access.role;
 }
 
 const dateValue = (value: string | null | undefined) => value === undefined ? undefined : value === null ? null : new Date(value);
@@ -83,7 +85,7 @@ const TASK_DEFINITIONS = {
 
 export class BuyerTitleEscrowService {
   static async get(userId: string, propertyId: string) {
-    await assertAccess(userId, propertyId, 'VIEWER');
+    const role = await assertAccess(userId, propertyId, 'VIEWER');
     const workspace = await prisma.buyerTitleEscrowWorkspace.findUnique({
       where: { propertyId },
       include: { issues: { orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { createdAt: 'asc' }] } },
@@ -98,17 +100,14 @@ export class BuyerTitleEscrowService {
       workspace.responsibleContactId
         ? prisma.buyerJourneyContact.findFirst({ where: { id: workspace.responsibleContactId, checklistId: workspace.checklistId } })
         : null,
-      documentIds.length
-        ? prisma.document.findMany({
-            where: { id: { in: documentIds }, propertyId, deletedAt: null },
-            select: { id: true, name: true, type: true, verificationStatus: true, createdAt: true },
-          })
-        : [],
+      // Title, survey and association documents are Home Records (this workflow's uploads go there), read with the caller's role.
+      resolvePropertyDocuments({ propertyId, role, ids: documentIds }),
     ]);
     return {
       workspace: serializeWorkspace(workspace),
       contact: contact ? { ...contact, createdAt: contact.createdAt.toISOString(), updatedAt: contact.updatedAt.toISOString() } : null,
-      documents: documents.map((document) => ({ ...document, createdAt: document.createdAt.toISOString() })),
+      // The screen names each document; a Home Record carries no legacy verification status, so that field is null here.
+      documents: documents.map(toWorkflowDocumentSummary),
     };
   }
 
@@ -117,10 +116,10 @@ export class BuyerTitleEscrowService {
     propertyId: string,
     input: BuyerTitleEscrowWorkspaceUpdateInput,
   ) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
     const existing = await prisma.buyerTitleEscrowWorkspace.findUnique({ where: { propertyId } });
-    await this.assertDocuments(propertyId, [
+    await this.assertDocuments(propertyId, role, [
       input.titleCommitmentDocumentId,
       input.surveyDocumentId,
       input.associationDocumentId,
@@ -247,11 +246,11 @@ export class BuyerTitleEscrowService {
     return this.get(userId, propertyId);
   }
 
-  private static async assertDocuments(propertyId: string, ids: Array<string | null | undefined>) {
-    const requested = [...new Set(ids.filter((value): value is string => Boolean(value)))];
-    if (!requested.length) return;
-    const count = await prisma.document.count({ where: { id: { in: requested }, propertyId, deletedAt: null } });
-    if (count !== requested.length) throw new APIError('A linked title document was not found for this property.', 404, 'DOCUMENT_NOT_FOUND');
+  private static async assertDocuments(propertyId: string, role: HouseholdRole, ids: Array<string | null | undefined>) {
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids },
+      () => new APIError('A linked title document was not found for this property.', 404, 'DOCUMENT_NOT_FOUND'),
+    );
   }
 
   private static async upsertTask(

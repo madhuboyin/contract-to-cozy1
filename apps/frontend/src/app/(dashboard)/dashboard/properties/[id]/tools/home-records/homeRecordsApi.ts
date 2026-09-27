@@ -11,6 +11,7 @@ import type {
   PropertyRecordLinkPurpose,
   PropertyRecordSavedSearch,
   PropertyRecordSavedSearchView,
+  PropertyRecordSensitivity,
   PropertyRecordStorageHealth,
   PropertyRecordSummary,
   PropertyRecordType,
@@ -56,6 +57,25 @@ export async function createRecord(
   );
   if (!res.success) throw new Error(res.message ?? 'Failed to add record.');
   return res.data;
+}
+
+/**
+ * Add a document to Home Records for a workflow that stores the record's id (a buyer workspace, a proof of work) and return that id. Home
+ * Records refuses an exact duplicate file, so a workflow that re-submits a file the homeowner already added reuses the existing record instead
+ * of failing. The record is household-visible: a workflow's documents are shared with the people who work the same plan.
+ */
+export async function uploadRecordForWorkflow(
+  propertyId: string,
+  input: { file: File; title: string; description?: string; recordType: PropertyRecordType; sensitivity: PropertyRecordSensitivity },
+): Promise<string> {
+  try {
+    const created = await createRecord(propertyId, { ...input, visibility: 'HOUSEHOLD' });
+    return created.record.id;
+  } catch (error) {
+    const payload = (error as { payload?: { error?: { code?: string; details?: { recordId?: string } } } } | null)?.payload;
+    if (payload?.error?.code === 'PROPERTY_RECORD_DUPLICATE_CONTENT' && payload.error.details?.recordId) return payload.error.details.recordId;
+    throw error;
+  }
 }
 
 export async function createBatchRecords(

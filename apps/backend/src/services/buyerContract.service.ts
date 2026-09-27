@@ -1,4 +1,4 @@
-import { Prisma, type BuyerContractRevision } from '@prisma/client';
+import { Prisma, type HouseholdRole, type BuyerContractRevision } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -11,6 +11,7 @@ import {
 } from '../productFramework/buyerAcquisition.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
+import { assertPropertyDocumentsExist, listPropertyDocuments, resolvePropertyDocuments, toWorkflowDocumentSummary } from './propertyDocuments/propertyDocumentInventory.service';
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
@@ -19,6 +20,7 @@ async function assertAccess(userId: string, propertyId: string, minimum: 'VIEWER
   if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
     throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
   }
+  return access.role;
 }
 
 const dateOnly = (value: string | null | undefined) => value === undefined ? undefined : value === null ? null : new Date(`${value}T00:00:00.000Z`);
@@ -110,14 +112,15 @@ const MILESTONE_BY_CONTINGENCY: Record<string, { key: string; type: any; label?:
 
 export class BuyerContractService {
   static async get(userId: string, propertyId: string) {
-    await assertAccess(userId, propertyId, 'VIEWER');
+    const role = await assertAccess(userId, propertyId, 'VIEWER');
     const [workspace, property, documents, checklist] = await Promise.all([
       prisma.buyerContractWorkspace.findUnique({
         where: { propertyId },
         include: { revisions: { include: { fieldConfirmations: true, contingencies: { orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }] } }, orderBy: { revisionNumber: 'desc' } } },
       }),
       prisma.property.findUniqueOrThrow({ where: { id: propertyId }, select: { address: true, city: true, state: true, zipCode: true } }),
-      prisma.document.findMany({ where: { propertyId, deletedAt: null, type: { in: ['CONTRACT', 'OTHER'] } }, select: { id: true, name: true, type: true, verificationStatus: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
+      // Contract source documents are Home Records (contracts and other records), read with the caller's role.
+      listPropertyDocuments({ propertyId, role, kinds: ['CONTRACT', 'OTHER'] }),
       prisma.homeBuyerChecklist.findUnique({ where: { propertyId }, include: { milestones: true } }),
     ]);
     const revisions = workspace?.revisions.map(serializeRevision) ?? [];
@@ -129,15 +132,15 @@ export class BuyerContractService {
     return {
       workspace: workspace ? { id: workspace.id, checklistId: workspace.checklistId, propertyId, currentRevisionId: workspace.currentRevisionId, createdAt: workspace.createdAt.toISOString(), updatedAt: workspace.updatedAt.toISOString(), revisions } : null,
       propertyAddress: [property.address, property.city, property.state, property.zipCode].filter(Boolean).join(', '),
-      documents: documents.map((document) => ({ ...document, createdAt: document.createdAt.toISOString() })),
+      documents: documents.items.map(toWorkflowDocumentSummary),
       conflicts,
       disclaimer: 'ContractToCozy organizes buyer-recorded contract facts. It does not provide legal review, determine compliance, or waive a contingency. Confirm every date and term with the current signed source and your real-estate or legal professional.',
     };
   }
 
   static async createRevision(userId: string, propertyId: string, input: BuyerContractRevisionCreateInput) {
-    await assertAccess(userId, propertyId);
-    await this.assertDocuments(propertyId, input);
+    const role = await assertAccess(userId, propertyId);
+    await this.assertDocuments(propertyId, role, input);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
     const workspace = await prisma.buyerContractWorkspace.upsert({
       where: { propertyId }, create: { propertyId, checklistId: checklist.id }, update: {},
@@ -157,8 +160,8 @@ export class BuyerContractService {
   }
 
   static async updateDraft(userId: string, propertyId: string, revisionId: string, input: BuyerContractRevisionUpdateInput) {
-    await assertAccess(userId, propertyId);
-    await this.assertDocuments(propertyId, input);
+    const role = await assertAccess(userId, propertyId);
+    await this.assertDocuments(propertyId, role, input);
     const revision = await prisma.buyerContractRevision.findFirst({ where: { id: revisionId, status: 'DRAFT', workspace: { propertyId } } });
     if (!revision) throw new APIError('Editable contract draft not found.', 404, 'BUYER_CONTRACT_DRAFT_NOT_FOUND');
     await prisma.$transaction(async (tx) => {
@@ -172,7 +175,7 @@ export class BuyerContractService {
   }
 
   static async confirm(userId: string, propertyId: string, revisionId: string, input: BuyerContractRevisionConfirmInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const revision = await prisma.buyerContractRevision.findFirst({
       where: { id: revisionId, workspace: { propertyId } },
       include: { workspace: { include: { checklist: true } }, contingencies: true },
@@ -187,7 +190,7 @@ export class BuyerContractService {
     if (!confirmedFields.has('PROPERTY_ADDRESS')) {
       throw new APIError('Confirm the property address before updating this closing plan.', 409, 'BUYER_CONTRACT_PROPERTY_UNCONFIRMED');
     }
-    await this.assertDocumentIds(propertyId, [revision.sourceDocumentId, ...input.fieldConfirmations.map((item) => item.sourceDocumentId)]);
+    await this.assertDocumentIds(propertyId, role, [revision.sourceDocumentId, ...input.fieldConfirmations.map((item) => item.sourceDocumentId)]);
 
     const previous = revision.workspace.currentRevisionId
       ? await prisma.buyerContractRevision.findUnique({ where: { id: revision.workspace.currentRevisionId } })
@@ -252,14 +255,14 @@ export class BuyerContractService {
     await tx.buyerJourneyMilestone.upsert({ where: { checklistId_milestoneKey: { checklistId, milestoneKey } }, create: { checklistId, milestoneKey, ...data }, update: data });
   }
 
-  private static async assertDocuments(propertyId: string, input: BuyerContractRevisionCreateInput | BuyerContractRevisionUpdateInput) {
-    await this.assertDocumentIds(propertyId, [input.sourceDocumentId, ...(input.contingencies ?? []).map((item) => item.sourceDocumentId)]);
+  private static async assertDocuments(propertyId: string, role: HouseholdRole, input: BuyerContractRevisionCreateInput | BuyerContractRevisionUpdateInput) {
+    await this.assertDocumentIds(propertyId, role, [input.sourceDocumentId, ...(input.contingencies ?? []).map((item) => item.sourceDocumentId)]);
   }
 
-  private static async assertDocumentIds(propertyId: string, ids: Array<string | null | undefined>) {
-    const requested = [...new Set(ids.filter((value): value is string => Boolean(value)))];
-    if (!requested.length) return;
-    const count = await prisma.document.count({ where: { id: { in: requested }, propertyId, deletedAt: null } });
-    if (count !== requested.length) throw new APIError('A linked contract source document was not found for this property.', 404, 'BUYER_CONTRACT_SOURCE_NOT_FOUND');
+  private static async assertDocumentIds(propertyId: string, role: HouseholdRole, ids: Array<string | null | undefined>) {
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids },
+      () => new APIError('A linked contract source document was not found for this property.', 404, 'BUYER_CONTRACT_SOURCE_NOT_FOUND'),
+    );
   }
 }

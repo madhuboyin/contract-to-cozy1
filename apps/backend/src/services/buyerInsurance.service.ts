@@ -1,4 +1,4 @@
-import { Prisma, type BuyerInsuranceWorkspace } from '@prisma/client';
+import { Prisma, type BuyerInsuranceWorkspace, type HouseholdRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -14,12 +14,15 @@ import {
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { createInsurancePolicy } from './home-management.service';
+import { linkRecordToEntityInTransaction } from './homeRecords.service';
+import { assertPropertyDocumentsExist, resolvePropertyDocuments, toWorkflowDocumentSummary } from './propertyDocuments/propertyDocumentInventory.service';
 
 async function assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR') {
   const access = await resolvePropertyAccess(userId, propertyId);
   if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
     throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
   }
+  return access.role;
 }
 
 const dateValue = (value: string | null | undefined) => value === undefined ? undefined : value === null ? null : new Date(value);
@@ -52,7 +55,7 @@ function serialize(workspace: any) {
 
 export class BuyerInsuranceService {
   static async get(userId: string, propertyId: string) {
-    await assertAccess(userId, propertyId, 'VIEWER');
+    const role = await assertAccess(userId, propertyId, 'VIEWER');
     const workspace = await prisma.buyerInsuranceWorkspace.findUnique({
       where: { propertyId },
       include: {
@@ -73,26 +76,23 @@ export class BuyerInsuranceService {
             select: { id: true, carrierName: true, policyNumber: true, coverageType: true, premiumAmount: true, deductibleCents: true, personalPropertyLimitCents: true, startDate: true, expiryDate: true },
           })
         : null,
-      documentIds.length
-        ? prisma.document.findMany({
-            where: { id: { in: documentIds }, propertyId, deletedAt: null },
-            select: { id: true, name: true, type: true, verificationStatus: true, createdAt: true },
-          })
-        : [],
+      // The binder and quote documents are Home Records (this workflow's uploads go there), read with the caller's role.
+      resolvePropertyDocuments({ propertyId, role, ids: documentIds }),
     ]);
     return {
       workspace: serialize(workspace),
       contact: contact ? { ...contact, createdAt: contact.createdAt.toISOString(), updatedAt: contact.updatedAt.toISOString() } : null,
       policy: policy ? { ...policy, premiumAmount: policy.premiumAmount?.toString() ?? null, startDate: dateText(policy.startDate), expiryDate: dateText(policy.expiryDate) } : null,
-      documents: documents.map((document) => ({ ...document, createdAt: document.createdAt.toISOString() })),
+      // The screen names each document; a Home Record carries no legacy verification status, so that field is null here.
+      documents: documents.map(toWorkflowDocumentSummary),
     };
   }
 
   static async update(userId: string, propertyId: string, input: BuyerInsuranceWorkspaceUpdateInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
     const existing = await prisma.buyerInsuranceWorkspace.findUnique({ where: { propertyId } });
-    await this.assertDocuments(propertyId, [input.binderDocumentId]);
+    await this.assertDocuments(propertyId, role, [input.binderDocumentId]);
     const now = new Date();
     await prisma.$transaction(async (tx) => {
       let insuranceContactId = existing?.insuranceContactId ?? null;
@@ -132,8 +132,9 @@ export class BuyerInsuranceService {
           lastUpdatedByUserId: userId,
         },
       });
+      // The binder is a Home Record; attaching it to the bound policy is a Home Records entity link, written atomically with the workspace.
       if (input.binderDocumentId && workspace.boundPolicyId) {
-        await tx.document.update({ where: { id: input.binderDocumentId }, data: { policyId: workspace.boundPolicyId } });
+        await linkRecordToEntityInTransaction(tx, { propertyId, recordId: input.binderDocumentId, entityType: 'INSURANCE_POLICY', entityId: workspace.boundPolicyId, purpose: 'EVIDENCE', userId, label: 'Insurance binder' });
       }
       await this.reconcile(tx, workspace.id, checklist.id, userId, now);
     });
@@ -141,9 +142,9 @@ export class BuyerInsuranceService {
   }
 
   static async createQuote(userId: string, propertyId: string, input: BuyerInsuranceQuoteCreateInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
-    await this.assertDocuments(propertyId, [input.sourceDocumentId]);
+    await this.assertDocuments(propertyId, role, [input.sourceDocumentId]);
     const now = new Date();
     await prisma.$transaction(async (tx) => {
       const workspace = await tx.buyerInsuranceWorkspace.upsert({
@@ -160,8 +161,8 @@ export class BuyerInsuranceService {
   }
 
   static async updateQuote(userId: string, propertyId: string, quoteId: string, input: BuyerInsuranceQuoteUpdateInput) {
-    await assertAccess(userId, propertyId);
-    await this.assertDocuments(propertyId, [input.sourceDocumentId]);
+    const role = await assertAccess(userId, propertyId);
+    await this.assertDocuments(propertyId, role, [input.sourceDocumentId]);
     const quote = await prisma.buyerInsuranceQuote.findFirst({ where: { id: quoteId, propertyId } });
     if (!quote) throw new APIError('Insurance quote not found.', 404, 'BUYER_INSURANCE_QUOTE_NOT_FOUND');
     const now = new Date();
@@ -227,7 +228,7 @@ export class BuyerInsuranceService {
         where: { id: workspace.id },
         data: { boundPolicyId: policy!.id, boundRecordedAt: now, boundRecordedByUserId: userId, lastUpdatedByUserId: userId },
       });
-      if (updated.binderDocumentId) await tx.document.update({ where: { id: updated.binderDocumentId }, data: { policyId: policy!.id } });
+      if (updated.binderDocumentId) await linkRecordToEntityInTransaction(tx, { propertyId, recordId: updated.binderDocumentId, entityType: 'INSURANCE_POLICY', entityId: policy!.id, purpose: 'EVIDENCE', userId, label: 'Insurance binder' });
       await this.reconcile(tx, updated.id, updated.checklistId, userId, now);
     });
     return this.get(userId, propertyId);
@@ -259,11 +260,11 @@ export class BuyerInsuranceService {
     return this.get(userId, propertyId);
   }
 
-  private static async assertDocuments(propertyId: string, ids: Array<string | null | undefined>) {
-    const requested = [...new Set(ids.filter((value): value is string => Boolean(value)))];
-    if (!requested.length) return;
-    const count = await prisma.document.count({ where: { id: { in: requested }, propertyId, deletedAt: null } });
-    if (count !== requested.length) throw new APIError('An insurance document was not found for this property.', 404, 'DOCUMENT_NOT_FOUND');
+  private static async assertDocuments(propertyId: string, role: HouseholdRole, ids: Array<string | null | undefined>) {
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids },
+      () => new APIError('An insurance document was not found for this property.', 404, 'DOCUMENT_NOT_FOUND'),
+    );
   }
 
   private static async reconcile(tx: Prisma.TransactionClient, workspaceId: string, checklistId: string, userId: string, now: Date) {

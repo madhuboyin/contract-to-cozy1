@@ -47,7 +47,9 @@ test('binding promotes only the selected current quote into canonical Coverage',
   assert.match(service, /BUYER_INSURANCE_QUOTE_EXPIRED/);
   assert.match(service, /createInsurancePolicy\(property\.homeownerProfileId/);
   assert.match(service, /boundPolicyId: policy!\.id/);
-  assert.match(service, /data: \{ policyId: policy!\.id \}/);
+  // The binder is a Home Record: attaching it to the bound policy is an idempotent Home Records entity link written in the same transaction.
+  assert.match(service, /linkRecordToEntityInTransaction\(tx, \{ propertyId, recordId: updated\.binderDocumentId, entityType: 'INSURANCE_POLICY', entityId: policy!\.id/);
+  assert.doesNotMatch(service, /tx\.document\./);
   assert.match(homeownerService, /confirmedByUserId \?\? profile\?\.userId/);
   assert.match(service, /BUYER_ACTION_KEYS\.COVERAGE_BIND/);
   assert.match(service, /BUYER_MILESTONE_KEYS\.INSURANCE_EFFECTIVE/);

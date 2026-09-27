@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
 import { BuyerWorkspaceDetails, BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
+import { uploadRecordForWorkflow } from '../tools/home-records/homeRecordsApi';
 import type {
   BuyerInsuranceProofStatus,
   BuyerInsuranceQuoteInput,
@@ -46,11 +47,11 @@ export function BuyerInsuranceCenter({ propertyId, readOnly }: { propertyId: str
     queryClient.setQueryData(queryKey, data);
     void queryClient.invalidateQueries({ queryKey: ['buyer-plan-overview', propertyId] });
   };
-  const upload = async (file: File, name: string) => {
-    const response = await api.uploadDocument(file, { propertyId, type: 'INSURANCE_CERTIFICATE', name, description: 'Buyer insurance preparation evidence; status remains user recorded.' });
-    if (!response.success || !response.data?.id) throw new Error(`Unable to upload ${name}.`);
-    return response.data.id;
-  };
+  // Binder and quote documents are Home Records: the workspace stores the record's id.
+  const upload = (file: File, name: string) => uploadRecordForWorkflow(propertyId, {
+    file, title: name, recordType: 'INSURANCE_POLICY', sensitivity: 'INSURANCE',
+    description: 'Buyer insurance preparation evidence; status remains user recorded.',
+  });
   const workspaceMutation = useMutation({
     mutationFn: async (input: Parameters<typeof api.updateBuyerInsurance>[1]) => {
       const binderDocumentId = binderFile ? await upload(binderFile, 'Insurance binder or proof') : query.data?.workspace?.binderDocumentId ?? null;

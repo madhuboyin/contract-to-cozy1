@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
 import { BuyerWorkspaceDetails, BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
+import { uploadRecordForWorkflow } from '../tools/home-records/homeRecordsApi';
+import type { PropertyRecordSensitivity, PropertyRecordType } from '../tools/home-records/types';
 import type {
   BuyerClosingAppointmentFormat,
   BuyerTitleEscrowIssueInput,
@@ -49,24 +51,24 @@ export function BuyerTitleEscrowCenter({ propertyId, readOnly }: { propertyId: s
     queryClient.setQueryData(queryKey, workspace);
     void queryClient.invalidateQueries({ queryKey: ['buyer-plan-overview', propertyId] });
   };
-  const upload = async (slot: DocumentSlot, label: string, type: 'CONTRACT' | 'OTHER') => {
+  // The title, survey and association documents are Home Records: the workspace stores the record's id.
+  const upload = async (slot: DocumentSlot, label: string, recordType: PropertyRecordType, sensitivity: PropertyRecordSensitivity) => {
     const file = files[slot];
     if (!file) return workspaceQuery.data?.workspace?.[slot] ?? null;
-    const response = await api.uploadDocument(file, {
-      propertyId,
-      type,
-      name: label,
+    return uploadRecordForWorkflow(propertyId, {
+      file,
+      title: label,
       description: 'Buyer closing preparation document. Professional review remains external.',
+      recordType,
+      sensitivity,
     });
-    if (!response.success || !response.data?.id) throw new Error(`Unable to upload ${label}.`);
-    return response.data.id;
   };
   const workspaceMutation = useMutation({
     mutationFn: async (input: BuyerTitleEscrowWorkspaceInput) => {
       const [titleCommitmentDocumentId, surveyDocumentId, associationDocumentId] = await Promise.all([
-        upload('titleCommitmentDocumentId', 'Title commitment or preliminary title report', 'CONTRACT'),
-        upload('surveyDocumentId', 'Property survey', 'OTHER'),
-        upload('associationDocumentId', 'Association or HOA records', 'OTHER'),
+        upload('titleCommitmentDocumentId', 'Title commitment or preliminary title report', 'CLOSING_DOCUMENT', 'LEGAL'),
+        upload('surveyDocumentId', 'Property survey', 'SURVEY', 'STANDARD'),
+        upload('associationDocumentId', 'Association or HOA records', 'OTHER', 'STANDARD'),
       ]);
       const response = await api.updateBuyerTitleEscrow(propertyId, {
         ...input,

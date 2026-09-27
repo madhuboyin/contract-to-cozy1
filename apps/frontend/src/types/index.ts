@@ -3086,7 +3086,7 @@ export interface BuyerContractRevision extends Required<Omit<BuyerContractRevisi
 export interface BuyerContractWorkspaceResponse {
   workspace: null | { id: string; checklistId: string; propertyId: string; currentRevisionId: string | null; revisions: BuyerContractRevision[]; createdAt: string; updatedAt: string };
   propertyAddress: string;
-  documents: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
+  documents: Array<{ id: string; name: string; type: string; verificationStatus: string | null; source?: 'HOME_RECORD' | 'LEGACY_DOCUMENT'; createdAt: string }>;
   conflicts: string[];
   disclaimer: string;
 }
@@ -3527,11 +3527,13 @@ export interface BuyerEvidenceReview {
     name: string;
     type: string;
     description: string | null;
-    verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+    // A legacy document has a verification status the buyer can set; a Home Record has none (source HOME_RECORD), so it is listed read-only.
+    verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED' | null;
     verifiedAt: string | null;
     parserVersion: string | null;
     ocrQualityScore: number | null;
     createdAt: string;
+    source?: 'HOME_RECORD' | 'LEGACY_DOCUMENT';
   }>;
 }
 
@@ -3953,11 +3955,13 @@ export interface BuyerTitleEscrowWorkspaceResponse {
     phone: string | null;
     notes: string | null;
   };
+  // Home Records (this workflow's uploads live there); a Home Record carries no legacy verification status.
   documents: Array<{
     id: string;
     name: string;
     type: string;
-    verificationStatus: string;
+    verificationStatus: string | null;
+    source?: 'HOME_RECORD' | 'LEGACY_DOCUMENT';
     createdAt: string;
   }>;
 }
@@ -4026,7 +4030,7 @@ export interface BuyerInsuranceWorkspaceResponse {
   };
   contact: null | { id: string; name: string; company: string | null; email: string | null; phone: string | null; notes: string | null };
   policy: null | { id: string; carrierName: string; policyNumber: string; coverageType: string | null; premiumAmount: string | null; deductibleCents: number | null; personalPropertyLimitCents: number | null; startDate: string | null; expiryDate: string | null };
-  documents: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
+  documents: Array<{ id: string; name: string; type: string; verificationStatus: string | null; source?: 'HOME_RECORD' | 'LEGACY_DOCUMENT'; createdAt: string }>;
 }
 
 export type BuyerWalkthroughObservationCategory = 'OVERALL_CONDITION' | 'INCLUDED_ITEMS' | 'AGREED_REPAIRS' | 'NEW_DAMAGE' | 'LIGHTING_ELECTRICAL' | 'PLUMBING' | 'HVAC_APPLIANCES' | 'DOORS_WINDOWS' | 'GARAGE_ACCESS' | 'SMOKE_CO' | 'OTHER';
@@ -4100,9 +4104,9 @@ export interface BuyerWalkthroughWorkspaceResponse {
         negotiationCase: { id: string };
       }>;
     }>;
-    contractDocuments: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
+    contractDocuments: Array<{ id: string; name: string; type: string; verificationStatus: string | null; source?: 'HOME_RECORD' | 'LEGACY_DOCUMENT'; createdAt: string }>;
   };
-  evidenceDocuments: Array<{ id: string; name: string; type: string; verificationStatus: string; createdAt: string }>;
+  evidenceDocuments: Array<{ id: string; name: string; type: string; verificationStatus: string | null; source?: 'HOME_RECORD' | 'LEGACY_DOCUMENT'; createdAt: string }>;
 }
 
 export interface BuyerInspectionModuleRecommendation {

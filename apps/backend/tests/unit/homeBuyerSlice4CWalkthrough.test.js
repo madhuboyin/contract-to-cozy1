@@ -41,8 +41,10 @@ test('walkthrough contracts are strict, bounded, and require a professional rout
 test('service reads canonical transaction evidence and keeps completion evidence bounded', () => {
   assert.match(service, /prisma\.inspectionFinding\.findMany/);
   assert.match(service, /negotiationCaseLinks/);
-  assert.match(service, /type: 'CONTRACT'/);
-  assert.match(service, /prisma\.document\.count/);
+  // Contract and evidence documents are Home Records, read and asserted through the canonical inventory with the caller's role.
+  assert.match(service, /listPropertyDocuments\(\{ propertyId, role, kinds: \['CONTRACT'\] \}\)/);
+  assert.match(service, /assertPropertyDocumentsExist\(/);
+  assert.doesNotMatch(service, /prisma\.document\./);
   assert.match(service, /Every issue observation must have a recorded escalation item/);
   assert.match(service, /Route or disposition every walkthrough issue before completing/);
   assert.match(service, /BUYER_ACTION_KEYS\.WALKTHROUGH_PREP/);

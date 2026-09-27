@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import type {
   HouseholdRole,
   PropertyRecordLinkEntityType,
@@ -955,3 +956,35 @@ export class HomeRecordsService {
 }
 
 export const homeRecordsService = new HomeRecordsService();
+
+/**
+ * Link a Home Record to another entity inside the caller's transaction, idempotently (the same record, entity and purpose is one link). For a
+ * workflow that must record the link atomically with its own write, such as an insurance binder attached to the policy it was bound to. The
+ * record must belong to the property; the caller has already established that it is visible to the acting role.
+ */
+export async function linkRecordToEntityInTransaction(
+  tx: Prisma.TransactionClient,
+  input: {
+    propertyId: string;
+    recordId: string;
+    entityType: PropertyRecordLinkEntityType;
+    entityId: string;
+    purpose: PropertyRecordLinkPurpose;
+    userId: string;
+    label?: string | null;
+  },
+): Promise<void> {
+  const record = await tx.propertyRecord.findFirst({
+    where: { id: input.recordId, propertyId: input.propertyId, lifecycleStatus: { not: 'TRASHED' } },
+    select: { id: true, currentVersionId: true },
+  });
+  if (!record) throw new APIError('Active record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
+  await tx.propertyRecordLink.upsert({
+    where: { recordId_entityType_entityId_purpose: { recordId: input.recordId, entityType: input.entityType, entityId: input.entityId, purpose: input.purpose } },
+    create: {
+      recordId: input.recordId, versionId: record.currentVersionId, entityType: input.entityType, entityId: input.entityId,
+      purpose: input.purpose, label: input.label ?? null, createdByUserId: input.userId,
+    },
+    update: {},
+  });
+}

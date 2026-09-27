@@ -1974,7 +1974,7 @@ Status: neither statement was run by the agent; the count and any update are the
 
 | Slice | Readers | Writers | Note |
 |---|---|---|---|
-| S5b Buyer | buyerAcquisition, buyerClosingDay, buyerClosingDisclosure, buyerContract, buyerInsurance, buyerPurchaseLoanEstimate, buyerTitleEscrow, buyerWalkthrough, HomeBuyerTask, entryContext (buyer count) | buyerAcquisition, buyerInsurance; UI: four buyer plan centers | Buyer-plan links to the property `/documents` route already land on Home Records, which will not list buyer uploads until this converts |
+| S5b Buyer (S5b-1 done: title/escrow, insurance, walkthrough, contract; S5b-2 open) | buyerAcquisition, buyerClosingDay, buyerClosingDisclosure, buyerContract, buyerInsurance, buyerPurchaseLoanEstimate, buyerTitleEscrow, buyerWalkthrough, HomeBuyerTask, entryContext (buyer count) | buyerAcquisition, buyerInsurance; UI: four buyer plan centers | Buyer-plan links to the property `/documents` route already land on Home Records, which will not list buyer uploads until this converts |
 | S5c Claims and evidence | claims, entryContext evidence check, pastHazardExposure, coverageComparison, servicePriceRadar (id-scoped evidence checks) | claims.service (8), Ask evidence attach (captureConfirm), homeRecordWrites | Evidence references are document ids: reader and writer move as one |
 | S5d Inventory, warranty, insurance | inventory, insurancePolicyRecord, home-management, materialSpec, homeOperationsMaterialApprovalEvidence | inventory (4), home-management, warranties and insurance pages | Attachments hang off an inventory item, warranty or policy; Home Records links replace the link columns |
 | S5e Projects and renovation | projectTracker, permitTracker, renovationCase, renovationComplianceWorkflow, renovationReadiness, renovationRequirement, hoaCompliance | projectTracker (5), ProjectProofUploader | Proof of work |
@@ -1985,4 +1985,19 @@ Status: neither statement was run by the agent; the count and any update are the
 | Retire last | document.routes, documentAuth.middleware | | Removed with the legacy branch |
 
 **Order.** S5b first (largest user-visible gap: buyer documents are invisible in Home Records), then S5c, S5d, S5e, S5f, S5g. Each slice is a single PR-sized change: convert its writer, convert its reader, delete the legacy branch use, and add a guardrail test. The "verified" decision can be made at any point and unblocks the last group.
+
+### 17.1 S5b-1: buyer workflows with plain document ids (September 26, 2026)
+
+**Finding that reshaped S5b.** About 25 models hold real foreign keys to `documents` (many `onDelete: Cascade`) and dozens more hold plain string document ids. A Home Record id cannot be stored in a foreign-key column, so a workflow converts in one of two ways: **plain-id workflows** need no schema change (their columns can hold a Home Record id), while **foreign-key workflows** need the relation retargeted to `PropertyRecord`, which is a `prisma/schema.prisma` edit that the user applies with `prisma db push`.
+
+**Done (plain ids, reader and writer together, no schema change).** Title and escrow, insurance, walkthrough and contract:
+- Uploads go to Home Records through one screen helper (`uploadRecordForWorkflow`, household-visible; a re-picked duplicate file reuses the existing record). Title commitment becomes a closing document (legal), the survey a survey, association records other, the insurance binder and quotes an insurance policy record (insurance), walkthrough photos a photo.
+- The services resolve stored ids through `resolvePropertyDocuments` and validate them with `assertPropertyDocumentsExist`, with the caller's role, so record-level visibility applies and none of the four services touches the legacy table.
+- The insurance binder attaches to the bound policy as an idempotent Home Records entity link written in the same transaction (`linkRecordToEntityInTransaction`), replacing the legacy `policyId` column update.
+- Contract and walkthrough pickers list Home Records of the kinds they need (`listPropertyDocuments({ kinds })`).
+- The buyer evidence panel lists Home Records read-only (with a link to Home Records) and keeps Verify and Reject for legacy rows only; the readiness total counts both stores, the verified count stays legacy-only.
+
+**Open: S5b-2 (needs a schema change).** Foreign-key columns on the buyer models: `BuyerPurchaseLoanEstimateRevision.sourceDocumentId`, `BuyerClosingDisclosureRevision.sourceDocumentId`, `BuyerClosingDayWorkspace.signedClosingDocumentId`, `BuyerInspectionPlan.reinspectionProofDocumentId`, `HomeBuyerTask.completionDocumentId`, `BuyerJourneyMilestone.sourceDocumentId`, plus the closing-day upload screen and the buyer readers of those. The proposed edit retargets each relation from `Document` to `PropertyRecord` (keeping the column names, so contracts and screens do not change); it is a `prisma db push` for the user to run, with no data to migrate. Until then closing day, the loan estimate and closing disclosure keep legacy storage, and the buyer-plan links to the property documents route land on Home Records, which does list the converted uploads.
+
+**Still blocked on the "verified" decision:** the buyer Verify and Reject actions and the verified-document counts (buyerAcquisition, HomeBuyerTask).
 

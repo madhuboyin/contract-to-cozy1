@@ -120,3 +120,42 @@ test('the latest document of a kind is the most recently updated across both sto
   installSignals({});
   assert.equal(await latestPropertyDocumentOfKind({ propertyId: 'p1', kind: 'INSPECTION_REPORT', includeLegacy: true }), null);
 });
+
+// Documents a workflow refers to by id (S5b): Home Records with the caller's role, never trashed, and only when every id resolves.
+const { resolvePropertyDocuments, assertPropertyDocumentsExist } = require('../../src/services/propertyDocuments/propertyDocumentInventory.service.ts');
+
+function installResolver({ records = [], legacy = [] } = {}) {
+  const calls = { recordWhere: [], legacyWhere: [] };
+  prismaModule.prisma = new Proxy({}, { get(_t, model) {
+    if (model === 'then') return undefined;
+    if (model === 'propertyRecord') return { findMany: async ({ where }) => { calls.recordWhere.push(where); return records.filter((row) => where.id.in.includes(row.id)); } };
+    if (model === 'document') return { findMany: async ({ where }) => { calls.legacyWhere.push(where); return legacy.filter((row) => where.id.in.includes(row.id)); } };
+    throw new Error(`Unexpected prisma.${String(model)} access`);
+  } });
+  return calls;
+}
+const recordRow = (id, recordType = 'SURVEY') => ({ id, title: `Record ${id}`, recordType, createdAt: new Date('2026-09-01') });
+
+test('resolvePropertyDocuments reads Home Records with the caller\'s role, skips trashed records, and de-duplicates ids', async () => {
+  const calls = installResolver({ records: [recordRow('r1'), recordRow('r2', 'CLOSING_DOCUMENT')] });
+  const refs = await resolvePropertyDocuments({ propertyId: 'p1', role: 'CONTRIBUTOR', ids: ['r1', 'r1', null, undefined, 'r2', 'missing'] });
+  assert.deepEqual(refs.map((ref) => [ref.id, ref.source, ref.kindLabel]), [['r1', 'HOME_RECORD', 'Surveys'], ['r2', 'HOME_RECORD', 'Closing documents']]);
+  assert.deepEqual(calls.recordWhere[0], { id: { in: ['r1', 'r2', 'missing'] }, propertyId: 'p1', lifecycleStatus: { not: 'TRASHED' }, visibility: 'HOUSEHOLD' });
+  assert.equal(calls.legacyWhere.length, 0, 'a workflow that moved to Home Records never queries the legacy table');
+  assert.deepEqual(await resolvePropertyDocuments({ propertyId: 'p1', role: 'OWNER', ids: [null, undefined] }), []);
+});
+
+test('an owner sees every record; the legacy branch is only read for the ids Home Records did not resolve, and only when named', async () => {
+  const calls = installResolver({ records: [recordRow('r1')], legacy: [{ id: 'l1', name: 'Old scan', type: 'CONTRACT', createdAt: new Date('2026-08-01') }] });
+  const refs = await resolvePropertyDocuments({ propertyId: 'p1', role: 'OWNER', ids: ['r1', 'l1'], includeLegacy: true });
+  assert.deepEqual(refs.map((ref) => [ref.id, ref.source]), [['r1', 'HOME_RECORD'], ['l1', 'LEGACY_DOCUMENT']]);
+  assert.deepEqual(calls.recordWhere[0].visibility, undefined, 'an owner is not filtered by visibility');
+  assert.deepEqual(calls.legacyWhere[0].id, { in: ['l1'] });
+});
+
+test('assertPropertyDocumentsExist passes only when every id resolves, and throws the caller\'s own error otherwise', async () => {
+  installResolver({ records: [recordRow('r1')] });
+  await assertPropertyDocumentsExist({ propertyId: 'p1', role: 'OWNER', ids: ['r1', null] }, () => new Error('nope'));
+  await assert.rejects(() => assertPropertyDocumentsExist({ propertyId: 'p1', role: 'OWNER', ids: ['r1', 'r2'] }, () => new Error('nope')), /nope/);
+  await assertPropertyDocumentsExist({ propertyId: 'p1', role: 'OWNER', ids: [] }, () => new Error('never'));
+});

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
 import { BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
+import { uploadRecordForWorkflow } from '../tools/home-records/homeRecordsApi';
 import type {
   BuyerWalkthroughIssueCategory,
   BuyerWalkthroughIssueStatus,
@@ -42,11 +43,11 @@ export function BuyerWalkthroughCenter({ propertyId, readOnly }: { propertyId: s
     queryClient.setQueryData(queryKey, data);
     void queryClient.invalidateQueries({ queryKey: ['buyer-plan-overview', propertyId] });
   };
-  const upload = async (file: File, name: string) => {
-    const response = await api.uploadDocument(file, { propertyId, type: 'PHOTO', name, description: 'Buyer-recorded final walkthrough evidence; not a professional condition or repair certification.' });
-    if (!response.success || !response.data?.id) throw new Error(`Unable to upload ${name}.`);
-    return response.data.id;
-  };
+  // Walkthrough evidence photos are Home Records: the workspace stores the record's id.
+  const upload = (file: File, name: string) => uploadRecordForWorkflow(propertyId, {
+    file, title: name, recordType: 'PHOTO', sensitivity: 'STANDARD',
+    description: 'Buyer-recorded final walkthrough evidence; not a professional condition or repair certification.',
+  });
   const workspaceMutation = useMutation({
     mutationFn: async (input: Parameters<typeof api.updateBuyerWalkthrough>[1]) => {
       const response = await api.updateBuyerWalkthrough(propertyId, input);
@@ -132,7 +133,7 @@ export function BuyerWalkthroughCenter({ propertyId, readOnly }: { propertyId: s
       </form>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-lg border bg-background p-4"><p className="text-sm font-medium">Contract and included-item context</p>{data?.context.contractDocuments.length ? <ul className="mt-2 space-y-1 text-xs text-muted-foreground">{data.context.contractDocuments.map((document) => <li key={document.id}>{document.name} · {document.verificationStatus.toLowerCase()}</li>)}</ul> : <p className="mt-2 text-xs text-muted-foreground">No canonical contract documents are attached to this property.</p>}</div>
+        <div className="rounded-lg border bg-background p-4"><p className="text-sm font-medium">Contract and included-item context</p>{data?.context.contractDocuments.length ? <ul className="mt-2 space-y-1 text-xs text-muted-foreground">{data.context.contractDocuments.map((document) => <li key={document.id}>{document.name}{document.verificationStatus ? ` · ${document.verificationStatus.toLowerCase()}` : ''}</li>)}</ul> : <p className="mt-2 text-xs text-muted-foreground">No canonical contract documents are attached to this property.</p>}</div>
         <div className="rounded-lg border bg-background p-4"><p className="text-sm font-medium">Inspection and seller-outcome context</p>{data?.context.findings.length ? <div className="mt-2 max-h-56 space-y-2 overflow-auto">{data.context.findings.map((finding) => <div key={finding.id} className="rounded border p-2 text-xs"><p className="font-medium">{finding.homeSystem}{finding.location ? ` · ${finding.location}` : ''}</p><p className="text-muted-foreground">{finding.inspectorDescription}</p>{finding.negotiationCaseLinks.map((link) => <p key={link.id} className="mt-1 text-teal-800">Seller outcome: {link.outcome.replace(/_/g, ' ').toLowerCase()}{link.outcomeDocument ? ` · ${link.outcomeDocument.name}` : ''}</p>)}</div>)}</div> : <p className="mt-2 text-xs text-muted-foreground">No pre-close inspection or negotiation findings are linked.</p>}</div>
       </div>
 
