@@ -8,7 +8,7 @@
 // (HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md
 // §1.1). No field is ever written to a canonical record until its candidate
 // has been explicitly CONFIRMED or CORRECTED by a homeowner.
-import type { ExpenseCategory, ExtractedFactCandidate, ExtractedFactReviewStatus, WarrantyCategory } from '@prisma/client';
+import type { HouseholdRole, ExpenseCategory, ExtractedFactCandidate, ExtractedFactReviewStatus, WarrantyCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { auditLog, logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
@@ -17,6 +17,7 @@ import { documentIntelligenceService } from './documentIntelligence.service';
 import { documentInsightsToExtractionEnvelope } from './documentIntelligenceExtractionEnvelope.adapter';
 import type { ExtractionEnvelope } from './intelligence/extractionEnvelope.contract';
 import { homeRecordsService } from './homeRecords.service';
+import { assertRecordVisible, visibleRecordWhere } from './homeRecordsAccess';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
 import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
@@ -233,9 +234,10 @@ export class HomeRecordsExtractionService {
     propertyId: string;
     recordId: string;
     versionId: string;
+    role: HouseholdRole;
   }): Promise<ExtractedFactCandidate[]> {
     const version = await prisma.propertyRecordVersion.findFirst({
-      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId } },
+      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId, ...visibleRecordWhere(input.role) } },
       include: { record: true },
     });
     if (!version) throw new APIError('Record version not found.', 404, 'PROPERTY_RECORD_VERSION_NOT_FOUND');
@@ -346,7 +348,9 @@ export class HomeRecordsExtractionService {
     userId: string;
     action: 'CONFIRM' | 'CORRECT' | 'REJECT';
     reviewedValue?: string | null;
+    role: HouseholdRole;
   }): Promise<ExtractedFactCandidate> {
+    await assertRecordVisible(input.propertyId, input.recordId, input.role);
     const candidate = await prisma.extractedFactCandidate.findFirst({
       where: {
         id: input.candidateId,
@@ -400,9 +404,10 @@ export class HomeRecordsExtractionService {
     recordId: string;
     versionId: string;
     userId: string;
+    role: HouseholdRole;
   }) {
     const version = await prisma.propertyRecordVersion.findFirst({
-      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId } },
+      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId, ...visibleRecordWhere(input.role) } },
     });
     if (!version) throw new APIError('Record version not found.', 404, 'PROPERTY_RECORD_VERSION_NOT_FOUND');
 
@@ -581,9 +586,10 @@ export class HomeRecordsExtractionService {
     recordId: string;
     versionId: string;
     userId: string;
+    role: HouseholdRole;
   }) {
     const version = await prisma.propertyRecordVersion.findFirst({
-      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId } },
+      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId, ...visibleRecordWhere(input.role) } },
     });
     if (!version) throw new APIError('Record version not found.', 404, 'PROPERTY_RECORD_VERSION_NOT_FOUND');
 
@@ -752,9 +758,10 @@ export class HomeRecordsExtractionService {
     recordId: string;
     versionId: string;
     userId: string;
+    role: HouseholdRole;
   }) {
     const version = await prisma.propertyRecordVersion.findFirst({
-      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId } },
+      where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId, ...visibleRecordWhere(input.role) } },
     });
     if (!version) throw new APIError('Record version not found.', 404, 'PROPERTY_RECORD_VERSION_NOT_FOUND');
 

@@ -1931,3 +1931,14 @@ That loop makes the record valuable long before a sale and more valuable at
 every transition. It also gives each existing capability a clear reason to
 exist without allowing any of them to become a competing Home Record,
 Timeline, action list, access system, or source of truth.
+
+## 16. Review remediation log
+
+### 16.1 Record-level authorization on every mutation (September 26, 2026)
+
+**Finding (P1).** Reads applied the visibility rule (only owners see `OWNER_ONLY` and `RECIPIENT_SELECTED` records), but the mutation routes required only property-level `CONTRIBUTOR` access and the service lookups omitted the rule. A contributor who held a record id could add versions, link or unlink evidence, archive, trash, restore, change retention or dates, run extraction, review extracted fields, or promote fields into warranties, expenses and insurance policies. Two read-side leaks of the same kind were found while fixing it: the possible-version match (matched by title across all records and returned the id) and the exact-duplicate check (the conflict body carried the record and version id of a record the caller could not read).
+
+**Fix.** One shared module, `homeRecordsAccess.ts`, owns the rule (`visibleRecordWhere`) and the one role-aware lookup (`assertRecordVisible`). Every mutation (`addVersion`, `addLink`, `removeLink`, `archive`, `trash`, `restore`, `setRetention`, `setEffectivePeriod`), the create and batch-create duplicate and possible-version checks, `checkPossibleVersion`, and every extraction entry point (`runExtraction`, `reviewCandidate`, `promoteWarranty`, `promoteExpense`, `promoteInsurancePolicy`) now takes the caller's household role from the route and applies the same rule as the read paths. An invisible record is answered exactly like a missing one (404 `PROPERTY_RECORD_NOT_FOUND`), so its existence is never confirmed. Duplicate content and possible-version matches are judged among the records the caller can see.
+
+**Tests.** `homeRecordsRecordAuthorization.test.js` runs against a fake database that honors `where` (so an owner-only record is really invisible) and covers each entry point, the leaks, the owner and household-record paths, and a source assertion that every route passes `req.householdRole`. It fails with any of the checks removed. Existing foundation and extraction tests now pass an explicit role. 221 Home Records tests pass.
+

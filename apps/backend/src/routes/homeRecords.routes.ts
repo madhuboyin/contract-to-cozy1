@@ -160,7 +160,7 @@ router.get('/properties/:propertyId/records/possible-version', async (req: Custo
     if (!title || !recordTypeResult?.success) {
       return res.status(400).json({ success: false, code: 'PROPERTY_RECORD_POSSIBLE_VERSION_INPUT_INVALID' });
     }
-    const match = await homeRecordsService.checkPossibleVersion(req.params.propertyId, title, recordTypeResult.data);
+    const match = await homeRecordsService.checkPossibleVersion(req.params.propertyId, title, recordTypeResult.data, req.householdRole!);
     return res.json({ success: true, data: { match } });
   } catch (error) {
     return next(error);
@@ -237,6 +237,7 @@ router.post(
       const input = parseOrThrow(createRecordSchema, req.body);
       const result = await homeRecordsService.create({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         userId: req.user!.userId,
         file: req.file,
         title: input.title,
@@ -270,6 +271,7 @@ router.post(
       const input = parseOrThrow(createBatchSchema, req.body);
       const result = await homeRecordsService.createBatch({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         userId: req.user!.userId,
         files,
         title: input.title,
@@ -308,6 +310,7 @@ router.post(
       if (!req.file) return res.status(400).json({ success: false, message: 'File is required.' });
       const version = await homeRecordsService.addVersion({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         userId: req.user!.userId,
         file: req.file,
@@ -357,6 +360,7 @@ router.post(
       const input = parseOrThrow(createLinkSchema, req.body);
       const link = await homeRecordsService.addLink({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         userId: req.user!.userId,
         ...input,
@@ -373,7 +377,7 @@ router.delete(
   requireHouseholdRole('CONTRIBUTOR'),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
-      await homeRecordsService.removeLink(req.params.propertyId, req.params.recordId, req.params.linkId);
+      await homeRecordsService.removeLink(req.params.propertyId, req.params.recordId, req.params.linkId, req.householdRole!);
       return res.status(204).send();
     } catch (error) {
       return next(error);
@@ -386,7 +390,7 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
-      await homeRecordsService.archive(req.params.propertyId, req.params.recordId);
+      await homeRecordsService.archive(req.params.propertyId, req.params.recordId, req.householdRole!);
       return res.json({ success: true });
     } catch (error) {
       return next(error);
@@ -402,6 +406,7 @@ router.post(
       const input = parseOrThrow(trashSchema, req.body ?? {});
       await homeRecordsService.trash({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         userId: req.user!.userId,
         impactDecision: input.impactDecision,
@@ -418,7 +423,7 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
-      await homeRecordsService.restore(req.params.propertyId, req.params.recordId);
+      await homeRecordsService.restore(req.params.propertyId, req.params.recordId, req.householdRole!);
       return res.json({ success: true });
     } catch (error) {
       return next(error);
@@ -434,6 +439,7 @@ router.patch(
       const input = parseOrThrow(retentionSchema, req.body ?? {});
       await homeRecordsService.setRetention({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         retainUntil: input.retainUntil === undefined
           ? undefined
@@ -457,6 +463,7 @@ router.patch(
       const input = parseOrThrow(effectivePeriodSchema, req.body ?? {});
       await homeRecordsService.setEffectivePeriod({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         effectiveFrom: input.effectiveFrom === undefined
           ? undefined
@@ -479,6 +486,7 @@ router.post(
     try {
       const candidates = await homeRecordsExtractionService.runExtraction({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         versionId: req.params.versionId,
       });
@@ -497,6 +505,7 @@ router.post(
       const input = parseOrThrow(reviewCandidateSchema, req.body ?? {});
       const candidate = await homeRecordsExtractionService.reviewCandidate({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         candidateId: req.params.candidateId,
         userId: req.user!.userId,
@@ -518,6 +527,7 @@ router.post(
       const input = parseOrThrow(promoteFromVersionSchema, req.body ?? {});
       const warranty = await homeRecordsExtractionService.promoteWarranty({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         versionId: input.versionId,
         userId: req.user!.userId,
@@ -537,6 +547,7 @@ router.post(
       const input = parseOrThrow(promoteFromVersionSchema, req.body ?? {});
       const expense = await homeRecordsExtractionService.promoteExpense({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         versionId: input.versionId,
         userId: req.user!.userId,
@@ -556,6 +567,7 @@ router.post(
       const input = parseOrThrow(promoteFromVersionSchema, req.body ?? {});
       const insurancePolicy = await homeRecordsExtractionService.promoteInsurancePolicy({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         recordId: req.params.recordId,
         versionId: input.versionId,
         userId: req.user!.userId,

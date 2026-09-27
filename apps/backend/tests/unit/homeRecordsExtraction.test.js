@@ -19,6 +19,10 @@ let analyzeCalls = 0;
 let analyzeResult = null;
 
 const prismaMock = {
+  // The record-level visibility guard (homeRecordsAccess.assertRecordVisible) needs a record to exist; its behavior is covered by homeRecordsRecordAuthorization.test.js.
+  propertyRecord: {
+    findFirst: async () => ({ id: 'r1' }),
+  },
   propertyRecordVersion: {
     findFirst: async () => versionForRecord,
   },
@@ -144,7 +148,7 @@ test('runExtraction refuses record types with no promotion contract', async () =
   };
 
   await assert.rejects(
-    service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' }),
+    service.runExtraction({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1' }),
     (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_UNSUPPORTED_TYPE',
   );
 });
@@ -157,7 +161,7 @@ test('runExtraction refuses a version that has not passed content validation', a
   };
 
   await assert.rejects(
-    service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' }),
+    service.runExtraction({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1' }),
     (err) => err.code === 'PROPERTY_RECORD_VERSION_NOT_CLEAN',
   );
 });
@@ -172,7 +176,7 @@ test('runExtraction is idempotent — does not re-run AI analysis when candidate
   analyzeCalls = 0;
   downloadCalls = 0;
 
-  const result = await service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
+  const result = await service.runExtraction({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
 
   assert.equal(analyzeCalls, 0);
   assert.equal(downloadCalls, 0);
@@ -203,7 +207,7 @@ test('runExtraction fails closed with a clear error when the AI response could n
   createManyCalls.length = 0;
 
   await assert.rejects(
-    service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' }),
+    service.runExtraction({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1' }),
     (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_UNREADABLE',
   );
   assert.equal(createManyCalls.length, 0, 'no placeholder candidate row should be created on a failed parse');
@@ -235,7 +239,7 @@ test('runExtraction stages a document-type candidate plus mapped warranty fields
   };
   createManyCalls.length = 0;
 
-  await service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
+  await service.runExtraction({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
 
   assert.equal(createManyCalls.length, 1);
   const rows = createManyCalls[0].data;
@@ -257,7 +261,7 @@ test('reviewCandidate CONFIRM copies the proposed value as reviewed', async () =
   updateCalls.length = 0;
 
   const result = await service.reviewCandidate({
-    propertyId: 'p1', recordId: 'r1', candidateId: 'c1', userId: 'u1', action: 'CONFIRM',
+    role: 'OWNER', propertyId: 'p1', recordId: 'r1', candidateId: 'c1', userId: 'u1', action: 'CONFIRM',
   });
 
   assert.equal(result.reviewStatus, 'CONFIRMED');
@@ -269,7 +273,7 @@ test('reviewCandidate CORRECT requires a non-empty value', async () => {
   candidateForReview = { id: 'c1', fieldKey: 'providerName', proposedValue: 'GE', promotedEntityId: null };
 
   await assert.rejects(
-    service.reviewCandidate({ propertyId: 'p1', recordId: 'r1', candidateId: 'c1', userId: 'u1', action: 'CORRECT', reviewedValue: '   ' }),
+    service.reviewCandidate({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', candidateId: 'c1', userId: 'u1', action: 'CORRECT', reviewedValue: '   ' }),
     (err) => err.code === 'EXTRACTED_FACT_CANDIDATE_VALUE_REQUIRED',
   );
 });
@@ -278,7 +282,7 @@ test('reviewCandidate refuses to review the informational document-type row', as
   candidateForReview = { id: 'c1', fieldKey: '_documentType', proposedValue: 'WARRANTY', promotedEntityId: null };
 
   await assert.rejects(
-    service.reviewCandidate({ propertyId: 'p1', recordId: 'r1', candidateId: 'c1', userId: 'u1', action: 'CONFIRM' }),
+    service.reviewCandidate({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', candidateId: 'c1', userId: 'u1', action: 'CONFIRM' }),
     (err) => err.code === 'EXTRACTED_FACT_CANDIDATE_NOT_REVIEWABLE',
   );
 });
@@ -287,7 +291,7 @@ test('reviewCandidate refuses to re-review an already-promoted candidate', async
   candidateForReview = { id: 'c1', fieldKey: 'providerName', proposedValue: 'GE', promotedEntityId: 'warranty-9' };
 
   await assert.rejects(
-    service.reviewCandidate({ propertyId: 'p1', recordId: 'r1', candidateId: 'c1', userId: 'u1', action: 'CONFIRM' }),
+    service.reviewCandidate({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', candidateId: 'c1', userId: 'u1', action: 'CONFIRM' }),
     (err) => err.code === 'EXTRACTED_FACT_CANDIDATE_ALREADY_PROMOTED',
   );
 });
@@ -301,7 +305,7 @@ test('promoteWarranty blocks promotion until every required field is confirmed o
   prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
 
   await assert.rejects(
-    service.promoteWarranty({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    service.promoteWarranty({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
     (err) => {
       assert.equal(err.code, 'PROPERTY_RECORD_EXTRACTION_PROMOTION_INCOMPLETE');
       assert.ok(err.details.missingFields.includes('startDate'));
@@ -327,7 +331,7 @@ test('promoteWarranty creates a Warranty, links it, and marks candidates promote
   transactionCalls.homeEventCreates.length = 0;
   homeEventIdCounter = 0;
 
-  const warranty = await service.promoteWarranty({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
+  const warranty = await service.promoteWarranty({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
 
   assert.equal(warranty.id, 'warranty-1');
   const createData = transactionCalls.warrantyCreates[0].data;
@@ -377,7 +381,7 @@ test('promoteWarranty refuses to run twice against the same analysis', async () 
   prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
 
   await assert.rejects(
-    service.promoteWarranty({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    service.promoteWarranty({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
     (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
   );
 });
@@ -409,7 +413,7 @@ test('runExtraction stages a document-type candidate plus mapped expense fields 
   };
   createManyCalls.length = 0;
 
-  await service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
+  await service.runExtraction({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
 
   assert.equal(createManyCalls.length, 1);
   const rows = createManyCalls[0].data;
@@ -432,7 +436,7 @@ test('promoteExpense blocks promotion until every required field is confirmed or
   prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
 
   await assert.rejects(
-    service.promoteExpense({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    service.promoteExpense({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
     (err) => {
       assert.equal(err.code, 'PROPERTY_RECORD_EXTRACTION_PROMOTION_INCOMPLETE');
       assert.ok(err.details.missingFields.includes('amount'));
@@ -458,7 +462,7 @@ test('promoteExpense creates an Expense, links it, and marks candidates promoted
   transactionCalls.homeEventCreates.length = 0;
   homeEventIdCounter = 0;
 
-  const expense = await service.promoteExpense({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
+  const expense = await service.promoteExpense({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
 
   assert.equal(expense.id, 'expense-1');
   const createData = transactionCalls.expenseCreates[0].data;
@@ -505,7 +509,7 @@ test('promoteExpense refuses to run twice against the same analysis', async () =
   prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
 
   await assert.rejects(
-    service.promoteExpense({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    service.promoteExpense({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
     (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
   );
 });
@@ -541,7 +545,7 @@ test('runExtraction stages a document-type candidate plus mapped insurance field
   };
   createManyCalls.length = 0;
 
-  await service.runExtraction({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
+  await service.runExtraction({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1' });
 
   assert.equal(createManyCalls.length, 1);
   const rows = createManyCalls[0].data;
@@ -571,7 +575,7 @@ test('promoteInsurancePolicy blocks staging until every required field is confir
   prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
 
   await assert.rejects(
-    service.promoteInsurancePolicy({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    service.promoteInsurancePolicy({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
     (err) => {
       assert.equal(err.code, 'PROPERTY_RECORD_EXTRACTION_PROMOTION_INCOMPLETE');
       assert.ok(err.details.missingFields.includes('policyNumber'));
@@ -597,7 +601,7 @@ test('promoteInsurancePolicy stages a policy term via stageExtractedPolicyTerm, 
   transactionCalls.homeEventCreates.length = 0;
   homeEventIdCounter = 0;
 
-  const staged = await service.promoteInsurancePolicy({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
+  const staged = await service.promoteInsurancePolicy({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' });
 
   assert.equal(staged.policy.id, 'policy-1');
   assert.equal(staged.term.id, 'term-1');
@@ -639,7 +643,7 @@ test('promoteInsurancePolicy refuses to run twice against the same analysis', as
   prismaMock.extractedFactCandidate.findMany = async () => candidatesForPromotion;
 
   await assert.rejects(
-    service.promoteInsurancePolicy({ propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
+    service.promoteInsurancePolicy({ role: 'OWNER', propertyId: 'p1', recordId: 'r1', versionId: 'version-1', userId: 'u1' }),
     (err) => err.code === 'PROPERTY_RECORD_EXTRACTION_ALREADY_PROMOTED',
   );
 });

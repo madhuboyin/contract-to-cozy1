@@ -13,6 +13,7 @@ import { APIError } from '../middleware/error.middleware';
 import { uploadPropertyRecordVersionBuffer } from './storage/reportStorage';
 import { presignGetObject } from './storage/presign';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
+import { visibleRecordWhere } from './homeRecordsAccess';
 
 const TRASH_RECOVERY_DAYS = 30;
 
@@ -26,6 +27,7 @@ type RecordFile = {
 type CreateRecordInput = {
   propertyId: string;
   userId: string;
+  role: HouseholdRole;
   file: RecordFile;
   title: string;
   description?: string | null;
@@ -51,12 +53,14 @@ type CreateVersionInput = {
   propertyId: string;
   recordId: string;
   userId: string;
+  role: HouseholdRole;
   file: RecordFile;
 };
 
 type CreateBatchInput = {
   propertyId: string;
   userId: string;
+  role: HouseholdRole;
   files: RecordFile[];
   title: string;
   recordType: PropertyRecordType;
@@ -105,7 +109,7 @@ function allowedActions(role: HouseholdRole, lifecycleStatus: string) {
 }
 
 function visibleWhere(role: HouseholdRole) {
-  return role === 'OWNER' ? {} : { visibility: 'HOUSEHOLD' as const };
+  return visibleRecordWhere(role);
 }
 
 function expiryStatus(effectiveTo: Date | null, now: Date, soonThreshold: Date): ExpiryStatus {
@@ -419,14 +423,17 @@ export class HomeRecordsService {
   // first place — instead of create()'s own possibleVersionOf hint, which
   // only ever surfaced as an after-the-fact toast once the duplicate
   // already existed.
-  async checkPossibleVersion(propertyId: string, title: string, recordType: PropertyRecordType) {
-    return this.findPossibleVersionMatch(propertyId, title, recordType);
+  async checkPossibleVersion(propertyId: string, title: string, recordType: PropertyRecordType, role: HouseholdRole) {
+    return this.findPossibleVersionMatch(propertyId, title, recordType, role);
   }
 
-  private async findPossibleVersionMatch(propertyId: string, title: string, recordType: PropertyRecordType) {
+  // Only records this role may see can be offered as a possible earlier version: matching on title across owner-only records would tell a
+  // contributor that a record they cannot read exists, and hand them its id.
+  private async findPossibleVersionMatch(propertyId: string, title: string, recordType: PropertyRecordType, role: HouseholdRole) {
     return prisma.propertyRecord.findFirst({
       where: {
         propertyId,
+        ...visibleWhere(role),
         lifecycleStatus: { not: 'TRASHED' },
         recordType,
         title: { equals: title, mode: 'insensitive' },
@@ -438,7 +445,8 @@ export class HomeRecordsService {
   async create(input: CreateRecordInput) {
     const checksum = sha256(input.file.buffer);
     const duplicate = await prisma.propertyRecordVersion.findFirst({
-      where: { sha256: checksum, record: { propertyId: input.propertyId } },
+      // Duplicate content is judged among the records this role can see: the conflict body carries a record id, which must never be one the caller cannot read.
+      where: { sha256: checksum, record: { propertyId: input.propertyId, ...visibleWhere(input.role) } },
       select: { id: true, recordId: true, versionNumber: true },
     });
     if (duplicate) {
@@ -450,7 +458,7 @@ export class HomeRecordsService {
       );
     }
 
-    const possibleVersionOf = await this.findPossibleVersionMatch(input.propertyId, input.title, input.recordType);
+    const possibleVersionOf = await this.findPossibleVersionMatch(input.propertyId, input.title, input.recordType, input.role);
 
     const recordId = randomUUID();
     const versionId = randomUUID();
@@ -571,6 +579,7 @@ export class HomeRecordsService {
         const result = await this.create({
           propertyId: input.propertyId,
           userId: input.userId,
+          role: input.role,
           file,
           title,
           recordType: input.recordType,
@@ -592,7 +601,7 @@ export class HomeRecordsService {
   async addVersion(input: CreateVersionInput) {
     const checksum = sha256(input.file.buffer);
     const record = await prisma.propertyRecord.findFirst({
-      where: { id: input.recordId, propertyId: input.propertyId },
+      where: { id: input.recordId, propertyId: input.propertyId, ...visibleWhere(input.role) },
       include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
     });
     if (!record) throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
@@ -674,9 +683,10 @@ export class HomeRecordsService {
     purpose: PropertyRecordLinkPurpose;
     versionId?: string | null;
     label?: string | null;
+    role: HouseholdRole;
   }) {
     const record = await prisma.propertyRecord.findFirst({
-      where: { id: input.recordId, propertyId: input.propertyId, lifecycleStatus: { not: 'TRASHED' } },
+      where: { id: input.recordId, propertyId: input.propertyId, lifecycleStatus: { not: 'TRASHED' }, ...visibleWhere(input.role) },
       select: { id: true, currentVersionId: true },
     });
     if (!record) throw new APIError('Active record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
@@ -704,18 +714,18 @@ export class HomeRecordsService {
     });
   }
 
-  async removeLink(propertyId: string, recordId: string, linkId: string) {
+  async removeLink(propertyId: string, recordId: string, linkId: string, role: HouseholdRole) {
     const link = await prisma.propertyRecordLink.findFirst({
-      where: { id: linkId, recordId, record: { propertyId } },
+      where: { id: linkId, recordId, record: { propertyId, ...visibleWhere(role) } },
       select: { id: true },
     });
     if (!link) throw new APIError('Record link not found.', 404, 'PROPERTY_RECORD_LINK_NOT_FOUND');
     await prisma.propertyRecordLink.delete({ where: { id: linkId } });
   }
 
-  async archive(propertyId: string, recordId: string) {
+  async archive(propertyId: string, recordId: string, role: HouseholdRole) {
     const result = await prisma.propertyRecord.updateMany({
-      where: { id: recordId, propertyId, lifecycleStatus: 'ACTIVE' },
+      where: { id: recordId, propertyId, lifecycleStatus: 'ACTIVE', ...visibleWhere(role) },
       data: { lifecycleStatus: 'ARCHIVED', archivedAt: new Date() },
     });
     if (result.count !== 1) throw new APIError('Active record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
@@ -726,9 +736,10 @@ export class HomeRecordsService {
     recordId: string;
     userId: string;
     impactDecision?: 'KEEP_LINKS' | 'REMOVE_LINKS';
+    role: HouseholdRole;
   }) {
     const record = await prisma.propertyRecord.findFirst({
-      where: { id: input.recordId, propertyId: input.propertyId },
+      where: { id: input.recordId, propertyId: input.propertyId, ...visibleWhere(input.role) },
       include: { _count: { select: { links: true } } },
     });
     if (!record) throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
@@ -780,10 +791,10 @@ export class HomeRecordsService {
     await this.syncWorkItem(input.propertyId, input.recordId);
   }
 
-  async restore(propertyId: string, recordId: string) {
+  async restore(propertyId: string, recordId: string, role: HouseholdRole) {
     await prisma.$transaction(async (tx) => {
       const result = await tx.propertyRecord.updateMany({
-        where: { id: recordId, propertyId, lifecycleStatus: 'TRASHED' },
+        where: { id: recordId, propertyId, lifecycleStatus: 'TRASHED', ...visibleWhere(role) },
         data: { lifecycleStatus: 'ACTIVE', trashedAt: null, trashedByUserId: null },
       });
       if (result.count !== 1) throw new APIError('Trashed record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
@@ -799,9 +810,10 @@ export class HomeRecordsService {
     recordId: string;
     retainUntil?: Date | null;
     legalHoldReason?: string | null;
+    role: HouseholdRole;
   }) {
     const result = await prisma.propertyRecord.updateMany({
-      where: { id: input.recordId, propertyId: input.propertyId },
+      where: { id: input.recordId, propertyId: input.propertyId, ...visibleWhere(input.role) },
       data: {
         ...(input.retainUntil !== undefined ? { retainUntil: input.retainUntil } : {}),
         ...(input.legalHoldReason !== undefined
@@ -833,9 +845,10 @@ export class HomeRecordsService {
     recordId: string;
     effectiveFrom?: Date | null;
     effectiveTo?: Date | null;
+    role: HouseholdRole;
   }) {
     const result = await prisma.propertyRecord.updateMany({
-      where: { id: input.recordId, propertyId: input.propertyId },
+      where: { id: input.recordId, propertyId: input.propertyId, ...visibleWhere(input.role) },
       data: {
         ...(input.effectiveFrom !== undefined ? { effectiveFrom: input.effectiveFrom } : {}),
         ...(input.effectiveTo !== undefined ? { effectiveTo: input.effectiveTo } : {}),

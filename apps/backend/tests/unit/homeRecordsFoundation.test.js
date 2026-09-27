@@ -226,7 +226,7 @@ test('exact duplicate content is rejected before storage upload', async () => {
 
   await assert.rejects(
     service.create({
-      propertyId: 'property-1',
+      propertyId: 'property-1', role: 'OWNER',
       userId: 'user-1',
       file,
       title: 'Warranty',
@@ -254,7 +254,7 @@ test('a replacement with the current hash is rejected instead of overwriting his
   storageUploadCalls = 0;
 
   await assert.rejects(
-    service.addVersion({ propertyId: 'property-1', recordId: 'record-1', userId: 'user-1', file }),
+    service.addVersion({ propertyId: 'property-1', role: 'OWNER', recordId: 'record-1', userId: 'user-1', file }),
     (error) => error.code === 'PROPERTY_RECORD_VERSION_DUPLICATE',
   );
   assert.equal(storageUploadCalls, 0);
@@ -269,7 +269,7 @@ test('active evidence requires an explicit impact decision before trash', async 
   };
 
   await assert.rejects(
-    service.trash({ propertyId: 'property-1', recordId: 'record-1', userId: 'user-1' }),
+    service.trash({ propertyId: 'property-1', role: 'OWNER', recordId: 'record-1', userId: 'user-1' }),
     (error) => {
       assert.equal(error.code, 'PROPERTY_RECORD_EVIDENCE_IMPACT_DECISION_REQUIRED');
       assert.equal(error.details.activeLinkCount, 2);
@@ -289,7 +289,7 @@ test('trash is reversible and queues a delayed purge instead of deleting storage
   storageUploadCalls = 0;
 
   await service.trash({
-    propertyId: 'property-1',
+    propertyId: 'property-1', role: 'OWNER',
     recordId: 'record-1',
     userId: 'user-1',
     impactDecision: 'KEEP_LINKS',
@@ -337,7 +337,7 @@ test('a new record and a new version are marked scan-clean, not left pending for
   versionCreateCalls.length = 0;
 
   await service.create({
-    propertyId: 'property-1',
+    propertyId: 'property-1', role: 'OWNER',
     userId: 'user-1',
     file,
     title: 'Warranty',
@@ -355,7 +355,7 @@ test('a new record and a new version are marked scan-clean, not left pending for
     currentVersionId: 'version-1',
     versions: [{ id: 'version-1', versionNumber: 1, sha256: 'different-hash' }],
   };
-  await service.addVersion({ propertyId: 'property-1', recordId: 'record-1', userId: 'user-1', file });
+  await service.addVersion({ propertyId: 'property-1', role: 'OWNER', recordId: 'record-1', userId: 'user-1', file });
 
   assert.equal(versionCreateCalls.length, 1);
   assert.equal(versionCreateCalls[0].data.scanStatus, 'CLEAN');
@@ -366,7 +366,7 @@ test('a link to an OTHER entity is accepted since there is no canonical table to
   linkCreateCalls.length = 0;
 
   const link = await service.addLink({
-    propertyId: 'property-1',
+    propertyId: 'property-1', role: 'OWNER',
     recordId: 'record-1',
     userId: 'user-1',
     entityType: 'OTHER',
@@ -463,22 +463,22 @@ test('list() flags needsReview from pending extracted-fact candidates and comput
 
 test('checkPossibleVersion returns the matching record when one exists for this title/type', async () => {
   possibleVersionMatch = { id: 'record-existing', title: 'HVAC Warranty', currentVersionId: 'version-9' };
-  const match = await service.checkPossibleVersion('property-1', 'HVAC Warranty', 'WARRANTY');
+  const match = await service.checkPossibleVersion('property-1', 'HVAC Warranty', 'WARRANTY', 'OWNER');
   assert.deepEqual(match, { id: 'record-existing', title: 'HVAC Warranty', currentVersionId: 'version-9' });
   possibleVersionMatch = null;
 });
 
 test('checkPossibleVersion returns null when no match exists', async () => {
   possibleVersionMatch = null;
-  const match = await service.checkPossibleVersion('property-1', 'Brand New Thing', 'OTHER');
+  const match = await service.checkPossibleVersion('property-1', 'Brand New Thing', 'OTHER', 'OWNER');
   assert.equal(match, null);
 });
 
 test("create() and checkPossibleVersion() share one match implementation, not two drifting copies of the same query", () => {
   const backendRoot = path.resolve(__dirname, '../..');
   const source = fs.readFileSync(path.join(backendRoot, 'src/services/homeRecords.service.ts'), 'utf8');
-  assert.match(source, /async checkPossibleVersion\(propertyId: string, title: string, recordType: PropertyRecordType\) \{\s*return this\.findPossibleVersionMatch/);
-  assert.match(source, /possibleVersionOf = await this\.findPossibleVersionMatch\(input\.propertyId, input\.title, input\.recordType\)/);
+  assert.match(source, /async checkPossibleVersion\(propertyId: string, title: string, recordType: PropertyRecordType, role: HouseholdRole\) \{\s*return this\.findPossibleVersionMatch/);
+  assert.match(source, /possibleVersionOf = await this\.findPossibleVersionMatch\(input\.propertyId, input\.title, input\.recordType, input\.role\)/);
 });
 
 test('the possible-version route is registered before the :recordId catch-all, so Express does not swallow it as a record id', () => {
@@ -523,7 +523,7 @@ test('create() triggers full-text extraction and stores the result once it resol
   extractFullTextResult = { text: 'Extracted warranty terms and coverage dates.' };
 
   await service.create({
-    propertyId: 'property-1',
+    propertyId: 'property-1', role: 'OWNER',
     userId: 'user-1',
     file,
     title: 'Warranty',
@@ -554,7 +554,7 @@ test('a failed or empty extraction never throws out of create()/addVersion() and
 
   // create() itself must resolve normally despite the extraction failure.
   await service.create({
-    propertyId: 'property-1',
+    propertyId: 'property-1', role: 'OWNER',
     userId: 'user-1',
     file,
     title: 'Warranty',
@@ -578,7 +578,7 @@ test('a failed or empty extraction never throws out of create()/addVersion() and
     currentVersionId: 'version-1',
     versions: [{ id: 'version-1', versionNumber: 1, sha256: 'different-hash' }],
   };
-  await service.addVersion({ propertyId: 'property-1', recordId: 'record-1', userId: 'user-1', file });
+  await service.addVersion({ propertyId: 'property-1', role: 'OWNER', recordId: 'record-1', userId: 'user-1', file });
   await flushMicrotasks();
   assert.equal(versionUpdateCalls.find((call) => call.data?.extractedText), undefined);
 });
@@ -603,7 +603,7 @@ test('createBatch creates one record per file, suffixing titles with "(N of M)" 
   const fileB = { buffer: Buffer.from('batch-file-b'), originalname: 'b.jpg', mimetype: 'image/jpeg', size: 4 };
 
   const result = await service.createBatch({
-    propertyId: 'property-1',
+    propertyId: 'property-1', role: 'OWNER',
     userId: 'user-1',
     files: [fileA, fileB],
     title: 'Warranty card',
@@ -629,7 +629,7 @@ test('createBatch does not suffix the title when the batch has exactly one file'
   const fileA = { buffer: Buffer.from('batch-file-single'), originalname: 'single.jpg', mimetype: 'image/jpeg', size: 4 };
 
   await service.createBatch({
-    propertyId: 'property-1',
+    propertyId: 'property-1', role: 'OWNER',
     userId: 'user-1',
     files: [fileA],
     title: 'Receipt',
@@ -651,7 +651,7 @@ test('createBatch reports one bad file per-item and still creates the rest of th
   duplicateVersion = { id: 'version-existing', recordId: 'record-existing', versionNumber: 1, sha256: dupChecksum };
 
   const result = await service.createBatch({
-    propertyId: 'property-1',
+    propertyId: 'property-1', role: 'OWNER',
     userId: 'user-1',
     files: [clean, dup],
     title: 'Scan',
