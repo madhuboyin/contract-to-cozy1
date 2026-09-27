@@ -128,6 +128,7 @@ export interface PriorityListItemView {
   deadlineAt: string | null;
   dependencyRefs: string[];
   cta: { id: string; label: string; href: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET' } | null;
+  inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: 'HOME_ACTIONS'; message: string } | null;
   watchState: string | null;
   suppressed: boolean;
   completed: boolean;
@@ -181,6 +182,13 @@ export function buildPriorityListView(
       deadlineAt: action.timing.dueAt,
       dependencyRefs: action.relatedJourneyId ? [action.relatedJourneyId] : [],
       cta,
+      inlineLaunch: channel === 'ASK'
+        ? {
+            interactionType: 'CONVERSATION_CONTINUE' as const,
+            operationId: 'HOME_ACTIONS' as const,
+            message: `What should I do next for “${action.presentation?.headline ?? action.recommendedAction}”?`.slice(0, 300),
+          }
+        : null,
       watchState: cta ? null : action.recommendationResponse.safeNextAction,
       ...state,
     };

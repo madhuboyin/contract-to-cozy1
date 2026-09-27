@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
+import { CalmAnswerContext, CalmChromeContext } from '../blocks/calmContext';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.82): Home Actions as read-only shelves.
 
@@ -43,5 +44,25 @@ describe('Home Action shelves', () => {
     expect(within(sheet).getByRole('link', { name: 'Open record' })).toHaveAttribute('href', expect.stringContaining('/dashboard/maintenance'));
     expect(within(sheet).queryAllByRole('button').map((button) => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['Close details']);
     expect(onItemAction).not.toHaveBeenCalled();
+  });
+
+  test('the calm ranked view stays in Ask instead of navigating to the traditional page', () => {
+    const onItemAction = jest.fn();
+    const priority: AskPresentationBlock = {
+      type: 'PRIORITY_LIST', id: 'home-actions-priority-list', title: 'What matters now', propertyId: 'home',
+      rankingPolicyVersion: 'priority-list-policy-v1', generatedAt: '2026-09-27T12:00:00.000Z', sourceFreshnessAt: '2026-09-27T12:00:00.000Z', truncated: false,
+      items: [{
+        homeActionId: 'a1', title: 'Replace the HVAC filter', consumerPriority: 'DO_NOW', comparativeReasonCodes: ['HIGHER_URGENCY'], confidenceLabel: 'HIGH', deadlineAt: null, dependencyRefs: [],
+        cta: { id: 'a1', label: 'Open Maintenance', href: '/dashboard/maintenance?propertyId=home', style: 'PRIMARY' },
+        inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE', operationId: 'HOME_ACTIONS', message: 'What should I do next for “Replace the HVAC filter”?' },
+        watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
+      }],
+    };
+    render(<CalmChromeContext.Provider value><CalmAnswerContext.Provider value>
+      <BlockView block={priority} executionId="e" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
+    </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
+    expect(screen.queryByRole('link', { name: 'Open Maintenance' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Review in Ask' }));
+    expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE');
   });
 });

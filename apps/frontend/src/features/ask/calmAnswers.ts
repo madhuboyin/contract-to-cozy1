@@ -42,7 +42,14 @@ export function useCalmAnswers(): boolean {
 
 /** The domains that have adopted the calm anatomy. Identified by the block the domain's own handler declares. */
 export function isCalmAdopter(execution: Pick<AskExecutionResponse, 'blocks'>): boolean {
-  return execution.blocks.some((block) => block.type === 'GROUPED_LIST' && (block.id === 'maintenance-groups' || block.id === 'inventory-results' || block.id === 'warranty-results' || block.id === 'incident-claim-list' || block.id === 'home-event-radar-feed' || block.id === 'document-lookup-groups'));
+  return execution.blocks.some((block) => (block.type === 'GROUPED_LIST' && (block.id === 'maintenance-groups' || block.id === 'inventory-results' || block.id === 'warranty-results' || block.id === 'incident-claim-list' || block.id === 'home-event-radar-feed' || block.id === 'document-lookup-groups'))
+    || (block.type === 'PRIORITY_LIST' && block.id === 'home-actions-priority-list'));
+}
+
+/** IW-CONV-047: a calm Home Actions answer keeps the governed ranked view as its one artifact. */
+export function calmArtifactBlocks(blocks: AskExecutionResponse['blocks']): AskExecutionResponse['blocks'] {
+  if (!blocks.some((block) => block.type === 'PRIORITY_LIST' && block.id === 'home-actions-priority-list')) return blocks;
+  return blocks.filter((block) => !(block.type === 'GROUPED_LIST' && block.id === 'home-actions-list'));
 }
 
 /** IW-CALM-001: the headline is the producer's own sentence, else the result's title. Never generated here. */

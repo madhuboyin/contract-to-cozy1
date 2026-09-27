@@ -139,6 +139,17 @@ test('buildPriorityListView never reorders the already-ranked feed and stamps th
   assert.equal(view.propertyId, 'prop-1');
   assert.equal(view.sourceFreshnessAt, '2026-08-01T00:00:00.000Z');
   assert.equal(view.truncated, false);
+  assert.deepEqual(view.items[0].inlineLaunch, {
+    interactionType: 'CONVERSATION_CONTINUE',
+    operationId: 'HOME_ACTIONS',
+    message: 'What should I do next for “Headline for a”?',
+  });
+});
+
+test('only the Ask channel declares an inline Home Action continuation', () => {
+  const feed = { propertyId: 'prop-1', generatedAt: '2026-08-01T00:00:00.000Z', actions: [rankedAction()] };
+  assert.equal(buildPriorityListView(feed, 'CONCIERGE_HOME').items[0].inlineLaunch, null);
+  assert.equal(buildPriorityListView(feed, 'EXTERNAL_PROACTIVE').items[0].inlineLaunch, null);
 });
 
 test('buildPriorityListView truncates to the requested channel display limit and sets the truncated flag', () => {

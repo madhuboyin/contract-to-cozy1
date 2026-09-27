@@ -364,6 +364,21 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         ? `The full governed feed contains ${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'}, but none match this timing filter.`
         : `These are the final grounded, deduplicated, lifecycle-eligible actions from Unified Home. ${feed.buckets.NOW.length} need attention now, ${feed.buckets.SOON.length} are due soon, ${feed.buckets.PLAN.length} are for planning, and ${feed.buckets.CONSIDER.length} are optional considerations.`),
     tone: empty?.tone ?? (feed.diagnostics.unavailableProducers.length > 0 || selectedActions.some((action) => action.priority === 'NOW') ? 'CAUTION' : 'DEFAULT'),
+    headline: empty?.title
+      ?? (filteredEmpty
+        ? `No ${priorityFilter?.map((value) => value.toLowerCase()).join(' or ')} Home Action is currently surfaced`
+        : selectedActions.length === 1
+          ? selectedActions[0].presentation?.headline ?? selectedActions[0].recommendedAction
+          : `${selectedActions.length} Home Actions are ready to review.`),
+    supportLine: empty?.body
+      ?? (filteredEmpty
+        ? `${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'} remain in the full governed feed.`
+        : 'Start with the highest-ranked item; each review stays in Ask Cozy.'),
+    chips: selectedActions.length ? [
+      { label: `${feed.buckets.NOW.length} now`, tone: feed.buckets.NOW.length ? 'CRITICAL' : 'DEFAULT' },
+      { label: `${feed.buckets.SOON.length} soon`, tone: feed.buckets.SOON.length ? 'CAUTION' : 'DEFAULT' },
+      { label: `${feed.buckets.PLAN.length} to plan`, tone: 'DEFAULT' },
+    ] : undefined,
     actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: homeHref, style: 'PRIMARY' }],
   }];
 

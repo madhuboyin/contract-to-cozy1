@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react';
-import { CALM_ANSWERS_STORAGE_KEY, calmHeadline, isCalmAdopter, resolveCalmPreference, useCalmAnswers } from '../calmAnswers';
+import { CALM_ANSWERS_STORAGE_KEY, calmArtifactBlocks, calmHeadline, isCalmAdopter, resolveCalmPreference, useCalmAnswers } from '../calmAnswers';
 import type { AskExecutionResponse } from '../types';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.11 (IW-CALM-001/012, FRD v1.111).
@@ -40,6 +40,7 @@ describe('isCalmAdopter', () => {
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'maintenance-groups' }]))).toBe(true);
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'inventory-results' }]))).toBe(true);
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'warranty-results' }]))).toBe(true);
+    expect(isCalmAdopter(execution([summary(), { type: 'PRIORITY_LIST', id: 'home-actions-priority-list' }]))).toBe(true);
     // The Property Summary's warranties section is one part of a larger answer, not the adopted warranty answer.
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'property-warranties' }]))).toBe(false);
     // The inventory disambiguation list ("which item do you mean?") is a question, not the adopted answer.
@@ -54,6 +55,16 @@ describe('calmHeadline', () => {
     expect(calmHeadline(execution([summary()]))).toEqual({ headline: '9 maintenance records match this request', supportLine: null });
     expect(calmHeadline(execution([]))).toBeNull();
   });
+});
+
+test('calm Home Actions keeps one ranked artifact and removes only its duplicate shelves', () => {
+  const blocks = [
+    summary(),
+    { type: 'PRIORITY_LIST', id: 'home-actions-priority-list' },
+    { type: 'GROUPED_LIST', id: 'home-actions-list' },
+    { type: 'EVIDENCE', id: 'home-actions-evidence' },
+  ] as unknown as AskExecutionResponse['blocks'];
+  expect(calmArtifactBlocks(blocks).map((block) => block.id)).toEqual(['maintenance-summary', 'home-actions-priority-list', 'home-actions-evidence']);
 });
 
 describe('useCalmAnswers default', () => {

@@ -565,6 +565,11 @@ const PriorityListItemSchema = z.object({
   deadlineAt: z.string().nullable(),
   dependencyRefs: z.array(z.string()).max(10).default([]),
   cta: AskActionSchema.nullable(),
+  inlineLaunch: z.object({
+    interactionType: z.literal('CONVERSATION_CONTINUE'),
+    operationId: z.literal('HOME_ACTIONS'),
+    message: z.string().trim().min(1).max(300),
+  }).nullable().default(null),
   watchState: z.string().nullable(),
   suppressed: z.boolean(),
   completed: z.boolean(),

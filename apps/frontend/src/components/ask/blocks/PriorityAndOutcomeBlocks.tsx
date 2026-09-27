@@ -5,6 +5,7 @@ import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './context';
+import { useCalmAnswer } from './calmContext';
 import type { AskBlockRenderer } from './types';
 
 // Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
@@ -31,7 +32,8 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
   );
 }
 
-export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, executionId }) => {
+export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, executionId, onItemAction, itemActionsDisabled }) => {
+  const calm = useCalmAnswer();
   const categoryLabel: Record<typeof block.items[number]['consumerPriority'], string> = {
     DO_NOW: 'Do now', PLAN_SOON: 'Plan soon', WATCH: 'Watch', OPTIONAL: 'Optional', NO_ACTION: 'No action needed',
   };
@@ -40,17 +42,17 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
     WATCH: 'bg-slate-100 text-slate-700', OPTIONAL: 'bg-slate-100 text-slate-500', NO_ACTION: 'bg-emerald-100 text-emerald-800',
   };
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4">
+    <section className={calm ? 'space-y-3' : 'rounded-2xl border border-slate-200 bg-white p-4'} data-calm-home-actions={calm ? '' : undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold text-slate-950">{block.title}</h3>
-        <span className="text-xs text-slate-500">Ranking policy {block.rankingPolicyVersion}</span>
+        <h3 className={calm ? 'sr-only' : 'font-semibold text-slate-950'}>{block.title}</h3>
+        {!calm && <span className="text-xs text-slate-500">Ranking policy {block.rankingPolicyVersion}</span>}
       </div>
       {block.items.length === 0 ? (
         <p className="mt-2 text-sm text-slate-600">No ranked item is currently available on this channel. This does not mean the home needs no attention — it means the governed feed has nothing eligible to show right now.</p>
       ) : (
-        <ol className="mt-4 space-y-3">
+        <ol className={calm ? 'grid gap-2 sm:grid-cols-2 xl:grid-cols-3' : 'mt-4 space-y-3'}>
           {block.items.map((item, index) => (
-            <li key={item.homeActionId} className="rounded-xl border border-slate-200 p-3">
+            <li key={item.homeActionId} className={cn('rounded-xl border border-slate-200 p-3', calm && 'flex min-w-0 flex-col border-l-4 bg-white shadow-sm')}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-slate-400">#{index + 1}</span>
                 <h4 className="font-semibold text-slate-900">{item.title}</h4>
@@ -68,14 +70,14 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 {item.deadlineAt && ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}`}
               </p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div>{item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}</div>
+                <div>{calm && item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}</div>
                 <HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />
               </div>
             </li>
           ))}
         </ol>
       )}
-      {block.truncated && <p className="mt-3 text-xs text-slate-500">More ranked items exist than are shown here. Open Home Actions to see the full list.</p>}
+      {block.truncated && <p className="mt-3 text-xs text-slate-500">More ranked items exist than are shown here. Ask “What else needs my attention?” to continue.</p>}
     </section>
   );
 };

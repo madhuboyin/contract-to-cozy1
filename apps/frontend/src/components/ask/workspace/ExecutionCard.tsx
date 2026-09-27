@@ -9,7 +9,7 @@ import { resolveItemActionDispatch } from '@/features/ask/interactionDispatch';
 import { ResultRevalidationBoundary } from '../ResultRevalidationBoundary';
 import { hasResponseContext, ResponseContextSummary } from '../EvidenceContextPanel';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
+import { calmArtifactBlocks, isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
 import { canAskConversationally } from '@/features/ask/conversationalCapture';
 import { AskBlockActionContext } from '../blocks/context';
 import { CalmAnswerContext, CalmChromeContext, CalmReceiptContext, CalmSecondaryContext } from '../blocks/calmContext';
@@ -159,7 +159,10 @@ export function ExecutionCard({
   // IW-CONV-001 (FRD v1.112): while Cozy is asking a question or asking for confirmation, that question is the message; a plain lead-in
   // summary (default tone, no chips) that says the same thing in other words is not drawn above it.
   const cardIsTheMessage = calmChrome && (execution.captureRequests.some(canAskConversationally) || (execution.status === 'NEEDS_CONFIRMATION' && Boolean(execution.confirmation)));
-  const shownBlocks = cardIsTheMessage ? execution.blocks.filter((block) => !(block.type === 'SUMMARY' && block.tone === 'DEFAULT' && !block.chips?.length)) : execution.blocks;
+  const messageBlocks = cardIsTheMessage ? execution.blocks.filter((block) => !(block.type === 'SUMMARY' && block.tone === 'DEFAULT' && !block.chips?.length)) : execution.blocks;
+  // IW-CONV-047: HOME_ACTIONS previously drew both its ranked PRIORITY_LIST and the same records again as shelves.
+  // In the adopted calm anatomy the ranked list is the one primary artifact; the classic view keeps both for compatibility.
+  const shownBlocks = calm ? calmArtifactBlocks(messageBlocks) : messageBlocks;
   // ACUI-005: the created record's link, for a calm receipt that has no action of its own.
   const receiptContinuation = calmChrome ? execution.blocks.flatMap((block) => block.type === 'OUTPUT_ARTIFACTS' ? block.items : []).find((item) => item.navigation)?.navigation ?? null : null;
   const refresh = async () => {
