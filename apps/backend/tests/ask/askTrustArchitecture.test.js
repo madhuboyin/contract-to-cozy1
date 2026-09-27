@@ -560,6 +560,37 @@ test('semantic response validation has an independent default-on control and kil
   assert.equal(readAskOperationalControls({ ASK_SEMANTIC_RESPONSE_VALIDATOR_KILL_SWITCH: 'true' }).semanticResponseValidatorEnabled, false);
 });
 
+test('canonical home-change blocks pass even when a recorded change names Home Actions', () => {
+  const relevance = validateAskSemanticAnswerRelevance({
+    question: 'What changed around my home lately?',
+    operationId: 'HOME_CHANGE_SUMMARY',
+    result: {
+      status: 'ANSWERED', reasonCode: 'HOME_CHANGE_SUMMARY_FOUND',
+      blocks: [{
+        type: 'CHANGE_SUMMARY', id: 'home-change-change-1',
+        title: 'Home action', source: 'Home action', changeType: 'UPDATED',
+        summary: 'Home action confirmed.', effectiveAt: null,
+        detectedAt: '2026-09-27T00:00:00.000Z', materiality: 'MATERIAL',
+        materialityReasonCodes: ['STATUS_CHANGED'], confidence: 1, linkedAction: null,
+      }],
+      suggestions: ['What should I do next?'],
+    },
+  });
+  assert.equal(relevance.outcome, 'PASS');
+  assert.deepEqual(relevance.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
+
+  const untyped = validateAskSemanticAnswerRelevance({
+    question: 'What changed around my home lately?',
+    operationId: 'HOME_CHANGE_SUMMARY',
+    result: {
+      status: 'ANSWERED',
+      blocks: [{ type: 'SUMMARY', id: 'home-actions-summary', title: 'Home action', body: 'Home action confirmed.', tone: 'DEFAULT', actions: [] }],
+      suggestions: [],
+    },
+  });
+  assert.notEqual(untyped.outcome, 'PASS');
+});
+
 test('registered operation direct-answer fixtures do not produce semantic mismatch failures', () => {
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     const relevance = validateAskSemanticAnswerRelevance({
