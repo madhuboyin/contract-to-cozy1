@@ -175,17 +175,19 @@ function ChangeSummaryRow({ block }: { block: ChangeSummary }) {
     && new Date(block.effectiveAt).toLocaleDateString() === new Date(block.detectedAt).toLocaleDateString();
   return (
     <details className="group border-b border-slate-100 last:border-b-0">
-      <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-2.5 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
         <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', block.materiality === 'URGENT' ? 'bg-red-500' : block.materiality === 'IMPORTANT' ? 'bg-amber-500' : 'bg-teal-500')} aria-hidden="true" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-slate-950">{block.title}</span>
-          <span className="mt-0.5 block truncate text-xs text-slate-600">{block.summary}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-semibold text-slate-950">{block.title}</span>
+            <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-slate-600">{block.summary.replace(/^Home action /i, '').replace(/^./, (letter) => letter.toUpperCase())}</span>
         </span>
-        <span className="hidden shrink-0 text-xs text-slate-500 sm:inline">{block.source}</span>
-        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
       <div className="bg-slate-50/70 px-4 py-3 pl-10 text-xs text-slate-600">
+        <p>Source: {block.source}</p>
         <p>{sameDate ? `Recorded ${new Date(block.detectedAt).toLocaleDateString()}` : <>Detected {new Date(block.detectedAt).toLocaleDateString()}{block.effectiveAt && ` · Effective ${new Date(block.effectiveAt).toLocaleDateString()}`}</>}</p>
         {block.linkedAction && (
           <AskContextLink href={block.linkedAction.href} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg font-semibold text-teal-800 hover:text-teal-950">
@@ -206,10 +208,10 @@ export function ChangeSummaryList({ blocks }: { blocks: ChangeSummary[] }) {
     return result;
   }, []);
   return (
-    <section data-testid="change-summary-list" aria-label="Recent home changes" className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <section data-testid="change-summary-list" aria-label="Recent home changes" className="w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white">
       {groups.map((group) => (
         <div key={group.key}>
-          <h3 className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">{group.label}</h3>
+          <h3 className="border-b border-slate-100 px-4 pb-1.5 pt-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">{group.label}</h3>
           {group.blocks.map((block) => <ChangeSummaryRow key={block.id} block={block} />)}
         </div>
       ))}

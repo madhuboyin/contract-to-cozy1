@@ -1321,7 +1321,11 @@ delivery path exists for this operation. The defined precision/recall targets ha
 pipeline computing them yet. The Ask surface presents consecutive `CHANGE_SUMMARY` blocks as one
 compact, date-grouped activity list. Rows use the linked canonical Home Action or Home Event title
 when available, expand in place for timing and navigation, and deep-link to the exact canonical work
-item or event rather than the general dashboard.
+item or event rather than the general dashboard. Operational Work rows created before canonical
+action links were recorded recover the title and exact action link from their property-scoped source
+work item; replaying the source revision also repairs the missing canonical link. The collapsed row
+keeps source metadata in its expansion so the primary scan surface emphasizes the distinct action
+title rather than repeating a generic source label.
 
 ### Phase 9B — P1/P2 Priority Intelligence and Concierge Home
 

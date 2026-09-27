@@ -26,14 +26,17 @@ test('renders canonical titles as compact expandable activity rows with exact wo
   ]} />);
 
   const list = screen.getByTestId('change-summary-list');
-  expect(within(list).getAllByText('Home action updated.')).toHaveLength(2);
+  expect(within(list).getAllByText('Updated.')).toHaveLength(2);
   expect(within(list).getByText('Chimney cleaning and inspection')).toBeInTheDocument();
   expect(within(list).getByText('Replace the aging water heater')).toBeInTheDocument();
   expect(within(list).getAllByRole('heading', { level: 3 })).toHaveLength(1);
+  expect(list).toHaveClass('max-w-5xl');
+  expect(within(list).queryByText('Home action')).not.toBeInTheDocument();
 
   const firstRow = within(list).getByText('Chimney cleaning and inspection').closest('details');
   expect(firstRow).not.toBeNull();
   fireEvent.click(within(firstRow as HTMLElement).getByText('Chimney cleaning and inspection'));
+  expect(within(firstRow as HTMLElement).getByText('Source: Home action')).toBeInTheDocument();
   expect(within(firstRow as HTMLElement).getByRole('link', { name: /Open in Home Operations/ })).toHaveAttribute(
     'href',
     '/dashboard/properties/property-1/home-operations?focusWorkItemId=work-1&openManage=1',

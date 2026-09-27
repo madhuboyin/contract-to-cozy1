@@ -351,6 +351,21 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
     };
   }
 
+  // Older Operational Work change rows can predate their canonicalActionId
+  // link even though sourceEntityId has always been the work-item id. Resolve
+  // those titles in one property-scoped query so legacy rows do not collapse
+  // into a list of indistinguishable "Home action" labels.
+  const unlinkedWorkItemIds = [...new Set(material
+    .filter((change) => (change.sourceType === 'OPERATIONAL_WORK_EVENT' || change.sourceType === 'OPERATIONAL_WORK_DUE') && !change.canonicalAction)
+    .map((change) => change.sourceEntityId))];
+  const unlinkedWorkItems = unlinkedWorkItemIds.length
+    ? await prisma.operationalWorkItem.findMany({
+        where: { propertyId, id: { in: unlinkedWorkItemIds } },
+        select: { id: true, title: true },
+      })
+    : [];
+  const fallbackWorkItems = new Map(unlinkedWorkItems.map((item) => [item.id, item]));
+
   const blocks: AskPresentationBlock[] = await Promise.all(material.map(async (change) => {
     let detailOverride: string | null = null;
     if (change.sourceType === 'DECISION_PREFERENCE_VALUE') {
@@ -358,8 +373,10 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       detailOverride = detail?.summary ?? null;
     }
     const source = sourceTypeLabel(change.sourceType);
-    const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title, canonicalEventTitle: change.canonicalEvent?.title });
-    const linkedAction = homeChangeLinkedAction({ propertyId, canonicalActionId: change.canonicalAction?.id, canonicalEventId: change.canonicalEvent?.id });
+    const fallbackWorkItem = fallbackWorkItems.get(change.sourceEntityId);
+    const canonicalActionId = change.canonicalAction?.id ?? fallbackWorkItem?.id;
+    const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title ?? fallbackWorkItem?.title, canonicalEventTitle: change.canonicalEvent?.title });
+    const linkedAction = homeChangeLinkedAction({ propertyId, canonicalActionId, canonicalEventId: change.canonicalEvent?.id });
     return {
       type: 'CHANGE_SUMMARY', id: `home-change-${change.id}`,
       title,

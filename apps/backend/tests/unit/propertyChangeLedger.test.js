@@ -14,6 +14,7 @@ const {
 } = require('../../src/propertyChanges/propertyChangePolicy.ts');
 const {
   buildPropertyChangeDeduplicationKey,
+  emitPropertyChangeWithTransaction,
   requestRecomputeForChange,
 } = require('../../src/propertyChanges/propertyChange.service.ts');
 
@@ -166,6 +167,49 @@ test('emission is replay-safe, supersedes only older ordinals, and never creates
   assert.doesNotMatch(service, /notificationService/);
 });
 
+test('a replay heals a missing canonical action link without replacing an existing link', async () => {
+  const updates = [];
+  const existing = {
+    id: 'change-1',
+    canonicalActionId: null,
+    canonicalEventId: null,
+  };
+  const tx = {
+    operationalWorkItem: {
+      findUnique: async () => ({ propertyId: 'property-1' }),
+    },
+    propertyChange: {
+      findUnique: async () => existing,
+      update: async ({ data }) => {
+        updates.push(data);
+        return { ...existing, ...data };
+      },
+    },
+  };
+
+  const result = await emitPropertyChangeWithTransaction(tx, {
+    propertyId: 'property-1',
+    sourceType: 'OPERATIONAL_WORK_EVENT',
+    sourceEntityId: 'action-1',
+    sourceRevision: '1',
+    changeType: 'ACTION_STATE_CHANGED',
+    canonicalActionId: 'action-1',
+    sourceHealth: 'CURRENT',
+    signals: baseSignals,
+  });
+
+  assert.equal(result.deduped, true);
+  assert.equal(result.change.canonicalActionId, 'action-1');
+  assert.deepEqual(updates, [{ canonicalActionId: 'action-1' }]);
+});
+
+test('Ask batch-resolves unlinked Operational Work changes within the selected property', () => {
+  const handler = read('src/services/ask/handlers/miscHandlers.handler.ts');
+  assert.match(handler, /operationalWorkItem\.findMany\(\{\s*where: \{ propertyId, id: \{ in: unlinkedWorkItemIds \} \}/);
+  assert.match(handler, /fallbackWorkItems\.get\(change\.sourceEntityId\)/);
+  assert.match(handler, /canonicalActionTitle: change\.canonicalAction\?\.title \?\? fallbackWorkItem\?\.title/);
+});
+
 test('property APIs keep audience state per user and admin inspection explains eligibility decisions', () => {
   const routes = read('src/propertyChanges/propertyChange.routes.ts');
   assert.match(routes, /properties\/:propertyId\/changes/);
@@ -307,7 +351,7 @@ test('emitPropertyChangeWithTransaction requests a recompute inside its own tran
   const service = read('src/propertyChanges/propertyChange.service.ts');
   assert.match(service, /await requestRecomputeForChange\(\{ \.\.\.change, sourceHealth: input\.sourceHealth \}, undefined, tx\);\s*\n\s*return \{ change, deduped: false \};/);
   // Both early-return (deduped) paths must not call it.
-  const dedupedReturns = service.match(/if \(existing\) return \{ change: existing, deduped: true \};|if \(replayed\) return \{ change: replayed, deduped: true \};/g);
+  const dedupedReturns = service.match(/if \((?:existing|replayed)\) return \{ change: await healMissingCanonicalLinks\(tx, (?:existing|replayed), input\), deduped: true \};/g);
   assert.equal(dedupedReturns.length, 2);
 });
 

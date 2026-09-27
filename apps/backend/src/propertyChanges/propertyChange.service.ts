@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   Prisma,
+  type PropertyChange,
   PropertyChangeBriefingEligibility,
   PropertyChangeType,
   type IntelligenceRecomputeTriggerType,
@@ -76,6 +77,19 @@ async function assertCanonicalLinks(
   }
 }
 
+async function healMissingCanonicalLinks(
+  tx: ChangeTransaction,
+  change: PropertyChange,
+  input: PropertyChangeEmissionInput,
+): Promise<PropertyChange> {
+  const data = {
+    ...(!change.canonicalActionId && input.canonicalActionId ? { canonicalActionId: input.canonicalActionId } : {}),
+    ...(!change.canonicalEventId && input.canonicalEventId ? { canonicalEventId: input.canonicalEventId } : {}),
+  };
+  if (!Object.keys(data).length) return change;
+  return tx.propertyChange.update({ where: { id: change.id }, data });
+}
+
 export async function emitPropertyChangeWithTransaction(
   tx: ChangeTransaction,
   input: PropertyChangeEmissionInput,
@@ -93,7 +107,7 @@ export async function emitPropertyChangeWithTransaction(
       propertyId_sourceType_sourceEntityId_sourceRevision: identity,
     },
   });
-  if (existing) return { change: existing, deduped: true };
+  if (existing) return { change: await healMissingCanonicalLinks(tx, existing, input), deduped: true };
 
   const cursor = await tx.propertyChangeSourceCursor.upsert({
     where: {
@@ -137,7 +151,7 @@ export async function emitPropertyChangeWithTransaction(
     const replayed = await tx.propertyChange.findUnique({
       where: { id: cursor.latestChangeId },
     });
-    if (replayed) return { change: replayed, deduped: true };
+    if (replayed) return { change: await healMissingCanonicalLinks(tx, replayed, input), deduped: true };
   }
 
   const materiality = derivePropertyChangeMateriality(input.signals);
