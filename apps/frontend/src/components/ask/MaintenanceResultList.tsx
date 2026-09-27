@@ -43,6 +43,19 @@ function fieldLabel(value: string | null): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
+function taskAccent(tone: Item['tone']): string {
+  if (tone === 'CRITICAL') return 'before:bg-rose-500';
+  if (tone === 'CAUTION') return 'before:bg-amber-400';
+  if (tone === 'POSITIVE') return 'before:bg-emerald-500';
+  return 'before:bg-slate-300';
+}
+
+function taskSupportingFacts(item: Item): string[] {
+  const timing = item.timingLabel ?? item.meta.find((fact) => /\b(due|overdue|today|tomorrow|day|week|month)\b/i.test(fact));
+  const context = item.amountLabel ?? item.badgeLabel ?? item.meta.find((fact) => fact !== timing);
+  return [timing, context].filter((fact): fact is string => Boolean(fact)).slice(0, 2);
+}
+
 function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disabled, onAction, onCanonicalTask, onUnavailable, onAccessLost, onClose }: {
   taskId: string;
   expectedPropertyId?: string;
@@ -190,20 +203,63 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
 
   const taskDetail = (taskId: string, item: Item) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={closeDetail} />;
 
-  return <section className={calm ? 'space-y-3' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white'} data-display-pattern={layout === 'SHELVES' ? 'shelves' : undefined}>
+  return <section className={calm ? 'space-y-3' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white'} data-display-pattern={calm ? 'priority-stack' : layout === 'SHELVES' ? 'shelves' : undefined}>
     <div className={calm ? 'flex flex-wrap items-center justify-between gap-2' : 'border-b border-slate-100 p-4'}>
       <h3 className={calm ? 'sr-only' : 'font-semibold text-slate-950'}>{block.title}</h3>
       {!calm && block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
-      {onChooseLayout && <div className={cn(calm ? 'order-2 inline-flex items-center gap-0.5' : 'mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1')} role="group" aria-label={`View ${block.title}`}>
+      {onChooseLayout && !calm && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
         {(['SHELVES', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={layout === option} onClick={() => onChooseLayout(option)}
-          className={cn(calm ? 'min-h-8 rounded-md px-2 text-xs' : 'min-h-8 rounded-lg px-2.5 text-xs font-semibold', calm ? (layout === option ? 'font-semibold text-slate-900' : 'text-slate-500 hover:text-slate-800') : (layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white'))}>{option === 'SHELVES' ? 'Shelves' : 'List'}</button>)}
+          className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'SHELVES' ? 'Shelves' : 'List'}</button>)}
       </div>}
       <div className={cn(!calm && 'mt-3', calm ? 'flex flex-wrap gap-0.5' : 'flex flex-wrap gap-2')} role="group" aria-label="Maintenance filters">
         {block.filters.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active}
           onClick={() => onFilter(filter.message)} className={cn(calm ? 'min-h-8 rounded-md px-2.5 py-1 text-sm disabled:opacity-100' : 'min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', calm ? (filter.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900') : (filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700'))}>{filter.label}</button>)}
       </div>
     </div>
-    {layout === 'SHELVES' && block.sections.map((section) => {
+    {calm && block.sections.map((section) => {
+      const offset = section.offset ?? 0;
+      const visible = Math.max(6, controls?.view.visibleCounts[section.id] ?? 6);
+      const shown = section.items.slice(0, controls ? visible : section.items.length);
+      return <section key={section.id} className="py-1" aria-labelledby={`maintenance-section-${section.id}`}>
+        <div className="mb-2 flex items-baseline gap-2">
+          <h4 id={`maintenance-section-${section.id}`} className="text-sm font-semibold text-slate-900">{section.title}</h4>
+          <span className="text-xs text-slate-500">{section.count} {section.count === 1 ? 'task' : 'tasks'}</span>
+        </div>
+        {section.items.length === 0 ? <p className="py-2 text-sm text-slate-500">No matching tasks.</p> : <ul className="grid gap-2 sm:grid-cols-2">
+          {shown.map((item) => {
+            const selected = controls?.view.selectedTaskId === item.id;
+            const facts = taskSupportingFacts(item);
+            return <li key={item.id} data-ask-task-id={item.id} className={cn(
+              'relative min-w-0 overflow-hidden rounded-xl border bg-white px-4 py-3 shadow-sm before:absolute before:inset-y-0 before:left-0 before:w-1',
+              taskAccent(item.tone), selected ? 'border-teal-600 ring-1 ring-teal-600/20' : 'border-slate-200',
+            )}>
+              <div className="flex min-h-[68px] items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-950">{item.title}</p>
+                  {facts.length > 0 && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{facts.join(' · ')}</p>}
+                </div>
+                <button type="button" data-maintenance-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id}
+                  disabled={disabled} aria-expanded={detailTaskId === item.id} aria-controls={`maintenance-detail-${item.id}`} onClick={() => openDetail(item)}
+                  className="-mr-1 inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:opacity-50"
+                  aria-label={`Review task: ${item.title}`}>Review</button>
+              </div>
+            </li>;
+          })}
+        </ul>}
+        {controls && visible < section.items.length && <button type="button" disabled={disabled} className="mt-2 min-h-10 text-sm font-semibold text-teal-800 disabled:opacity-50"
+          onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 6) } }))}>
+          Show {Math.min(6, section.items.length - visible)} more {section.title.toLowerCase()} tasks
+        </button>}
+        {(offset > 0 || offset + section.items.length < section.count) && <nav className="mt-2 flex flex-wrap items-center justify-between gap-2" aria-label={`${section.title} pages`}>
+          <p className="text-xs text-slate-500">Showing {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
+          <div className="flex gap-2">
+            {offset > 0 && <button type="button" disabled={disabled} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous<span className="sr-only"> page of {section.title}</span></button>}
+            {offset + section.items.length < section.count && <button type="button" disabled={disabled} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'NEXT')}>Next<span className="sr-only"> page of {section.title}</span></button>}
+          </div>
+        </nav>}
+      </section>;
+    })}
+    {!calm && layout === 'SHELVES' && block.sections.map((section) => {
       const offset = section.offset ?? 0;
       const shown = section.items.slice(0, MAINTENANCE_SHELF_CARD_LIMIT);
       const partial = shown.length < section.count;
@@ -221,7 +277,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         </HorizontalTrack>
       </div>;
     })}
-    {layout === 'LIST' && block.sections.map((section) => {
+    {!calm && layout === 'LIST' && block.sections.map((section) => {
       const offset = section.offset ?? 0;
       const visible = controls?.view.visibleCounts[section.id] ?? 5;
       return <div key={section.id} className={sectionFrame}>
@@ -264,8 +320,8 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         </nav>}
       </div>;
     })}
-    {layout === 'LIST' && detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
-    {layout === 'SHELVES' && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
+    {!calm && layout === 'LIST' && detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
+    {(calm || layout === 'SHELVES') && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
       {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
     </DetailSheetFrame>}
     <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{(calm ? calmMaintenanceActions(block.actions) : block.actions).map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === calmPrimaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>

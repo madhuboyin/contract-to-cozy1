@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { ExecutionCard } from '../workspace/ExecutionCard';
 import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
 import type { AskExecutionResponse } from '@/features/ask/types';
+import { api } from '@/lib/api/client';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.11 (IW-CALM-001..005, 010/011, FRD v1.111): the Maintenance answer, slice A.
 const task = (id: string, title: string) => ({ id, title, meta: ['HVAC'], status: 'PENDING', entityType: 'MAINTENANCE_TASK', tone: 'CRITICAL', timingLabel: 'Was due Sep 22, 2026', actions: [] });
@@ -27,7 +28,7 @@ const card = (execution: AskExecutionResponse, suggestions: string[] = []) => re
     contextOpen={false} onOpenContext={jest.fn()} onToggleFold={jest.fn()} onTogglePin={jest.fn()} />,
 );
 
-beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+beforeEach(() => { window.localStorage.clear(); window.sessionStorage.clear(); jest.restoreAllMocks(); });
 
 describe('calm Maintenance answer', () => {
   it('leads with the headline and supporting line, and drops the frame, title, paging note and count line', async () => {
@@ -46,6 +47,31 @@ describe('calm Maintenance answer', () => {
     expect(screen.queryByRole('button', { name: /Refresh this result/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Response options' })).toBeInTheDocument();
     expect(container.querySelector('article > div.rounded-3xl')).toBeNull();
+  });
+
+  it('uses the compact priority stack and keeps task controls behind Review', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const { container } = card(execution());
+    expect(await screen.findByRole('button', { name: 'Review task: Replace HVAC filter' })).toBeInTheDocument();
+    expect(container.querySelector('[data-display-pattern="priority-stack"]')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Shelves' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'List' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Select task/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Show details/ })).toBeNull();
+  });
+
+  it('opens Review as in-Ask canonical detail instead of expanding row controls', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    jest.spyOn(api, 'getMaintenanceTask').mockResolvedValueOnce({ success: true, data: {
+      id: 'filter', propertyId: 'home', title: 'Replace HVAC filter', description: 'Use a 16x25x1 filter.', status: 'PENDING', priority: 'HIGH', source: 'USER_CREATED',
+      nextDueDate: '2026-09-22T00:00:00.000Z', isRecurring: true, frequency: 'QUARTERLY', lastCompletedDate: null, estimatedCost: 25, actualCost: null,
+      updatedAt: new Date('2026-09-20T00:00:00.000Z'), completedAt: null,
+    } } as unknown as Awaited<ReturnType<typeof api.getMaintenanceTask>>);
+    card(execution());
+    fireEvent.click(await screen.findByRole('button', { name: 'Review task: Replace HVAC filter' }));
+    const detail = await screen.findByRole('dialog', { name: 'Task detail: Replace HVAC filter' });
+    expect(await within(detail).findByText('Use a 16x25x1 filter.')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
   });
 
   it('keeps two actions on the list: View all and Create a task, without the generic Open and Setup links', async () => {
