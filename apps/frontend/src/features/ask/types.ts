@@ -351,6 +351,20 @@ export interface ConciergeHomeView {
     items: Array<{ decisionThreadId: string; title: string; lifecycleStatus: string; contextStatus: string; verdict: string | null; confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null; subject?: AskConciergeSubject | null; updatedAt: string }>;
     href: string;
   };
+  homeContinuity: {
+    state: 'AVAILABLE' | 'UNAVAILABLE';
+    decisions: Array<{ id: string; title: string; summary: string | null; href: string }>;
+    activeMajorMoment: null | {
+      kind: 'PROJECT' | 'GUIDANCE_JOURNEY';
+      id: string;
+      title: string;
+      stage: string;
+      context: string | null;
+      blocker: string | null;
+      nextMilestone: string;
+      href: string;
+    };
+  };
   landingSpotlight?: { kind: 'ATTENTION' | 'DECISION'; entityId: string } | null;
   capabilityGroups: AskCapabilityGroup[];
   featuredPrompts: AskFeaturedPrompt[];

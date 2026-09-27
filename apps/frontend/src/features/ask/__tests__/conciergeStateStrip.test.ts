@@ -12,6 +12,7 @@ const view = (overrides: Partial<ConciergeHomeView> = {}): ConciergeHomeView => 
   priorityList: { state: 'AVAILABLE', rankingPolicyVersion: 'v1', generatedAt: null, items: [], truncated: false, href: '/dashboard' },
   changes: { state: 'NO_CHANGE', windowDays: 14, items: [], href: '/dashboard' },
   decisions: { state: 'NO_DECISIONS', items: [], href: '/dashboard' },
+  homeContinuity: { state: 'AVAILABLE', decisions: [], activeMajorMoment: null },
   landingSpotlight: null, capabilityGroups: [], featuredPrompts: [], suggestedQuestions: [], ...overrides,
 });
 
@@ -105,4 +106,3 @@ describe('buildConciergeStateStrip opening and explanations', () => {
     expect(strip.chips.find((chip) => chip.id === 'strip-decision-t1')?.explanation?.reasons).toEqual(['You have an open decision (in progress).']);
   });
 });
-

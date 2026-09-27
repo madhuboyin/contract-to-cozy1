@@ -20,6 +20,7 @@ function view(overrides: Partial<ConciergeHomeView> = {}): ConciergeHomeView {
       state: 'AVAILABLE', href: '/decisions',
       items: [{ decisionThreadId: 'fridge-decision', title: 'Repair or replace the refrigerator', lifecycleStatus: 'IN_PROGRESS', contextStatus: 'CURRENT', verdict: null, confidenceLabel: 'MEDIUM', subject: refrigerator, updatedAt: '2026-08-14T12:00:00.000Z' }],
     },
+    homeContinuity: { state: 'AVAILABLE', decisions: [], activeMajorMoment: null },
     landingSpotlight: null,
     capabilityGroups: [
       { id: 'UNDERSTAND', label: 'Understand', description: '', capabilityIds: [], prompts: [{ id: 'understand', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'Summarize this home.' }] },

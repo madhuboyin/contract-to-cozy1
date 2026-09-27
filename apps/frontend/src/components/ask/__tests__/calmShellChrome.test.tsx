@@ -17,6 +17,7 @@ const view = (overrides: Partial<ConciergeHomeView> = {}): ConciergeHomeView => 
   ] },
   changes: { state: 'NO_CHANGE', windowDays: 14, items: [], href: '/dashboard' },
   decisions: { state: 'NO_DECISIONS', items: [], href: '/dashboard' },
+  homeContinuity: { state: 'AVAILABLE', decisions: [], activeMajorMoment: null },
   landingSpotlight: { kind: 'ATTENTION', entityId: 'heat' }, capabilityGroups: [], featuredPrompts: [], suggestedQuestions: [], ...overrides,
 });
 const starters = ['Maintain', 'Protect', 'Save', 'Plan', 'Extra'].map((label, index) => ({ id: `s${index}`, categoryId: 'MAINTAIN' as const, categoryLabel: label, question: `${label} question?`, source: 'DISCOVERY' as const }));
@@ -56,6 +57,8 @@ describe('CalmLanding', () => {
     const quiet = view({ priorityList: { ...view().priorityList, items: [] }, landingSpotlight: null });
     render(<CalmLanding view={quiet} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
     expect(screen.getByText('Nothing needs your attention right now.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Decisions to make' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Active major moment' })).toBeInTheDocument();
   });
 
   it('is honest while loading and when the overview is unavailable, and never claims the home is fine', () => {
@@ -67,6 +70,24 @@ describe('CalmLanding', () => {
     rerender(<CalmLanding view={view({ priorityList: { ...view().priorityList, state: 'UNAVAILABLE' } })} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
     expect(screen.getByText('Your priorities are temporarily unavailable.')).toBeInTheDocument();
     expect(screen.queryByText(/Nothing needs your attention/)).toBeNull();
+  });
+
+  it('shows dashboard-parity decisions and active major moment below the Ask entry point', () => {
+    render(<CalmLanding view={view({
+      homeContinuity: {
+        state: 'AVAILABLE',
+        decisions: [{ id: 'decision-1', title: 'Choose furnace repair or replacement', summary: 'Compare the long-term cost.', href: '/dashboard/properties/home/home-operations?action=decision-1' }],
+        activeMajorMoment: { kind: 'PROJECT', id: 'project-1', title: 'Roof repair', stage: 'IN_PROGRESS', context: null, blocker: 'Waiting for provider selection', nextMilestone: 'Select a contractor', href: '/dashboard/properties/home/projects/project-1' },
+      },
+    })} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    const continuity = screen.getByRole('region', { name: 'Decisions and active work' });
+    expect(continuity).toHaveTextContent('Decisions to make');
+    expect(continuity).toHaveTextContent('Choose furnace repair or replacement');
+    expect(screen.getByRole('link', { name: /Choose furnace repair or replacement/ })).toHaveAttribute('href', '/dashboard/properties/home/home-operations?action=decision-1');
+    expect(continuity).toHaveTextContent('Active major moment');
+    expect(continuity).toHaveTextContent('Roof repair');
+    expect(continuity).toHaveTextContent('Waiting for provider selection');
+    expect(screen.getByRole('link', { name: /^Continue/ })).toHaveAttribute('href', '/dashboard/properties/home/projects/project-1');
   });
 });
 

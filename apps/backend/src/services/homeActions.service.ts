@@ -1489,111 +1489,66 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
   return { actionId, interaction: 'OPENED' as const, recordedAt: new Date().toISOString(), decisionLineage };
 }
 
-export async function getUnifiedHome(propertyId: string, userId: string) {
-  const access = await resolvePropertyAccess(userId, propertyId);
-  if (!access) throw new Error('Property not found or access denied.');
-  const propertyRead = invokeReadSkillOperationForConsumer({
-    consumer: 'HOME_ACTIONS',
-    operationId: 'PROPERTY_SUMMARY',
-    role: access.role,
-    execute: () => prisma.property.findUnique({
-      where: { id: propertyId },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        city: true,
-        state: true,
-        zipCode: true,
-        dwellingType: true,
-        yearBuilt: true,
-        propertySize: true,
-        bedrooms: true,
-        bathrooms: true,
-        heatingType: true,
-        coolingType: true,
-        roofType: true,
-        updatedAt: true,
+type HomeActionFeedResult = Awaited<ReturnType<typeof getHomeActionFeed>>;
+
+export type HomeContinuityProjection = {
+  decisions: HomeAction[];
+  activeMajorMoment: null | {
+    kind: 'PROJECT' | 'GUIDANCE_JOURNEY';
+    id: string;
+    title: string;
+    stage: string;
+    context: string | null;
+    blocker: string | null;
+    nextMilestone: string;
+    href: string;
+  };
+};
+
+/**
+ * Shared projection for the two continuity cards shown on Unified Home and
+ * Ask Cozy Home. Callers pass the canonical feed they already load so this
+ * never creates a second ranking read or a competing definition of a decision.
+ */
+export async function getHomeContinuityProjection(
+  propertyId: string,
+  feedInput: HomeActionFeedResult | Promise<HomeActionFeedResult>,
+): Promise<HomeContinuityProjection> {
+  const [feed, activeProject, activeJourneyCandidates] = await Promise.all([
+    feedInput,
+    prisma.projectRecord.findFirst({
+      where: { propertyId, status: { in: ['PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'] } },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        milestones: {
+          where: { status: { not: 'COMPLETE' } },
+          orderBy: { position: 'asc' },
+          take: 1,
+        },
+        issues: {
+          where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'ESCALATED'] } },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
     }),
-  });
-  const feedRead = getHomeActionFeed(propertyId, userId);
-  const [feed, property, inventory, documentCount, verifiedDocumentCount, recentEvents, activeProject, activeJourneyCandidates, propertyContextSnapshot] =
-    await Promise.all([
-      feedRead,
-      propertyRead,
-      prisma.inventoryItem.findMany({
-        where: { propertyId, ...visibleInventoryItemWhere() },
-        select: {
-          id: true,
-          name: true,
-          category: true,
-          isVerified: true,
-          warrantyId: true,
-          insurancePolicyId: true,
-          coverageNotRequired: true,
-          updatedAt: true,
+    prisma.guidanceJourney.findMany({
+      where: { propertyId, status: 'ACTIVE' },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+      include: {
+        inventoryItem: { select: { name: true, assetType: true, category: true } },
+        primarySignal: { select: { sourceEntityType: true, sourceEntityId: true, metadataJson: true } },
+        steps: {
+          where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
+          orderBy: { stepOrder: 'asc' },
+          take: 1,
         },
-      }),
-      countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
-      countPropertyDocuments({ propertyId, includeLegacy: true, verifiedOnly: true }).then((counts) => counts.total),
-      prisma.homeEvent.findMany({
-        where: { propertyId },
-        orderBy: { occurredAt: 'desc' },
-        take: 3,
-        select: { id: true, title: true, summary: true, type: true, importance: true, occurredAt: true },
-      }),
-      prisma.projectRecord.findFirst({
-        where: { propertyId, status: { in: ['PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'] } },
-        orderBy: { updatedAt: 'desc' },
-        include: {
-          milestones: {
-            where: { status: { not: 'COMPLETE' } },
-            orderBy: { position: 'asc' },
-            take: 1,
-          },
-          issues: {
-            where: { status: { in: ['OPEN', 'ACKNOWLEDGED', 'ESCALATED'] } },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
-        },
-      }),
-      prisma.guidanceJourney.findMany({
-        where: { propertyId, status: 'ACTIVE' },
-        orderBy: { updatedAt: 'desc' },
-        take: 20,
-        include: {
-          inventoryItem: { select: { name: true, assetType: true, category: true } },
-          primarySignal: { select: { sourceEntityType: true, sourceEntityId: true, metadataJson: true } },
-          steps: {
-            where: { status: { in: ['PENDING', 'IN_PROGRESS', 'BLOCKED'] } },
-            orderBy: { stepOrder: 'asc' },
-            take: 1,
-          },
-        },
-      }),
-      getAggregationPropertyContext(propertyId, userId, 'UNIFIED_HOME'),
-    ]);
+      },
+    }),
+  ]);
 
-  if (!property) throw new Error('Property not found or access denied.');
-
-  const contextCompleteness = getContextCompleteness(propertyContextSnapshot);
-  const knownPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.knownFacts, 0);
-  const missingPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.missingFactKeys.length, 0);
-  const conflictedPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.conflictedFactKeys.length, 0);
-  const stalePropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.staleFactKeys.length, 0);
-  const recordCompleteness = contextCompleteness.completenessPercent;
-  const coverageGapCount = (await detectCoverageGaps(propertyId)).length;
-  const capabilitySuggestions = await getUnifiedHomeCapabilitySuggestions({
-    propertyId,
-    userId,
-    propertyContext: propertyContextSnapshot,
-    actions: feed.actions,
-  });
-
-  const topAttentionActions = feed.actions.slice(0, 5);
-  const attentionActionIds = new Set(topAttentionActions.map((action) => action.id));
+  const attentionActionIds = new Set(feed.actions.slice(0, 5).map((action) => action.id));
   const decisions = feed.actions
     .filter((action) => action.job === 'DECIDE' ||
       ['MATERIAL_FINANCIAL', 'REGULATED_COVERAGE'].includes(action.governance.safetyTier))
@@ -1632,6 +1587,84 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
         }
       : null;
 
+  return { decisions, activeMajorMoment };
+}
+
+export async function getUnifiedHome(propertyId: string, userId: string) {
+  const access = await resolvePropertyAccess(userId, propertyId);
+  if (!access) throw new Error('Property not found or access denied.');
+  const propertyRead = invokeReadSkillOperationForConsumer({
+    consumer: 'HOME_ACTIONS',
+    operationId: 'PROPERTY_SUMMARY',
+    role: access.role,
+    execute: () => prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        dwellingType: true,
+        yearBuilt: true,
+        propertySize: true,
+        bedrooms: true,
+        bathrooms: true,
+        heatingType: true,
+        coolingType: true,
+        roofType: true,
+        updatedAt: true,
+      },
+    }),
+  });
+  const feedRead = getHomeActionFeed(propertyId, userId);
+  const continuityRead = getHomeContinuityProjection(propertyId, feedRead);
+  const [feed, property, inventory, documentCount, verifiedDocumentCount, recentEvents, continuity, propertyContextSnapshot] =
+    await Promise.all([
+      feedRead,
+      propertyRead,
+      prisma.inventoryItem.findMany({
+        where: { propertyId, ...visibleInventoryItemWhere() },
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          isVerified: true,
+          warrantyId: true,
+          insurancePolicyId: true,
+          coverageNotRequired: true,
+          updatedAt: true,
+        },
+      }),
+      countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
+      countPropertyDocuments({ propertyId, includeLegacy: true, verifiedOnly: true }).then((counts) => counts.total),
+      prisma.homeEvent.findMany({
+        where: { propertyId },
+        orderBy: { occurredAt: 'desc' },
+        take: 3,
+        select: { id: true, title: true, summary: true, type: true, importance: true, occurredAt: true },
+      }),
+      continuityRead,
+      getAggregationPropertyContext(propertyId, userId, 'UNIFIED_HOME'),
+    ]);
+
+  if (!property) throw new Error('Property not found or access denied.');
+
+  const contextCompleteness = getContextCompleteness(propertyContextSnapshot);
+  const knownPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.knownFacts, 0);
+  const missingPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.missingFactKeys.length, 0);
+  const conflictedPropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.conflictedFactKeys.length, 0);
+  const stalePropertyFacts = contextCompleteness.scopes.reduce((sum, scope) => sum + scope.staleFactKeys.length, 0);
+  const recordCompleteness = contextCompleteness.completenessPercent;
+  const coverageGapCount = (await detectCoverageGaps(propertyId)).length;
+  const capabilitySuggestions = await getUnifiedHomeCapabilitySuggestions({
+    propertyId,
+    userId,
+    propertyContext: propertyContextSnapshot,
+    actions: feed.actions,
+  });
+
   return {
     contractVersion: 'phase2-home-v1',
     property: {
@@ -1657,9 +1690,9 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
       planHref: `/dashboard/properties/${propertyId}/home-operations`,
       firstValueInsight: feed.firstValueInsight,
     },
-    decisions,
+    decisions: continuity.decisions,
     capabilitySuggestions,
-    activeMajorMoment,
+    activeMajorMoment: continuity.activeMajorMoment,
     glance: {
       recordCompleteness,
       knownPropertyFacts,

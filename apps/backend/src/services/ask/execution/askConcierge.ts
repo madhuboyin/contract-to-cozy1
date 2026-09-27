@@ -14,7 +14,7 @@ import { buildCapabilityCatalog, canonicalCapabilityRegistry, type CapabilityCat
 import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../../toolDiscoveryAvailability.service';
 import { getAskOperationDefinition, resolveAskOperation, type AskOperationId } from '../askOperationRegistry';
 import { skillRuntimeUnavailableReason } from '../capabilityHandlerRegistry';
-import { getHomeActionFeed } from '../../homeActions.service';
+import { getHomeActionFeed, getHomeContinuityProjection } from '../../homeActions.service';
 import { money } from '../askFormatting';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess, HOME_CHANGE_SUMMARY_WINDOW_DAYS, journeyContextFrom } from '../askHandlerSupport';
 import * as decisionThreadService from '../../decisionPlatform/decisionThreadService';
@@ -122,9 +122,10 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     }
   })();
 
+  const feedPromise = getHomeActionFeed(propertyId, userId);
   const priorityListPromise = (async (): Promise<ConciergeHomeView['priorityList']> => {
     try {
-      const feed = await getHomeActionFeed(propertyId, userId);
+      const feed = await feedPromise;
       const suppressedHomeActionIds = await getSuppressedHomeActionIds({
         userId, propertyId, homeActionIds: feed.actions.map((action) => action.id),
       }).catch(() => new Set<string>());
@@ -162,6 +163,25 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     } catch (error) {
       logger.warn({ err: error, propertyId, userId }, 'Concierge Home priority list section failed closed');
       return { state: 'UNAVAILABLE', rankingPolicyVersion: null, generatedAt: null, items: [], truncated: false, href: homeHref };
+    }
+  })();
+
+  const homeContinuityPromise = (async (): Promise<ConciergeHomeView['homeContinuity']> => {
+    try {
+      const continuity = await getHomeContinuityProjection(propertyId, feedPromise);
+      return {
+        state: 'AVAILABLE',
+        decisions: continuity.decisions.map((action) => ({
+          id: action.id,
+          title: action.presentation?.headline ?? action.signal,
+          summary: action.presentation?.summary ?? action.recommendedAction ?? null,
+          href: action.primaryCta.href,
+        })),
+        activeMajorMoment: continuity.activeMajorMoment,
+      };
+    } catch (error) {
+      logger.warn({ err: error, propertyId, userId }, 'Concierge Home continuity section failed closed');
+      return { state: 'UNAVAILABLE', decisions: [], activeMajorMoment: null };
     }
   })();
 
@@ -290,12 +310,13 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     }
   })();
 
-  const [priorityList, changes, decisions, inventoryDecisionCandidate, journeyContext] = await Promise.all([
+  const [priorityList, changes, decisions, inventoryDecisionCandidate, journeyContext, homeContinuity] = await Promise.all([
     priorityListPromise,
     changesPromise,
     decisionsPromise,
     inventoryDecisionCandidatePromise,
     journeyContextPromise,
+    homeContinuityPromise,
   ]);
   const audienceDiscoveryActive = controls.audienceDiscoveryEnabled && controls.audiencePolicyEnabled;
   const discoveryOperatingMode = audienceDiscoveryActive && journeyContext.state === 'AVAILABLE'
@@ -422,6 +443,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     priorityList,
     changes,
     decisions,
+    homeContinuity,
     landingSpotlight,
     capabilityGroups: audienceCapabilityGroups,
     featuredPrompts,

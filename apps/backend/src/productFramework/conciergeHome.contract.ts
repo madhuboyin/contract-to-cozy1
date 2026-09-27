@@ -82,6 +82,26 @@ export const ConciergeHomeDecisionsSchema = z.object({
   href: z.string(),
 });
 
+export const ConciergeHomeContinuitySchema = z.object({
+  state: z.enum(['AVAILABLE', 'UNAVAILABLE']),
+  decisions: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    summary: z.string().nullable(),
+    href: z.string(),
+  })),
+  activeMajorMoment: z.object({
+    kind: z.enum(['PROJECT', 'GUIDANCE_JOURNEY']),
+    id: z.string(),
+    title: z.string(),
+    stage: z.string(),
+    context: z.string().nullable(),
+    blocker: z.string().nullable(),
+    nextMilestone: z.string(),
+    href: z.string(),
+  }).nullable(),
+});
+
 export const ConciergeHomeCapabilityPromptSchema = z.object({
   id: z.string(),
   categoryId: z.enum(['UNDERSTAND', 'MAINTAIN', 'PROTECT', 'SAVE', 'DECIDE', 'PLAN_MONITOR']),
@@ -125,6 +145,7 @@ export const ConciergeHomeViewSchema = z.object({
   priorityList: ConciergeHomePriorityListSchema,
   changes: ConciergeHomeChangesSchema,
   decisions: ConciergeHomeDecisionsSchema,
+  homeContinuity: ConciergeHomeContinuitySchema,
   landingSpotlight: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('ATTENTION'), entityId: z.string().trim().min(1).max(160) }),
     z.object({ kind: z.literal('DECISION'), entityId: z.string().trim().min(1).max(160) }),

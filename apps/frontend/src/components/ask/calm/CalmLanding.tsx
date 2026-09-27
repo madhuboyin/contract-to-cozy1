@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, ArrowRight, ChevronRight, Loader2, Milestone, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buildConciergeStateStrip, type StripChip, type StripTone } from '@/features/ask/conciergeStateStrip';
 import type { AskCapabilityPrompt, AskFeaturedPrompt, ConciergeHomeView } from '@/features/ask/types';
@@ -16,6 +17,17 @@ const TONE: Record<StripTone, { chip: string; dot: string }> = {
 };
 // The suggestions stay on one row at every width and scroll sideways when they do not fit; they never wrap into a second row.
 const ROW = 'flex flex-nowrap gap-2 overflow-x-auto pb-1 [scrollbar-width:none]';
+
+const MAJOR_MOMENT_STAGE_LABELS: Record<string, string> = {
+  DRAFT: 'Draft', PLANNING: 'Planning', IN_PROGRESS: 'In progress', PAUSED: 'Paused', DISPUTED: 'In dispute',
+  AWARENESS: 'Reviewing', DIAGNOSIS: 'Diagnosing', DECISION: 'Deciding', EXECUTION: 'In progress',
+  VALIDATION: 'Verifying', TRACKING: 'Monitoring',
+};
+
+function majorMomentStageLabel(stage: string): string {
+  return MAJOR_MOMENT_STAGE_LABELS[stage]
+    ?? stage.replace(/_/g, ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase());
+}
 
 export function CalmLanding({ view, loading, failed, starters, usingFallbackStarters, onAsk, headlineShownAbove = false, composer, children }: {
   view: ConciergeHomeView | null;
@@ -79,6 +91,49 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
         {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-10 whitespace-nowrap rounded-full border border-stone-300 bg-transparent px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-700 hover:text-emerald-950">{prompt.question}</button></li>)}
         {children && <li className="shrink-0">{children}</li>}
       </ul>}
+      {view && !loading && !failed && (
+        <section className="mt-8 grid gap-4 sm:grid-cols-2" aria-label="Decisions and active work">
+          <article className="flex min-h-48 min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700" aria-hidden="true"><ShieldCheck className="h-5 w-5" /></span>
+              <div><h3 className="font-semibold text-slate-950">Decisions to make</h3><p className="mt-0.5 text-sm text-slate-500">Choices that need your answer.</p></div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {view.homeContinuity.state === 'UNAVAILABLE'
+                ? <p className="text-sm text-slate-500">Your decisions are temporarily unavailable.</p>
+                : view.homeContinuity.decisions.length === 0
+                  ? <p className="text-sm text-slate-500">No decisions need your attention.</p>
+                  : view.homeContinuity.decisions.slice(0, 2).map((decision) => (
+                    <Link key={decision.id} href={decision.href} className="group block rounded-xl border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50/40">
+                      <p className="line-clamp-1 text-sm font-semibold text-slate-950">{decision.title}</p>
+                      {decision.summary && decision.summary.trim().toLowerCase() !== decision.title.trim().toLowerCase() && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{decision.summary}</p>}
+                    </Link>
+                  ))}
+            </div>
+          </article>
+
+          <article className="flex min-h-48 min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700" aria-hidden="true"><Milestone className="h-5 w-5" /></span>
+              <div><h3 className="font-semibold text-slate-950">Active major moment</h3><p className="mt-0.5 text-sm text-slate-500">Your current project or guided plan.</p></div>
+            </div>
+            <div className="mt-4 flex flex-1 flex-col">
+              {view.homeContinuity.state === 'UNAVAILABLE'
+                ? <p className="text-sm text-slate-500">Your active work is temporarily unavailable.</p>
+                : view.homeContinuity.activeMajorMoment
+                  ? <>
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><span>{view.homeContinuity.activeMajorMoment.kind === 'PROJECT' ? 'Project' : 'Guided plan'}</span><span className="rounded-full border border-slate-200 px-2 py-0.5 normal-case tracking-normal text-slate-700">{majorMomentStageLabel(view.homeContinuity.activeMajorMoment.stage)}</span></div>
+                    <h4 className="mt-2 line-clamp-1 text-sm font-semibold text-slate-950">{view.homeContinuity.activeMajorMoment.title}</h4>
+                    {view.homeContinuity.activeMajorMoment.context && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{view.homeContinuity.activeMajorMoment.context}</p>}
+                    {view.homeContinuity.activeMajorMoment.blocker && <p className="mt-2 flex gap-1.5 text-xs text-amber-700"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />{view.homeContinuity.activeMajorMoment.blocker}</p>}
+                    <p className="mt-2 text-xs text-slate-600">Next: {view.homeContinuity.activeMajorMoment.nextMilestone}</p>
+                    <Link href={view.homeContinuity.activeMajorMoment.href} className="mt-auto inline-flex min-h-10 items-center gap-1 self-start pt-3 text-sm font-semibold text-teal-800 hover:text-teal-950">Continue <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                  </>
+                  : <p className="text-sm text-slate-500">No major project or guided plan is active.</p>}
+            </div>
+          </article>
+        </section>
+      )}
     </div>
   );
 }
