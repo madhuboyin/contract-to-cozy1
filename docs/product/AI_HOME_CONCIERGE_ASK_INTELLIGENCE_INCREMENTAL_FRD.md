@@ -1350,7 +1350,9 @@ answer reads as conversational guidance rather than an administrative activity t
 annotation layer over the existing governed Home Actions feed — it never re-ranks or publishes a
 second feed, and `PRIORITY_LIST` is delivered as an additive block on the existing `HOME_ACTIONS`
 operation rather than a new one, which is the actual enforcement mechanism behind "no competing
-action source." Usefulness feedback (per-item `USEFUL`/`NOT_USEFUL`) and a 14-day suppression
+action source." The optional Buyer Plan mode lookup is bounded by its declared provider timeout and
+degrades to the ordinary homeowner feed; Property Context evaluation and the canonical Home Actions
+read run concurrently so neither independent read consumes the other's execution budget. Usefulness feedback (per-item `USEFUL`/`NOT_USEFUL`) and a 14-day suppression
 cooldown are built; Concierge Home composes three already-governed sources with each section
 reporting its own honest state (`AVAILABLE`/`NO_ACTION`/`NO_CHANGE`/`NO_DECISIONS`/`UNAVAILABLE`)
 so a failed or empty section is never presented as "nothing needs attention." "Baseline usefulness

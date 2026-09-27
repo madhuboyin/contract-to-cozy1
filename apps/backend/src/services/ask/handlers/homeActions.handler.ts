@@ -218,18 +218,50 @@ export function homeActionShelfFacts(action: {
   return { tone: action.priority === 'NOW' ? 'CAUTION' : 'DEFAULT', timingLabel };
 }
 
+type BuyerPlanContextValue = Awaited<ReturnType<typeof buyerPlanContextProvider.load>>;
+
+// Buyer context is an optional mode switch for HOME_ACTIONS, not a required
+// dependency of the homeowner feed. The provider declares a 2s budget, but
+// this direct compatibility read historically bypassed the context composer
+// that enforces it. Keep the buyer experience when it answers in-budget and
+// fall through to canonical Home Actions when it is slow or unavailable.
+export async function loadOptionalBuyerPlanContext(
+  input: Parameters<typeof buyerPlanContextProvider.load>[0],
+  load: (value: Parameters<typeof buyerPlanContextProvider.load>[0]) => Promise<BuyerPlanContextValue> = (value) => buyerPlanContextProvider.load(value),
+  timeoutMs = buyerPlanContextProvider.defaultTimeoutMs,
+): Promise<BuyerPlanContextValue | null> {
+  const controller = new AbortController();
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      load({ ...input, signal: controller.signal }),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => {
+          controller.abort(new Error('Buyer Plan context timed out'));
+          resolve(null);
+        }, timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    logger.warn({ err: error, propertyId: input.propertyId }, '[ask-orchestrator] optional Buyer Plan context unavailable for Home Actions');
+    return null;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
   const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const [access, buyerContextValue] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
-    buyerPlanContextProvider.load({
+    loadOptionalBuyerPlanContext({
       userId,
       propertyId,
       operationId: 'HOME_ACTIONS',
       signal: new AbortController().signal,
     }),
   ]);
-  const buyerResult = buyerContextValue.status === 'AVAILABLE' && buyerContextValue.data
+  const buyerResult = buyerContextValue?.status === 'AVAILABLE' && buyerContextValue.data
     ? buildBuyerPlanHomeActionsResult(buyerContextValue.data)
     : null;
   if (buyerResult) return buyerResult;
@@ -239,7 +271,15 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     if (allPropertyResult) return allPropertyResult;
   }
 
-  const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: 'HOME_ACTIONS', operationKey: 'VIEW_FEED' });
+  const [evaluation, feedResult] = await Promise.all([
+    evaluateFeatureContext(propertyId, userId, { featureKey: 'HOME_ACTIONS', operationKey: 'VIEW_FEED' }),
+    getHomeActionFeed(propertyId, userId)
+      .then((feed) => ({ feed, failed: false as const }))
+      .catch((error) => {
+        logger.warn({ err: error, propertyId, userId }, '[ask-orchestrator] Home Action feed unavailable');
+        return { feed: null, failed: true as const };
+      }),
+  ]);
   const activeRequirement = evaluation.requirements[0];
   const canImproveContext = access.role !== HouseholdRole.VIEWER;
   const captureSupported = activeRequirement
@@ -263,10 +303,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     expectedContextVersion: evaluation.contextVersion,
   }] : [];
 
-  let feed: Awaited<ReturnType<typeof getHomeActionFeed>>;
-  try {
-    feed = await getHomeActionFeed(propertyId, userId);
-  } catch {
+  if (feedResult.failed || !feedResult.feed) {
     return {
       status: 'UNAVAILABLE', reasonCode: 'HOME_ACTION_FEED_UNAVAILABLE', contextVersion: evaluation.contextVersion,
       captureRequests,
@@ -278,6 +315,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       suggestions: ['Summarize my home record', 'What maintenance is pending?'],
     };
   }
+  const feed = feedResult.feed;
 
   if (focusedActionId) {
     const focusedAction = feed.actions.find((action) => action.id === focusedActionId);
