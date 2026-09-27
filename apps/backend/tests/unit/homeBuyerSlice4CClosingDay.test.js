@@ -23,7 +23,8 @@ test('Closing Day owns normalized property-scoped session state and signed-copy 
   assert.match(schema, /model BuyerClosingDayWorkspace/);
   assert.match(schema, /checklistId String @unique/);
   assert.match(schema, /propertyId\s+String @unique/);
-  assert.match(schema, /signedClosingDocument Document\? @relation\("BuyerClosingDaySignedDocument"/);
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5b-2).
+  assert.match(schema, /signedClosingDocument PropertyRecord\? @relation\("BuyerClosingDaySignedDocument"/);
   assert.match(schema, /professionalClosingConfirmedAt DateTime\?/);
   assert.match(service, /CLOSING_DAY_DOCUMENT_NOT_FOUND/);
 });

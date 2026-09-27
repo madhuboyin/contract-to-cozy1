@@ -1,4 +1,4 @@
-import { Prisma, type BuyerClosingDisclosureRevision } from '@prisma/client';
+import { Prisma, type BuyerClosingDisclosureRevision, type HouseholdRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -9,12 +9,14 @@ import {
   type BuyerClosingFundsReadinessUpdateInput,
 } from '../productFramework/buyerAcquisition.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 
 async function assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR') {
   const access = await resolvePropertyAccess(userId, propertyId);
   if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
     throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
   }
+  return access.role;
 }
 
 const dateOnly = (value: string | null | undefined) => value ? new Date(`${value}T00:00:00.000Z`) : value;
@@ -71,10 +73,12 @@ export class BuyerClosingDisclosureService {
     return { ...plan, selectedLoanEstimateRevision };
   }
 
-  private static async assertSourceDocument(propertyId: string, documentId?: string | null) {
-    if (!documentId) return;
-    const document = await prisma.document.findFirst({ where: { id: documentId, propertyId, deletedAt: null } });
-    if (!document) throw new APIError('Closing Disclosure source document not found.', 404, 'CLOSING_DISCLOSURE_SOURCE_NOT_FOUND');
+  // The source reference is a Home Record id (Documents slice S5b-2), resolved with the caller's role.
+  private static async assertSourceDocument(propertyId: string, role: HouseholdRole, documentId?: string | null) {
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids: [documentId] },
+      () => new APIError('Closing Disclosure source document not found.', 404, 'CLOSING_DISCLOSURE_SOURCE_NOT_FOUND'),
+    );
   }
 
   static async get(userId: string, propertyId: string) {
@@ -127,9 +131,9 @@ export class BuyerClosingDisclosureService {
   }
 
   static async createRevision(userId: string, propertyId: string, input: BuyerClosingDisclosureInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     await this.context(propertyId);
-    await this.assertSourceDocument(propertyId, input.sourceDocumentId);
+    await this.assertSourceDocument(propertyId, role, input.sourceDocumentId);
     let workspace = await prisma.buyerClosingDisclosureWorkspace.findUnique({
       where: { propertyId }, include: { revisions: { orderBy: { revisionNumber: 'desc' } } },
     });
@@ -144,9 +148,9 @@ export class BuyerClosingDisclosureService {
   }
 
   static async updateDraft(userId: string, propertyId: string, revisionId: string, input: BuyerClosingDisclosureUpdateInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     await this.context(propertyId);
-    await this.assertSourceDocument(propertyId, input.sourceDocumentId);
+    await this.assertSourceDocument(propertyId, role, input.sourceDocumentId);
     const revision = await prisma.buyerClosingDisclosureRevision.findFirst({ where: { id: revisionId, workspace: { propertyId }, status: 'DRAFT' } });
     if (!revision) throw new APIError('Editable Closing Disclosure draft not found.', 404, 'CLOSING_DISCLOSURE_DRAFT_NOT_FOUND');
     await prisma.buyerClosingDisclosureRevision.update({ where: { id: revisionId }, data: revisionData(input) });

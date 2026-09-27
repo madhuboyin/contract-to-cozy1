@@ -29,7 +29,7 @@ import { composeBuyerInspectionModules } from './buyerInspectionModuleCompositio
 import { inspectionFindingSourceAdapter } from '../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
-import { countPropertyDocuments, listPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
+import { assertPropertyDocumentsExist, countPropertyDocuments, listPropertyDocuments, resolvePropertyDocuments, toWorkflowDocumentSummary } from './propertyDocuments/propertyDocumentInventory.service';
 import { homeRecordsService } from './homeRecords.service';
 
 const DAY_MS = 86_400_000;
@@ -602,16 +602,9 @@ export class BuyerAcquisitionService {
   }
 
   static async getInspectionPlan(userId: string, propertyId: string) {
-    await this.assertAccess(userId, propertyId, 'VIEWER');
+    const access = await this.assertAccess(userId, propertyId, 'VIEWER');
     const [plan, latestReport, propertyContext] = await Promise.all([
-      prisma.buyerInspectionPlan.findUnique({
-        where: { propertyId },
-        include: {
-          reinspectionProofDocument: {
-            select: { id: true, name: true, verificationStatus: true, createdAt: true },
-          },
-        },
-      }),
+      prisma.buyerInspectionPlan.findUnique({ where: { propertyId } }),
       prisma.inspectionReport.findFirst({
         where: { propertyId, reportType: 'PRE_PURCHASE' },
         orderBy: [{ inspectionDate: 'desc' }, { createdAt: 'desc' }],
@@ -629,7 +622,13 @@ export class BuyerAcquisitionService {
         scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY'],
       }),
     ]);
-    return { plan, latestReport, recommendations: composeBuyerInspectionModules(propertyContext) };
+    // The reinspection proof reference is a Home Record id (Documents slice S5b-2); resolved with the caller's role so an owner-only record
+    // is not disclosed to a member who cannot see it.
+    const reinspectionProofDocument = plan?.reinspectionProofDocumentId
+      ? (await resolvePropertyDocuments({ propertyId, role: access.role, ids: [plan.reinspectionProofDocumentId] }))
+        .map(toWorkflowDocumentSummary)[0] ?? null
+      : null;
+    return { plan: plan ? { ...plan, reinspectionProofDocument } : null, latestReport, recommendations: composeBuyerInspectionModules(propertyContext) };
   }
 
   static async updateInspectionPlan(
@@ -637,17 +636,15 @@ export class BuyerAcquisitionService {
     propertyId: string,
     input: BuyerInspectionPlanInput,
   ) {
-    await this.assertAccess(userId, propertyId);
+    const access = await this.assertAccess(userId, propertyId);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
     const existing = await prisma.buyerInspectionPlan.findUnique({ where: { propertyId } });
 
-    if (input.reinspectionProofDocumentId) {
-      const proof = await prisma.document.findFirst({
-        where: { id: input.reinspectionProofDocumentId, propertyId, deletedAt: null },
-        select: { id: true },
-      });
-      if (!proof) throw new APIError('Reinspection proof document not found.', 404, 'DOCUMENT_NOT_FOUND');
-    }
+    // The reinspection proof reference is a Home Record id (Documents slice S5b-2), resolved with the caller's role.
+    await assertPropertyDocumentsExist(
+      { propertyId, role: access.role, ids: [input.reinspectionProofDocumentId] },
+      () => new APIError('Reinspection proof document not found.', 404, 'DOCUMENT_NOT_FOUND'),
+    );
 
     const date = (value: string | null | undefined, fallback: Date | null = null) =>
       value === undefined ? fallback : value ? new Date(value) : null;

@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Archive,
   ArchiveRestore,
+  ArrowLeft,
   Bookmark,
   BookmarkPlus,
   Camera,
@@ -26,6 +27,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import { buyerPlanReturnHref } from '@/lib/navigation/buyerReturnContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1292,6 +1294,9 @@ export default function HomeRecordsClient() {
   // Deep-linkable from elsewhere (e.g. a Timeline event's evidence link) —
   // detail is otherwise a client-state-driven sheet with no URL of its own.
   const [selectedRecordId, setSelectedRecordId] = React.useState<string | null>(() => searchParams.get('recordId'));
+  // A buyer-plan launch (e.g. "Import documents") carries its own return contract through the property Documents
+  // redirect — restores the "Back to Closing Plan" round trip the legacy Documents page used to offer.
+  const buyerReturnHref = buyerPlanReturnHref(propertyId, searchParams);
   const [search, setSearch] = React.useState('');
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
   const [recordTypeFilter, setRecordTypeFilter] = React.useState<PropertyRecordType | 'ALL'>('ALL');
@@ -1442,6 +1447,14 @@ export default function HomeRecordsClient() {
 
   return (
     <MobilePageContainer className="space-y-5 py-4 lg:max-w-5xl lg:px-8 lg:pb-10">
+      {buyerReturnHref && (
+        <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+          <Link href={buyerReturnHref}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Closing Plan
+          </Link>
+        </Button>
+      )}
       <MobilePageIntro
         eyebrow="Home tool"
         title="Property Records"

@@ -11,12 +11,14 @@ import { assertBuyerJourneyStageTransition } from '../productFramework/buyerJour
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import { assertPropertyDocumentsExist, resolvePropertyDocuments, toWorkflowDocumentSummary } from './propertyDocuments/propertyDocumentInventory.service';
 
 async function assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR') {
   const access = await resolvePropertyAccess(userId, propertyId);
   if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
     throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
   }
+  return access.role;
 }
 
 const inactiveStatuses: Array<'COMPLETED' | 'NOT_NEEDED' | 'CANCELLED'> = ['COMPLETED', 'NOT_NEEDED', 'CANCELLED'];
@@ -35,7 +37,7 @@ function serialize(workspace: BuyerClosingDayWorkspace | null) {
 
 export class BuyerClosingDayService {
   static async get(userId: string, propertyId: string) {
-    await assertAccess(userId, propertyId, 'VIEWER');
+    const role = await assertAccess(userId, propertyId, 'VIEWER');
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
     const [workspace, title, fundsTask, blockers] = await Promise.all([
       prisma.buyerClosingDayWorkspace.findUnique({ where: { propertyId } }),
@@ -64,11 +66,10 @@ export class BuyerClosingDayService {
         select: { id: true, role: true, name: true, company: true, phone: true, email: true },
       })
       : null;
+    // The signed closing record is a Home Record id (Documents slice S5b-2), resolved with the caller's role.
     const signedDocument = workspace?.signedClosingDocumentId
-      ? await prisma.document.findFirst({
-        where: { id: workspace.signedClosingDocumentId, propertyId, deletedAt: null },
-        select: { id: true, name: true, type: true, verificationStatus: true, createdAt: true },
-      })
+      ? (await resolvePropertyDocuments({ propertyId, role, ids: [workspace.signedClosingDocumentId] }))
+        .map(toWorkflowDocumentSummary)[0] ?? null
       : null;
     return {
       workspace: serialize(workspace),
@@ -82,7 +83,7 @@ export class BuyerClosingDayService {
       titleBlockingIssues: (title?.issues ?? []).map((issue) => ({ id: issue.id, title: issue.title, status: issue.status, notes: issue.notes })),
       fundsReadiness: fundsTask ?? null,
       blockers,
-      signedDocument: signedDocument ? { ...signedDocument, createdAt: signedDocument.createdAt.toISOString() } : null,
+      signedDocument,
       lifecycle: {
         stage: checklist.stage,
         targetCloseDate: checklist.targetCloseDate?.toISOString() ?? null,
@@ -93,12 +94,13 @@ export class BuyerClosingDayService {
   }
 
   static async update(userId: string, propertyId: string, input: BuyerClosingDayUpdateInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
-    if (input.signedClosingDocumentId) {
-      const document = await prisma.document.findFirst({ where: { id: input.signedClosingDocumentId, propertyId, deletedAt: null } });
-      if (!document) throw new APIError('Signed closing document not found for this property.', 404, 'CLOSING_DAY_DOCUMENT_NOT_FOUND');
-    }
+    // The signed closing record is a Home Record id (Documents slice S5b-2), resolved with the caller's role.
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids: [input.signedClosingDocumentId] },
+      () => new APIError('Signed closing document not found for this property.', 404, 'CLOSING_DAY_DOCUMENT_NOT_FOUND'),
+    );
     await prisma.$transaction(async (tx) => {
       const workspace = await tx.buyerClosingDayWorkspace.upsert({
         where: { propertyId },
@@ -111,7 +113,7 @@ export class BuyerClosingDayService {
   }
 
   static async confirmProfessionalClose(userId: string, propertyId: string, input: BuyerClosingDayConfirmInput) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const checklist = await HomeBuyerTaskService.getOrCreateChecklist(userId, propertyId);
     const [workspace, title] = await Promise.all([
       prisma.buyerClosingDayWorkspace.findUnique({ where: { propertyId } }),
@@ -132,15 +134,16 @@ export class BuyerClosingDayService {
       ...itemStatuses.map((field) => [field, workspace[field] !== 'UNKNOWN'] as const),
     ].filter(([, complete]) => !complete).map(([field]) => field);
     if (missing.length) throw new APIError(`Complete required Closing Day confirmations: ${missing.join(', ')}.`, 409, 'CLOSING_DAY_INCOMPLETE');
-    const [signedDocument, trustedContact] = await Promise.all([
+    // The signed closing record is a Home Record id (Documents slice S5b-2), resolved with the caller's role.
+    const [signedDocuments, trustedContact] = await Promise.all([
       workspace.signedClosingDocumentId
-        ? prisma.document.findFirst({ where: { id: workspace.signedClosingDocumentId, propertyId, deletedAt: null }, select: { id: true } })
-        : null,
+        ? resolvePropertyDocuments({ propertyId, role, ids: [workspace.signedClosingDocumentId] })
+        : [],
       title?.responsibleContactId
         ? prisma.buyerJourneyContact.findFirst({ where: { id: title.responsibleContactId, checklistId: checklist.id }, select: { id: true } })
         : null,
     ]);
-    if (!signedDocument) throw new APIError('Attach a current signed closing record before confirming close.', 409, 'CLOSING_DAY_SIGNED_RECORD_REQUIRED');
+    if (!signedDocuments.length) throw new APIError('Attach a current signed closing record before confirming close.', 409, 'CLOSING_DAY_SIGNED_RECORD_REQUIRED');
     if (!title?.closingAppointmentAt || title.closingAppointmentFormat === 'UNKNOWN' || !trustedContact) {
       throw new APIError('Confirm the appointment time, method, and trusted title/escrow contact before recording close.', 409, 'CLOSING_DAY_APPOINTMENT_INCOMPLETE');
     }

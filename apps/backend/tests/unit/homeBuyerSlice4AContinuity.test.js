@@ -38,7 +38,9 @@ test('Slice 4A buyer return context is property-scoped and allowlisted', () => {
 
 test('documents and every Inspection Hub hop preserve the canonical Buyer Plan return path', () => {
   const buyerPlan = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan/page.tsx'), 'utf8');
-  const documents = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/documents/DocumentsPageClient.tsx'), 'utf8');
+  // Documents slice S4 retired the legacy DocumentsPageClient.tsx (the property Documents route now only redirects to
+  // Home Records) — the round-trip link now lives on the Home Records client itself.
+  const documents = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-records/HomeRecordsClient.tsx'), 'utf8');
   const hub = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/inspection-hub/page.tsx'), 'utf8');
   const report = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/inspection-hub/[reportId]/page.tsx'), 'utf8');
   const openItems = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/inspection-hub/open-items/page.tsx'), 'utf8');

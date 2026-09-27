@@ -3067,7 +3067,8 @@ model BuyerPurchaseLoanEstimateRevision {
   confirmedAt                         DateTime?
 
   offer          BuyerPurchaseLoanOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  sourceDocument Document?              @relation("BuyerPurchaseLoanEstimateSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5b-2): the column name is unchanged.
+  sourceDocument PropertyRecord?        @relation("BuyerPurchaseLoanEstimateSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3128,7 +3129,8 @@ model BuyerClosingDisclosureRevision {
   confirmedByUserId String?
 
   workspace BuyerClosingDisclosureWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  sourceDocument Document? @relation("BuyerClosingDisclosureSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5b-2): the column name is unchanged.
+  sourceDocument PropertyRecord? @relation("BuyerClosingDisclosureSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3171,7 +3173,8 @@ model BuyerClosingDayWorkspace {
 
   checklist HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  signedClosingDocument Document? @relation("BuyerClosingDaySignedDocument", fields: [signedClosingDocumentId], references: [id], onDelete: SetNull)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5b-2): the column name is unchanged.
+  signedClosingDocument PropertyRecord? @relation("BuyerClosingDaySignedDocument", fields: [signedClosingDocumentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3496,7 +3499,8 @@ model BuyerInspectionPlan {
 
   checklist HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   property  Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  reinspectionProofDocument Document? @relation("BuyerInspectionReinspectionProof", fields: [reinspectionProofDocumentId], references: [id], onDelete: SetNull)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5b-2): the column name is unchanged.
+  reinspectionProofDocument PropertyRecord? @relation("BuyerInspectionReinspectionProof", fields: [reinspectionProofDocumentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3571,7 +3575,8 @@ model HomeBuyerTask {
   assignedContact       BuyerJourneyContact? @relation(fields: [assignedContactId], references: [id], onDelete: SetNull)
   completedBy           User?                @relation("HomeBuyerTaskCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
   completionVerifiedBy  User?                @relation("HomeBuyerTaskCompletionVerifier", fields: [completionVerifiedById], references: [id], onDelete: SetNull)
-  completionDocument    Document?            @relation("HomeBuyerTaskCompletionDocument", fields: [completionDocumentId], references: [id], onDelete: SetNull)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5b-2): the column name is unchanged.
+  completionDocument    PropertyRecord?      @relation("HomeBuyerTaskCompletionDocument", fields: [completionDocumentId], references: [id], onDelete: SetNull)
 
   // Durable lineage back to imported evidence or a canonical journey/action.
   sourceType                 BuyerTaskSourceType @default(USER)
@@ -3625,7 +3630,8 @@ model BuyerJourneyMilestone {
 
   checklist       HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   responsibleUser User?              @relation("BuyerMilestoneResponsibleUser", fields: [responsibleUserId], references: [id], onDelete: SetNull)
-  sourceDocument  Document?          @relation("BuyerMilestoneSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5b-2): the column name is unchanged.
+  sourceDocument  PropertyRecord?    @relation("BuyerMilestoneSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   @@unique([checklistId, milestoneKey])
   @@index([checklistId, type])
@@ -5098,10 +5104,6 @@ model Document {
   negotiationShieldDocuments NegotiationShieldDocument[]
   buyerNegotiationOutcomeLinks NegotiationShieldBuyerFinding[] @relation("BuyerNegotiationOutcomeDocument")
   buyerFindingOutcomeLinks     InspectionFinding[]             @relation("BuyerFindingOutcomeDocument")
-  buyerInspectionProofLinks    BuyerInspectionPlan[]            @relation("BuyerInspectionReinspectionProof")
-  buyerPurchaseLoanEstimateSources BuyerPurchaseLoanEstimateRevision[] @relation("BuyerPurchaseLoanEstimateSourceDocument")
-  buyerClosingDisclosureSources BuyerClosingDisclosureRevision[] @relation("BuyerClosingDisclosureSourceDocument")
-  buyerClosingDaySignedFor BuyerClosingDayWorkspace[] @relation("BuyerClosingDaySignedDocument")
   propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
@@ -5116,8 +5118,6 @@ model Document {
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
   quoteComparisonExtractions QuoteComparisonExtraction[]
   hoaApprovalDecisionEvidence HoaApprovalRecord[]        @relation("HoaApprovalDecisionEvidence")
-  homeBuyerTaskCompletions    HomeBuyerTask[]           @relation("HomeBuyerTaskCompletionDocument")
-  buyerMilestoneSources       BuyerJourneyMilestone[]   @relation("BuyerMilestoneSourceDocument")
 
   homeSavingsAccountId     String?
   homeSavingsOpportunityId String?
@@ -5195,6 +5195,13 @@ model PropertyRecord {
   versions       PropertyRecordVersion[] @relation("PropertyRecordVersions")
   links          PropertyRecordLink[]
   purgeJobs      PropertyRecordPurgeJob[]
+  // Domains retargeted off the legacy Document table onto Home Records (Documents slice S5b-2 — see the records plan §17.1/17.2).
+  buyerPurchaseLoanEstimateSources BuyerPurchaseLoanEstimateRevision[] @relation("BuyerPurchaseLoanEstimateSourceDocument")
+  buyerClosingDisclosureSources    BuyerClosingDisclosureRevision[]    @relation("BuyerClosingDisclosureSourceDocument")
+  buyerClosingDaySignedFor         BuyerClosingDayWorkspace[]          @relation("BuyerClosingDaySignedDocument")
+  buyerInspectionProofLinks        BuyerInspectionPlan[]               @relation("BuyerInspectionReinspectionProof")
+  homeBuyerTaskCompletions         HomeBuyerTask[]                     @relation("HomeBuyerTaskCompletionDocument")
+  buyerMilestoneSources            BuyerJourneyMilestone[]             @relation("BuyerMilestoneSourceDocument")
 
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])

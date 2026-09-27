@@ -1,6 +1,7 @@
 import {
   Prisma,
   type BuyerPurchaseLoanEstimateRevision,
+  type HouseholdRole,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
@@ -13,6 +14,7 @@ import {
   BUYER_MILESTONE_KEYS,
 } from '../productFramework/buyerAcquisition.contract';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 import {
   compareRefinanceLoanEstimates,
   type RefinanceLoanEstimateInput,
@@ -30,6 +32,7 @@ async function assertAccess(userId: string, propertyId: string, minimum: 'VIEWER
   if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
     throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
   }
+  return access.role;
 }
 
 const dateValue = (value: string | null | undefined) => value ? new Date(`${value}T00:00:00.000Z`) : value;
@@ -196,13 +199,13 @@ export class BuyerPurchaseLoanEstimateService {
     propertyId: string,
     input: BuyerPurchaseLoanEstimateCreateInput,
   ) {
-    await assertAccess(userId, propertyId);
+    const role = await assertAccess(userId, propertyId);
     const plan = await prisma.buyerPurchaseFinancingPlan.findUnique({ where: { propertyId } });
     if (!plan || plan.purchasePath !== 'FINANCED') {
       throw new APIError('Confirm purchase financing before adding Loan Estimates.', 409, 'PURCHASE_FINANCING_REQUIRED');
     }
     const { lenderName, ...fields } = input;
-    await this.assertSourceDocument(propertyId, fields.sourceDocumentId);
+    await this.assertSourceDocument(propertyId, role, fields.sourceDocumentId);
     await prisma.buyerPurchaseLoanOffer.create({
       data: {
         planId: plan.id,
@@ -220,8 +223,8 @@ export class BuyerPurchaseLoanEstimateService {
     offerId: string,
     input: BuyerPurchaseLoanEstimateRevisionInput,
   ) {
-    await assertAccess(userId, propertyId);
-    await this.assertSourceDocument(propertyId, input.sourceDocumentId);
+    const role = await assertAccess(userId, propertyId);
+    await this.assertSourceDocument(propertyId, role, input.sourceDocumentId);
     const offer = await prisma.buyerPurchaseLoanOffer.findFirst({
       where: { id: offerId, propertyId, plan: { purchasePath: 'FINANCED' } },
       include: { revisions: { orderBy: { revisionNumber: 'desc' }, take: 1 } },
@@ -243,8 +246,8 @@ export class BuyerPurchaseLoanEstimateService {
     revisionId: string,
     input: BuyerPurchaseLoanEstimateUpdateInput,
   ) {
-    await assertAccess(userId, propertyId);
-    await this.assertSourceDocument(propertyId, input.sourceDocumentId);
+    const role = await assertAccess(userId, propertyId);
+    await this.assertSourceDocument(propertyId, role, input.sourceDocumentId);
     const revision = await prisma.buyerPurchaseLoanEstimateRevision.findFirst({
       where: { id: revisionId, offer: { propertyId }, status: 'DRAFT' },
     });
@@ -425,12 +428,11 @@ export class BuyerPurchaseLoanEstimateService {
     return this.list(userId, propertyId);
   }
 
-  private static async assertSourceDocument(propertyId: string, sourceDocumentId?: string | null) {
-    if (!sourceDocumentId) return;
-    const document = await prisma.document.findFirst({
-      where: { id: sourceDocumentId, propertyId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!document) throw new APIError('Loan Estimate source document not found.', 404, 'DOCUMENT_NOT_FOUND');
+  // The source reference is a Home Record id (Documents slice S5b-2), resolved with the caller's role.
+  private static async assertSourceDocument(propertyId: string, role: HouseholdRole, sourceDocumentId?: string | null) {
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids: [sourceDocumentId] },
+      () => new APIError('Loan Estimate source document not found.', 404, 'DOCUMENT_NOT_FOUND'),
+    );
   }
 }

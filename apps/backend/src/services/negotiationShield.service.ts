@@ -1535,7 +1535,10 @@ export class NegotiationShieldService {
               status: 'COMPLETED',
               completedAt: now,
               completedByUserId: actorUserId,
-              completionDocumentId: effectiveCompletionDocumentId,
+              // HomeBuyerTask.completionDocumentId is a Home Records reference (Documents slice S5b-2); a negotiation outcome document is
+              // still a legacy Document id (negotiation shield's own domain, S5f, not yet converted), so it cannot be written here — the id
+              // stays available via completionEvidenceJson below, and completionMethod still reflects whether evidence was attached.
+              completionDocumentId: null,
               completionMethod: effectiveCompletionDocumentId ? 'DOCUMENT' : 'EXTERNAL_CONFIRMATION',
               statusReason: input.outcome === 'ACCEPTED_CREDIT'
                 ? 'Seller credit accepted and recorded.'

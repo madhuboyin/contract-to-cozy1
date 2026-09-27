@@ -21,7 +21,8 @@ test('purchase Loan Estimates own separate lender offers and numbered revisions'
   assert.match(schema, /model BuyerPurchaseLoanOffer/);
   assert.match(schema, /model BuyerPurchaseLoanEstimateRevision/);
   assert.match(schema, /@@unique\(\[offerId, revisionNumber\]\)/);
-  assert.match(schema, /sourceDocument Document\?\s+@relation\("BuyerPurchaseLoanEstimateSourceDocument"/);
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5b-2).
+  assert.match(schema, /sourceDocument PropertyRecord\?\s+@relation\("BuyerPurchaseLoanEstimateSourceDocument"/);
   assert.doesNotMatch(
     schema.slice(schema.indexOf('model RefinanceLoanEstimateComparisonSnapshot'), schema.indexOf('model RefinanceDecision')),
     /BuyerPurchaseLoanOffer|BuyerPurchaseLoanEstimateRevision/,

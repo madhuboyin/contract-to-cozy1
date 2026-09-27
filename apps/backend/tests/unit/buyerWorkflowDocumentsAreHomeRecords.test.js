@@ -7,8 +7,10 @@ require('ts-node/register');
 
 // S5b-1: the buyer workflows whose document references are plain ids (title and escrow, insurance, walkthrough, contract) store Home Record
 // ids. Their uploads go to Home Records and their readers resolve those ids through the canonical inventory with the caller's role; none of
-// them touches the legacy table any more. (Closing day, loan estimate, closing disclosure, reinspection proof, task completion and milestones
-// hold real foreign keys to the legacy table and convert with a schema change, S5b-2.)
+// them touches the legacy table any more. (Closing day, loan estimate, closing disclosure and reinspection proof held real foreign keys to
+// the legacy table; S5b-2 retargeted those relations to PropertyRecord — see propertyBriefFoundation.test.js and homeBuyerSlice4B/4C for their
+// own coverage. HomeBuyerTask.completionDocumentId is also retargeted, EXCEPT the negotiation-shield outcome-document flow, which still
+// writes a legacy id and is deliberately not linked into it until negotiation shield's own domain converts, S5f.)
 const backendRoot = path.resolve(__dirname, '../..');
 const read = (relative) => fs.readFileSync(path.join(backendRoot, relative), 'utf8');
 const readFrontend = (relative) => fs.readFileSync(path.resolve(backendRoot, '../frontend/src/app/(dashboard)/dashboard/properties/[id]/buyer-plan', relative), 'utf8');
@@ -21,13 +23,12 @@ test('the four converted buyer services never read or write the legacy document 
   }
 });
 
-test('the converted buyer screens upload to Home Records, and the closing-day screen (a foreign key to the legacy table) does not yet', () => {
-  for (const file of ['BuyerTitleEscrowCenter.tsx', 'BuyerInsuranceCenter.tsx', 'BuyerWalkthroughCenter.tsx']) {
+test('the converted buyer screens upload to Home Records, including closing day now that its foreign key is retargeted (S5b-2)', () => {
+  for (const file of ['BuyerTitleEscrowCenter.tsx', 'BuyerInsuranceCenter.tsx', 'BuyerWalkthroughCenter.tsx', 'BuyerClosingDayCenter.tsx']) {
     const source = readFrontend(file);
     assert.match(source, /uploadRecordForWorkflow\(/, `${file} uploads to Home Records`);
     assert.doesNotMatch(source, /api\.uploadDocument\(/, `${file} must not upload to the legacy table`);
   }
-  assert.match(readFrontend('BuyerClosingDayCenter.tsx'), /api\.uploadDocument\(/, 'closing day keeps legacy storage until its foreign key is retargeted (S5b-2)');
 });
 
 test('the buyer evidence panel links a Home Record row back to Home Records and offers verify/reject on every row', () => {

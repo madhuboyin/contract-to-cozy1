@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useCelebration } from '@/hooks/useCelebration';
 import { api } from '@/lib/api/client';
 import { BuyerWorkspaceGuidance } from './BuyerWorkspaceGuidance';
+import { uploadRecordForWorkflow } from '../tools/home-records/homeRecordsApi';
 import type { BuyerClosingChecklistItemStatus, BuyerClosingDayInput, BuyerClosingDayWorkspaceResponse } from '@/types';
 
 const lines = (value: FormDataEntryValue | null) => String(value ?? '').split('\n').map((item) => item.trim()).filter(Boolean);
@@ -50,16 +51,16 @@ export function BuyerClosingDayCenter({ propertyId, readOnly }: { propertyId: st
   };
   const saveMutation = useMutation({
     mutationFn: async (input: BuyerClosingDayInput) => {
+      // The signed closing record is a Home Record (Documents slice S5b-2), not the legacy document vault.
       let signedClosingDocumentId: string | undefined;
       if (signedFile) {
-        const upload = await api.uploadDocument(signedFile, {
-          propertyId,
-          type: 'CONTRACT',
-          name: signedFile.name || 'Signed closing record',
+        signedClosingDocumentId = await uploadRecordForWorkflow(propertyId, {
+          file: signedFile,
+          title: signedFile.name || 'Signed closing record',
           description: 'Buyer-supplied signed closing record. ContractToCozy does not interpret its legal effect.',
+          recordType: 'CLOSING_DOCUMENT',
+          sensitivity: 'LEGAL',
         });
-        if (!upload.success || !upload.data?.id) throw new Error('Unable to upload the signed closing record.');
-        signedClosingDocumentId = upload.data.id;
       }
       const response = await api.updateBuyerClosingDay(propertyId, { ...input, ...(signedClosingDocumentId ? { signedClosingDocumentId } : {}) });
       if (!response.success) throw new Error(response.message || 'Unable to save Closing Day preparation.');
