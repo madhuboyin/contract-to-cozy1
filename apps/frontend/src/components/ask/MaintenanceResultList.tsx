@@ -225,7 +225,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
           <h4 id={`maintenance-section-${section.id}`} className="text-sm font-semibold text-slate-900">{section.title}</h4>
           <span className="text-xs text-slate-500">{section.count} {section.count === 1 ? 'task' : 'tasks'}</span>
         </div>
-        {section.items.length === 0 ? <p className="py-2 text-sm text-slate-500">No matching tasks.</p> : <ul className="grid gap-2 sm:grid-cols-2">
+        {section.items.length === 0 ? <p className="py-2 text-sm text-slate-500">No matching tasks.</p> : <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((item) => {
             const selected = controls?.view.selectedTaskId === item.id;
             const facts = taskSupportingFacts(item);

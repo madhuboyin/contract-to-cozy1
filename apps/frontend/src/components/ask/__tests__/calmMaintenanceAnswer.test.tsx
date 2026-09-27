@@ -54,6 +54,7 @@ describe('calm Maintenance answer', () => {
     const { container } = card(execution());
     expect(await screen.findByRole('button', { name: 'Review task: Replace HVAC filter' })).toBeInTheDocument();
     expect(container.querySelector('[data-display-pattern="priority-stack"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-display-pattern="priority-stack"] ul')?.className).toContain('xl:grid-cols-3');
     expect(screen.queryByRole('button', { name: 'Shelves' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'List' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Select task/ })).toBeNull();
