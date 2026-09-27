@@ -16,7 +16,8 @@ import {
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { api } from '@/lib/api/client';
 import type { Property } from '@/types';
-import { listInventoryItems, listInventoryRooms, listPropertyDocuments } from '../../../../inventory/inventoryApi';
+import { listInventoryItems, listInventoryRooms } from '../../../../inventory/inventoryApi';
+import { listRecords } from '../home-records/homeRecordsApi';
 import { listIncidents } from '../../incidents/incidentsApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1030,7 +1031,8 @@ export default function ServicePriceRadarClient() {
       const [itemsResult, roomsResult, docsResult, incidentsResult] = await Promise.allSettled([
         listInventoryItems(propertyId, {}),
         listInventoryRooms(propertyId),
-        listPropertyDocuments(propertyId),
+        // Linked documents are Home Records: the picker lists them and the radar stores the record's id.
+        listRecords(propertyId, { lifecycleStatus: 'ACTIVE' }).then((records) => records.map((record) => ({ id: record.id, name: record.title, type: record.recordType }))),
         listIncidents({ propertyId, limit: 8 }),
       ]);
 

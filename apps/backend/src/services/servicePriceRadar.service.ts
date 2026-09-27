@@ -24,6 +24,8 @@ import {
   ServiceRadarVerdictValue,
 } from './servicePriceRadar.types';
 import { logger } from '../lib/logger';
+import { resolvePropertyAccess } from './propertyAccess.service';
+import { resolvePropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 import {
   buildServicePriceBenchmarkScopeKey,
   qualifyServicePriceBenchmark,
@@ -431,22 +433,12 @@ async function loadApplianceContext(propertyId: string, linkedEntityId: string, 
   };
 }
 
-async function loadDocumentContext(propertyId: string, linkedEntityId: string, relevanceScore: number | null): Promise<LinkedEntityContext> {
-  const document = await prisma.document.findFirst({
-    where: {
-      id: linkedEntityId,
-      OR: [
-        { propertyId },
-        { inventoryItem: { propertyId } },
-      ],
-    },
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      description: true,
-    },
-  });
+// A linked document is a Home Record (the price radar's picker lists Home Records), resolved with the caller's role so an owner-only record
+// cannot be linked, or its name shown, by a member who cannot see it.
+async function loadDocumentContext(propertyId: string, linkedEntityId: string, relevanceScore: number | null, userId: string): Promise<LinkedEntityContext> {
+  const access = await resolvePropertyAccess(userId, propertyId);
+  const [resolved] = access ? await resolvePropertyDocuments({ propertyId, role: access.role, ids: [linkedEntityId] }) : [];
+  const document = resolved ? { id: resolved.id, name: resolved.title, type: resolved.kind, description: resolved.description } : null;
 
   if (!document) {
     throw new APIError('Linked document was not found for this property.', 400, 'INVALID_LINKED_ENTITY');
@@ -534,7 +526,7 @@ async function loadRoomContext(propertyId: string, linkedEntityId: string, relev
   };
 }
 
-async function loadLinkedEntityContext(propertyId: string, input: ServiceRadarCreateLinkedEntityInput): Promise<LinkedEntityContext> {
+async function loadLinkedEntityContext(propertyId: string, input: ServiceRadarCreateLinkedEntityInput, userId: string): Promise<LinkedEntityContext> {
   const relevanceScore = typeof input.relevanceScore === 'number' ? input.relevanceScore : null;
 
   if (input.linkedEntityType === 'SYSTEM') {
@@ -546,7 +538,7 @@ async function loadLinkedEntityContext(propertyId: string, input: ServiceRadarCr
   }
 
   if (input.linkedEntityType === 'DOCUMENT') {
-    return loadDocumentContext(propertyId, input.linkedEntityId, relevanceScore);
+    return loadDocumentContext(propertyId, input.linkedEntityId, relevanceScore, userId);
   }
 
   if (input.linkedEntityType === 'INCIDENT') {
@@ -567,7 +559,7 @@ async function loadLinkedEntityContext(propertyId: string, input: ServiceRadarCr
   };
 }
 
-async function resolveLinkedEntityContexts(propertyId: string, inputs: ServiceRadarCreateLinkedEntityInput[]): Promise<LinkedEntityContext[]> {
+async function resolveLinkedEntityContexts(propertyId: string, inputs: ServiceRadarCreateLinkedEntityInput[], userId: string): Promise<LinkedEntityContext[]> {
   const deduped = new Map<string, ServiceRadarCreateLinkedEntityInput>();
   for (const input of inputs) {
     deduped.set(`${input.linkedEntityType}:${input.linkedEntityId}`, input);
@@ -575,7 +567,7 @@ async function resolveLinkedEntityContexts(propertyId: string, inputs: ServiceRa
 
   const contexts: LinkedEntityContext[] = [];
   for (const input of deduped.values()) {
-    contexts.push(await loadLinkedEntityContext(propertyId, input));
+    contexts.push(await loadLinkedEntityContext(propertyId, input, userId));
   }
 
   return contexts;
@@ -912,7 +904,7 @@ async function findBestBenchmark(
   }
 }
 
-async function hydrateStoredLinkedEntities(propertyId: string, rows: any[]): Promise<LinkedEntityContext[]> {
+async function hydrateStoredLinkedEntities(propertyId: string, rows: any[], userId: string): Promise<LinkedEntityContext[]> {
   const hydrated: LinkedEntityContext[] = [];
 
   for (const row of rows) {
@@ -923,7 +915,7 @@ async function hydrateStoredLinkedEntities(propertyId: string, rows: any[]): Pro
     };
 
     try {
-      hydrated.push(await loadLinkedEntityContext(propertyId, input));
+      hydrated.push(await loadLinkedEntityContext(propertyId, input, userId));
     } catch {
       hydrated.push({
         linkedEntityType: input.linkedEntityType,
@@ -957,7 +949,7 @@ export class ServicePriceRadarService {
       linkedEntities: input.linkedEntities ?? [],
     };
 
-    const linkedEntities = await resolveLinkedEntityContexts(propertyId, normalizedInput.linkedEntities ?? []);
+    const linkedEntities = await resolveLinkedEntityContexts(propertyId, normalizedInput.linkedEntities ?? [], userId);
     const benchmarkMatch = await findBestBenchmark(property, normalizedInput.serviceCategory, normalizedInput.serviceSubcategory ?? null);
     const evaluation = engine.evaluate(property, normalizedInput, linkedEntities, benchmarkMatch);
 
@@ -1073,7 +1065,7 @@ export class ServicePriceRadarService {
       throw new APIError('Service Price Radar check not found.', 404, 'SERVICE_RADAR_CHECK_NOT_FOUND');
     }
 
-    const linkedEntities = await hydrateStoredLinkedEntities(propertyId, Array.isArray(row.systemLinks) ? row.systemLinks : []);
+    const linkedEntities = await hydrateStoredLinkedEntities(propertyId, Array.isArray(row.systemLinks) ? row.systemLinks : [], userId);
 
     return {
       check: mapDetail(row, linkedEntities),

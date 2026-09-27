@@ -181,6 +181,7 @@ export interface PropertyDocumentRef {
   title: string;
   kind: string;
   kindLabel: string;
+  description: string | null;
   addedAt: Date;
 }
 
@@ -200,19 +201,19 @@ export async function resolvePropertyDocuments(input: {
   if (ids.length === 0) return [];
   const records = await prisma.propertyRecord.findMany({
     where: { id: { in: ids }, propertyId: input.propertyId, lifecycleStatus: { not: 'TRASHED' }, ...visibleRecordWhere(input.role) },
-    select: { id: true, title: true, recordType: true, createdAt: true },
+    select: { id: true, title: true, recordType: true, description: true, createdAt: true },
   });
   const fromRecords: PropertyDocumentRef[] = records.map((record) => ({
-    id: record.id, source: 'HOME_RECORD', title: record.title, kind: record.recordType, kindLabel: propertyDocumentKindLabel(record.recordType), addedAt: record.createdAt,
+    id: record.id, source: 'HOME_RECORD', title: record.title, kind: record.recordType, kindLabel: propertyDocumentKindLabel(record.recordType), description: record.description ?? null, addedAt: record.createdAt,
   }));
   let fromLegacy: PropertyDocumentRef[] = [];
   if (input.includeLegacy) {
     const found = new Set(fromRecords.map((row) => row.id));
     const rows = await prisma.document.findMany({
       where: { id: { in: ids.filter((id) => !found.has(id)) }, propertyId: input.propertyId, deletedAt: null },
-      select: { id: true, name: true, type: true, createdAt: true },
+      select: { id: true, name: true, type: true, description: true, createdAt: true },
     });
-    fromLegacy = rows.map((row) => ({ id: row.id, source: 'LEGACY_DOCUMENT', title: row.name, kind: LEGACY_KIND_KEY[row.type], kindLabel: propertyDocumentKindLabel(LEGACY_KIND_KEY[row.type]), addedAt: row.createdAt }));
+    fromLegacy = rows.map((row) => ({ id: row.id, source: 'LEGACY_DOCUMENT', title: row.name, kind: LEGACY_KIND_KEY[row.type], kindLabel: propertyDocumentKindLabel(LEGACY_KIND_KEY[row.type]), description: row.description ?? null, addedAt: row.createdAt }));
   }
   return [...fromRecords, ...fromLegacy];
 }

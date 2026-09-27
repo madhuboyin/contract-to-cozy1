@@ -19,6 +19,7 @@ import { emitNorthStarLineageEvent } from './analytics';
 import { getOrCreateOnboarding } from './propertyOnboarding.service';
 import { resolvePropertyAccess } from './propertyAccess.service';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
+import { countPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 
 const TRIGGER_SOURCES = ['USER_SELECTED', 'CONVERSATION', 'DOCUMENT', 'PHOTO', 'SYSTEM_SIGNAL', 'OTHER'] as const;
 export const BUYER_PURCHASE_STAGES = ['EXPLORING', 'OFFER_MADE', 'UNDER_CONTRACT'] as const;
@@ -393,8 +394,9 @@ export async function addTriggerEvidence(
   if (!onboarding?.activeTriggerId) throw new Error('Entry context has not been captured.');
 
   if (input.documentId) {
-    const document = await prisma.document.findFirst({
-      where: { id: input.documentId, propertyId, uploadedBy: userId },
+    // The evidence file is a Home Record the caller added for this property (the onboarding upload goes to Home Records).
+    const document = await prisma.propertyRecord.findFirst({
+      where: { id: input.documentId, propertyId, createdByUserId: userId, lifecycleStatus: { not: 'TRASHED' } },
       select: { id: true },
     });
     if (!document) throw new Error('Uploaded evidence was not found for this property.');
@@ -626,7 +628,7 @@ export async function getActivationFirstValue(
         where: { propertyId },
         include: { tasks: true, milestones: true },
       }),
-      prisma.document.count({ where: { propertyId, deletedAt: null } }),
+      countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
     ])
     : [null, 0];
 

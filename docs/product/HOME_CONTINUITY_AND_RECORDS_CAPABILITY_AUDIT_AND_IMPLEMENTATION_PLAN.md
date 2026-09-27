@@ -2001,3 +2001,17 @@ Status: neither statement was run by the agent; the count and any update are the
 
 **Still blocked on the "verified" decision:** the buyer Verify and Reject actions and the verified-document counts (buyerAcquisition, HomeBuyerTask).
 
+### 17.2 S5c: claims and evidence, and what it changed about the plan (September 27, 2026)
+
+**Done (plain ids, no foreign key, reader and writer together).**
+- Service Price Radar: a linked document is resolved as a Home Record with the caller's role (an owner-only record cannot be linked, or named, by a member who cannot see it); the radar's picker lists Home Records.
+- Onboarding activation evidence: the upload goes to Home Records and the trigger check finds a Home Record the caller added for this property; the buyer entry-context document count reads the canonical inventory.
+
+**Not convertible on its own, and why (each is pinned by a test).**
+- **Claims.** `ClaimDocument.documentId` is a cascading foreign key to `documents`, and claims has three of its own writers that create `Document` rows (claim upload, add claim document, bulk upload). Converting claims means retargeting that relation to `PropertyRecord` and moving the three writers onto Home Records creation.
+- **Hazard evidence and coverage-comparison sources.** `PropertyHazardEvidenceLink.documentId` and `CoverageComparisonOption.sourceDocumentId` are foreign keys.
+- **Ask's recent-document context** (conversational capture). It hands the model document ids that become event evidence, `HomeEventDocument.documentId`, a foreign key. A Home Record id there would violate it. It converts with the home-event evidence link. (Noted in the source.)
+- **Ask evidence attach.** It writes the legacy link columns (`inventoryItemId`, `warrantyId`) that the inventory and warranty screens read, so it converts with S5d.
+
+**Revised order.** The remaining large work is one theme: **retarget the `Document` foreign keys to `PropertyRecord`**, about 25 relations across buyer (S5b-2), claims, home events, hazard, coverage comparison, quote comparison, negotiation, renovation, permits, HOA, property tax, project, capital timeline and risk mitigation. That is a single `prisma/schema.prisma` edit (column names kept, so contracts and screens do not change) plus the writers that create those rows, and one `prisma db push` by the user, with no data to migrate. Recommended: do the schema retarget as one deliberate step, then convert the writers domain by domain (S5b-2 buyer closing, then claims, then home events and evidence, then the rest), each with its reader. S5d (inventory, warranty and insurance attachments, with Ask evidence attach) is the other independent group. The "verified" decision still gates the verified-document readers.
+

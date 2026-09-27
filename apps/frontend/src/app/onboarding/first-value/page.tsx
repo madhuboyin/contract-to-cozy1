@@ -6,6 +6,7 @@ import { AlertCircle, ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api/client';
+import { uploadRecordForWorkflow } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi';
 import type { ActivationFirstValueDTO } from '@/types';
 import { track } from '@/lib/analytics/events';
 
@@ -103,21 +104,15 @@ export default function OnboardingFirstValuePage() {
     try {
       let documentId: string | null = null;
       if (evidenceFile) {
-        const documentType = evidenceKind === 'QUOTE'
-          ? 'ESTIMATE'
-          : evidenceKind === 'INVOICE'
-            ? 'INVOICE'
-            : evidenceKind === 'PHOTO'
-              ? 'PHOTO'
-              : 'OTHER';
-        const uploaded = await api.uploadDocument(evidenceFile, {
-          type: documentType,
-          name: evidenceFile.name,
+        // The activation evidence is a Home Record (Home Records replaces the legacy Documents vault); the trigger stores the record's id.
+        const recordType = evidenceKind === 'INVOICE' ? 'INVOICE' : evidenceKind === 'PHOTO' ? 'PHOTO' : 'OTHER';
+        documentId = await uploadRecordForWorkflow(propertyId, {
+          file: evidenceFile,
+          title: evidenceFile.name,
           description: evidenceDetail.trim() || `Activation ${evidenceKind.toLowerCase()} evidence`,
-          propertyId,
+          recordType,
+          sensitivity: 'STANDARD',
         });
-        if (!uploaded.success || !uploaded.data?.id) throw new Error(uploaded.message || 'Evidence upload failed.');
-        documentId = uploaded.data.id;
       }
       const attached = await api.addActivationTriggerEvidence(propertyId, {
         kind: evidenceKind,

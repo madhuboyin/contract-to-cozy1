@@ -126,6 +126,9 @@ async function fetchRecentHomeEventContext(propertyId: string): Promise<RecentHo
 // two repairs mentioned in the same message).
 const RECENT_DOCUMENT_CONTEXT_LIMIT = 8;
 
+// Stays on the legacy Document table on purpose (documents retirement, S5c): the ids returned here are cited as event evidence and become
+// HomeEventDocument.documentId, a foreign key to `documents`. A Home Record id would violate it. This reader converts together with the
+// home-event evidence link (the foreign-key retarget slice), not before.
 async function fetchRecentDocumentContext(propertyId: string): Promise<RecentDocumentContext[]> {
   const documents = await prisma.document.findMany({
     where: { propertyId, deletedAt: null },
