@@ -325,3 +325,7 @@ Decisions: Claims/Protection is the next calm domain (higher consequence and per
 ## 14. Home Event Radar certification (September 26, 2026)
 
 Decision: Home Event Radar is the next calm domain (deterministic typed feed, inline canonical detail, meaningful actions, lower risk than Property Summary/Home Record). Slices: R-1 calm adoption, R-2 governed refinement (lifecycle, source family, include-dismissed, authoritative re-query with view state), R-3 integrated acceptance journey. R-1 shipped (FRD v1.132, IW-CONV-036). R-2 shipped (FRD v1.133, IW-CONV-037). R-3 shipped (FRD v1.134, IW-CONV-038): Radar certified; Documents/Home Record follows Radar.
+
+## 15. Documents certification (September 26, 2026)
+
+Scope decision: Documents (`DOCUMENT_LOOKUP`) first; Home Record (`PROPERTY_SUMMARY`, rooms, timeline) is a separate, larger slice. The answer is read-only and Ask offers no upload or verify action, so it has no filled step. Slices: D-1 calm adoption (shipped, FRD v1.135, IW-CONV-039, with a fix for the stripped Open Documents link), D-2 governed refinement (type, verification status), D-3 acceptance journey.

@@ -361,7 +361,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // FRD v1.124 (Warranties W-1): a deterministic read of the recorded warranties, the same property-scoped rows GET
   // /properties/:propertyId/warranties returns (any household member, so VIEWER). It reports recorded fields, never decides coverage.
   WARRANTY_LOOKUP: definition('WARRANTY_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'warranty.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
-  DOCUMENT_LOOKUP: definition('DOCUMENT_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'documents.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
+  DOCUMENT_LOOKUP: definition('DOCUMENT_LOOKUP', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'documents.lookup', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   PROPERTY_SUMMARY: definition('PROPERTY_SUMMARY', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property.summary', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'PROGRESS', 'EVIDENCE']),
   INTELLIGENCE_ENVELOPE_QUERY: definition('INTELLIGENCE_ENVELOPE_QUERY', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'intelligence-envelope.query', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),
   HOME_EVENT_RADAR_FEED: definition('HOME_EVENT_RADAR_FEED', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-event-radar.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY']),

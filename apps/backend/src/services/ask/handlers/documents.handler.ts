@@ -59,6 +59,36 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   LICENSE: 'Licenses', HOME_REPORT_PDF: 'Home report PDFs', OTHER: 'Other',
 };
 
+const documentCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/**
+ * Documents D-1 (FRD v1.135): the calm answer for the document lookup, as one counted sentence, one supporting line and answer chips, from the
+ * recorded counts only (no model, no document contents). "Not yet verified" is the recorded UNVERIFIED and PENDING statuses; nothing here says
+ * what a document means, whether it is complete or whether it is accepted by anyone outside the record.
+ */
+export function documentsCalmCopy(input: {
+  total: number; unverified: number; verified: number; rejected: number; newest: { name: string; addedOn: string | null } | null; truncatedTypes: number;
+}): { headline: string; supportLine?: string; chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> } {
+  const { total, unverified, verified, rejected, newest, truncatedTypes } = input;
+  const headline = total === 0 ? 'No documents on file.' : `${documentCount(total, 'document', 'documents')} on file.`;
+  const notes = [
+    newest ? `Most recent: ${newest.name}${newest.addedOn ? `, added ${newest.addedOn}` : ''}.` : null,
+    truncatedTypes > 0 ? 'Showing the most recent of each type; open Documents for the full record.' : null,
+  ].filter((note): note is string => Boolean(note));
+  const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
+    ...(unverified > 0 ? [{ label: `${unverified} not yet verified`, tone: 'CAUTION' as const }] : []),
+    ...(rejected > 0 ? [{ label: `${rejected} rejected`, tone: 'CAUTION' as const }] : []),
+    ...(verified > 0 ? [{ label: `${verified} verified`, tone: 'DEFAULT' as const }] : []),
+  ];
+  return notes.length ? { headline, supportLine: notes.join(' '), chips } : { headline, chips };
+}
+
+const DOCUMENT_LOOKUP_BOUNDARY: AskPresentationBlock = {
+  type: 'BOUNDARY', id: 'document-lookup-boundary', title: 'Recorded information only',
+  body: 'This shows what is recorded about each document in your Home Record: its type, when it was added and its verification status. Ask has not read or interpreted the documents themselves.',
+  severity: 'INFO', suggestions: [],
+};
+
 async function documentLookupResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
@@ -71,7 +101,7 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
     return {
       status: 'ANSWERED',
       reasonCode: 'NO_DOCUMENTS_ON_FILE',
-      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no uploaded documents recorded for this home yet.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no uploaded documents recorded for this home yet.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }, DOCUMENT_LOOKUP_BOUNDARY],
       suggestions: [],
     };
   }
@@ -83,6 +113,8 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
     grouped.set(document.type, existing);
   }
   const unverifiedCount = documents.filter((document) => document.verificationStatus === 'UNVERIFIED' || document.verificationStatus === 'PENDING').length;
+  const verifiedCount = documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
+  const rejectedCount = documents.filter((document) => document.verificationStatus === 'REJECTED').length;
 
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
@@ -90,6 +122,11 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
     title: `${documents.length} document${documents.length === 1 ? '' : 's'} on file`,
     body: unverifiedCount ? `${unverifiedCount} not yet verified.` : 'All recorded documents are verified.',
     tone: unverifiedCount ? 'CAUTION' : 'DEFAULT',
+    ...documentsCalmCopy({
+      total: documents.length, unverified: unverifiedCount, verified: verifiedCount, rejected: rejectedCount,
+      newest: { name: documents[0].name, addedOn: humanDate(documents[0].createdAt) || null },
+      truncatedTypes: [...grouped.values()].filter((docs) => docs.length > 20).length,
+    }),
     actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }],
   }, {
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType lets
@@ -119,8 +156,9 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
         href,
       })),
     })),
-    actions: [],
-  }];
+    // Documents D-1: the record page is a quiet text link in the calm answer only (the summary shows the same link in the previous shell).
+    actions: [{ id: 'open-documents-list', label: 'Open Documents', href, style: 'SECONDARY' }],
+  }, DOCUMENT_LOOKUP_BOUNDARY];
 
   return {
     status: 'ANSWERED',

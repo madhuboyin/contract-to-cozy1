@@ -36,6 +36,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   DO_NOTHING_SIMULATION: new Set(['do-nothing-boundary']),
   WARRANTY_LOOKUP: new Set(['warranty-boundary']),
   INCIDENT_CLAIM_STATUS: new Set(['claim-status-boundary']),
+  DOCUMENT_LOOKUP: new Set(['document-lookup-boundary']),
   APPLIANCE_FAILURE_RISK: new Set(['appliance-oracle-boundary']),
   MAINTENANCE_BUDGET_FORECAST: new Set(['budget-forecast-boundary']),
   // FRD v1.64: the safety-first boundary was never declared, so the validator removed it and then withheld every
@@ -82,6 +83,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // actions are shown in the inline detail only when the live state allows them.
   INSPECTION_FINDINGS: new Set(['open-inspection', 'finding-accept', 'finding-dismiss', 'finding-resolve']),
   INSPECTION_FINDING_UPDATE: new Set(['open-inspection', 'open-finding']),
+  // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
+  DOCUMENT_LOOKUP: new Set(['open-documents', 'open-documents-list']),
   INCIDENT_CLAIM_STATUS: new Set(['open-incidents', 'open-claims', 'open-incidents-list', 'open-claims-list', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
   SAVINGS_OPPORTUNITIES: new Set(['open-savings', 'review-all-savings']),
   OWNERSHIP_COSTS: new Set(['open-ownership-costs']),

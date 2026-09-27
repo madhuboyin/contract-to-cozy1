@@ -1,6 +1,6 @@
 'use client';
 
-import { useCalmChrome } from './blocks/calmContext';
+import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
 import type { AskPresentationBlock } from '@/features/ask/types';
@@ -144,6 +144,10 @@ export function DocumentResultList({ block, propertyId, onFilter, onPage, onAcce
   const controls = useContext(ResultViewContext);
   // IW-CALM-009 (FRD v1.111): the paging note says "Showing", not "Server results", inside a calm answer.
   const calmChrome = useCalmChrome();
+  // Documents D-1 (FRD v1.135): inside an adopted calm answer the record page is a quiet text link owned by the list (the answer has no filled
+  // step: uploading and verifying happen on the Documents page, not here). Outside the calm answer the summary shows the same link, so the
+  // list's own copy is not drawn.
+  const calm = useCalmAnswer();
   const [localDetailDocumentId, setLocalDetailDocumentId] = useState<string | null>(null);
   const detailDocumentId = controls ? controls.detailIdFor(block.id) : localDetailDocumentId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailDocumentId);
@@ -197,6 +201,6 @@ export function DocumentResultList({ block, propertyId, onFilter, onPage, onAcce
       </div>;
     })}
     {detailDocumentId && detailItem && <DocumentDetail key={detailDocumentId} documentId={detailDocumentId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
+    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.filter((action) => calm || action.id !== 'open-documents-list').map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
   </section>;
 }
