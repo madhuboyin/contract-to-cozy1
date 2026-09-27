@@ -1950,13 +1950,13 @@ Timeline, action list, access system, or source of truth.
 
 **Decision (September 26, 2026): existing `RECIPIENT_SELECTED` rows are `OWNER_ONLY`,** because that is the behavior actually enforced on them. There are no real users or production data, so:
 
-1. Count them first, in the user-managed database reconciliation: `SELECT count(*) FROM "PropertyRecord" WHERE visibility = 'RECIPIENT_SELECTED';`
+1. Count them first, in the user-managed database reconciliation: `SELECT count(*) FROM property_records WHERE visibility = 'RECIPIENT_SELECTED';`
 2. If the count is zero, nothing more is needed.
-3. If it is nonzero, set them to what they already behave as, in the same reconciliation: `UPDATE "PropertyRecord" SET visibility = 'OWNER_ONLY' WHERE visibility = 'RECIPIENT_SELECTED';`
+3. If it is nonzero, set them to what they already behave as, in the same reconciliation: `UPDATE property_records SET visibility = 'OWNER_ONLY' WHERE visibility = 'RECIPIENT_SELECTED';`
 4. No migration, compatibility layer, visibility-change endpoint or contributor exception is added for these rows.
 5. `RECIPIENT_SELECTED` creation stays disabled until real recipient grants and their access lifecycle (identity, acceptance, expiry, access log, revocation) exist.
 
-Status: neither statement has been run by the agent; the count and any update are the user's.
+Status: neither statement has been run by the agent; the count and any update are the user's. The Prisma model `PropertyRecord` is mapped to the table `property_records` (`@@map`), so the SQL uses the table name; the first draft of this note used the model name and failed with `relation does not exist`. If `property_records` itself does not exist in a database, the Home Records tables have not been applied there (`prisma db push` is pending) and there is nothing to count.
 
 **Pairing (findings #2 and #4).** Ask reading the legacy `Document` table (#2) and the legacy Documents entry points, dashboard link and upload-driven timeline events (#4) are one problem: two record inventories. They stay paired and unchanged until the canonical inventory strategy is decided, because fixing only one would deepen the split. Documents D-2 and D-3 (Ask refinement and journey) wait on the same decision.
 
