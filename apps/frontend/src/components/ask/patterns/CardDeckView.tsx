@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } fr
 import { cn } from '@/lib/utils';
 import type { AskBatchDecision, AskDeckBatch, AskGroupedListItem, AskGroupedListItemAction } from '@/features/ask/types';
 import { TONE_CHIP, type ItemActionHandler } from './PatternParts';
+import { useCalmAnswer } from '../blocks/calmContext';
 
 // IW-PRES-015 (FRD v1.72, v1.75). One card at a time, and every decision is the item's own declared action.
 // Without a declared batch, each action is sent immediately, exactly as the list sends it, and its confirmation and
@@ -27,6 +28,7 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
   onBatch?: (decisions: AskBatchDecision[]) => void;
   onOpenDetail?: (item: AskGroupedListItem) => void;
 }) {
+  const calmAnswer = useCalmAnswer();
   const [index, setIndex] = useState(0);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [batchSent, setBatchSent] = useState(false);
@@ -177,7 +179,8 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
         {shown.map((action) => (
           <button key={action.id} type="button" disabled={disabled} onClick={() => choose(action)}
             className={cn('min-h-9 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
-              action.id === swipeRightActionId ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>
+              // Radar R-3 (FRD v1.134): inside an adopted calm answer the answer's own step is the one filled control, so the card's swipe-right action is quiet.
+              action.id === swipeRightActionId && !calmAnswer ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>
             {action.label}{batchMode && !isBatched(action) ? ' …' : ''}
           </button>
         ))}

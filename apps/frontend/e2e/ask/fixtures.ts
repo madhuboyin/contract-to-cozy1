@@ -2772,3 +2772,6 @@ function withActiveSession<T>(body: T): T {
 async function fulfill(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: status === 204 ? '' : JSON.stringify(withActiveSession(body)) });
 }
+
+// Shared with the per-domain journey fixture modules (for example radarJourneyFixtures.ts), which layer their routes over installAskApi's.
+export { apiOrigin as askApiOrigin, assertAuthenticated as assertAskAuthenticated, fulfill as fulfillAskRoute };

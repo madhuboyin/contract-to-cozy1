@@ -240,6 +240,7 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
   // Radar R-1 (FRD v1.132): inside an adopted calm answer the feed's top-ranked event (the first item of the first section, which the
   // producer orders by lifecycle then priority) is the one dominant step and opens its inline detail; the filters are quiet text groups.
   const calm = useCalmAnswer();
+  const reviewRef = useRef<HTMLButtonElement>(null);
   const [localDetailMatchId, setLocalDetailMatchId] = useState<string | null>(null);
   const detailMatchId = controls ? controls.detailIdFor(block.id) : localDetailMatchId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailMatchId);
@@ -252,7 +253,8 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
     const closingId = detailMatchId;
     if (controls) controls.closeDetail();
     else setLocalDetailMatchId(null);
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-radar-event-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
+    // Focus returns to whatever opened the detail: the event's own row, else the calm answer's Review step.
+    requestAnimationFrame(() => (document.querySelector<HTMLElement>(`[data-radar-event-detail-trigger="${CSS.escape(closingId ?? '')}"]`) ?? reviewRef.current)?.focus());
   };
 
   const layoutSwitch = onChooseLayout && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
@@ -275,7 +277,7 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
             className={cn('min-h-8 rounded-md px-2.5 py-1 text-sm disabled:opacity-100', filter.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900', name === 'Clear filters' && 'underline underline-offset-2')}>{filter.label}</button>)}
         </div>)}
       </div>}
-      {calm && topItem && <button type="button" disabled={disabled} data-radar-review-top="" onClick={() => openDetail(topItem)} className="mt-3 inline-flex min-h-11 max-w-full items-center rounded-xl bg-teal-700 px-4 py-2 text-left text-sm font-semibold text-white disabled:opacity-50">Review: {topItem.title}</button>}
+      {calm && topItem && <button type="button" ref={reviewRef} disabled={disabled} data-radar-review-top="" onClick={() => openDetail(topItem)} className="mt-3 inline-flex min-h-11 max-w-full items-center rounded-xl bg-teal-700 px-4 py-2 text-left text-sm font-semibold text-white disabled:opacity-50">Review: {topItem.title}</button>}
       {onFilter && block.filters.length > 0 && !calm && <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter monitored events">
         {block.filters.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active}
           onClick={() => onFilter(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
