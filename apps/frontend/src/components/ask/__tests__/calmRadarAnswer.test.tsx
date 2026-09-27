@@ -10,12 +10,13 @@ jest.mock('@/lib/api/client', () => ({ api: { getRadarEventDetail: jest.fn(() =>
 const event = (id: string, title: string, status = 'new') => ({ id, title, description: `${title} is in effect.`, meta: ['high', 'National Weather Service'], status, entityType: 'RADAR_MATCH', href: `/dashboard/properties/home/tools/home-event-radar?matchId=${id}`, actions: [] });
 const filters = [
   { id: 'radar-lifecycle-all', label: 'Any time', message: 'Show my home event radar feed', active: true },
-  { id: 'radar-lifecycle-now', label: 'Happening now', message: 'Show my home event radar feed happening now', active: false },
+  { id: 'radar-lifecycle-now', label: 'Happening now', message: 'Only show events happening now', active: false },
   { id: 'radar-family-all', label: 'All sources', message: 'Show my home event radar feed', active: true },
-  { id: 'radar-family-weather', label: 'Weather', message: 'Show my home event radar feed for weather events', active: false },
+  { id: 'radar-family-weather', label: 'Weather', message: 'Only show weather events', active: false },
   { id: 'radar-hide-dismissed', label: 'Hide dismissed', message: 'Show my home event radar feed', active: true },
-  { id: 'radar-include-dismissed', label: 'Include dismissed', message: 'Show my home event radar feed, including dismissed', active: false },
+  { id: 'radar-include-dismissed', label: 'Include dismissed', message: 'Now show events including dismissed ones', active: false },
 ];
+const withClear = [...filters, { id: 'radar-clear-all', label: 'Clear filters', message: 'Now show all events with no filters', active: false }];
 const blocks = () => [
   { type: 'SUMMARY', id: 'home-event-radar-summary', title: 'Monitored home events', headline: '2 events are happening now.', supportLine: 'Most important: Heat advisory.', body: 'x', tone: 'DEFAULT',
     chips: [{ label: '1 high priority', tone: 'CRITICAL' }, { label: '2 happening now', tone: 'CAUTION' }], actions: [] },
@@ -66,7 +67,29 @@ describe('calm Home Event Radar answer', () => {
     expect(within(timing).getByRole('button', { name: 'Any time' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(screen.getByRole('group', { name: 'Dismissed events' })).getAllByRole('button')).toHaveLength(2);
     fireEvent.click(within(source).getByRole('button', { name: 'Weather' }));
-    expect(askMock.mock.calls[0][0]).toBe('Show my home event radar feed for weather events');
+    // A chip continues this result through its source execution, so the earlier one collapses instead of stacking a second live feed.
+    expect(askMock).toHaveBeenCalledWith('Only show weather events', undefined, { sourceExecutionId: 'execution' });
+  });
+
+  it('offers "Clear filters" only while a filter is applied', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const value = execution();
+    ((value.blocks as unknown[])[1] as { filters: unknown }).filters = withClear;
+    card(value);
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+    expect(askMock).toHaveBeenCalledWith('Now show all events with no filters', undefined, { sourceExecutionId: 'execution' });
+    expect(screen.queryAllByRole('button', { name: 'Clear filters' })).toHaveLength(1);
+  });
+
+  it('says nothing matches, and keeps the chips, when a filter leaves no events', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const value = execution();
+    ((value.blocks as unknown[])[1] as { filters: unknown; sections: unknown[] }).filters = withClear;
+    ((value.blocks as unknown[])[1] as { sections: unknown[] }).sections = [{ id: 'radar-no-match', title: 'No matching events', count: 0, items: [] }];
+    card(value);
+    expect(await screen.findByRole('group', { name: 'Filter by timing' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Review:/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
   });
 
   it('keeps the previous presentation, with no review step, when the setting is off', async () => {

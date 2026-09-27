@@ -2,7 +2,7 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { HouseholdRole } from '@prisma/client';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { type AskCaptureRequest, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
@@ -23,6 +23,9 @@ import { type CorrectionOption } from '../askCorrectionFields';
 import { ensurePropertyAccess, loadRadarMatchForWrite, RadarFeedbackInputSchema, RadarTaskAnswerSchema, RadarTaskInputSchema, RadarTaskTargetSchema } from '../askHandlerSupport';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { getAskPropertyTimezone } from '../askExecutionContext';
+import { containsFilterContinuation } from '../askFollowUpContext';
+import { type AskViewState } from '../support/executionState';
+import { loadAskViewState } from './maintenance.handler';
 
 const RADAR_SOURCE_FAMILY_LABEL: Record<string, string> = {
   weather: 'Weather', air_quality: 'Air quality', disaster: 'Disaster', utility: 'Utility', tax: 'Tax', insurance: 'Insurance', other: 'Other',
@@ -77,18 +80,77 @@ export function radarFeedFilterMessage(state: RadarFeedFilterState): string {
   return `Show my home event radar feed${state.sourceFamily ? ` for ${RADAR_FAMILY_PHRASE[state.sourceFamily]} events` : ''}${state.lifecycle ? ` ${RADAR_LIFECYCLE_PHRASE[state.lifecycle]}` : ''}${state.includeDismissed ? ', including dismissed' : ''}.`;
 }
 
-function radarFeedFilterChips(state: RadarFeedFilterState, presentFamilies: string[]) {
-  const chip = (id: string, label: string, next: RadarFeedFilterState, active: boolean) => ({ id, label, message: radarFeedFilterMessage(next), active });
-  const families = [...new Set([...presentFamilies, ...(state.sourceFamily ? [state.sourceFamily] : [])])]
-    .filter((family): family is RadarFeedFamilyFilter => family in RADAR_FAMILY_PHRASE).sort();
+// Radar R-2 (FRD v1.133): the feed's filters are a governed refinement, the same continuity model as Maintenance, Inventory, Warranties and
+// Claims. Three independent dimensions (timing, source, dismissed events) ride in the result's view state: timing in statusFilter
+// ('ALL' or a lifecycle), source in domainScopePhrase ('ALL' or a family), dismissed events in dateScopePhrase. A declared chip is a fresh
+// authoritative read of the feed with the resulting filters, never the filtered subset of an earlier page. Each chip message begins with a
+// phrase askFollowUpContext's FILTER_CONTINUATION_PATTERN accepts (asserted in tests), and replaces exactly one dimension.
+const RADAR_TIMING_MESSAGE: Record<RadarFeedLifecycleFilter | 'all', string> = {
+  all: 'Now show events at any time', now: 'Only show events happening now', upcoming: 'Only show upcoming events', recently_ended: 'Only show recently ended events',
+};
+const RADAR_ALL_SOURCES_MESSAGE = 'Now show events from all sources';
+const RADAR_INCLUDE_DISMISSED_MESSAGE = 'Now show events including dismissed ones';
+const RADAR_HIDE_DISMISSED_MESSAGE = 'Now show events without dismissed ones';
+const RADAR_CLEAR_MESSAGE = 'Now show all events with no filters';
+const RADAR_FAMILIES = Object.keys(RADAR_FAMILY_PHRASE) as RadarFeedFamilyFilter[];
+const RADAR_LIFECYCLES = Object.keys(RADAR_LIFECYCLE_CHIP) as RadarFeedLifecycleFilter[];
+// A typed follow-up arrives joined to the prior question ("Show my radar feed. Only show upcoming events"), so each phrase may follow a sentence break.
+const atStart = (phrase: string) => new RegExp(`(?:^|[.!?]\\s+)\\s*${phrase}\\b`, 'i');
+
+export function radarViewStateFields(state: RadarFeedFilterState): Pick<AskViewState, 'statusFilter' | 'domainScopePhrase' | 'dateScopePhrase'> {
+  return { statusFilter: state.lifecycle ?? 'ALL', domainScopePhrase: state.sourceFamily ?? 'ALL', dateScopePhrase: state.includeDismissed ? 'INCLUDE_DISMISSED' : null };
+}
+
+/** The filters a prior radar view state recorded, or null when it is not a valid radar view state. */
+export function radarFiltersFromViewState(prior: AskViewState | null | undefined): RadarFeedFilterState | null {
+  if (!prior || !prior.domainScopePhrase) return null;
+  const lifecycle = prior.statusFilter === 'ALL' ? null : RADAR_LIFECYCLES.find((value) => value === prior.statusFilter) ?? undefined;
+  const sourceFamily = prior.domainScopePhrase === 'ALL' ? null : RADAR_FAMILIES.find((value) => value === prior.domainScopePhrase) ?? undefined;
+  if (lifecycle === undefined || sourceFamily === undefined) return null;
+  return { lifecycle, sourceFamily, includeDismissed: prior.dateScopePhrase === 'INCLUDE_DISMISSED' };
+}
+
+export function resolveRadarRefinement(message: string, prior: AskViewState | null | undefined): RadarFeedFilterState | null {
+  const current = radarFiltersFromViewState(prior);
+  // Only a declared chip or a typed filter phrase refines a result; an ordinary question is answered on its own.
+  if (!current || !containsFilterContinuation(message)) return null;
+  if (atStart('now show all events with no filters').test(message)) return { lifecycle: null, sourceFamily: null, includeDismissed: false };
+  const lifecycle: RadarFeedLifecycleFilter | null | undefined = atStart('now show events at any time').test(message) ? null
+    : atStart('only show events happening now').test(message) ? 'now'
+      : atStart('only show upcoming events').test(message) ? 'upcoming'
+        : atStart('only show recently ended events').test(message) ? 'recently_ended' : undefined;
+  const family = RADAR_FAMILIES.find((value) => atStart(`only show ${RADAR_FAMILY_PHRASE[value]} events`).test(message));
+  const sourceFamily: RadarFeedFamilyFilter | null | undefined = atStart('now show events from all sources').test(message) ? null : family ?? undefined;
+  const dismissed: boolean | undefined = atStart('now show events including dismissed ones').test(message) ? true : atStart('now show events without dismissed ones').test(message) ? false : undefined;
+  if (lifecycle === undefined && sourceFamily === undefined && dismissed === undefined) return null;
+  return { lifecycle: lifecycle === undefined ? current.lifecycle : lifecycle, sourceFamily: sourceFamily === undefined ? current.sourceFamily : sourceFamily, includeDismissed: dismissed ?? current.includeDismissed };
+}
+
+export function buildRadarViewState(prior: AskViewState | null | undefined, state: RadarFeedFilterState): AskViewState {
+  return { resultId: prior?.resultId ?? randomUUID(), ...radarViewStateFields(state), selectedTaskId: null, revision: (prior?.revision ?? 0) + 1 };
+}
+
+/** The declared chips: timing, source (only sources that have events under the other filters, plus the applied one), dismissed events, and a way back. */
+export function radarFeedFilterChips(state: RadarFeedFilterState, availableFamilies: string[]) {
+  const chip = (id: string, label: string, message: string, active: boolean) => ({ id, label, message, active });
+  const families = RADAR_FAMILIES.filter((family) => family === state.sourceFamily || availableFamilies.includes(family)).sort();
+  const narrowed = state.lifecycle !== null || state.sourceFamily !== null || state.includeDismissed;
   return [
-    chip('radar-lifecycle-all', 'Any time', { ...state, lifecycle: null }, state.lifecycle === null),
-    ...(Object.keys(RADAR_LIFECYCLE_CHIP) as RadarFeedLifecycleFilter[]).map((lifecycle) => chip(`radar-lifecycle-${lifecycle}`, RADAR_LIFECYCLE_CHIP[lifecycle], { ...state, lifecycle }, state.lifecycle === lifecycle)),
-    chip('radar-family-all', 'All sources', { ...state, sourceFamily: null }, state.sourceFamily === null),
-    ...families.map((family) => chip(`radar-family-${family}`, RADAR_SOURCE_FAMILY_LABEL[family] ?? family, { ...state, sourceFamily: family }, state.sourceFamily === family)),
-    chip('radar-hide-dismissed', 'Hide dismissed', { ...state, includeDismissed: false }, !state.includeDismissed),
-    chip('radar-include-dismissed', 'Include dismissed', { ...state, includeDismissed: true }, state.includeDismissed),
+    chip('radar-lifecycle-all', 'Any time', RADAR_TIMING_MESSAGE.all, state.lifecycle === null),
+    ...RADAR_LIFECYCLES.map((lifecycle) => chip(`radar-lifecycle-${lifecycle}`, RADAR_LIFECYCLE_CHIP[lifecycle], RADAR_TIMING_MESSAGE[lifecycle], state.lifecycle === lifecycle)),
+    chip('radar-family-all', 'All sources', RADAR_ALL_SOURCES_MESSAGE, state.sourceFamily === null),
+    ...families.map((family) => chip(`radar-family-${family}`, RADAR_SOURCE_FAMILY_LABEL[family] ?? family, `Only show ${RADAR_FAMILY_PHRASE[family]} events`, state.sourceFamily === family)),
+    chip('radar-hide-dismissed', 'Hide dismissed', RADAR_HIDE_DISMISSED_MESSAGE, !state.includeDismissed),
+    chip('radar-include-dismissed', 'Include dismissed', RADAR_INCLUDE_DISMISSED_MESSAGE, state.includeDismissed),
+    ...(narrowed ? [chip('radar-clear-all', 'Clear filters', RADAR_CLEAR_MESSAGE, false)] : []),
   ];
+}
+
+/** The prior view only when the source execution really was a radar feed read (another domain's view state must never be continued). */
+async function loadRadarViewState(sourceExecutionId: string | null | undefined, userId: string): Promise<AskViewState | null> {
+  if (!sourceExecutionId) return null;
+  const source = await prisma.askExecution.findFirst({ where: { id: sourceExecutionId, userId }, select: { operationId: true } });
+  return source?.operationId === 'HOME_EVENT_RADAR_FEED' ? loadAskViewState(sourceExecutionId, userId) : null;
 }
 
 const radarCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
@@ -135,17 +197,20 @@ const RADAR_FEED_BOUNDARY: AskPresentationBlock = {
   severity: 'INFO', suggestions: [],
 };
 
-async function homeEventRadarFeedResult(userId: string, propertyId: string, message: string, cursor?: string | null): Promise<AskOperationResult> {
+async function homeEventRadarFeedResult(userId: string, propertyId: string, message: string, cursor?: string | null, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const filters = parseRadarFeedFilters(message);
-  const page = await radarQueryService.listFeed(propertyId, userId, {
-    limit: 20,
-    ...(cursor ? { cursor } : {}),
-    ...(filters.lifecycle ? { lifecycle: [filters.lifecycle] } : {}),
-    ...(filters.sourceFamily ? { sourceFamily: [filters.sourceFamily] } : {}),
+  const refinement = resolveRadarRefinement(message, priorViewState);
+  // Paging keeps the filters the source result recorded (the cursor is bound to them); a fresh question reads its own words.
+  const filters = refinement ?? (cursor ? radarFiltersFromViewState(priorViewState) : null) ?? parseRadarFeedFilters(message);
+  const feedOptions = (state: RadarFeedFilterState, limit: number, pageCursor?: string | null) => ({
+    limit,
+    ...(pageCursor ? { cursor: pageCursor } : {}),
+    ...(state.lifecycle ? { lifecycle: [state.lifecycle] } : {}),
+    ...(state.sourceFamily ? { sourceFamily: [state.sourceFamily] } : {}),
     // Same default as the traditional page: dismissed events are hidden unless asked for.
-    ...(filters.includeDismissed ? {} : { state: ['new', 'seen', 'saved', 'acted_on'] }),
-  } as Parameters<typeof radarQueryService.listFeed>[2]) as {
+    ...(state.includeDismissed ? {} : { state: ['new', 'seen', 'saved', 'acted_on'] }),
+  } as Parameters<typeof radarQueryService.listFeed>[2]);
+  const page = await radarQueryService.listFeed(propertyId, userId, feedOptions(filters, 20, cursor)) as {
     items: Array<Record<string, any>>;
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
     totalCount: number;
@@ -156,7 +221,8 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
   const radarHref = (matchId?: string) => radarEventHref(propertyId, matchId);
   const narrowed = filters.lifecycle !== null || filters.sourceFamily !== null;
 
-  if (!items.length && !narrowed) {
+  // A refinement that matches nothing still continues the result and keeps every chip, so a filter can be widened or cleared.
+  if (!items.length && !narrowed && !refinement) {
     const copy = RADAR_FEED_STATE_COPY[page.feedState] ?? RADAR_FEED_STATE_COPY.UNCOVERED;
     return {
       status: 'ANSWERED',
@@ -182,6 +248,13 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     existing.push(item);
     grouped.set(family, existing);
   }
+  // Which sources have events under the OTHER filters, read authoritatively (never inferred from the visible page), so narrowing to one
+  // source never hides the way to another.
+  const availableFamilies = (await Promise.all(RADAR_FAMILIES.map(async (family) => {
+    const other = await radarQueryService.listFeed(propertyId, userId, feedOptions({ ...filters, sourceFamily: family }, 1)) as { totalCount: number };
+    return other.totalCount > 0 ? family : null;
+  }))).filter((family): family is RadarFeedFamilyFilter => family !== null);
+  const viewState = buildRadarViewState(priorViewState, filters);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'home-event-radar-summary',
@@ -204,7 +277,7 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     actions: [],
   }, {
     type: 'GROUPED_LIST',
-    filters: radarFeedFilterChips(filters, [...grouped.keys()]),
+    filters: radarFeedFilterChips(filters, availableFamilies),
     id: 'home-event-radar-feed',
     title: 'Home Event Radar feed',
     // IW-PRES-015 / IW-PRES-022 (FRD v1.92): the feed is a card deck; Save is a right swipe and Dismiss a left swipe.
@@ -247,7 +320,7 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     reasonCode: degraded ? 'HOME_EVENT_RADAR_FEED_PARTIAL' : undefined,
     blocks,
     suggestions: page.pageInfo?.hasNextPage ? ['Show more monitored events'] : [],
-    parameters: page.pageInfo?.hasNextPage ? { nextCursor: page.pageInfo.endCursor } : undefined,
+    parameters: { viewState, ...(page.pageInfo?.hasNextPage ? { nextCursor: page.pageInfo.endCursor } : {}) },
   };
 }
 
@@ -914,4 +987,7 @@ async function homeEventRadarPreferencesResult(userId: string, propertyId: strin
 
 registerCapabilityHandler('home-event-radar.preferences', async (envelope) => homeEventRadarPreferencesResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-registerCapabilityHandler('home-event-radar.feed', async (envelope) => homeEventRadarFeedResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor));
+registerCapabilityHandler('home-event-radar.feed', async (envelope) => homeEventRadarFeedResult(
+  envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor,
+  await loadRadarViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
+));

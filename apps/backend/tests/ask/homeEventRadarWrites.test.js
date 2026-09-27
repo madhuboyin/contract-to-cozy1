@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 
 require('ts-node/register');
+const { resolveRadarRefinement } = require('../../src/services/ask/handlers/homeEventRadar.handler.ts');
 
 // ASK_COZY_INLINE_WORKSPACE_FRD v1.40: Home Event Radar filters + per-user writes.
 // Runtime tests: prisma, the radar services, analytics and property access are
@@ -59,7 +60,12 @@ function install() {
     if (!matchExists) throw new APIError('Radar match not found', 404, 'RADAR_MATCH_NOT_FOUND');
     return { propertyMatchId: matchId, title: 'Hail warning', userState: liveState, userFeedback: liveFeedback };
   };
-  radarQueryService.listFeed = async (...args) => { calls.listFeed.push(args); return feedPage; };
+  radarQueryService.listFeed = async (...args) => {
+    calls.listFeed.push(args);
+    // R-2 source-availability probe: one event of the asked source, so the count is that source's own.
+    const probeFamily = args[2].limit === 1 && args[2].sourceFamily ? args[2].sourceFamily[0] : null;
+    return probeFamily ? { ...feedPage, items: [], totalCount: feedPage.items.filter((item) => item.sourceFamily === probeFamily).length } : feedPage;
+  };
   radarInteractionService.updateState = async (...args) => { calls.updateState.push(args); liveState = args[3]; return {}; };
   radarInteractionService.submitFeedback = async (...args) => { calls.submitFeedback.push(args); return {}; };
   analytics.analyticsEmitter.track = (event) => { calls.track.push(event); };
@@ -114,12 +120,14 @@ test('"Show more" paging keeps the filters: the continuation message prefixes th
 test('the feed hides dismissed events by default (traditional-page parity) and passes each filter to the canonical listFeed', async () => {
   feedPage = { ...feedPage, items: [feedItem('match-1')], totalCount: 1, feedState: 'ACTIVE' };
   await capabilityInvoke('HOME_EVENT_RADAR_FEED', { userId: 'u1', propertyId: 'p1', message: 'Show my home event radar feed' });
-  assert.deepEqual(calls.listFeed[0][2].state, ['new', 'seen', 'saved', 'acted_on']);
-  assert.equal(calls.listFeed[0][2].lifecycle, undefined);
+  // R-2: each answer also probes which sources have events (limit 1); only the page read (limit 20) is the question itself.
+  const pageReads = () => calls.listFeed.filter((call) => call[2].limit === 20);
+  assert.deepEqual(pageReads()[0][2].state, ['new', 'seen', 'saved', 'acted_on']);
+  assert.equal(pageReads()[0][2].lifecycle, undefined);
   await capabilityInvoke('HOME_EVENT_RADAR_FEED', { userId: 'u1', propertyId: 'p1', message: radarFeedFilterMessage({ lifecycle: 'now', sourceFamily: 'tax', includeDismissed: true }) });
-  assert.equal(calls.listFeed[1][2].state, undefined, 'including dismissed drops the state filter');
-  assert.deepEqual(calls.listFeed[1][2].lifecycle, ['now']);
-  assert.deepEqual(calls.listFeed[1][2].sourceFamily, ['tax']);
+  assert.equal(pageReads()[1][2].state, undefined, 'including dismissed drops the state filter');
+  assert.deepEqual(pageReads()[1][2].lifecycle, ['now']);
+  assert.deepEqual(pageReads()[1][2].sourceFamily, ['tax']);
 });
 
 test('filter chips mark exactly one active chip per dimension and only offer present source families (plus the active one)', async () => {
@@ -129,8 +137,8 @@ test('filter chips mark exactly one active chip per dimension and only offer pre
   const active = list.filters.filter((chip) => chip.active).map((chip) => chip.id);
   assert.deepEqual(active, ['radar-lifecycle-upcoming', 'radar-family-tax', 'radar-hide-dismissed']);
   assert.deepEqual(list.filters.filter((chip) => chip.id.startsWith('radar-family-') && chip.id !== 'radar-family-all').map((chip) => chip.id), ['radar-family-tax', 'radar-family-utility', 'radar-family-weather']);
-  // Each chip keeps the other dimensions.
-  assert.deepEqual(parseRadarFeedFilters(list.filters.find((chip) => chip.id === 'radar-lifecycle-now').message), { lifecycle: 'now', sourceFamily: 'tax', includeDismissed: false });
+  // Each chip keeps the other dimensions: resolved against the result's own view state it replaces only its own.
+  assert.deepEqual(resolveRadarRefinement(list.filters.find((chip) => chip.id === 'radar-lifecycle-now').message, result.parameters.viewState), { lifecycle: 'now', sourceFamily: 'tax', includeDismissed: false });
 });
 
 test('an empty unfiltered feed keeps its coverage copy and offers to include dismissed events; an empty filtered feed keeps its chips', async () => {

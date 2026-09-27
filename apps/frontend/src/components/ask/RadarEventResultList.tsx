@@ -264,7 +264,7 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
       {layoutSwitch}
       {onFilter && block.filters.length > 0 && calm && <div className="mt-2 space-y-1" data-radar-filters="">
-        {([['radar-lifecycle-', 'Filter by timing'], ['radar-family-', 'Filter by source'], ['radar-hide-', 'Dismissed events'], ['radar-include-', 'Dismissed events']] as const).reduce<Array<[string, typeof block.filters]>>((groups, [prefix, name]) => {
+        {([['radar-lifecycle-', 'Filter by timing'], ['radar-family-', 'Filter by source'], ['radar-hide-', 'Dismissed events'], ['radar-include-', 'Dismissed events'], ['radar-clear-', 'Clear filters']] as const).reduce<Array<[string, typeof block.filters]>>((groups, [prefix, name]) => {
           const found = block.filters.filter((filter) => filter.id.startsWith(prefix));
           if (!found.length) return groups;
           const existing = groups.find(([groupName]) => groupName === name);
@@ -272,7 +272,7 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
           return groups;
         }, []).map(([name, group]) => <div key={name} className="flex flex-wrap gap-0.5" role="group" aria-label={name}>
           {group.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active} onClick={() => onFilter(filter.message)}
-            className={cn('min-h-8 rounded-md px-2.5 py-1 text-sm disabled:opacity-100', filter.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900')}>{filter.label}</button>)}
+            className={cn('min-h-8 rounded-md px-2.5 py-1 text-sm disabled:opacity-100', filter.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900', name === 'Clear filters' && 'underline underline-offset-2')}>{filter.label}</button>)}
         </div>)}
       </div>}
       {calm && topItem && <button type="button" disabled={disabled} data-radar-review-top="" onClick={() => openDetail(topItem)} className="mt-3 inline-flex min-h-11 max-w-full items-center rounded-xl bg-teal-700 px-4 py-2 text-left text-sm font-semibold text-white disabled:opacity-50">Review: {topItem.title}</button>}

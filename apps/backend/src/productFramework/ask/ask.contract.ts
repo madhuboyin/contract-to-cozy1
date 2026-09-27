@@ -202,7 +202,8 @@ const GroupedListBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3).default([]),
   // FRD v1.92: 12, not 6. The Home Event Radar feed declares four time chips, an all-sources chip, one chip per source present and
   // two dismissed chips (eight with one source, up to twelve with six), which the earlier limit of six rejected.
-  filters: z.array(GroupedListFilterSchema).max(12).default([]),
+  // Sixteen: the Home Event Radar feed offers timing (4), source (all + 6), dismissed events (2) and a way back (1) = 14 when every source has events.
+  filters: z.array(GroupedListFilterSchema).max(16).default([]),
   presentation: GroupedListPresentationSchema.optional(),
 });
 
