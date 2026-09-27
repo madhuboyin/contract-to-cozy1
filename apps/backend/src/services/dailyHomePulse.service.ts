@@ -20,6 +20,7 @@ import { logger } from '../lib/logger';
 import { weatherService } from './weather.service';
 import { getPlanningContextEnvelope } from './planningContext/context';
 import type { getAggregationContextEnvelope } from './aggregationContext/context';
+import { countPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 
 type SummaryKind = 'HEALTH' | 'RISK';
 type InsightSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -828,7 +829,7 @@ export class DailyHomePulseService {
       localUpdates,
       liveForecastMeta,
     ] = await Promise.all([
-        prisma.document.count({ where: { propertyId } }),
+        countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
         prisma.booking.findMany({
           where: {
             propertyId,

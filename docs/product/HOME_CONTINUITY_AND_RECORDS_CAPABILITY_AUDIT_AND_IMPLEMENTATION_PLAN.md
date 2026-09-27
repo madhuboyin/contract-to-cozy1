@@ -1964,3 +1964,25 @@ Status: neither statement was run by the agent; the count and any update are the
 
 **Tests.** `homeRecordsRecordAuthorization.test.js` (service guard, batch reporting, route schema) and `homeRecordsVisibilityOptions.test.ts` (both selects built from the selectable list).
 
+## 17. Retiring the legacy Document table (September 26, 2026)
+
+**Decision.** Home Records replaces legacy Documents. A temporary canonical read (`propertyDocuments/propertyDocumentInventory.service.ts`) projects Home Records (authoritative) and, only when a caller names it, the legacy vault (every row marked transitional). No dual-write, no historical migration, no compatibility layer. A domain keeps legacy storage only until its reader and its writer are converted together; then the legacy branch is removed from the adapter, and finally the `Document` model.
+
+**Done.** S1 the canonical read. S2 Ask's document lookup. S3 Property Summary and the property page. S4 the Documents page, links and general uploads move to Home Records; an upload no longer creates a Timeline event. S5a the general readers: the total-document counts (daily pulse, digital-twin quality, home score x3, home actions) and the inspection-report signal (capability recommendation) read the canonical inventory (`countPropertyDocuments`, `latestPropertyDocumentOfKind`).
+
+**Remaining consumers of `prisma.document` (about 50 files), by what has to convert together.**
+
+| Slice | Readers | Writers | Note |
+|---|---|---|---|
+| S5b Buyer | buyerAcquisition, buyerClosingDay, buyerClosingDisclosure, buyerContract, buyerInsurance, buyerPurchaseLoanEstimate, buyerTitleEscrow, buyerWalkthrough, HomeBuyerTask, entryContext (buyer count) | buyerAcquisition, buyerInsurance; UI: four buyer plan centers | Buyer-plan links to the property `/documents` route already land on Home Records, which will not list buyer uploads until this converts |
+| S5c Claims and evidence | claims, entryContext evidence check, pastHazardExposure, coverageComparison, servicePriceRadar (id-scoped evidence checks) | claims.service (8), Ask evidence attach (captureConfirm), homeRecordWrites | Evidence references are document ids: reader and writer move as one |
+| S5d Inventory, warranty, insurance | inventory, insurancePolicyRecord, home-management, materialSpec, homeOperationsMaterialApprovalEvidence | inventory (4), home-management, warranties and insurance pages | Attachments hang off an inventory item, warranty or policy; Home Records links replace the link columns |
+| S5e Projects and renovation | projectTracker, permitTracker, renovationCase, renovationComplianceWorkflow, renovationReadiness, renovationRequirement, hoaCompliance | projectTracker (5), ProjectProofUploader | Proof of work |
+| S5f Savings and negotiation | savingsOutcome, savingsBenefitsCanonical, negotiationShield | savingsOutcome, negotiationShield, quote comparison, OutcomeRecorder | |
+| S5g Other writers | riskPremiumOptimizer | propertyTaxDocumentIntake (2), providerCredential (2), inspectionReadiness, homeReportExport, property.service (photo), onboarding first value, edit-page photo, RichCompletionDialog, hvacSpecialist, SmartDocumentUpload | Each converts with its own reader |
+| Blocked on a decision | propertyBrief, canonicalChangeReconciliation, homeBriefing, the "verified documents" count in homeActions, HomeBuyerTask and buyerAcquisition | | These read the legacy **verification status**. A Home Record has needs-review, not verification. What "verified" means for a Home Record (for example, extracted details reviewed and confirmed, or an explicit reviewed state) is a product decision; until it is made these stay legacy-only and must not be given an invented mapping |
+| Quota | subscription (per-user document limit) | | Counts legacy uploads by `uploadedBy`; the limit must count Home Record uploads once uploads move |
+| Retire last | document.routes, documentAuth.middleware | | Removed with the legacy branch |
+
+**Order.** S5b first (largest user-visible gap: buyer documents are invisible in Home Records), then S5c, S5d, S5e, S5f, S5g. Each slice is a single PR-sized change: convert its writer, convert its reader, delete the legacy branch use, and add a guardrail test. The "verified" decision can be made at any point and unblocks the last group.
+

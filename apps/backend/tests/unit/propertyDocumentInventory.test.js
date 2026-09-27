@@ -74,3 +74,49 @@ test('inventory-linked legacy documents are included only when asked, for a call
   await listPropertyDocuments({ propertyId: 'p1', role: 'OWNER', includeLegacy: true, includeInventoryLinkedLegacy: true });
   assert.deepEqual(documentQueries[0].where, { deletedAt: null, OR: [{ propertyId: 'p1' }, { inventoryItem: { propertyId: 'p1' } }] });
 });
+
+// Property-level signals: counts and a latest-of-kind lookup that never return a listing and never depend on the caller's role.
+const { countPropertyDocuments, latestPropertyDocumentOfKind } = require('../../src/services/propertyDocuments/propertyDocumentInventory.service.ts');
+
+function installSignals({ recordCount = 0, legacyCount = 0, recordLatest = null, legacyLatest = null } = {}) {
+  const calls = { recordCount: [], documentCount: [], recordFind: [], documentFind: [] };
+  prismaModule.prisma = new Proxy({}, { get(_t, model) {
+    if (model === 'then') return undefined;
+    if (model === 'propertyRecord') return { count: async (args) => { calls.recordCount.push(args); return recordCount; }, findFirst: async (args) => { calls.recordFind.push(args); return recordLatest; } };
+    if (model === 'document') return { count: async (args) => { calls.documentCount.push(args); return legacyCount; }, findFirst: async (args) => { calls.documentFind.push(args); return legacyLatest; } };
+    throw new Error(`Unexpected prisma.${String(model)} access`);
+  } });
+  return calls;
+}
+
+test('countPropertyDocuments adds active Home Records to the legacy vault only when asked, and excludes soft-deleted legacy rows', async () => {
+  let calls = installSignals({ recordCount: 3, legacyCount: 2 });
+  assert.deepEqual(await countPropertyDocuments({ propertyId: 'p1' }), { total: 3, homeRecords: 3, legacy: 0 });
+  assert.equal(calls.documentCount.length, 0, 'the legacy table is not read unless named');
+  assert.deepEqual(calls.recordCount[0].where, { propertyId: 'p1', lifecycleStatus: 'ACTIVE' });
+  calls = installSignals({ recordCount: 3, legacyCount: 2 });
+  assert.deepEqual(await countPropertyDocuments({ propertyId: 'p1', includeLegacy: true }), { total: 5, homeRecords: 3, legacy: 2 });
+  assert.deepEqual(calls.documentCount[0].where, { propertyId: 'p1', deletedAt: null });
+});
+
+test('the linked count uses a Home Records entity link and the legacy link columns', async () => {
+  const calls = installSignals({ recordCount: 1, legacyCount: 4 });
+  const counts = await countPropertyDocuments({ propertyId: 'p1', includeLegacy: true, linkedToOtherRecords: true });
+  assert.equal(counts.total, 5);
+  assert.deepEqual(calls.recordCount[0].where.links, { some: { entityType: { in: ['INVENTORY_ITEM', 'WARRANTY', 'INSURANCE_POLICY'] } } });
+  assert.deepEqual(calls.documentCount[0].where.OR, [{ inventoryItemId: { not: null } }, { warrantyId: { not: null } }, { policyId: { not: null } }]);
+});
+
+test('the latest document of a kind is the most recently updated across both stores, and only Home Records when the legacy branch is not named', async () => {
+  const newer = { id: 'l1', updatedAt: new Date('2026-09-05') };
+  const older = { id: 'r1', updatedAt: new Date('2026-09-01') };
+  let calls = installSignals({ recordLatest: older, legacyLatest: newer });
+  assert.deepEqual(await latestPropertyDocumentOfKind({ propertyId: 'p1', kind: 'INSPECTION_REPORT', includeLegacy: true }), { id: 'l1', source: 'LEGACY_DOCUMENT', kind: 'INSPECTION_REPORT', updatedAt: newer.updatedAt });
+  assert.equal(calls.recordFind[0].where.recordType, 'INSPECTION_REPORT');
+  assert.equal(calls.documentFind[0].where.type, 'INSPECTION_REPORT');
+  calls = installSignals({ recordLatest: older, legacyLatest: newer });
+  assert.equal((await latestPropertyDocumentOfKind({ propertyId: 'p1', kind: 'INSPECTION_REPORT' })).source, 'HOME_RECORD');
+  assert.equal(calls.documentFind.length, 0);
+  installSignals({});
+  assert.equal(await latestPropertyDocumentOfKind({ propertyId: 'p1', kind: 'INSPECTION_REPORT', includeLegacy: true }), null);
+});

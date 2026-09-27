@@ -114,3 +114,57 @@ export async function listPropertyDocuments(input: {
   const items = [...fromRecords, ...fromLegacy].sort((left, right) => right.addedAt.getTime() - left.addedAt.getTime());
   return { items, totals: { total: items.length, homeRecords: fromRecords.length, legacy: fromLegacy.length } };
 }
+
+// Property-level signals (scores, pulse, quality) ask "how many documents does this home have", not "which ones may this person see". They
+// count every active Home Record regardless of the caller's role, exactly as the property's other counts do, and never return a row.
+const LINKED_ENTITY_TYPES = ['INVENTORY_ITEM', 'WARRANTY', 'INSURANCE_POLICY'] as const;
+
+export async function countPropertyDocuments(input: {
+  propertyId: string;
+  /** The transitional legacy branch, named so a caller opts in knowingly. */
+  includeLegacy?: boolean;
+  /** Only documents attached to an inventory item, a warranty or an insurance policy (Home Records: an entity link; legacy: its own link columns). */
+  linkedToOtherRecords?: boolean;
+}): Promise<{ total: number; homeRecords: number; legacy: number }> {
+  const homeRecords = await prisma.propertyRecord.count({
+    where: {
+      propertyId: input.propertyId,
+      lifecycleStatus: 'ACTIVE',
+      ...(input.linkedToOtherRecords ? { links: { some: { entityType: { in: [...LINKED_ENTITY_TYPES] } } } } : {}),
+    },
+  });
+  const legacy = input.includeLegacy
+    ? await prisma.document.count({
+      where: {
+        propertyId: input.propertyId,
+        deletedAt: null,
+        ...(input.linkedToOtherRecords ? { OR: [{ inventoryItemId: { not: null } }, { warrantyId: { not: null } }, { policyId: { not: null } }] } : {}),
+      },
+    })
+    : 0;
+  return { total: homeRecords + legacy, homeRecords, legacy };
+}
+
+/** The most recently updated document of one kind (a kind key from either store), or null. Home Records first, then the transitional legacy branch. */
+export async function latestPropertyDocumentOfKind(input: {
+  propertyId: string;
+  kind: string;
+  includeLegacy?: boolean;
+}): Promise<{ id: string; source: PropertyDocumentSource; kind: string; updatedAt: Date } | null> {
+  const record = await prisma.propertyRecord.findFirst({
+    where: { propertyId: input.propertyId, lifecycleStatus: 'ACTIVE', recordType: input.kind as PropertyRecordType },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    select: { id: true, updatedAt: true },
+  });
+  const legacy = input.includeLegacy
+    ? await prisma.document.findFirst({
+      where: { propertyId: input.propertyId, deletedAt: null, type: input.kind as DocumentType },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      select: { id: true, updatedAt: true },
+    })
+    : null;
+  const winner = [record ? { ...record, source: 'HOME_RECORD' as const } : null, legacy ? { ...legacy, source: 'LEGACY_DOCUMENT' as const } : null]
+    .filter((row): row is { id: string; updatedAt: Date; source: PropertyDocumentSource } => row !== null)
+    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0];
+  return winner ? { id: winner.id, source: winner.source, kind: input.kind, updatedAt: winner.updatedAt } : null;
+}

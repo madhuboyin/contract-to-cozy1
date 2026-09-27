@@ -15,6 +15,7 @@ import {
   PropertyScoreSnapshotSummaryDTO,
 } from './propertyScoreSnapshot.service';
 import { logger } from '../lib/logger';
+import { countPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 
 type HomeScoreComponentKey = 'HEALTH' | 'RISK';
 type HomeScoreConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -698,13 +699,8 @@ export class HomeScoreReportService {
       overdueTaskCount,
       criticalTaskCount,
     ] = await Promise.all([
-      prisma.document.count({ where: { propertyId } }),
-      prisma.document.count({
-        where: {
-          propertyId,
-          OR: [{ inventoryItemId: { not: null } }, { warrantyId: { not: null } }, { policyId: { not: null } }],
-        },
-      }),
+      countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
+      countPropertyDocuments({ propertyId, includeLegacy: true, linkedToOtherRecords: true }).then((counts) => counts.total),
       prisma.inventoryItem.count({ where: { propertyId } }),
       prisma.warranty.count({ where: { propertyId } }),
       prisma.insurancePolicy.count({ where: { propertyId } }),
@@ -2455,9 +2451,7 @@ export class HomeScoreReportService {
       throw new Error('Property not found while calculating health score.');
     }
 
-    const documentCount = await prisma.document.count({
-      where: { propertyId },
-    });
+    const documentCount = (await countPropertyDocuments({ propertyId, includeLegacy: true })).total;
 
     const activeBookings = await prisma.booking.findMany({
       where: {

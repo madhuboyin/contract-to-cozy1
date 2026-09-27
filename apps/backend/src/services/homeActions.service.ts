@@ -75,6 +75,7 @@ import {
   CompletionEvidencePolicyViolationError,
   UnsupportedWorkItemCompletionError,
 } from './homeActionCompletion.service';
+import { countPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 import { COMPLETION_EVIDENCE_POLICY } from './intelligence/completionEvidencePolicy.registry';
 import {
   resolveDecisionFamilyRef,
@@ -1534,7 +1535,9 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
           updatedAt: true,
         },
       }),
-      prisma.document.count({ where: { propertyId } }),
+      countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
+      // "Verified" is a legacy verification status; a Home Record has needs-review instead, so this stays a legacy-only count until that domain
+      // decides what a verified document means for a Home Record.
       prisma.document.count({ where: { propertyId, verificationStatus: 'VERIFIED' } }),
       prisma.homeEvent.findMany({
         where: { propertyId },

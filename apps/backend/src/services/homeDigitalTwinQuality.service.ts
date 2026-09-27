@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { hasInsufficientRiskDetails } from './riskReportSemantics';
+import { countPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 
 // ============================================================================
 // DIMENSION WEIGHTS
@@ -228,7 +229,7 @@ export class HomeDigitalTwinQualityService {
         where: { propertyId },
         select: { id: true, category: true, name: true, replacementCostCents: true },
       }),
-      prisma.document.count({ where: { propertyId } }),
+      countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
       prisma.homeTwinComponent.findMany({
         where: { digitalTwinId, lifecycleState: 'ACTIVE' },
         select: { replacementCostEstimate: true, confidenceScore: true },

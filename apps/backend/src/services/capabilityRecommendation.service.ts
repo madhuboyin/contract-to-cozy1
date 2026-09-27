@@ -49,6 +49,7 @@ import { buildPropertyContextCapabilitySources } from '../productFramework/capab
 import { APP_CONFIG } from '../config/appConfig';
 import { loadApprovedCapabilityIds } from './capabilityGovernanceReview.service';
 import { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
+import { latestPropertyDocumentOfKind } from './propertyDocuments/propertyDocumentInventory.service';
 
 const EVALUATOR_SCOPES = PROPERTY_CONTEXT_SCOPES.filter(
   (scope) => scope !== 'OPTIONAL_HOUSEHOLD',
@@ -372,11 +373,9 @@ async function loadDefaultPersonalizationRecommendations(
       select: { id: true, updatedAt: true },
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
     }),
-    prisma.document.findFirst({
-      where: { propertyId, type: 'INSPECTION_REPORT' },
-      select: { id: true, type: true, updatedAt: true },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
-    }),
+    // The latest inspection report on file, from Home Records or the transitional legacy vault.
+    latestPropertyDocumentOfKind({ propertyId, kind: 'INSPECTION_REPORT', includeLegacy: true })
+      .then((document) => (document ? { id: document.id, type: document.kind, updatedAt: document.updatedAt } : null)),
   ]);
   const activeRecommendations = recommendations
     .filter((recommendation) =>
