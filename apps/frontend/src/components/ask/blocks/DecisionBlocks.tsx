@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { formatLegacyAskCurrency } from '@/features/ask/presentationCompatibility';
-import { ChevronDown, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, CheckCircle2, Sparkles } from 'lucide-react';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
@@ -150,11 +150,6 @@ function changeDate(block: ChangeSummary): Date {
   return new Date(block.effectiveAt ?? block.detectedAt);
 }
 
-function dateKey(block: ChangeSummary): string {
-  const date = changeDate(block);
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
 function dateHeading(block: ChangeSummary): string {
   const date = changeDate(block);
   const today = new Date();
@@ -166,55 +161,64 @@ function dateHeading(block: ChangeSummary): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
 }
 
-function ChangeSummaryRow({ block }: { block: ChangeSummary }) {
+function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
   const materialityBadge = block.materiality === 'URGENT' ? 'bg-red-100 text-red-800'
     : block.materiality === 'IMPORTANT' ? 'bg-amber-100 text-amber-900'
       : block.materiality === 'MEANINGFUL' ? 'bg-teal-50 text-teal-800'
         : 'bg-slate-100 text-slate-600';
+  const cardTone = block.materiality === 'URGENT' ? 'border-red-200 bg-gradient-to-br from-red-50/80 to-white'
+    : block.materiality === 'IMPORTANT' ? 'border-amber-200 bg-gradient-to-br from-amber-50/80 to-white'
+      : block.materiality === 'MEANINGFUL' ? 'border-teal-200 bg-gradient-to-br from-teal-50/80 to-white'
+        : 'border-slate-200 bg-gradient-to-br from-slate-50 to-white';
+  const iconTone = block.materiality === 'URGENT' ? 'bg-red-100 text-red-700'
+    : block.materiality === 'IMPORTANT' ? 'bg-amber-100 text-amber-800'
+      : block.materiality === 'MEANINGFUL' ? 'bg-teal-100 text-teal-800'
+        : 'bg-slate-100 text-slate-600';
   const sameDate = block.effectiveAt
     && new Date(block.effectiveAt).toLocaleDateString() === new Date(block.detectedAt).toLocaleDateString();
+  const summary = block.summary.replace(/^Home action /i, '').replace(/^./, (letter) => letter.toUpperCase());
   return (
-    <details className="group border-b border-slate-100 last:border-b-0">
-      <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-2.5 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
-        <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', block.materiality === 'URGENT' ? 'bg-red-500' : block.materiality === 'IMPORTANT' ? 'bg-amber-500' : 'bg-teal-500')} aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-semibold text-slate-950">{block.title}</span>
-            <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
-          </span>
-          <span className="mt-0.5 block truncate text-xs text-slate-600">{block.summary.replace(/^Home action /i, '').replace(/^./, (letter) => letter.toUpperCase())}</span>
+    <article className={cn('flex min-h-44 flex-col rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md', cardTone)}>
+      <div className="flex items-start justify-between gap-3">
+        <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', iconTone)} aria-hidden="true">
+          <CheckCircle2 className="h-5 w-5" />
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true" />
-      </summary>
-      <div className="bg-slate-50/70 px-4 py-3 pl-10 text-xs text-slate-600">
-        <p>Source: {block.source}</p>
-        <p>{sameDate ? `Recorded ${new Date(block.detectedAt).toLocaleDateString()}` : <>Detected {new Date(block.detectedAt).toLocaleDateString()}{block.effectiveAt && ` · Effective ${new Date(block.effectiveAt).toLocaleDateString()}`}</>}</p>
-        {block.linkedAction && (
-          <AskContextLink href={block.linkedAction.href} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg font-semibold text-teal-800 hover:text-teal-950">
-            {block.linkedAction.label}<ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          </AskContextLink>
-        )}
+        <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
       </div>
-    </details>
+      <h3 className="mt-3 text-base font-semibold leading-5 text-slate-950">{block.title}</h3>
+      <p className="mt-1 text-sm text-slate-600">{summary}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+          {sameDate
+            ? `Recorded ${dateHeading(block)}`
+            : <>Detected {new Date(block.detectedAt).toLocaleDateString()}{block.effectiveAt && ` · effective ${new Date(block.effectiveAt).toLocaleDateString()}`}</>}
+        </span>
+        <span>{block.source}</span>
+      </div>
+      {block.linkedAction && (
+        <AskContextLink href={block.linkedAction.href} className="mt-auto inline-flex min-h-10 items-center gap-1.5 self-start pt-3 text-sm font-semibold text-teal-800 hover:text-teal-950">
+          Review action<ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">: {block.linkedAction.label}</span>
+        </AskContextLink>
+      )}
+    </article>
   );
 }
 
 export function ChangeSummaryList({ blocks }: { blocks: ChangeSummary[] }) {
-  const groups = blocks.reduce<Array<{ key: string; label: string; blocks: ChangeSummary[] }>>((result, block) => {
-    const key = dateKey(block);
-    const group = result[result.length - 1];
-    if (group?.key === key) group.blocks.push(block);
-    else result.push({ key, label: dateHeading(block), blocks: [block] });
-    return result;
-  }, []);
   return (
-    <section data-testid="change-summary-list" aria-label="Recent home changes" className="w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      {groups.map((group) => (
-        <div key={group.key}>
-          <h3 className="border-b border-slate-100 px-4 pb-1.5 pt-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">{group.label}</h3>
-          {group.blocks.map((block) => <ChangeSummaryRow key={block.id} block={block} />)}
+    <section data-testid="change-summary-list" aria-label="Recent home changes" className="w-full max-w-6xl rounded-3xl border border-teal-100 bg-teal-50/30 p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-teal-700 text-white shadow-sm" aria-hidden="true"><Sparkles className="h-5 w-5" /></span>
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">Here’s what changed around your home</h2>
+          <p className="mt-1 text-sm leading-5 text-slate-600">I found {blocks.length} recent {blocks.length === 1 ? 'update' : 'updates'}. Open any action when you’re ready to review the current record.</p>
         </div>
-      ))}
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {blocks.map((block) => <ChangeSummaryCard key={block.id} block={block} />)}
+      </div>
     </section>
   );
 }
