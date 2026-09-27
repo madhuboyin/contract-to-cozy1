@@ -101,9 +101,10 @@ import type {
   PropertyRecordSummary,
   PropertyRecordType,
   PropertyRecordVisibility,
-  SELECTABLE_RECORD_VISIBILITIES,
   SelectableRecordVisibility,
 } from './types';
+// A value, not a type: it must not ride in the `import type` block above (next build rejects that; plain tsc does not).
+import { SELECTABLE_RECORD_VISIBILITIES } from './types';
 
 // ─── Display config ─────────────────────────────────────────────────────────
 
