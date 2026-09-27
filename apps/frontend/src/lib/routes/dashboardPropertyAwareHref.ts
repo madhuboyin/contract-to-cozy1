@@ -56,7 +56,8 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
   '/dashboard/documents': {
     navTarget: 'documents',
     toPropertyHref: (propertyId, query) =>
-      buildHref(`/dashboard/properties/${propertyId}/documents`, query),
+      // Documents now live in Home Records; the property /documents route only redirects there.
+      buildHref(`/dashboard/properties/${propertyId}/tools/home-records`, query),
   },
   '/dashboard/maintenance': {
     navTarget: 'maintenance',

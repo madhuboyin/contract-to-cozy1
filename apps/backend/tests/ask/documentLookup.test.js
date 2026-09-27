@@ -99,7 +99,7 @@ test('the capability handler and captureFallbackHref registrations both exist fo
     orchestratorSource,
     /registerCapabilityHandler\('documents\.lookup', async \(envelope\) => documentLookupResult\(envelope\.userId, envelope\.propertyId!\)\);/,
   );
-  assert.match(orchestratorSource, /case 'DOCUMENT_LOOKUP': return `\$\{base\}\/documents`;/);
+  assert.match(orchestratorSource, /case 'DOCUMENT_LOOKUP': return `\$\{base\}\/tools\/home-records`;/);
 });
 
 test('the new documents skill manifest declares DOCUMENT_LOOKUP and its adapter', () => {

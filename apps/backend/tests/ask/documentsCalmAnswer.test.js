@@ -63,7 +63,8 @@ test('a real answer reads Home Records with the caller\'s role, marks legacy row
   assert.equal(byId.r1.entityType, 'PROPERTY_RECORD');
   assert.equal(byId.l1.entityType, 'DOCUMENT');
   assert.ok(byId.l1.meta.includes('older vault') && !byId.r1.meta.includes('older vault'));
-  assert.ok(byId.r1.href.endsWith('/tools/home-records') && byId.l1.href.startsWith('/dashboard/documents'));
+  // A Home Record links to Home Records; a transitional legacy document has no page of its own any more, only its inline detail.
+  assert.ok(byId.r1.href.endsWith('/tools/home-records') && byId.l1.href === null);
   assert.equal(byId.r1.status, 'NEEDS_REVIEW');
   // One vocabulary for kinds: a Home Record invoice and a legacy invoice share a section.
   assert.equal(list(result).sections.find((section) => section.title === 'Invoices').count, 2);

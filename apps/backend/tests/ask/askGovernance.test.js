@@ -194,8 +194,8 @@ test('Property Summary declares bounded Document identities for inline detail an
   const producer = orchestrator.slice(start, end);
   assert.match(producer, /documents\.items\.slice\(0, 50\)/);
   // Each row routes to its own inline detail by source: a Home Record through the record route, a transitional legacy document through the
-  // document route (and only the legacy row carries a link to the older vault).
-  assert.match(producer, /id: document\.id[\s\S]*entityType: document\.source === 'HOME_RECORD' \? 'PROPERTY_RECORD' : 'DOCUMENT'[\s\S]*href: document\.transitional \? legacyDocumentsHref : null/);
+  // document route (a legacy row has no page link: the legacy Documents workspace is retired).
+  assert.match(producer, /id: document\.id[\s\S]*entityType: document\.source === 'HOME_RECORD' \? 'PROPERTY_RECORD' : 'DOCUMENT'[\s\S]*href: null/);
   assert.match(producer, /id: 'open-documents'[\s\S]*label: 'Open Home Records'[\s\S]*style: 'SECONDARY'/);
 
   const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');

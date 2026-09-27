@@ -201,7 +201,7 @@ export function consolidateUrgentActions(
 export function getHealthInsightSetupRoute(factorTitle: string, propertyId: string): string {
   const t = factorTitle.toLowerCase();
   if (t.includes('appliance')) return `/dashboard/properties/${propertyId}/inventory`;
-  if (t.includes('document')) return `/dashboard/documents?propertyId=${propertyId}`;
+  if (t.includes('document')) return `/dashboard/properties/${propertyId}/tools/home-records`;
   return propertyEditHref(propertyId, anchorForHealthFactor(factorTitle));
 }
 

@@ -116,18 +116,6 @@ require.cache[propertyAccessPath] = {
   },
 };
 
-const homeEventsPath = require.resolve('../../src/services/homeEvents/homeEvents.autogen.ts');
-require.cache[homeEventsPath] = {
-  id: homeEventsPath,
-  filename: homeEventsPath,
-  loaded: true,
-  exports: {
-    HomeEventsAutoGen: {
-      onDocumentUploaded: async () => {},
-    },
-  },
-};
-
 const storagePath = require.resolve('../../src/services/storage/reportStorage.ts');
 require.cache[storagePath] = {
   id: storagePath,

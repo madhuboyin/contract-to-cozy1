@@ -66,7 +66,7 @@ function resolvePrimaryRecordAction(
     return { label: 'Add first room', href: `/dashboard/properties/${property.id}/rooms` };
   }
   if ((recordOverview.sections.documents.data?.totalCount ?? 0) === 0) {
-    return { label: 'Upload first document', href: `/dashboard/documents?propertyId=${encodeURIComponent(property.id)}` };
+    return { label: 'Upload first document', href: `/dashboard/properties/${encodeURIComponent(property.id)}/tools/home-records` };
   }
   // The header CTA is deliberately curated. Property Context also contains
   // operational and derived facts (for example timezone and geocoding) that
@@ -197,7 +197,7 @@ export default function PropertyDetailPage() {
     { label: 'Details', href: `/dashboard/properties/${property.id}/edit` },
     { label: 'Systems & Inventory', href: `/dashboard/properties/${property.id}/inventory?backTo=${backTo}` },
     { label: 'Rooms & Household', href: `/dashboard/properties/${property.id}/rooms?backTo=${backTo}` },
-    { label: 'Documents', href: `/dashboard/documents?propertyId=${encodeURIComponent(property.id)}&backTo=${backTo}` },
+    { label: 'Documents', href: `/dashboard/properties/${encodeURIComponent(property.id)}/tools/home-records?backTo=${backTo}` },
     { label: 'History', href: `/dashboard/properties/${property.id}/timeline?backTo=${backTo}` },
   ];
   const primaryRecordAction = resolvePrimaryRecordAction(bootstrapQuery.data!);

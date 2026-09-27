@@ -150,7 +150,7 @@ const renderContextualButton = (insight: { factor: string; status: string; score
     if (insight.factor.includes('Documents')) {
         return (
             <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
-                <Link href={`/dashboard/documents?propertyId=${propertyId}`}>
+                <Link href={`/dashboard/properties/${propertyId}/tools/home-records`}>
                     Upload Documents <Settings className="ml-2 h-4 w-4" />
                 </Link>
             </Button>

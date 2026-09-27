@@ -28,7 +28,8 @@ describe('buildPropertyAwareDashboardHref', () => {
     expect(buildPropertyAwareDashboardHref('property-123', '/dashboard/protect'))
       .toBe('/dashboard/properties/property-123/protect');
     expect(buildPropertyAwareDashboardHref('property-123', '/dashboard/documents?action=upload'))
-      .toBe('/dashboard/properties/property-123/documents?action=upload');
+      // Documents live in Home Records; the ?action=upload deep link is carried across.
+      .toBe('/dashboard/properties/property-123/tools/home-records?action=upload');
     expect(buildPropertyAwareDashboardHref('property-123', '/dashboard/maintenance?taskId=task-1'))
       .toBe('/dashboard/properties/property-123/maintenance?taskId=task-1');
   });

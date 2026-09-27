@@ -30,7 +30,7 @@ async function pendingDocumentPromotionCandidates(propertyId: string): Promise<D
 
 async function documentPromotionReviewResult(propertyId: string): Promise<AskOperationResult> {
   const candidates = await pendingDocumentPromotionCandidates(propertyId);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
   if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }], suggestions: [] };
   return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: candidates.slice(0, 2).map((candidate) => `Confirm document candidate ${candidate.id}`) };
 }
@@ -39,7 +39,7 @@ async function documentPromotionConfirmResult(propertyId: string, message: strin
   const candidates = await pendingDocumentPromotionCandidates(propertyId);
   const selected = exactEntityMatch(candidates, message, launchContext);
   const decision = /\breject|discard\b/i.test(message) ? 'REJECT' : /\bconfirm|promote|apply\b/i.test(message) ? 'CONFIRM' : null;
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/documents`;
+  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
   if (!selected || !decision) return { status: 'NEEDS_ENTITY', reasonCode: 'DOCUMENT_PROMOTION_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotion-targets', title: 'Choose an exact candidate and decision', description: 'Use the candidate id or exact title and say confirm or reject.', sections: [{ id: 'pending', title: 'Pending candidates', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Review Documents', href, style: 'SECONDARY' }] }], suggestions: [] };
   if (selected.kind === 'INSPECTION_REPORT' && decision === 'REJECT') return { status: 'BLOCKED', reasonCode: 'INSPECTION_REPORT_REJECTION_REQUIRES_REVIEW_UI', blocks: [{ type: 'BOUNDARY', id: 'inspection-report-rejection-boundary', title: 'Review corrections in Inspection Hub', severity: 'INFO', body: 'Ask can confirm the reviewed report, but rejecting or correcting individual extracted findings requires the report review screen so the exact edits and evidence remain visible.', suggestions: [] }], suggestions: [] };
   const contextVersion = createHash('sha256').update(`${selected.kind}:${selected.id}:${selected.updatedAt.toISOString()}`).digest('hex');
@@ -95,7 +95,6 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
   const access = await ensurePropertyAccess(userId, propertyId);
   // Home Records is the canonical page for documents; the legacy vault is reachable only for the rows still in it.
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
-  const legacyHref = `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`;
   // The transitional legacy branch is requested by name: it is removed once no domain still needs it.
   const inventory = await listPropertyDocuments({ propertyId, role: access.role, includeLegacy: true });
   const documents = inventory.items;
@@ -162,7 +161,8 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
           document.transitional ? 'older vault' : null,
         ].filter((value): value is string => Boolean(value)),
         status: document.verification ?? (document.needsReview ? 'NEEDS_REVIEW' : document.expiry === 'EXPIRED' ? 'EXPIRED' : null),
-        href: document.transitional ? legacyHref : href,
+        // A transitional legacy document has no page of its own any more (the legacy Documents workspace is retired); its inline detail still works.
+        href: document.transitional ? null : href,
       })),
     })),
     // Documents D-1: the record page is a quiet text link in the calm answer only (the summary shows the same link in the previous shell).

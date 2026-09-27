@@ -541,7 +541,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                           </Button>
                         ) : (
                           <Button asChild type="button" variant="ghost">
-                            <Link href={`/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`}>
+                            <Link href={`/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`}>
                               Upload evidence
                             </Link>
                           </Button>

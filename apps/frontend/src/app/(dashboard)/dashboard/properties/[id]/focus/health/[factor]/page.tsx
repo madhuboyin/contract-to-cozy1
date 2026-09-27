@@ -153,7 +153,7 @@ function getPrimaryCta(
     if (factor.includes("Document")) {
       return {
         label: "Upload property documents",
-        href: `/dashboard/documents?propertyId=${propertyId}`,
+        href: `/dashboard/properties/${propertyId}/tools/home-records`,
       };
     }
     return {

@@ -259,9 +259,9 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       });
     }
     if (documents) {
-      // Home Records is the canonical page for documents; a transitional legacy row (still in the older Documents vault) links to that vault.
+      // Home Records is the canonical page for documents. A transitional legacy row has no page of its own (the legacy Documents workspace is
+      // retired); its inline detail still works.
       const documentsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
-      const legacyDocumentsHref = `/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`;
       blocks.push({
         type: 'GROUPED_LIST', filters: [], id: 'property-documents', title: 'Documents',
         description: documents.totalCount > 50
@@ -274,7 +274,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             // through the legacy document route. Each row carries only its own store's status.
             id: document.id, title: document.title, description: null,
             entityType: document.source === 'HOME_RECORD' ? 'PROPERTY_RECORD' : 'DOCUMENT',
-            href: document.transitional ? legacyDocumentsHref : null,
+            href: null,
             status: document.verification ?? (document.needsReview ? 'NEEDS_REVIEW' : document.expiry === 'EXPIRED' ? 'EXPIRED' : null),
             meta: [document.kindLabel, `Added ${humanDate(document.addedAt) ?? 'date unavailable'}`, ...(document.transitional ? ['older vault'] : [])],
           })),

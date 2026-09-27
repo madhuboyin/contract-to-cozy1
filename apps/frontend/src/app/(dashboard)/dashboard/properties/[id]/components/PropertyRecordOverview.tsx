@@ -699,7 +699,7 @@ export default function PropertyRecordOverview({
   const contextVersion = contextSnapshot?.contextVersion ?? null;
   const propertyPath = `/dashboard/properties/${propertyId}`;
   const withBackTo = (href: string) => `${href}${href.includes('?') ? '&' : '?'}backTo=${encodeURIComponent(propertyPath)}`;
-  const documentsHref = withBackTo(`/dashboard/documents?propertyId=${encodeURIComponent(propertyId)}`);
+  const documentsHref = withBackTo(`/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`);
 
   const loadState = (status: 'AVAILABLE' | 'UNAVAILABLE') => ({ isLoading: false, isError: status === 'UNAVAILABLE' });
   const roomsQuery = loadState(overview.sections.rooms.status);

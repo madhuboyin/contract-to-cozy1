@@ -233,7 +233,7 @@ function getMyHomeActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Upload property document',
       description: 'Add inspection or appraisal',
       icon: Upload,
-      href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
+      href: `/dashboard/properties/${ctx.propertyId}/tools/home-records?action=upload`,
       priority: 'medium',
       group: 'missing-info',
     });
@@ -289,7 +289,7 @@ function getProtectActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Upload insurance policy',
       description: 'Track coverage details',
       icon: Upload,
-      href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
+      href: `/dashboard/properties/${ctx.propertyId}/tools/home-records?action=upload`,
       priority: 'high',
       group: 'missing-info',
     });
@@ -487,7 +487,7 @@ function getVaultActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Upload document',
     description: 'Add property records',
     icon: Upload,
-    href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
+    href: `/dashboard/properties/${ctx.propertyId}/tools/home-records?action=upload`,
     priority: 'high',
     group: 'recommended-next',
   });
@@ -511,7 +511,7 @@ function getVaultActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Add receipt',
     description: 'Document home expenses',
     icon: FileText,
-    href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
+    href: `/dashboard/properties/${ctx.propertyId}/tools/home-records?action=upload`,
     priority: 'medium',
     group: 'contextual-actions',
   });
@@ -523,7 +523,7 @@ function getVaultActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Review missing documents',
       description: 'Complete property records',
       icon: ClipboardList,
-      href: `/dashboard/documents?propertyId=${ctx.propertyId}`,
+      href: `/dashboard/properties/${ctx.propertyId}/tools/home-records`,
       priority: 'medium',
       group: 'missing-info',
     });
@@ -535,7 +535,7 @@ function getVaultActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Organize property records',
     description: 'Tag and categorize files',
     icon: FileText,
-    href: `/dashboard/documents?propertyId=${ctx.propertyId}`,
+    href: `/dashboard/properties/${ctx.propertyId}/tools/home-records`,
     priority: 'low',
     group: 'contextual-actions',
   });
@@ -779,7 +779,7 @@ function getToolsActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Upload insurance policy',
       description: 'Improve coverage analysis',
       icon: Upload,
-      href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
+      href: `/dashboard/properties/${ctx.propertyId}/tools/home-records?action=upload`,
       priority: 'high',
       group: 'recommended-next',
     });
@@ -855,7 +855,7 @@ function getFallbackActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Upload document',
     description: 'Add property records',
     icon: Upload,
-    href: `/dashboard/documents?propertyId=${ctx.propertyId}&action=upload`,
+    href: `/dashboard/properties/${ctx.propertyId}/tools/home-records?action=upload`,
     priority: 'low',
     group: 'contextual-actions',
   });

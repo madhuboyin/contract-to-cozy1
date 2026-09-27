@@ -773,28 +773,7 @@ export async function createDocument(
       insurancePolicy: data.policyId ? { connect: { id: data.policyId } } : undefined,
     } as Prisma.DocumentCreateInput,
   });
-  // AUTO-GEN Timeline moment for property-linked docs (safe, non-blocking)
-  if (rawDocument.propertyId) {
-    try {
-      await HomeEventsAutoGen.onDocumentUploaded({
-        propertyId: rawDocument.propertyId,
-        documentId: rawDocument.id,
-        homeownerProfileId,
-
-        name: rawDocument.name,
-        docType: String(rawDocument.type),
-        mimeType: rawDocument.mimeType ?? null,
-        description: rawDocument.description ?? null,
-
-        createdAt: rawDocument.createdAt,
-
-        warrantyId: (rawDocument as any).warrantyId ?? data.warrantyId ?? null,
-        policyId: (rawDocument as any).insurancePolicyId ?? data.policyId ?? null,
-      });
-    } catch (e) {
-      logger.error({ err: e }, '[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (home-management)');
-    }
-  }
+  // Uploading a file is not itself a property event: no Timeline moment is created for it.
 
   return buildDocumentResponse(rawDocument as Document);
 }

@@ -124,7 +124,7 @@ export function captureFallbackHref(operationId: string | null, propertyId: stri
     case 'INSPECTION_FINDING_UPDATE': return `${base}/inspection`;
     case 'DOCUMENT_PROMOTION_REVIEW':
     case 'DOCUMENT_PROMOTION_CONFIRM':
-    case 'DOCUMENT_LOOKUP': return `${base}/documents`;
+    case 'DOCUMENT_LOOKUP': return `${base}/tools/home-records`;
     case 'HOUSEHOLD_INVITATION': return `${base}/household`;
     case 'MAINTENANCE_TASK_CREATE':
     case 'MAINTENANCE_TASK_COMPLETE':

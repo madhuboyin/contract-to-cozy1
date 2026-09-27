@@ -12,7 +12,6 @@ import { documentIntelligenceService } from '../services/documentIntelligence.se
 import { subscriptionService } from '../services/subscription.service';
 import { DocumentType } from '@prisma/client';
 import { validateDocumentUpload } from '../utils/documentValidator.util'; // Assuming this was added in the previous step
-import { HomeEventsAutoGen } from '../services/homeEvents/homeEvents.autogen';
 import { auditLog, logger } from '../lib/logger';
 import { uploadDocumentBuffer } from '../services/storage/reportStorage';
 import { presignGetObject } from '../services/storage/presign';
@@ -177,25 +176,8 @@ router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), 
       }
     });
     
-    // AUTO-GEN timeline moment if property-linked (safe, non-blocking)
-    if (document.propertyId) {
-      try {
-        await HomeEventsAutoGen.onDocumentUploaded({
-          propertyId: document.propertyId,
-          documentId: document.id,
-          homeownerProfileId: homeownerProfile.id,
-
-          name: document.name,
-          docType: String(document.type),
-          mimeType: document.mimeType ?? null,
-          description: (document as any).description ?? null,
-
-          createdAt: document.createdAt,
-        });
-      } catch (e) {
-        logger.error({ err: e }, '[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (documents/analyze)');
-      }
-    }
+    // Uploading a file is not itself a property event: no Timeline moment is created here. A Timeline event comes from a reviewed fact
+    // (Home Records extraction and promotion), never from the act of uploading.
 
     const bucket = process.env.S3_BUCKET;
     const fileSignedUrl = bucket

@@ -1265,7 +1265,8 @@ export default function HomeRecordsClient() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showTrashed, setShowTrashed] = React.useState(false);
-  const [uploadOpen, setUploadOpen] = React.useState(false);
+  // Links that used to open the legacy Documents upload (?action=upload) land here with the upload open.
+  const [uploadOpen, setUploadOpen] = React.useState(() => searchParams.get('action') === 'upload');
   const [batchScanOpen, setBatchScanOpen] = React.useState(false);
   // A real resolution flow, not just an after-the-fact toast: holds the
   // pending upload + its possible-version match while the homeowner
