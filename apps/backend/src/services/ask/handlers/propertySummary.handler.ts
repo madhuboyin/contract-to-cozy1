@@ -63,6 +63,7 @@ export function propertyCompletenessProgress(
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const propertyHref = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
   const completenessFocus = isPropertyCompletenessRequest(message);
+  const roomFocus = /\b(?:show|list|view|see|review)\b.{0,35}\b(?:my|our|the|this)?\s*(?:home|house|property)?\b.{0,20}\brooms?\b|\b(?:show|list|view|see|review)\b.{0,35}\brooms?\b|\b(?:home|house|property)\b.{0,20}\bby room\b/i.test(message);
   const [access, overview, evaluation, property] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     getPropertyRecordOverview(propertyId, userId, 'ASK'),
@@ -134,14 +135,22 @@ async function propertySummaryResult(userId: string, propertyId: string, message
     : 'Property Context details are temporarily unavailable, so Ask cannot reliably determine which details are pending.';
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'property-summary',
-    title: completenessFocus && percent != null
+    title: roomFocus
+      ? `Here are the rooms recorded for ${propertyName}`
+      : completenessFocus && percent != null
       ? `${propertyName}’s Property Context is ${percent}% complete`
       : `Here is the current Living Home Record for ${propertyName}`,
-    body: completenessFocus
+    body: roomFocus
+      ? rooms
+        ? `${rooms.count} room${rooms.count === 1 ? ' is' : 's are'} recorded. Select a room to inspect its current details.`
+        : 'Room details are temporarily unavailable for this home.'
+      : completenessFocus
       ? completenessBody
       : `${context ? `${context.knownFactCount} governed property facts are currently known.` : 'Property Context details are temporarily unavailable.'} The record contains ${rooms?.count ?? 'an unknown number of'} room${rooms?.count === 1 ? '' : 's'}, ${inventory?.totalCount ?? 'an unknown number of'} inventory item${inventory?.totalCount === 1 ? '' : 's'}, and ${documents?.totalCount ?? 'an unknown number of'} document${documents?.totalCount === 1 ? '' : 's'}. ${degradedSections.length ? `${degradedSections.join(', ')} could not be fully loaded, so this is a partial summary.` : 'All summary sections loaded successfully.'}`,
-    tone: degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100) ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-property-record', label: completenessFocus && pendingDetailCount > 0 ? 'Review missing details' : completenessFocus ? 'Review home details' : 'Open property record', href: propertyHref, style: 'PRIMARY' }],
+    tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100) ? 'CAUTION' : 'DEFAULT',
+    actions: [roomFocus
+      ? { id: 'open-rooms', label: 'Open Rooms', href: `${propertyHref}/rooms`, style: 'PRIMARY' }
+      : { id: 'open-property-record', label: completenessFocus && pendingDetailCount > 0 ? 'Review missing details' : completenessFocus ? 'Review home details' : 'Open property record', href: propertyHref, style: 'PRIMARY' }],
   }];
 
   if (!completenessFocus) {
@@ -341,6 +350,9 @@ async function propertySummaryResult(userId: string, propertyId: string, message
 
   const permissionLimited = Boolean(activeRequirement && !canImproveContext);
   const limited = captureRequests.length > 0 || degradedSections.length > 0 || permissionLimited || pendingDetailCount > 0 || (percent != null && percent < 100);
+  const responseBlocks = roomFocus
+    ? blocks.filter((block) => ['property-summary', 'property-rooms', 'property-summary-evidence'].includes(block.id))
+    : blocks;
   return {
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length
@@ -353,9 +365,11 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             ? 'PROPERTY_SUMMARY_INCOMPLETE'
             : undefined,
     contextVersion: evaluation.contextVersion,
-    captureRequests,
-    blocks,
-    suggestions: completenessFocus
+    captureRequests: roomFocus ? [] : captureRequests,
+    blocks: responseBlocks,
+    suggestions: roomFocus
+      ? ['Show my appliance inventory', 'How complete is my property profile?', 'What maintenance is pending?']
+      : completenessFocus
       ? ['Summarize my home record', 'Show incomplete inventory records', 'List pending maintenance tasks']
       : ['How complete is my property profile?', 'Show incomplete inventory records', 'What maintenance is pending?'],
   };

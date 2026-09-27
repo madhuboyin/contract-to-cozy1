@@ -48,7 +48,7 @@ test.afterEach(() => {
   evaluateModule.evaluateFeatureContext = originals.evaluate;
 });
 
-const invoke = (role = 'OWNER') => capabilityInvoke('PROPERTY_SUMMARY', { userId: 'u1', propertyId: 'p1', message: 'Give me a summary of my home record.' }, { propertyAccess: { role, userId: 'u1', propertyId: 'p1' } });
+const invoke = (role = 'OWNER', message = 'Give me a summary of my home record.') => capabilityInvoke('PROPERTY_SUMMARY', { userId: 'u1', propertyId: 'p1', message }, { propertyAccess: { role, userId: 'u1', propertyId: 'p1' } });
 const roomsBlock = (result) => result.blocks.find((block) => block.id === 'property-rooms');
 
 test('room tile facts: recorded items and open maintenance tasks, singular and plural, nothing when no task is open', () => {
@@ -106,7 +106,12 @@ test('with no floor recorded the map stays, with a hint that says how to set one
 
 test('the production answer checker keeps a conversational room-map answer intact with semantic relevance enabled', async () => {
   install([room('kitchen', { name: 'KITCHEN_MAIN', floorLevel: 0, _count: { items: 2, maintenanceTasks: 1 } }), room('den', { name: 'Den', floorLevel: 1 })]);
-  const result = await invoke();
+  const result = await invoke('OWNER', 'Show me my home by room');
+  assert.deepEqual(result.blocks.map((block) => block.id), ['property-summary', 'property-rooms', 'property-summary-evidence']);
+  assert.equal(result.blocks[0].title, 'Here are the rooms recorded for Home');
+  assert.equal(result.blocks[0].body, '2 rooms are recorded. Select a room to inspect its current details.');
+  assert.deepEqual(result.blocks[0].actions.map((action) => [action.id, action.label, action.href]), [['open-rooms', 'Open Rooms', '/dashboard/properties/p1/rooms']]);
+  assert.deepEqual(result.captureRequests, []);
   const checked = validateAskAnswerTrustPipeline({
     question: 'Show me my home by room', operationId: 'PROPERTY_SUMMARY', propertyId: 'p1', semanticEnabled: true,
     result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('PROPERTY_SUMMARY')]),

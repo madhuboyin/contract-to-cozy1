@@ -216,7 +216,7 @@ export function ChangeSummaryList({ blocks }: { blocks: ChangeSummary[] }) {
           <p className="mt-1 text-sm leading-5 text-slate-600">I found {blocks.length} recent {blocks.length === 1 ? 'update' : 'updates'}. Open any action when you’re ready to review the current record.</p>
         </div>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {blocks.map((block) => <ChangeSummaryCard key={block.id} block={block} />)}
       </div>
     </section>
