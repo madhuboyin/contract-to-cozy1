@@ -572,6 +572,7 @@ test('canonical home-change blocks pass even when a recorded change names Home A
         summary: 'Home action confirmed.', effectiveAt: null,
         detectedAt: '2026-09-27T00:00:00.000Z', materiality: 'MATERIAL',
         materialityReasonCodes: ['STATUS_CHANGED'], confidence: 1, linkedAction: null,
+        reviewAction: null,
       }],
       suggestions: ['What should I do next?'],
     },

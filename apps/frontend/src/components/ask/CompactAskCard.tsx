@@ -30,6 +30,7 @@ export function CompactAskCard({
   action,
   secondary,
   selected = false,
+  density = 'default',
   className,
   dataAttributes,
 }: {
@@ -43,6 +44,7 @@ export function CompactAskCard({
   action?: ReactNode;
   secondary?: ReactNode;
   selected?: boolean;
+  density?: 'default' | 'dense';
   className?: string;
   dataAttributes?: Record<`data-${string}`, string>;
 }) {
@@ -51,23 +53,24 @@ export function CompactAskCard({
     <article
       {...dataAttributes}
       className={cn(
-        'relative flex min-h-44 min-w-0 flex-col overflow-hidden rounded-2xl border bg-white p-4 pl-5 shadow-sm transition-all duration-200 before:absolute before:inset-y-0 before:left-0 before:w-1 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md',
+        'relative flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-200 before:absolute before:inset-y-0 before:left-0 before:w-1 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md',
+        density === 'dense' ? 'min-h-36 p-3 pl-4' : 'min-h-44 p-4 pl-5',
         TONE_EDGE[tone],
         selected ? 'border-teal-600 ring-1 ring-teal-600/20' : 'border-slate-200',
         className,
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <span className={cn('inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', TONE_ICON[tone])} aria-hidden="true">
+        <span className={cn('inline-flex shrink-0 items-center justify-center rounded-xl', density === 'dense' ? 'h-9 w-9' : 'h-10 w-10', TONE_ICON[tone])} aria-hidden="true">
           <Icon className="h-5 w-5" />
         </span>
         {badge}
       </div>
-      <h4 className="mt-3 line-clamp-2 min-h-10 text-base font-semibold leading-5 text-slate-950">{title}</h4>
+      <h4 className={cn('line-clamp-2 text-base font-semibold leading-5 text-slate-950', density === 'dense' ? 'mt-2' : 'mt-3 min-h-10')}>{title}</h4>
       {summary && <div className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">{summary}</div>}
       {meta && <div className="mt-2 line-clamp-1 text-xs text-slate-500">{meta}</div>}
       {(action || secondary) && (
-        <div className="mt-auto flex min-h-11 items-end justify-between gap-2 pt-3">
+        <div className={cn('mt-auto flex items-end justify-between gap-2', density === 'dense' ? 'min-h-10 pt-2' : 'min-h-11 pt-3')}>
           <div className="min-w-0">{action}</div>
           {secondary && <div className="shrink-0">{secondary}</div>}
         </div>

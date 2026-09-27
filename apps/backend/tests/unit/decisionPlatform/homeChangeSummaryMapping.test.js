@@ -8,6 +8,9 @@ const {
   buildChangeSummaryText,
   homeChangeDisplayTitle,
   homeChangeLinkedAction,
+  homeChangeCanonicalIdentity,
+  homeChangeInlineReviewAction,
+  selectUniqueHomeChanges,
 } = require('../../../src/services/decisionPlatform/homeChangeSummaryMapping.ts');
 
 test('a known sourceType resolves to its curated label', () => {
@@ -64,4 +67,26 @@ test('linked changes deep-link to their exact canonical work item or event', () 
     href: '/dashboard/properties/property%201/timeline?eventId=event%2F1',
   });
   assert.equal(homeChangeLinkedAction({ propertyId: 'property-1' }), null);
+});
+
+test('canonical identity collapses multiple change rows for the same action without title-based guessing', () => {
+  const changes = [
+    { id: 'new-action', title: 'Furnace inspection', actionId: 'work-1' },
+    { id: 'old-action', title: 'Furnace inspection', actionId: 'work-1' },
+    { id: 'same-title-other-record', title: 'Furnace inspection', actionId: 'work-2' },
+  ];
+  assert.deepEqual(
+    selectUniqueHomeChanges(changes, (change) => homeChangeCanonicalIdentity({
+      sourceType: 'OPERATIONAL_WORK_EVENT', sourceEntityId: change.id, canonicalActionId: change.actionId,
+    }), 10).map((change) => change.id),
+    ['new-action', 'same-title-other-record'],
+  );
+});
+
+test('inline review keeps the primary action in Ask with exact canonical context', () => {
+  assert.deepEqual(homeChangeInlineReviewAction({ title: 'Furnace inspection', canonicalActionId: 'work-1' }), {
+    id: 'review-home-action-work-1', label: 'Review in Ask', interactionType: 'START_WORKFLOW',
+    message: 'What should I do next for “Furnace inspection”?', operationId: 'HOME_ACTIONS',
+    entityType: 'HOME_ACTION', entityId: 'work-1', actionId: 'work-1', style: 'SECONDARY',
+  });
 });

@@ -169,15 +169,14 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
         : 'bg-slate-100 text-slate-600';
   const sameDate = block.effectiveAt
     && new Date(block.effectiveAt).toLocaleDateString() === new Date(block.detectedAt).toLocaleDateString();
-  const summary = block.summary.replace(/^Home action /i, '').replace(/^./, (letter) => letter.toUpperCase());
   return (
     <CompactAskCard
       title={block.title}
+      density="dense"
       iconCategory={block.source}
       fallbackIcon={CheckCircle2}
       tone={block.materiality === 'URGENT' ? 'CRITICAL' : block.materiality === 'IMPORTANT' ? 'CAUTION' : block.materiality === 'MEANINGFUL' ? 'POSITIVE' : 'DEFAULT'}
       badge={<span className={cn('rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>}
-      summary={summary}
       meta={<span className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="inline-flex items-center gap-1.5">
           <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
@@ -187,9 +186,10 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
         </span>
         <span>{block.source}</span>
       </span>}
-      action={block.linkedAction ? (
-        <AskContextLink href={block.linkedAction.href} className="mt-auto inline-flex min-h-10 items-center gap-1.5 self-start pt-3 text-sm font-semibold text-teal-800 hover:text-teal-950">
-          Review action<ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+      action={block.reviewAction ? <ActionLink action={block.reviewAction} /> : undefined}
+      secondary={block.linkedAction ? (
+        <AskContextLink href={block.linkedAction.href} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-slate-500 hover:text-teal-800">
+          Full record<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="sr-only">: {block.linkedAction.label}</span>
         </AskContextLink>
       ) : undefined}
@@ -204,7 +204,7 @@ export function ChangeSummaryList({ blocks }: { blocks: ChangeSummary[] }) {
         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-teal-700 text-white shadow-sm" aria-hidden="true"><Sparkles className="h-5 w-5" /></span>
         <div>
           <h2 className="text-lg font-semibold text-slate-950">Here’s what changed around your home</h2>
-          <p className="mt-1 text-sm leading-5 text-slate-600">I found {blocks.length} recent {blocks.length === 1 ? 'update' : 'updates'}. Open any action when you’re ready to review the current record.</p>
+          <p className="mt-1 text-sm leading-5 text-slate-600">I found {blocks.length} recent {blocks.length === 1 ? 'update' : 'updates'}. Review each change here, or open its full record when needed.</p>
         </div>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

@@ -36,13 +36,16 @@ const AskActionSchema = z.object({
   interactionType: z.literal('START_WORKFLOW').optional(),
   message: z.string().trim().min(1).max(300).optional(),
   operationId: z.string().trim().min(1).max(120).optional(),
+  entityType: z.string().trim().min(1).max(120).optional(),
+  entityId: z.string().trim().min(1).max(160).optional(),
+  actionId: z.string().trim().min(1).max(160).optional(),
   style: z.enum(['PRIMARY', 'SECONDARY', 'QUIET']).default('SECONDARY'),
 }).superRefine((action, ctx) => {
   if (action.interactionType === 'START_WORKFLOW') {
     if (!action.message) ctx.addIssue({ code: 'custom', path: ['message'], message: 'START_WORKFLOW actions require a message.' });
     if (!action.operationId) ctx.addIssue({ code: 'custom', path: ['operationId'], message: 'START_WORKFLOW actions require an operationId.' });
     if (action.href) ctx.addIssue({ code: 'custom', path: ['href'], message: 'START_WORKFLOW actions must not also navigate.' });
-  } else if (action.message || action.operationId) {
+  } else if (action.message || action.operationId || action.entityType || action.entityId || action.actionId) {
     ctx.addIssue({ code: 'custom', path: ['interactionType'], message: 'Workflow metadata requires interactionType START_WORKFLOW.' });
   }
 });
@@ -547,6 +550,7 @@ const ChangeSummaryBlockSchema = z.object({
   materialityReasonCodes: z.array(z.string()).max(12),
   confidence: z.number().min(0).max(1).nullable(),
   linkedAction: z.object({ label: z.string(), href: z.string() }).nullable(),
+  reviewAction: AskActionSchema.nullable(),
 });
 
 // Ask Intelligence FRD §17/§21.2, Phase 9B. Renders the versioned,

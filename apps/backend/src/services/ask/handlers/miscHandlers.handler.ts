@@ -23,7 +23,7 @@ import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
 import { listPropertyChanges } from '../../../propertyChanges/propertyChange.service';
-import { buildChangeSummaryText, homeChangeDisplayTitle, homeChangeLinkedAction, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
+import { buildChangeSummaryText, homeChangeCanonicalIdentity, homeChangeDisplayTitle, homeChangeInlineReviewAction, homeChangeLinkedAction, selectUniqueHomeChanges, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
 import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelemetry';
 import { resolveAskEnvelopeQueryScope } from '../askEnvelopeQueryScope';
 import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
@@ -337,9 +337,9 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
   await ensurePropertyAccess(userId, propertyId);
   const since = new Date(Date.now() - HOME_CHANGE_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const changes = await listPropertyChanges({ propertyId, userId, since });
-  const material = changes.filter((change) => change.materiality !== 'INFORMATIONAL').slice(0, HOME_CHANGE_SUMMARY_MAX_ITEMS);
+  const materialCandidates = changes.filter((change) => change.materiality !== 'INFORMATIONAL');
 
-  if (!material.length) {
+  if (!materialCandidates.length) {
     return {
       status: 'ANSWERED', reasonCode: 'HOME_CHANGE_SUMMARY_NONE',
       blocks: [{
@@ -355,7 +355,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
   // link even though sourceEntityId has always been the work-item id. Resolve
   // those titles in one property-scoped query so legacy rows do not collapse
   // into a list of indistinguishable "Home action" labels.
-  const unlinkedWorkItemIds = [...new Set(material
+  const unlinkedWorkItemIds = [...new Set(materialCandidates
     .filter((change) => (change.sourceType === 'OPERATIONAL_WORK_EVENT' || change.sourceType === 'OPERATIONAL_WORK_DUE') && !change.canonicalAction)
     .map((change) => change.sourceEntityId))];
   const unlinkedWorkItems = unlinkedWorkItemIds.length
@@ -365,6 +365,16 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       })
     : [];
   const fallbackWorkItems = new Map(unlinkedWorkItems.map((item) => [item.id, item]));
+  const material = selectUniqueHomeChanges(
+    materialCandidates,
+    (change) => homeChangeCanonicalIdentity({
+      sourceType: change.sourceType,
+      sourceEntityId: change.sourceEntityId,
+      canonicalActionId: change.canonicalAction?.id ?? fallbackWorkItems.get(change.sourceEntityId)?.id,
+      canonicalEventId: change.canonicalEvent?.id,
+    }),
+    HOME_CHANGE_SUMMARY_MAX_ITEMS,
+  );
 
   const blocks: AskPresentationBlock[] = await Promise.all(material.map(async (change) => {
     let detailOverride: string | null = null;
@@ -377,6 +387,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
     const canonicalActionId = change.canonicalAction?.id ?? fallbackWorkItem?.id;
     const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title ?? fallbackWorkItem?.title, canonicalEventTitle: change.canonicalEvent?.title });
     const linkedAction = homeChangeLinkedAction({ propertyId, canonicalActionId, canonicalEventId: change.canonicalEvent?.id });
+    const reviewAction = homeChangeInlineReviewAction({ title, canonicalActionId, canonicalEventId: change.canonicalEvent?.id });
     return {
       type: 'CHANGE_SUMMARY', id: `home-change-${change.id}`,
       title,
@@ -389,6 +400,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       materialityReasonCodes: change.materialityReasonCodes,
       confidence: change.confidence,
       linkedAction,
+      reviewAction,
     };
   }));
 

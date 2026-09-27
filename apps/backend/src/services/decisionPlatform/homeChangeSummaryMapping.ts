@@ -86,3 +86,67 @@ export function homeChangeLinkedAction(input: {
   }
   return null;
 }
+
+export function homeChangeCanonicalIdentity(input: {
+  sourceType: string;
+  sourceEntityId: string;
+  canonicalActionId?: string | null;
+  canonicalEventId?: string | null;
+}): string {
+  if (input.canonicalActionId) return `action:${input.canonicalActionId}`;
+  if (input.canonicalEventId) return `event:${input.canonicalEventId}`;
+  return `source:${input.sourceType}:${input.sourceEntityId}`;
+}
+
+/** Keep the first row for each canonical entity. Callers provide rows in
+ * their governed order (materiality first, newest first) and apply the
+ * display limit only after this selection. */
+export function selectUniqueHomeChanges<T>(
+  changes: readonly T[],
+  identity: (change: T) => string,
+  limit: number,
+): T[] {
+  const seen = new Set<string>();
+  const selected: T[] = [];
+  for (const change of changes) {
+    const key = identity(change);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    selected.push(change);
+    if (selected.length === limit) break;
+  }
+  return selected;
+}
+
+export function homeChangeInlineReviewAction(input: {
+  title: string;
+  canonicalActionId?: string | null;
+  canonicalEventId?: string | null;
+}) {
+  if (input.canonicalActionId) {
+    return {
+      id: `review-home-action-${input.canonicalActionId}`,
+      label: 'Review in Ask',
+      interactionType: 'START_WORKFLOW' as const,
+      message: `What should I do next for “${input.title}”?`,
+      operationId: 'HOME_ACTIONS',
+      entityType: 'HOME_ACTION',
+      entityId: input.canonicalActionId,
+      actionId: input.canonicalActionId,
+      style: 'SECONDARY' as const,
+    };
+  }
+  if (input.canonicalEventId) {
+    return {
+      id: `review-home-event-${input.canonicalEventId}`,
+      label: 'Review in Ask',
+      interactionType: 'START_WORKFLOW' as const,
+      message: `Show me the timeline entry “${input.title}”.`,
+      operationId: 'HOME_TIMELINE_EVENTS',
+      entityType: 'HOME_EVENT',
+      entityId: input.canonicalEventId,
+      style: 'SECONDARY' as const,
+    };
+  }
+  return null;
+}

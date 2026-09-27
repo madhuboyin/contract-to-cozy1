@@ -217,6 +217,9 @@ export function ExecutionCard({
       sourceExecutionId: execution.executionId,
       operationId: action.operationId,
       capabilityId: action.capabilityId,
+      entityType: action.entityType,
+      entityId: action.entityId,
+      actionId: action.actionId,
     });
   };
   // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is
