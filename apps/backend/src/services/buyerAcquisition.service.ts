@@ -30,6 +30,7 @@ import { inspectionFindingSourceAdapter } from '../modules/homeOperations/adapte
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { countPropertyDocuments, listPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
+import { homeRecordsService } from './homeRecords.service';
 
 const DAY_MS = 86_400_000;
 
@@ -896,7 +897,13 @@ export class BuyerAcquisitionService {
     status: Extract<DocumentVerificationStatus, 'VERIFIED' | 'REJECTED'>;
     notes?: string | null;
   }) {
-    await this.assertAccess(userId, propertyId);
+    const access = await this.assertAccess(userId, propertyId);
+    // A Home Record is verified on the record itself (the buyer's note is the record's verification note); a transitional legacy document keeps
+    // its own status update until its domain converts.
+    const record = await prisma.propertyRecord.findFirst({ where: { id: documentId, propertyId }, select: { id: true } });
+    if (record) {
+      return homeRecordsService.setVerification({ propertyId, recordId: documentId, userId, role: access.role, status: input.status, notes: input.notes ?? null });
+    }
     const document = await prisma.document.findFirst({ where: { id: documentId, propertyId } });
     if (!document) throw new APIError('Document not found.', 404, 'DOCUMENT_NOT_FOUND');
     const metadata = document.metadata && typeof document.metadata === 'object' && !Array.isArray(document.metadata)
@@ -1281,9 +1288,8 @@ export class BuyerAcquisitionService {
       prisma.inspectionFinding.count({ where: { propertyId, buyerDisposition: { not: 'PENDING_REVIEW' } } }),
       prisma.inspectionFinding.count({ where: { propertyId, severity: { in: ['SAFETY', 'MAJOR'] }, buyerDisposition: { in: ['PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION'] } } }),
       prisma.inspectionFinding.count({ where: { propertyId, severity: { in: ['SAFETY', 'MAJOR'] }, buyerDisposition: { in: ['PRE_CLOSE_NEGOTIATION', 'POST_CLOSE_ACTION'] }, buyerRepairJourneyId: { not: null } } }),
-      // "Verified" is a legacy verification status (a Home Record has none), so the verified count stays legacy-only until that is decided
-      // (records plan, section 17). The total counts every document on file: Home Records plus the transitional legacy vault.
-      prisma.document.count({ where: { propertyId, verificationStatus: 'VERIFIED' } }),
+      // Verified and total documents on file, from Home Records and the transitional legacy vault.
+      countPropertyDocuments({ propertyId, includeLegacy: true, verifiedOnly: true }).then((counts) => counts.total),
       countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
     ]);
     const assignedTasks = plan.tasks.filter((task) => task.assignedToUserId).length;

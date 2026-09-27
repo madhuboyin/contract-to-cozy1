@@ -10,6 +10,7 @@ import {
   PropertyBriefSectionType,
   PropertyBriefShareStatus,
   PropertyBriefStatus,
+  type HouseholdRole,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
@@ -27,6 +28,7 @@ import {
   type PropertyBriefSectionInput,
 } from './propertyBrief.contracts';
 import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
+import { listPropertyDocuments, resolvePropertyDocuments } from '../services/propertyDocuments/propertyDocumentInventory.service';
 
 const json = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -88,6 +90,8 @@ const RESALE_SAFE_PURPOSES = new Set<PropertyBriefPurposeInput>(['PROSPECTIVE_BU
 
 async function assembleSections(input: {
   propertyId: string;
+  /** The acting member's household role: the documents offered in a brief are the Home Records that member can see. */
+  role: HouseholdRole;
   purpose: PropertyBriefPurposeInput;
   selectedSections: PropertyBriefSectionInput[];
   documentIds: string[];
@@ -254,21 +258,17 @@ async function assembleSections(input: {
   }
 
   if (input.selectedSections.includes('DOCUMENTS')) {
-    const documents = input.documentIds.length === 0 ? [] : await prisma.document.findMany({
-      where: {
-        id: { in: input.documentIds },
-        propertyId: input.propertyId,
-        verificationStatus: DocumentVerificationStatus.VERIFIED,
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 25,
-    });
+    // The homeowner's selected documents that are verified: Home Records (read with the acting role) and the transitional legacy vault.
+    const documents = (await resolvePropertyDocuments({ propertyId: input.propertyId, role: input.role, ids: input.documentIds, includeLegacy: true }))
+      .filter((document) => document.verification === 'VERIFIED')
+      .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
+      .slice(0, 25);
     const items = documents.map((document) => ({
       key: document.id,
-      name: document.name,
-      type: document.type,
+      name: document.title,
+      type: document.kind,
       description: document.description,
-      verification: document.verificationStatus,
+      verification: document.verification,
       asOf: (document.verifiedAt ?? document.updatedAt).toISOString(),
     }));
     sections.push({
@@ -286,9 +286,9 @@ async function assembleSections(input: {
         itemKey: document.id,
         sourceEntityType: 'DOCUMENT',
         sourceEntityId: document.id,
-        sourceLabel: 'Verified Vault document',
+        sourceLabel: document.source === 'HOME_RECORD' ? 'Verified Home Record' : 'Verified Vault document',
         sourceAsOf: document.verifiedAt ?? document.updatedAt,
-        verification: document.verificationStatus,
+        verification: document.verification ?? 'UNVERIFIED',
         documentId: document.id,
       })),
     });
@@ -586,20 +586,14 @@ export async function getPropertyBriefTemplates() {
   }));
 }
 
-export async function listEligiblePropertyBriefDocuments(propertyId: string) {
-  return prisma.document.findMany({
-    where: { propertyId, verificationStatus: DocumentVerificationStatus.VERIFIED },
-    orderBy: { verifiedAt: 'desc' },
-    take: 100,
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      description: true,
-      verifiedAt: true,
-      updatedAt: true,
-    },
-  });
+export async function listEligiblePropertyBriefDocuments(propertyId: string, role: HouseholdRole) {
+  // Verified documents the acting member can see: Home Records and the transitional legacy vault.
+  const inventory = await listPropertyDocuments({ propertyId, role, includeLegacy: true });
+  return inventory.items
+    .filter((document) => document.verification === 'VERIFIED')
+    .sort((left, right) => (right.verifiedAt ?? right.updatedAt).getTime() - (left.verifiedAt ?? left.updatedAt).getTime())
+    .slice(0, 100)
+    .map((document) => ({ id: document.id, name: document.title, type: document.kind, description: document.description, verifiedAt: document.verifiedAt, updatedAt: document.updatedAt, source: document.source }));
 }
 
 // Slice 7's "stale-item review/reminders": a brief is an immutable snapshot
@@ -650,6 +644,7 @@ export async function listPropertyBriefs(propertyId: string) {
 export async function createPropertyBrief(input: {
   propertyId: string;
   userId: string;
+  role: HouseholdRole;
   purpose: PropertyBriefPurposeInput;
   title?: string;
   selectedSections: PropertyBriefSectionInput[];
@@ -660,6 +655,7 @@ export async function createPropertyBrief(input: {
   const asOf = new Date();
   const sections = await assembleSections({
     propertyId: input.propertyId,
+    role: input.role,
     purpose: input.purpose,
     selectedSections,
     documentIds: input.documentIds,
@@ -745,6 +741,7 @@ export function diffBriefSections(
 export async function republishPropertyBrief(input: {
   propertyId: string;
   briefId: string;
+  role: HouseholdRole;
 }) {
   const existing = await findAccessibleBrief(input.propertyId, input.briefId);
   if (existing.status === PropertyBriefStatus.ARCHIVED) {
@@ -759,6 +756,7 @@ export async function republishPropertyBrief(input: {
   const asOf = new Date();
   const freshSections = await assembleSections({
     propertyId: input.propertyId,
+    role: input.role,
     purpose: existing.purpose as PropertyBriefPurposeInput,
     selectedSections: existing.selectedSections as PropertyBriefSectionInput[],
     documentIds,

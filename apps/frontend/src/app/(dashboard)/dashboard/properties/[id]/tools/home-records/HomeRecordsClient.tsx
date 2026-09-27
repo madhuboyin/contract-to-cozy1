@@ -84,6 +84,7 @@ import {
   reviewCandidate,
   runExtraction,
   setEffectivePeriod,
+  setRecordVerification,
   setRetention,
   trashRecord,
   type PossibleVersionMatch,
@@ -100,6 +101,7 @@ import type {
   PropertyRecordSensitivity,
   PropertyRecordSummary,
   PropertyRecordType,
+  PropertyRecordVerificationStatus,
   PropertyRecordVisibility,
   SelectableRecordVisibility,
 } from './types';
@@ -953,6 +955,12 @@ function RecordDetailSheet({
     onError: (e: any) => toast({ title: 'Could not add link', description: e?.message, variant: 'destructive' }),
   });
 
+  const verificationMutation = useMutation({
+    mutationFn: (status: PropertyRecordVerificationStatus) => setRecordVerification(propertyId, recordId, { status }),
+    onSuccess: (_result, status) => { invalidate(); toast({ title: status === 'VERIFIED' ? 'Marked verified' : status === 'REJECTED' ? 'Marked rejected' : 'Verification cleared' }); },
+    onError: (error) => toast({ title: 'Could not update verification', description: error instanceof Error ? error.message : 'Try again.', variant: 'destructive' }),
+  });
+
   const archiveMutation = useMutation({
     mutationFn: () => archiveRecord(propertyId, recordId),
     onSuccess: () => { invalidate(); toast({ title: 'Record archived' }); },
@@ -1205,6 +1213,12 @@ function RecordDetailSheet({
 
             {/* Actions */}
             <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-4">
+              {record.allowedActions.verify && (
+                <>
+                  <Button variant={record.verificationStatus === 'VERIFIED' ? 'default' : 'outline'} size="sm" onClick={() => verificationMutation.mutate('VERIFIED')} disabled={verificationMutation.isPending}>Verify</Button>
+                  <Button variant="outline" size="sm" onClick={() => verificationMutation.mutate('REJECTED')} disabled={verificationMutation.isPending}>Reject</Button>
+                </>
+              )}
               {record.allowedActions.archive && (
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => archiveMutation.mutate()} disabled={archiveMutation.isPending}>
                   <Archive className="h-3.5 w-3.5" />

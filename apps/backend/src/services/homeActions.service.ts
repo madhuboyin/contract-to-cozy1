@@ -1536,9 +1536,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
         },
       }),
       countPropertyDocuments({ propertyId, includeLegacy: true }).then((counts) => counts.total),
-      // "Verified" is a legacy verification status; a Home Record has needs-review instead, so this stays a legacy-only count until that domain
-      // decides what a verified document means for a Home Record.
-      prisma.document.count({ where: { propertyId, verificationStatus: 'VERIFIED' } }),
+      countPropertyDocuments({ propertyId, includeLegacy: true, verifiedOnly: true }).then((counts) => counts.total),
       prisma.homeEvent.findMany({
         where: { propertyId },
         orderBy: { occurredAt: 'desc' },

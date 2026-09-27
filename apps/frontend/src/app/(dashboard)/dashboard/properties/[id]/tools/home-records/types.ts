@@ -33,6 +33,8 @@ export type PropertyRecordVisibility = 'HOUSEHOLD' | 'OWNER_ONLY' | 'RECIPIENT_S
 export const SELECTABLE_RECORD_VISIBILITIES = ['HOUSEHOLD', 'OWNER_ONLY'] as const;
 export type SelectableRecordVisibility = (typeof SELECTABLE_RECORD_VISIBILITIES)[number];
 
+export type PropertyRecordVerificationStatus = 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+
 export type PropertyRecordLifecycleStatus = 'ACTIVE' | 'ARCHIVED' | 'TRASHED';
 
 // null: no effectiveTo set (most records — a paint color, a manual — have no
@@ -92,6 +94,7 @@ export interface RecordAllowedActions {
   restore: boolean;
   manageRetention: boolean;
   manageEffectivePeriod: boolean;
+  verify: boolean;
 }
 
 export interface PropertyRecordSummary {
@@ -119,6 +122,10 @@ export interface PropertyRecordSummary {
   // homeowner confirm/correct/reject — see homeRecordsExtraction.service.ts.
   needsReview: boolean;
   expiryStatus: ExpiryStatus;
+  // The homeowner's own verification of the record (distinct from needsReview, which is pending extracted facts).
+  verificationStatus: PropertyRecordVerificationStatus;
+  verifiedAt: string | null;
+  verificationNotes: string | null;
 }
 
 export interface PropertyRecordLink {

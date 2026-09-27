@@ -204,10 +204,18 @@ async function homeownerDetailForChange(change: {
     };
   }
   if (change.sourceType === 'DOCUMENT') {
-    const document = await prisma.document.findFirst({
+    // A Home Record (household-visibility only: a briefing is read by the whole household) or a transitional legacy document.
+    const record = await prisma.propertyRecord.findFirst({
+      where: { id: change.sourceEntityId, propertyId: change.propertyId, visibility: 'HOUSEHOLD', lifecycleStatus: 'ACTIVE' },
+      select: { title: true, recordType: true, verifiedAt: true, updatedAt: true },
+    });
+    const legacy = record ? null : await prisma.document.findFirst({
       where: { id: change.sourceEntityId, propertyId: change.propertyId },
       select: { name: true, type: true, verifiedAt: true, updatedAt: true },
     });
+    const document = record
+      ? { name: record.title, type: record.recordType, verifiedAt: record.verifiedAt, updatedAt: record.updatedAt }
+      : legacy;
     if (!document) return null;
     return {
       title: `${document.name} was verified`,

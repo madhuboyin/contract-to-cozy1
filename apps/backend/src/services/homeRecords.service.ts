@@ -106,6 +106,7 @@ function allowedActions(role: HouseholdRole, lifecycleStatus: string) {
     restore: canMutate && lifecycleStatus === 'TRASHED',
     manageRetention: role === 'OWNER',
     manageEffectivePeriod: canMutate && lifecycleStatus !== 'TRASHED',
+    verify: canMutate && lifecycleStatus !== 'TRASHED',
   };
 }
 
@@ -840,6 +841,34 @@ export class HomeRecordsService {
         },
       });
     }
+  }
+
+  /**
+   * The homeowner's own verification of a record: confirm it, reject it, or return it to unverified, with an optional note. Same statuses and
+   * bookkeeping the legacy Document vault used (`verifiedAt` and `verifiedByUserId` are set only for VERIFIED), now on the canonical record. A
+   * record the caller cannot see is "not found", like every other mutation.
+   */
+  async setVerification(input: {
+    propertyId: string;
+    recordId: string;
+    userId: string;
+    role: HouseholdRole;
+    status: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+    notes?: string | null;
+  }) {
+    const now = new Date();
+    const result = await prisma.propertyRecord.updateMany({
+      where: { id: input.recordId, propertyId: input.propertyId, lifecycleStatus: { not: 'TRASHED' }, ...visibleWhere(input.role) },
+      data: {
+        verificationStatus: input.status,
+        verifiedAt: input.status === 'VERIFIED' ? now : null,
+        verifiedByUserId: input.status === 'VERIFIED' ? input.userId : null,
+        verificationNotes: input.notes?.trim() || null,
+      },
+    });
+    if (result.count !== 1) throw new APIError('Record not found.', 404, 'PROPERTY_RECORD_NOT_FOUND');
+    auditLog('HOME_RECORD_VERIFICATION_SET', input.userId, { propertyId: input.propertyId, recordId: input.recordId, status: input.status });
+    return { id: input.recordId, verificationStatus: input.status, verifiedAt: input.status === 'VERIFIED' ? now : null };
   }
 
   async setEffectivePeriod(input: {

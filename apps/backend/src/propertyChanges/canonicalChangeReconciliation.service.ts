@@ -30,7 +30,7 @@ export async function reconcileCanonicalPropertyChanges(input: {
   since: Date;
   through: Date;
 }) {
-  const [events, facts, documents, claims, projects, maintenance] = await Promise.all([
+  const [events, facts, legacyDocuments, homeRecords, claims, projects, maintenance] = await Promise.all([
     prisma.homeEvent.findMany({
       where: {
         propertyId: input.propertyId,
@@ -70,6 +70,18 @@ export async function reconcileCanonicalPropertyChanges(input: {
     prisma.document.findMany({
       where: {
         propertyId: input.propertyId,
+        verificationStatus: 'VERIFIED',
+        updatedAt: { gte: input.since, lte: input.through },
+      },
+      select: { id: true, updatedAt: true, verifiedAt: true },
+    }),
+    // Verified Home Records. A change becomes a household-visible briefing item, so only household-visibility records qualify: an owner-only
+    // record never surfaces (or is named) in a briefing the whole household reads.
+    prisma.propertyRecord.findMany({
+      where: {
+        propertyId: input.propertyId,
+        visibility: 'HOUSEHOLD',
+        lifecycleStatus: 'ACTIVE',
         verificationStatus: 'VERIFIED',
         updatedAt: { gte: input.since, lte: input.through },
       },
@@ -160,7 +172,7 @@ export async function reconcileCanonicalPropertyChanges(input: {
         canonicalActionPriority: null,
       },
     })),
-    ...documents.map((document): Candidate => ({
+    ...[...homeRecords, ...legacyDocuments].map((document): Candidate => ({
       propertyId: input.propertyId,
       sourceType: 'DOCUMENT',
       sourceEntityId: document.id,

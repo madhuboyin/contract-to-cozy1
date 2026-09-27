@@ -21,6 +21,7 @@ import {
   BuyerPlanOverviewSchema,
 } from '../productFramework/buyerAcquisition.contract';
 import { getPropertyContext } from '../modules/propertyContext';
+import { documentVerificationStats } from './propertyDocuments/propertyDocumentInventory.service';
 import {
   BUYER_PHASE_CHECKLIST_TEMPLATE_VERSION,
   composeBuyerChecklist,
@@ -406,9 +407,6 @@ export class HomeBuyerTaskService {
             },
           },
         },
-        documents: {
-          select: { verificationStatus: true },
-        },
         inspectionReports: {
           where: { status: { not: 'ARCHIVED' } },
           select: {
@@ -467,7 +465,8 @@ export class HomeBuyerTaskService {
         90,
         Math.max(0, Math.floor((now.getTime() - plan.ownershipStartedAt.getTime()) / DAY_MS)),
       );
-      const verifiedDocumentCount = property.documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
+      const documentStats = await documentVerificationStats({ propertyId: property.id, includeLegacy: true });
+      const verifiedDocumentCount = documentStats.verified;
       const openMaterialFindingCount = property.inspectionReports.reduce((count, report) => count + report.findings.length, 0);
       const activeBuyerTasks = plan.tasks.filter((task) =>
         task.applicability !== 'NOT_APPLICABLE'
@@ -509,7 +508,7 @@ export class HomeBuyerTaskService {
             },
           },
           evidence: {
-            documentCount: property.documents.length,
+            documentCount: documentStats.total,
             verifiedDocumentCount,
             inspectionReportCount: property.inspectionReports.length,
             openMaterialFindingCount,
@@ -608,7 +607,8 @@ export class HomeBuyerTaskService {
     const nonTerminalMilestones = plan.milestones.filter((milestone) => !['CANCELLED', 'WAIVED'].includes(milestone.status));
     const completed = visibleTasks.filter((task) => task.status === 'COMPLETED').length;
     const total = visibleTasks.length;
-    const verifiedDocumentCount = property.documents.filter((document) => document.verificationStatus === 'VERIFIED').length;
+    const documentStats = await documentVerificationStats({ propertyId: property.id, includeLegacy: true });
+    const verifiedDocumentCount = documentStats.verified;
     const reviewPendingReports = property.inspectionReports.filter((report) => report.status === 'REVIEW_PENDING').length;
     const processingReports = property.inspectionReports.filter((report) => report.status === 'PROCESSING').length;
     const confirmedReports = property.inspectionReports.filter((report) => report.status === 'CONFIRMED').length;
@@ -698,9 +698,9 @@ export class HomeBuyerTaskService {
           inspectionState,
           inspectionReportCount: property.inspectionReports.length,
           openMaterialFindingCount: property.inspectionReports.reduce((count, report) => count + report.findings.length, 0),
-          documentCount: property.documents.length,
+          documentCount: documentStats.total,
           verifiedDocumentCount,
-          documentsNeedingReviewCount: property.documents.length - verifiedDocumentCount,
+          documentsNeedingReviewCount: documentStats.total - verifiedDocumentCount,
         },
         people: {
           contactCount: plan.contacts.length,
@@ -1378,16 +1378,16 @@ export class HomeBuyerTaskService {
 
   static async getImportReadiness(userId: string, propertyId: string) {
     await this.assertAccess(userId, propertyId, 'VIEWER');
-    const [reportGroups, materialFindings, documentGroups] = await Promise.all([
+    const [reportGroups, materialFindings, documentStats] = await Promise.all([
       prisma.inspectionReport.groupBy({ by: ['status'], where: { propertyId }, _count: true }),
       prisma.inspectionFinding.count({ where: { propertyId, status: 'OPEN', severity: { in: ['SAFETY', 'MAJOR'] } } }),
-      prisma.document.groupBy({ by: ['verificationStatus'], where: { propertyId }, _count: true }),
+      // Documents on file and verified, from Home Records and the transitional legacy vault.
+      documentVerificationStats({ propertyId, includeLegacy: true }),
     ]);
     const reportCount = (status: string) => reportGroups.find((item) => item.status === status)?._count ?? 0;
-    const documentCount = (status: string) => documentGroups.find((item) => item.verificationStatus === status)?._count ?? 0;
     const reportTotal = reportGroups.reduce((sum, item) => sum + item._count, 0);
-    const documentTotal = documentGroups.reduce((sum, item) => sum + item._count, 0);
-    const verified = documentCount('VERIFIED');
+    const documentTotal = documentStats.total;
+    const verified = documentStats.verified;
     const reviewPending = reportCount('REVIEW_PENDING');
     const confirmed = reportCount('CONFIRMED');
     const nextRecommendedStep = reportTotal === 0 ? 'IMPORT_INSPECTION'

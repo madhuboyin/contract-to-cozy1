@@ -8,8 +8,8 @@
 //   - Home Records is authoritative. A legacy row is explicitly marked `transitional`, and the legacy branch is removed (and eventually the
 //     Document model) when no domain still requires it. Until then a caller asks for the legacy branch by name (`includeLegacy`).
 //   - There is no dual-write and no attempt to reconcile the two stores: a document lives in exactly one of them.
-//   - The two stores do not share a status vocabulary (legacy has a verification status; Home Records has needs-review, expiry and lifecycle),
-//     so each row carries only the facts its own store records, never a fabricated mapping between them.
+//   - Both stores carry the homeowner's verification status. Each row also carries only the facts its own store records: a Home Record has
+//     needs-review, expiry and lifecycle; the legacy vault has none of those.
 //   - Visibility is the caller's: Home Records applies the record-level rule (owner-only records are not returned to other roles); legacy
 //     documents have no such concept.
 import type { HouseholdRole, PropertyRecordType, DocumentType } from '@prisma/client';
@@ -31,8 +31,9 @@ export interface PropertyDocument {
   description: string | null;
   addedAt: Date;
   updatedAt: Date;
-  /** Legacy only: the recorded verification status. Null for a Home Record. */
+  /** The recorded verification status: the homeowner's own confirm or reject, on a Home Record and on a transitional legacy document alike. */
   verification: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED' | null;
+  verifiedAt: Date | null;
   /** Home Records only: pending extracted facts await review. Null for a legacy row. */
   needsReview: boolean | null;
   /** Home Records only: from the record's effective-to date. Null when none is recorded or for a legacy row. */
@@ -86,7 +87,7 @@ export async function listPropertyDocuments(input: {
     id: record.id, source: 'HOME_RECORD', transitional: false,
     title: record.title, kind: record.recordType, kindLabel: propertyDocumentKindLabel(record.recordType),
     description: record.description ?? null, addedAt: record.createdAt, updatedAt: record.updatedAt,
-    verification: null, needsReview: record.needsReview, expiry: record.expiryStatus,
+    verification: record.verificationStatus, verifiedAt: record.verifiedAt ?? null, needsReview: record.needsReview, expiry: record.expiryStatus,
     lifecycle: record.lifecycleStatus === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
     sensitivity: record.sensitivity, visibility: record.visibility,
   }));
@@ -101,7 +102,7 @@ export async function listPropertyDocuments(input: {
           : { propertyId: input.propertyId }),
       },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, type: true, description: true, verificationStatus: true, createdAt: true, updatedAt: true },
+      select: { id: true, name: true, type: true, description: true, verificationStatus: true, verifiedAt: true, createdAt: true, updatedAt: true },
     });
     fromLegacy = rows.map((row) => {
       const kind = LEGACY_KIND_KEY[row.type];
@@ -109,7 +110,7 @@ export async function listPropertyDocuments(input: {
         id: row.id, source: 'LEGACY_DOCUMENT', transitional: true,
         title: row.name, kind, kindLabel: propertyDocumentKindLabel(kind), description: row.description ?? null,
         addedAt: row.createdAt, updatedAt: row.updatedAt,
-        verification: row.verificationStatus, needsReview: null, expiry: null, lifecycle: 'ACTIVE', sensitivity: null, visibility: null,
+        verification: row.verificationStatus, verifiedAt: row.verifiedAt ?? null, needsReview: null, expiry: null, lifecycle: 'ACTIVE', sensitivity: null, visibility: null,
       } satisfies PropertyDocument;
     });
   }
@@ -130,11 +131,14 @@ export async function countPropertyDocuments(input: {
   includeLegacy?: boolean;
   /** Only documents attached to an inventory item, a warranty or an insurance policy (Home Records: an entity link; legacy: its own link columns). */
   linkedToOtherRecords?: boolean;
+  /** Only documents the homeowner has verified. */
+  verifiedOnly?: boolean;
 }): Promise<{ total: number; homeRecords: number; legacy: number }> {
   const homeRecords = await prisma.propertyRecord.count({
     where: {
       propertyId: input.propertyId,
       lifecycleStatus: 'ACTIVE',
+      ...(input.verifiedOnly ? { verificationStatus: 'VERIFIED' as const } : {}),
       ...(input.linkedToOtherRecords ? { links: { some: { entityType: { in: [...LINKED_ENTITY_TYPES] } } } } : {}),
     },
   });
@@ -143,6 +147,7 @@ export async function countPropertyDocuments(input: {
       where: {
         propertyId: input.propertyId,
         deletedAt: null,
+        ...(input.verifiedOnly ? { verificationStatus: 'VERIFIED' as const } : {}),
         ...(input.linkedToOtherRecords ? { OR: [{ inventoryItemId: { not: null } }, { warrantyId: { not: null } }, { policyId: { not: null } }] } : {}),
       },
     })
@@ -182,6 +187,9 @@ export interface PropertyDocumentRef {
   kind: string;
   kindLabel: string;
   description: string | null;
+  verification: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED' | null;
+  verifiedAt: Date | null;
+  updatedAt: Date;
   addedAt: Date;
 }
 
@@ -201,19 +209,19 @@ export async function resolvePropertyDocuments(input: {
   if (ids.length === 0) return [];
   const records = await prisma.propertyRecord.findMany({
     where: { id: { in: ids }, propertyId: input.propertyId, lifecycleStatus: { not: 'TRASHED' }, ...visibleRecordWhere(input.role) },
-    select: { id: true, title: true, recordType: true, description: true, createdAt: true },
+    select: { id: true, title: true, recordType: true, description: true, verificationStatus: true, verifiedAt: true, updatedAt: true, createdAt: true },
   });
   const fromRecords: PropertyDocumentRef[] = records.map((record) => ({
-    id: record.id, source: 'HOME_RECORD', title: record.title, kind: record.recordType, kindLabel: propertyDocumentKindLabel(record.recordType), description: record.description ?? null, addedAt: record.createdAt,
+    id: record.id, source: 'HOME_RECORD', title: record.title, kind: record.recordType, kindLabel: propertyDocumentKindLabel(record.recordType), description: record.description ?? null, verification: record.verificationStatus, verifiedAt: record.verifiedAt, updatedAt: record.updatedAt, addedAt: record.createdAt,
   }));
   let fromLegacy: PropertyDocumentRef[] = [];
   if (input.includeLegacy) {
     const found = new Set(fromRecords.map((row) => row.id));
     const rows = await prisma.document.findMany({
       where: { id: { in: ids.filter((id) => !found.has(id)) }, propertyId: input.propertyId, deletedAt: null },
-      select: { id: true, name: true, type: true, description: true, createdAt: true },
+      select: { id: true, name: true, type: true, description: true, verificationStatus: true, verifiedAt: true, updatedAt: true, createdAt: true },
     });
-    fromLegacy = rows.map((row) => ({ id: row.id, source: 'LEGACY_DOCUMENT', title: row.name, kind: LEGACY_KIND_KEY[row.type], kindLabel: propertyDocumentKindLabel(LEGACY_KIND_KEY[row.type]), description: row.description ?? null, addedAt: row.createdAt }));
+    fromLegacy = rows.map((row) => ({ id: row.id, source: 'LEGACY_DOCUMENT', title: row.name, kind: LEGACY_KIND_KEY[row.type], kindLabel: propertyDocumentKindLabel(LEGACY_KIND_KEY[row.type]), description: row.description ?? null, verification: row.verificationStatus, verifiedAt: row.verifiedAt, updatedAt: row.updatedAt, addedAt: row.createdAt }));
   }
   return [...fromRecords, ...fromLegacy];
 }
@@ -230,9 +238,33 @@ export async function assertPropertyDocumentsExist(
 }
 
 /**
- * The shape the buyer workflow screens read for a document: a name, a kind and a date. A Home Record carries no legacy verification status, so
- * that field is null; `source` says which store the row came from.
+ * The shape the buyer workflow screens read for a document: a name, a kind, a date and the recorded verification status; `source` says which
+ * store the row came from.
  */
-export function toWorkflowDocumentSummary(document: { id: string; source: PropertyDocumentSource; title: string; kind: string; addedAt: Date }) {
-  return { id: document.id, name: document.title, type: document.kind, verificationStatus: null, source: document.source, createdAt: document.addedAt.toISOString() };
+export function toWorkflowDocumentSummary(document: { id: string; source: PropertyDocumentSource; title: string; kind: string; addedAt: Date; verification?: PropertyDocument['verification'] }) {
+  return { id: document.id, name: document.title, type: document.kind, verificationStatus: document.verification ?? null, source: document.source, createdAt: document.addedAt.toISOString() };
+}
+
+/**
+ * How many documents are on file and how many the homeowner has verified, from both stores (the legacy branch only when named). The one
+ * shape the buyer readiness and ownership-plan signals read, so they never re-count the legacy table on their own.
+ */
+export async function documentVerificationStats(input: { propertyId: string; includeLegacy?: boolean }): Promise<{
+  total: number; verified: number; rejected: number; unverified: number; homeRecords: number; legacy: number;
+}> {
+  const recordGroups = await prisma.propertyRecord.groupBy({
+    by: ['verificationStatus'],
+    where: { propertyId: input.propertyId, lifecycleStatus: 'ACTIVE' },
+    _count: true,
+  });
+  const legacyGroups = input.includeLegacy
+    ? await prisma.document.groupBy({ by: ['verificationStatus'], where: { propertyId: input.propertyId, deletedAt: null }, _count: true })
+    : [];
+  const sum = (groups: Array<{ verificationStatus: string; _count: number }>, ...statuses: string[]) =>
+    groups.filter((group) => statuses.includes(group.verificationStatus)).reduce((total, group) => total + group._count, 0);
+  const homeRecords = recordGroups.reduce((total, group) => total + group._count, 0);
+  const legacy = legacyGroups.reduce((total, group) => total + group._count, 0);
+  const verified = sum(recordGroups, 'VERIFIED') + sum(legacyGroups, 'VERIFIED');
+  const rejected = sum(recordGroups, 'REJECTED') + sum(legacyGroups, 'REJECTED');
+  return { total: homeRecords + legacy, verified, rejected, unverified: homeRecords + legacy - verified - rejected, homeRecords, legacy };
 }

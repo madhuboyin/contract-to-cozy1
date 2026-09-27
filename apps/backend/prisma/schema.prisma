@@ -5181,6 +5181,12 @@ model PropertyRecord {
   // natural expiry.
   effectiveFrom    DateTime?
   effectiveTo      DateTime?
+  // The homeowner's own verification of the record (the same status the legacy Document vault carried, now on the canonical record): who
+  // confirmed or rejected it, when, and any note. Distinct from `needsReview` (pending extracted facts) and from scan/integrity status.
+  verificationStatus  DocumentVerificationStatus @default(UNVERIFIED)
+  verifiedAt          DateTime?
+  verifiedByUserId    String?
+  verificationNotes   String?
   createdAt        DateTime                      @default(now())
   updatedAt        DateTime                      @updatedAt
 
@@ -5194,6 +5200,7 @@ model PropertyRecord {
   @@index([propertyId, recordType])
   @@index([propertyId, sensitivity])
   @@index([propertyId, effectiveTo])
+  @@index([propertyId, verificationStatus])
   @@map("property_records")
 }
 

@@ -457,6 +457,32 @@ router.patch(
   },
 );
 
+const verificationSchema = z.object({
+  status: z.enum(['UNVERIFIED', 'PENDING', 'VERIFIED', 'REJECTED']),
+  notes: z.string().trim().max(1000).nullish(),
+});
+
+router.post(
+  '/properties/:propertyId/records/:recordId/verification',
+  requireHouseholdRole('CONTRIBUTOR'),
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    try {
+      const input = parseOrThrow(verificationSchema, req.body ?? {});
+      const result = await homeRecordsService.setVerification({
+        propertyId: req.params.propertyId,
+        role: req.householdRole!,
+        recordId: req.params.recordId,
+        userId: req.user!.userId,
+        status: input.status,
+        notes: input.notes ?? null,
+      });
+      return res.json({ success: true, data: { record: result } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
 router.patch(
   '/properties/:propertyId/records/:recordId/effective-period',
   requireHouseholdRole('CONTRIBUTOR'),

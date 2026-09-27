@@ -12,6 +12,7 @@ import type {
   PropertyRecordSavedSearch,
   PropertyRecordSavedSearchView,
   PropertyRecordSensitivity,
+  PropertyRecordVerificationStatus,
   PropertyRecordStorageHealth,
   PropertyRecordSummary,
   PropertyRecordType,
@@ -157,6 +158,14 @@ export async function setRetention(
   input: { retainUntil?: string | null; legalHoldReason?: string | null },
 ): Promise<void> {
   await api.patch(`/api/properties/${propertyId}/records/${recordId}/retention`, input);
+}
+
+export async function setRecordVerification(
+  propertyId: string,
+  recordId: string,
+  input: { status: PropertyRecordVerificationStatus; notes?: string | null },
+): Promise<void> {
+  await api.post(`/api/properties/${propertyId}/records/${recordId}/verification`, input);
 }
 
 export async function setEffectivePeriod(

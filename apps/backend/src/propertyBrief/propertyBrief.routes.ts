@@ -80,7 +80,7 @@ router.get(
     try {
       return res.json({
         success: true,
-        data: await listEligiblePropertyBriefDocuments(req.params.propertyId),
+        data: await listEligiblePropertyBriefDocuments(req.params.propertyId, req.householdRole!),
       });
     } catch (error) {
       return next(error);
@@ -119,6 +119,7 @@ router.post(
         data: await createPropertyBrief({
           propertyId: req.params.propertyId,
           userId: req.user.userId,
+          role: req.householdRole!,
           purpose: req.body.purpose,
           title: req.body.title,
           selectedSections: req.body.selectedSections,
@@ -162,6 +163,7 @@ router.post(
       if (!req.user?.userId) return res.status(401).json({ success: false });
       const result = await republishPropertyBrief({
         propertyId: req.params.propertyId,
+        role: req.householdRole!,
         briefId: uuid.parse(req.params.briefId),
       });
 
