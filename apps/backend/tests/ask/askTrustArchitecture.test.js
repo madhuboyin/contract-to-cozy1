@@ -28,6 +28,7 @@ const {
   validateAskTrustCertificationCorpus,
 } = require('../../src/services/ask/askTrustCertificationCorpus.ts');
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
+const { assertSkillResultBlocksAllowed, askFailureStatus } = require('../../src/services/ask/askHandlerSupport.ts');
 
 test('every operation exposes a valid English semantic contract', () => {
   assert.deepEqual(validateAskOperationDefinitions(), []);
@@ -626,4 +627,25 @@ test('a non-answer result keeps its explanation block even when the operation do
     result: { status: 'ANSWERED', reasonCode: 'X', blocks: [{ type: 'SUMMARY', id: 'stray', title: 'Stray', body: 'Not an allowed answer block.', tone: 'DEFAULT', actions: [] }], suggestions: [] },
   });
   assert.equal(answered.result.blocks.some((block) => block.id === 'stray'), false);
+});
+
+test('the Skill presentation guard preserves non-answer explanations after trust validation', () => {
+  const clarification = {
+    status: 'NEEDS_CLARIFICATION', reasonCode: 'ASK_SEMANTIC_ANSWER_UNCERTAIN',
+    blocks: [{ type: 'SUMMARY', id: 'answer-clarification', title: 'One detail is needed', body: 'Which recent home change should I review?', tone: 'DEFAULT', actions: [] }],
+    suggestions: [],
+  };
+
+  assert.doesNotThrow(() => assertSkillResultBlocksAllowed('HOME_CHANGE_SUMMARY', clarification));
+
+  const answered = { ...clarification, status: 'ANSWERED' };
+  assert.throws(
+    () => assertSkillResultBlocksAllowed('HOME_CHANGE_SUMMARY', answered),
+    /undeclared block type SUMMARY/,
+  );
+  try {
+    assertSkillResultBlocksAllowed('HOME_CHANGE_SUMMARY', answered);
+  } catch (error) {
+    assert.equal(askFailureStatus(error), 'FAILED_TERMINAL');
+  }
 });

@@ -144,6 +144,15 @@ export function assertSkillResultBlocksAllowed(operationId: AskOperationId, resu
   const startedAt = process.hrtime.bigint();
   let status: string = result.status;
   try {
+    // Operation/Skill block allowlists describe successful answer payloads.
+    // Non-answer states use shared explanatory blocks (for example, a
+    // semantic-validation clarification uses SUMMARY even when the operation
+    // itself answers with CHANGE_SUMMARY). The trust pipeline intentionally
+    // preserves those explanations; applying the answer allowlist here as a
+    // second, stricter pass turns a recoverable clarification/unavailable
+    // result into FAILED_TERMINAL with "undeclared block type".
+    const answerShaped = ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'].includes(result.status);
+    if (!answerShaped) return;
     const allowedResultBlocks = allowedResultBlocksForOperation(operationId);
     const disallowedBlock = result.blocks.find((block) => block.type !== 'BOUNDARY' && block.type !== 'ERROR_STATE' && !allowedResultBlocks.includes(block.type));
     if (disallowedBlock) {
