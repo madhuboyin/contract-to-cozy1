@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ClipboardCheck, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './context';
 import { useCalmAnswer } from './calmContext';
 import type { AskBlockRenderer } from './types';
+import { CompactAskCard } from '../CompactAskCard';
 
 // Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
 // per-PRIORITY_LIST-item rating, distinct from ExecutionFeedback's
@@ -52,7 +53,18 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
       ) : (
         <ol className={calm ? 'grid gap-2 sm:grid-cols-2 xl:grid-cols-3' : 'mt-4 space-y-3'}>
           {block.items.map((item, index) => (
-            <li key={item.homeActionId} className={cn('rounded-xl border border-slate-200 p-3', calm && 'flex min-w-0 flex-col border-l-4 bg-white shadow-sm')}>
+            <li key={item.homeActionId} className={cn(!calm && 'rounded-xl border border-slate-200 p-3')}>
+              {calm ? <CompactAskCard
+                title={item.title}
+                iconCategory="MAINTENANCE"
+                fallbackIcon={ClipboardCheck}
+                tone={item.consumerPriority === 'DO_NOW' ? 'CRITICAL' : item.consumerPriority === 'PLAN_SOON' ? 'CAUTION' : item.consumerPriority === 'NO_ACTION' ? 'POSITIVE' : 'DEFAULT'}
+                badge={<span className={cn('rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{categoryLabel[item.consumerPriority]}</span>}
+                summary={item.comparativeReasonCodes.length > 0 ? `Ranked here because ${item.comparativeReasonCodes.map((code) => code.replace(/_/g, ' ').toLowerCase()).join(', ')}.` : undefined}
+                meta={<>{`#${index + 1} · ${item.confidenceLabel.toLowerCase()} confidence`}{item.deadlineAt && ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}`}</>}
+                action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
+                secondary={<HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />}
+              /> : <>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-slate-400">#{index + 1}</span>
                 <h4 className="font-semibold text-slate-900">{item.title}</h4>
@@ -73,6 +85,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 <div>{calm && item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}</div>
                 <HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />
               </div>
+              </>}
             </li>
           ))}
         </ol>

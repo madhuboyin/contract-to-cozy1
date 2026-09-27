@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, X } from 'lucide-react';
+import { ExternalLink, Loader2, Wrench, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
@@ -11,6 +11,7 @@ import { DetailSheetFrame } from './patterns/PatternParts';
 import { HorizontalTrack, ShelfCard } from './patterns/ShelvesView';
 import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import type { PropertyMaintenanceTask } from '@/types';
+import { CompactAskCard } from './CompactAskCard';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -41,13 +42,6 @@ function formatMoney(value: number | null): string {
 
 function fieldLabel(value: string | null): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
-}
-
-function taskAccent(tone: Item['tone']): string {
-  if (tone === 'CRITICAL') return 'before:bg-rose-500';
-  if (tone === 'CAUTION') return 'before:bg-amber-400';
-  if (tone === 'POSITIVE') return 'before:bg-emerald-500';
-  return 'before:bg-slate-300';
 }
 
 function taskSupportingFacts(item: Item): string[] {
@@ -229,20 +223,20 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
           {shown.map((item) => {
             const selected = controls?.view.selectedTaskId === item.id;
             const facts = taskSupportingFacts(item);
-            return <li key={item.id} data-ask-task-id={item.id} className={cn(
-              'relative min-w-0 overflow-hidden rounded-xl border bg-white px-4 py-3 shadow-sm before:absolute before:inset-y-0 before:left-0 before:w-1',
-              taskAccent(item.tone), selected ? 'border-teal-600 ring-1 ring-teal-600/20' : 'border-slate-200',
-            )}>
-              <div className="flex min-h-[68px] items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="line-clamp-2 text-sm font-semibold leading-5 text-slate-950">{item.title}</p>
-                  {facts.length > 0 && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{facts.join(' · ')}</p>}
-                </div>
-                <button type="button" data-maintenance-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id}
+            return <li key={item.id} data-ask-task-id={item.id} className="min-w-0">
+              <CompactAskCard
+                title={item.title}
+                iconCategory="MAINTENANCE"
+                fallbackIcon={Wrench}
+                tone={item.tone === 'CRITICAL' ? 'CRITICAL' : item.tone === 'CAUTION' ? 'CAUTION' : item.tone === 'POSITIVE' ? 'POSITIVE' : 'DEFAULT'}
+                selected={selected}
+                badge={item.badgeLabel ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700">{item.badgeLabel}</span> : undefined}
+                meta={facts.length > 0 ? facts.join(' · ') : undefined}
+                action={<button type="button" data-maintenance-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id}
                   disabled={disabled} aria-expanded={detailTaskId === item.id} aria-controls={`maintenance-detail-${item.id}`} onClick={() => openDetail(item)}
-                  className="-mr-1 inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:opacity-50"
-                  aria-label={`Review task: ${item.title}`}>Review</button>
-              </div>
+                  className="inline-flex min-h-10 items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:opacity-50"
+                  aria-label={`Review task: ${item.title}`}>Review</button>}
+              />
             </li>;
           })}
         </ul>}

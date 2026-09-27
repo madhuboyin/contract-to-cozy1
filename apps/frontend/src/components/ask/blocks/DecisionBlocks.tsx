@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils';
 import { formatLegacyAskCurrency } from '@/features/ask/presentationCompatibility';
 import { ArrowUpRight, CalendarDays, CheckCircle2, Sparkles } from 'lucide-react';
 import type { AskPresentationBlock } from '@/features/ask/types';
+import { CompactAskCard } from '../CompactAskCard';
 import { ActionLink, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 
@@ -166,28 +167,18 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
     : block.materiality === 'IMPORTANT' ? 'bg-amber-100 text-amber-900'
       : block.materiality === 'MEANINGFUL' ? 'bg-teal-50 text-teal-800'
         : 'bg-slate-100 text-slate-600';
-  const cardTone = block.materiality === 'URGENT' ? 'border-red-200 bg-gradient-to-br from-red-50/80 to-white'
-    : block.materiality === 'IMPORTANT' ? 'border-amber-200 bg-gradient-to-br from-amber-50/80 to-white'
-      : block.materiality === 'MEANINGFUL' ? 'border-teal-200 bg-gradient-to-br from-teal-50/80 to-white'
-        : 'border-slate-200 bg-gradient-to-br from-slate-50 to-white';
-  const iconTone = block.materiality === 'URGENT' ? 'bg-red-100 text-red-700'
-    : block.materiality === 'IMPORTANT' ? 'bg-amber-100 text-amber-800'
-      : block.materiality === 'MEANINGFUL' ? 'bg-teal-100 text-teal-800'
-        : 'bg-slate-100 text-slate-600';
   const sameDate = block.effectiveAt
     && new Date(block.effectiveAt).toLocaleDateString() === new Date(block.detectedAt).toLocaleDateString();
   const summary = block.summary.replace(/^Home action /i, '').replace(/^./, (letter) => letter.toUpperCase());
   return (
-    <article className={cn('flex min-h-44 flex-col rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md', cardTone)}>
-      <div className="flex items-start justify-between gap-3">
-        <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', iconTone)} aria-hidden="true">
-          <CheckCircle2 className="h-5 w-5" />
-        </span>
-        <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
-      </div>
-      <h3 className="mt-3 text-base font-semibold leading-5 text-slate-950">{block.title}</h3>
-      <p className="mt-1 text-sm text-slate-600">{summary}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+    <CompactAskCard
+      title={block.title}
+      iconCategory={block.source}
+      fallbackIcon={CheckCircle2}
+      tone={block.materiality === 'URGENT' ? 'CRITICAL' : block.materiality === 'IMPORTANT' ? 'CAUTION' : block.materiality === 'MEANINGFUL' ? 'POSITIVE' : 'DEFAULT'}
+      badge={<span className={cn('rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>}
+      summary={summary}
+      meta={<span className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="inline-flex items-center gap-1.5">
           <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
           {sameDate
@@ -195,14 +186,14 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
             : <>Detected {new Date(block.detectedAt).toLocaleDateString()}{block.effectiveAt && ` · effective ${new Date(block.effectiveAt).toLocaleDateString()}`}</>}
         </span>
         <span>{block.source}</span>
-      </div>
-      {block.linkedAction && (
+      </span>}
+      action={block.linkedAction ? (
         <AskContextLink href={block.linkedAction.href} className="mt-auto inline-flex min-h-10 items-center gap-1.5 self-start pt-3 text-sm font-semibold text-teal-800 hover:text-teal-950">
           Review action<ArrowUpRight className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">: {block.linkedAction.label}</span>
         </AskContextLink>
-      )}
-    </article>
+      ) : undefined}
+    />
   );
 }
 
