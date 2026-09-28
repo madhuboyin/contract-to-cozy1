@@ -8,7 +8,7 @@ import { resolveConciergeLandingSpotlight } from './conciergeLandingPolicy';
 export type StripTone = 'CRITICAL' | 'CAUTION' | 'DEFAULT';
 /** ACUI-002: why an entry is on the launch, as short plain sentences built only from governed Concierge fields. */
 export type StripExplanation = { reasons: string[] };
-export type StripChip = { id: string; label: string; /** One line of context: the top item behind the count. */ detail?: string | null; /** Absent when nothing meaningful can be derived; the launch then hides "Why this appeared". */ explanation?: StripExplanation | null; tone: StripTone; prompt: AskCapabilityPrompt; source: 'ATTENTION' | 'DECISION' | 'DISCOVERY' };
+export type StripChip = { id: string; label: string; count?: number; /** One line of context: the top item behind the count. */ detail?: string | null; /** Absent when nothing meaningful can be derived; the launch then hides "Why this appeared". */ explanation?: StripExplanation | null; tone: StripTone; prompt: AskCapabilityPrompt; source: 'ATTENTION' | 'DECISION' | 'DISCOVERY' };
 export interface ConciergeStateStrip {
   headline: string | null;
   /** ACUI-001: the launch headline, or null when the state is unknown (the launch then keeps its generic prompt). Never says "nothing" when a source is unavailable. */
@@ -39,12 +39,12 @@ const REASON_CODE_TEXT: Record<string, string> = {
 const CONFIDENCE_TEXT = { LOW: 'low', MEDIUM: 'medium', HIGH: 'high' } as const;
 
 type PriorityItem = ConciergeHomeView['priorityList']['items'][number];
-function explainAttention(items: PriorityItem[], priority: 'DO_NOW' | 'PLAN_SOON', generatedAt: string): StripExplanation | null {
+function explainPrioritySection(items: PriorityItem[], section: 'ATTENTION' | 'PLAN_AHEAD', generatedAt: string): StripExplanation | null {
   const top = items[0];
   if (!top) return null;
   const reasons: string[] = [];
-  const rank = priority === 'DO_NOW' ? 'do now' : 'plan soon';
-  reasons.push(items.length === 1 ? `It is ranked “${rank}” in your home priorities.` : `${items.length} items are ranked “${rank}” in your home priorities.`);
+  const label = section === 'ATTENTION' ? 'What needs attention' : 'Plan ahead';
+  reasons.push(items.length === 1 ? `It is in “${label}” on your Home dashboard.` : `${items.length} items are in “${label}” on your Home dashboard.`);
   const due = formatDay(top.deadlineAt);
   if (due) {
     const overdue = top.deadlineAt && new Date(top.deadlineAt).getTime() < new Date(generatedAt).getTime();
@@ -66,6 +66,15 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
   const usable = view.priorityList.items.filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION');
   const doNow = usable.filter((item) => item.consumerPriority === 'DO_NOW').length;
   const planSoon = usable.filter((item) => item.consumerPriority === 'PLAN_SOON').length;
+  // Preserve feed order within each dashboard band while ensuring the more immediate band leads its card.
+  const attentionItems = [
+    ...usable.filter((item) => item.consumerPriority === 'DO_NOW'),
+    ...usable.filter((item) => item.consumerPriority === 'PLAN_SOON'),
+  ];
+  const planAheadItems = [
+    ...usable.filter((item) => item.consumerPriority === 'WATCH'),
+    ...usable.filter((item) => item.consumerPriority === 'OPTIONAL'),
+  ];
 
   let headline: string | null = null;
   if (view.priorityList.state === 'UNAVAILABLE') {
@@ -80,10 +89,22 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
     headline = 'Nothing needs your attention right now.';
   }
 
-  const byPriority = (priority: 'DO_NOW' | 'PLAN_SOON') => usable.filter((item) => item.consumerPriority === priority);
-  const topTitle = (priority: 'DO_NOW' | 'PLAN_SOON') => byPriority(priority)[0]?.title ?? null;
-  if (doNow > 0) chips.push({ id: 'strip-do-now', label: `${doNow} to do now`, detail: topTitle('DO_NOW'), explanation: explainAttention(byPriority('DO_NOW'), 'DO_NOW', view.generatedAt), tone: 'CRITICAL', source: 'ATTENTION', prompt: prompt('strip-do-now', 'What needs my attention right now?', 'PLAN_MONITOR', 'Plan') });
-  if (planSoon > 0) chips.push({ id: 'strip-plan-soon', label: `${planSoon} to plan soon`, detail: topTitle('PLAN_SOON'), explanation: explainAttention(byPriority('PLAN_SOON'), 'PLAN_SOON', view.generatedAt), tone: 'CAUTION', source: 'ATTENTION', prompt: prompt('strip-plan-soon', 'Which home actions should I plan for next?', 'PLAN_MONITOR', 'Plan') });
+  if (view.priorityList.state !== 'UNAVAILABLE') {
+    chips.push({
+      id: 'strip-needs-attention', label: 'What needs attention', count: attentionItems.length,
+      detail: attentionItems[0]?.title ?? 'Nothing needs attention right now.',
+      explanation: explainPrioritySection(attentionItems, 'ATTENTION', view.generatedAt),
+      tone: doNow > 0 ? 'CRITICAL' : attentionItems.length > 0 ? 'CAUTION' : 'DEFAULT', source: 'ATTENTION',
+      prompt: prompt('strip-needs-attention', 'Show me what needs attention now or soon', 'PLAN_MONITOR', 'Plan'),
+    });
+    chips.push({
+      id: 'strip-plan-ahead', label: 'Plan ahead', count: planAheadItems.length,
+      detail: planAheadItems[0]?.title ?? 'Nothing to plan right now.',
+      explanation: explainPrioritySection(planAheadItems, 'PLAN_AHEAD', view.generatedAt),
+      tone: 'DEFAULT', source: 'ATTENTION',
+      prompt: prompt('strip-plan-ahead', 'Show me what I should plan ahead for', 'PLAN_MONITOR', 'Plan'),
+    });
+  }
 
   if (view.changes.state === 'UNAVAILABLE') {
     notes.push('Recent changes are temporarily unavailable.');
@@ -124,10 +145,10 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
   // urgent" is said only when no source is unavailable, and an unknown state leaves the line null so the generic prompt stays.
   const importantChanges = chips.find((chip) => chip.id === 'strip-changes');
   const changeCount = view.changes.state === 'AVAILABLE' ? view.changes.items.filter((item) => item.materiality === 'IMPORTANT' || item.materiality === 'URGENT').length : 0;
-  const lead = doNow > 0 ? `${doNow} to do now` : notes.length === 0 && view.priorityList.state !== 'UNAVAILABLE' ? 'Nothing urgent' : null;
-  const summaryParts = [lead, planSoon > 0 ? `${planSoon} to plan soon` : null, changeCount > 0 ? `${changeCount} ${plural(changeCount, 'change', 'changes')} to review` : null].filter((part): part is string => Boolean(part));
+  const lead = attentionItems.length > 0 ? `${attentionItems.length} ${plural(attentionItems.length, 'item needs', 'items need')} attention` : notes.length === 0 && view.priorityList.state !== 'UNAVAILABLE' ? 'Nothing needs attention' : null;
+  const summaryParts = [lead, planAheadItems.length > 0 ? `${planAheadItems.length} to plan ahead` : null, changeCount > 0 ? `${changeCount} recent ${plural(changeCount, 'change', 'changes')}` : null].filter((part): part is string => Boolean(part));
   let opening: string | null = null;
-  if (summaryParts.length > 0) opening = summaryParts.length === 1 && lead === 'Nothing urgent' ? 'Nothing needs your attention right now' : summaryParts.join(' · ');
+  if (summaryParts.length > 0) opening = summaryParts.length === 1 && lead === 'Nothing needs attention' ? 'Nothing needs your attention right now' : summaryParts.join(' · ');
 
   return { headline, opening, chips, urgent, notes };
 }

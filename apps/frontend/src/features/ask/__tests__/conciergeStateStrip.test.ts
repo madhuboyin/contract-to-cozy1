@@ -2,7 +2,7 @@ import { buildConciergeStateStrip } from '../conciergeStateStrip';
 import type { ConciergeHomeView } from '../types';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.11 slice D (FRD v1.111).
-const item = (id: string, consumerPriority: 'DO_NOW' | 'PLAN_SOON' | 'WATCH', extra = {}) => ({
+const item = (id: string, consumerPriority: 'DO_NOW' | 'PLAN_SOON' | 'WATCH' | 'OPTIONAL', extra = {}) => ({
   homeActionId: id, title: `Action ${id}`, askQuestion: `Ask about ${id}`, askCategoryId: 'MAINTAIN' as const, askCategoryLabel: 'Maintain' as const, subject: null,
   consumerPriority, comparativeReasonCodes: [], confidenceLabel: 'HIGH' as const, deadlineAt: null, cta: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false, ...extra,
 });
@@ -17,18 +17,24 @@ const view = (overrides: Partial<ConciergeHomeView> = {}): ConciergeHomeView => 
 });
 
 describe('buildConciergeStateStrip', () => {
-  it('states what needs attention and offers one chip per count', () => {
+  it('states what needs attention and exposes the two dashboard priority sections', () => {
     const strip = buildConciergeStateStrip(view({ priorityList: { ...view().priorityList, items: [item('a', 'DO_NOW'), item('b', 'DO_NOW'), item('c', 'PLAN_SOON')] } }));
     expect(strip.headline).toBe('2 things need attention now, and 1 more to plan soon.');
-    expect(strip.chips.map((chip) => [chip.label, chip.tone])).toEqual([['2 to do now', 'CRITICAL'], ['1 to plan soon', 'CAUTION']]);
+    expect(strip.chips.map((chip) => [chip.label, chip.count, chip.tone])).toEqual([
+      ['What needs attention', 3, 'CRITICAL'],
+      ['Plan ahead', 0, 'DEFAULT'],
+    ]);
     expect(strip.urgent?.title).toBe('Action a');
   });
 
-  it('ignores suppressed, completed, stale, unavailable and watch-only items when counting', () => {
+  it('ignores ineligible items and places watch items in Plan ahead', () => {
     const items = [item('a', 'DO_NOW', { suppressed: true }), item('b', 'DO_NOW', { completed: true }), item('c', 'PLAN_SOON', { stale: true }), item('d', 'PLAN_SOON', { unavailable: true }), item('e', 'WATCH')];
     const strip = buildConciergeStateStrip(view({ priorityList: { ...view().priorityList, items } }));
     expect(strip.headline).toBe('Nothing needs your attention right now.');
-    expect(strip.chips).toEqual([]);
+    expect(strip.chips.map((chip) => [chip.label, chip.count, chip.detail])).toEqual([
+      ['What needs attention', 0, 'Nothing needs attention right now.'],
+      ['Plan ahead', 1, 'Action e'],
+    ]);
   });
 
   it('says so instead of implying the home is fine when priorities are unavailable', () => {
@@ -71,29 +77,39 @@ describe('buildConciergeStateStrip opening and explanations', () => {
 
   it('opens with one line of state: what is urgent, what is coming, and what changed', () => {
     const changes = { changes: { state: 'AVAILABLE' as const, windowDays: 14, href: '/x', items: [importantChange] } };
-    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW'), item('b', 'DO_NOW')])).opening).toBe('2 to do now');
-    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')])).opening).toBe('Nothing urgent · 1 to plan soon');
-    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON'), item('b', 'PLAN_SOON'), item('c', 'PLAN_SOON'), item('d', 'PLAN_SOON')], { changes: { state: 'AVAILABLE' as const, windowDays: 14, href: '/x', items: [importantChange, { ...importantChange, id: 'd' }, { ...importantChange, id: 'e' }] } })).opening).toBe('Nothing urgent · 4 to plan soon · 3 changes to review');
-    expect(buildConciergeStateStrip(withItems([], changes)).opening).toBe('Nothing urgent · 1 change to review');
-    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW')], changes)).opening).toBe('1 to do now · 1 change to review');
+    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW'), item('b', 'DO_NOW')])).opening).toBe('2 items need attention');
+    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')])).opening).toBe('1 item needs attention');
+    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON'), item('b', 'PLAN_SOON'), item('c', 'PLAN_SOON'), item('d', 'PLAN_SOON')], { changes: { state: 'AVAILABLE' as const, windowDays: 14, href: '/x', items: [importantChange, { ...importantChange, id: 'd' }, { ...importantChange, id: 'e' }] } })).opening).toBe('4 items need attention · 3 recent changes');
+    expect(buildConciergeStateStrip(withItems([], changes)).opening).toBe('Nothing needs attention · 1 recent change');
+    expect(buildConciergeStateStrip(withItems([item('a', 'DO_NOW')], changes)).opening).toBe('1 item needs attention · 1 recent change');
     expect(buildConciergeStateStrip(withItems([])).opening).toBe('Nothing needs your attention right now');
   });
 
   it('never says nothing or nothing-urgent when a source is unavailable, and leaves the opening unknown when priorities are', () => {
     const changesDown = { changes: { state: 'UNAVAILABLE' as const, windowDays: 14, href: '/x', items: [] } };
     expect(buildConciergeStateStrip(withItems([], changesDown)).opening).toBeNull();
-    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')], changesDown)).opening).toBe('1 to plan soon');
+    expect(buildConciergeStateStrip(withItems([item('a', 'PLAN_SOON')], changesDown)).opening).toBe('1 item needs attention');
     expect(buildConciergeStateStrip(view({ priorityList: { ...view().priorityList, state: 'UNAVAILABLE' } })).opening).toBeNull();
   });
 
   it('explains attention chips from governed fields only', () => {
     const chip = buildConciergeStateStrip(withItems([item('a', 'DO_NOW', { deadlineAt: '2026-09-20T00:00:00.000Z', comparativeReasonCodes: ['SAFETY_FLOOR', 'STABLE_TIE_BREAK'], confidenceLabel: 'LOW' })])).chips[0];
     expect(chip.explanation?.reasons).toEqual([
-      'It is ranked “do now” in your home priorities.',
+      'It is in “What needs attention” on your Home dashboard.',
       '“Action a” was due Sep 20.',
       'Safety-related items are ranked first.',
       'Confidence in “Action a”: low.',
     ]);
+  });
+
+  it('keeps Plan ahead second and counts both watch and optional priorities', () => {
+    const strip = buildConciergeStateStrip(withItems([item('a', 'WATCH'), item('b', 'OPTIONAL')], { changes: { state: 'AVAILABLE', windowDays: 14, href: '/x', items: [importantChange] } }));
+    expect(strip.chips.slice(0, 2).map((chip) => [chip.id, chip.count])).toEqual([
+      ['strip-needs-attention', 0],
+      ['strip-plan-ahead', 2],
+    ]);
+    expect(strip.chips[2]?.id).toBe('strip-changes');
+    expect(strip.opening).toBe('Nothing needs attention · 2 to plan ahead · 1 recent change');
   });
 
   it('explains change and decision entries, and skips an unparseable date instead of guessing', () => {

@@ -16,7 +16,7 @@ import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
 import { buildPriorityListView } from '../../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds } from '../../decisionPlatform/homeActionUsefulnessFeedback.service';
-import { buildFocusedHomeActionGuidance } from '../askFocusedGuidance';
+import { buildFocusedHomeActionGuidance, homeActionPriorityFilter } from '../askFocusedGuidance';
 
 function homeActionEmptyCopy(reason: HomeActionEmptyStateReason | null): { title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' } {
   switch (reason) {
@@ -338,12 +338,8 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion);
   }
 
-  const urgentFocus = /\b(?:urgent|right now|immediately|priority now)\b/i.test(message);
-  const soonFocus = /\bsoon\b/i.test(message);
-  const planFocus = /\b(?:should i plan|planning|plan for|later)\b/i.test(message);
-  const waitFocus = /\b(?:can wait|consider)\b/i.test(message);
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);
-  const priorityFilter = urgentFocus ? ['NOW'] : soonFocus ? ['SOON'] : planFocus ? ['PLAN'] : waitFocus ? ['PLAN', 'CONSIDER'] : null;
+  const priorityFilter = homeActionPriorityFilter(message);
   const selectedActions = (priorityFilter
     ? feed.actions.filter((action) => priorityFilter.includes(action.priority))
     : feed.actions).slice(0, topFocus ? 5 : MAX_RESULT_ITEMS);

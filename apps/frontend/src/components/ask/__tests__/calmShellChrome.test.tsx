@@ -29,11 +29,11 @@ describe('CalmLanding', () => {
     render(<CalmLanding view={view()} loading={false} failed={false} starters={starterList} usingFallbackStarters={false} onAsk={onAsk}><span>explorer</span></CalmLanding>);
     // Chips carry the counts; the sentence is only for when there are no chips.
     expect(screen.queryByText('1 thing needs attention now, and 1 more to plan soon.')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /^1 to do now/ }));
-    expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'What needs my attention right now?' }), 'ATTENTION');
+    fireEvent.click(screen.getByRole('button', { name: /^What needs attention/ }));
+    expect(onAsk).toHaveBeenLastCalledWith(expect.objectContaining({ question: 'Show me what needs attention now or soon' }), 'ATTENTION');
     // Two "needs attention" lines, then a short row of starters (the duplicate is dropped) and the explorer entry.
     expect(screen.queryByText('Top priority')).toBeNull();
-    expect(screen.getByRole('list', { name: 'Needs your attention' }).querySelectorAll('[data-strip-chip]')).toHaveLength(2);
+    expect(screen.getByRole('list', { name: 'Home priorities' }).querySelectorAll('[data-strip-chip]')).toHaveLength(2);
     const row = screen.getByRole('list', { name: 'Suggestions' });
     expect(row.querySelectorAll('button')).toHaveLength(3);
     expect(row).toHaveTextContent('explorer');
@@ -42,21 +42,23 @@ describe('CalmLanding', () => {
 
   it('drops a starter that repeats a strip chip or the top priority', () => {
     const repeated = [
-      { ...starters[0], id: 'a', question: 'Which home actions should I plan for next?' },
+      { ...starters[0], id: 'a', question: 'Show me what I should plan ahead for' },
       { ...starters[1], id: 'attention-heat', question: 'Something else?' },
-      { ...starters[2], id: 'c', question: 'what needs my attention right now?' },
+      { ...starters[2], id: 'c', question: 'show me what needs attention now or soon' },
       { ...starters[3], id: 'd', question: 'A genuinely different question?' },
     ];
     render(<CalmLanding view={view()} loading={false} failed={false} starters={repeated} usingFallbackStarters={false} onAsk={jest.fn()} />);
     const buttons = screen.getByRole('list', { name: 'Suggestions' }).querySelectorAll('button');
     expect(Array.from(buttons).map((button) => button.textContent)).toEqual(['A genuinely different question?']);
-    expect(screen.getByRole('list', { name: 'Needs your attention' }).querySelectorAll('[data-strip-chip]')).toHaveLength(2);
+    expect(screen.getByRole('list', { name: 'Home priorities' }).querySelectorAll('[data-strip-chip]')).toHaveLength(2);
   });
 
-  it('falls back to a sentence when there are no chips', () => {
+  it('keeps both quiet dashboard sections when there are no priority items', () => {
     const quiet = view({ priorityList: { ...view().priorityList, items: [] }, landingSpotlight: null });
     render(<CalmLanding view={quiet} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
-    expect(screen.getByText('Nothing needs your attention right now.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing needs attention right now.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /What needs attention/ })).toHaveTextContent('0');
+    expect(screen.getByRole('button', { name: /Plan ahead/ })).toHaveTextContent('0');
     expect(screen.getByRole('heading', { name: 'Decisions to make' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Active major moment' })).toBeInTheDocument();
   });

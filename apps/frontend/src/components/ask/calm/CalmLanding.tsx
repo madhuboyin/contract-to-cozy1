@@ -7,9 +7,8 @@ import { cn } from '@/lib/utils';
 import { buildConciergeStateStrip, type StripChip, type StripTone } from '@/features/ask/conciergeStateStrip';
 import type { AskCapabilityPrompt, AskFeaturedPrompt, ConciergeHomeView } from '@/features/ask/types';
 
-// ASK_COZY_INLINE_WORKSPACE_FRD §11.11 slice D (FRD v1.111): the calm landing below the composer. One sentence about the home,
-// count chips that each open the matching answer, at most one urgent item, then a few starter questions. It replaces the
-// "Popular ways" cards and the "For your attention" card; nothing here is a second source of truth (see conciergeStateStrip).
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.11 slice D, refined by FRD v1.151: two stable dashboard-parity priority cards,
+// then the composer and a single row of secondary context and starter questions. Nothing here is a second source of truth.
 const TONE: Record<StripTone, { chip: string; dot: string }> = {
   CRITICAL: { chip: 'bg-red-50/60 text-red-800 hover:bg-red-50', dot: 'bg-red-500' },
   CAUTION: { chip: 'bg-amber-50/60 text-amber-900 hover:bg-amber-50', dot: 'bg-amber-500' },
@@ -51,9 +50,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
   for (const entry of strip?.chips ?? []) { covered.add(entry.prompt.id); covered.add(entry.prompt.question.trim().toLowerCase()); }
   if (strip?.urgent) { covered.add(strip.urgent.prompt.id); covered.add(strip.urgent.prompt.question.trim().toLowerCase()); }
   const shownStarters = starters.filter((prompt) => !covered.has(prompt.id) && !covered.has(prompt.question.trim().toLowerCase())).slice(0, 3);
-  // Prototype-parity slice: at most two grounded attention cards before the
-  // compact composer. Their actions and explanations retain the same
-  // governed prompts; only hierarchy and presentation change.
+  // Dashboard-parity slice: the same two priority partitions always occupy these cards.
   const contextLine = (entry: StripChip) => {
     const reasons = entry.explanation?.reasons.filter(Boolean) ?? [];
     const whyId = `why-${entry.id}`;
@@ -61,7 +58,10 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
     return (
       <li key={entry.id} className={cn('min-w-0 rounded-2xl border border-transparent p-3.5 sm:p-4', open && 'pb-3.5', TONE[entry.tone].chip.split(' ')[0])}>
         <button type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className="group block w-full text-left">
-          <span className={cn('block text-[11px] font-semibold uppercase tracking-[0.12em]', TONE[entry.tone].chip.split(' ')[1])}>{entry.label}</span>
+          <span className="flex items-center justify-between gap-3">
+            <span className={cn('block text-[11px] font-semibold uppercase tracking-[0.12em]', TONE[entry.tone].chip.split(' ')[1])}>{entry.label}</span>
+            {entry.count !== undefined && <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-slate-600" aria-label={`${entry.count} items`}>{entry.count}</span>}
+          </span>
           {entry.detail && <span className="mt-1.5 block text-base font-semibold leading-5 text-slate-950">{entry.detail}</span>}
           <span className="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-emerald-900">Review <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span>
         </button>
@@ -72,8 +72,9 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
       </li>
     );
   };
-  const stripChips = (strip?.chips ?? []).slice(0, 2);
-    return (
+  const stripChips = (strip?.chips ?? []).filter((entry) => entry.id === 'strip-needs-attention' || entry.id === 'strip-plan-ahead');
+  const secondaryStripChips = (strip?.chips ?? []).filter((entry) => entry.id !== 'strip-needs-attention' && entry.id !== 'strip-plan-ahead');
+  return (
     <div data-calm-landing="">
       <section aria-label="Your home today" data-calm-state-strip="">
         {loading && <p className="flex items-center gap-2 text-sm text-slate-500" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Checking your home…</p>}
@@ -83,11 +84,11 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
           {strip.notes.map((note) => <p key={note} className="mt-2 text-xs text-slate-500">{note}</p>)}
         </>}
       </section>
-      {/* IW-CONV-016 (FRD v1.112): one row of suggestions and nothing else on the landing: what needs attention (with a dot), then a few
-          starter questions, then "More ideas". The top priority is one tap away through the first chip, not a second element. */}
-      {stripChips.length > 0 && !loading && <ul className="grid gap-4 sm:grid-cols-2" aria-label="Needs your attention">{stripChips.map(contextLine)}</ul>}
+      {/* FRD v1.151: recent changes and decision continuations remain useful, but are secondary suggestion pills rather than replacing either priority card. */}
+      {stripChips.length > 0 && !loading && <ul className="grid gap-4 sm:grid-cols-2" aria-label="Home priorities">{stripChips.map(contextLine)}</ul>}
       {composer && <div className="mt-6">{composer}</div>}
-      {(shownStarters.length > 0 || children) && !loading && <ul className={cn(ROW, 'mt-4')} aria-label="Suggestions">
+      {(secondaryStripChips.length > 0 || shownStarters.length > 0 || children) && !loading && <ul className={cn(ROW, 'mt-4')} aria-label="Suggestions">
+        {secondaryStripChips.map((entry) => <li key={entry.id} className="shrink-0"><button type="button" onClick={() => onAsk(entry.prompt, entry.source)} className="min-h-10 whitespace-nowrap rounded-full border border-stone-300 bg-transparent px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-700 hover:text-emerald-950">{entry.label}</button></li>)}
         {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-10 whitespace-nowrap rounded-full border border-stone-300 bg-transparent px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-700 hover:text-emerald-950">{prompt.question}</button></li>)}
         {children && <li className="shrink-0">{children}</li>}
       </ul>}

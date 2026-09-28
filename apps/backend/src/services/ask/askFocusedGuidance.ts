@@ -2,6 +2,19 @@ import type { AskOperationResult } from './askOperationRegistry';
 import type { AskOperationId } from './askOperationRegistry';
 import type { RankedHomeAction } from '../homeActions.service';
 
+export type HomeActionPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
+
+/** Keeps Ask landing section prompts aligned with the dashboard's canonical partitions. */
+export function homeActionPriorityFilter(message: string): HomeActionPriority[] | null {
+  if (/\bneeds? attention now or soon\b/i.test(message)) return ['NOW', 'SOON'];
+  if (/\bplan ahead\b/i.test(message)) return ['PLAN', 'CONSIDER'];
+  if (/\b(?:urgent|right now|immediately|priority now)\b/i.test(message)) return ['NOW'];
+  if (/\bsoon\b/i.test(message)) return ['SOON'];
+  if (/\b(?:should i plan|planning|plan for|later)\b/i.test(message)) return ['PLAN'];
+  if (/\b(?:can wait|consider)\b/i.test(message)) return ['PLAN', 'CONSIDER'];
+  return null;
+}
+
 export function focusedOperationForLaunchContext(context?: {
   entityType?: string | null;
   entityId?: string | null;

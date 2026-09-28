@@ -8,7 +8,17 @@ const {
   focusedHomeActionCategory,
   focusedHomeActionQuestion,
   focusedOperationForLaunchContext,
+  homeActionPriorityFilter,
 } = require('../../src/services/ask/askFocusedGuidance.ts');
+
+test('landing section prompts preserve the dashboard priority partitions', () => {
+  assert.deepEqual(homeActionPriorityFilter('Show me what needs attention now or soon'), ['NOW', 'SOON']);
+  assert.deepEqual(homeActionPriorityFilter('Show me what I should plan ahead for'), ['PLAN', 'CONSIDER']);
+  assert.deepEqual(homeActionPriorityFilter('What is urgent?'), ['NOW']);
+  assert.deepEqual(homeActionPriorityFilter('What is due soon?'), ['SOON']);
+  assert.deepEqual(homeActionPriorityFilter('What can wait?'), ['PLAN', 'CONSIDER']);
+  assert.equal(homeActionPriorityFilter('What should I do next?'), null);
+});
 
 function weatherAction() {
   return {
