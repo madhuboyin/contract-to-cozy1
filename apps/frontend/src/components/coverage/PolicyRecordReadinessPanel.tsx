@@ -167,8 +167,8 @@ export default function PolicyRecordReadinessPanel({ propertyId, policyId }: { p
         {currentTerm && (
           <p className="mt-1 text-xs text-muted-foreground">
             Effective {formatDate(currentTerm.termStart)}–{formatDate(currentTerm.termEnd)}
-            {currentTerm.sourceDocument?.name
-              ? ` · source ${currentTerm.sourceDocument.name}`
+            {currentTerm.sourceDocument?.title
+              ? ` · source ${currentTerm.sourceDocument.title}`
               : ' · source not linked'}
           </p>
         )}
@@ -190,7 +190,7 @@ export default function PolicyRecordReadinessPanel({ propertyId, policyId }: { p
                     <p className="text-sm"><span className="text-muted-foreground">Existing confirmed record:</span> {formatFactValue(confirmedByKey.get(fact.factKey)!)}</p>
                   )}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Source: {fact.sourceDocument?.name ?? 'Policy document'}
+                    Source: {fact.sourceDocument?.title ?? 'Policy document'}
                     {fact.sourcePage ? `, page ${fact.sourcePage}` : ', page not captured'}
                     {fact.confidence != null
                       ? ` · extraction confidence ${Math.round(fact.confidence * 100)}%`
@@ -233,7 +233,7 @@ export default function PolicyRecordReadinessPanel({ propertyId, policyId }: { p
                 <dd className="text-sm sm:text-right">{formatFactValue(fact)}</dd>
                 <dd className="text-xs text-muted-foreground sm:col-span-2 sm:text-right">
                   Confirmed
-                  {fact.sourceDocument?.name ? ` from ${fact.sourceDocument.name}` : ''}
+                  {fact.sourceDocument?.title ? ` from ${fact.sourceDocument.title}` : ''}
                   {fact.sourcePage ? `, page ${fact.sourcePage}` : ''}
                 </dd>
               </div>

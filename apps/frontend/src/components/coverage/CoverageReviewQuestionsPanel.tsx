@@ -117,8 +117,8 @@ export default function CoverageReviewQuestionsPanel({ propertyId }: { propertyI
           <p className="mt-3 text-xs text-muted-foreground">
             {review.policyTerm.insurancePolicy.carrierName} · policy{' '}
             {review.policyTerm.insurancePolicy.policyNumber}
-            {review.policyTerm.sourceDocument?.name
-              ? ` · ${review.policyTerm.sourceDocument.name}`
+            {review.policyTerm.sourceDocument?.title
+              ? ` · ${review.policyTerm.sourceDocument.title}`
               : ' · no source document linked'}
           </p>
         )}

@@ -50,7 +50,8 @@ export type CoverageReviewDTO = {
     termEnd: string | null;
     verificationStatus: 'VERIFIED' | 'UNVERIFIED';
     insurancePolicy: { id: string; carrierName: string; policyNumber: string };
-    sourceDocument: { id: string; name: string } | null;
+    // A Home Record now (Documents slice S5d): title, not the legacy vault's name.
+    sourceDocument: { id: string; title: string } | null;
   } | null;
   questions: CoverageReviewQuestionDTO[];
 };
@@ -83,7 +84,8 @@ export type InsurancePolicyHistoryDTO = {
       policyNumber: string;
       coverageType: string | null;
     };
-    sourceDocument: { id: string; name: string } | null;
+    // A Home Record now (Documents slice S5d): title, not the legacy vault's name.
+    sourceDocument: { id: string; title: string } | null;
     facts: Array<{
       id: string;
       factKey: string;
@@ -95,7 +97,7 @@ export type InsurancePolicyHistoryDTO = {
       currency: string | null;
       sourceDocumentId: string | null;
       sourcePage: number | null;
-      sourceDocument: { id: string; name: string } | null;
+      sourceDocument: { id: string; title: string } | null;
     }>;
   }>;
   changes: Array<{
@@ -194,7 +196,9 @@ export type CoverageComparisonDTO = {
     termStart: string | null;
     termEnd: string | null;
     insurancePolicy: { id: string; carrierName: string; policyNumber: string };
-    sourceDocument: { id: string; name: string } | null;
+    // A Home Record now (Documents slice S5d); options[].sourceDocument below is a different relation
+    // (CoverageComparisonOption's own, still the legacy vault — not converted this pass).
+    sourceDocument: { id: string; title: string } | null;
   };
   options: CoverageComparisonOptionDTO[];
   decisions: Array<{

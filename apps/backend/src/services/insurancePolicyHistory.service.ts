@@ -133,11 +133,11 @@ export async function getInsurancePolicyHistory(
       insurancePolicy: {
         select: { id: true, carrierName: true, policyNumber: true, coverageType: true },
       },
-      sourceDocument: { select: { id: true, name: true } },
+      sourceDocument: { select: { id: true, title: true } },
       facts: {
         where: { confirmationStatus: 'CONFIRMED' },
         orderBy: { factKey: 'asc' },
-        include: { sourceDocument: { select: { id: true, name: true } } },
+        include: { sourceDocument: { select: { id: true, title: true } } },
       },
     },
   });

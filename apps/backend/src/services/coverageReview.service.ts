@@ -56,10 +56,10 @@ export async function getOrCreateCoverageReview(
       insurancePolicy: {
         select: { id: true, carrierName: true, policyNumber: true },
       },
-      sourceDocument: { select: { id: true, name: true } },
+      sourceDocument: { select: { id: true, title: true } },
       facts: {
         orderBy: { factKey: 'asc' },
-        include: { sourceDocument: { select: { id: true, name: true } } },
+        include: { sourceDocument: { select: { id: true, title: true } } },
       },
     },
   });
@@ -118,7 +118,7 @@ export async function getOrCreateCoverageReview(
           insurancePolicy: {
             select: { id: true, carrierName: true, policyNumber: true },
           },
-          sourceDocument: { select: { id: true, name: true } },
+          sourceDocument: { select: { id: true, title: true } },
         },
       },
       questions: {
@@ -200,7 +200,7 @@ export async function getOrCreateCoverageReview(
             insurancePolicy: {
               select: { id: true, carrierName: true, policyNumber: true },
             },
-            sourceDocument: { select: { id: true, name: true } },
+            sourceDocument: { select: { id: true, title: true } },
           },
         },
         questions: {

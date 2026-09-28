@@ -130,6 +130,13 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
     });
     if (!property) throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
 
+    // input.documentId is only ever populated by documentIntelligence.service.ts's autoCreateInsurancePolicy,
+    // which has no caller anywhere in the app (grep-confirmed dead) — the one live caller
+    // (homeRecordsExtraction.service.ts's promoteInsurancePolicy) deliberately omits it and links a Home Record
+    // to the policy via PropertyRecordLink instead (see ExtractedPolicyTermInput's own doc comment). This stays
+    // a legacy-Document-only lookup by design, not converted to the canonical inventory: the intended way to
+    // reference a Home Record here is the PropertyRecordLink path the live caller already uses, not this
+    // scalar column.
     const document = input.documentId
       ? await tx.document.findFirst({
           where: {
@@ -220,10 +227,10 @@ export async function getPolicyRecord(policyId: string, homeownerProfileId: stri
       terms: {
         orderBy: [{ termStart: 'desc' }, { createdAt: 'desc' }],
         include: {
-          sourceDocument: { select: { id: true, name: true } },
+          sourceDocument: { select: { id: true, title: true } },
           facts: {
             orderBy: { factKey: 'asc' },
-            include: { sourceDocument: { select: { id: true, name: true } } },
+            include: { sourceDocument: { select: { id: true, title: true } } },
           },
         },
       },

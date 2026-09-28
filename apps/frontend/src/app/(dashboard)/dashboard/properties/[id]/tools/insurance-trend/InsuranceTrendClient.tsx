@@ -103,9 +103,9 @@ export default function InsuranceTrendClient({ embedded = false }: { embedded?: 
   const documentNames = useMemo(() => {
     const names = new Map<string, string>();
     for (const term of history?.terms ?? []) {
-      if (term.sourceDocument) names.set(term.sourceDocument.id, term.sourceDocument.name);
+      if (term.sourceDocument) names.set(term.sourceDocument.id, term.sourceDocument.title);
       for (const fact of term.facts) {
-        if (fact.sourceDocument) names.set(fact.sourceDocument.id, fact.sourceDocument.name);
+        if (fact.sourceDocument) names.set(fact.sourceDocument.id, fact.sourceDocument.title);
       }
     }
     return names;
@@ -310,7 +310,7 @@ export default function InsuranceTrendClient({ embedded = false }: { embedded?: 
                     </span>
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Source: {term.sourceDocument?.name ?? 'homeowner-confirmed policy facts'}
+                    Source: {term.sourceDocument?.title ?? 'homeowner-confirmed policy facts'}
                   </p>
                 </article>
               );

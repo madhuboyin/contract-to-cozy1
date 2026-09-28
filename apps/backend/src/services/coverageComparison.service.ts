@@ -193,7 +193,9 @@ const comparisonInclude = {
   baselinePolicyTerm: {
     include: {
       insurancePolicy: { select: { id: true, carrierName: true, policyNumber: true } },
-      sourceDocument: { select: { id: true, name: true } },
+      // A Home Record now (Documents slice S5d) — options.sourceDocument below is a different relation
+      // (CoverageComparisonOption's own, still the legacy Document table; not converted this pass).
+      sourceDocument: { select: { id: true, title: true } },
     },
   },
   options: {

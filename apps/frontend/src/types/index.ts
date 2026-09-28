@@ -1544,7 +1544,8 @@ export interface InsurancePolicyFact {
   confirmedAt: string | null;
   effectiveFrom: string | null;
   effectiveTo: string | null;
-  sourceDocument?: Pick<Document, 'id' | 'name'> | null;
+  // A Home Record now (Documents slice S5d): title, not the legacy vault's name.
+  sourceDocument?: { id: string; title: string } | null;
 }
 
 export interface InsurancePolicyTerm {
@@ -1558,7 +1559,8 @@ export interface InsurancePolicyTerm {
   verificationStatus: 'UNVERIFIED' | 'VERIFIED';
   verifiedAt: string | null;
   sourceDocumentId: string | null;
-  sourceDocument?: Pick<Document, 'id' | 'name'> | null;
+  // A Home Record now (Documents slice S5d): title, not the legacy vault's name.
+  sourceDocument?: { id: string; title: string } | null;
   facts: InsurancePolicyFact[];
   createdAt: string;
   updatedAt: string;
