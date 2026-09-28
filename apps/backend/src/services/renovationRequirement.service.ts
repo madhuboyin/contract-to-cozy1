@@ -3,10 +3,12 @@ import {
   Prisma,
   RenovationAdvisoryLikelihood,
   RenovationRequirementFamily,
+  type HouseholdRole,
 } from '@prisma/client';
 import { prisma } from '../config/database';
 import { APIError } from '../middleware/error.middleware';
 import { resolvePropertyAccess } from './propertyAccess.service';
+import { resolvePropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 import {
   pollAuthorityGuidance,
   type AuthorityGuidanceResult,
@@ -304,11 +306,11 @@ export async function listRequirements(propertyId: string, renovationCaseId: str
   });
 }
 
-async function assertOptionalTargets(propertyId: string, input: any) {
+async function assertOptionalTargets(propertyId: string, input: any, role: HouseholdRole) {
   const checks = await Promise.all([
     input.ownerUserId ? resolvePropertyAccess(input.ownerUserId, propertyId) : true,
     input.sourceDocumentId
-      ? prisma.document.findFirst({ where: { id: input.sourceDocumentId, propertyId }, select: { id: true } })
+      ? resolvePropertyDocuments({ propertyId, role, ids: [input.sourceDocumentId] }).then((matches) => matches.length > 0)
       : true,
     input.relatedPermitId
       ? prisma.propertyPermitRecord.findFirst({ where: { id: input.relatedPermitId, propertyId }, select: { id: true } })
@@ -332,6 +334,7 @@ export async function determineRequirement(
   requirementId: string,
   actorUserId: string,
   input: any,
+  role: HouseholdRole,
 ) {
   await caseWithScope(propertyId, renovationCaseId);
   const requirement = await prisma.renovationRequirement.findFirst({
@@ -340,7 +343,7 @@ export async function determineRequirement(
   if (!requirement) {
     throw new APIError('Renovation requirement not found.', 404, 'RENOVATION_REQUIREMENT_NOT_FOUND');
   }
-  await assertOptionalTargets(propertyId, input);
+  await assertOptionalTargets(propertyId, input, role);
 
   await prisma.$transaction(async (tx) => {
     await tx.renovationRequirement.update({
@@ -405,15 +408,13 @@ export async function upsertAuthorityProfile(
   renovationCaseId: string,
   actorUserId: string,
   input: any,
+  role: HouseholdRole,
 ) {
   const renovationCase = await caseWithScope(propertyId, renovationCaseId);
   const scopeVersionId = renovationCase.currentScopeVersion!.id;
   if (input.sourceDocumentId) {
-    const document = await prisma.document.findFirst({
-      where: { id: input.sourceDocumentId, propertyId },
-      select: { id: true },
-    });
-    if (!document) {
+    const matches = await resolvePropertyDocuments({ propertyId, role, ids: [input.sourceDocumentId] });
+    if (matches.length === 0) {
       throw new APIError(
         'Authority profile source document must belong to the same property.',
         409,

@@ -11,13 +11,23 @@ const calls = {
 };
 
 const prismaMock = {
-  document: {
-    findFirst: async (args) => {
+  propertyRecord: {
+    findMany: async (args) => {
       calls.evidenceLookups.push(args);
-      return args.where.id === 'document-property-1'
-        && args.where.propertyId === 'property-1'
-        ? { id: args.where.id }
-        : null;
+      const wanted = args.where.id.in;
+      if (args.where.propertyId !== 'property-1') return [];
+      return wanted
+        .filter((id) => id === 'record-property-1')
+        .map((id) => ({
+          id,
+          title: 'HOA decision letter',
+          recordType: 'HOA',
+          description: null,
+          verificationStatus: 'UNVERIFIED',
+          verifiedAt: null,
+          updatedAt: new Date(),
+          createdAt: new Date(),
+        }));
     },
   },
   hoaApprovalRecord: {
@@ -78,7 +88,7 @@ test('association decisions require an explicit truth layer and source', async (
   await assert.rejects(
     () => assertDecisionTruth('property-1', {
       decisionStatus: 'APPROVED',
-    }),
+    }, 'OWNER'),
     (error) => {
       assert.equal(error.code, 'HOA_DECISION_PROVENANCE_REQUIRED');
       return true;
@@ -92,8 +102,8 @@ test('documented decisions require property-scoped evidence', async () => {
       decisionStatus: 'APPROVED',
       decisionTruthLayer: 'DOCUMENTED',
       decisionSourceType: 'ASSOCIATION_DOCUMENT',
-      decisionEvidenceDocumentId: 'document-other-property',
-    }),
+      decisionEvidenceDocumentId: 'record-other-property',
+    }, 'OWNER'),
     (error) => {
       assert.equal(error.code, 'HOA_DECISION_EVIDENCE_PROPERTY_MISMATCH');
       return true;
@@ -105,9 +115,9 @@ test('documented decisions require property-scoped evidence', async () => {
       decisionStatus: 'APPROVED_WITH_CONDITIONS',
       decisionTruthLayer: 'DOCUMENTED',
       decisionSourceType: 'ASSOCIATION_DOCUMENT',
-      decisionEvidenceDocumentId: 'document-property-1',
+      decisionEvidenceDocumentId: 'record-property-1',
       approvalConditions: 'Use the approved exterior color palette.',
-    }),
+    }, 'OWNER'),
   );
 });
 
@@ -116,7 +126,7 @@ test('decision metadata cannot exist without decision truth', async () => {
     () => assertDecisionTruth('property-1', {
       decisionSourceType: 'ASSOCIATION_EMAIL',
       decisionSourceReference: 'board@example.test',
-    }),
+    }, 'OWNER'),
     (error) => {
       assert.equal(error.code, 'HOA_DECISION_STATUS_REQUIRED');
       return true;
@@ -135,6 +145,7 @@ test('reported HOA progress never becomes association decision truth', async () 
       reportedStatus: 'APPROVED',
       decisionDate: '2026-07-29T12:00:00.000Z',
     },
+    'OWNER',
   );
 
   assert.equal(calls.updates.length, 1);

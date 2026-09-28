@@ -93,6 +93,7 @@ export async function createApprovalRecord(req: Request, res: Response, next: Ne
       req.params.propertyId,
       req.user!.userId,
       req.body,
+      req.householdRole!,
     );
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
@@ -132,6 +133,7 @@ export async function updateApprovalRecord(req: Request, res: Response, next: Ne
       req.params.propertyId,
       req.user!.userId,
       req.body,
+      req.householdRole!,
     );
     res.json({ success: true, data: { record } });
   } catch (err) { next(err); }

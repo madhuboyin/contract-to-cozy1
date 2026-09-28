@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type HouseholdRole } from '@prisma/client';
 
 type PermitRecordCategory =
   | 'BUILDING' | 'ELECTRICAL' | 'PLUMBING' | 'MECHANICAL' | 'STRUCTURAL'
@@ -21,6 +21,7 @@ type RenovationInspectionStageType =
   | 'ROUGH_IN' | 'ELECTRICAL' | 'PLUMBING' | 'MECHANICAL' | 'INSULATION' | 'FINAL' | 'OTHER';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 import { getGeneratePermitDisclosureQueue } from './JobQueue.service';
 import { presignGetObject } from './storage/presign';
 import { JOB_REGISTRY } from '../config/workerJobRegistry';
@@ -288,23 +289,20 @@ export class PermitTrackerService {
     return this.getPermitDetail(permitId, propertyId);
   }
 
-  async recordOfficialStatus(permitId: string, propertyId: string, userId: string, payload: any) {
+  async recordOfficialStatus(permitId: string, propertyId: string, userId: string, payload: any, role: HouseholdRole) {
     const existing = await prisma.propertyPermitRecord.findFirst({
       where: { id: permitId, propertyId, isActive: true },
     });
     if (!existing) throw new APIError('Permit not found', 404, 'NOT_FOUND');
     if (payload.evidenceDocumentId) {
-      const evidence = await prisma.document.findFirst({
-        where: { id: payload.evidenceDocumentId, propertyId },
-        select: { id: true },
-      });
-      if (!evidence) {
-        throw new APIError(
+      await assertPropertyDocumentsExist(
+        { propertyId, role, ids: [payload.evidenceDocumentId] },
+        () => new APIError(
           'Official permit evidence must belong to the same property.',
           409,
           'PERMIT_EVIDENCE_SCOPE_MISMATCH',
-        );
-      }
+        ),
+      );
     }
     await prisma.propertyPermitRecord.update({
       where: { id: permitId },

@@ -3,10 +3,12 @@ import {
   HoaDecisionStatus,
   HoaDecisionSourceType,
   HoaDecisionTruthLayer,
+  HouseholdRole,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { IncidentService } from './incidents/incident.service';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 
 class HoaComplianceService {
   // ── Association ──────────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ class HoaComplianceService {
     });
   }
 
-  async createApprovalRecord(propertyId: string, userId: string, payload: any) {
+  async createApprovalRecord(propertyId: string, userId: string, payload: any, role: HouseholdRole) {
     const association = await prisma.hoaAssociation.findFirst({
       where: { propertyId, isActive: true },
     });
@@ -55,7 +57,7 @@ class HoaComplianceService {
       throw new APIError('Add your HOA/association details before tracking an approval', 400, 'NO_ASSOCIATION');
     }
 
-    await assertDecisionTruth(propertyId, payload);
+    await assertDecisionTruth(propertyId, payload, role);
     const hasDecision = payload.decisionStatus != null;
 
     return prisma.hoaApprovalRecord.create({
@@ -97,7 +99,7 @@ class HoaComplianceService {
     });
   }
 
-  async updateApprovalRecord(recordId: string, propertyId: string, userId: string, patch: any) {
+  async updateApprovalRecord(recordId: string, propertyId: string, userId: string, patch: any, role: HouseholdRole) {
     const existing = await prisma.hoaApprovalRecord.findFirst({
       where: { id: recordId, propertyId, isActive: true },
     });
@@ -147,7 +149,7 @@ class HoaComplianceService {
         ? patch.decisionEffectiveDate
         : existing.decisionEffectiveDate,
     };
-    await assertDecisionTruth(propertyId, candidateDecision);
+    await assertDecisionTruth(propertyId, candidateDecision, role);
 
     return prisma.hoaApprovalRecord.update({
       where: { id: recordId },
@@ -326,7 +328,7 @@ export async function assertDecisionTruth(propertyId: string, input: {
   approvalConditions?: string | null;
   decisionObservedAt?: string | Date | null;
   decisionEffectiveDate?: string | Date | null;
-}) {
+}, role: HouseholdRole) {
   if (input.decisionStatus == null) {
     const hasOrphanedDecisionMetadata = Boolean(
       input.decisionTruthLayer
@@ -407,20 +409,14 @@ export async function assertDecisionTruth(propertyId: string, input: {
   }
 
   if (input.decisionEvidenceDocumentId) {
-    const evidence = await prisma.document.findFirst({
-      where: {
-        id: input.decisionEvidenceDocumentId,
-        propertyId,
-      },
-      select: { id: true },
-    });
-    if (!evidence) {
-      throw new APIError(
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids: [input.decisionEvidenceDocumentId] },
+      () => new APIError(
         'HOA decision evidence must belong to the same property',
         400,
         'HOA_DECISION_EVIDENCE_PROPERTY_MISMATCH',
-      );
-    }
+      ),
+    );
   }
 }
 

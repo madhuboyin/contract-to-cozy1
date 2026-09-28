@@ -1,8 +1,10 @@
+import type { HouseholdRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import { APIError } from '../middleware/error.middleware';
 import { getRenovationCase, linkContributor } from './renovationCase.service';
 import { resolvePropertyAccess } from './propertyAccess.service';
 import { hoaComplianceService } from './hoaCompliance.service';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 import {
   markProjectsForRenovationCaseReconciliationError,
   reconcileProjectsForRenovationCase,
@@ -123,6 +125,7 @@ export async function createCondition(
   renovationCaseId: string,
   actorUserId: string,
   input: any,
+  role: HouseholdRole,
 ) {
   const scopeVersionId = await caseScope(propertyId, renovationCaseId, input.scopeVersionId);
   await subject(propertyId, input.subjectType, input.subjectId);
@@ -130,11 +133,10 @@ export async function createCondition(
     throw new APIError('Condition owner must have property access.', 409, 'RENOVATION_CONDITION_OWNER_SCOPE_MISMATCH');
   }
   if (input.sourceDocumentId) {
-    const evidence = await prisma.document.findFirst({
-      where: { id: input.sourceDocumentId, propertyId },
-      select: { id: true },
-    });
-    if (!evidence) throw new APIError('Condition evidence must belong to this property.', 409, 'RENOVATION_CONDITION_EVIDENCE_SCOPE_MISMATCH');
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids: [input.sourceDocumentId] },
+      () => new APIError('Condition evidence must belong to this property.', 409, 'RENOVATION_CONDITION_EVIDENCE_SCOPE_MISMATCH'),
+    );
   }
   const created = await prisma.renovationComplianceCondition.create({
     data: {
@@ -171,17 +173,17 @@ export async function updateCondition(
   conditionId: string,
   actorUserId: string,
   input: any,
+  role: HouseholdRole,
 ) {
   const condition = await prisma.renovationComplianceCondition.findFirst({
     where: { id: conditionId, renovationCaseId, propertyId },
   });
   if (!condition) throw new APIError('Compliance condition not found.', 404, 'RENOVATION_CONDITION_NOT_FOUND');
   if (input.sourceDocumentId) {
-    const evidence = await prisma.document.findFirst({
-      where: { id: input.sourceDocumentId, propertyId },
-      select: { id: true },
-    });
-    if (!evidence) throw new APIError('Condition evidence must belong to this property.', 409, 'RENOVATION_CONDITION_EVIDENCE_SCOPE_MISMATCH');
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids: [input.sourceDocumentId] },
+      () => new APIError('Condition evidence must belong to this property.', 409, 'RENOVATION_CONDITION_EVIDENCE_SCOPE_MISMATCH'),
+    );
   }
   const updated = await prisma.renovationComplianceCondition.update({
     where: { id: conditionId },
@@ -207,20 +209,18 @@ export async function createHoaDocumentReview(
   propertyId: string,
   renovationCaseId: string,
   input: any,
+  role: HouseholdRole,
 ) {
   const scopeVersionId = await caseScope(propertyId, renovationCaseId, input.scopeVersionId);
   await subject(propertyId, 'HOA_APPROVAL', input.hoaApprovalId);
-  const document = await prisma.document.findFirst({
-    where: { id: input.documentId, propertyId },
-    select: { id: true },
-  });
-  if (!document) {
-    throw new APIError(
+  await assertPropertyDocumentsExist(
+    { propertyId, role, ids: [input.documentId] },
+    () => new APIError(
       'HOA extraction source document must belong to this property.',
       409,
       'HOA_DOCUMENT_REVIEW_PROPERTY_MISMATCH',
-    );
-  }
+    ),
+  );
   return prisma.hoaApprovalDocumentReview.upsert({
     where: {
       renovationCaseId_scopeVersionId_hoaApprovalId_documentId: {
@@ -268,6 +268,7 @@ export async function reviewHoaDocumentExtraction(
   reviewId: string,
   actorUserId: string,
   input: any,
+  role: HouseholdRole,
 ) {
   const review = await prisma.hoaApprovalDocumentReview.findFirst({
     where: { id: reviewId, propertyId, renovationCaseId },
@@ -331,6 +332,7 @@ export async function reviewHoaDocumentExtraction(
         expirationDate: review.extractedExpirationDate?.toISOString(),
         approvalConditions: selectedConditions.map(condition => condition.description).join('\n\n') || undefined,
       },
+      role,
     );
   }
   for (const condition of selectedConditions) {

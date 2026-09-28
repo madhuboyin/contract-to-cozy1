@@ -89,6 +89,7 @@ export async function createComplianceCondition(req: Request, res: Response, nex
       req.params.caseId,
       req.user!.userId,
       req.body,
+      req.householdRole!,
     );
     res.status(201).json({ success: true, data });
   } catch (error) { next(error); }
@@ -102,6 +103,7 @@ export async function updateComplianceCondition(req: Request, res: Response, nex
       req.params.conditionId,
       req.user!.userId,
       req.body,
+      req.householdRole!,
     );
     res.json({ success: true, data });
   } catch (error) { next(error); }
@@ -113,6 +115,7 @@ export async function createHoaDocumentReview(req: Request, res: Response, next:
       req.params.propertyId,
       req.params.caseId,
       req.body,
+      req.householdRole!,
     );
     res.status(201).json({ success: true, data });
   } catch (error) { next(error); }
@@ -126,6 +129,7 @@ export async function reviewHoaDocumentExtraction(req: Request, res: Response, n
       req.params.reviewId,
       req.user!.userId,
       req.body,
+      req.householdRole!,
     );
     res.json({ success: true, data });
   } catch (error) { next(error); }
@@ -158,6 +162,7 @@ export async function determineRequirement(req: Request, res: Response, next: Ne
       req.params.requirementId,
       req.user!.userId,
       req.body,
+      req.householdRole!,
     );
     res.json({ success: true, data });
   } catch (error) { next(error); }
@@ -170,6 +175,7 @@ export async function createAuthorityProfile(req: Request, res: Response, next: 
       req.params.caseId,
       req.user!.userId,
       req.body,
+      req.householdRole!,
     );
     res.status(201).json({ success: true, data });
   } catch (error) { next(error); }

@@ -5103,16 +5103,11 @@ model Document {
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
   propertyTaxIntake          PropertyTaxDocumentIntake?
-  renovationRequirementEvidence RenovationRequirement[]
-  renovationAuthorityProfileSources RenovationAuthorityProfile[]
-  permitOfficialStatusEvidence PropertyPermitRecord[] @relation("PermitOfficialStatusEvidence")
-  renovationConditionEvidence RenovationComplianceCondition[]
   propertyTaxAppealEvidence  PropertyTaxAppealEvidence[]   @relation("PropertyTaxAppealEvidenceDocument")
   propertyTaxAppealComparables PropertyTaxAppealComparable[] @relation("PropertyTaxAppealComparableDocument")
   propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[] @relation("PropertyTaxAppealFilingConfirmation")
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
   quoteComparisonExtractions QuoteComparisonExtraction[]
-  hoaApprovalDecisionEvidence HoaApprovalRecord[]        @relation("HoaApprovalDecisionEvidence")
 
   homeSavingsAccountId     String?
   homeSavingsOpportunityId String?
@@ -5202,6 +5197,11 @@ model PropertyRecord {
   insurancePolicyTermSources       InsurancePolicyTerm[]                @relation("InsurancePolicyTermSourceDocument")
   insurancePolicyFactSources       InsurancePolicyFact[]                @relation("InsurancePolicyFactSourceDocument")
   coverageComparisonOptions        CoverageComparisonOption[]           @relation("CoverageComparisonOptionDocument")
+  renovationRequirementEvidence    RenovationRequirement[]
+  renovationAuthorityProfileSources RenovationAuthorityProfile[]
+  permitOfficialStatusEvidence     PropertyPermitRecord[]                @relation("PermitOfficialStatusEvidence")
+  renovationConditionEvidence      RenovationComplianceCondition[]
+  hoaApprovalDecisionEvidence      HoaApprovalRecord[]                   @relation("HoaApprovalDecisionEvidence")
 
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])
@@ -17658,7 +17658,7 @@ model RenovationComplianceCondition {
   scopeVersion   RenovationScopeVersion @relation(fields: [scopeVersionId], references: [id], onDelete: Cascade)
   permitRecord   PropertyPermitRecord? @relation(fields: [permitRecordId], references: [id], onDelete: Cascade)
   hoaApproval    HoaApprovalRecord? @relation(fields: [hoaApprovalId], references: [id], onDelete: Cascade)
-  sourceDocument Document? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceDocument PropertyRecord? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
   owner          User? @relation("RenovationComplianceConditionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   verifiedBy     User? @relation("RenovationComplianceConditionVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
 
@@ -17701,7 +17701,7 @@ model RenovationAuthorityProfile {
   property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   scopeVersion   RenovationScopeVersion @relation(fields: [scopeVersionId], references: [id], onDelete: Cascade)
   confirmedBy    User? @relation("RenovationAuthorityProfileConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
-  sourceDocument Document? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceDocument PropertyRecord? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   @@unique([renovationCaseId, version])
   @@index([propertyId, status])
@@ -17753,7 +17753,7 @@ model RenovationRequirement {
   scopeVersion   RenovationScopeVersion @relation(fields: [scopeVersionId], references: [id], onDelete: Cascade)
   owner          User? @relation("RenovationRequirementOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   determinedBy   User? @relation("RenovationRequirementDeterminedBy", fields: [determinedByUserId], references: [id], onDelete: SetNull)
-  sourceDocument Document? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceDocument PropertyRecord? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
   advisorSession HomeRenovationAdvisorSession? @relation(fields: [advisorSessionId], references: [id], onDelete: SetNull)
   relatedPermit PropertyPermitRecord? @relation(fields: [relatedPermitId], references: [id], onDelete: SetNull)
   relatedHoaApproval HoaApprovalRecord? @relation(fields: [relatedHoaApprovalId], references: [id], onDelete: SetNull)
@@ -20274,7 +20274,7 @@ model PropertyPermitRecord {
   property                 Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   dataSource               PermitDataSource?             @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
   renovationAdvisorSession HomeRenovationAdvisorSession? @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
-  officialEvidenceDocument Document? @relation("PermitOfficialStatusEvidence", fields: [officialEvidenceDocumentId], references: [id], onDelete: SetNull)
+  officialEvidenceDocument PropertyRecord? @relation("PermitOfficialStatusEvidence", fields: [officialEvidenceDocumentId], references: [id], onDelete: SetNull)
 
   inspectionMilestones      PermitInspectionMilestone[]
   unpermittedFlags          PermitUnpermittedFlag[]     @relation("ResolvedByPermit")
@@ -20616,7 +20616,7 @@ model HoaApprovalRecord {
   property                 Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   hoaAssociation           HoaAssociation                @relation(fields: [hoaAssociationId], references: [id], onDelete: Cascade)
   renovationAdvisorSession HomeRenovationAdvisorSession? @relation(fields: [renovationAdvisorSessionId], references: [id], onDelete: SetNull)
-  decisionEvidenceDocument Document?                      @relation("HoaApprovalDecisionEvidence", fields: [decisionEvidenceDocumentId], references: [id], onDelete: SetNull)
+  decisionEvidenceDocument PropertyRecord?                @relation("HoaApprovalDecisionEvidence", fields: [decisionEvidenceDocumentId], references: [id], onDelete: SetNull)
   renovationRequirements    RenovationRequirement[]
   complianceConditions      RenovationComplianceCondition[]
 

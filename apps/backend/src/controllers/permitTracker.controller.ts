@@ -167,6 +167,7 @@ export async function recordOfficialPermitStatus(req: Request, res: Response, ne
       req.params.propertyId,
       req.user!.userId,
       req.body,
+      req.householdRole!,
     );
     res.json({ success: true, data: { permit } });
   } catch (err) { next(err); }
