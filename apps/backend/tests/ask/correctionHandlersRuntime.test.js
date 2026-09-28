@@ -1258,6 +1258,9 @@ test('Add item: the declared action returns the form (name, category, room with 
   assert.deepEqual([byKey.name.required, byKey.category.required, byKey.roomId.required, byKey.brand.required, byKey.model.required], [true, true, true, false, false]);
   assert.deepEqual(byKey.roomId.inputSchema.options.map((option) => option.value), [ROOM_KITCHEN.id, 'NONE']);
   assert.equal(byKey.category.inputSchema.options.length, 14);
+  assert.equal(request.currentAnswer.roomId, null);
+  const fromRoom = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope({ ...declaredItemAdd, entityType: 'INVENTORY_ROOM', entityId: ROOM_KITCHEN.id }));
+  assert.equal(fromRoom.captureRequests[0].currentAnswer.roomId, ROOM_KITCHEN.id);
   assert.equal(calls.createItem.length, 0);
 });
 

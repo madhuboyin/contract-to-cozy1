@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useMemo } from 'react';
 import { BlockView } from '../blocks/registry';
+import { AskBlockActionContext } from '../blocks/context';
+import { RoomResultList } from '../RoomResultList';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { floorLabel, roomFloors } from '@/features/ask/displayPatterns';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
@@ -43,6 +45,11 @@ function Harness({ onItemAction = jest.fn() }: { onItemAction?: jest.Mock }) {
 const canonicalRoom = (): RoomInsightsDTO => ({
   room: { id: 'kitchen', name: 'Kitchen', type: 'KITCHEN', profile: null },
   stats: { itemCount: 7, replacementTotalCents: 1250000, coverageGapsCount: 1, appliancesCount: 4, docsLinkedCount: 3 },
+  items: [
+    { id: 'oven', name: 'Oven Range', category: 'APPLIANCE', condition: 'GOOD' },
+    { id: 'dishwasher', name: 'Dishwasher', category: 'APPLIANCE', condition: null },
+  ],
+  itemsTruncated: false,
   healthScore: { score: 82, band: 'GOOD', label: 'Good', evaluationState: 'SCORED', badges: [], improvements: [] },
   kitchen: { missingAppliances: [], quickWins: [] },
 } as RoomInsightsDTO);
@@ -72,10 +79,36 @@ test('a tile opens the live room detail in the sheet, with its corrections', asy
   render(<Harness onItemAction={onItemAction} />);
   fireEvent.click(await screen.findByRole('button', { name: /Kitchen/ }));
   const sheet = await screen.findByRole('dialog', { name: 'Room detail: Kitchen' });
-  await waitFor(() => expect(within(sheet).getByText('Good · 82/100')).toBeInTheDocument());
+  await waitFor(() => expect(within(sheet).getByText('Oven Range')).toBeInTheDocument());
+  expect(within(sheet).getByText('Dishwasher')).toBeInTheDocument();
+  expect(within(sheet).getByRole('link', { name: /Open full room record/ })).toHaveAttribute('href', '/dashboard/properties/home/rooms/kitchen');
   expect(mockedGetRoomInsights).toHaveBeenCalledWith('home', 'kitchen');
   fireEvent.click(within(sheet).getByRole('button', { name: /Rename room/ }));
   expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ROOM', 'kitchen', 'Rename this room.', 'ROOM_RENAME', 'MUTATE_RECORD');
+});
+
+test('the focused room answer removes duplicate chrome and keeps room and add actions inside Ask', async () => {
+  mockedGetRoomInsights.mockResolvedValueOnce(canonicalRoom());
+  const invoke = jest.fn();
+  const onAction = jest.fn();
+  const focused: Block = {
+    ...block,
+    presentation: { pattern: 'ROOM_MAP', focused: true },
+    actions: [{ id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW', message: 'Add a room to my home record.', operationId: 'ROOM_CREATE', style: 'PRIMARY' }],
+  };
+  render(<AskBlockActionContext.Provider value={{ disabled: false, invoke }}><RoomResultList block={focused} propertyId="home" onAction={onAction} onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} layout="MAP" onChooseLayout={() => {}} /></AskBlockActionContext.Provider>);
+
+  expect(screen.queryByRole('heading', { name: 'Rooms' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'List' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /Open Rooms/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Add a room/ }));
+  expect(invoke).toHaveBeenCalledWith(focused.actions[0]);
+
+  fireEvent.click(screen.getByRole('button', { name: /Kitchen/ }));
+  const sheet = await screen.findByRole('dialog', { name: 'Room detail: Kitchen' });
+  expect(await within(sheet).findByText('Oven Range')).toBeInTheDocument();
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Add an item' }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ROOM', 'kitchen', 'Add an item to my home inventory.', 'INVENTORY_ITEM_CREATE', 'CONVERSATION_CONTINUE');
 });
 
 test('the Room map / List switch keeps the rooms component: the list shows the counts and opens the same detail inline', async () => {
@@ -86,7 +119,7 @@ test('the Room map / List switch keeps the rooms component: the list shows the c
   expect(container.querySelector('[data-display-pattern="room_map"]')).toBeNull();
   expect(screen.getByText('Kitchen · 7 items · 2 open tasks · Updated Sep 1, 2026')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
-  await waitFor(() => expect(screen.getByText('Good · 82/100')).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText('Oven Range')).toBeInTheDocument());
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Room map' }));
   expect(container.querySelector('[data-display-pattern="room_map"]')).toBeInTheDocument();

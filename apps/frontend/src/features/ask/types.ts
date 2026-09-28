@@ -68,7 +68,7 @@ export interface AskGroupedListItem {
 export type AskGroupedListPresentation =
   | { pattern: 'SHELVES' }
   | { pattern: 'DECK'; swipeRightActionId?: string | null; swipeLeftActionId?: string | null; batch?: AskDeckBatch | null }
-  | { pattern: 'ROOM_MAP' };
+  | { pattern: 'ROOM_MAP'; focused?: boolean };
 export interface AskBatchDecision { entityId: string; actionId: string }
 // IW-PRES-015: decisions made with these item actions are collected in the deck and sent together, for one confirmation.
 export interface AskDeckBatch { operationId: string; entityType: string; actionIds: string[]; message: string }

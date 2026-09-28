@@ -15,6 +15,12 @@ export function matchesPropertySummaryAnswerContract(result: AskOperationResult)
   const hasEvidence = result.blocks.some((block) => (
     block.type === 'EVIDENCE' && block.id === 'property-summary-evidence'
   ));
+  const hasFocusedRooms = result.blocks.some((block) => (
+    block.type === 'GROUPED_LIST'
+    && block.id === 'property-rooms'
+    && block.presentation?.pattern === 'ROOM_MAP'
+    && block.presentation.focused === true
+  ));
 
-  return hasSummary && hasEvidence;
+  return hasSummary && (hasEvidence || hasFocusedRooms);
 }

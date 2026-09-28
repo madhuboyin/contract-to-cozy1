@@ -171,7 +171,7 @@ const GroupedListPresentationSchema = z.discriminatedUnion('pattern', [
       message: z.string().trim().min(1).max(300),
     }).nullable().optional(),
   }),
-  z.object({ pattern: z.literal('ROOM_MAP') }),
+  z.object({ pattern: z.literal('ROOM_MAP'), focused: z.boolean().optional() }),
 ]);
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD §7 (ACT-001 FILTER_RESULT): a declared,

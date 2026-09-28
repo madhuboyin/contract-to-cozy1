@@ -302,6 +302,8 @@ export interface AskOperationResult {
   confirmation?: AskConfirmation | null;
   suggestions: string[];
   skillHandoff?: SkillHandoffSuggestion | null;
+  /** The requested answer is complete and should not be followed by a generic cross-skill suggestion. */
+  suppressSkillHandoff?: boolean;
   parameters?: Record<string, unknown>;
 }
 

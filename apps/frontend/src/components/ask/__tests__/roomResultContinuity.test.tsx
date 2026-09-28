@@ -35,6 +35,8 @@ function canonicalRoom(overrides: Partial<RoomInsightsDTO> = {}): RoomInsightsDT
   return {
     room: { id: 'room-0', name: 'Kitchen', type: 'KITCHEN', profile: null },
     stats: { itemCount: 8, replacementTotalCents: 1250000, coverageGapsCount: 1, appliancesCount: 4, docsLinkedCount: 3 },
+    items: [{ id: 'oven', name: 'Oven Range', category: 'APPLIANCE', condition: 'GOOD' }],
+    itemsTruncated: false,
     healthScore: { score: 82, band: 'GOOD', label: 'Good', evaluationState: 'SCORED', badges: [], improvements: [] },
     kitchen: { missingAppliances: [], quickWins: [] },
     ...overrides,
@@ -52,8 +54,7 @@ test('Property Summary room titles dispatch through the registry and open canoni
   expect(screen.getByRole('link', { name: /Open Rooms/ })).toHaveAttribute('href', '/dashboard/properties/home/rooms');
   fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
 
-  await waitFor(() => expect(screen.getByText('$12,500')).toBeInTheDocument());
-  expect(screen.getByText('Good · 82/100')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText('Oven Range')).toBeInTheDocument());
   expect(mockedGetRoomInsights).toHaveBeenCalledWith('home', 'room-0');
   expect(window.location.pathname).toBe('/dashboard/ask');
 });
@@ -62,7 +63,7 @@ test('room selection persists in result view state', async () => {
   mockedGetRoomInsights.mockResolvedValueOnce(canonicalRoom());
   render(<List response={execution()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
-  await waitFor(() => expect(screen.getByText('Good · 82/100')).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText('Oven Range')).toBeInTheDocument());
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'property-summary')).detailTaskId).toBe('room-0');
 });
 
@@ -114,7 +115,7 @@ test('room detail shows the declared rename action with exact identity, and none
 
   render(<List response={execution()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
-  await waitFor(() => expect(screen.getByText('$12,500')).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText('Oven Range')).toBeInTheDocument());
   expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
 });
 

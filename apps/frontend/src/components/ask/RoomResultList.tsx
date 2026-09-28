@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, X } from 'lucide-react';
+import { ExternalLink, Loader2, Package, Plus, X } from 'lucide-react';
 import { getRoomInsights, type RoomInsightsDTO } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
@@ -29,13 +29,9 @@ function label(value: string | null | undefined): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
-function currencyFromCents(value: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value / 100);
-}
-
 type RoomItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
 
-function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose }: {
+function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose, fullRecord }: {
   roomId: string;
   expectedPropertyId?: string;
   fallbackItem: Item;
@@ -43,6 +39,7 @@ function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onActi
   onAction?: RoomItemActionHandler;
   onAccessLost: () => void;
   onClose: () => void;
+  fullRecord?: ReactNode;
 }) {
   const [room, setRoom] = useState<RoomInsightsDTO | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,21 +93,25 @@ function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onActi
       <p className="mt-2 text-xs text-slate-500">The conversation remains available. Refresh this Ask result to reconcile with your home record.</p>
     </div>}
     {room && <>
-      <dl className="mt-4 grid gap-x-5 gap-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-        <div><dt className="text-xs text-slate-500">Room type</dt><dd className="mt-0.5 font-medium text-slate-900">{label(room.room.type)}</dd></div>
-        <div><dt className="text-xs text-slate-500">Recorded items</dt><dd className="mt-0.5 font-medium text-slate-900">{room.stats.itemCount}</dd></div>
-        <div><dt className="text-xs text-slate-500">Appliances</dt><dd className="mt-0.5 font-medium text-slate-900">{room.stats.appliancesCount}</dd></div>
-        <div><dt className="text-xs text-slate-500">Linked documents</dt><dd className="mt-0.5 font-medium text-slate-900">{room.stats.docsLinkedCount}</dd></div>
-        <div><dt className="text-xs text-slate-500">Coverage gaps</dt><dd className="mt-0.5 font-medium text-slate-900">{room.stats.coverageGapsCount}</dd></div>
-        <div><dt className="text-xs text-slate-500">Recorded replacement value</dt><dd className="mt-0.5 font-medium text-slate-900">{currencyFromCents(room.stats.replacementTotalCents)}</dd></div>
-        <div><dt className="text-xs text-slate-500">Room health</dt><dd className="mt-0.5 font-medium text-slate-900">{room.healthScore.score == null ? room.healthScore.label : `${room.healthScore.label} · ${room.healthScore.score}/100`}</dd></div>
-      </dl>
+      <p className="mt-1 text-sm text-slate-500">{label(room.room.type)} · {room.stats.itemCount} recorded item{room.stats.itemCount === 1 ? '' : 's'}</p>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+        <h5 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Items in this room</h5>
+        {room.items.length ? <ul className="mt-2 divide-y divide-slate-100">
+          {room.items.map((item) => <li key={item.id} className="flex items-center gap-3 py-2.5">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600" aria-hidden="true"><Package className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900">{item.name}</span><span className="block text-xs text-slate-500">{label(item.category)}{item.condition ? ` · ${label(item.condition)}` : ''}</span></span>
+          </li>)}
+        </ul> : <p className="mt-2 text-sm text-slate-500">No items are recorded in this room yet.</p>}
+        {room.itemsTruncated && <p className="mt-2 text-xs text-slate-500">Showing the first 20 of {room.stats.itemCount} items.</p>}
+      </div>
+      {onAction && (fallbackItem.actions?.length ?? 0) > 0 && <button type="button" disabled={disabled} onClick={() => onAction('INVENTORY_ROOM', roomId, 'Add an item to my home inventory.', 'INVENTORY_ITEM_CREATE', 'CONVERSATION_CONTINUE')}
+        className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 disabled:opacity-50"><Plus className="h-4 w-4" aria-hidden="true" />Add an item</button>}
       {onAction && (fallbackItem.actions?.length ?? 0) > 0 && <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={`Corrections for ${room.room.name}`}>
         {fallbackItem.actions!.map((action) => <button key={action.id} type="button" disabled={disabled}
           className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
           onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}<span className="sr-only"> for {room.room.name}</span></button>)}
       </div>}
-      <p className="mt-3 text-xs text-slate-500">Current canonical room record and room-level inventory analysis.</p>
+      {fullRecord && <div className="mt-3 text-xs font-medium text-slate-500">{fullRecord}</div>}
     </>}
   </aside>;
 }
@@ -144,17 +145,19 @@ export function RoomResultList({ block, propertyId, disabled, onAction, onAccess
 
   const allRooms = block.sections.flatMap((section) => section.items);
   const total = block.sections.reduce((sum, section) => sum + section.count, 0);
-  const roomDetail = (roomId: string, item: Item) => <RoomDetail key={roomId} roomId={roomId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />;
+  const focused = block.presentation?.pattern === 'ROOM_MAP' && block.presentation.focused === true;
+  const roomDetail = (roomId: string, item: Item) => <RoomDetail key={roomId} roomId={roomId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail}
+    fullRecord={propertyId ? link(`/dashboard/properties/${encodeURIComponent(propertyId)}/rooms/${encodeURIComponent(roomId)}`, <>Open full room record<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>) : undefined} />;
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-display-pattern={layout === 'MAP' ? 'room_map' : undefined}>
-    <div className="border-b border-slate-100 p-4">
+  return <section className={cn('overflow-hidden', focused ? '' : 'rounded-2xl border border-slate-200 bg-white')} data-display-pattern={layout === 'MAP' ? 'room_map' : undefined}>
+    {!focused && <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
       {onChooseLayout && <div className="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
         {(['MAP', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={layout === option} onClick={() => onChooseLayout(option)}
           className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', layout === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'MAP' ? 'Room map' : 'List'}</button>)}
       </div>}
-    </div>
+    </div>}
     {layout === 'MAP' && <div className="border-b border-slate-100">
       {allRooms.length === 0 ? <p className="p-4 text-sm text-slate-500">No rooms are recorded yet.</p>
         : <RoomMapView items={allRooms} disabled={Boolean(disabled)} onItemAction={(entityType, entityId, message, operationId, interactionType) => onAction?.(entityType, entityId, message, operationId, interactionType)} onOpenRoom={openDetail} />}
@@ -181,6 +184,6 @@ export function RoomResultList({ block, propertyId, disabled, onAction, onAccess
     {layout === 'MAP' && <DetailSheetFrame open={Boolean(detailRoomId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Room detail: ${detailItem.title}` : 'Room detail'}>
       {detailRoomId && detailItem && roomDetail(detailRoomId, detailItem)}
     </DetailSheetFrame>}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>
+    {block.actions.length > 0 && <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', focused ? 'px-4 pb-2 pt-3' : 'p-4')}>{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>}
   </section>;
 }

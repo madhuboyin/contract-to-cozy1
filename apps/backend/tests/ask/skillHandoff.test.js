@@ -74,6 +74,7 @@ test('pending capture, clarification, and ineligible outcomes cannot leak a hand
   assert.equal(resolveSkillHandoffSuggestion({ ...base, result: answered({ status: 'FAILED_RETRYABLE' }) }), null);
   assert.equal(resolveSkillHandoffSuggestion({ ...base, result: answered({ captureRequests: [{}] }) }), null);
   assert.equal(resolveSkillHandoffSuggestion({ ...base, result: answered({ clarification: {} }) }), null);
+  assert.equal(resolveSkillHandoffSuggestion({ ...base, result: answered({ suppressSkillHandoff: true }) }), null);
   assert.equal(resolveSkillHandoffSuggestion({ sourceOperationId: 'MAINTENANCE_STATUS', result: answered() }), null);
 });
 

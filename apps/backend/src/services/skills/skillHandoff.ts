@@ -152,6 +152,7 @@ export function resolveSkillHandoffSuggestion(input: {
   availableContextReferenceIds?: readonly string[];
   continuity?: Partial<SkillHandoffContinuity>;
 }): SkillHandoffSuggestion | null {
+  if (input.result.suppressSkillHandoff) return null;
   if (input.result.confirmation || input.result.clarification || (input.result.captureRequests?.length ?? 0) > 0) return null;
   const source = getSkillForOperation(input.sourceOperationId);
   if (!source) return null;

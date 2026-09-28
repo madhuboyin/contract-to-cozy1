@@ -49,6 +49,13 @@ export type RoomInsightsDTO = {
     appliancesCount: number;
     docsLinkedCount: number;
   };
+  items: Array<{
+    id: string;
+    name: string;
+    category: string;
+    condition: string | null;
+  }>;
+  itemsTruncated: boolean;
   kitchen?: {
     missingAppliances: string[];
     quickWins: { title: string; detail: string }[];
@@ -66,6 +73,7 @@ export class RoomInsightsService {
       where: { id: roomId, propertyId },
       include: {
         items: {
+          orderBy: { name: 'asc' },
           include: {
             documents: true,
           },
@@ -103,6 +111,13 @@ export class RoomInsightsService {
         appliancesCount,
         docsLinkedCount,
       },
+      items: items.slice(0, 20).map((item) => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        condition: item.condition ?? null,
+      })),
+      itemsTruncated: items.length > 20,
       healthScore: {
         score: null,
         band: null,

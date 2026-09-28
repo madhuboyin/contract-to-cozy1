@@ -748,7 +748,7 @@ export async function inventoryCreateBlocker(propertyId: string, input: Inventor
   return null;
 }
 
-export async function inventoryItemCreateResult(userId: string, propertyId: string, suppliedInput: InventoryCreateInput | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
+export async function inventoryItemCreateResult(userId: string, propertyId: string, suppliedInput: InventoryCreateInput | undefined, sourceExecutionId: string | null, initialRoomId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
   if (access.role === HouseholdRole.VIEWER) {
@@ -762,11 +762,12 @@ export async function inventoryItemCreateResult(userId: string, propertyId: stri
   const contextVersion = inventoryCreateVersionFor(propertyId, rooms);
   const openInventory = { id: 'open-inventory', label: 'Open inventory instead', href: inventoryHref, style: 'SECONDARY' as const };
   if (!suppliedInput) {
+    const roomId = initialRoomId && rooms.some((room) => room.id === initialRoomId) ? initialRoomId : undefined;
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'INVENTORY_CREATE_INPUT_REQUIRED', contextVersion,
       parameters: { sourceExecutionId },
       blocks: [{ type: 'SUMMARY', id: 'inventory-create-input', title: 'Add an item', body: 'Nothing has been added yet. Enter the details, then review them before the item is added.', tone: 'DEFAULT', actions: [openInventory] }],
-      captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms)], suggestions: [],
+      captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms, roomId ? { roomId } : undefined)], suggestions: [],
     };
   }
   const blocker = await inventoryCreateBlocker(propertyId, suppliedInput, rooms);
@@ -805,7 +806,13 @@ registerCapabilityHandler('inventory.create', async (envelope) => {
   const declaredAddAction = envelope.launchContext?.operationId === 'INVENTORY_ITEM_CREATE'
     && envelope.launchContext.surface !== 'ASK_REFRESH'
     && envelope.message === INVENTORY_ADD_MESSAGE;
-  if (declaredAddAction) return inventoryItemCreateResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null);
+  if (declaredAddAction) return inventoryItemCreateResult(
+    envelope.userId,
+    envelope.propertyId!,
+    undefined,
+    envelope.launchContext?.sourceExecutionId ?? null,
+    envelope.launchContext?.entityType === 'INVENTORY_ROOM' ? envelope.launchContext.entityId ?? null : null,
+  );
   // A refresh of an in-progress add, or a bare message: never start (or reset) a form here.
   return {
     status: 'NOT_APPLICABLE', reasonCode: 'ASK_INVENTORY_CREATE_NOT_DIRECTLY_ROUTABLE',

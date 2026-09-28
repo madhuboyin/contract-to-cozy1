@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ChevronRight, DoorOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { roomFloors } from '@/features/ask/displayPatterns';
 import type { AskGroupedListItem } from '@/features/ask/types';
@@ -31,10 +32,14 @@ export function RoomMapView({ items, onItemAction, disabled, onOpenRoom }: { ite
         {floor.items.map((room) => (
           <li key={room.id}>
             <button type="button" onClick={() => (onOpenRoom ? onOpenRoom(room) : setOpenItem(room))} data-ask-room-tile={room.id} data-room-detail-trigger={room.id}
-              className="flex min-h-[5.5rem] w-full flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-teal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600">
-              <span className="text-sm font-semibold text-slate-950">{room.title}</span>
-              {room.countLabel && <span className="text-xs text-slate-500">{room.countLabel}</span>}
+              className="group flex min-h-[4.75rem] w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-400 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700" aria-hidden="true"><DoorOpen className="h-4 w-4" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-slate-950">{room.title}</span>
+                {room.countLabel && <span className="mt-0.5 block text-xs text-slate-500">{room.countLabel}</span>}
+              </span>
               {room.badgeLabel && <span className="mt-auto self-start rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">{room.badgeLabel}</span>}
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-teal-700" aria-hidden="true" />
             </button>
           </li>
         ))}

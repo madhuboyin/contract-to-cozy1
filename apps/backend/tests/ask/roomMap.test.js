@@ -107,10 +107,12 @@ test('with no floor recorded the map stays, with a hint that says how to set one
 test('the production answer checker keeps a conversational room-map answer intact with semantic relevance enabled', async () => {
   install([room('kitchen', { name: 'KITCHEN_MAIN', floorLevel: 0, _count: { items: 2, maintenanceTasks: 1 } }), room('den', { name: 'Den', floorLevel: 1 })]);
   const result = await invoke('OWNER', 'Show me my home by room');
-  assert.deepEqual(result.blocks.map((block) => block.id), ['property-summary', 'property-rooms', 'property-summary-evidence']);
-  assert.equal(result.blocks[0].title, 'Here are the rooms recorded for Home');
-  assert.equal(result.blocks[0].body, '2 rooms are recorded. Select a room to inspect its current details.');
-  assert.deepEqual(result.blocks[0].actions.map((action) => [action.id, action.label, action.href]), [['open-rooms', 'Open Rooms', '/dashboard/properties/p1/rooms']]);
+  assert.deepEqual(result.blocks.map((block) => block.id), ['property-summary', 'property-rooms']);
+  assert.equal(result.blocks[0].title, '2 rooms recorded');
+  assert.equal(result.blocks[0].body, 'Select a room to see the items recorded there.');
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(result.suppressSkillHandoff, true);
+  assert.deepEqual(result.suggestions, []);
   assert.deepEqual(result.captureRequests, []);
   const checked = validateAskAnswerTrustPipeline({
     question: 'Show me my home by room', operationId: 'PROPERTY_SUMMARY', propertyId: 'p1', semanticEnabled: true,
@@ -118,7 +120,8 @@ test('the production answer checker keeps a conversational room-map answer intac
   });
   assert.equal(checked.result.status, result.status, JSON.stringify(checked.trust.reasonCodes));
   const block = roomsBlock(checked.result);
-  assert.deepEqual(block.presentation, { pattern: 'ROOM_MAP' });
+  assert.deepEqual(block.presentation, { pattern: 'ROOM_MAP', focused: true });
+  assert.deepEqual(block.actions.map((action) => action.label), ['Add a room']);
   assert.deepEqual(block.sections[0].items.map((item) => [item.title, item.badgeLabel ?? null]), [['KITCHEN_MAIN', '1 open task'], ['Den', null]]);
   assert.deepEqual(checked.semantic?.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
 });

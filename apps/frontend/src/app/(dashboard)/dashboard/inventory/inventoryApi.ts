@@ -399,6 +399,8 @@ export async function lookupInventoryBarcodeWithDiagnostics(
 export type RoomInsightsDTO = {
   room: { id: string; name: string; type: string; profile: Record<string, unknown> | null };
   stats: { itemCount: number; replacementTotalCents: number; coverageGapsCount: number; appliancesCount: number; docsLinkedCount: number };
+  items: Array<{ id: string; name: string; category: string; condition: string | null }>;
+  itemsTruncated: boolean;
   healthScore: { score: number | null; band: string | null; label: string; evaluationState: string; badges: string[]; improvements: Array<{ title: string; detail?: string }> };
   kitchen?: { missingAppliances: string[]; quickWins: Array<{ title: string; detail: string }> };
   livingRoom?: { comfortScoreHint: 'LOW' | 'MEDIUM' | 'HIGH'; quickWins: Array<{ title: string; detail: string }> };
