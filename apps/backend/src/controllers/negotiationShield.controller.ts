@@ -49,6 +49,7 @@ export async function recordBuyerNegotiationOutcome(
       req.params.caseId,
       userId,
       req.body as RecordBuyerNegotiationOutcomeInput,
+      req.householdRole!,
     );
     res.json({ success: true, data: detail });
   } catch (error) {
@@ -177,6 +178,7 @@ export async function attachNegotiationShieldDocumentMetadata(
       caseId: req.params.caseId,
       userId,
       homeownerProfileId,
+      role: req.householdRole!,
       payload,
     });
     res.status(201).json({ success: true, data: detail });

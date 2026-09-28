@@ -1,7 +1,10 @@
-import { DocumentType, HomeEventType, MaintenanceTaskStatus, Prisma } from '@prisma/client';
+import { DocumentType, HomeEventType, MaintenanceTaskStatus, Prisma, type HouseholdRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { APIError } from '../middleware/error.middleware';
+import { signedUrl } from './homeRecords.service';
+import { visibleRecordWhere } from './homeRecordsAccess';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 import {
   AttachNegotiationShieldDocumentPayload,
   BuyerNegotiationFindingDTO,
@@ -101,13 +104,6 @@ function hasMeaningfulText(value: string | null | undefined, minLength = 20): bo
   return typeof value === 'string' && value.trim().length >= minLength;
 }
 
-function readStorageKey(metadata: unknown): string | null {
-  const meta = asObject(metadata);
-  return typeof meta.storageKey === 'string' && meta.storageKey.trim().length > 0
-    ? meta.storageKey
-    : null;
-}
-
 function resolveSourceType(args: {
   hasInputs: boolean;
   hasDocuments: boolean;
@@ -188,19 +184,21 @@ export class NegotiationShieldService {
     };
   }
 
-  private serializeDocument(record: any): NegotiationShieldDocumentDTO {
+  private async serializeDocument(record: any): Promise<NegotiationShieldDocumentDTO> {
     const document = record.document ?? {};
+    const version = document.currentVersion ?? null;
+    const available = Boolean(version) && version.scanStatus === 'CLEAN' && version.integrityStatus === 'VERIFIED';
+    const fileUrl = available ? await signedUrl(version.storageKey, version.originalFileName) : null;
     return {
       id: String(record.id),
       caseId: String(record.caseId),
       documentId: String(record.documentId),
       documentType: record.documentType,
-      fileName: document.name ?? '',
-      mimeType: document.mimeType ?? null,
-      fileSizeBytes:
-        typeof document.fileSize === 'number' ? document.fileSize : document.fileSize ?? null,
-      fileUrl: document.fileUrl ?? null,
-      storageKey: readStorageKey(document.metadata),
+      fileName: document.title ?? '',
+      mimeType: version?.mimeType ?? null,
+      fileSizeBytes: typeof version?.fileSizeBytes === 'number' ? version.fileSizeBytes : null,
+      fileUrl,
+      storageKey: version?.storageKey ?? null,
       uploadedAt: asIsoString(record.uploadedAt ?? document.createdAt) as string,
     };
   }
@@ -262,7 +260,7 @@ export class NegotiationShieldService {
       outcomeNotes: record.outcomeNotes ?? null,
       outcomeRecordedAt: asIsoString(record.outcomeRecordedAt),
       outcomeDocumentId: record.outcomeDocumentId ?? null,
-      outcomeDocumentName: record.outcomeDocument?.name ?? null,
+      outcomeDocumentName: record.outcomeDocument?.title ?? null,
     };
   }
 
@@ -289,34 +287,12 @@ export class NegotiationShieldService {
   private async assertDocumentAttachAllowed(args: {
     propertyId: string;
     documentId: string;
-    uploadedByProfileId?: string | null;
+    role: HouseholdRole;
   }) {
-    const document = await prisma.document.findUnique({
-      where: { id: args.documentId },
-      select: {
-        id: true,
-        propertyId: true,
-        uploadedBy: true,
-      },
-    });
-
-    if (!document) {
-      throw new APIError('Document not found.', 404, 'NEGOTIATION_SHIELD_DOCUMENT_NOT_FOUND');
-    }
-
-    const propertyMatch = document.propertyId === args.propertyId;
-    const uploaderMatch =
-      !document.propertyId &&
-      !!args.uploadedByProfileId &&
-      document.uploadedBy === args.uploadedByProfileId;
-
-    if (!propertyMatch && !uploaderMatch) {
-      throw new APIError(
-        'Document not found or access denied.',
-        404,
-        'NEGOTIATION_SHIELD_DOCUMENT_ACCESS_DENIED'
-      );
-    }
+    await assertPropertyDocumentsExist(
+      { propertyId: args.propertyId, role: args.role, ids: [args.documentId] },
+      () => new APIError('Document not found or access denied.', 404, 'NEGOTIATION_SHIELD_DOCUMENT_ACCESS_DENIED'),
+    );
   }
 
   private async countCaseChildren(caseId: string) {
@@ -1212,7 +1188,7 @@ export class NegotiationShieldService {
         },
         documents: {
           include: {
-            document: true,
+            document: { include: { currentVersion: true } },
           },
           orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }],
         },
@@ -1225,7 +1201,7 @@ export class NegotiationShieldService {
           take: 1,
         },
         buyerFindingLinks: {
-          include: { finding: true, outcomeDocument: { select: { name: true } } },
+          include: { finding: true, outcomeDocument: { select: { title: true } } },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },
       },
@@ -1239,7 +1215,7 @@ export class NegotiationShieldService {
       case: this.serializeCase(record),
       inputs: Array.isArray(record.inputs) ? record.inputs.map((row: any) => this.serializeInput(row)) : [],
       documents: Array.isArray(record.documents)
-        ? record.documents.map((row: any) => this.serializeDocument(row))
+        ? await Promise.all(record.documents.map((row: any) => this.serializeDocument(row)))
         : [],
       latestAnalysis:
         Array.isArray(record.analyses) && record.analyses[0]
@@ -1455,6 +1431,7 @@ export class NegotiationShieldService {
     caseId: string,
     actorUserId: string,
     input: RecordBuyerNegotiationOutcomeInput,
+    role: HouseholdRole,
   ): Promise<NegotiationShieldCaseDetailDTO> {
     const linked = await this.models.buyerFindingModel.findFirst({
       where: {
@@ -1473,13 +1450,13 @@ export class NegotiationShieldService {
       : input.completionDocumentId;
     const completionDocument = effectiveCompletionDocumentId
       ? input.completionDocumentId === undefined
-        ? await prisma.document.findFirst({
-          where: { id: effectiveCompletionDocumentId, propertyId },
-          select: { id: true, name: true, verificationStatus: true },
+        ? await prisma.propertyRecord.findFirst({
+          where: { id: effectiveCompletionDocumentId, propertyId, ...visibleRecordWhere(role) },
+          select: { id: true, title: true, verificationStatus: true },
         })
         : (await prisma.negotiationShieldDocument.findFirst({
           where: { caseId, documentId: effectiveCompletionDocumentId, negotiationShieldCase: { propertyId } },
-          select: { document: { select: { id: true, name: true, verificationStatus: true } } },
+          select: { document: { select: { id: true, title: true, verificationStatus: true } } },
         }))?.document ?? null
       : null;
     if (effectiveCompletionDocumentId && !completionDocument) {
@@ -1535,10 +1512,10 @@ export class NegotiationShieldService {
               status: 'COMPLETED',
               completedAt: now,
               completedByUserId: actorUserId,
-              // HomeBuyerTask.completionDocumentId is a Home Records reference (Documents slice S5b-2); a negotiation outcome document is
-              // still a legacy Document id (negotiation shield's own domain, S5f, not yet converted), so it cannot be written here — the id
-              // stays available via completionEvidenceJson below, and completionMethod still reflects whether evidence was attached.
-              completionDocumentId: null,
+              // HomeBuyerTask.completionDocumentId and NegotiationShieldBuyerFinding.outcomeDocumentId are both Home Records
+              // references now (Documents slices S5b-2 and S5f), so this can write the real id again — previously nulled out
+              // here because they disagreed (S5b-2 done, negotiation shield still legacy), see the plan doc §17's buyer conflict note.
+              completionDocumentId: effectiveCompletionDocumentId,
               completionMethod: effectiveCompletionDocumentId ? 'DOCUMENT' : 'EXTERNAL_CONFIRMATION',
               statusReason: input.outcome === 'ACCEPTED_CREDIT'
                 ? 'Seller credit accepted and recorded.'
@@ -1615,7 +1592,7 @@ export class NegotiationShieldService {
             outcome: input.outcome,
             sellerResponse: input.sellerResponse,
             documentId: completionDocument.id,
-            documentName: completionDocument.name,
+            documentName: completionDocument.title,
           },
           metadata: {
             sourceFeatureKey: 'buyer_acquisition_plan',
@@ -1724,6 +1701,7 @@ export class NegotiationShieldService {
     caseId: string;
     userId: string;
     homeownerProfileId?: string | null;
+    role: HouseholdRole;
     payload: AttachNegotiationShieldDocumentPayload;
   }): Promise<NegotiationShieldCaseDetailDTO> {
     const parentCase = await this.assertCaseBelongsToProperty(args.propertyId, args.caseId);
@@ -1733,9 +1711,15 @@ export class NegotiationShieldService {
       await this.assertDocumentAttachAllowed({
         propertyId: args.propertyId,
         documentId,
-        uploadedByProfileId: args.homeownerProfileId ?? null,
+        role: args.role,
       });
     } else {
+      // No caller passes this today (NegotiationShieldToolClient.tsx always uploads through Home
+      // Records first, via the documentId branch above) — pinned on the legacy Document table rather
+      // than converted, since there is no live path to verify a Home Records equivalent against. This
+      // will now hit a real FK violation on the documentModel.create below if it is ever exercised
+      // (NegotiationShieldDocument.documentId is a PropertyRecord-typed foreign key), not silently
+      // wrong data — same acceptance as claims' dead upload paths (Documents slice S5c).
       const fileUrl = buildStoredFileUrl(args.payload.fileUrl, args.payload.storageKey);
       const uploadedBy = args.homeownerProfileId ?? args.userId;
 
@@ -1819,7 +1803,7 @@ export class NegotiationShieldService {
     const caseDocument = await this.models.documentModel.findFirst({
       where: { id: caseDocumentId, caseId },
       include: {
-        document: true,
+        document: { include: { currentVersion: true } },
       },
     });
 
@@ -1831,13 +1815,27 @@ export class NegotiationShieldService {
       );
     }
 
+    const version = caseDocument.document.currentVersion;
+    const available = Boolean(version) && version!.scanStatus === 'CLEAN' && version!.integrityStatus === 'VERIFIED';
+    if (!available) {
+      throw new APIError(
+        'This document is still being scanned and is not yet available to parse.',
+        409,
+        'NEGOTIATION_SHIELD_DOCUMENT_NOT_AVAILABLE'
+      );
+    }
+    const fileUrl = await signedUrl(version!.storageKey, version!.originalFileName);
+    if (!fileUrl) {
+      throw new APIError('Document storage is not configured.', 500, 'NEGOTIATION_SHIELD_DOCUMENT_STORAGE_UNAVAILABLE');
+    }
+
     const parsed = await parseNegotiationShieldDocument({
       scenarioType: parentCase.scenarioType,
       source: {
-        fileUrl: caseDocument.document.fileUrl,
-        fileName: caseDocument.document.name,
-        mimeType: caseDocument.document.mimeType ?? null,
-        metadata: caseDocument.document.metadata,
+        fileUrl,
+        fileName: caseDocument.document.title,
+        mimeType: version!.mimeType ?? null,
+        metadata: null,
       },
     });
 
@@ -1869,8 +1867,8 @@ export class NegotiationShieldService {
         parsedAt,
         parsedFieldCount: parsed.parsedFieldCount,
         parseWarnings: parsed.warnings,
-        fileName: caseDocument.document.name,
-        mimeType: caseDocument.document.mimeType ?? null,
+        fileName: caseDocument.document.title,
+        mimeType: version!.mimeType ?? null,
       },
     };
 

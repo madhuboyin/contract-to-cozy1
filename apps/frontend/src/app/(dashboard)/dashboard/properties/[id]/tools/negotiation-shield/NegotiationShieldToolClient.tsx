@@ -36,9 +36,11 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api/client';
+import { uploadRecordForWorkflow } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi';
+import type { PropertyRecordType } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/types';
 import { toSafeHref } from '@/lib/security/url';
 import { cn } from '@/lib/utils';
-import type { DocumentType, Property } from '@/types';
+import type { Property } from '@/types';
 import {
   analyzeNegotiationShieldCase,
   attachNegotiationShieldDocument,
@@ -397,17 +399,17 @@ function upsertCaseSummary(
   });
 }
 
-function mapCaseDocumentToUploadType(documentType: NegotiationShieldDocumentType): DocumentType {
+function mapCaseDocumentToUploadType(documentType: NegotiationShieldDocumentType): PropertyRecordType {
   switch (documentType) {
-    case 'QUOTE':
     case 'CLAIM_ESTIMATE':
-    case 'CONTRACTOR_ESTIMATE':
-      return 'ESTIMATE';
-    case 'PREMIUM_NOTICE':
     case 'CLAIM_SETTLEMENT_NOTICE':
-      return 'INSURANCE_CERTIFICATE';
+      return 'CLAIM';
+    case 'PREMIUM_NOTICE':
+      return 'INSURANCE_POLICY';
     case 'INSPECTION_REPORT':
       return 'INSPECTION_REPORT';
+    case 'QUOTE':
+    case 'CONTRACTOR_ESTIMATE':
     case 'BUYER_REQUEST':
     case 'CONTRACTOR_RECOMMENDATION':
     case 'SUPPORTING_DOCUMENT':
@@ -2257,19 +2259,16 @@ function CaseWorkspace({
         throw new Error('Select a file to upload.');
       }
 
-      const uploadResponse = await api.uploadDocument(selectedFile, {
-        propertyId,
-        name: documentName.trim() || selectedFile.name,
-        type: mapCaseDocumentToUploadType(documentType),
+      const recordId = await uploadRecordForWorkflow(propertyId, {
+        file: selectedFile,
+        title: documentName.trim() || selectedFile.name,
+        recordType: mapCaseDocumentToUploadType(documentType),
+        sensitivity: 'STANDARD',
       });
-
-      if (!uploadResponse.success) {
-        throw new Error(uploadResponse.message || 'Upload failed.');
-      }
 
       return attachNegotiationShieldDocument(propertyId, caseDetail.case.id, {
         documentType,
-        documentId: uploadResponse.data.id,
+        documentId: recordId,
       });
     },
     onMutate: () => {

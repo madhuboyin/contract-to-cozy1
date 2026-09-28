@@ -5096,9 +5096,6 @@ model Document {
   homeEventEvidence                    HomeEventEvidence[]
   riskMitigationPlanItems    RiskMitigationPlanItem[]
   capitalTimelineItems       HomeCapitalTimelineItem[]
-  negotiationShieldDocuments NegotiationShieldDocument[]
-  buyerNegotiationOutcomeLinks NegotiationShieldBuyerFinding[] @relation("BuyerNegotiationOutcomeDocument")
-  buyerFindingOutcomeLinks     InspectionFinding[]             @relation("BuyerFindingOutcomeDocument")
   propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
   propertyTaxBillLinks       PropertyTaxBillDocument[]
   propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
@@ -5202,6 +5199,9 @@ model PropertyRecord {
   permitOfficialStatusEvidence     PropertyPermitRecord[]                @relation("PermitOfficialStatusEvidence")
   renovationConditionEvidence      RenovationComplianceCondition[]
   hoaApprovalDecisionEvidence      HoaApprovalRecord[]                   @relation("HoaApprovalDecisionEvidence")
+  negotiationShieldDocuments       NegotiationShieldDocument[]
+  buyerNegotiationOutcomeLinks     NegotiationShieldBuyerFinding[]        @relation("BuyerNegotiationOutcomeDocument")
+  buyerFindingOutcomeLinks         InspectionFinding[]                   @relation("BuyerFindingOutcomeDocument")
 
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])
@@ -10082,7 +10082,7 @@ model NegotiationShieldBuyerFinding {
 
   negotiationCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
   finding         InspectionFinding     @relation(fields: [findingId], references: [id], onDelete: Cascade)
-  outcomeDocument Document?             @relation("BuyerNegotiationOutcomeDocument", fields: [outcomeDocumentId], references: [id], onDelete: SetNull)
+  outcomeDocument PropertyRecord?       @relation("BuyerNegotiationOutcomeDocument", fields: [outcomeDocumentId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
   @@index([sellerResponse])
@@ -10117,7 +10117,7 @@ model NegotiationShieldDocument {
   uploadedAt   DateTime                      @default(now())
 
   negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  document              Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document              PropertyRecord        @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([caseId, documentId])
   @@index([caseId, uploadedAt(sort: Desc)])
@@ -20845,7 +20845,7 @@ model InspectionFinding {
   recallMatch       RecallMatch?           @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
   writeBacks        InspectionWriteBack[]
   negotiationCaseLinks NegotiationShieldBuyerFinding[]
-  buyerOutcomeDocument Document?        @relation("BuyerFindingOutcomeDocument", fields: [buyerOutcomeDocumentId], references: [id], onDelete: SetNull)
+  buyerOutcomeDocument PropertyRecord?  @relation("BuyerFindingOutcomeDocument", fields: [buyerOutcomeDocumentId], references: [id], onDelete: SetNull)
   resolvedByProject ProjectRecord?         @relation("InspectionFindingResolvedByProject", fields: [resolvedByProjectId], references: [id], onDelete: SetNull)
 
   @@index([reportId])

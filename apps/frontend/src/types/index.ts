@@ -3510,7 +3510,7 @@ export interface BuyerEvidenceFinding {
   buyerRepairJourneyId: string | null;
   buyerOutcomeDocumentId: string | null;
   buyerOutcomeDocument: {
-    name: string;
+    title: string;
     verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
   } | null;
 }
@@ -4102,7 +4102,7 @@ export interface BuyerWalkthroughWorkspaceResponse {
         outcomeNotes: string | null;
         agreedCreditCents: number | null;
         outcomeDocumentId: string | null;
-        outcomeDocument: { id: string; name: string; verificationStatus: string } | null;
+        outcomeDocument: { id: string; title: string; verificationStatus: string } | null;
         negotiationCase: { id: string };
       }>;
     }>;

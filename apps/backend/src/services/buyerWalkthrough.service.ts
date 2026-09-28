@@ -70,7 +70,7 @@ export class BuyerWalkthroughService {
             select: {
               id: true, sellerResponse: true, sellerResponseNotes: true, outcome: true,
               outcomeNotes: true, agreedCreditCents: true, outcomeDocumentId: true,
-              outcomeDocument: { select: { id: true, name: true, verificationStatus: true } },
+              outcomeDocument: { select: { id: true, title: true, verificationStatus: true } },
               negotiationCase: { select: { id: true } },
             },
           },

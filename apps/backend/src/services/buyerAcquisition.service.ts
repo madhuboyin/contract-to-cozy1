@@ -862,7 +862,7 @@ export class BuyerAcquisitionService {
               buyerRepairJourneyId: true,
               buyerOutcomeDocumentId: true,
               buyerOutcomeDocument: {
-                select: { name: true, verificationStatus: true },
+                select: { title: true, verificationStatus: true },
               },
             },
           },
