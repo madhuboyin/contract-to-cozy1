@@ -22,12 +22,45 @@ import {
   Prisma,
   PropertyHiddenAssetMatchStatus,
   SavingsOutcomeStage,
+  type HouseholdRole,
 } from '@prisma/client';
 import type { Request } from 'express';
 import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
 import { signalService } from './signal.service';
 import { recordDecisionRecordOutcome } from './decisionPlatform/outcomeObservationService';
+import { linkRecordToEntityInTransaction } from './homeRecords.service';
+import { resolvePropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
+
+/** The shape savingsOutcome.service.ts's own DTOs expect for an outcome's attached evidence. */
+type SavingsOutcomeDocumentRef = { id: string; name: string; type: string; mimeType: string; fileSize: number };
+
+/** Batches PropertyRecordLink by entityType across many outcome ids at once — one query, not N+1 —
+ * mirroring homeEvents.service.ts's equivalent HOME_EVENT batching. */
+export async function documentsByOutcomeId(
+  entityType: 'HIDDEN_ASSET_MATCH_OUTCOME' | 'HOME_SAVINGS_OPPORTUNITY_OUTCOME',
+  outcomeIds: string[],
+  tx: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<Map<string, SavingsOutcomeDocumentRef[]>> {
+  const byId = new Map<string, SavingsOutcomeDocumentRef[]>();
+  if (outcomeIds.length === 0) return byId;
+  const links = await tx.propertyRecordLink.findMany({
+    where: { entityType, entityId: { in: outcomeIds } },
+    include: { record: { select: { id: true, title: true, recordType: true } }, version: { select: { mimeType: true, fileSizeBytes: true } } },
+  });
+  for (const link of links) {
+    const list = byId.get(link.entityId) ?? [];
+    list.push({
+      id: link.record.id,
+      name: link.record.title,
+      type: link.record.recordType,
+      mimeType: link.version?.mimeType ?? '',
+      fileSize: link.version?.fileSizeBytes ?? 0,
+    });
+    byId.set(link.entityId, list);
+  }
+  return byId;
+}
 
 export class SavingsOutcomeGovernanceError extends Error {
   code: string;
@@ -195,13 +228,12 @@ function assertStageInputIsComplete(input: RecordOutcomeInput, hasValue: boolean
 }
 
 /**
- * Verifies every documentId belongs to this homeowner (via Document.uploadedBy,
- * which stores homeownerProfile.id — see documentAuth.middleware.ts for the
- * same pattern) before linking any of them as outcome evidence.
+ * Verifies every documentId is a Home Record visible to this caller's household role and scoped
+ * to this property, before linking any of them as outcome evidence (Documents slice S5f).
  */
 async function assertDocumentsOwnedByUser(
   documentIds: string[] | undefined,
-  userId: string,
+  role: HouseholdRole,
   propertyId: string | null,
 ): Promise<string[]> {
   if (!documentIds || documentIds.length === 0) return [];
@@ -211,28 +243,11 @@ async function assertDocumentsOwnedByUser(
       'Evidence can only be attached to a property-scoped savings opportunity.',
     );
   }
-  const homeownerProfile = await prisma.homeownerProfile.findUnique({
-    where: { userId },
-    select: { id: true },
-  });
-  if (!homeownerProfile) {
-    throw new SavingsOutcomeGovernanceError(
-      'HOMEOWNER_PROFILE_NOT_FOUND',
-      'A homeowner profile is required to attach Document Vault evidence.',
-    );
-  }
-  const owned = await prisma.document.findMany({
-    where: {
-      id: { in: documentIds },
-      uploadedBy: homeownerProfile.id,
-      propertyId,
-    },
-    select: { id: true },
-  });
-  if (owned.length !== documentIds.length) {
+  const resolved = await resolvePropertyDocuments({ propertyId, role, ids: documentIds });
+  if (resolved.length !== documentIds.length) {
     throw new SavingsOutcomeGovernanceError('DOCUMENT_NOT_FOUND', 'One or more attached documents were not found.');
   }
-  return owned.map((d) => d.id);
+  return resolved.map((d) => d.id);
 }
 
 // ============================================================================
@@ -255,11 +270,12 @@ export interface RecordHiddenAssetMatchOutcomeInput extends RecordOutcomeInput {
 export async function recordHiddenAssetMatchOutcome(
   matchId: string,
   userId: string,
-  input: RecordHiddenAssetMatchOutcomeInput
+  input: RecordHiddenAssetMatchOutcomeInput,
+  role: HouseholdRole,
 ) {
   const match = await assertMatchForUser(matchId, userId);
   assertStageInputIsComplete(input, input.amountReceived != null);
-  const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, userId, match.propertyId);
+  const ownedDocumentIds = await assertDocumentsOwnedByUser(input.documentIds, role, match.propertyId);
 
   let resolvedIdempotencyKey = input.idempotencyKey?.trim() || '';
   try {
@@ -323,10 +339,12 @@ export async function recordHiddenAssetMatchOutcome(
       },
     });
     if (ownedDocumentIds.length > 0) {
-      await tx.document.updateMany({
-        where: { id: { in: ownedDocumentIds } },
-        data: { hiddenAssetMatchOutcomeId: created.id },
-      });
+      for (const recordId of ownedDocumentIds) {
+        await linkRecordToEntityInTransaction(tx, {
+          propertyId: match.propertyId!, recordId, entityType: 'HIDDEN_ASSET_MATCH_OUTCOME',
+          entityId: created.id, purpose: 'EVIDENCE', userId,
+        });
+      }
     }
     // Marking PURSUING is a homeowner intent signal, not the outcome trail
     // itself — once a real outcome exists, the match should reflect it too
@@ -408,11 +426,12 @@ export async function recordHiddenAssetMatchOutcome(
 
 export async function getHiddenAssetMatchOutcomes(matchId: string, userId: string) {
   await assertMatchForUser(matchId, userId);
-  return prisma.hiddenAssetMatchOutcome.findMany({
+  const outcomes = await prisma.hiddenAssetMatchOutcome.findMany({
     where: { matchId },
     orderBy: [{ recordedAt: 'asc' }, { createdAt: 'asc' }],
-    include: { documents: { select: { id: true, name: true, type: true, mimeType: true, fileSize: true } } },
   });
+  const documentsByOutcome = await documentsByOutcomeId('HIDDEN_ASSET_MATCH_OUTCOME', outcomes.map((o) => o.id));
+  return outcomes.map((outcome) => ({ ...outcome, documents: documentsByOutcome.get(outcome.id) ?? [] }));
 }
 
 // ============================================================================
@@ -461,7 +480,8 @@ function assertRecurringObservationWindow(input: RecordHomeSavingsOpportunityOut
 export async function recordHomeSavingsOpportunityOutcome(
   opportunityId: string,
   userId: string,
-  input: RecordHomeSavingsOpportunityOutcomeInput
+  input: RecordHomeSavingsOpportunityOutcomeInput,
+  role: HouseholdRole,
 ) {
   const opportunity = await assertOpportunityForUser(opportunityId, userId);
   assertStageInputIsComplete(
@@ -471,7 +491,7 @@ export async function recordHomeSavingsOpportunityOutcome(
   assertRecurringObservationWindow(input);
   const ownedDocumentIds = await assertDocumentsOwnedByUser(
     input.documentIds,
-    userId,
+    role,
     opportunity.propertyId,
   );
 
@@ -541,10 +561,12 @@ export async function recordHomeSavingsOpportunityOutcome(
         },
       });
       if (ownedDocumentIds.length > 0) {
-        await tx.document.updateMany({
-          where: { id: { in: ownedDocumentIds } },
-          data: { homeSavingsOpportunityOutcomeId: outcome.id },
-        });
+        for (const recordId of ownedDocumentIds) {
+          await linkRecordToEntityInTransaction(tx, {
+            propertyId: opportunity.propertyId!, recordId, entityType: 'HOME_SAVINGS_OPPORTUNITY_OUTCOME',
+            entityId: outcome.id, purpose: 'EVIDENCE', userId,
+          });
+        }
       }
       if (input.stage === 'EXPIRED') {
         await tx.homeSavingsOpportunity.update({
@@ -620,11 +642,12 @@ export async function recordHomeSavingsOpportunityOutcome(
 
 export async function getHomeSavingsOpportunityOutcomes(opportunityId: string, userId: string) {
   await assertOpportunityForUser(opportunityId, userId);
-  return prisma.homeSavingsOpportunityOutcome.findMany({
+  const outcomes = await prisma.homeSavingsOpportunityOutcome.findMany({
     where: { opportunityId },
     orderBy: [{ recordedAt: 'asc' }, { createdAt: 'asc' }],
-    include: { documents: { select: { id: true, name: true, type: true, mimeType: true, fileSize: true } } },
   });
+  const documentsByOutcome = await documentsByOutcomeId('HOME_SAVINGS_OPPORTUNITY_OUTCOME', outcomes.map((o) => o.id));
+  return outcomes.map((outcome) => ({ ...outcome, documents: documentsByOutcome.get(outcome.id) ?? [] }));
 }
 
 export async function revokeHiddenAssetMatchOutcome(
@@ -786,11 +809,13 @@ export async function verifySavingsBenefitOutcome(
       const outcome = await tx.hiddenAssetMatchOutcome.findUnique({
         where: { id: outcomeId },
         include: {
-          documents: { select: { id: true } },
           match: { select: { propertyId: true } },
         },
       });
       if (!outcome) throw new Error('Outcome not found.');
+      const evidenceCount = await tx.propertyRecordLink.count({
+        where: { entityType: 'HIDDEN_ASSET_MATCH_OUTCOME', entityId: outcome.id },
+      });
       if (outcome.recordedBy === actorId) {
         throw new SavingsOutcomeGovernanceError(
           'INDEPENDENT_REVIEWER_REQUIRED',
@@ -809,7 +834,7 @@ export async function verifySavingsBenefitOutcome(
           'Only a current RECEIVED outcome can be verified.',
         );
       }
-      if (outcome.documents.length === 0) {
+      if (evidenceCount === 0) {
         throw new SavingsOutcomeGovernanceError(
           'VERIFICATION_EVIDENCE_REQUIRED',
           'Independent verification requires attached Document Vault evidence.',
@@ -852,11 +877,13 @@ export async function verifySavingsBenefitOutcome(
     const outcome = await tx.homeSavingsOpportunityOutcome.findUnique({
       where: { id: outcomeId },
       include: {
-        documents: { select: { id: true } },
         opportunity: { select: { propertyId: true } },
       },
     });
     if (!outcome) throw new Error('Outcome not found.');
+    const evidenceCount = await tx.propertyRecordLink.count({
+      where: { entityType: 'HOME_SAVINGS_OPPORTUNITY_OUTCOME', entityId: outcome.id },
+    });
     if (outcome.recordedBy === actorId) {
       throw new SavingsOutcomeGovernanceError(
         'INDEPENDENT_REVIEWER_REQUIRED',
@@ -875,7 +902,7 @@ export async function verifySavingsBenefitOutcome(
         'Only a current RECEIVED outcome can be verified.',
       );
     }
-    if (outcome.documents.length === 0) {
+    if (evidenceCount === 0) {
       throw new SavingsOutcomeGovernanceError(
         'VERIFICATION_EVIDENCE_REQUIRED',
         'Independent verification requires attached Document Vault evidence.',
@@ -948,7 +975,6 @@ export async function listSavingsBenefitOutcomeVerificationQueue(
     prisma.hiddenAssetMatchOutcome.findMany({
       where: benefitWhere,
       include: {
-        documents: { select: { id: true, name: true } },
         match: { include: { program: { select: { name: true } } } },
       },
       orderBy: { recordedAt: 'asc' },
@@ -957,7 +983,6 @@ export async function listSavingsBenefitOutcomeVerificationQueue(
     prisma.homeSavingsOpportunityOutcome.findMany({
       where: recurringWhere,
       include: {
-        documents: { select: { id: true, name: true } },
         opportunity: { select: { headline: true } },
       },
       orderBy: { recordedAt: 'asc' },
@@ -965,6 +990,10 @@ export async function listSavingsBenefitOutcomeVerificationQueue(
     }),
     prisma.hiddenAssetMatchOutcome.count({ where: benefitWhere }),
     prisma.homeSavingsOpportunityOutcome.count({ where: recurringWhere }),
+  ]);
+  const [benefitDocuments, recurringDocuments] = await Promise.all([
+    documentsByOutcomeId('HIDDEN_ASSET_MATCH_OUTCOME', benefits.map((o) => o.id)),
+    documentsByOutcomeId('HOME_SAVINGS_OPPORTUNITY_OUTCOME', recurring.map((o) => o.id)),
   ]);
   const outcomes = [
     ...benefits.map((outcome) => ({
@@ -975,7 +1004,7 @@ export async function listSavingsBenefitOutcomeVerificationQueue(
       currency: outcome.currency,
       verificationState: outcome.verificationState,
       evidenceNote: outcome.evidenceNote,
-      documents: outcome.documents,
+      documents: benefitDocuments.get(outcome.id) ?? [],
       recordedAt: outcome.recordedAt,
     })),
     ...recurring.map((outcome) => ({
@@ -989,7 +1018,7 @@ export async function listSavingsBenefitOutcomeVerificationQueue(
       currency: outcome.currency,
       verificationState: outcome.verificationState,
       evidenceNote: outcome.evidenceNote,
-      documents: outcome.documents,
+      documents: recurringDocuments.get(outcome.id) ?? [],
       recordedAt: outcome.recordedAt,
     })),
   ]

@@ -92,6 +92,7 @@ export async function patchSavingsBenefitsAction(req: CustomRequest, res: Respon
               ? new Date(body.followUpAt)
               : null,
       },
+      req.householdRole!,
     );
     return res.json({ success: true, data });
   } catch (error: any) {
@@ -112,6 +113,7 @@ export async function postSavingsBenefitsActionOutcome(req: CustomRequest, res: 
         observationStartedAt: body.observationStartedAt ? new Date(body.observationStartedAt) : null,
         observationEndedAt: body.observationEndedAt ? new Date(body.observationEndedAt) : null,
       }) as RecordHiddenAssetMatchOutcomeInput | RecordHomeSavingsOpportunityOutcomeInput,
+      req.householdRole!,
     );
     return res.status(201).json({ success: true, data });
   } catch (error: any) {

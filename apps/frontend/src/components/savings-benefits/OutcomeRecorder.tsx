@@ -20,7 +20,8 @@ import type {
 } from '@/types';
 import { StatusChip, type StatusChipTone } from '@/components/mobile/dashboard/MobilePrimitives';
 import DocumentUploadZone from '@/app/(dashboard)/dashboard/components/inventory/DocumentUploadZone';
-import DocumentPickerModal from '@/app/(dashboard)/dashboard/components/inventory/DocumentPickerModal';
+import HomeRecordPickerModal from './HomeRecordPickerModal';
+import { uploadRecordForWorkflow } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi';
 
 type OutcomeFamily = 'BENEFIT' | 'RECURRING_COST';
 type OutcomeDTO = HiddenAssetMatchOutcomeDTO | HomeSavingsOpportunityOutcomeDTO;
@@ -243,12 +244,13 @@ export function OutcomeRecorder({
     setUploading(true);
     setUploadError(null);
     try {
-      const result = await api.analyzeDocument(file, propertyId);
-      if (!result.success || !result.data?.document) {
-        throw new Error(result.message || 'Failed to upload document');
-      }
-      const doc = result.data.document;
-      setDocuments((prev) => [...prev, { id: doc.id, name: doc.name || file.name }]);
+      const recordId = await uploadRecordForWorkflow(propertyId, {
+        file,
+        title: file.name,
+        recordType: 'OTHER',
+        sensitivity: 'STANDARD',
+      });
+      setDocuments((prev) => [...prev, { id: recordId, name: file.name }]);
     } catch (err: any) {
       setUploadError(err?.message || 'Failed to upload document');
     } finally {
@@ -580,7 +582,7 @@ export function OutcomeRecorder({
         </div>
       )}
 
-      <DocumentPickerModal
+      <HomeRecordPickerModal
         open={pickerOpen}
         propertyId={propertyId}
         alreadyLinkedIds={new Set(

@@ -962,6 +962,8 @@ export class HomeRecordsService {
         case 'PERMIT': return prisma.propertyPermitRecord.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'PROPERTY_BRIEF': return prisma.propertyBrief.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'EXPENSE': return prisma.expense.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+        case 'HIDDEN_ASSET_MATCH_OUTCOME': return prisma.hiddenAssetMatchOutcome.findFirst({ where: { id: entityId, match: { propertyId } }, select: { id: true } });
+        case 'HOME_SAVINGS_OPPORTUNITY_OUTCOME': return prisma.homeSavingsOpportunityOutcome.findFirst({ where: { id: entityId, opportunity: { propertyId } }, select: { id: true } });
         // OTHER has no canonical table to verify against; the caller-supplied
         // entityId is opaque and always treated as existing.
         case 'OTHER': return { id: entityId };

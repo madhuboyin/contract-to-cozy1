@@ -3,8 +3,10 @@ import {
   Prisma,
   PropertyHiddenAssetMatchStatus,
   SavingsBenefitActionType,
+  type HouseholdRole,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 import { HiddenAssetService } from './hiddenAssets.service';
 import { HomeSavingsService } from './homeSavings.service';
 import { isProgramActionableNow } from './hiddenAssets/sourceFreshness';
@@ -15,6 +17,7 @@ import {
   recordHomeSavingsOpportunityOutcome,
   revokeHiddenAssetMatchOutcome,
   revokeHomeSavingsOpportunityOutcome,
+  documentsByOutcomeId,
 } from './savingsOutcome.service';
 import {
   RecordSensitiveFactInput,
@@ -72,15 +75,19 @@ export async function getCanonicalOpportunityDetail(
     include: {
       program: { include: { source: true, rules: { orderBy: { sortOrder: 'asc' } } } },
       criterionResults: { orderBy: { evaluatedAt: 'desc' } },
-      outcomes: {
-        orderBy: { recordedAt: 'asc' },
-        include: { documents: { select: { id: true, name: true } } },
-      },
+      outcomes: { orderBy: { recordedAt: 'asc' } },
       savingsBenefitActions: { orderBy: { createdAt: 'desc' } },
     },
   });
   if (benefit) {
-    return { family: 'BENEFIT' as const, opportunity: benefit };
+    const documentsByOutcome = await documentsByOutcomeId('HIDDEN_ASSET_MATCH_OUTCOME', benefit.outcomes.map((o) => o.id));
+    return {
+      family: 'BENEFIT' as const,
+      opportunity: {
+        ...benefit,
+        outcomes: benefit.outcomes.map((outcome) => ({ ...outcome, documents: documentsByOutcome.get(outcome.id) ?? [] })),
+      },
+    };
   }
 
   const recurring = await prisma.homeSavingsOpportunity.findFirst({
@@ -93,14 +100,20 @@ export async function getCanonicalOpportunityDetail(
     },
     include: {
       account: true,
-      outcomes: {
-        orderBy: { recordedAt: 'asc' },
-        include: { documents: { select: { id: true, name: true } } },
-      },
+      outcomes: { orderBy: { recordedAt: 'asc' } },
       savingsBenefitActions: { orderBy: { createdAt: 'desc' } },
     },
   });
-  if (recurring) return { family: 'RECURRING_COST' as const, opportunity: recurring };
+  if (recurring) {
+    const documentsByOutcome = await documentsByOutcomeId('HOME_SAVINGS_OPPORTUNITY_OUTCOME', recurring.outcomes.map((o) => o.id));
+    return {
+      family: 'RECURRING_COST' as const,
+      opportunity: {
+        ...recurring,
+        outcomes: recurring.outcomes.map((outcome) => ({ ...outcome, documents: documentsByOutcome.get(outcome.id) ?? [] })),
+      },
+    };
+  }
   throw new Error('Opportunity not found or access denied.');
 }
 
@@ -554,8 +567,9 @@ export async function updateCanonicalAction(
   actionId: string,
   userId: string,
   input: UpdateCanonicalActionInput,
+  role: HouseholdRole,
 ) {
-  const property = await assertProperty(propertyId, userId);
+  await assertProperty(propertyId, userId);
   const action = await prisma.savingsBenefitAction.findFirst({
     where: { id: actionId, propertyId },
   });
@@ -574,17 +588,10 @@ export async function updateCanonicalAction(
       input.checklist.flatMap((item) => item.evidenceDocumentIds ?? []),
     )];
     if (requestedDocumentIds.length > 0) {
-      const ownedDocuments = await prisma.document.findMany({
-        where: {
-          id: { in: requestedDocumentIds },
-          uploadedBy: property.homeownerProfileId,
-          propertyId,
-        },
-        select: { id: true },
-      });
-      if (ownedDocuments.length !== requestedDocumentIds.length) {
-        throw new Error('One or more checklist documents are unavailable or not owned by this user.');
-      }
+      await assertPropertyDocumentsExist(
+        { propertyId, role, ids: requestedDocumentIds },
+        () => new Error('One or more checklist documents are unavailable or not owned by this user.'),
+      );
     }
     const updatesByKey = new Map(input.checklist.map((item) => [item.key, item]));
     const unknownKeys = [...updatesByKey.keys()].filter(
@@ -686,6 +693,7 @@ export async function recordCanonicalActionOutcome(
   actionId: string,
   userId: string,
   input: RecordHiddenAssetMatchOutcomeInput | RecordHomeSavingsOpportunityOutcomeInput,
+  role: HouseholdRole,
 ) {
   await assertProperty(propertyId, userId);
   const action = await prisma.savingsBenefitAction.findFirst({
@@ -701,12 +709,14 @@ export async function recordCanonicalActionOutcome(
         action.hiddenAssetMatchId,
         userId,
         { ...input, actionId: action.id } as RecordHiddenAssetMatchOutcomeInput,
+        role,
       )
     : action.homeSavingsOpportunityId
       ? await recordHomeSavingsOpportunityOutcome(
           action.homeSavingsOpportunityId,
           userId,
           { ...input, actionId: action.id } as RecordHomeSavingsOpportunityOutcomeInput,
+          role,
         )
       : null;
   if (!outcome) throw new Error('Action is not linked to an opportunity.');

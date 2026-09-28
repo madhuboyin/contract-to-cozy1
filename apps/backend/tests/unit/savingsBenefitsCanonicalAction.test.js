@@ -201,5 +201,5 @@ test('canonical action persistence and route contracts require idempotency and e
   assert.match(service, /Attach evidence before completing/);
   assert.match(service, /Complete every required checklist item/);
   assert.match(service, /select:\s*\{\s*id:\s*true,\s*homeownerProfileId:\s*true\s*\}/);
-  assert.match(service, /uploadedBy:\s*property\.homeownerProfileId/);
+  assert.match(service, /assertPropertyDocumentsExist/);
 });

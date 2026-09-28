@@ -234,21 +234,18 @@ test('real services persist the reviewed-source author-review-publish golden pat
     await recordCanonicalActionOutcome(property.id, action.id, homeowner.id, {
       idempotencyKey: `${runId}:submitted`,
       stage: 'SUBMITTED',
-    });
+    }, 'OWNER');
     await recordCanonicalActionOutcome(property.id, action.id, homeowner.id, {
       idempotencyKey: `${runId}:approved`,
       stage: 'APPROVED',
-    });
-    const evidence = await prisma.document.create({
+    }, 'OWNER');
+    // Outcome evidence is a Home Record (Documents slice S5f), not a legacy Document Vault upload.
+    const evidence = await prisma.propertyRecord.create({
       data: {
         propertyId: property.id,
-        // Document Vault authorization stores the homeownerProfile id in uploadedBy.
-        uploadedBy: homeowner.homeownerProfile.id,
-        type: 'OTHER',
-        name: 'Golden award letter',
-        fileUrl: `acceptance://${runId}/award`,
-        fileSize: 256,
-        mimeType: 'application/pdf',
+        createdByUserId: homeowner.id,
+        recordType: 'OTHER',
+        title: 'Golden award letter',
       },
     });
     evidenceDocumentId = evidence.id;
@@ -259,7 +256,7 @@ test('real services persist the reviewed-source author-review-publish golden pat
       currency: 'USD',
       evidenceNote: 'Award letter received.',
       documentIds: [evidence.id],
-    });
+    }, 'OWNER');
     await assert.rejects(
       () => verifySavingsBenefitOutcome(
         'BENEFIT',
@@ -434,7 +431,7 @@ test('real services persist the reviewed-source author-review-publish golden pat
     });
     assert.ok(audited >= 7, `Expected the full workflow to be audited, found ${audited} records`);
   } finally {
-    if (evidenceDocumentId) await prisma.document.deleteMany({ where: { id: evidenceDocumentId } });
+    if (evidenceDocumentId) await prisma.propertyRecord.deleteMany({ where: { id: evidenceDocumentId } });
     if (programId) await prisma.hiddenAssetProgram.deleteMany({ where: { id: programId } });
     if (sourceId) await prisma.hiddenAssetSource.deleteMany({ where: { id: sourceId } });
     if (partnerId) await prisma.savingsBenefitPartner.deleteMany({ where: { id: partnerId } });

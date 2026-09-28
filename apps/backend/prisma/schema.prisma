@@ -2242,6 +2242,8 @@ enum PropertyRecordLinkEntityType {
   PERMIT
   PROPERTY_BRIEF
   EXPENSE
+  HIDDEN_ASSET_MATCH_OUTCOME
+  HOME_SAVINGS_OPPORTUNITY_OUTCOME
   OTHER
 }
 
@@ -5106,28 +5108,21 @@ model Document {
   knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
   quoteComparisonExtractions QuoteComparisonExtraction[]
 
+  // Confirmed dead (Documents slice S5f, 2026-09-28): no writer or reader anywhere touches either
+  // field or its reverse relation. Left as-is rather than retargeted — nothing writes a legacy id
+  // into them, so there is no landmine to prevent, unlike hiddenAssetMatchOutcomeId/
+  // homeSavingsOpportunityOutcomeId below, which were both live and moved to PropertyRecordLink.
   homeSavingsAccountId     String?
   homeSavingsOpportunityId String?
 
   homeSavingsAccount     HomeSavingsAccount?     @relation("HomeSavingsAccountDocuments", fields: [homeSavingsAccountId], references: [id], onDelete: SetNull)
   homeSavingsOpportunity HomeSavingsOpportunity? @relation("HomeSavingsOpportunityDocuments", fields: [homeSavingsOpportunityId], references: [id], onDelete: SetNull)
 
-  // Evidence attached to one append-only outcome-ledger entry (HSB-033) —
-  // an award letter, confirmation screenshot, etc. supplementing or
-  // replacing the free-text evidenceNote on that entry.
-  hiddenAssetMatchOutcomeId     String?
-  homeSavingsOpportunityOutcomeId String?
-
-  hiddenAssetMatchOutcome     HiddenAssetMatchOutcome?     @relation("HiddenAssetMatchOutcomeDocuments", fields: [hiddenAssetMatchOutcomeId], references: [id], onDelete: SetNull)
-  homeSavingsOpportunityOutcome HomeSavingsOpportunityOutcome? @relation("HomeSavingsOpportunityOutcomeDocuments", fields: [homeSavingsOpportunityOutcomeId], references: [id], onDelete: SetNull)
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([homeSavingsAccountId])
   @@index([homeSavingsOpportunityId])
-  @@index([hiddenAssetMatchOutcomeId])
-  @@index([homeSavingsOpportunityOutcomeId])
   @@index([bookingId])
   @@index([type])
   @@index([propertyId]) // NEW INDEX
@@ -11487,7 +11482,9 @@ model HomeSavingsOpportunityOutcome {
   recordedAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
-  documents Document[] @relation("HomeSavingsOpportunityOutcomeDocuments")
+  // Evidence attached to this outcome-ledger entry lives in PropertyRecordLink (entityType
+  // HOME_SAVINGS_OPPORTUNITY_OUTCOME), not a Prisma relation here — see homeEvents.service.ts's
+  // equivalent HOME_EVENT pattern; batched by outcome id in savingsOutcome.service.ts's readers.
 
   @@unique([opportunityId, idempotencyKey])
   @@index([opportunityId])
@@ -14955,7 +14952,9 @@ model HiddenAssetMatchOutcome {
   recordedAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
-  documents Document[] @relation("HiddenAssetMatchOutcomeDocuments")
+  // Evidence attached to this outcome-ledger entry lives in PropertyRecordLink (entityType
+  // HIDDEN_ASSET_MATCH_OUTCOME), not a Prisma relation here — see homeEvents.service.ts's
+  // equivalent HOME_EVENT pattern; batched by outcome id in savingsOutcome.service.ts's readers.
 
   @@unique([matchId, idempotencyKey])
   @@index([matchId])

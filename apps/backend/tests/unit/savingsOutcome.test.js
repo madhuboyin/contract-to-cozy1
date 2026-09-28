@@ -11,10 +11,11 @@ let matches = new Map();
 let matchOutcomes = [];
 let opportunities = new Map();
 let opportunityOutcomes = [];
-let documents = [];
+let records = [];
+let recordLinks = [];
 let signals = [];
 let updateManyOverride = null;
-const documentOwnershipQueries = [];
+const recordOwnershipQueries = [];
 const signalExpiryQueries = [];
 const publishSavingsRealizationSignalCalls = [];
 let publishSavingsRealizationSignalImpl = async () => ({ id: 'signal-1' });
@@ -132,17 +133,51 @@ require.cache[prismaPath] = {
           return row;
         },
       },
-      document: {
+      propertyRecord: {
         findMany: async ({ where }) => {
-          documentOwnershipQueries.push(where);
-          return documents
-            .filter((document) =>
-              where.id.in.includes(document.id)
-              && document.uploadedBy === where.uploadedBy
-              && document.propertyId === where.propertyId)
-            .map(({ id }) => ({ id }));
+          recordOwnershipQueries.push(where);
+          return records
+            .filter((record) =>
+              where.id.in.includes(record.id)
+              && record.propertyId === where.propertyId
+              && record.lifecycleStatus !== 'TRASHED')
+            .map((record) => ({
+              id: record.id, title: record.title, recordType: record.recordType, description: null,
+              verificationStatus: 'UNVERIFIED', verifiedAt: null, updatedAt: new Date(), createdAt: new Date(),
+            }));
         },
-        updateMany: async () => ({ count: 1 }),
+        findFirst: async ({ where }) => {
+          const record = records.find((candidate) =>
+            candidate.id === where.id
+            && candidate.propertyId === where.propertyId
+            && candidate.lifecycleStatus !== 'TRASHED');
+          return record ? { id: record.id, currentVersionId: record.currentVersionId ?? null } : null;
+        },
+      },
+      propertyRecordLink: {
+        upsert: async ({ where, create }) => {
+          const key = where.recordId_entityType_entityId_purpose;
+          const existing = recordLinks.find((link) =>
+            link.recordId === key.recordId && link.entityType === key.entityType
+            && link.entityId === key.entityId && link.purpose === key.purpose);
+          if (existing) return existing;
+          const link = { id: `link-${recordLinks.length + 1}`, ...create };
+          recordLinks.push(link);
+          return link;
+        },
+        findMany: async ({ where }) =>
+          recordLinks
+            .filter((link) => link.entityType === where.entityType && where.entityId.in.includes(link.entityId))
+            .map((link) => {
+              const record = records.find((candidate) => candidate.id === link.recordId);
+              return {
+                entityId: link.entityId,
+                record: { id: record.id, title: record.title, recordType: record.recordType },
+                version: { mimeType: record.mimeType ?? '', fileSizeBytes: record.fileSizeBytes ?? 0 },
+              };
+            }),
+        count: async ({ where }) =>
+          recordLinks.filter((link) => link.entityType === where.entityType && link.entityId === where.entityId).length,
       },
       signal: {
         updateMany: async ({ where, data }) => {
@@ -168,7 +203,8 @@ require.cache[prismaPath] = {
           propertyHiddenAssetMatch: require.cache[prismaPath].exports.prisma.propertyHiddenAssetMatch,
           homeSavingsOpportunity: require.cache[prismaPath].exports.prisma.homeSavingsOpportunity,
           homeSavingsOpportunityOutcome: require.cache[prismaPath].exports.prisma.homeSavingsOpportunityOutcome,
-          document: require.cache[prismaPath].exports.prisma.document,
+          propertyRecord: require.cache[prismaPath].exports.prisma.propertyRecord,
+          propertyRecordLink: require.cache[prismaPath].exports.prisma.propertyRecordLink,
           signal: require.cache[prismaPath].exports.prisma.signal,
         }),
     },
@@ -210,9 +246,10 @@ test.beforeEach(() => {
   ]);
   opportunityOutcomes = [];
   updateManyOverride = null;
-  documents = [];
+  records = [];
+  recordLinks = [];
   signals = [];
-  documentOwnershipQueries.length = 0;
+  recordOwnershipQueries.length = 0;
   signalExpiryQueries.length = 0;
   publishSavingsRealizationSignalCalls.length = 0;
   publishSavingsRealizationSignalImpl = async () => ({ id: 'signal-1' });
@@ -334,24 +371,24 @@ test('recordHiddenAssetMatchOutcome rejects a mismatched owner', async () => {
   );
 });
 
-test('outcome evidence must belong to the authenticated user and the same property', async () => {
-  documents = [{ id: 'document-1', uploadedBy: 'profile-1', propertyId: 'property-1' }];
+test('outcome evidence must be a Home Record visible to the caller and scoped to the same property', async () => {
+  records = [{ id: 'record-1', propertyId: 'property-1', title: 'Rebate confirmation', recordType: 'RECEIPT', lifecycleStatus: 'ACTIVE' }];
   await recordHiddenAssetMatchOutcome('match-1', 'user-1', {
     stage: 'SUBMITTED',
-    documentIds: ['document-1'],
-  });
-  assert.deepEqual(documentOwnershipQueries[0], {
-    id: { in: ['document-1'] },
-    uploadedBy: 'profile-1',
+    documentIds: ['record-1'],
+  }, 'OWNER');
+  assert.deepEqual(recordOwnershipQueries[0], {
+    id: { in: ['record-1'] },
     propertyId: 'property-1',
+    lifecycleStatus: { not: 'TRASHED' },
   });
 
-  documents = [{ id: 'other-property-document', uploadedBy: 'profile-1', propertyId: 'property-2' }];
+  records = [{ id: 'other-property-record', propertyId: 'property-2', title: 'Other', recordType: 'RECEIPT', lifecycleStatus: 'ACTIVE' }];
   await assert.rejects(
     () => recordHomeSavingsOpportunityOutcome('opp-1', 'user-1', {
       stage: 'SUBMITTED',
-      documentIds: ['other-property-document'],
-    }),
+      documentIds: ['other-property-record'],
+    }, 'OWNER'),
     /not found/,
   );
 });

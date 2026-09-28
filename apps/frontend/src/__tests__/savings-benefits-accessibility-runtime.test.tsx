@@ -17,7 +17,7 @@ jest.mock('@/app/(dashboard)/dashboard/components/inventory/DocumentUploadZone',
   default: () => <button type="button">Upload evidence</button>,
 }));
 
-jest.mock('@/app/(dashboard)/dashboard/components/inventory/DocumentPickerModal', () => ({
+jest.mock('@/components/savings-benefits/HomeRecordPickerModal', () => ({
   __esModule: true,
   default: () => null,
 }));
