@@ -22,6 +22,7 @@ import {
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
+import { linkRecordToEntityInTransaction } from './homeRecords.service';
 import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
 import JobQueueService from './JobQueue.service';
 import { resolveWorkKey } from '../modules/homeOperations/domain/workKey';
@@ -2062,23 +2063,32 @@ export async function completeMinorWork(propertyId: string, userId: string, data
 
     const documentIds: string[] = [];
     for (const proof of data.proofDocuments) {
-      const uploadedDocument = proof.documentId
-        ? await tx.document.findFirst({ where: { id: proof.documentId, propertyId } })
-        : null;
-      if (proof.documentId && !uploadedDocument) {
-        throw new APIError('Uploaded proof document was not found for this property.', 409, 'INVALID_PROOF_DOCUMENT');
+      if (proof.documentId) {
+        // Live path: ProjectProofUploader.tsx uploads through Home Records first and passes back a
+        // PropertyRecord id here — verify it, mark it verified, and link it to this HomeEvent as
+        // evidence instead of writing a legacy Document row.
+        const record = await tx.propertyRecord.findFirst({
+          where: { id: proof.documentId, propertyId, lifecycleStatus: { not: 'TRASHED' } },
+          select: { id: true },
+        });
+        if (!record) {
+          throw new APIError('Uploaded proof document was not found for this property.', 409, 'INVALID_PROOF_DOCUMENT');
+        }
+        await tx.propertyRecord.update({
+          where: { id: record.id },
+          data: { verificationStatus: 'VERIFIED', verifiedAt: new Date(), verifiedByUserId: userId },
+        });
+        await linkRecordToEntityInTransaction(tx, {
+          propertyId, recordId: record.id, entityType: 'HOME_EVENT', entityId: event.id,
+          purpose: 'EVIDENCE', userId, label: proof.name,
+        });
+        documentIds.push(record.id);
+        continue;
       }
-      const document = uploadedDocument ? await tx.document.update({
-        where: { id: uploadedDocument.id },
-        data: {
-          projectProofKey: `minor:${journey.id}:${proof.proofKey}`,
-          inventoryItemId: item.id,
-          verificationStatus: 'VERIFIED',
-          verifiedAt: new Date(),
-          verifiedByUserId: userId,
-          metadata: { journeyId: journey.id, proofKind: proof.kind, minorWork: true },
-        },
-      }) : await tx.document.upsert({
+      // No caller passes a proof without a documentId today (ProjectProofUploader.tsx always uploads
+      // through Home Records first) — pinned on the legacy Document table rather than converted, since
+      // there is no live path to verify a Home Records equivalent against.
+      const document = await tx.document.upsert({
         where: { projectProofKey: `minor:${journey.id}:${proof.proofKey}` },
         create: {
           propertyId,
@@ -2358,25 +2368,40 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
       proofDocuments.push({ proofKey: 'completion-record', type: 'OTHER', name: 'Project completion record', fileUrl: data.completionRecordKey, fileSize: 0, mimeType: 'application/octet-stream', kind: 'PDF' });
     }
     const documentIds: string[] = [];
+    const proofRecordIdByKey = new Map<string, string>();
     for (const proof of proofDocuments) {
-      const uploadedDocument = proof.documentId
-        ? await tx.document.findFirst({ where: { id: proof.documentId, propertyId } })
-        : null;
-      if (proof.documentId && !uploadedDocument) {
-        throw new APIError('Uploaded proof document was not found for this property.', 409, 'INVALID_PROOF_DOCUMENT');
+      if (proof.documentId) {
+        // Live path: ProjectProofUploader.tsx uploads through Home Records first and passes back a
+        // PropertyRecord id here — verify it, mark it verified, and link it to this HomeEvent as
+        // evidence instead of writing a legacy Document row.
+        const record = await tx.propertyRecord.findFirst({
+          where: { id: proof.documentId, propertyId, lifecycleStatus: { not: 'TRASHED' } },
+          select: { id: true },
+        });
+        if (!record) {
+          throw new APIError('Uploaded proof document was not found for this property.', 409, 'INVALID_PROOF_DOCUMENT');
+        }
+        await tx.propertyRecord.update({
+          where: { id: record.id },
+          data: {
+            verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
+            verifiedAt: verifiedSuccess ? new Date() : null,
+            verifiedByUserId: verifiedSuccess ? userId : null,
+          },
+        });
+        await linkRecordToEntityInTransaction(tx, {
+          propertyId, recordId: record.id, entityType: 'HOME_EVENT', entityId: event.id,
+          purpose: 'EVIDENCE', userId, label: proof.name,
+        });
+        documentIds.push(record.id);
+        proofRecordIdByKey.set(proof.proofKey, record.id);
+        continue;
       }
-      const document = uploadedDocument ? await tx.document.update({
-        where: { id: uploadedDocument.id },
-        data: {
-          projectId,
-          projectProofKey: `${projectId}:${proof.proofKey}`,
-          inventoryItemId: existing.inventoryItemId,
-          verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
-          verifiedAt: verifiedSuccess ? new Date() : null,
-          verifiedByUserId: verifiedSuccess ? userId : null,
-          metadata: { projectId, proofKind: proof.kind, outcomeStatus: data.outcomeStatus },
-        },
-      }) : await tx.document.upsert({
+      // No caller passes a proof without a documentId today (ProjectProofUploader.tsx always uploads
+      // through Home Records first, and warrantyDocumentKey/completionRecordKey have no live caller
+      // either) — pinned on the legacy Document table rather than converted, since there is no live
+      // path to verify a Home Records equivalent against.
+      const document = await tx.document.upsert({
         where: { projectProofKey: `${projectId}:${proof.proofKey}` },
         create: {
           propertyId,
@@ -2457,7 +2482,15 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
           update: { startDate: actualEndDate, expiryDate: warrantyExpiresAt, providerName: existing.contractorName ?? 'Manufacturer or installer' },
         });
         warrantyId = warranty.id;
-        await tx.document.updateMany({ where: { id: { in: documentIds }, projectProofKey: `${projectId}:warranty` }, data: { warrantyId: warranty.id } });
+        const warrantyRecordId = proofRecordIdByKey.get('warranty');
+        if (warrantyRecordId) {
+          await linkRecordToEntityInTransaction(tx, {
+            propertyId, recordId: warrantyRecordId, entityType: 'WARRANTY', entityId: warranty.id,
+            purpose: 'WARRANTY', userId,
+          });
+        } else {
+          await tx.document.updateMany({ where: { id: { in: documentIds }, projectProofKey: `${projectId}:warranty` }, data: { warrantyId: warranty.id } });
+        }
       }
 
       if (existing.inventoryItemId) {

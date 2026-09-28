@@ -141,7 +141,8 @@ test('completion links shared uploaded documents instead of requiring proof URLs
   assert.match(validator, /documentId: z\.string\(\)\.optional/);
   assert.match(service, /INVALID_PROOF_DOCUMENT/);
   assert.match(service, /projectProofKey: `\$\{projectId\}:\$\{proof\.proofKey\}`/);
-  assert.match(uploader, /api\.uploadDocument/);
+  assert.match(uploader, /uploadRecordForWorkflow/);
+  assert.match(service, /linkRecordToEntityInTransaction/);
   assert.match(completionPage, /ProjectProofUploader/);
   assert.doesNotMatch(completionPage, /Invoice URL/);
 });

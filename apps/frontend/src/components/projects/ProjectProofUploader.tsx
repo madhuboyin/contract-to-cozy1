@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { CheckCircle2, Loader2, Upload } from 'lucide-react';
-import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
+import { uploadRecordForWorkflow } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi';
 
 export type ProjectProof = {
   proofKey: string;
@@ -35,14 +35,14 @@ export function ProjectProofUploader({ propertyId, value, onChange }: {
     setUploading(proof.proofKey);
     setError(null);
     try {
-      const response = await api.uploadDocument(file, {
-        propertyId,
-        type: proof.type,
-        name: proof.label,
+      const recordId = await uploadRecordForWorkflow(propertyId, {
+        file,
+        title: proof.label,
         description: `Project completion proof: ${proof.label}`,
+        recordType: proof.type,
+        sensitivity: 'STANDARD',
       });
-      if (!response.success || !('data' in response) || !response.data?.id) throw new Error('Upload did not return a document ID.');
-      const next: ProjectProof = { proofKey: proof.proofKey, documentId: response.data.id, type: proof.type, name: proof.label, kind: proof.kind };
+      const next: ProjectProof = { proofKey: proof.proofKey, documentId: recordId, type: proof.type, name: proof.label, kind: proof.kind };
       onChange([...value.filter((item) => item.proofKey !== proof.proofKey), next]);
     } catch (uploadError: any) {
       setError(uploadError?.message ?? `Failed to upload ${proof.label}.`);
