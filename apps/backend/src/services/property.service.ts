@@ -42,6 +42,7 @@ import {
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { countPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 import { signedUrl } from './homeRecords.service';
 
 async function reconcileCurrentSeasonalChecklist(propertyId: string, userId: string): Promise<void> {
@@ -442,9 +443,9 @@ function attachHealthInsightCopy(
  * UPDATED: Now fetches full booking objects to support insightFactor-based suppression
  */
 async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredProperty> {
-    const documentCount = await prisma.document.count({
-        where: { propertyId: property.id }
-    });
+    // Home Records is the newer, canonical document store (see propertyDocumentInventory.service.ts):
+    // an upload that moved there must still count toward the health score's document signal.
+    const { total: documentCount } = await countPropertyDocuments({ propertyId: property.id, includeLegacy: true });
 
     // UPDATED: Fetch full booking objects instead of just categories
     // We need insightFactor field for precise suppression logic

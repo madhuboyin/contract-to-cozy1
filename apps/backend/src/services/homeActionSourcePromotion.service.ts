@@ -62,7 +62,7 @@ function toRouteSlug(value: string): string {
 export type HomeActionSourceDb = Pick<typeof prisma,
   'guidanceJourney' | 'incident' | 'recallMatch' | 'coverageReview' | 'projectRecord' |
   'seasonalChecklist' | 'personalizedRecommendation' | 'orchestrationActionEvent' | 'orchestrationActionSnooze'> &
-  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'inventoryItem' | 'document' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense' | 'decisionThread' | 'operationalWorkItem'>>;
+  Partial<Pick<typeof prisma, 'domainEvent' | 'propertyFinancingProfile' | 'propertyRefinanceRadarState' | 'refinanceDecision' | 'homeDigitalTwin' | 'homeTwinComponent' | 'homeCapitalTimelineAnalysis' | 'propertyTaxAppealCase' | 'propertyHiddenAssetMatch' | 'savingsBenefitAction' | 'ownershipCostChange' | 'ownershipCostSnapshot' | 'ownershipCostDecision' | 'inspectionFinding' | 'propertySaleCase' | 'saleReadinessItem' | 'warranty' | 'insurancePolicy' | 'property' | 'inventoryItem' | 'document' | 'propertyRecord' | 'booking' | 'replaceRepairAnalysis' | 'sellHoldRentAnalysis' | 'propertyRadarCompoundInsight' | 'riskPremiumOptimizationAnalysis' | 'homeEvent' | 'insurancePolicyTerm' | 'insurancePolicyFact' | 'expense' | 'decisionThread' | 'operationalWorkItem'>>;
 
 function lowConsequenceGovernance(policyVersion = 'phase2-v1'): HomeAction['governance'] {
   return {
@@ -2215,13 +2215,17 @@ async function loadHealthInsightActions(propertyId: string, db: HomeActionSource
   if (!db.property || !db.document || !db.booking) return [];
 
   const now = evaluatedAt ?? new Date();
-  const [property, documentCount, activeBookings] = await Promise.all([
+  const [property, legacyDocumentCount, homeRecordCount, activeBookings] = await Promise.all([
     db.property.findUnique({ where: { id: propertyId }, include: { inventoryItems: true, warranties: true } }),
     db.document.count({ where: { propertyId } }),
+    // Home Records is the newer, canonical document store (see propertyDocumentInventory.service.ts):
+    // an upload that moved there must still count toward the health score's document signal.
+    db.propertyRecord ? db.propertyRecord.count({ where: { propertyId, lifecycleStatus: 'ACTIVE' } }) : 0,
     db.booking.findMany({ where: { propertyId, status: { in: [...ACTIVE_BOOKING_STATUSES_FOR_HEALTH_SCORE] } } }),
   ]);
   if (!property) return [];
 
+  const documentCount = legacyDocumentCount + homeRecordCount;
   const healthScore = calculateHealthScore(property as any, documentCount, activeBookings as any);
   const inventoryItems = (property as any).inventoryItems as Array<{ id: string; name: string; assetType: string | null; category: string; purchasedOn: Date | null }> ?? [];
   const applianceRecords = inventoryItems.filter((item) => item.category === 'APPLIANCE');

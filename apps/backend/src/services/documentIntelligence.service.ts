@@ -6,7 +6,6 @@ import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
 import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
-import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
 
 export interface DocumentInsights {
   documentType: 'WARRANTY' | 'RECEIPT' | 'MANUAL' | 'INSPECTION' | 'INVOICE' | 'INSURANCE' | 'UNKNOWN';
@@ -139,7 +138,6 @@ const documentIntelligenceCircuit = new AICircuitBreaker('document-intelligence'
 
 export class DocumentIntelligenceService {
   private ai: GoogleGenAI;
-  private static readonly AUTO_WARRANTY_MIN_CONFIDENCE = 0.7;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -353,56 +351,6 @@ export class DocumentIntelligenceService {
       if (typeof value === 'string' && value.trim()) candidateFields[key] = value.trim();
     }
     return { candidateFields, confidence };
-  }
-
-  async autoCreateInsurancePolicy(
-    homeownerProfileId: string,
-    propertyId: string,
-    insights: DocumentInsights,
-    documentId: string
-  ): Promise<any | null> {
-    try {
-      const { extractedData } = insights;
-
-      if ((insights.confidence ?? 0) < DocumentIntelligenceService.AUTO_WARRANTY_MIN_CONFIDENCE) {
-        return null;
-      }
-
-      if (!extractedData.carrierName || !extractedData.policyNumber) {
-        return null;
-      }
-
-      const staged = await stageExtractedPolicyTerm({
-        homeownerProfileId,
-        propertyId,
-        documentId,
-        carrierName: extractedData.carrierName,
-        policyNumber: extractedData.policyNumber,
-        coverageType: extractedData.coverageType,
-        premiumAmount: extractedData.premiumAmount,
-        deductibleAmount: extractedData.deductible,
-        dwellingLimit: extractedData.dwellingLimit,
-        personalPropertyLimit: extractedData.personalPropertyLimit,
-        liabilityLimit: extractedData.liabilityLimit,
-        valuationBasis: extractedData.valuationBasis,
-        endorsements: extractedData.endorsements,
-        coverageLimits: extractedData.coverageLimits,
-        termStart: extractedData.startDate,
-        termEnd: extractedData.expiryDate,
-        confidence: insights.confidence,
-        sourceText: insights.rawText,
-      });
-
-      logger.info(
-        { policyId: staged.policy.id, policyTermId: staged.term.id },
-        '[DOC-INTELLIGENCE] Staged insurance policy facts for confirmation'
-      );
-
-      return staged.policy;
-    } catch (error: any) {
-      logger.error({ err: error }, '[DOC-INTELLIGENCE] Insurance creation error');
-      return null;
-    }
   }
 
 }

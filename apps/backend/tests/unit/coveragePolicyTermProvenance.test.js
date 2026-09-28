@@ -25,12 +25,16 @@ test('Slice 2 models policy identity, terms, and typed facts separately', () => 
 });
 
 test('document extraction stages unverified facts without invented premium or dates', () => {
-  const intelligence = read('apps/backend/src/services/documentIntelligence.service.ts');
+  // documentIntelligence.service.ts's own auto-create path (autoCreateInsurancePolicy) was removed
+  // as dead code (zero callers anywhere in the app, Documents-retirement cleanup); the live staging
+  // path is homeRecordsExtraction.service.ts's promoteInsurancePolicy, which still routes through
+  // this same reviewed pipeline rather than fabricating a premium or dates.
+  const extraction = read('apps/backend/src/services/homeRecordsExtraction.service.ts');
   const recordService = read('apps/backend/src/services/insurancePolicyRecord.service.ts');
 
-  assert.match(intelligence, /stageExtractedPolicyTerm/);
-  assert.doesNotMatch(intelligence, /premiumAmount:\s*extractedData\.premiumAmount\s*\|\|\s*0/);
-  assert.doesNotMatch(intelligence, /new Date\(Date\.now\(\) \+ 365/);
+  assert.match(extraction, /stageExtractedPolicyTerm/);
+  assert.doesNotMatch(extraction, /premiumAmount:\s*extractedData\.premiumAmount\s*\|\|\s*0/);
+  assert.doesNotMatch(extraction, /new Date\(Date\.now\(\) \+ 365/);
   assert.match(recordService, /premiumAmount: null/);
   assert.match(recordService, /startDate: null/);
   assert.match(recordService, /expiryDate: null/);
