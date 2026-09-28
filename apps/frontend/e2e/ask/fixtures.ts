@@ -1026,6 +1026,69 @@ function warrantyJourneyExecution(state: WarrantyJourneyState, options: { viewer
   };
 }
 
+// Documents D-3: the DOCUMENT_LOOKUP answer as the real producer sends it (calm adopter, governed verification-status and type filters, view
+// state, and the recorded-information boundary; no filled step -- uploading, verifying and reviewing happen on the Home Records page, not
+// here). 'document-home-record' is a Home Record row (opens through PropertyRecordAskDetail); 'document-legacy' is a transitional legacy
+// row (opens through DocumentDetail, marked "older vault").
+type DocumentsJourneyVerification = 'ALL' | 'VERIFIED' | 'UNVERIFIED' | 'PENDING' | 'REJECTED';
+type DocumentsJourneyState = { verification: DocumentsJourneyVerification; kind: string | null; revision: number; sessionId?: string };
+const DOCUMENTS_KIND_LABELS: Record<string, string> = { INVOICE: 'Invoices', WARRANTY: 'Warranties', PERMIT: 'Permits', ESTIMATE: 'Estimates' };
+const DOCUMENTS_JOURNEY_ITEMS = [
+  { id: 'document-invoice', title: 'HVAC install invoice', kind: 'INVOICE', verification: 'VERIFIED', entityType: 'PROPERTY_RECORD', transitional: false, meta: ['verified', 'Sep 3, 2026'] },
+  { id: 'document-home-record', title: 'Roof warranty document', kind: 'WARRANTY', verification: 'PENDING', entityType: 'PROPERTY_RECORD', transitional: false, meta: ['pending', 'Sep 2, 2026'] },
+  { id: 'document-legacy', title: 'Old permit scan', kind: 'PERMIT', verification: 'UNVERIFIED', entityType: 'DOCUMENT', transitional: true, meta: ['unverified', 'Aug 1, 2026', 'older vault'] },
+  { id: 'document-rejected', title: 'Deleted estimate', kind: 'ESTIMATE', verification: 'REJECTED', entityType: 'DOCUMENT', transitional: true, meta: ['rejected', 'Jul 1, 2026', 'older vault'] },
+] as const;
+function documentsJourneyExecution(state: DocumentsJourneyState, options: { empty?: boolean } = {}) {
+  const href = `/dashboard/properties/${propertyId}/tools/home-records`;
+  const common = {
+    schemaVersion: '1.0', sessionId: state.sessionId ?? 'ask-acceptance-session', status: 'ANSWERED', property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'DOCUMENT_LOOKUP', version: '1.0', family: 'RECORD_QUERY' }, contextVersion: 'documents-journey-v1',
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+  const boundary = { type: 'BOUNDARY', id: 'document-lookup-boundary', title: 'Recorded information only', body: 'This shows what is recorded about each document in your Home Record: its type, when it was added and its review or verification status. Ask has not read or interpreted the documents themselves.', severity: 'INFO', suggestions: [] };
+  if (options.empty) {
+    return { ...common, executionId: 'execution-documents-journey-empty', question: 'Show my documents journey', viewState: null, blocks: [{
+      type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no documents recorded for this home yet.',
+      actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'PRIMARY' }],
+    }, boundary] };
+  }
+  const matched = DOCUMENTS_JOURNEY_ITEMS.filter((item) => (!state.kind || item.kind === state.kind) && (state.verification === 'ALL' || item.verification === state.verification));
+  const isFiltered = state.verification !== 'ALL' || state.kind !== null;
+  const matchWord = matched.length === 1 ? 'matches' : 'match';
+  const title = isFiltered ? `${matched.length} document${matched.length === 1 ? '' : 's'} ${matchWord} this request` : `${DOCUMENTS_JOURNEY_ITEMS.length} documents on file`;
+  const kinds = Object.keys(DOCUMENTS_KIND_LABELS).sort((left, right) => DOCUMENTS_KIND_LABELS[left].localeCompare(DOCUMENTS_KIND_LABELS[right]));
+  const chips = [
+    { id: 'status-all', label: 'All', message: 'Now show all documents', active: state.verification === 'ALL' },
+    { id: 'status-verified', label: 'Verified', message: 'Only show verified documents', active: state.verification === 'VERIFIED' },
+    { id: 'status-unverified', label: 'Unverified', message: 'Only show unverified documents', active: state.verification === 'UNVERIFIED' },
+    { id: 'status-pending', label: 'Pending', message: 'Only show documents pending verification', active: state.verification === 'PENDING' },
+    { id: 'status-rejected', label: 'Rejected', message: 'Only show rejected documents', active: state.verification === 'REJECTED' },
+    { id: 'type-all', label: 'All types', message: 'Now show all document types', active: state.kind === null },
+    ...kinds.map((kind) => ({ id: `type-${kind.toLowerCase()}`, label: DOCUMENTS_KIND_LABELS[kind], message: `Only show ${DOCUMENTS_KIND_LABELS[kind]}`, active: state.kind === kind })),
+    ...(isFiltered ? [{ id: 'clear-all', label: 'Clear filters', message: 'Now show all documents with no filters', active: false }] : []),
+  ];
+  const grouped = new Map<string, (typeof DOCUMENTS_JOURNEY_ITEMS)[number][]>();
+  for (const item of matched) { const list = grouped.get(item.kind) ?? []; list.push(item); grouped.set(item.kind, list); }
+  return {
+    ...common, executionId: `execution-documents-journey-${state.revision}`,
+    ...(state.revision > 1 ? { continuesExecutionId: `execution-documents-journey-${state.revision - 1}` } : {}),
+    question: state.revision === 1 ? 'Show my documents journey' : 'Refined documents',
+    viewState: { resultId: 'documents-journey-result', domainScopePhrase: state.kind, dateScopePhrase: null, statusFilter: state.verification, selectedTaskId: null, revision: state.revision },
+    blocks: [
+      { type: 'SUMMARY', id: 'document-lookup-summary', title, body: 'Nothing recorded needs review.', tone: 'DEFAULT', actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }] },
+      { type: 'GROUPED_LIST', id: 'document-lookup-groups', title: 'Documents by type', filters: chips,
+        sections: matched.length === 0 ? [{ id: 'documents', title: 'Documents', count: 0, items: [] }] : [...grouped.entries()].sort(([left], [right]) => DOCUMENTS_KIND_LABELS[left].localeCompare(DOCUMENTS_KIND_LABELS[right])).map(([kind, items]) => ({
+          id: `document-lookup-${kind.toLowerCase()}`, title: DOCUMENTS_KIND_LABELS[kind], count: items.length,
+          items: items.map((item) => ({ id: item.id, title: item.title, entityType: item.entityType, description: null, meta: item.meta, status: item.verification, href: item.transitional ? null : href })),
+        })),
+        actions: [{ id: 'open-documents-list', label: 'Open Home Records', href, style: 'SECONDARY' }] },
+      boundary,
+    ],
+  };
+}
+
 // Claims C-3: the incident and claim status answer as the real producer sends it (calm adopter, governed scope and state filters, view
 // state, a recorded-information boundary and no filled step). Claim rows carry the existing status-transition actions; 'claim-kitchen-leak'
 // reuses the acceptance record (canonical detail and the transition flow), 'claim-removed' has no canonical record behind it.
@@ -1892,7 +1955,7 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
@@ -1903,6 +1966,7 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
   let refinementFailedOnce = false;
   let inventoryJourney: InventoryJourneyState | null = null;
   let warrantyJourney: WarrantyJourneyState | null = null;
+  let documentsJourney: DocumentsJourneyState | null = null;
   let claimsJourney: ClaimsJourneyView | null = null;
   let claimConfirmCalls = 0;
   let unknownOutcomeCalls = 0;
@@ -1949,6 +2013,20 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
   } } }));
   // No single-line-item GET exists on the real backend either -- ReserveAllocationDetail re-fetches the whole
   // list and finds its own id, the same pattern as Household/Warranty detail.
+  // Documents D-3 inline detail: a Home Record row reads through the record route (record-level visibility applies); a transitional legacy
+  // row reads through the legacy property-scoped document route. 'document-rejected' is deliberately not mocked here (it is in the answer
+  // but not behind either detail route), so its detail shows the removed-record state, the same pattern as warranty-removed.
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/records/document-home-record`, (route) => fulfill(route, { success: true, data: { record: {
+    id: 'document-home-record', propertyId, title: 'Roof warranty document', description: 'Manufacturer warranty for the roofing replacement.', recordType: 'WARRANTY',
+    sensitivity: 'STANDARD', visibility: 'HOUSEHOLD', lifecycleStatus: 'ACTIVE', needsReview: false, expiryStatus: null,
+    effectiveFrom: '2026-09-02T00:00:00.000Z', effectiveTo: null, createdAt: '2026-09-02T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z',
+    _count: { versions: 1, links: 0 }, versions: [], links: [], deletionImpact: { activeLinkCount: 0, requiresImpactDecision: false, legalHold: false, retainUntil: null, brokenLinkCount: 0 },
+  } } }));
+  await page.route(`${apiOrigin}/api/documents/property/${propertyId}/document-legacy`, (route) => fulfill(route, { success: true, data: { document: {
+    id: 'document-legacy', propertyId, name: 'Old permit scan', description: 'Scanned building permit from a prior renovation.', type: 'PERMIT',
+    verificationStatus: 'UNVERIFIED', verifiedAt: null, mimeType: 'application/pdf', fileSize: 204800, createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+  } } }));
+  await page.route(`${apiOrigin}/api/documents/property/${propertyId}/document-rejected`, (route) => fulfill(route, { success: false, error: { code: 'DOCUMENT_NOT_FOUND', message: 'Document not found.' } }, 404));
   await page.route(`${apiOrigin}/api/properties/${propertyId}/reserve-fund/line-items`, (route) => fulfill(route, { success: true, data: { lineItems: [{
     id: 'line-property-summary', fundId: 'fund-property-summary', timelineItemId: 'timeline-property-summary', status: 'ACTIVE',
     targetCostCents: 120000, allocatedMonthlyCents: 2500, allocatedBalanceCents: 45000, retiredAt: null, retiredReason: null, retiredEvidenceRef: null,
@@ -2254,6 +2332,31 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
       else if (/home warranty plan warranties/i.test(body.message)) warrantyJourney = { ...previous!, category: 'HOME_WARRANTY_PLAN', revision: previous!.revision + 1 };
       else warrantyJourney = { ...previous!, status: 'ALL', revision: previous!.revision + 1 };
       await fulfill(route, { success: true, data: warrantyJourneyExecution({ ...warrantyJourney!, sessionId: body.sessionId }, { viewer: options.warrantyViewer, empty: options.warrantyEmpty }) }, 201);
+      return;
+    }
+    // Documents D-3: a documents answer and its declared-filter refinements (verification status and type, merged the way the handler
+    // merges them). No "warrant"-style substring in common across kind labels, so the continuation guard is a bare phrasing check gated on
+    // documentsJourney already being set -- safe because only one journey's trigger phrase is ever sent within a single test.
+    if (/documents journey/i.test(body.message) || (documentsJourney && /^(?:only show|now show all)\b/i.test(body.message))) {
+      if (options.refinementFailsOnce && documentsJourney && !refinementFailedOnce && /^only show/i.test(body.message)) {
+        refinementFailedOnce = true;
+        await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Ask could not refine just now.' } }, 500);
+        return;
+      }
+      const previous = documentsJourney;
+      if (/documents journey/i.test(body.message)) documentsJourney = { verification: 'ALL', kind: null, revision: 1 };
+      else if (/no filters/i.test(body.message)) documentsJourney = { verification: 'ALL', kind: null, revision: previous!.revision + 1 };
+      else if (/all document types/i.test(body.message)) documentsJourney = { ...previous!, kind: null, revision: previous!.revision + 1 };
+      else if (/pending verification/i.test(body.message)) documentsJourney = { ...previous!, verification: 'PENDING', revision: previous!.revision + 1 };
+      else if (/unverified documents/i.test(body.message)) documentsJourney = { ...previous!, verification: 'UNVERIFIED', revision: previous!.revision + 1 };
+      else if (/rejected documents/i.test(body.message)) documentsJourney = { ...previous!, verification: 'REJECTED', revision: previous!.revision + 1 };
+      else if (/verified documents/i.test(body.message)) documentsJourney = { ...previous!, verification: 'VERIFIED', revision: previous!.revision + 1 };
+      else if (/invoices/i.test(body.message)) documentsJourney = { ...previous!, kind: 'INVOICE', revision: previous!.revision + 1 };
+      else if (/warranties/i.test(body.message)) documentsJourney = { ...previous!, kind: 'WARRANTY', revision: previous!.revision + 1 };
+      else if (/permits/i.test(body.message)) documentsJourney = { ...previous!, kind: 'PERMIT', revision: previous!.revision + 1 };
+      else if (/estimates/i.test(body.message)) documentsJourney = { ...previous!, kind: 'ESTIMATE', revision: previous!.revision + 1 };
+      else documentsJourney = { ...previous!, verification: 'ALL', revision: previous!.revision + 1 };
+      await fulfill(route, { success: true, data: documentsJourneyExecution({ ...documentsJourney!, sessionId: body.sessionId }, { empty: options.documentsEmpty }) }, 201);
       return;
     }
     // ACUI I-3: an inventory answer and its declared-filter refinements. The fixture merges dimensions the way the handler does.

@@ -1,7 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -9,6 +9,9 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
 import { listPropertyDocuments, type PropertyDocument } from '../../propertyDocuments/propertyDocumentInventory.service';
+import { type AskViewState } from '../support/executionState';
+import { loadAskViewState } from './maintenance.handler';
+import { containsFilterContinuation } from '../askFollowUpContext';
 
 type DocumentPromotionCandidate = { id: string; kind: 'MATERIAL_EXTRACTION_REVIEW' | 'INSPECTION_REPORT' | 'INSURANCE_POLICY_FACT'; title: string; description: string; updatedAt: Date; parentId: string; candidateFields?: Record<string, unknown> };
 
@@ -84,6 +87,91 @@ export function documentsCalmCopy(input: {
   return notes.length ? { headline, supportLine: notes.join(' '), chips } : { headline, chips };
 }
 
+// D-2 (FRD v1.153): filters as a governed viewState refinement, the same continuity model as Maintenance, Buyer Deadlines and Warranties. A
+// declared chip is a fresh authoritative read over every recorded document; it keeps the result identity, increments the revision and
+// replaces only the dimension it names. Two independent dimensions: a verification status and a type (kind, present-in-this-home only).
+export type DocumentVerificationFilter = 'ALL' | 'VERIFIED' | 'UNVERIFIED' | 'PENDING' | 'REJECTED';
+const VERIFICATION_FILTERS: ReadonlySet<string> = new Set(['ALL', 'VERIFIED', 'UNVERIFIED', 'PENDING', 'REJECTED']);
+// Each declared chip message begins with a phrase askFollowUpContext's FILTER_CONTINUATION_PATTERN accepts (asserted in tests).
+const CLEAR_MESSAGE = 'Now show all documents with no filters';
+const CLEAR_PATTERN = /^\s*now show all documents with no filters\b/i;
+const ALL_STATUS_PATTERN = /^\s*now show all documents\b/i;
+const ALL_TYPES_PATTERN = /^\s*now show all document types\b/i;
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** A kind key from what this question names, matched only against kinds this home actually has (never guessed from a fixed list). */
+function matchDocumentKind(message: string, presentKinds: ReadonlyArray<{ kind: string; label: string }>): string | null {
+  for (const entry of presentKinds) {
+    const singular = entry.label.toLowerCase().replace(/s$/, '');
+    if (new RegExp(`\\b${escapeRegExp(singular)}s?\\b`, 'i').test(message)) return entry.kind;
+  }
+  return null;
+}
+function documentVerificationFocus(message: string): DocumentVerificationFilter {
+  if (/\brejected\b/i.test(message)) return 'REJECTED';
+  if (/\bpending\b/i.test(message)) return 'PENDING';
+  if (/\bunverified\b/i.test(message)) return 'UNVERIFIED';
+  if (/\bverified\b/i.test(message)) return 'VERIFIED';
+  return 'ALL';
+}
+
+/** What a fresh (non-continuation) question asks about, from its own words. Nothing is remembered between questions (continuation is below). */
+export function documentFocus(message: string, presentKinds: ReadonlyArray<{ kind: string; label: string }>): { verification: DocumentVerificationFilter; kind: string | null } {
+  return { verification: documentVerificationFocus(message), kind: matchDocumentKind(message, presentKinds) };
+}
+
+/** A declared chip or a typed filter phrase that continues the prior document-lookup result; an ordinary question is answered on its own. */
+export function resolveDocumentRefinement(
+  message: string, prior: AskViewState | null | undefined, presentKinds: ReadonlyArray<{ kind: string; label: string }>,
+): { verification: DocumentVerificationFilter; kind: string | null } | null {
+  if (!prior || !VERIFICATION_FILTERS.has(prior.statusFilter)) return null;
+  if (!containsFilterContinuation(message)) return null;
+  const priorKind = prior.domainScopePhrase && presentKinds.some((entry) => entry.kind === prior.domainScopePhrase) ? prior.domainScopePhrase : null;
+  if (CLEAR_PATTERN.test(message)) return { verification: 'ALL', kind: null };
+  const allTypes = ALL_TYPES_PATTERN.test(message);
+  const verification: DocumentVerificationFilter | null = /\brejected\b/i.test(message) ? 'REJECTED'
+    : /\bpending\b/i.test(message) ? 'PENDING'
+      : /\bunverified\b/i.test(message) ? 'UNVERIFIED'
+        : /\bverified\b/i.test(message) ? 'VERIFIED'
+          : ALL_STATUS_PATTERN.test(message) ? 'ALL' : null;
+  const kind = allTypes ? null : matchDocumentKind(message, presentKinds);
+  if (!verification && !kind && !allTypes) return null;
+  return { verification: verification ?? prior.statusFilter as DocumentVerificationFilter, kind: allTypes ? null : kind ?? priorKind };
+}
+
+export function buildDocumentViewState(prior: AskViewState | null | undefined, verification: DocumentVerificationFilter, kind: string | null): AskViewState {
+  return {
+    resultId: prior?.resultId ?? randomUUID(),
+    // Documents reuse the generic fields: the kind key rides in domainScopePhrase, the verification filter in statusFilter.
+    domainScopePhrase: kind, dateScopePhrase: null, statusFilter: verification, selectedTaskId: null, revision: (prior?.revision ?? 0) + 1,
+  };
+}
+
+/** The declared chips: type chips only for kinds this home actually has, and a way back once a filter is applied. */
+export function documentFilterChips(
+  verification: DocumentVerificationFilter, kind: string | null, present: { kinds: ReadonlyArray<{ kind: string; label: string }>; pending: boolean; rejected: boolean },
+) {
+  return [
+    { id: 'status-all', label: 'All', message: 'Now show all documents', active: verification === 'ALL' },
+    { id: 'status-verified', label: 'Verified', message: 'Only show verified documents', active: verification === 'VERIFIED' },
+    { id: 'status-unverified', label: 'Unverified', message: 'Only show unverified documents', active: verification === 'UNVERIFIED' },
+    ...(present.pending || verification === 'PENDING' ? [{ id: 'status-pending', label: 'Pending', message: 'Only show documents pending verification', active: verification === 'PENDING' }] : []),
+    ...(present.rejected || verification === 'REJECTED' ? [{ id: 'status-rejected', label: 'Rejected', message: 'Only show rejected documents', active: verification === 'REJECTED' }] : []),
+    ...(present.kinds.length > 1 || kind ? [
+      { id: 'type-all', label: 'All types', message: 'Now show all document types', active: kind === null },
+      ...present.kinds.map((entry) => ({ id: `type-${entry.kind.toLowerCase()}`, label: entry.label, message: `Only show ${entry.label}`, active: kind === entry.kind })),
+    ] : []),
+    ...(verification !== 'ALL' || kind ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : []),
+  ];
+}
+
+/** The prior view only when the source execution really was a document lookup (another domain's view state must never be continued). */
+async function loadDocumentViewState(sourceExecutionId: string | null | undefined, userId: string): Promise<AskViewState | null> {
+  if (!sourceExecutionId) return null;
+  const source = await prisma.askExecution.findFirst({ where: { id: sourceExecutionId, userId }, select: { operationId: true } });
+  return source?.operationId === 'DOCUMENT_LOOKUP' ? loadAskViewState(sourceExecutionId, userId) : null;
+}
+
 const DOCUMENT_LOOKUP_BOUNDARY: AskPresentationBlock = {
   type: 'BOUNDARY', id: 'document-lookup-boundary', title: 'Recorded information only',
   body: 'This shows what is recorded about each document in your Home Record: its type, when it was added and its review or verification status. Ask has not read or interpreted the documents themselves.',
@@ -91,7 +179,7 @@ const DOCUMENT_LOOKUP_BOUNDARY: AskPresentationBlock = {
 };
 
 // Kinds are shown in one vocabulary whichever store holds the document; a legacy row keeps its own facts and is marked as transitional.
-async function documentLookupResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+async function documentLookupResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   // Home Records is the canonical page for documents; the legacy vault is reachable only for the rows still in it.
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
@@ -108,39 +196,84 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
     };
   }
 
+  // D-2: the chips reflect every recorded document (never the filtered subset), so a filter can always be widened or cleared.
+  const presentKinds = [...new Map(documents.map((document) => [document.kind, document.kindLabel] as const)).entries()]
+    .map(([kind, label]) => ({ kind, label }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+  const refinement = resolveDocumentRefinement(message, priorViewState, presentKinds);
+  const focus = refinement ?? documentFocus(message, presentKinds);
+  const verificationFilter = focus.verification;
+  const kindFilter = focus.kind;
+  const isFiltered = verificationFilter !== 'ALL' || kindFilter !== null;
+  const matched = documents.filter((document) => (!kindFilter || document.kind === kindFilter) && (verificationFilter === 'ALL' || (document.verification ?? 'UNVERIFIED') === verificationFilter));
+  const present = { kinds: presentKinds, pending: documents.some((document) => document.verification === 'PENDING'), rejected: documents.some((document) => document.verification === 'REJECTED') };
+  const viewState = buildDocumentViewState(priorViewState, verificationFilter, kindFilter);
+  const chips = documentFilterChips(verificationFilter, kindFilter, present);
+
+  if (matched.length === 0 && refinement) {
+    // A filter that matches nothing still continues the result and keeps every chip, so it can be widened or cleared.
+    return {
+      status: 'ANSWERED', reasonCode: 'DOCUMENT_FILTER_NO_MATCH', parameters: { viewState },
+      blocks: [{
+        type: 'SUMMARY', id: 'document-lookup-summary', title: 'No recorded documents match these filters', headline: 'No documents match these filters.',
+        supportLine: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}. Widen or clear a filter to see them.`,
+        body: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}, but none match the selected filters.`, tone: 'DEFAULT',
+        actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }],
+      }, {
+        type: 'GROUPED_LIST', filters: chips, id: 'document-lookup-groups', title: 'Documents by type',
+        sections: [{ id: 'documents', title: 'Documents', count: 0, items: [] }],
+        actions: [{ id: 'open-documents-list', label: 'Open Home Records', href, style: 'SECONDARY' }],
+      }, DOCUMENT_LOOKUP_BOUNDARY],
+      suggestions: [],
+    };
+  }
+
+  if (matched.length === 0) {
+    return {
+      status: 'ANSWERED', reasonCode: 'DOCUMENT_MATCH_NOT_FOUND',
+      blocks: [{
+        type: 'SUMMARY', id: 'document-lookup-no-match', title: 'No recorded document matches this request',
+        body: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}, but none match this request.`,
+        tone: 'DEFAULT', actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }],
+      }, DOCUMENT_LOOKUP_BOUNDARY],
+      suggestions: ['Show my documents'],
+    };
+  }
+
   const grouped = new Map<string, { label: string; docs: PropertyDocument[] }>();
-  for (const document of documents) {
+  for (const document of matched) {
     const existing = grouped.get(document.kind) ?? { label: document.kindLabel, docs: [] };
     existing.docs.push(document);
     grouped.set(document.kind, existing);
   }
-  const count = (predicate: (document: PropertyDocument) => boolean) => documents.filter(predicate).length;
+  const count = (predicate: (document: PropertyDocument) => boolean) => matched.filter(predicate).length;
   const unverifiedCount = count((document) => document.verification === 'UNVERIFIED' || document.verification === 'PENDING');
   const needsReviewCount = count((document) => document.needsReview === true);
+  const matchWord = matched.length === 1 ? 'matches' : 'match';
 
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'document-lookup-summary',
-    title: `${documents.length} document${documents.length === 1 ? '' : 's'} on file`,
+    title: isFiltered ? `${matched.length} document${matched.length === 1 ? '' : 's'} ${matchWord} this request` : `${documents.length} document${documents.length === 1 ? '' : 's'} on file`,
     body: needsReviewCount || unverifiedCount ? `${needsReviewCount + unverifiedCount} need attention.` : 'Nothing recorded needs review.',
     tone: needsReviewCount || unverifiedCount ? 'CAUTION' : 'DEFAULT',
     ...documentsCalmCopy({
-      total: documents.length,
+      total: matched.length,
       needsReview: needsReviewCount,
       expired: count((document) => document.expiry === 'EXPIRED'),
       expiringSoon: count((document) => document.expiry === 'EXPIRING_SOON'),
       unverified: unverifiedCount,
       verified: count((document) => document.verification === 'VERIFIED'),
       rejected: count((document) => document.verification === 'REJECTED'),
-      legacy: inventory.totals.legacy,
-      newest: { name: documents[0].title, addedOn: humanDate(documents[0].addedAt) || null },
+      legacy: count((document) => document.transitional),
+      newest: { name: matched[0].title, addedOn: humanDate(matched[0].addedAt) || null },
       truncatedKinds: [...grouped.values()].filter((group) => group.docs.length > 20).length,
     }),
     actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }],
   }, {
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType routes each row to its own inline detail. A Home Record is read through the record
     // route (record-level visibility applies); a transitional legacy document through the legacy property-scoped document route.
-    type: 'GROUPED_LIST', filters: [],
+    type: 'GROUPED_LIST', filters: chips,
     id: 'document-lookup-groups',
     title: 'Documents by type',
     description: 'Documents recorded for this property, grouped by type.',
@@ -173,6 +306,7 @@ async function documentLookupResult(userId: string, propertyId: string): Promise
     status: 'ANSWERED',
     reasonCode: needsReviewCount || unverifiedCount ? 'DOCUMENTS_INCLUDE_UNVERIFIED' : 'DOCUMENTS_ALL_VERIFIED',
     contextVersion: createHash('sha256').update(JSON.stringify(documents.map((document) => ({ id: document.id, source: document.source, verification: document.verification, needsReview: document.needsReview, updatedAt: document.updatedAt })))).digest('hex'),
+    parameters: { viewState },
     blocks,
     suggestions: ['Open Home Records'],
   };
@@ -182,4 +316,7 @@ registerCapabilityHandler('document-promotion.review', async (envelope) => docum
 
 registerCapabilityHandler('document-promotion.confirm', async (envelope) => documentPromotionConfirmResult(envelope.propertyId!, envelope.message, envelope.launchContext));
 
-registerCapabilityHandler('documents.lookup', async (envelope) => documentLookupResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('documents.lookup', async (envelope) => documentLookupResult(
+  envelope.userId, envelope.propertyId!, envelope.message,
+  await loadDocumentViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
+));

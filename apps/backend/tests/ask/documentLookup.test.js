@@ -97,7 +97,7 @@ test('documentLookupResult groups by type and surfaces each row\'s own store fac
 test('the capability handler and captureFallbackHref registrations both exist for DOCUMENT_LOOKUP', () => {
   assert.match(
     orchestratorSource,
-    /registerCapabilityHandler\('documents\.lookup', async \(envelope\) => documentLookupResult\(envelope\.userId, envelope\.propertyId!\)\);/,
+    /registerCapabilityHandler\('documents\.lookup', async \(envelope\) => documentLookupResult\(\s*envelope\.userId, envelope\.propertyId!, envelope\.message,\s*await loadDocumentViewState\(envelope\.launchContext\?\.sourceExecutionId, envelope\.userId\),\s*\)\);/,
   );
   assert.match(orchestratorSource, /case 'DOCUMENT_LOOKUP': return `\$\{base\}\/tools\/home-records`;/);
 });

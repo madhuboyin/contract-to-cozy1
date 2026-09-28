@@ -1962,6 +1962,8 @@ Status: neither statement was run by the agent; the count and any update are the
 
 **Pairing (findings #2 and #4).** Ask reading the legacy `Document` table (#2) and the legacy Documents entry points, dashboard link and upload-driven timeline events (#4) are one problem: two record inventories. They stay paired and unchanged until the canonical inventory strategy is decided, because fixing only one would deepen the split. Documents D-2 and D-3 (Ask refinement and journey) wait on the same decision.
 
+**Superseded (September 28, 2026).** §17 below makes and implements that canonical-inventory decision (Home Records authoritative, the legacy vault projected only as a named, transitional branch through `propertyDocumentInventory.service.ts`), and by S1-S2 `DOCUMENT_LOOKUP` already reads only that canonical projection, never the legacy table directly. Documents D-2 (governed verification-status and type filters) and D-3 (acceptance journey) no longer wait on anything: D-2 shipped (FRD v1.153, `ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` §15); D-3 is written but not yet confirmed green (a local Playwright environment gap, not an architecture blocker). This note's "wait on the same decision" language describes the state before §17, not the current one.
+
 **Tests.** `homeRecordsRecordAuthorization.test.js` (service guard, batch reporting, route schema) and `homeRecordsVisibilityOptions.test.ts` (both selects built from the selectable list).
 
 ## 17. Retiring the legacy Document table (September 26, 2026)
