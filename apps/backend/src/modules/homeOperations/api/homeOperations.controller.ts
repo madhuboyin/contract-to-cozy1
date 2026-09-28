@@ -27,6 +27,7 @@ import {
   UnsupportedWorkItemCompletionError,
 } from '../../../services/homeActionCompletion.service';
 import { resolveWorkItemRecommendationSnapshotId } from '../../../services/decisionPlatform/homeActionDecisionLineage';
+import { resolvePropertyDocuments } from '../../../services/propertyDocuments/propertyDocumentInventory.service';
 
 function homeOperationsContext(req: CustomRequest, res: Response): { propertyId: string } | null {
   const propertyId = req.params.propertyId;
@@ -265,7 +266,7 @@ export async function approveMaterialWorkHandler(req: CustomRequest, res: Respon
     // DOCUMENT/PROPERTY_FACT check never proved the evidence was tied to a
     // real domain record.
     try {
-      await assertMaterialApprovalEvidenceSatisfiesPolicy(item, evidence, {
+      await assertMaterialApprovalEvidenceSatisfiesPolicy(item, req.householdRole!, evidence, {
         costCents: req.body.costCents ?? null,
         observedResult: req.body.observedResult ?? null,
       });
@@ -431,8 +432,10 @@ export async function recordEvidenceHandler(req: CustomRequest, res: Response, n
       });
     }
 
+    // DOCUMENT evidence can be either a legacy Document (not every domain is converted yet) or a Home Record
+    // (Documents slices S5b-2/S5c and on); the canonical inventory checks both.
     const evidenceExists = req.body.evidenceType === 'DOCUMENT'
-      ? Boolean(await prisma.document.findFirst({ where: { id: req.body.evidenceEntityId, propertyId: context.propertyId }, select: { id: true } }))
+      ? (await resolvePropertyDocuments({ propertyId: context.propertyId, role: req.householdRole!, ids: [req.body.evidenceEntityId], includeLegacy: true })).length > 0
       : req.body.evidenceType === 'HOME_EVENT'
         ? Boolean(await prisma.homeEvent.findFirst({ where: { id: req.body.evidenceEntityId, propertyId: context.propertyId }, select: { id: true } }))
         : req.body.evidenceType === 'PROPERTY_FACT'

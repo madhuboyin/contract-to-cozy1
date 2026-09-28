@@ -67,6 +67,7 @@ export async function uploadChecklistItemDocument(req: Request, res: Response) {
     claimId,
     itemId,
     userId,
+    role: (req as any).householdRole,
     file,
     claimDocumentType: parsed.data.claimDocumentType,
     title: parsed.data.title ?? null,

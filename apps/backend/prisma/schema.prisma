@@ -5095,7 +5095,6 @@ model Document {
   inventoryItemId            String? // NEW: Link to an InventoryItem record
   inventoryItem              InventoryItem?              @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   homeReportExports          HomeReportExport[]
-  claimDocuments             ClaimDocument[]
   homeEventLinks             HomeEventDocument[]
   homeEventEvidence                    HomeEventEvidence[]
   riskMitigationPlanItems    RiskMitigationPlanItem[]
@@ -5202,6 +5201,7 @@ model PropertyRecord {
   homeBuyerTaskCompletions         HomeBuyerTask[]                     @relation("HomeBuyerTaskCompletionDocument")
   buyerMilestoneSources            BuyerJourneyMilestone[]             @relation("BuyerMilestoneSourceDocument")
   hazardEvidenceLinks              PropertyHazardEvidenceLink[]
+  claimDocuments                   ClaimDocument[]
 
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])
@@ -9600,8 +9600,12 @@ model ClaimDocument {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  claim    Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  claim    Claim          @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5c): the column name is unchanged.
+  // addClaimDocument/bulkUploadClaimDocuments/bulkUploadChecklistItemDocuments are unreachable from the product UI
+  // (confirmed: no frontend caller) and still create a legacy Document row — left as-is (pinned, not converted);
+  // only uploadAndAttachChecklistItemDocument, the one live upload path, creates a PropertyRecord here.
+  document PropertyRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   checklistPrimaryFor ClaimChecklistItem[]         @relation("ClaimChecklistPrimaryDoc")
   timelineEvents      ClaimTimelineEvent[]

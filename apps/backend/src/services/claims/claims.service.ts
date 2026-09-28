@@ -18,7 +18,7 @@ import { markDoNothingRunsStale } from '../doNothingSimulator.service';
 import { ClaimStatus } from '../../types/claims.types';
 import { evaluateFeatureContext } from '../../modules/propertyContext/application/evaluateFeatureContext';
 
-import { ClaimDocumentType, ClaimTimelineEventType} from '@prisma/client';
+import { ClaimDocumentType, ClaimTimelineEventType, type HouseholdRole } from '@prisma/client';
 import { HomeEventsAutoGen } from '../homeEvents/homeEvents.autogen';
 import {
   claimCoverageDate,
@@ -29,6 +29,8 @@ import {
 import { reconcileClaimCreated, reconcileClaimStatusChanged } from '../claimWorkReconciliation.service';
 import { emitPropertyChangeWithTransaction } from '../../propertyChanges/propertyChange.service';
 import { claimDocumentToExtractionEnvelope } from './claimDocumentExtractionEnvelope.adapter';
+import { homeRecordsService, signedUrl } from '../homeRecords.service';
+import { APIError } from '../../middleware/error.middleware';
 
 async function emitClaimDocumentPromotedChange(
   tx: Parameters<typeof emitPropertyChangeWithTransaction>[0],
@@ -73,6 +75,7 @@ type UploadAndAttachArgs = {
   claimId: string;
   itemId: string;
   userId: string;
+  role: HouseholdRole;
   file: Express.Multer.File;
 
   claimDocumentType?: ClaimDocumentType;
@@ -121,7 +124,7 @@ export type ClaimsSummaryDTO = {
   };
 };
 export async function uploadAndAttachChecklistItemDocument(args: UploadAndAttachArgs) {
-  const { propertyId, claimId, itemId, userId, file } = args;
+  const { propertyId, claimId, itemId, userId, role, file } = args;
 
   // 1) Validate claim + item ownership under property (IDOR safety)
   const claim = await prisma.claim.findFirst({
@@ -144,55 +147,19 @@ export async function uploadAndAttachChecklistItemDocument(args: UploadAndAttach
     throw err;
   }
 
-  // 2) Upload the binary to storage -> get fileUrl
-  const uploaded = await uploadFileToStorage({
-    buffer: file.buffer,
-    mimeType: file.mimetype,
-    originalName: file.originalname,
-    propertyId,
-    claimId,
-  });
+  // 2) Create the Home Record. This is its own upload + transaction (storage write, dedup, versioning) — it
+  // cannot be nested inside the claim-specific transaction below, matching the same trade-off
+  // uploadRecordForWorkflow's callers already accept elsewhere in this arc.
+  const documentId = await createClaimDocumentRecord(propertyId, userId, role, file, args.title);
 
   const now = new Date();
+  // The extraction envelope this upload used to write to Document.metadata had no reader (grep-confirmed) and
+  // PropertyRecord has no equivalent free-form metadata column, so it is not reconstructed here.
   await prisma.$transaction(async (tx) => {
-    const document = await tx.document.create({
-      data: {
-        uploadedBy: userId,
-        propertyId,
-        type: 'OTHER' as any,
-        name: uploaded.name,
-        description: null,
-        fileUrl: uploaded.fileUrl,
-        fileSize: uploaded.fileSize,
-        mimeType: uploaded.mimeType,
-        metadata: uploaded.metadata ?? null,
-      },
-      select: { id: true },
-    });
-    const extractionEnvelope = claimDocumentToExtractionEnvelope({
-      documentId: document.id,
-      claimDocumentType: args.claimDocumentType ?? ClaimDocumentType.OTHER,
-      fileName: uploaded.name,
-      mimeType: uploaded.mimeType,
-      title: args.title,
-      notes: args.notes,
-      extractedAt: now,
-    });
-    await tx.document.update({
-      where: { id: document.id },
-      data: {
-        metadata: {
-          ...(uploaded.metadata && typeof uploaded.metadata === 'object' && !Array.isArray(uploaded.metadata)
-            ? uploaded.metadata
-            : {}),
-          extractionEnvelope,
-        },
-      },
-    });
     const claimDoc = await tx.claimDocument.create({
       data: {
         claimId,
-        documentId: document.id,
+        documentId,
         type: args.claimDocumentType ?? ClaimDocumentType.OTHER,
         title: args.title,
         notes: args.notes,
@@ -229,7 +196,7 @@ export async function uploadAndAttachChecklistItemDocument(args: UploadAndAttach
       propertyId,
       claimId,
       claimDocumentId: claimDoc.id,
-      documentId: document.id,
+      documentId,
       revision: `uploaded:${claimDoc.id}`,
       occurredAt: now,
     });
@@ -237,10 +204,11 @@ export async function uploadAndAttachChecklistItemDocument(args: UploadAndAttach
 
   // Return updated claim (recommended) so UI can refresh cheaply.
   // If your existing pattern is “return claim”, keep consistent.
-  return prisma.claim.findFirst({
+  const updated = await prisma.claim.findFirst({
     where: { id: claimId, propertyId },
     include: buildClaimIncludesForDetail(), // see helper below
   });
+  return updated ? decorateClaimDocuments(updated) : updated;
 }
 
 /**
@@ -307,6 +275,12 @@ async function uploadFileToStorage(args: {
   };
 }
 
+// A claim document's document is a Home Record (Documents slice S5c) for every reachable upload path
+// (uploadAndAttachChecklistItemDocument); addClaimDocument/bulkUploadClaimDocuments/
+// bulkUploadChecklistItemDocuments are unreachable from the product UI (no frontend caller) and still create a
+// legacy Document row — pinned, not converted (see the model comment in schema.prisma).
+const CLAIM_DOCUMENT_INCLUDE = { document: { include: { currentVersion: true } } } as const;
+
 function buildClaimIncludesForDetail() {
   return {
     checklistItems: {
@@ -314,18 +288,119 @@ function buildClaimIncludesForDetail() {
       include: {
         itemDocuments: {
           include: {
-            claimDocument: { include: { document: true } },
+            claimDocument: { include: CLAIM_DOCUMENT_INCLUDE },
           },
         },
       },
     },
-    documents: { include: { document: true } },
+    documents: { include: CLAIM_DOCUMENT_INCLUDE },
     timelineEvents: { orderBy: { occurredAt: 'desc' as const } },
   };
 }
 
 function mustHave(value: any, message: string) {
   if (!value) throw new Error(message);
+}
+
+type ClaimDocumentRecord = {
+  id: string;
+  title: string;
+  currentVersion: {
+    storageKey: string;
+    originalFileName: string;
+    mimeType: string;
+    scanStatus: string;
+    integrityStatus: string;
+  } | null;
+} | null | undefined;
+
+/** The shape ClaimDocumentDTO.document expects on the frontend: a name and a download link, not the record's own field names. */
+async function summarizeClaimDocument(record: ClaimDocumentRecord) {
+  if (!record) return null;
+  const version = record.currentVersion;
+  const available = Boolean(version) && version!.scanStatus === 'CLEAN' && version!.integrityStatus === 'VERIFIED';
+  const fileUrl = available ? await signedUrl(version!.storageKey, version!.originalFileName) : null;
+  return {
+    id: record.id,
+    name: record.title,
+    mimeType: version?.mimeType ?? null,
+    fileUrl,
+    fileSignedUrl: fileUrl,
+  };
+}
+
+/** Decorates every `.document` reference (Home Record) in a claim (or claim list) response with a presigned
+ * download link, across the three shapes claims.service.ts returns: a flat `documents[]`, checklist items'
+ * either raw `itemDocuments[].claimDocument` or (getClaim's) already-flattened `documents[]`, and timeline
+ * events' `claimDocument`. */
+// Loosely typed on purpose: listClaims/getClaim/uploadAndAttachChecklistItemDocument each shape checklistItems/
+// timelineEvents differently (shallow vs. joined vs. normalized — see each call site), so a single strict
+// generic constraint would reject the very inputs this is meant to decorate. The internal logic below still
+// narrows via `in` checks before touching a field.
+async function decorateClaimDocuments(claim: any): Promise<any> {
+  const documents = claim.documents
+    ? await Promise.all(claim.documents.map(async (d: any) => ({ ...d, document: await summarizeClaimDocument(d.document) })))
+    : claim.documents;
+  const checklistItems = claim.checklistItems
+    ? await Promise.all(claim.checklistItems.map(async (item: any) => {
+      if (item.documents) {
+        return { ...item, documents: await Promise.all(item.documents.map(async (d: any) => ({ ...d, document: await summarizeClaimDocument(d.document) }))) };
+      }
+      if (item.itemDocuments) {
+        return {
+          ...item,
+          itemDocuments: await Promise.all(item.itemDocuments.map(async (r: any) => ({
+            ...r,
+            claimDocument: { ...r.claimDocument, document: await summarizeClaimDocument(r.claimDocument.document) },
+          }))),
+        };
+      }
+      return item;
+    }))
+    : claim.checklistItems;
+  const timelineEvents = claim.timelineEvents
+    ? await Promise.all(claim.timelineEvents.map(async (ev: any) => (
+      ev.claimDocument
+        ? { ...ev, claimDocument: { ...ev.claimDocument, document: await summarizeClaimDocument(ev.claimDocument.document) } }
+        : ev
+    )))
+    : claim.timelineEvents;
+  return {
+    ...claim,
+    ...(documents !== undefined ? { documents } : {}),
+    ...(checklistItems !== undefined ? { checklistItems } : {}),
+    ...(timelineEvents !== undefined ? { timelineEvents } : {}),
+  };
+}
+
+/** The one live claim-document upload path's Home Record creation: reuses an exact-duplicate's existing record
+ * (matching uploadRecordForWorkflow's frontend pattern, here applied server-side since this upload happens
+ * inline with a claim-specific write) rather than failing the whole upload. */
+async function createClaimDocumentRecord(
+  propertyId: string,
+  userId: string,
+  role: HouseholdRole,
+  file: Express.Multer.File,
+  title: string | null,
+) {
+  try {
+    const created = await homeRecordsService.create({
+      propertyId,
+      userId,
+      role,
+      file: { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype, size: file.buffer.length },
+      title: title || file.originalname,
+      recordType: 'CLAIM',
+      sensitivity: 'CLAIM',
+      visibility: 'HOUSEHOLD',
+    });
+    return created.record.id;
+  } catch (error) {
+    if (error instanceof APIError && error.code === 'PROPERTY_RECORD_DUPLICATE_CONTENT' && error.details?.recordId) {
+      return error.details.recordId as string;
+    }
+    throw error;
+  }
 }
 
 function isoToDateOrNull(iso?: string | null) {
@@ -440,15 +515,16 @@ async function recomputeChecklistCompletionPct(claimId: string) {
 
 export class ClaimsService {
   static async listClaims(propertyId: string) {
-    return prisma.claim.findMany({
+    const claims = await prisma.claim.findMany({
       where: { propertyId },
       orderBy: { lastActivityAt: 'desc' },
       include: {
         checklistItems: true,
-        documents: { include: { document: true } },
+        documents: { include: CLAIM_DOCUMENT_INCLUDE },
         timelineEvents: true,
       },
     });
+    return Promise.all(claims.map((claim) => decorateClaimDocuments(claim)));
   }
 
   static async getClaim(propertyId: string, claimId: string) {
@@ -461,52 +537,50 @@ export class ClaimsService {
             itemDocuments: {
               include: {
                 claimDocument: {
-                  include: {
-                    document: true,
-                  },
+                  include: CLAIM_DOCUMENT_INCLUDE,
                 },
               },
             },
           },
         },
-  
+
         documents: {
           orderBy: { createdAt: 'desc' },
-          include: { document: true },
+          include: CLAIM_DOCUMENT_INCLUDE,
         },
-  
+
         timelineEvents: {
           orderBy: { occurredAt: 'desc' },
           include: {
             claimDocument: {
-              include: { document: true },
+              include: CLAIM_DOCUMENT_INCLUDE,
             },
           },
         },
-  
+
         insurancePolicy: true,
         warranty: true,
       },
     });
-  
+
     if (!claim) throw new Error('Claim not found');
-  
+
     // ✅ Normalize checklistItems → expose `documents[]`
     const normalized = {
       ...claim,
       checklistItems: claim.checklistItems.map((it) => ({
         ...it,
-  
+
         // Flatten join table → frontend-friendly shape
         documents: (it.itemDocuments ?? []).map((r) => r.claimDocument),
-  
+
         // Optional: hide join table from response
         itemDocuments: undefined,
       })),
     };
-  
-    return normalized;
-  }  
+
+    return decorateClaimDocuments(normalized);
+  }
 
   static async regenerateChecklist(
     propertyId: string,
@@ -1002,6 +1076,12 @@ export class ClaimsService {
     return updated;
   }
      
+  // PINNED, not converted to Home Records (Documents slice S5c): unreachable from the product UI (the frontend
+  // api client's addClaimDocument has no caller and no test exercises it — grep-confirmed) and it also expects
+  // an already-uploaded fileUrl rather than a raw file, unlike the one live upload path above. Still creates a
+  // legacy Document row; ClaimDocument.documentId now FKs to PropertyRecord, so calling this in practice would
+  // fail the foreign key constraint rather than silently write wrong data. Convert (or remove) before wiring any
+  // real caller to it.
   static async addClaimDocument(propertyId: string, claimId: string, userId: string, input: AddClaimDocumentInput) {
     const claim = await prisma.claim.findFirst({ where: { id: claimId, propertyId } });
     if (!claim) throw new Error('Claim not found');
@@ -1547,6 +1627,11 @@ export class ClaimsService {
   /**
    * Bulk upload claim-level documents (NOT tied to a checklist item).
    * Creates Document + ClaimDocument + Timeline events, updates claim.lastActivityAt.
+   *
+   * PINNED, not converted to Home Records (Documents slice S5c): unreachable from the product UI (claimsApi.ts's
+   * bulkUploadClaimDocuments has no caller — grep-confirmed). Still creates a legacy Document row; see the
+   * schema.prisma comment on ClaimDocument.document for why this is safe to leave (a foreign-key violation, not
+   * silently wrong data, if it's ever actually called).
    */
   static async bulkUploadClaimDocuments(
     propertyId: string,
@@ -1677,6 +1762,10 @@ export class ClaimsService {
    * Bulk upload documents tied to checklist items.
    * Creates Document + ClaimDocument + join table ClaimChecklistItemDocument.
    * Creates timeline events and updates claim.lastActivityAt.
+   *
+   * PINNED, not converted to Home Records (Documents slice S5c): unreachable from the product UI
+   * (claimsApi.ts's bulkUploadChecklistItemDocuments has no caller — grep-confirmed). See
+   * bulkUploadClaimDocuments's comment above.
    */
   static async bulkUploadChecklistItemDocuments(
     propertyId: string,

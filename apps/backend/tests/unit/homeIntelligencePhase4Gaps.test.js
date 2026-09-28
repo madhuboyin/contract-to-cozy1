@@ -147,7 +147,9 @@ test('approveMaterialWorkHandler consults the completion evidence policy before 
   const fnStart = homeOperationsController.indexOf('export async function approveMaterialWorkHandler(');
   const fnEnd = homeOperationsController.indexOf('\nexport async function batchTransitionWorkItemsHandler', fnStart);
   const fn = homeOperationsController.slice(fnStart, fnEnd);
-  assert.match(fn, /assertMaterialApprovalEvidenceSatisfiesPolicy\(item, evidence,/);
+  // The role param (added Documents slice S5c) lets the policy check resolve a claim-document evidence
+  // reference through either store — the legacy Document table or Home Records.
+  assert.match(fn, /assertMaterialApprovalEvidenceSatisfiesPolicy\(item, req\.householdRole!, evidence,/);
   assert.match(fn, /recordOperationalWorkOutcome\(\{/);
   assert.match(fn, /resolveWorkItemRecommendationSnapshotId\(verified\.propertyId, verified\.id\)/);
   // The old unconditional SAFETY_EMERGENCY-only check must be gone, not

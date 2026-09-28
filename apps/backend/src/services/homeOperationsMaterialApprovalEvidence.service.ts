@@ -9,10 +9,11 @@
 // flip with no proof the evidenceEntityId was a real domain record, and
 // policy/claim linkage was never checked at all. This module is the policy
 // gate approveMaterialWorkHandler was missing.
-import type { OperationalWorkEvidenceType, RecommendationSafetyTier } from '@prisma/client';
+import type { HouseholdRole, OperationalWorkEvidenceType, RecommendationSafetyTier } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { evidencePolicyFor } from './homeActionCompletion.service';
 import type { CompletionEvidencePolicyEntry } from './intelligence/completionEvidencePolicy.registry';
+import { visibleRecordWhere } from './homeRecordsAccess';
 
 export class MaterialApprovalEvidencePolicyViolationError extends Error {
   constructor(message: string) {
@@ -68,13 +69,26 @@ async function domainCompletionRecordIsVerifiable(
 
 async function documentIsVerifiableForPolicyOrClaim(
   item: WorkItemForEvidenceCheck,
+  role: HouseholdRole,
   evidenceEntityId: string,
 ): Promise<boolean> {
-  const document = await prisma.document.findFirst({
-    where: { id: evidenceEntityId, propertyId: item.propertyId, deletedAt: null },
-    select: { policyId: true, claimDocuments: { select: { id: true }, take: 1 } },
-  });
-  return Boolean(document && (document.policyId || document.claimDocuments.length > 0));
+  // Claim documents are Home Records now (Documents slice S5c) — ClaimDocument.documentId FKs only to
+  // PropertyRecord, so a legacy Document can no longer carry a claim link at all; it can still be policy-attached
+  // (Document.policyId, S5d, not yet converted).
+  const [legacyDocument, record] = await Promise.all([
+    prisma.document.findFirst({
+      where: { id: evidenceEntityId, propertyId: item.propertyId, deletedAt: null },
+      select: { policyId: true },
+    }),
+    prisma.propertyRecord.findFirst({
+      where: { id: evidenceEntityId, propertyId: item.propertyId, lifecycleStatus: { not: 'TRASHED' }, ...visibleRecordWhere(role) },
+      select: { claimDocuments: { select: { id: true }, take: 1 } },
+    }),
+  ]);
+  return Boolean(
+    (legacyDocument && legacyDocument.policyId)
+    || (record && record.claimDocuments.length > 0),
+  );
 }
 
 /**
@@ -84,6 +98,7 @@ async function documentIsVerifiableForPolicyOrClaim(
  */
 export async function assertMaterialApprovalEvidenceSatisfiesPolicy(
   item: WorkItemForEvidenceCheck,
+  role: HouseholdRole,
   evidence: { evidenceType: OperationalWorkEvidenceType; evidenceEntityId: string },
   completion: { costCents?: number | null; observedResult?: string | null } = {},
 ): Promise<void> {
@@ -120,7 +135,7 @@ export async function assertMaterialApprovalEvidenceSatisfiesPolicy(
     const linked = evidence.evidenceType === 'DOMAIN_COMPLETION_RECORD'
       ? await domainCompletionRecordIsVerifiable(item, evidence.evidenceEntityId)
       : evidence.evidenceType === 'DOCUMENT'
-        ? await documentIsVerifiableForPolicyOrClaim(item, evidence.evidenceEntityId)
+        ? await documentIsVerifiableForPolicyOrClaim(item, role, evidence.evidenceEntityId)
         : false;
     if (!linked) {
       throw new MaterialApprovalEvidencePolicyViolationError(

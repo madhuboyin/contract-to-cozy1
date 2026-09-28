@@ -121,7 +121,9 @@ function expiryStatus(effectiveTo: Date | null, now: Date, soonThreshold: Date):
   return 'CURRENT';
 }
 
-async function signedUrl(storageKeyValue: string, fileName: string) {
+// Exported for other domains reading a PropertyRecordVersion directly (e.g. claims.service.ts's claim-document
+// summary) rather than through HomeRecordsService's own list()/get().
+export async function signedUrl(storageKeyValue: string, fileName: string) {
   const bucket = process.env.S3_BUCKET;
   if (!bucket) return null;
   return presignGetObject({
