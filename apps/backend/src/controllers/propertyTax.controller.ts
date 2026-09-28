@@ -283,6 +283,7 @@ export async function uploadPropertyTaxDocument(req: CustomRequest, res: Respons
     const intake = await propertyTaxDocumentIntakeService.createVaultIntake({
       propertyId: req.params.propertyId,
       userId: req.user!.userId,
+      role: req.householdRole!,
       kind: kind.data,
       privacyConsent: true,
       file: req.file,
@@ -532,6 +533,7 @@ export async function upsertPropertyTaxAppealEvidence(
     const evidence = await propertyTaxAppealReadinessService.upsertEvidence({
       propertyId: req.params.propertyId,
       userId: req.user!.userId,
+      role: req.householdRole!,
       ...parsed.data,
     });
     res.json({ success: true, data: { evidence } });
@@ -580,6 +582,7 @@ export async function upsertPropertyTaxAppealComparable(
     const comparable = await propertyTaxAppealReadinessService.upsertComparable({
       propertyId: req.params.propertyId,
       userId: req.user!.userId,
+      role: req.householdRole!,
       ...parsed.data,
     });
     res.json({ success: true, data: { comparable } });
@@ -698,6 +701,7 @@ export async function confirmPropertyTaxAppealFiling(
       propertyId: req.params.propertyId,
       caseId: req.params.caseId,
       userId: req.user!.userId,
+      role: req.householdRole!,
       ...parsed.data,
       filedAt: new Date(parsed.data.filedAt),
     });

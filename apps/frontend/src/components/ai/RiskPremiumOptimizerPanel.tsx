@@ -22,7 +22,8 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { PropertyContextStatusNotice } from '@/components/property-context/PropertyContextStatusNotice';
 import { api } from '@/lib/api/client';
-import type { Document } from '@/types';
+
+type PropertyRecordOption = { id: string; title: string; recordType: string };
 
 type RiskPremiumOptimizerPanelProps = {
   propertyId: string;
@@ -94,7 +95,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
   const [showAllRecommendations, setShowAllRecommendations] = useState(false);
   const [updatingPlanItemId, setUpdatingPlanItemId] = useState<string | null>(null);
   const [rerunRecommended, setRerunRecommended] = useState(false);
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<PropertyRecordOption[]>([]);
 
   const fetchStatus = async () => {
     if (!propertyId) return;
@@ -125,8 +126,8 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
   }, [propertyId]);
 
   useEffect(() => {
-    void api.listDocuments(propertyId).then((response) => {
-      if (response.success) setDocuments(response.data.documents);
+    void api.listPropertyRecords(propertyId).then((response) => {
+      if (response.success) setDocuments(response.data.records);
     });
   }, [propertyId]);
 
@@ -526,7 +527,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                           >
                             <option value="">No linked evidence</option>
                             {documents.map((document) => (
-                              <option key={document.id} value={document.id}>{document.name}</option>
+                              <option key={document.id} value={document.id}>{document.title}</option>
                             ))}
                           </select>
                         </label>

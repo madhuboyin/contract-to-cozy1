@@ -42,6 +42,7 @@ import {
 
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { signedUrl } from './homeRecords.service';
 
 async function reconcileCurrentSeasonalChecklist(propertyId: string, userId: string): Promise<void> {
   const window = resolveCurrentSeasonWindow(new Date());
@@ -488,8 +489,21 @@ async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredPr
         };
     }
 
+    // The cover photo is a Home Record now (Documents slice S5g); it has no flat fileUrl like the
+    // legacy Document it replaced, so resolve a presigned link here — the one place every property
+    // read (getUserProperties, createProperty, getPropertyById, updateProperty) converges.
+    const coverPhoto = (property as any).coverPhoto as
+      | { id: string; currentVersion: { storageKey: string; originalFileName: string; scanStatus: string; integrityStatus: string } | null }
+      | null;
+    const coverPhotoUrl = coverPhoto?.currentVersion
+      && coverPhoto.currentVersion.scanStatus === 'CLEAN'
+      && coverPhoto.currentVersion.integrityStatus === 'VERIFIED'
+      ? await signedUrl(coverPhoto.currentVersion.storageKey, coverPhoto.currentVersion.originalFileName)
+      : null;
+
     return {
         ...property,
+        coverPhoto: coverPhoto ? { id: coverPhoto.id, fileUrl: coverPhotoUrl } : null,
         healthScore,
     } as ScoredProperty;
 }
@@ -514,39 +528,24 @@ async function resolveCoverPhotoDocumentIdForProperty(args: {
   propertyId: string;
   coverPhotoDocumentId?: string | null;
 }): Promise<string | null | undefined> {
-  const { homeownerProfileId, propertyId, coverPhotoDocumentId } = args;
+  const { propertyId, coverPhotoDocumentId } = args;
 
   if (coverPhotoDocumentId === undefined) return undefined;
   if (coverPhotoDocumentId === null) return null;
 
-  const photoDoc = await prisma.document.findFirst({
-    where: {
-      id: coverPhotoDocumentId,
-      uploadedBy: homeownerProfileId,
-      type: DocumentType.PHOTO,
-    },
-    select: {
-      id: true,
-      propertyId: true,
-    },
+  // updateProperty/createProperty (this function's only callers) are already scoped to the
+  // calling user's own homeownerProfileId, the same ownership model Home Records' OWNER role maps
+  // to — see coverage-comparison's identical mapping decision (Documents slice S5d).
+  const photoRecord = await prisma.propertyRecord.findFirst({
+    where: { id: coverPhotoDocumentId, propertyId, lifecycleStatus: { not: 'TRASHED' } },
+    select: { id: true },
   });
 
-  if (!photoDoc) {
+  if (!photoRecord) {
     throw new Error('Cover photo not found or not accessible');
   }
 
-  if (photoDoc.propertyId && photoDoc.propertyId !== propertyId) {
-    throw new Error('Cover photo is already linked to another property');
-  }
-
-  if (photoDoc.propertyId !== propertyId) {
-    await prisma.document.update({
-      where: { id: photoDoc.id },
-      data: { propertyId },
-    });
-  }
-
-  return photoDoc.id;
+  return photoRecord.id;
 }
 
 // --- CRUD OPERATIONS ---
@@ -561,7 +560,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
   const ownedProperties = await prisma.property.findMany({
     where: { homeownerProfileId },
     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
-    include: { homeownerProfile: true, warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true },
+    include: { homeownerProfile: true, warranties: true, coverPhoto: { include: { currentVersion: true } }, financingProfile: true, exteriorProfile: true, responsibilities: true },
   });
 
   const hydrated = await Promise.all(ownedProperties.map(hydrateMajorAppliancesFromInventory));
@@ -575,7 +574,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
     },
     select: {
       role: true,
-      property: { include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true } },
+      property: { include: { warranties: true, coverPhoto: { include: { currentVersion: true } }, financingProfile: true, exteriorProfile: true, responsibilities: true } },
     },
   });
 
@@ -808,7 +807,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       where: { id: property.id },
       include: {
         warranties: true,
-        coverPhoto: true,
+        coverPhoto: { include: { currentVersion: true } },
         financingProfile: true,
         exteriorProfile: true,
         responsibilities: true,
@@ -836,7 +835,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
   // Primary path: user owns the property
   let property = await prisma.property.findFirst({
     where: { id: propertyId, homeownerProfileId },
-    include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true },
+    include: { warranties: true, coverPhoto: { include: { currentVersion: true } }, financingProfile: true, exteriorProfile: true, responsibilities: true },
   });
 
   let householdRole: string | null = null;
@@ -847,7 +846,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
       where: { propertyId_userId: { propertyId, userId } },
       select: {
         role: true,
-        property: { include: { warranties: true, coverPhoto: true, financingProfile: true, exteriorProfile: true, responsibilities: true } },
+        property: { include: { warranties: true, coverPhoto: { include: { currentVersion: true } }, financingProfile: true, exteriorProfile: true, responsibilities: true } },
       },
     });
     if (!membership) return null;
@@ -1333,7 +1332,7 @@ export async function updateProperty(
       include: { 
           // FIX 6: Include warranties
           warranties: true,
-          coverPhoto: true,
+          coverPhoto: { include: { currentVersion: true } },
           financingProfile: true,
           exteriorProfile: true,
           responsibilities: true,

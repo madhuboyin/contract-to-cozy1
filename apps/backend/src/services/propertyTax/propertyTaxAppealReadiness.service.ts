@@ -1,7 +1,8 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { propertyTaxRecordService } from './propertyTaxRecord.service';
 import { propertyTaxRuleService } from './propertyTaxRule.service';
+import { assertPropertyDocumentsExist } from '../propertyDocuments/propertyDocumentInventory.service';
 
 type AppealGround = 'ASSESSED_VALUE' | 'TAX_CLASS' | 'EXEMPTION';
 type AppealEvidenceType =
@@ -90,6 +91,7 @@ export class PropertyTaxAppealReadinessService {
   async upsertEvidence(input: {
     propertyId: string;
     userId: string;
+    role: HouseholdRole;
     evidenceKey: string;
     ground: AppealGround;
     type: AppealEvidenceType;
@@ -113,14 +115,10 @@ export class PropertyTaxAppealReadinessService {
       throw new Error('The selected appeal ground is not covered by the reviewed rule');
     }
     if (input.supportingDocumentId) {
-      const document = await this.db.document.findFirst({
-        where: {
-          id: input.supportingDocumentId,
-          propertyId: input.propertyId,
-        },
-        select: { id: true },
-      });
-      if (!document) throw new Error('Supporting document not found for this property');
+      await assertPropertyDocumentsExist(
+        { propertyId: input.propertyId, role: input.role, ids: [input.supportingDocumentId] },
+        () => new Error('Supporting document not found for this property'),
+      );
     }
     const now = new Date();
     return this.db.propertyTaxAppealEvidence.upsert({
@@ -162,6 +160,7 @@ export class PropertyTaxAppealReadinessService {
   async upsertComparable(input: {
     propertyId: string;
     userId: string;
+    role: HouseholdRole;
     comparableKey: string;
     address: string;
     saleDate: string;
@@ -191,11 +190,10 @@ export class PropertyTaxAppealReadinessService {
     if (!Number.isFinite(saleDate.getTime())) throw new Error('saleDate is invalid');
     if (saleDate.getTime() > Date.now()) throw new Error('saleDate cannot be in the future');
     if (input.sourceDocumentId) {
-      const document = await this.db.document.findFirst({
-        where: { id: input.sourceDocumentId, propertyId: input.propertyId },
-        select: { id: true },
-      });
-      if (!document) throw new Error('Comparable source document not found for this property');
+      await assertPropertyDocumentsExist(
+        { propertyId: input.propertyId, role: input.role, ids: [input.sourceDocumentId] },
+        () => new Error('Comparable source document not found for this property'),
+      );
     }
     const adjustments = input.adjustments ?? {};
     const adjustmentValues = [

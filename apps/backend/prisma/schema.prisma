@@ -4148,7 +4148,7 @@ model Property {
   documents                  Document[]                  @relation("PropertyDocuments")
   propertyRecords            PropertyRecord[]
   propertyRecordSavedSearches PropertyRecordSavedSearch[]
-  coverPhoto                 Document?                   @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
+  coverPhoto                 PropertyRecord?             @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport RiskAssessmentReport? @relation(name: "PropertyRiskReport")
@@ -5086,26 +5086,14 @@ model Document {
   // Relations
   booking                    Booking?                    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   property                   Property?                   @relation("PropertyDocuments", fields: [propertyId], references: [id], onDelete: SetNull)
-  coverForProperties         Property[]                  @relation("PropertyCoverPhoto")
   warranty                   Warranty?                   @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy            InsurancePolicy?            @relation(fields: [policyId], references: [id], onDelete: Cascade)
   providerCredential         ProviderCredential?         @relation(fields: [providerCredentialId], references: [id], onDelete: Cascade)
   project                    ProjectRecord?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
   inventoryItemId            String? // NEW: Link to an InventoryItem record
   inventoryItem              InventoryItem?              @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  homeReportExports          HomeReportExport[]
   homeEventLinks             HomeEventDocument[]
   homeEventEvidence                    HomeEventEvidence[]
-  riskMitigationPlanItems    RiskMitigationPlanItem[]
-  capitalTimelineItems       HomeCapitalTimelineItem[]
-  propertyTaxAssessmentLinks PropertyTaxAssessmentDocument[]
-  propertyTaxBillLinks       PropertyTaxBillDocument[]
-  propertyTaxFieldEvidence   PropertyTaxFieldEvidence[]
-  propertyTaxIntake          PropertyTaxDocumentIntake?
-  propertyTaxAppealEvidence  PropertyTaxAppealEvidence[]   @relation("PropertyTaxAppealEvidenceDocument")
-  propertyTaxAppealComparables PropertyTaxAppealComparable[] @relation("PropertyTaxAppealComparableDocument")
-  propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[] @relation("PropertyTaxAppealFilingConfirmation")
-  knowledgeArticleCoverFor   KnowledgeArticle[]          @relation("KnowledgeArticleCoverDocument")
   quoteComparisonExtractions QuoteComparisonExtraction[]
 
   // Confirmed dead (Documents slice S5f, 2026-09-28): no writer or reader anywhere touches either
@@ -5197,6 +5185,18 @@ model PropertyRecord {
   negotiationShieldDocuments       NegotiationShieldDocument[]
   buyerNegotiationOutcomeLinks     NegotiationShieldBuyerFinding[]        @relation("BuyerNegotiationOutcomeDocument")
   buyerFindingOutcomeLinks         InspectionFinding[]                   @relation("BuyerFindingOutcomeDocument")
+  coverForProperties               Property[]                             @relation("PropertyCoverPhoto")
+  homeReportExports                HomeReportExport[]
+  riskMitigationPlanItems          RiskMitigationPlanItem[]
+  capitalTimelineItems             HomeCapitalTimelineItem[]
+  knowledgeArticleCoverFor         KnowledgeArticle[]                     @relation("KnowledgeArticleCoverDocument")
+  propertyTaxAssessmentLinks       PropertyTaxAssessmentDocument[]
+  propertyTaxBillLinks             PropertyTaxBillDocument[]
+  propertyTaxFieldEvidence         PropertyTaxFieldEvidence[]
+  propertyTaxIntake                PropertyTaxDocumentIntake?
+  propertyTaxAppealEvidence        PropertyTaxAppealEvidence[]            @relation("PropertyTaxAppealEvidenceDocument")
+  propertyTaxAppealComparables     PropertyTaxAppealComparable[]          @relation("PropertyTaxAppealComparableDocument")
+  propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[]            @relation("PropertyTaxAppealFilingConfirmation")
 
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])
@@ -8966,7 +8966,7 @@ model KnowledgeArticle {
   updatedAt DateTime @updatedAt
 
   // Relations
-  coverDocument Document? @relation("KnowledgeArticleCoverDocument", fields: [coverDocumentId], references: [id], onDelete: SetNull)
+  coverDocument PropertyRecord? @relation("KnowledgeArticleCoverDocument", fields: [coverDocumentId], references: [id], onDelete: SetNull)
 
   sections      KnowledgeArticleSection[]
   categoryLinks KnowledgeArticleCategory[]
@@ -9296,9 +9296,12 @@ model HomeReportExport {
   dataVersion     Int   @default(1)
   snapshot        Json? // store the final computed DTO used to render
 
-  // Optional: store generated PDF as a Document row (recommended)
+  // Confirmed dead (Documents slice S5g, 2026-09-28): written on every export but never read back
+  // anywhere (the export's own fileUrl/storageBucket/storageKey already carry everything a reader
+  // needs). The write itself was removed from homeReportExport.service.ts; the column stays,
+  // retargeted for consistency like every other slice in this arc.
   documentId String?
-  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  document   PropertyRecord? @relation(fields: [documentId], references: [id], onDelete: SetNull)
 
   // Property Context version at generation; used to reconcile stale reports.
   contextVersion String?
@@ -10197,7 +10200,7 @@ model RiskMitigationPlanItem {
   analysis RiskPremiumOptimizationAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
   property Property                        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  evidenceDocument Document?  @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
+  evidenceDocument PropertyRecord?  @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
   linkedHomeEvent  HomeEvent? @relation(fields: [linkedHomeEventId], references: [id], onDelete: SetNull)
 
   @@index([analysisId])
@@ -10325,7 +10328,7 @@ model HomeCapitalTimelineItem {
   inventoryItem InventoryItem?              @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
   linkedHomeEvent  HomeEvent? @relation(fields: [linkedHomeEventId], references: [id], onDelete: SetNull)
-  evidenceDocument Document?  @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
+  evidenceDocument PropertyRecord?  @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
 
   // Home Renovation Risk Advisor linkage (back-reference)
   renovationAdvisorSessions HomeRenovationAdvisorSession[]
@@ -22612,7 +22615,7 @@ model PropertyTaxDocumentIntake {
   updatedAt                   DateTime @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document PropertyRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
   confirmedAssessmentRecord PropertyTaxAssessmentRecord? @relation("PropertyTaxIntakeConfirmedAssessment", fields: [confirmedAssessmentRecordId], references: [id], onDelete: SetNull)
   confirmedBillRecord       PropertyTaxBillRecord? @relation("PropertyTaxIntakeConfirmedBill", fields: [confirmedBillRecordId], references: [id], onDelete: SetNull)
   fields                    PropertyTaxExtractedField[]
@@ -22699,7 +22702,7 @@ model PropertyTaxAppealEvidence {
 
   property          Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   ruleProfile       PropertyTaxRuleProfile @relation(fields: [ruleProfileId], references: [id], onDelete: Restrict)
-  supportingDocument Document?             @relation("PropertyTaxAppealEvidenceDocument", fields: [supportingDocumentId], references: [id], onDelete: SetNull)
+  supportingDocument PropertyRecord?       @relation("PropertyTaxAppealEvidenceDocument", fields: [supportingDocumentId], references: [id], onDelete: SetNull)
 
   @@unique([propertyId, evidenceKey])
   @@index([propertyId, ground, type])
@@ -22737,7 +22740,7 @@ model PropertyTaxAppealComparable {
 
   property       Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   ruleProfile    PropertyTaxRuleProfile @relation(fields: [ruleProfileId], references: [id], onDelete: Restrict)
-  sourceDocument Document?              @relation("PropertyTaxAppealComparableDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceDocument PropertyRecord?        @relation("PropertyTaxAppealComparableDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   @@unique([propertyId, comparableKey])
   @@index([propertyId, saleDate])
@@ -22787,7 +22790,7 @@ model PropertyTaxAppealCase {
   property                   Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   ruleProfile                PropertyTaxRuleProfile      @relation(fields: [ruleProfileId], references: [id], onDelete: Restrict)
   assessmentRecord           PropertyTaxAssessmentRecord? @relation(fields: [assessmentRecordId], references: [id], onDelete: SetNull)
-  filingConfirmationDocument Document?                   @relation("PropertyTaxAppealFilingConfirmation", fields: [filingConfirmationDocumentId], references: [id], onDelete: SetNull)
+  filingConfirmationDocument PropertyRecord?             @relation("PropertyTaxAppealFilingConfirmation", fields: [filingConfirmationDocumentId], references: [id], onDelete: SetNull)
   packet                     PropertyTaxAppealPacket?
   events                     PropertyTaxAppealCaseEvent[]
   reminders                  PropertyTaxAppealReminder[]
@@ -23039,7 +23042,7 @@ model PropertyTaxFieldEvidence {
   parcelMatch      PropertyTaxParcelMatch?      @relation(fields: [parcelMatchId], references: [id], onDelete: Cascade)
   assessmentRecord PropertyTaxAssessmentRecord? @relation(fields: [assessmentRecordId], references: [id], onDelete: Cascade)
   billRecord       PropertyTaxBillRecord?       @relation(fields: [billRecordId], references: [id], onDelete: Cascade)
-  sourceDocument   Document?                    @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  sourceDocument   PropertyRecord?              @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
   sourceDataSource TaxAssessorDataSource?       @relation(fields: [sourceDataSourceId], references: [id], onDelete: SetNull)
 
   @@index([assessmentRecordId, fieldKey, reviewStatus])
@@ -23059,7 +23062,7 @@ model PropertyTaxAssessmentDocument {
   createdAt          DateTime @default(now())
 
   assessmentRecord PropertyTaxAssessmentRecord @relation(fields: [assessmentRecordId], references: [id], onDelete: Cascade)
-  document         Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document         PropertyRecord              @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([assessmentRecordId, documentId])
   @@index([documentId])
@@ -23074,7 +23077,7 @@ model PropertyTaxBillDocument {
   createdAt    DateTime @default(now())
 
   billRecord PropertyTaxBillRecord @relation(fields: [billRecordId], references: [id], onDelete: Cascade)
-  document   Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document   PropertyRecord        @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([billRecordId, documentId])
   @@index([documentId])

@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma, type HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import {
-  deleteDocumentObject,
-  uploadDocumentBuffer,
-} from '../storage/reportStorage';
+import { homeRecordsService } from '../homeRecords.service';
 import { propertyTaxFieldsToExtractionEnvelope } from './propertyTaxExtractionEnvelope.adapter';
 import { emitPropertyChangeWithTransaction } from '../../propertyChanges/propertyChange.service';
 
@@ -139,17 +136,37 @@ function dueDates(value: unknown): string[] | undefined {
   });
 }
 
+type CreateVaultRecordInput = {
+  propertyId: string;
+  userId: string;
+  role: HouseholdRole;
+  file: { buffer: Buffer; originalname: string; mimetype: string; size: number };
+  title: string;
+  description: string;
+};
+
 export class PropertyTaxDocumentIntakeService {
   constructor(
     private readonly db = prisma,
-    private readonly upload = uploadDocumentBuffer,
-    private readonly removeUpload = deleteDocumentObject,
+    private readonly createRecord: (input: CreateVaultRecordInput) => Promise<{ record: { id: string } }> = (input) =>
+      homeRecordsService.create({
+        propertyId: input.propertyId,
+        userId: input.userId,
+        role: input.role,
+        file: input.file,
+        title: input.title,
+        description: input.description,
+        recordType: 'TAX_DOCUMENT',
+        sensitivity: 'FINANCIAL',
+        visibility: 'HOUSEHOLD',
+      }),
     private readonly emitChange = emitPropertyChangeWithTransaction,
   ) {}
 
   async createVaultIntake(input: {
     propertyId: string;
     userId: string;
+    role: HouseholdRole;
     kind: 'ASSESSMENT_NOTICE' | 'TAX_BILL' | 'EXEMPTION_NOTICE' | 'CORRECTION_NOTICE' | 'OTHER';
     privacyConsent: boolean;
     file: Express.Multer.File;
@@ -169,53 +186,35 @@ export class PropertyTaxDocumentIntakeService {
     });
     if (!property) throw new Error('Property not found');
 
-    const uploaded = await this.upload({
-      buffer: input.file.buffer,
-      fileName: input.file.originalname,
-      mimeType: input.file.mimetype,
-      userId: property.homeownerProfileId,
+    const created = await this.createRecord({
       propertyId: property.id,
+      userId: input.userId,
+      role: input.role,
+      file: {
+        buffer: input.file.buffer,
+        originalname: input.file.originalname,
+        mimetype: input.file.mimetype,
+        size: input.file.size,
+      },
+      title: input.file.originalname,
+      description: `Property tax ${input.kind.toLowerCase().replace(/_/g, ' ')}`,
     });
-    try {
-      return await this.db.$transaction(async (tx) => {
-        const document = await tx.document.create({
-          data: {
-            uploadedBy: property.homeownerProfileId,
-            propertyId: property.id,
-            type: 'OTHER',
-            name: input.file.originalname,
-            description: `Property tax ${input.kind.toLowerCase().replace(/_/g, ' ')}`,
-            fileUrl: uploaded.key,
-            fileSize: input.file.size,
-            mimeType: input.file.mimetype,
-            sha256: createHash('sha256').update(input.file.buffer).digest('hex'),
-            verificationStatus: 'PENDING',
-            metadata: {
-              category: 'PROPERTY_TAX',
-              kind: input.kind,
-              storageMode: 'VAULT',
-              privacyConsentVersion: PROPERTY_TAX_PRIVACY_CONSENT_VERSION,
-            },
-          },
-        });
-        return tx.propertyTaxDocumentIntake.create({
-          data: {
-            propertyId: property.id,
-            documentId: document.id,
-            kind: input.kind,
-            status: 'UPLOADED',
-            storageMode: 'VAULT',
-            extractionMethod: 'MANUAL',
-            privacyConsentVersion: PROPERTY_TAX_PRIVACY_CONSENT_VERSION,
-            privacyConsentedAt: new Date(),
-          },
-          include: { document: true, fields: true },
-        });
+
+    return this.db.$transaction(async (tx) => {
+      return tx.propertyTaxDocumentIntake.create({
+        data: {
+          propertyId: property.id,
+          documentId: created.record.id,
+          kind: input.kind,
+          status: 'UPLOADED',
+          storageMode: 'VAULT',
+          extractionMethod: 'MANUAL',
+          privacyConsentVersion: PROPERTY_TAX_PRIVACY_CONSENT_VERSION,
+          privacyConsentedAt: new Date(),
+        },
+        include: { document: true, fields: true },
       });
-    } catch (error) {
-      await this.removeUpload(uploaded.key).catch(() => undefined);
-      throw error;
-    }
+    });
   }
 
   async list(propertyId: string, userId: string) {
@@ -224,23 +223,33 @@ export class PropertyTaxDocumentIntakeService {
       select: { id: true },
     });
     if (!owned) throw new Error('Property not found');
-    return this.db.propertyTaxDocumentIntake.findMany({
+    const intakes = await this.db.propertyTaxDocumentIntake.findMany({
       where: { propertyId },
       orderBy: { createdAt: 'desc' },
       include: {
         document: {
           select: {
             id: true,
-            name: true,
-            mimeType: true,
-            fileSize: true,
+            title: true,
             verificationStatus: true,
             createdAt: true,
+            currentVersion: { select: { mimeType: true, fileSizeBytes: true } },
           },
         },
         fields: { orderBy: { fieldKey: 'asc' } },
       },
     });
+    return intakes.map((intake) => ({
+      ...intake,
+      document: {
+        id: intake.document.id,
+        name: intake.document.title,
+        mimeType: intake.document.currentVersion?.mimeType ?? '',
+        fileSize: intake.document.currentVersion?.fileSizeBytes ?? 0,
+        verificationStatus: intake.document.verificationStatus,
+        createdAt: intake.document.createdAt,
+      },
+    }));
   }
 
   async stageManualFields(
@@ -562,13 +571,12 @@ export class PropertyTaxDocumentIntakeService {
         });
       }
 
-      await tx.document.update({
+      await tx.propertyRecord.update({
         where: { id: intake.documentId },
         data: {
           verificationStatus: 'VERIFIED',
           verifiedAt: now,
           verifiedByUserId: userId,
-          parserVersion: 'property-tax-manual-v1',
         },
       });
       await this.emitChange(tx, {

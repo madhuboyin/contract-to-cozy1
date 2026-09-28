@@ -36,21 +36,15 @@ test('Vault intake requires explicit privacy consent before storage', async () =
   assert.equal(uploads, 0);
 });
 
-test('tax document upload uses owned Vault storage and records consent provenance', async () => {
-  const calls = { document: [], intake: [], removed: [] };
+test('tax document upload creates a Home Record and records consent provenance', async () => {
+  const calls = { createRecord: [], intake: [] };
   const tx = {
-    document: {
-      async create(input) {
-        calls.document.push(input);
-        return { id: 'document-1', ...input.data };
-      },
-    },
     propertyTaxDocumentIntake: {
       async create(input) {
         calls.intake.push(input);
         return {
           id: 'intake-1',
-          document: { id: 'document-1' },
+          document: { id: 'record-1' },
           fields: [],
           ...input.data,
         };
@@ -69,13 +63,16 @@ test('tax document upload uses owned Vault storage and records consent provenanc
   };
   const service = new PropertyTaxDocumentIntakeService(
     db,
-    async () => ({ key: 'documents/profile-1/property-1/bill.pdf' }),
-    async (key) => calls.removed.push(key),
+    async (input) => {
+      calls.createRecord.push(input);
+      return { record: { id: 'record-1' } };
+    },
   );
 
   const result = await service.createVaultIntake({
     propertyId: 'property-1',
     userId: 'user-1',
+    role: 'OWNER',
     kind: 'TAX_BILL',
     privacyConsent: true,
     file: {
@@ -92,9 +89,9 @@ test('tax document upload uses owned Vault storage and records consent provenanc
     calls.intake[0].data.privacyConsentVersion,
     PROPERTY_TAX_PRIVACY_CONSENT_VERSION,
   );
-  assert.equal(calls.document[0].data.verificationStatus, 'PENDING');
-  assert.equal(calls.document[0].data.metadata.category, 'PROPERTY_TAX');
-  assert.equal(calls.removed.length, 0);
+  assert.equal(calls.intake[0].data.documentId, 'record-1');
+  assert.equal(calls.createRecord[0].role, 'OWNER');
+  assert.equal(calls.createRecord[0].propertyId, 'property-1');
 });
 
 test('manual staging preserves per-field confidence and source location', async () => {
@@ -241,7 +238,7 @@ test('homeowner confirmation creates document-backed canonical assessment and bi
         return {};
       },
     },
-    document: {
+    propertyRecord: {
       async update(input) {
         calls.document.push(input);
         return {};
@@ -252,7 +249,7 @@ test('homeowner confirmation creates document-backed canonical assessment and bi
     async $transaction(callback) {
       return callback(tx);
     },
-  }, undefined, undefined, async (_tx, input) => {
+  }, undefined, async (_tx, input) => {
     calls.propertyChange = input;
   });
 

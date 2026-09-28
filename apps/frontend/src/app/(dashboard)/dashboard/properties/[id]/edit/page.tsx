@@ -48,6 +48,7 @@ import {
   normalizeOutdoorSpaceTypes,
 } from "@/lib/property/propertyContextForm";
 import { api, type PropertyEnrichmentStatus } from "@/lib/api/client";
+import { uploadRecordForWorkflow } from "@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi";
 import { track } from "@/lib/analytics/events";
 import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -869,16 +870,12 @@ export default function EditPropertyPage() {
       let coverPhotoDocumentId: string | null | undefined = undefined;
 
       if (propertyPhotoFile) {
-        const uploadResponse = await api.uploadDocument(propertyPhotoFile, {
-          type: "PHOTO",
-          name: propertyPhotoFile.name || "Property Photo",
-          propertyId,
+        coverPhotoDocumentId = await uploadRecordForWorkflow(propertyId, {
+          file: propertyPhotoFile,
+          title: propertyPhotoFile.name || "Property Photo",
+          recordType: "PHOTO",
+          sensitivity: "STANDARD",
         });
-
-        if (!uploadResponse.success || !uploadResponse.data?.id) {
-          throw new Error(uploadResponse.message || "Failed to upload property photo.");
-        }
-        coverPhotoDocumentId = uploadResponse.data.id;
       } else if (removeCoverPhoto) {
         coverPhotoDocumentId = null;
       }

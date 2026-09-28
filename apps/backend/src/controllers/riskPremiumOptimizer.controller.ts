@@ -92,7 +92,7 @@ export async function updateRiskPremiumPlanItem(req: CustomRequest, res: Respons
     }
 
     const payload = (req.body ?? {}) as UpdateRiskMitigationPlanItemInput;
-    const result = await service.updatePlanItem(propertyId, planItemId, userId, payload);
+    const result = await service.updatePlanItem(propertyId, planItemId, userId, payload, req.householdRole!);
     return res.json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error updating risk mitigation plan item');

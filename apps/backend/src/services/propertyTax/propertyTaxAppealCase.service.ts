@@ -1,6 +1,7 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { propertyTaxAppealReadinessService } from './propertyTaxAppealReadiness.service';
+import { assertPropertyDocumentsExist } from '../propertyDocuments/propertyDocumentInventory.service';
 
 type AppealGround = 'ASSESSED_VALUE' | 'TAX_CLASS' | 'EXEMPTION';
 type CaseEventType =
@@ -147,7 +148,7 @@ export class PropertyTaxAppealCaseService {
       filingConfirmationDocument: {
         select: {
           id: true,
-          name: true,
+          title: true,
           verificationStatus: true,
         },
       },
@@ -486,6 +487,7 @@ export class PropertyTaxAppealCaseService {
     caseId: string;
     propertyId: string;
     userId: string;
+    role: HouseholdRole;
     filedAt: Date;
     externalReference: string;
     confirmationDocumentId?: string;
@@ -502,14 +504,10 @@ export class PropertyTaxAppealCaseService {
       throw new Error('filedAt cannot be in the future');
     }
     if (input.confirmationDocumentId) {
-      const document = await this.db.document.findFirst({
-        where: {
-          id: input.confirmationDocumentId,
-          propertyId: input.propertyId,
-        },
-        select: { id: true },
-      });
-      if (!document) throw new Error('Filing confirmation document not found');
+      await assertPropertyDocumentsExist(
+        { propertyId: input.propertyId, role: input.role, ids: [input.confirmationDocumentId] },
+        () => new Error('Filing confirmation document not found'),
+      );
     }
     await this.db.$transaction(async (tx) => {
       await tx.propertyTaxAppealCase.update({

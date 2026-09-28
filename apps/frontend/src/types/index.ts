@@ -1949,7 +1949,7 @@ export interface Property {
   isEquityVerified: boolean;
   coverPhotoDocumentId: string | null;
   applianceAges: any;
-  coverPhoto?: Document | null;
+  coverPhoto?: { id: string; fileUrl: string | null } | null;
   exteriorProfile?: PropertyExteriorProfile | null;
   
   // Canonical InventoryItem-backed appliance projection for property setup.

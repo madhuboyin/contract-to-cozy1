@@ -9,8 +9,10 @@ import {
   RiskPremiumOptimizationAnalysis,
   RiskPremiumOptimizationConfidence,
   RiskPremiumOptimizationStatus,
+  type HouseholdRole,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 import { assertCoverageConflictFree } from './coverageConflict.service';
 import {
   AssumptionSetService,
@@ -1427,18 +1429,11 @@ export class RiskPremiumOptimizerService {
     return item;
   }
 
-  private async assertEvidenceDocument(propertyId: string, documentId: string) {
-    const document = await prisma.document.findFirst({
-      where: {
-        id: documentId,
-        propertyId,
-      },
-      select: { id: true },
-    });
-
-    if (!document) {
-      throw new Error('Evidence document not found for this property.');
-    }
+  private async assertEvidenceDocument(propertyId: string, documentId: string, role: HouseholdRole) {
+    await assertPropertyDocumentsExist(
+      { propertyId, role, ids: [documentId] },
+      () => new Error('Evidence document not found for this property.'),
+    );
   }
 
   private async assertLinkedHomeEvent(propertyId: string, homeEventId: string) {
@@ -1459,13 +1454,14 @@ export class RiskPremiumOptimizerService {
     propertyId: string,
     planItemId: string,
     userId: string,
-    input: UpdateRiskMitigationPlanItemInput
+    input: UpdateRiskMitigationPlanItemInput,
+    role: HouseholdRole,
   ) {
     await assertPropertyForUser(propertyId, userId);
     const existing = await this.assertPlanItemAccess(propertyId, planItemId);
 
     if (input.evidenceDocumentId) {
-      await this.assertEvidenceDocument(propertyId, input.evidenceDocumentId);
+      await this.assertEvidenceDocument(propertyId, input.evidenceDocumentId, role);
     }
     if (input.linkedHomeEventId) {
       await this.assertLinkedHomeEvent(propertyId, input.linkedHomeEventId);

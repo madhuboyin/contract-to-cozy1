@@ -81,27 +81,17 @@ export async function createExportAndGeneratePdf(args: CreateExportArgs) {
       expiresInSeconds: 7 * 24 * 60 * 60, // 7 days
     });
 
-    // 6) create Document row
-    const doc = await prisma.document.create({
-      data: {
-        uploadedBy: userId,
-        propertyId,
-        type: 'HOME_REPORT_PDF',
-        name: fileName,
-        description: `Generated home report (${type})`,
-        fileUrl,
-        fileSize: uploaded.fileSizeBytes,
-        mimeType: 'application/pdf',
-      },
-    });
+    // documentId (Document) is intentionally not populated here — Documents slice S5g found it was
+    // written but never read back anywhere (the export's own fileUrl/storageBucket/storageKey
+    // already carry everything a reader needs); the column stays for schema consistency (see
+    // schema.prisma) but this generator no longer manufactures an unused legacy row for it.
 
-    // 7) finalize export
+    // 6) finalize export
     await prisma.homeReportExport.update({
       where: { id: exp.id },
       data: {
         status: 'READY',
         completedAt: new Date(),
-        documentId: doc.id,
         snapshot: snapshot as any,
         contextVersion: snapshot.meta.contextVersion,
         storageBucket: uploaded.bucket,
@@ -116,7 +106,6 @@ export async function createExportAndGeneratePdf(args: CreateExportArgs) {
     return {
       exportId: exp.id,
       status: 'READY',
-      documentId: doc.id,
       fileUrl,
     };
   } catch (err: any) {

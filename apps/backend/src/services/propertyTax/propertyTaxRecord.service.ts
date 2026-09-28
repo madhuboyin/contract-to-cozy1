@@ -119,7 +119,7 @@ function serializeRecord(record: {
   dataSource: { id: string; name: string } | null;
   documents: Array<{
     role: string;
-    document: { id: string; name: string; verificationStatus: string };
+    document: { id: string; title: string; verificationStatus: string };
   }>;
 }) {
   return {
@@ -168,7 +168,7 @@ export class PropertyTaxRecordService {
             dataSource: { select: { id: true, name: true } },
             documents: {
               include: {
-                document: { select: { id: true, name: true, verificationStatus: true } },
+                document: { select: { id: true, title: true, verificationStatus: true } },
               },
             },
           },
@@ -181,7 +181,7 @@ export class PropertyTaxRecordService {
             dataSource: { select: { id: true, name: true } },
             documents: {
               include: {
-                document: { select: { id: true, name: true, verificationStatus: true } },
+                document: { select: { id: true, title: true, verificationStatus: true } },
               },
             },
           },
