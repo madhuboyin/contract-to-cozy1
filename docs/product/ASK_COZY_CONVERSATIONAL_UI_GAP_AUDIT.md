@@ -1,7 +1,8 @@
 # Ask Cozy Conversational UI — Prototype-to-Implementation Gap Audit
 
 **Date:** September 26, 2026  
-**Status:** Implementation planning input  
+**Updated:** September 28, 2026 through commit `f4967e00`
+**Status:** Living implementation audit; original findings are retained where useful and superseded behavior is identified explicitly
 **Scope:** Ask Cozy conversational UI only; this is not a review of ContractToCozy's broader feature set  
 **Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
 **Primary requirements:** `ASK_COZY_INLINE_WORKSPACE_FRD.md`, `ASK_COZY_INTERACTION_MODEL_UI_FRD.md`, and `ASK_COZY_PRIMARY_INTERFACE_REDESIGN.md`
@@ -14,16 +15,18 @@ The gap is the composition of those capabilities into the quieter interaction mo
 
 The recommended next implementation is a maintenance-first vertical slice that changes the hierarchy and presentation while preserving the existing contracts, domain services, confirmation safeguards, and evidence model.
 
+**September 28 synchronization note:** the maintenance-first slice and subsequent calm-domain work are implemented. Ask Home now consumes the same server-produced compact Home Action projection as Unified Home: one **What needs attention** section and one **Plan ahead** section, each capped at three entries after canonical coverage-correction grouping. Opening either section returns those same entries rather than a separate eight-item list. Calm Home Action cards no longer show ranking ordinals, confidence labels, comparative-reason prose, or policy terminology. Focused Home Action guidance is a single compact next-step card without adaptive Auto/List/Cards controls or technical Source/Execution facts. The detailed source of truth is FRD v1.152 in `ASK_COZY_INLINE_WORKSPACE_FRD.md`.
+
 ## 2. Classification summary
 
 | Prototype principle | Classification | Current implementation | Required change |
 | --- | --- | --- | --- |
 | Property-aware, nonblank opening | **Modify** | `CalmLanding` derives Do now, Plan soon, and change entries from the canonical Concierge Home payload. Entries now include the top underlying item detail. | Replace the generic hero question with a stateful headline and make the selected property visibly explicit at the launch decision point. Preserve the existing Concierge source of truth. |
-| Calm, quiet conversation | **Reuse / modify** | Calm chrome, reduced card treatment, two-item attention limit, deduplicated suggestions, sticky composer, and mobile sheets are present. | Apply the calm answer anatomy consistently to the maintenance slice and remove residual duplicated or generic launch chrome. |
+| Calm, quiet conversation | **Implemented / continue applying** | Calm chrome, reduced card treatment, two Home priority section cards, deduplicated suggestions, sticky composer, and mobile sheets are present. Each priority section is a compact summary backed by at most three server-projected actions. | Continue applying the calm answer anatomy by domain. Do not restore duplicated priority/shelf results or generic adaptive controls to focused Home Action guidance. |
 | Contextual multimodal input | **Add** | Voice input is accessible and fills the composer without auto-sending. Evidence upload supports JPEG, PNG, WEBP, and PDF for an already identified entity. | Add a typed composer-affordance contract. Show labels such as “Add a photo of the filter” or “Attach the invoice” only when the current intent and target support them. Reuse the upload service and validation; do not create a second evidence path. |
 | Answer-first progressive detail | **Reuse / modify** | Typed blocks, calm headline selection, fold/pin controls, expandable evidence, assumptions, limitations, and context panels already exist. | Define a stable calm ordering: answer, supporting fact, next action, compact trust line, optional detail. Avoid rendering every eligible block with equal visual weight. |
 | Result as a conversational object | **Reuse** | Declared suggestions create linked executions; filter refinements preserve the original question while replacing duplicate result content; item actions dispatch deterministically. | Retain this architecture. Add maintenance-specific acceptance coverage for refine, explain, act, and return-to-result behavior. |
-| “Why this appeared” | **Modify / add** | Result-level `WHY_NOW` blocks and priority reason codes exist. Launch attention entries expose label, detail, tone, prompt, and source but not an explanation payload. | Extend the launch entry view model with a deterministic explanation reference or reason summary derived from existing governed data. Reuse the `WHY_NOW` presentation pattern; do not infer reasons in the client. |
+| “Why this appeared” | **Implemented; presentation constrained** | Launch entries expose a collapsed explanation derived from governed deadline, priority, change, confidence, and lifecycle fields. Detailed ranking fields remain available for audit. | Keep explanations progressive. Do not place ranking ordinals, comparative reason codes, confidence labels, policy versions, or workflow internals directly on the primary calm cards. |
 | Compact trust and provenance | **Reuse / modify** | `ResponseContextSummary` opens the evidence/context surface. Full context supports claims, assumptions, limitations, artifacts, related records, and dates. | Render a quiet, human-readable trust line immediately below calm answers when context exists, with the existing panel as progressive detail. |
 | Answer → Review → Confirm → Receipt | **Reuse / modify** | Inline capture, editable confirmation, consent reset after edit, idempotency, authorization recheck, pending-outcome reconciliation, `WORKFLOW_PROGRESS`, and `OUTPUT_ARTIFACTS` exist. | Make the stage change legible in copy and layout. A permanent stepper is not required. Standardize the post-action receipt anatomy and keep the resulting artifact actionable in the conversation. |
 | Active-work continuity | **Modify** | Pending work can be resumed, cancelled, or dismissed; sessions can be pinned, searched, restored, and deleted. Desktop gives the transcript history a permanent left rail. | Promote active work above transcript retrieval. Keep history available, but reduce its default visual priority in the calm shell. |
@@ -54,11 +57,11 @@ For a selected property, the primary launch content should instead be:
 
 1. explicit home identity;
 2. a concise state headline derived from the same data as the attention entries;
-3. no more than two prioritized entries;
+3. exactly two Home priority section cards when the source is available—**What needs attention** and **Plan ahead**—each backed by no more than three entries from the shared server projection;
 4. a property- and context-aware composer prompt; and
 5. secondary suggestions only when they do not repeat the attention entries.
 
-The current two-entry cap and suggestion deduplication should be retained.
+The two-section hierarchy and suggestion deduplication should be retained. The section cards summarize their canonical entries; they are not two independently ranked actions.
 
 ### 4.2 Calm answer anatomy
 
@@ -99,7 +102,7 @@ This does not require a persistent four-step progress component. Clear headings,
 
 ### 5.1 Launch explanation contract
 
-Add optional governed explanation data to each launch attention entry. It should support a short explanation and a route or expansion target for deeper evidence. The explanation must be derived from canonical priority, deadline, change, confidence, or evidence fields—not generated ad hoc in the browser.
+Implemented for launch entries. Governed explanation data supports a short collapsed explanation and deeper evidence. Explanations are derived from canonical priority, deadline, change, confidence, or evidence fields—not generated ad hoc in the browser. Primary Home Action cards deliberately omit technical ranking language; explanation remains progressive detail.
 
 ### 5.2 Contextual composer affordances
 
@@ -131,7 +134,7 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 - Replace the universal “Ask anything about your home…” placeholder with contextual copy when a selected property or active workflow provides a more useful prompt.
 - Avoid showing the same suggestion as an attention entry, response action, and follow-up chip. Existing launch deduplication is a good start; apply the rule across response surfaces.
 - Demote transcript-first desktop chrome in the calm launch state. Do not remove history functionality.
-- Do not expose implementation terms such as block types, ranking versions, or workflow internals in the primary answer unless they are necessary to user trust; place them in progressive detail.
+- Do not expose implementation terms such as block types, ranking versions, ranking ordinals, comparative reason codes, confidence labels, or workflow internals in the primary answer unless they are necessary to user trust; place them in progressive detail. Calm Home Action cards comply as of FRD v1.152.
 
 ## 7. Implementation-ready ticket sequence
 
@@ -146,7 +149,7 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 
 - Home identity is visible beside or directly above the state headline.
 - Headline distinguishes attention, upcoming work, material change, and genuinely quiet state without overstating certainty.
-- No more than two attention entries render by default.
+- Exactly two Home priority section cards render when the priority source is available. Each section contains at most three entries from the same server projection used by Unified Home.
 - Generic hero copy is used only when the state needed for a more specific opening is unavailable.
 - Existing Concierge Home data remains the only launch source of truth.
 - Desktop and narrow mobile layouts preserve a clear path to type or speak immediately.
@@ -274,6 +277,14 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 | ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Browser-covered by ACUI-008 (fixture-backed). |
 | ACUI-008 | **Implemented (FRD v1.120):** `e2e/ask/maintenanceJourney.spec.ts`, 9 scenarios at desktop and 390px. Fixture-backed; not a live-backend run. |
 
+## 7b. Ask Home synchronization status (September 28, 2026, commit `f4967e00`)
+
+- **Shared projection:** `getUnifiedHome` and Concierge Home consume `projectHomeActionDashboardSections`. Canonical feed order is preserved, regulated coverage corrections collapse to one entry, and raw priorities partition into **What needs attention** (`NOW`/`SOON`) and **Plan ahead** (`PLAN`/`CONSIDER`), capped independently at three.
+- **Exact continuations:** the two landing prompts return only their projected section entries. They no longer open the full eight-item Ask channel list.
+- **Homeowner-facing copy:** calm priority cards omit rank number, confidence and comparative ranking prose. Governance fields remain in the contract for audit and non-primary detail.
+- **Focused response density:** focused Home Action guidance uses one compact next-step card, filters technical Source/Execution/Task/Work-state facts, and does not offer Auto/List/Cards switching.
+- **Validation:** backend and frontend typechecks passed; 32 focused backend/frontend tests and 17 product-framework contract tests passed; frontend focused ESLint and `git diff --check` passed. Backend ESLint was not available from the backend package configuration. No real database, live backend, production household, browser-runtime, or assistive-technology verification was performed for this revision.
+
 ## 8. Recommended delivery boundary
 
 Implement ACUI-001, ACUI-002, ACUI-003, ACUI-005, and their ACUI-008 coverage as the first vertical slice. They produce the complete conversational arc with the least architectural risk because the underlying maintenance, confirmation, evidence, and receipt contracts already exist.
@@ -298,7 +309,7 @@ Compared with `docs/product/prototypes/ask-cozy-launch-validation.html` (FRDs wi
 | --- | --- | --- | --- |
 | Launch headline and state | State-specific headline and subhead | State headline from the same Concierge data; unknown state keeps the generic prompt | Aligned |
 | Home identity | Property selector in the top bar | Home name above the headline; multi-home selection stays in the app shell | Aligned in intent |
-| Attention entries | Two cards with kicker, title, copy, link text and "Why this appeared" | Two quieter rows with label, top item, chevron and an inline "Why this appeared" | Deliberate (IW-CONV-017: composer leads); not material |
+| Attention entries | Two cards with kicker, title, copy, link text and "Why this appeared" | Two compact section cards—**What needs attention** and **Plan ahead**—with a count and first canonical item; each opens the same capped three-item projection used by Unified Home | Aligned in hierarchy; implementation is more data-consistent than the prototype |
 | "Why this appeared" | A toast with fixed text | Inline disclosure from governed fields, hidden when nothing can be derived | Better than the prototype |
 | Composer tool row | Three per-state buttons (scan label, add report, describe) on the landing | Only voice on the landing; a purpose-named attach appears when one supported record is resolved | Deliberate (ACUI-004: no bare or unsupported affordances). **Product decision if landing-level photo/report entry is wanted:** it needs a defined upload flow, not just a button |
 | Active work / recent artifacts | Both sections on the landing | Unfinished-work lines; artifacts row out of scope by decision | Deliberate |
