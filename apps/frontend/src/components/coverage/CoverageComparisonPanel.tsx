@@ -9,7 +9,9 @@ import {
   type CoverageComparisonDTO,
   type CoverageComparisonFactDTO,
 } from '@/lib/api/coverageAnalysisApi';
-import type { Document } from '@/types';
+
+// The quote-source picker's own store: Home Records (Documents slice S5d), not the legacy vault.
+type PropertyRecordOption = { id: string; title: string; recordType: string };
 
 const FIELD_LABELS: Record<string, string> = {
   ANNUAL_PREMIUM: 'Annual premium',
@@ -65,7 +67,7 @@ export default function CoverageComparisonPanel({
 }) {
   const [comparison, setComparison] = useState<CoverageComparisonDTO | null>(null);
   const [state, setState] = useState<'LOADING' | 'BASELINE_REQUIRED' | 'READY' | 'ERROR'>('LOADING');
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<PropertyRecordOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -88,11 +90,11 @@ export default function CoverageComparisonPanel({
           guidanceStepKey,
           sourceActionId,
         }),
-        api.listDocuments(propertyId),
+        api.listPropertyRecords(propertyId),
       ]);
       setComparison(workspace.comparison);
       setState(workspace.state);
-      if (documentResponse.success) setDocuments(documentResponse.data.documents);
+      if (documentResponse.success) setDocuments(documentResponse.data.records);
     } catch (loadError: any) {
       setError(loadError?.message ?? 'Unable to load the comparison.');
       setState('ERROR');
@@ -248,7 +250,7 @@ export default function CoverageComparisonPanel({
               <div>
                 <h3 className="font-semibold">{option.label}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {option.carrierName || 'Carrier not entered'} · {option.sourceDocument?.name || 'No source name'}
+                  {option.carrierName || 'Carrier not entered'} · {option.sourceDocument?.title || 'No source name'}
                 </p>
               </div>
               <span className="rounded-full border px-2 py-1 text-[11px] font-semibold">
@@ -305,7 +307,7 @@ export default function CoverageComparisonPanel({
                 <label className="text-sm sm:col-span-2">Source document
                   <select value={sourceDocumentId} onChange={(event) => setSourceDocumentId(event.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2">
                     <option value="">Choose an uploaded document</option>
-                    {documents.map((document) => <option key={document.id} value={document.id}>{document.name}</option>)}
+                    {documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}
                   </select>
                 </label>
                 <label className="text-sm">Source page<input type="number" min="1" value={sourcePage} onChange={(event) => setSourcePage(event.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2" /></label>

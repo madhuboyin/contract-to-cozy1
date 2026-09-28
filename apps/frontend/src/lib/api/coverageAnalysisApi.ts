@@ -182,7 +182,8 @@ export type CoverageComparisonOptionDTO = {
     baseline: CoverageComparisonFactDTO;
     option: CoverageComparisonFactDTO;
   }>;
-  sourceDocument: { id: string; name: string } | null;
+  // A Home Record now (Documents slice S5d): title, not the legacy vault's name.
+  sourceDocument: { id: string; title: string } | null;
 };
 
 export type CoverageComparisonDTO = {

@@ -2590,6 +2590,17 @@ class APIClient {
     });
   }
 
+  /**
+   * List a property's Home Records (the canonical document store, replacing the legacy vault above).
+   * A minimal shape for pickers outside the Home Records tool itself; see that tool's own
+   * homeRecordsApi.ts/types.ts for the full PropertyRecordSummary shape.
+   */
+  async listPropertyRecords(propertyId: string): Promise<APIResponse<{
+    records: Array<{ id: string; title: string; recordType: string }>;
+  }>> {
+    return this.request(`/api/properties/${propertyId}/records`);
+  }
+
   // ==========================================================================
   // APPLIANCE ORACLE ENDPOINTS
   // ==========================================================================

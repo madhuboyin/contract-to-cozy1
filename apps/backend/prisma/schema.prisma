@@ -5087,7 +5087,6 @@ model Document {
   coverForProperties         Property[]                  @relation("PropertyCoverPhoto")
   warranty                   Warranty?                   @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy            InsurancePolicy?            @relation(fields: [policyId], references: [id], onDelete: Cascade)
-  coverageComparisonOptions  CoverageComparisonOption[]    @relation("CoverageComparisonOptionDocument")
   providerCredential         ProviderCredential?         @relation(fields: [providerCredentialId], references: [id], onDelete: Cascade)
   project                    ProjectRecord?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
   inventoryItemId            String? // NEW: Link to an InventoryItem record
@@ -5202,6 +5201,7 @@ model PropertyRecord {
   claimDocuments                   ClaimDocument[]
   insurancePolicyTermSources       InsurancePolicyTerm[]                @relation("InsurancePolicyTermSourceDocument")
   insurancePolicyFactSources       InsurancePolicyFact[]                @relation("InsurancePolicyFactSourceDocument")
+  coverageComparisonOptions        CoverageComparisonOption[]           @relation("CoverageComparisonOptionDocument")
 
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])
@@ -5783,7 +5783,11 @@ model CoverageComparisonOption {
   comparison    CoverageComparison  @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
   property      Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   policyTerm    InsurancePolicyTerm? @relation("CoverageComparisonOptionPolicyTerm", fields: [policyTermId], references: [id], onDelete: SetNull)
-  sourceDocument Document?          @relation("CoverageComparisonOptionDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5d): the column name is
+  // unchanged. The QUOTE_DOCUMENT option type is the live writer (a real picker, api.listDocuments moved to
+  // listRecords); the POLICY_TERM option type inherits InsurancePolicyTerm.sourceDocumentId, which is always
+  // null in live practice (see that model's own comment) so it never disagrees with this.
+  sourceDocument PropertyRecord?    @relation("CoverageComparisonOptionDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   @@index([comparisonId, createdAt])
   @@index([propertyId])

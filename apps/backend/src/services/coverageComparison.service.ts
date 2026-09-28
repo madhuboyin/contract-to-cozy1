@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { recordCoverageDecisionOutcome } from './decisionPlatform/outcomeObservationService';
+import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 
 export const COVERAGE_EQUIVALENCE_VERSION = 1;
 
@@ -193,14 +194,14 @@ const comparisonInclude = {
   baselinePolicyTerm: {
     include: {
       insurancePolicy: { select: { id: true, carrierName: true, policyNumber: true } },
-      // A Home Record now (Documents slice S5d) — options.sourceDocument below is a different relation
-      // (CoverageComparisonOption's own, still the legacy Document table; not converted this pass).
+      // A Home Record now (Documents slice S5d).
       sourceDocument: { select: { id: true, title: true } },
     },
   },
   options: {
     orderBy: { createdAt: 'asc' as const },
-    include: { sourceDocument: { select: { id: true, name: true } } },
+    // Also a Home Record now (this pass, CoverageComparisonOption's own relation).
+    include: { sourceDocument: { select: { id: true, title: true } } },
   },
   decisions: { orderBy: { decidedAt: 'desc' as const } },
 };
@@ -382,11 +383,13 @@ export async function addCoverageComparisonOption(
     if (!sourceDocumentId) {
       throw new APIError('A quote source document is required', 400, 'QUOTE_DOCUMENT_REQUIRED');
     }
-    const document = await prisma.document.findFirst({
-      where: { id: sourceDocumentId, propertyId },
-      select: { id: true },
-    });
-    if (!document) throw new APIError('Quote source document not found', 404, 'DOCUMENT_NOT_FOUND');
+    // The quote reference is a Home Record id (Documents slice S5d). This domain has no household-role
+    // sharing (authorizeProperty above already confirmed this userId is the property's own homeownerProfile
+    // owner), so OWNER is the correct, not just convenient, role for the canonical inventory check.
+    await assertPropertyDocumentsExist(
+      { propertyId, role: 'OWNER', ids: [sourceDocumentId] },
+      () => new APIError('Quote source document not found', 404, 'DOCUMENT_NOT_FOUND'),
+    );
     facts = facts.map((fact) => ({
       ...fact,
       sourceDocumentId,
