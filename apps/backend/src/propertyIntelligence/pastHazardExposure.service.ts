@@ -2,6 +2,7 @@ import {
   IntelligenceSourceFamily,
   PropertyHazardEffectStatus,
   PropertyHazardEvidenceKind,
+  type HouseholdRole,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
@@ -12,6 +13,8 @@ import {
   getPropertyIntelligenceObservations,
 } from './propertyIntelligence.service';
 import { derivePropertyIntelligenceSafetyTier } from '../productFramework/propertyIntelligenceOwnership.contract';
+import { assertPropertyDocumentsExist } from '../services/propertyDocuments/propertyDocumentInventory.service';
+import { linkRecordToEntityInTransaction } from '../services/homeRecords.service';
 
 const HAZARD_SOURCE_FAMILIES = new Set<IntelligenceSourceFamily>([
   IntelligenceSourceFamily.HAZARD,
@@ -86,7 +89,8 @@ export async function getPastHazardExposure(
             include: {
               claim: { select: { id: true, title: true, status: true } },
               homeEvent: { select: { id: true, title: true, type: true, occurredAt: true } },
-              document: { select: { id: true, name: true, type: true } },
+              // document is now a Home Record (Documents slice S5c): title/recordType, not name/type.
+              document: { select: { id: true, title: true, recordType: true } },
             },
             orderBy: { createdAt: 'asc' },
           },
@@ -341,6 +345,7 @@ export async function recordPropertyHazardOutcome(input: {
 
 async function validateEvidence(input: {
   propertyId: string;
+  role: HouseholdRole;
   kind: PropertyHazardEvidenceKind;
   claimId?: string | null;
   homeEventId?: string | null;
@@ -387,12 +392,12 @@ async function validateEvidence(input: {
     if (!input.documentId) {
       throw new APIError('documentId is required.', 400, 'DOCUMENT_ID_REQUIRED');
     }
-    const document = await prisma.document.findFirst({
-      where: { id: input.documentId, propertyId: input.propertyId },
-      select: { id: true },
-    });
-    if (!document) throw new APIError('Document not found.', 404, 'DOCUMENT_NOT_FOUND');
-    return `document:${document.id}`;
+    // The evidence reference is a Home Record id (Documents slice S5c), resolved with the caller's role.
+    await assertPropertyDocumentsExist(
+      { propertyId: input.propertyId, role: input.role, ids: [input.documentId] },
+      () => new APIError('Document not found.', 404, 'DOCUMENT_NOT_FOUND'),
+    );
+    return `document:${input.documentId}`;
   }
   if (!input.entityType || !input.entityId) {
     throw new APIError(
@@ -408,6 +413,7 @@ export async function linkPropertyHazardEvidence(input: {
   propertyId: string;
   outcomeId: string;
   userId: string;
+  role: HouseholdRole;
   kind: PropertyHazardEvidenceKind;
   claimId?: string | null;
   homeEventId?: string | null;
@@ -444,6 +450,8 @@ export async function linkPropertyHazardEvidence(input: {
       input.kind === PropertyHazardEvidenceKind.REPAIR ? 'REPAIR_RECORD'
         : input.kind === PropertyHazardEvidenceKind.DOCUMENT ? 'DOCUMENT'
           : input.kind;
+    const isDocumentEvidence = input.kind === PropertyHazardEvidenceKind.PHOTO
+      || input.kind === PropertyHazardEvidenceKind.DOCUMENT;
     await prisma.homeEventEvidence.upsert({
       where: {
         eventId_evidenceKey: {
@@ -455,7 +463,9 @@ export async function linkPropertyHazardEvidence(input: {
         eventId: outcome.canonicalTimelineEventId,
         evidenceType: timelineEvidenceType,
         evidenceKey: entityKey,
-        documentId: input.documentId ?? null,
+        // documentId is NOT set here for PHOTO/DOCUMENT evidence: the reference is a Home Record id (S5c), but
+        // HomeEventEvidence.documentId still FKs to the legacy Document table (its other writers aren't converted
+        // yet). The record is linked to this event through PropertyRecordLink below instead.
         sourceEntityType:
           input.kind === PropertyHazardEvidenceKind.CLAIM ? 'Claim'
             : input.kind === PropertyHazardEvidenceKind.INSPECTION
@@ -468,6 +478,17 @@ export async function linkPropertyHazardEvidence(input: {
       },
       update: { note: input.note ?? undefined },
     });
+    if (isDocumentEvidence && input.documentId) {
+      await linkRecordToEntityInTransaction(prisma, {
+        propertyId: input.propertyId,
+        recordId: input.documentId,
+        entityType: 'HOME_EVENT',
+        entityId: outcome.canonicalTimelineEventId,
+        purpose: 'EVIDENCE',
+        userId: input.userId,
+        label: 'Past hazard evidence',
+      });
+    }
   }
 
   if (outcome.status === PropertyHazardEffectStatus.OBSERVED_EFFECT_CONFIRMED) {

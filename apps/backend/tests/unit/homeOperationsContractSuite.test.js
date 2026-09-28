@@ -114,6 +114,24 @@ const prismaMock = {
   document: {
     findFirst: async ({ where }) => documents.get(where.id) ?? null,
   },
+  // Evidence documentIds are Home Record ids now (Documents slice S5c); `documents` doubles as the fixture
+  // store for both, since no test here relies on the two stores actually differing.
+  propertyRecord: {
+    findMany: async ({ where }) => {
+      const ids = where.id?.in ?? [];
+      return ids
+        .map((id) => documents.get(id))
+        .filter(Boolean)
+        .map((doc) => ({
+          id: doc.id, title: doc.title ?? 'Document', recordType: doc.recordType ?? 'OTHER', description: null,
+          verificationStatus: 'UNVERIFIED', verifiedAt: null, updatedAt: new Date(), createdAt: new Date(),
+        }));
+    },
+    findFirst: async ({ where }) => (documents.get(where.id) ? { id: where.id, currentVersionId: null } : null),
+  },
+  propertyRecordLink: {
+    upsert: async () => ({}),
+  },
 };
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');

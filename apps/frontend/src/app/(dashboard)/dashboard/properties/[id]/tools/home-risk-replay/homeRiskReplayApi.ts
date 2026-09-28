@@ -59,7 +59,8 @@ export interface PastHazardExposureItem {
       note: string | null;
       claim?: { id: string; title: string; status: string } | null;
       homeEvent?: { id: string; title: string; type: string; occurredAt: string } | null;
-      document?: { id: string; name: string; type: string } | null;
+      // A Home Record (Documents slice S5c): title/recordType, not the legacy vault's name/type.
+      document?: { id: string; title: string; recordType: string } | null;
     }>;
     canonicalActionId: string | null;
     canonicalTimelineEventId: string | null;

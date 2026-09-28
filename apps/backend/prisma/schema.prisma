@@ -5098,7 +5098,6 @@ model Document {
   claimDocuments             ClaimDocument[]
   homeEventLinks             HomeEventDocument[]
   homeEventEvidence                    HomeEventEvidence[]
-  hazardEvidenceLinks                  PropertyHazardEvidenceLink[]
   riskMitigationPlanItems    RiskMitigationPlanItem[]
   capitalTimelineItems       HomeCapitalTimelineItem[]
   negotiationShieldDocuments NegotiationShieldDocument[]
@@ -5202,6 +5201,7 @@ model PropertyRecord {
   buyerInspectionProofLinks        BuyerInspectionPlan[]               @relation("BuyerInspectionReinspectionProof")
   homeBuyerTaskCompletions         HomeBuyerTask[]                     @relation("HomeBuyerTaskCompletionDocument")
   buyerMilestoneSources            BuyerJourneyMilestone[]             @relation("BuyerMilestoneSourceDocument")
+  hazardEvidenceLinks              PropertyHazardEvidenceLink[]
 
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])
@@ -16299,7 +16299,8 @@ model PropertyHazardEvidenceLink {
   outcome   PropertyHazardOutcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
   claim     Claim?                @relation(fields: [claimId], references: [id], onDelete: SetNull)
   homeEvent HomeEvent?            @relation(fields: [homeEventId], references: [id], onDelete: SetNull)
-  document  Document?             @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  // Retargeted from the legacy Document table to Home Records (Documents slice S5c): the column name is unchanged.
+  document  PropertyRecord?       @relation(fields: [documentId], references: [id], onDelete: SetNull)
   linkedBy  User?                 @relation("PropertyHazardEvidenceLinker", fields: [linkedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([outcomeId, entityKey])

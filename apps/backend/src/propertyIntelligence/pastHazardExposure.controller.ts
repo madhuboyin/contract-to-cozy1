@@ -55,6 +55,7 @@ export async function linkPastHazardEvidence(
       propertyId: req.params.propertyId,
       outcomeId: req.params.outcomeId,
       userId: req.user!.userId,
+      role: req.householdRole!,
       ...req.body,
     });
     res.status(201).json({ success: true, data: { evidence } });
