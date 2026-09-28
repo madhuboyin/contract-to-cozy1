@@ -63,17 +63,20 @@ const prompt = (id: string, question: string, categoryId: AskCapabilityPrompt['c
 export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStateStrip {
   const notes: string[] = [];
   const chips: StripChip[] = [];
-  const usable = view.priorityList.items.filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION');
-  const doNow = usable.filter((item) => item.consumerPriority === 'DO_NOW').length;
-  const planSoon = usable.filter((item) => item.consumerPriority === 'PLAN_SOON').length;
+  // This payload is already the server's dashboard projection. Do not apply
+  // a second client-side eligibility filter or Ask's counts can diverge from
+  // the Home cards even though both began with the same governed feed.
+  const usable = view.priorityList.items;
+  const doNow = usable.filter((item) => item.rawPriority === 'NOW').length;
+  const planSoon = usable.filter((item) => item.rawPriority === 'SOON').length;
   // Preserve feed order within each dashboard band while ensuring the more immediate band leads its card.
   const attentionItems = [
-    ...usable.filter((item) => item.consumerPriority === 'DO_NOW'),
-    ...usable.filter((item) => item.consumerPriority === 'PLAN_SOON'),
+    ...usable.filter((item) => item.rawPriority === 'NOW'),
+    ...usable.filter((item) => item.rawPriority === 'SOON'),
   ];
   const planAheadItems = [
-    ...usable.filter((item) => item.consumerPriority === 'WATCH'),
-    ...usable.filter((item) => item.consumerPriority === 'OPTIONAL'),
+    ...usable.filter((item) => item.rawPriority === 'PLAN'),
+    ...usable.filter((item) => item.rawPriority === 'CONSIDER'),
   ];
 
   let headline: string | null = null;

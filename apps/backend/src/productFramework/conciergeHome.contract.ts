@@ -28,6 +28,7 @@ export const ConciergeHomePriorityItemSchema = z.object({
   askCategoryId: z.enum(['MAINTAIN', 'PROTECT', 'SAVE', 'PLAN_MONITOR']),
   askCategoryLabel: z.enum(['Maintain', 'Protect', 'Save', 'Plan']),
   subject: ConciergeHomeSubjectSchema.nullable(),
+  rawPriority: z.enum(['NOW', 'SOON', 'PLAN', 'CONSIDER']),
   consumerPriority: z.enum(['DO_NOW', 'PLAN_SOON', 'WATCH', 'OPTIONAL', 'NO_ACTION']),
   comparativeReasonCodes: z.array(z.string()),
   confidenceLabel: z.enum(['LOW', 'MEDIUM', 'HIGH']),

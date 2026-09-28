@@ -715,6 +715,10 @@ export type UnifiedHomeDTO = {
   };
   attention: {
     actions: RankedHomeActionDTO[];
+    sections: {
+      attention: Array<{ kind: 'ACTION' | 'COVERAGE_CORRECTION_GROUP'; actionIds: string[] }>;
+      planAhead: Array<{ kind: 'ACTION' | 'COVERAGE_CORRECTION_GROUP'; actionIds: string[] }>;
+    };
     totalCount: number;
     planHref: string;
     firstValueInsight: HomeFirstValueInsightDTO | null;

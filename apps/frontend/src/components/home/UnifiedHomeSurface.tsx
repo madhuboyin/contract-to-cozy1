@@ -1371,6 +1371,33 @@ export function splitHomeAttentionEntries(entries: AttentionEntry[], limit = 3) 
   };
 }
 
+function dashboardAttentionEntries(
+  actions: RankedHomeActionDTO[],
+  sections: UnifiedHomeDTO['attention']['sections'],
+): { urgent: AttentionEntry[]; planning: AttentionEntry[] } {
+  const byId = new Map(actions.map((action) => [action.id, action]));
+  const materialize = (entries: UnifiedHomeDTO['attention']['sections']['attention']): AttentionEntry[] => entries.flatMap((entry) => {
+    const selected = entry.actionIds
+      .map((id) => byId.get(id))
+      .filter((action): action is RankedHomeActionDTO => Boolean(action));
+    if (!selected.length) return [];
+    if (entry.kind === 'COVERAGE_CORRECTION_GROUP') {
+      return [{
+        kind: 'COVERAGE_CORRECTION_GROUP' as const,
+        actions: selected,
+        subjects: selected
+          .map((action) => coverageCorrectionSubject(action))
+          .filter((subject): subject is string => Boolean(subject)),
+      }];
+    }
+    return [entryForAction(selected[0])];
+  });
+  return {
+    urgent: materialize(sections.attention),
+    planning: materialize(sections.planAhead),
+  };
+}
+
 function AttentionEntryCard({
   entry,
   propertyId,
@@ -1453,8 +1480,10 @@ export function UnifiedHomeSurface({
   }
 
   const home = query.data;
-  const attentionEntries = groupAttentionActions(home.attention.actions);
-  const { urgent: visibleAttentionEntries, planning: visiblePlanEntries } = splitHomeAttentionEntries(attentionEntries);
+  const { urgent: visibleAttentionEntries, planning: visiblePlanEntries } = dashboardAttentionEntries(
+    home.attention.actions,
+    home.attention.sections,
+  );
   const attentionState = resolveHomeAttentionState(
     home.attention.actions.length,
     home.propertyContext,

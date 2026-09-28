@@ -12,7 +12,7 @@ function view(overrides: Partial<ConciergeHomeView> = {}): ConciergeHomeView {
       state: 'AVAILABLE', rankingPolicyVersion: 'v1', generatedAt: '2026-08-14T12:00:00.000Z', truncated: false, href: '/actions',
       items: [{
         homeActionId: 'fridge-action', title: 'Plan ahead for Refrigerator', askQuestion: 'What should I do next for the refrigerator?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain', subject: refrigerator,
-        consumerPriority: 'PLAN_SOON', comparativeReasonCodes: [], confidenceLabel: 'HIGH', deadlineAt: null, cta: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
+        rawPriority: 'SOON', consumerPriority: 'PLAN_SOON', comparativeReasonCodes: [], confidenceLabel: 'HIGH', deadlineAt: null, cta: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
       }],
     },
     changes: { state: 'NO_CHANGE', windowDays: 30, items: [], href: '/changes' },

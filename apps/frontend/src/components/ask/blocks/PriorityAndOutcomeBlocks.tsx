@@ -60,8 +60,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 fallbackIcon={ClipboardCheck}
                 tone={item.consumerPriority === 'DO_NOW' ? 'CRITICAL' : item.consumerPriority === 'PLAN_SOON' ? 'CAUTION' : item.consumerPriority === 'NO_ACTION' ? 'POSITIVE' : 'DEFAULT'}
                 badge={<span className={cn('rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{categoryLabel[item.consumerPriority]}</span>}
-                summary={item.comparativeReasonCodes.length > 0 ? `Ranked here because ${item.comparativeReasonCodes.map((code) => code.replace(/_/g, ' ').toLowerCase()).join(', ')}.` : undefined}
-                meta={<>{`#${index + 1} · ${item.confidenceLabel.toLowerCase()} confidence`}{item.deadlineAt && ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}`}</>}
+                meta={item.deadlineAt ? <>Due {new Date(item.deadlineAt).toLocaleDateString()}</> : undefined}
                 action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
                 secondary={<HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />}
               /> : <>

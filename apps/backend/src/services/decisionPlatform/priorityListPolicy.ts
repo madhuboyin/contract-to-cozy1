@@ -122,6 +122,7 @@ export function derivePriorityListItemState(action: RankedHomeAction, fatigueSup
 export interface PriorityListItemView {
   homeActionId: string;
   title: string;
+  rawPriority: RankedHomeAction['priority'];
   consumerPriority: ConsumerPriorityCategory;
   comparativeReasonCodes: ComparativeReasonCode[];
   confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
@@ -149,7 +150,7 @@ export interface PriorityListView {
 // surface is registered to display before truncating.
 export const PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS = {
   ASK: 8,
-  CONCIERGE_HOME: 5,
+  CONCIERGE_HOME: 6,
   // Phase 9C (FRD §18.2/§18.3): external delivery only ever considers the
   // single top-ranked item per evaluation pass -- see
   // homeActionProactiveDelivery.service.ts's "send at most one, break after
@@ -176,6 +177,7 @@ export function buildPriorityListView(
     return {
       homeActionId: action.id,
       title: action.presentation?.headline ?? action.recommendedAction,
+      rawPriority: action.priority,
       consumerPriority: mapConsumerPriorityCategory(action),
       comparativeReasonCodes: comparativeReasonCodes(action, next),
       confidenceLabel: action.confidence.label,

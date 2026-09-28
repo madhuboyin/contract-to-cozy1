@@ -329,6 +329,7 @@ export interface ConciergeHomeView {
       askCategoryId: 'MAINTAIN' | 'PROTECT' | 'SAVE' | 'PLAN_MONITOR';
       askCategoryLabel: 'Maintain' | 'Protect' | 'Save' | 'Plan';
       subject?: AskConciergeSubject | null;
+      rawPriority: 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
       consumerPriority: 'DO_NOW' | 'PLAN_SOON' | 'WATCH' | 'OPTIONAL' | 'NO_ACTION';
       comparativeReasonCodes: string[];
       confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';

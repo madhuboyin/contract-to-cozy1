@@ -66,6 +66,7 @@ function unifiedHomeFixture(urgent: boolean): UnifiedHomeDTO {
     },
     attention: {
       actions: [],
+      sections: { attention: [], planAhead: [] },
       totalCount: 0,
       planHref: `/dashboard/properties/${HOME_BUYER_LIFECYCLE_ACCEPTANCE_PROPERTY_ID}/maintenance`,
       firstValueInsight: null,

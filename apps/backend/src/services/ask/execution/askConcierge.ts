@@ -27,6 +27,10 @@ import { conciergeLandingSubjectKey, inventoryDecisionQuestion, selectConciergeL
 import { getSkillDefinition } from '../../skills/skillRegistry';
 import { focusedHomeActionCategory, focusedHomeActionQuestion } from '../askFocusedGuidance';
 import { lifecyclePromptsFor } from '../askLifecyclePromptPolicy';
+import {
+  dashboardSectionRepresentativeActions,
+  projectHomeActionDashboardSections,
+} from '../../homeActionDashboardProjection';
 
 type ConciergeCapabilityGroupDefinition = Omit<ConciergeHomeView['capabilityGroups'][number], 'capabilityIds'> & {
   outcomeCategory: CapabilityCatalogItem['outcomeCategory'];
@@ -126,10 +130,15 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
   const priorityListPromise = (async (): Promise<ConciergeHomeView['priorityList']> => {
     try {
       const feed = await feedPromise;
+      const sections = projectHomeActionDashboardSections(feed.actions);
+      const projectedActions = dashboardSectionRepresentativeActions(feed.actions, [
+        ...sections.attention,
+        ...sections.planAhead,
+      ]);
       const suppressedHomeActionIds = await getSuppressedHomeActionIds({
-        userId, propertyId, homeActionIds: feed.actions.map((action) => action.id),
+        userId, propertyId, homeActionIds: projectedActions.map((action) => action.id),
       }).catch(() => new Set<string>());
-      const view = buildPriorityListView(feed, 'CONCIERGE_HOME', { suppressedHomeActionIds });
+      const view = buildPriorityListView({ ...feed, actions: projectedActions }, 'CONCIERGE_HOME', { suppressedHomeActionIds });
       const sourceActions = new Map(feed.actions.map((action) => [action.id, action]));
       return {
         state: view.items.length ? 'AVAILABLE' : 'NO_ACTION',
@@ -145,6 +154,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
             askCategoryId: category.categoryId,
             askCategoryLabel: category.categoryLabel,
             subject: sourceAction?.presentation?.subject ?? null,
+            rawPriority: item.rawPriority,
             consumerPriority: item.consumerPriority,
             comparativeReasonCodes: item.comparativeReasonCodes,
             confidenceLabel: item.confidenceLabel,

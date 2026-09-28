@@ -90,6 +90,7 @@ function home(): UnifiedHomeDTO {
     },
     attention: {
       actions: [action()],
+      sections: { attention: [{ kind: 'ACTION', actionIds: ['action-1'] }], planAhead: [] },
       totalCount: 1,
       planHref: '/dashboard/resolution-center',
       firstValueInsight: null,

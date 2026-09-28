@@ -32,6 +32,37 @@ import type { AskBlockRenderer } from './types';
 // MaintenanceResultList's own export.
 export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
+  if (block.id === 'focused-home-action-guidance') {
+    const next = block.sections.find((section) => section.id === 'next-step');
+    const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];
+    const facts = block.sections.find((section) => section.id === 'known-details')?.items ?? [];
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{block.title}</p>
+        <div className="mt-2 space-y-2">
+          {next?.items.map((item) => (
+            <div key={item.id}>
+              <p className="font-semibold text-slate-950">{item.title}</p>
+              {item.description && <p className="mt-1 text-sm leading-5 text-slate-600">{item.description}</p>}
+              {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
+            </div>
+          ))}
+          {why?.description && <p className="text-sm leading-5 text-slate-600">{why.description}</p>}
+        </div>
+        {facts.length > 0 && (
+          <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {facts.slice(0, 6).map((fact) => (
+              <div key={fact.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{fact.title}</dt>
+                <dd className="mt-0.5 text-sm font-medium text-slate-800">{fact.description}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+      </section>
+    );
+  }
   const preference = controls?.view.groupedListModes[block.id] ?? 'AUTO';
   const decision = resolveGroupedListView(block, preference);
   const presentation = decision.mode;

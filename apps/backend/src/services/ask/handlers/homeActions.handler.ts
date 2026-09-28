@@ -17,6 +17,10 @@ import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHan
 import { buildPriorityListView } from '../../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds } from '../../decisionPlatform/homeActionUsefulnessFeedback.service';
 import { buildFocusedHomeActionGuidance, homeActionPriorityFilter } from '../askFocusedGuidance';
+import {
+  dashboardSectionRepresentativeActions,
+  projectHomeActionDashboardSections,
+} from '../../homeActionDashboardProjection';
 
 function homeActionEmptyCopy(reason: HomeActionEmptyStateReason | null): { title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' } {
   switch (reason) {
@@ -340,9 +344,17 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);
   const priorityFilter = homeActionPriorityFilter(message);
-  const selectedActions = (priorityFilter
-    ? feed.actions.filter((action) => priorityFilter.includes(action.priority))
-    : feed.actions).slice(0, topFocus ? 5 : MAX_RESULT_ITEMS);
+  const dashboardSection = /\bneeds? attention now or soon\b/i.test(message)
+    ? 'attention'
+    : /\bplan ahead\b/i.test(message)
+      ? 'planAhead'
+      : null;
+  const dashboardSections = dashboardSection ? projectHomeActionDashboardSections(feed.actions) : null;
+  const selectedActions = dashboardSection && dashboardSections
+    ? dashboardSectionRepresentativeActions(feed.actions, dashboardSections[dashboardSection])
+    : (priorityFilter
+      ? feed.actions.filter((action) => priorityFilter.includes(action.priority))
+      : feed.actions).slice(0, topFocus ? 5 : MAX_RESULT_ITEMS);
   const empty = feed.actions.length === 0 ? homeActionEmptyCopy(feed.diagnostics.emptyStateReason) : null;
   const filteredEmpty = feed.actions.length > 0 && selectedActions.length === 0;
   const lowConfidence = selectedActions.some((action) => action.confidence.label === 'LOW');
@@ -358,7 +370,9 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     body: empty?.body
       ?? (filteredEmpty
         ? `The full governed feed contains ${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'}, but none match this timing filter.`
-        : `These are the final grounded, deduplicated, lifecycle-eligible actions from Unified Home. ${feed.buckets.NOW.length} need attention now, ${feed.buckets.SOON.length} are due soon, ${feed.buckets.PLAN.length} are for planning, and ${feed.buckets.CONSIDER.length} are optional considerations.`),
+        : dashboardSection
+          ? `These are the same ${dashboardSection === 'attention' ? 'What needs attention' : 'Plan ahead'} items shown on your Home dashboard.`
+          : `These are the final grounded, deduplicated, lifecycle-eligible actions from Unified Home. ${feed.buckets.NOW.length} need attention now, ${feed.buckets.SOON.length} are due soon, ${feed.buckets.PLAN.length} are for planning, and ${feed.buckets.CONSIDER.length} are optional considerations.`),
     tone: empty?.tone ?? (feed.diagnostics.unavailableProducers.length > 0 || selectedActions.some((action) => action.priority === 'NOW') ? 'CAUTION' : 'DEFAULT'),
     headline: empty?.title
       ?? (filteredEmpty
@@ -370,7 +384,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       ?? (filteredEmpty
         ? `${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'} remain in the full governed feed.`
         : 'Start with the highest-ranked item; each review stays in Ask Cozy.'),
-    chips: selectedActions.length ? [
+    chips: selectedActions.length && !dashboardSection ? [
       { label: `${feed.buckets.NOW.length} now`, tone: feed.buckets.NOW.length ? 'CRITICAL' : 'DEFAULT' },
       { label: `${feed.buckets.SOON.length} soon`, tone: feed.buckets.SOON.length ? 'CAUTION' : 'DEFAULT' },
       { label: `${feed.buckets.PLAN.length} to plan`, tone: 'DEFAULT' },
@@ -404,14 +418,15 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
   // honest empty-state copy, and an empty PRIORITY_LIST block risks reading
   // as "nothing needs attention" rather than "feed has no eligible items".
   if (feed.actions.length) {
+    const priorityActions = dashboardSection ? selectedActions : feed.actions;
     const suppressedHomeActionIds = await getSuppressedHomeActionIds({
-      userId, propertyId, homeActionIds: feed.actions.map((action) => action.id),
+      userId, propertyId, homeActionIds: priorityActions.map((action) => action.id),
     }).catch(() => new Set<string>());
     blocks.push({
       type: 'PRIORITY_LIST',
       id: 'home-actions-priority-list',
       title: 'What matters now',
-      ...buildPriorityListView(feed, 'ASK', { suppressedHomeActionIds }),
+      ...buildPriorityListView({ ...feed, actions: priorityActions }, 'ASK', { suppressedHomeActionIds }),
     });
   }
 
@@ -436,7 +451,6 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
               `${action.confidence.label.toLowerCase()} confidence`,
               action.source.kind.toLowerCase().replace(/_/g, ' '),
               action.workItem ? `Work ${action.workItem.state.toLowerCase().replace(/_/g, ' ')}` : null,
-              action.ranking.explanation,
             ].filter((value): value is string => Boolean(value)),
             status: action.state,
             href: action.primaryCta.href,

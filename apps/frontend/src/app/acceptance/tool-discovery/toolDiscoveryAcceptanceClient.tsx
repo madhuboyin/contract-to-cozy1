@@ -137,6 +137,7 @@ const home: UnifiedHomeDTO = {
   },
   attention: {
     actions: [coverageAction],
+    sections: { attention: [{ kind: 'ACTION', actionIds: [coverageAction.id] }], planAhead: [] },
     totalCount: 1,
     planHref: '/dashboard/resolution-center',
     firstValueInsight: null,

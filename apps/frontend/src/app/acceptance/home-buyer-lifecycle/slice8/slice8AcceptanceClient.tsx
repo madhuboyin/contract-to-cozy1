@@ -39,6 +39,7 @@ function homeFixture(id: string, name: string, address: string, documents: numbe
     },
     attention: {
       actions: [],
+      sections: { attention: [], planAhead: [] },
       totalCount: 0,
       planHref: acceptanceHref({ scenario: 'protected', property: id === OWNER_ONE_ID ? 'owner-one' : id === OWNER_TWO_ID ? 'owner-two' : 'purchase' }),
       firstValueInsight: null,

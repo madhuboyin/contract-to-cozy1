@@ -78,7 +78,9 @@ export function buildFocusedHomeActionGuidance(
   const timing = action.timing.dueAt
     ? `Due ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(action.timing.dueAt))}`
     : action.timing.rationale;
-  const keyFacts = action.presentation?.keyFacts ?? [];
+  const keyFacts = (action.presentation?.keyFacts ?? []).filter((fact) =>
+    !/^(?:source|execution|task|work state)$/i.test(fact.label.trim()),
+  );
   const isPreparation = action.presentation?.variant === 'ENVIRONMENT_PREPARATION';
   const preparationFacts = isPreparation
     ? action.presentation?.factGroups
@@ -136,7 +138,7 @@ export function buildFocusedHomeActionGuidance(
         id: `${action.id}-why`,
         title: action.signal,
         description: action.whyItMatters,
-        meta: [action.ranking.explanation],
+        meta: [],
         status: null,
         href: null,
       }],

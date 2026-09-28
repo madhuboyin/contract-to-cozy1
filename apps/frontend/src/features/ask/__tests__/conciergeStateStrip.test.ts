@@ -4,6 +4,7 @@ import type { ConciergeHomeView } from '../types';
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.11 slice D (FRD v1.111).
 const item = (id: string, consumerPriority: 'DO_NOW' | 'PLAN_SOON' | 'WATCH' | 'OPTIONAL', extra = {}) => ({
   homeActionId: id, title: `Action ${id}`, askQuestion: `Ask about ${id}`, askCategoryId: 'MAINTAIN' as const, askCategoryLabel: 'Maintain' as const, subject: null,
+  rawPriority: ({ DO_NOW: 'NOW', PLAN_SOON: 'SOON', WATCH: 'PLAN', OPTIONAL: 'CONSIDER' } as const)[consumerPriority],
   consumerPriority, comparativeReasonCodes: [], confidenceLabel: 'HIGH' as const, deadlineAt: null, cta: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false, ...extra,
 });
 const view = (overrides: Partial<ConciergeHomeView> = {}): ConciergeHomeView => ({
@@ -27,12 +28,12 @@ describe('buildConciergeStateStrip', () => {
     expect(strip.urgent?.title).toBe('Action a');
   });
 
-  it('ignores ineligible items and places watch items in Plan ahead', () => {
+  it('preserves the server projection even when an item carries a disclosed state flag', () => {
     const items = [item('a', 'DO_NOW', { suppressed: true }), item('b', 'DO_NOW', { completed: true }), item('c', 'PLAN_SOON', { stale: true }), item('d', 'PLAN_SOON', { unavailable: true }), item('e', 'WATCH')];
     const strip = buildConciergeStateStrip(view({ priorityList: { ...view().priorityList, items } }));
-    expect(strip.headline).toBe('Nothing needs your attention right now.');
+    expect(strip.headline).toBe('2 things need attention now, and 2 more to plan soon.');
     expect(strip.chips.map((chip) => [chip.label, chip.count, chip.detail])).toEqual([
-      ['What needs attention', 0, 'Nothing needs attention right now.'],
+      ['What needs attention', 4, 'Action a'],
       ['Plan ahead', 1, 'Action e'],
     ]);
   });

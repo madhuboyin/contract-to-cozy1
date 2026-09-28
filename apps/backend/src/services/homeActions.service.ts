@@ -88,6 +88,7 @@ import {
 } from './decisionPlatform/homeActionDecisionLineage';
 import { getSuppressedHomeActionIds } from './decisionPlatform/homeActionUsefulnessFeedback.service';
 import { REPAIR_REPLACE_PROFILES } from './agents/repairReplaceProfileCatalog';
+import { projectHomeActionDashboardSections } from './homeActionDashboardProjection';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -1686,6 +1687,7 @@ export async function getUnifiedHome(propertyId: string, userId: string) {
     },
     attention: {
       actions: feed.actions,
+      sections: projectHomeActionDashboardSections(feed.actions),
       totalCount: feed.actions.length,
       planHref: `/dashboard/properties/${propertyId}/home-operations`,
       firstValueInsight: feed.firstValueInsight,
