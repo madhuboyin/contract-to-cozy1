@@ -12,6 +12,7 @@ import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { BuyerAcquisitionService } from './buyerAcquisition.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
 import { assertPropertyDocumentsExist, resolvePropertyDocuments, toWorkflowDocumentSummary } from './propertyDocuments/propertyDocumentInventory.service';
+import { linkRecordToEntityInTransaction } from './homeRecords.service';
 
 async function assertAccess(userId: string, propertyId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR') {
   const access = await resolvePropertyAccess(userId, propertyId);
@@ -218,38 +219,19 @@ export class BuyerClosingDayService {
         update: {},
       });
       if (confirmed.signedClosingDocumentId) {
-        await tx.homeEventEvidence.upsert({
-          where: {
-            eventId_evidenceKey: {
-              eventId: homeRecordEvent.id,
-              evidenceKey: `signed-closing-document:${confirmed.signedClosingDocumentId}`,
-            },
-          },
-          create: {
-            eventId: homeRecordEvent.id,
-            evidenceType: 'DOCUMENT',
-            evidenceKey: `signed-closing-document:${confirmed.signedClosingDocumentId}`,
-            documentId: confirmed.signedClosingDocumentId,
-            observedAt: closedAt,
-            note: 'Buyer-supplied signed closing record; legal effect was not interpreted.',
-            addedByUserId: userId,
-          },
-          update: {},
-        });
-        await tx.homeEventDocument.upsert({
-          where: {
-            eventId_documentId: {
-              eventId: homeRecordEvent.id,
-              documentId: confirmed.signedClosingDocumentId,
-            },
-          },
-          create: {
-            eventId: homeRecordEvent.id,
-            documentId: confirmed.signedClosingDocumentId,
-            kind: 'OTHER',
-            caption: 'Buyer-supplied signed closing record',
-          },
-          update: {},
+        // The signed closing record is a Home Record id (Documents slice S5b-2); HomeEventEvidence/HomeEventDocument
+        // still FK to the legacy Document table (their other writer, project proof uploads, isn't converted yet — S5e),
+        // so this links through the canonical PropertyRecordLink mechanism instead of those two columns, matching how
+        // Home Records evidence already surfaces on a Timeline event (Slice 6: getHomeEvent/listHomeEvents + TimelineClient's
+        // "Home Records evidence" field), rather than writing a Home Record id into a still-legacy-Document-typed column.
+        await linkRecordToEntityInTransaction(tx, {
+          propertyId,
+          recordId: confirmed.signedClosingDocumentId,
+          entityType: 'HOME_EVENT',
+          entityId: homeRecordEvent.id,
+          purpose: 'EVIDENCE',
+          userId,
+          label: 'Signed closing record',
         });
       }
     });

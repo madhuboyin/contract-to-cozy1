@@ -25,8 +25,12 @@ test('the Home Record milestone labels provenance honestly and retains signed ev
   assert.match(closingService, /ContractToCozy did not determine legal effect/);
   assert.match(closingService, /homeEventEvidence\.upsert/);
   assert.match(closingService, /evidenceType: 'DOMAIN_RECORD'/);
-  assert.match(closingService, /evidenceType: 'DOCUMENT'/);
-  assert.match(closingService, /homeEventDocument\.upsert/);
+  // The signed closing record is a Home Record id (S5b-2); HomeEventEvidence/HomeEventDocument still FK to the
+  // legacy Document table (project proof uploads, S5e, aren't converted yet), so the signed record links through
+  // the canonical PropertyRecordLink mechanism instead of writing a Home Record id into those columns.
+  assert.match(closingService, /linkRecordToEntityInTransaction\(tx,/);
+  assert.match(closingService, /entityType: 'HOME_EVENT'/);
+  assert.match(closingService, /purpose: 'EVIDENCE'/);
 });
 
 test('successful close presents a deduplicated welcome-home celebration and ownership paths', () => {
