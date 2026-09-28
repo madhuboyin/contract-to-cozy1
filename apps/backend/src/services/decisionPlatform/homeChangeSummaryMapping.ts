@@ -98,6 +98,53 @@ export function homeChangeCanonicalIdentity(input: {
   return `source:${input.sourceType}:${input.sourceEntityId}`;
 }
 
+export interface LiveHomeChangeAction {
+  id: string;
+  lineageId: string;
+  source: { entityId: string };
+  deduplication: { canonicalKey: string; mergedActionIds: string[] };
+  workItem: { id: string; workKey: string } | null;
+}
+
+/** Resolve a ledger row to the identity that the current governed Home Action
+ * feed actually exposes. PropertyChange.canonicalActionId stores an
+ * OperationalWorkItem id, which is not necessarily the public HomeAction id
+ * (accepted work uses `operational-work:<workItemId>`). Event-backed actions
+ * are matched through their exact source entity. Feed order is authoritative
+ * when an action absorbed several source actions during deduplication. */
+export function resolveLiveHomeChangeAction<T extends LiveHomeChangeAction>(
+  actions: readonly T[],
+  input: { canonicalActionId?: string | null; canonicalEventId?: string | null },
+): T | null {
+  if (input.canonicalActionId) {
+    const match = actions.find((action) =>
+      action.id === input.canonicalActionId
+      || action.workItem?.id === input.canonicalActionId
+      || action.deduplication.mergedActionIds.includes(input.canonicalActionId!));
+    if (match) return match;
+  }
+  if (input.canonicalEventId) {
+    return actions.find((action) =>
+      action.source.entityId === input.canonicalEventId
+      || action.lineageId === input.canonicalEventId) ?? null;
+  }
+  return null;
+}
+
+export function liveHomeChangeCanonicalIdentity(action: LiveHomeChangeAction): string {
+  return `live-action:${action.deduplication.canonicalKey}`;
+}
+
+export function shouldIncludeHomeChange(input: {
+  sourceType: string;
+  canonicalActionId?: string | null;
+  liveAction: LiveHomeChangeAction | null;
+}): boolean {
+  const operationalWorkChange = input.sourceType === 'OPERATIONAL_WORK_EVENT'
+    || input.sourceType === 'OPERATIONAL_WORK_DUE';
+  return !operationalWorkChange || !input.canonicalActionId || Boolean(input.liveAction);
+}
+
 /** Keep the first row for each canonical entity. Callers provide rows in
  * their governed order (materiality first, newest first) and apply the
  * display limit only after this selection. */

@@ -5,6 +5,7 @@ import { HouseholdRole, MaintenanceTaskStatus } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
+import { logger } from '../../../lib/logger';
 import { type AskCaptureRequest, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../../lib/metrics';
 import { PropertyMaintenanceTaskService } from '../../PropertyMaintenanceTask.service';
@@ -23,7 +24,8 @@ import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
 import { listPropertyChanges } from '../../../propertyChanges/propertyChange.service';
-import { buildChangeSummaryText, homeChangeCanonicalIdentity, homeChangeDisplayTitle, homeChangeInlineReviewAction, homeChangeLinkedAction, selectUniqueHomeChanges, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
+import { buildChangeSummaryText, homeChangeCanonicalIdentity, homeChangeDisplayTitle, homeChangeInlineReviewAction, homeChangeLinkedAction, liveHomeChangeCanonicalIdentity, resolveLiveHomeChangeAction, selectUniqueHomeChanges, shouldIncludeHomeChange, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
+import { getHomeActionFeed } from '../../homeActions.service';
 import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelemetry';
 import { resolveAskEnvelopeQueryScope } from '../askEnvelopeQueryScope';
 import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
@@ -336,7 +338,24 @@ const HOME_CHANGE_SUMMARY_COVERED_SOURCES = [
 async function homeChangeSummaryResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   const since = new Date(Date.now() - HOME_CHANGE_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const changes = await listPropertyChanges({ propertyId, userId, since });
+  const [changes, homeActionFeed] = await Promise.all([
+    listPropertyChanges({ propertyId, userId, since }),
+    getHomeActionFeed(propertyId, userId).catch((error) => {
+      logger.warn({ err: error, propertyId, userId }, 'Home Change live-action reconciliation failed closed');
+      return null;
+    }),
+  ]);
+  if (!homeActionFeed) {
+    return {
+      status: 'UNAVAILABLE', reasonCode: 'HOME_CHANGE_RECONCILIATION_UNAVAILABLE',
+      blocks: [{
+        type: 'SUMMARY', id: 'home-change-summary-unavailable', title: 'Recent home changes are temporarily unavailable',
+        body: 'Ask could not verify recent change records against the current governed Home Action feed, so it will not show possibly stale or duplicate cards.',
+        tone: 'CAUTION', actions: [],
+      }],
+      suggestions: ['Summarize my home record'],
+    };
+  }
   const materialCandidates = changes.filter((change) => change.materiality !== 'INFORMATIONAL');
 
   if (!materialCandidates.length) {
@@ -365,18 +384,46 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       })
     : [];
   const fallbackWorkItems = new Map(unlinkedWorkItems.map((item) => [item.id, item]));
-  const material = selectUniqueHomeChanges(
-    materialCandidates,
-    (change) => homeChangeCanonicalIdentity({
-      sourceType: change.sourceType,
-      sourceEntityId: change.sourceEntityId,
-      canonicalActionId: change.canonicalAction?.id ?? fallbackWorkItems.get(change.sourceEntityId)?.id,
+  const reconciledCandidates = materialCandidates.map((change) => {
+    const canonicalActionId = change.canonicalAction?.id ?? fallbackWorkItems.get(change.sourceEntityId)?.id;
+    const liveAction = resolveLiveHomeChangeAction(homeActionFeed.actions, {
+      canonicalActionId,
       canonicalEventId: change.canonicalEvent?.id,
-    }),
+    });
+    return { change, canonicalActionId, liveAction };
+  }).filter(({ change, canonicalActionId, liveAction }) => {
+    // Operational Work rows describe an action lifecycle, not an independent
+    // historical event. Once the exact action is absent from the governed
+    // feed it must not remain an urgent-looking, clickable card. Durable
+    // completed history remains available through Home Timeline/work records.
+    return shouldIncludeHomeChange({ sourceType: change.sourceType, canonicalActionId, liveAction });
+  });
+  const material = selectUniqueHomeChanges(
+    reconciledCandidates,
+    ({ change, canonicalActionId, liveAction }) => liveAction
+      ? liveHomeChangeCanonicalIdentity(liveAction)
+      : homeChangeCanonicalIdentity({
+          sourceType: change.sourceType,
+          sourceEntityId: change.sourceEntityId,
+          canonicalActionId,
+          canonicalEventId: change.canonicalEvent?.id,
+        }),
     HOME_CHANGE_SUMMARY_MAX_ITEMS,
   );
 
-  const blocks: AskPresentationBlock[] = await Promise.all(material.map(async (change) => {
+  if (!material.length) {
+    return {
+      status: 'ANSWERED', reasonCode: 'HOME_CHANGE_SUMMARY_NONE',
+      blocks: [{
+        type: 'EMPTY_STATE', id: 'home-change-summary-empty', title: 'No current material changes to review',
+        body: 'Recent Operational Work ledger entries no longer map to an active governed Home Action. Ask has left them out rather than presenting expired work or a review control that cannot open.',
+        actions: [],
+      }],
+      suggestions: ['What should I do next?', 'Summarize my home record'],
+    };
+  }
+
+  const blocks: AskPresentationBlock[] = await Promise.all(material.map(async ({ change, canonicalActionId, liveAction }) => {
     let detailOverride: string | null = null;
     if (change.sourceType === 'DECISION_PREFERENCE_VALUE') {
       const [detail] = await decisionPreferenceService.getPreferenceReferenceDetails([change.sourceRevision]);
@@ -384,10 +431,11 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
     }
     const source = sourceTypeLabel(change.sourceType);
     const fallbackWorkItem = fallbackWorkItems.get(change.sourceEntityId);
-    const canonicalActionId = change.canonicalAction?.id ?? fallbackWorkItem?.id;
     const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title ?? fallbackWorkItem?.title, canonicalEventTitle: change.canonicalEvent?.title });
     const linkedAction = homeChangeLinkedAction({ propertyId, canonicalActionId, canonicalEventId: change.canonicalEvent?.id });
-    const reviewAction = homeChangeInlineReviewAction({ title, canonicalActionId, canonicalEventId: change.canonicalEvent?.id });
+    const reviewAction = liveAction
+      ? homeChangeInlineReviewAction({ title, canonicalActionId: liveAction.id })
+      : homeChangeInlineReviewAction({ title, canonicalEventId: change.canonicalEvent?.id });
     return {
       type: 'CHANGE_SUMMARY', id: `home-change-${change.id}`,
       title,

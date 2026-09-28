@@ -10,7 +10,10 @@ const {
   homeChangeLinkedAction,
   homeChangeCanonicalIdentity,
   homeChangeInlineReviewAction,
+  liveHomeChangeCanonicalIdentity,
+  resolveLiveHomeChangeAction,
   selectUniqueHomeChanges,
+  shouldIncludeHomeChange,
 } = require('../../../src/services/decisionPlatform/homeChangeSummaryMapping.ts');
 
 test('a known sourceType resolves to its curated label', () => {
@@ -89,4 +92,40 @@ test('inline review keeps the primary action in Ask with exact canonical context
     message: 'What should I do next for “Furnace inspection”?', operationId: 'HOME_ACTIONS',
     entityType: 'HOME_ACTION', entityId: 'work-1', actionId: 'work-1', style: 'SECONDARY',
   });
+});
+
+test('live reconciliation translates a work item id to the actual feed action id', () => {
+  const action = {
+    id: 'operational-work:work-1', lineageId: 'operational-work:work-1',
+    source: { entityId: 'task-1' },
+    deduplication: { canonicalKey: 'work-key-1', mergedActionIds: [] },
+    workItem: { id: 'work-1', workKey: 'work-key-1' },
+  };
+  assert.equal(resolveLiveHomeChangeAction([action], { canonicalActionId: 'work-1' }), action);
+  assert.equal(liveHomeChangeCanonicalIdentity(action), 'live-action:work-key-1');
+});
+
+test('event and work rows resolve to one governed feed identity', () => {
+  const action = {
+    id: 'weather-action-1', lineageId: 'weather-lineage-1',
+    source: { entityId: 'event-1' },
+    deduplication: { canonicalKey: 'weather-preparation-1', mergedActionIds: ['older-action'] },
+    workItem: { id: 'work-1', workKey: 'weather-preparation-1' },
+  };
+  const eventMatch = resolveLiveHomeChangeAction([action], { canonicalEventId: 'event-1' });
+  const workMatch = resolveLiveHomeChangeAction([action], { canonicalActionId: 'work-1' });
+  assert.equal(liveHomeChangeCanonicalIdentity(eventMatch), liveHomeChangeCanonicalIdentity(workMatch));
+});
+
+test('an inactive work item does not resolve merely because its stale id still exists', () => {
+  assert.equal(resolveLiveHomeChangeAction([], { canonicalActionId: 'work-1' }), null);
+  assert.equal(shouldIncludeHomeChange({
+    sourceType: 'OPERATIONAL_WORK_EVENT', canonicalActionId: 'work-1', liveAction: null,
+  }), false);
+  assert.equal(shouldIncludeHomeChange({
+    sourceType: 'OPERATIONAL_WORK_DUE', canonicalActionId: 'work-1', liveAction: null,
+  }), false);
+  assert.equal(shouldIncludeHomeChange({
+    sourceType: 'HOME_EVENT', canonicalActionId: null, liveAction: null,
+  }), true);
 });
