@@ -130,6 +130,33 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     }
   };
 
+  const retryExecution = async (execution: AskExecutionResponse) => {
+    if (!sessionId || loading) return;
+    const requestedSessionId = sessionId;
+    const requestKey = resultRequestKey(execution);
+    const requestToken = requests.current.begin(requestKey);
+    inFlight.current = { key: requestKey, token: requestToken, message: execution.question };
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await api.retryAskExecution(execution.executionId, newId());
+      if (!response.success || !response.data) throw new Error(response.message || 'Ask could not retry that request.');
+      if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
+      setExecutions((current) => mergeResultExecutions(current, [response.data!, ...(response.data!.childExecutions ?? [])]));
+      setJustUpdatedExecutionId(response.data.executionId);
+      if (mode === 'page') updateAskLocation({ sessionId: requestedSessionId, propertyId: response.data.property?.id ?? selectedPropertyId, executionId: response.data.executionId }, 'replace');
+      setRecentSessionsEpoch((current) => current + 1);
+    } catch (caught) {
+      if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
+      setError(caught instanceof Error ? caught.message : 'Ask is temporarily unavailable.');
+    } finally {
+      if (!stoppedRequests.current.delete(requestToken)) {
+        setLoading(false);
+        if (inFlight.current?.token === requestToken) inFlight.current = null;
+      }
+    }
+  };
+
   // FRD v1.96: stop waiting for the answer. The request cannot be recalled once sent, so it may still complete on the
   // server (and then shows in the history); its answer is discarded here, and the question comes back into the composer.
   const stopAsking = () => {
@@ -153,5 +180,5 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     window.setTimeout(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(question.length, question.length); }, 0);
   };
 
-  return { ask, stopAsking, editAndResend };
+  return { ask, retryExecution, stopAsking, editAndResend };
 }

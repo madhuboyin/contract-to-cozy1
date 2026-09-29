@@ -205,7 +205,7 @@ export async function reclaimOrphanedRunningExecution(execution: AskExecution): 
       resultJson: asInputJson({
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
         blocks: [{ type: 'ERROR_STATE', id: 'execution-interrupted', title: 'This got interrupted', body: 'The system restarted while this was running. No action was performed — try asking again.', retryable: true, actions: [] }],
-        captureRequests: [], clarification: null, confirmation: null, suggestions: ['Ask this question again'],
+        captureRequests: [], clarification: null, confirmation: null, suggestions: [],
         ...preservedExecutionHistory(execution.resultJson, [{ type: 'ERROR_STATE', id: 'execution-interrupted', title: 'This got interrupted', body: 'No action was performed.', retryable: true, actions: [] }]),
       }),
     },

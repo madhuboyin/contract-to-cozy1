@@ -206,7 +206,7 @@ export function mapPersistedExecution(execution: {
     confirmation: null,
     clarification: null,
     correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: true },
-    suggestions: ['Ask this question again'],
+    suggestions: [],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
   });

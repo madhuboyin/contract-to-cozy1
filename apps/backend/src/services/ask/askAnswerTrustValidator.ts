@@ -247,7 +247,7 @@ export function validateAskAnswerTrust(input: {
       result: {
         status: 'UNAVAILABLE', reasonCode: 'ASK_ANSWER_SOURCE_UNAVAILABLE',
         blocks: [{ type: 'ERROR_STATE', id: 'answer-trust-unavailable', title: 'I can’t reliably check that right now', body: 'A required home source was unavailable or incomplete, so I won’t treat missing data as an all-clear. Try again or open the relevant home record.', retryable: true, actions: [] }],
-        suggestions: ['Try again'], parameters: { ...(input.result.parameters ?? {}), answerTrust: trust },
+        suggestions: [], parameters: { ...(input.result.parameters ?? {}), answerTrust: trust },
       }, trust, repaired: true,
     };
   }
@@ -256,7 +256,7 @@ export function validateAskAnswerTrust(input: {
       result: {
         status: 'FAILED_RETRYABLE', reasonCode: 'ASK_ANSWER_TRUST_FAILED',
         blocks: [{ type: 'ERROR_STATE', id: 'answer-trust-failed', title: 'I couldn’t verify this answer', body: 'The response did not safely match your question and the selected home workflow. Nothing was changed. Please try again with one more detail.', retryable: true, actions: [] }],
-        suggestions: ['Ask this question again'], parameters: { ...(input.result.parameters ?? {}), answerTrust: trust },
+        suggestions: [], parameters: { ...(input.result.parameters ?? {}), answerTrust: trust },
       }, trust, repaired: true,
     };
   }

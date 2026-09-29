@@ -183,7 +183,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const scopeLabel = selectedPropertyId ? 'Answers use your selected home record' : 'General home guidance';
 
-  const { ask, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
+  const { ask, retryExecution, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
 
   const { submit, keyDown, isComposingRef } = useComposerKeys({ input, ask });
 
@@ -422,6 +422,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   updateExecution={updateExecution}
                   loading={loading}
                   ask={ask}
+                  retryExecution={retryExecution}
                   selectedPropertyId={selectedPropertyId ?? ''}
                   setInput={setInput}
                   visibleSuggestions={visibleSuggestions}

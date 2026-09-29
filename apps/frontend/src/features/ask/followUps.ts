@@ -4,6 +4,10 @@ import type { AskExecutionResponse } from './types';
 // only from the latest answer's own declared suggestions.
 export const FOLLOW_UP_LIMIT = 4;
 
+export function isRetrySuggestion(value: string): boolean {
+  return /^(?:try\s+(?:this\s+)?again|retry\b|ask\s+(?:this\s+)?question\s+again\b)/i.test(value.trim());
+}
+
 export function followUpSuggestions(
   latest: Pick<AskExecutionResponse, 'suggestions' | 'correctionCapabilities'> | undefined,
   askedKeys: ReadonlySet<string>,
@@ -18,7 +22,7 @@ export function followUpSuggestions(
     const key = keyOf(text);
     if (!text || askedKeys.has(key) || seen.has(key)) continue;
     // A retry the answer already offers as its primary action is not repeated as a chip.
-    if (retryOffered && /^try again\b/i.test(text)) continue;
+    if (retryOffered && isRetrySuggestion(text)) continue;
     seen.add(key);
     shown.push(text);
     if (shown.length >= FOLLOW_UP_LIMIT) break;

@@ -10,6 +10,8 @@ import './handlers/statusBoard.handler';
 export { EVIDENCE_ATTACH_MESSAGE, EVIDENCE_ATTACH_MESSAGES } from './handlers/miscHandlers.handler';
 import './execution/createAskExecution';
 export { createAskExecution } from './execution/createAskExecution';
+import './execution/askRetry';
+export { retryAskExecution } from './execution/askRetry';
 import './execution/askClarification';
 export { submitAskClarification, resolveAskExecutionProperty } from './execution/askClarification';
 import './execution/askConfirm';

@@ -739,6 +739,10 @@ export const ContinueAskExecutionSchema = z.object({
   surface: z.enum(['ASK_PAGE', 'GLOBAL_LAUNCHER']),
 }).strict();
 
+export const RetryAskExecutionSchema = z.object({
+  clientRequestId: z.string().trim().min(1).max(160),
+}).strict();
+
 export const ResolveAskExecutionPropertySchema = z.object({
   propertyId: z.string().trim().min(1).max(160),
 }).strict();
@@ -1047,6 +1051,7 @@ export type SubmitAskFeedback = z.infer<typeof SubmitAskFeedbackSchema>;
 export type SubmitHomeActionUsefulnessFeedback = z.infer<typeof SubmitHomeActionUsefulnessFeedbackSchema>;
 export type RequestAskCorrection = z.infer<typeof RequestAskCorrectionSchema>;
 export type ContinueAskExecution = z.infer<typeof ContinueAskExecutionSchema>;
+export type RetryAskExecution = z.infer<typeof RetryAskExecutionSchema>;
 export type ResolveAskExecutionProperty = z.infer<typeof ResolveAskExecutionPropertySchema>;
 export type AskPendingWorkItem = z.infer<typeof AskPendingWorkItemSchema>;
 export type AskRecentSessionSummary = z.infer<typeof AskRecentSessionSummarySchema>;

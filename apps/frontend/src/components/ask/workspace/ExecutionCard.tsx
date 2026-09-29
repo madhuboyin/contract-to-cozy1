@@ -102,7 +102,7 @@ export function ExecutionFeedback({ executionId, propertyId, capabilities, calm 
 }
 
 export function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, folded = false, pinned = false, onToggleFold, onTogglePin, onEditQuestion,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, retryExecution, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, folded = false, pinned = false, onToggleFold, onTogglePin, onEditQuestion,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -110,6 +110,7 @@ export function ExecutionCard({
   updateExecution: (updated: AskExecutionResponse) => void;
   loading: boolean;
   ask: (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => Promise<void>;
+  retryExecution?: (execution: AskExecutionResponse) => Promise<void>;
   selectedPropertyId: string;
   setInput: (value: string) => void;
   visibleSuggestions: string[];
@@ -337,7 +338,7 @@ export function ExecutionCard({
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
-        {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void ask(execution.question)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
+        {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void (retryExecution ? retryExecution(execution) : ask(execution.question))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
         {execution.captureRequests.map((request, index) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} autoFocus={index === 0 && isJustUpdated} />)}
         {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
         {execution.confirmation && execution.status === 'NEEDS_CONFIRMATION' && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} autoFocus={isJustUpdated} onAccessLost={() => onAccessLost(execution)} />}

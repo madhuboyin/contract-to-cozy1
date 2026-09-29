@@ -1068,6 +1068,9 @@ class APIClient {
   async createAskExecution(payload: CreateAskExecutionPayload): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>('/api/ask/executions', { method: 'POST', body: payload });
   }
+  async retryAskExecution(executionId: string, clientRequestId: string): Promise<APIResponse<AskExecutionResponse>> {
+    return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/retry`, { method: 'POST', body: { clientRequestId } });
+  }
   async getConciergeHome(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<ConciergeHomeView>> {
     return this.request<ConciergeHomeView>(`/api/ask/concierge-home?propertyId=${encodeURIComponent(propertyId)}`, options);
   }

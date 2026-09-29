@@ -1,7 +1,7 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.149
-**Date:** September 27, 2026
+**Version:** 1.156
+**Date:** September 28, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
 
@@ -582,6 +582,8 @@ Otherwise it renders the grouped list (IW-PRES-012). The renderer never infers a
 **IW-CALM-003 — Response chrome behind one control.** Refresh, Pin, Fold, the version trail ("originally answered"), the updated time, and response-level feedback live behind a single overflow control that is always reachable by keyboard and touch and appears on hover or focus on pointer devices. The updated time lives in that menu; nothing about freshness is shown inline unless the result is stale or partial, and that is said by the revalidation notice, not by a timestamp line. The original response stays reachable; it is not removed.
 
 **IW-CALM-004 — Errors and empty states.** An unavailable or failed result is one plain sentence and one primary retry action that re-reads current records. Two retry controls with overlapping meaning are not allowed. No home record is changed by a read error, and the sentence says so only when that is not obvious.
+
+**Retry continuity clarification (v1.156).** Retry is an execution action, not a suggested conversational question. The client sends the failed execution id and an idempotency key; the server re-authorizes the request and replays its persisted question, property, resolved operation, and original launch context against current records. The retry creates an auditable successor linked to the failed execution and collapses the failed result in the transcript. Labels such as “Ask this question again” must never be submitted as literal homeowner questions, and retry-like strings are excluded from follow-up chips whenever the response already exposes its retry action.
 
 **IW-CALM-005 — Limitations as footnotes.** An informational scope or limitation statement (a producer's `BOUNDARY` block of severity INFO with no actions) renders as a small muted footnote, without a warning icon or tinted card. The producer decides whether the statement applies; the client does not hide or reword it. Cautions and emergencies keep their warning treatment because the homeowner may need to act on them.
 

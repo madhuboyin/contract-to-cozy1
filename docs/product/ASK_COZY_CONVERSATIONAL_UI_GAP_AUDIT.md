@@ -17,6 +17,8 @@ The recommended next implementation is a maintenance-first vertical slice that c
 
 **September 28 synchronization note:** the maintenance-first slice and subsequent calm-domain work are implemented. Ask Home now consumes the same server-produced compact Home Action projection as Unified Home: one **What needs attention** section and one **Plan ahead** section, each capped at three entries after canonical coverage-correction grouping. Opening either section returns those same entries rather than a separate eight-item list. Calm Home Action cards no longer show ranking ordinals, confidence labels, comparative-reason prose, or policy terminology. Focused Home Action guidance is a single compact next-step card without adaptive Auto/List/Cards controls or technical Source/Execution facts. The detailed source of truth is FRD v1.152 in `ASK_COZY_INLINE_WORKSPACE_FRD.md`.
 
+**September 28 retry-continuity synchronization:** failed and retryable-unavailable answers now expose one execution-level retry. The browser sends the failed execution id plus an idempotency key; the server re-authorizes and replays the persisted question, property, resolved operation, and stable launch target against current records, then records and persists successor lineage. Retry labels are not conversational suggestions, and previously saved labels such as “Ask this question again” are filtered from the follow-up row when a retry action is present. This closes the duplicate-retry and literal-label submission defect described by IW-CALM-004/006; it does not relax confirmation or consequential-action safeguards.
+
 ## 2. Classification summary
 
 | Prototype principle | Classification | Current implementation | Required change |

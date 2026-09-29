@@ -11,7 +11,7 @@ describe('followUpSuggestions', () => {
   });
 
   it('does not repeat a retry the answer already offers, but keeps it when none is offered', () => {
-    expect(followUpSuggestions(latest(['Try again', 'Only show overdue'], true), new Set(), key)).toEqual(['Only show overdue']);
+    expect(followUpSuggestions(latest(['Try again', 'Ask this question again', 'Retry this request', 'Only show overdue'], true), new Set(), key)).toEqual(['Only show overdue']);
     expect(followUpSuggestions(latest(['Try again', 'Only show overdue'], false), new Set(), key)).toEqual(['Try again', 'Only show overdue']);
   });
 

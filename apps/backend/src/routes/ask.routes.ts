@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
-import { deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskFeedback, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
+import { deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
 router.use('/ask', authenticate, requireAskEligibleAccount);
 router.get('/ask/concierge-home', getAskConciergeHome);
 router.post('/ask/executions', postAskExecution);
+router.post('/ask/executions/:executionId/retry', postAskExecutionRetry);
 router.post('/ask/executions/:executionId/captures', postAskCapture);
 router.post('/ask/executions/:executionId/captures/events', postAskCaptureEvent);
 router.post('/ask/executions/:executionId/clarifications', postAskClarification);

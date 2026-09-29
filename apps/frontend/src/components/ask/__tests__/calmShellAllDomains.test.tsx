@@ -37,6 +37,20 @@ describe('calm shell, any domain', () => {
     expect(container.querySelector('[data-calm-footnote]')).toHaveTextContent('Based on recorded items. Unrecorded items are outside this result.');
   });
 
+  it('uses the execution retry action instead of resubmitting the question as new text', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const retryExecution = jest.fn();
+    const ask = jest.fn();
+    render(
+      <ExecutionCard execution={execution()} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={ask} retryExecution={retryExecution} selectedPropertyId="home"
+        setInput={jest.fn()} visibleSuggestions={[]} activeSessionRef={{ current: 'session' }} refreshResult={jest.fn()} refreshPending={false} onAccessLost={jest.fn()}
+        contextOpen={false} onOpenContext={jest.fn()} onToggleFold={jest.fn()} onTogglePin={jest.fn()} />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again with current records' }));
+    expect(retryExecution).toHaveBeenCalledWith(expect.objectContaining({ executionId: 'execution' }));
+    expect(ask).not.toHaveBeenCalled();
+  });
+
   it('puts Refresh, Pin and Collapse behind one menu and removes the per-answer frame', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
     const { container } = card(execution());

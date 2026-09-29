@@ -211,7 +211,7 @@ export async function executeOperationCore(input: { userId: string; sessionId: s
           tone: 'CAUTION',
           actions: [],
         }],
-        suggestions: ['Try again'],
+        suggestions: [],
       };
     }
     if (!audiencePolicy || !householdRole) return operationalUnavailableResult('ASK_SKILL_POLICY_MISMATCH');
