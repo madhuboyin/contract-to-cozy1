@@ -23,6 +23,7 @@ test('landing section prompts preserve the dashboard priority partitions', () =>
 function weatherAction() {
   return {
     id: 'incident:heat-1',
+    lineageId: 'incident:heat-1',
     source: { kind: 'INCIDENT' },
     priority: 'PLAN',
     state: 'OPEN',
@@ -172,17 +173,48 @@ test('Group B health-factor checklist renders inline instead of only navigating'
   assert.equal(noFactsFocused.actions[0].style, 'PRIMARY');
 });
 
-test('Group C savings-benefits resume action (has actionId) and unmapped destinations still navigate', () => {
-  const resumeAction = {
+test('Group C whole-tool destinations still navigate but are demoted to a secondary, honest action', () => {
+  const cases = [
+    { href: '/dashboard/properties/property-1/tools/savings-benefits?section=in-progress&actionId=action-1', overrides: {} },
+    { href: '/dashboard/properties/property-1/renovations/case-1', overrides: {} },
+    { href: '/dashboard/properties/property-1/tools/sale-case?section=readiness&itemId=item-1', overrides: {} },
+    { href: '/dashboard/properties/property-1/tools/capital-timeline?category=roof', overrides: {} },
+    // Risk Premium Optimizer mitigation plan: identified by lineageId, not href (the href is a
+    // per-item DIY/PROVIDER/CARRIER handoff link, not a fixed tool path).
+    { href: '/some-provider-directory/roofers', overrides: { lineageId: 'mitigation-plan:item-1' } },
+  ];
+
+  for (const { href, overrides } of cases) {
+    const action = { ...weatherAction(), ...overrides, primaryCta: { label: 'Open tool', href } };
+    const result = buildFocusedHomeActionGuidance(action, 'context-v1');
+    const primary = result.blocks
+      .find((block) => block.id === 'focused-home-action-guidance')
+      .actions.find((candidate) => candidate.id === `home-action-primary-${action.id}`);
+    assert.equal(primary.href, href, `${href} should still navigate`);
+    assert.equal(primary.interactionType, undefined);
+    assert.equal(primary.style, 'SECONDARY', `${href} should be demoted from PRIMARY`);
+  }
+
+  // A safety-emergency renovation action keeps its urgency: not demoted just because the
+  // destination also matches the Group C renovations href pattern.
+  const emergencyAction = {
     ...weatherAction(),
-    primaryCta: { label: 'Resume action', href: '/dashboard/properties/property-1/tools/savings-benefits?section=in-progress&actionId=action-1' },
+    governance: { ...weatherAction().governance, safetyTier: 'SAFETY_EMERGENCY' },
+    primaryCta: { label: 'Review safety issue', href: '/dashboard/properties/property-1/renovations/case-1' },
   };
-  const resumeResult = buildFocusedHomeActionGuidance(resumeAction, 'context-v1');
-  const resumePrimary = resumeResult.blocks
+  const emergencyResult = buildFocusedHomeActionGuidance(emergencyAction, 'context-v1');
+  const emergencyPrimary = emergencyResult.blocks
     .find((block) => block.id === 'focused-home-action-guidance')
-    .actions.find((candidate) => candidate.id === `home-action-primary-${resumeAction.id}`);
-  assert.equal(resumePrimary.href, resumeAction.primaryCta.href);
-  assert.equal(resumePrimary.interactionType, undefined);
+    .actions.find((candidate) => candidate.id === `home-action-primary-${emergencyAction.id}`);
+  assert.equal(emergencyPrimary.style, 'PRIMARY');
+
+  // Unmapped destinations (no group match at all) are unaffected.
+  const unmappedAction = { ...weatherAction(), primaryCta: { label: 'Open project', href: '/dashboard/properties/property-1/projects/project-1' } };
+  const unmappedResult = buildFocusedHomeActionGuidance(unmappedAction, 'context-v1');
+  const unmappedPrimary = unmappedResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${unmappedAction.id}`);
+  assert.equal(unmappedPrimary.style, 'PRIMARY');
 });
 
 test('focused Ask preserves neutral pre-snapshot HVAC guidance without manufacturing a verdict', () => {

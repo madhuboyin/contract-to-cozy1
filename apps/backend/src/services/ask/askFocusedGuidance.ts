@@ -112,6 +112,27 @@ export function isHealthFactorFocusHref(href: string | undefined): boolean {
   return /^\/dashboard\/properties\/[^/]+\/focus\/health\/[^/]+$/.test(parsed.pathname);
 }
 
+// Group C (gap audit §17): whole-feature/stateful tools where navigation is fundamentally
+// correct -- the Risk Premium Optimizer mitigation plan, a Renovation Case, the Sale Case tool,
+// Capital Timeline, and Savings & Benefits' in-progress (has-actionId) resume case. Unlike
+// Group A/B, the fix here is not to change the destination -- it is to stop presenting an
+// out-of-Ask navigation as the bare PRIMARY action, since the SUMMARY/GROUPED_LIST content
+// above it is the actual answer and this is an honest secondary escape hatch to the full tool.
+// A SAFETY_EMERGENCY renovation/project action is excluded: its urgency should stay visually
+// PRIMARY regardless of which group its destination falls into.
+export function isGroupCWholeToolDestination(action: RankedHomeAction): boolean {
+  if (action.lineageId.startsWith('mitigation-plan:')) return true;
+  if (action.governance.safetyTier === 'SAFETY_EMERGENCY') return false;
+  const parsed = parseHomeActionHref(action.primaryCta.href);
+  if (!parsed) return false;
+  const { pathname, params } = parsed;
+  if (/^\/dashboard\/properties\/[^/]+\/renovations\/[^/]+$/.test(pathname)) return true;
+  if (propertyToolPath('sale-case').test(pathname)) return true;
+  if (propertyToolPath('capital-timeline').test(pathname)) return true;
+  if (propertyToolPath('savings-benefits').test(pathname) && params.has('actionId')) return true;
+  return false;
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -153,6 +174,7 @@ export function buildFocusedHomeActionGuidance(
   const checklist = !groupARouting && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
+  const isGroupCDestination = !groupARouting && !checklist && isGroupCWholeToolDestination(action);
   const primaryAction = groupARouting
     ? {
       id: `home-action-primary-${action.id}`,
@@ -168,7 +190,10 @@ export function buildFocusedHomeActionGuidance(
       href: action.primaryCta.href,
       // The checklist is now answered inline (see the `checklist` section below), so the
       // traditional page becomes an optional escape hatch rather than the sole destination.
-      style: checklist ? 'SECONDARY' as const : 'PRIMARY' as const,
+      // A Group C whole-tool destination is honestly secondary for the same reason -- the
+      // SUMMARY/GROUPED_LIST content above it is the actual answer, navigation is correct but
+      // not the primary action.
+      style: checklist || isGroupCDestination ? 'SECONDARY' as const : 'PRIMARY' as const,
     };
 
   const timing = action.timing.dueAt
