@@ -60,6 +60,13 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   // conversationalCapture.ts's GOAL candidate processing, never proposed
   // from a raw homeowner message.
   'SELL_HOLD_RENT_GOAL_CAPTURE',
+  // Ask Cozy conversational UI gap audit, Group B (FRD v1.162-v1.163).
+  // RECALL_REVIEW (commit bbcb06c2) and RECALL_MATCH_UPDATE (commit b93ab08a)
+  // are deliberately skill-less, same precedent as CAPTURE_FACT_CONFIRM:
+  // read/confirmation-gated operations with no Skill package. Missing from
+  // this list crash-looped production at boot (2026-09-29).
+  'RECALL_REVIEW',
+  'RECALL_MATCH_UPDATE',
 ];
 
 export interface SkillOperationGovernanceContext {
