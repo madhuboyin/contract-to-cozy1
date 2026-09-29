@@ -119,6 +119,8 @@ export interface AskExecutionResponse {
   skillHandoff?: {
     suggestedNextSkillId: string;
     suggestedGoal: string;
+    /** Display-only button text nominated by the handler; absent on executions persisted before FRD v1.166. */
+    suggestedLabel?: string | null;
     reasonCodes: string[];
     contextReferenceIds: string[];
     continuity: {

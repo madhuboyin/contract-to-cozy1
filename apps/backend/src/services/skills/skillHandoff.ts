@@ -7,10 +7,26 @@ import { getSkillForOperation, resolveEffectiveSkillOperationPolicy, SKILL_DEFIN
 export interface SkillHandoffSuggestion {
   suggestedNextSkillId: string;
   suggestedGoal: string;
+  /** Display-only button text nominated by the handler; the message sent on click stays the routable goal prompt. */
+  suggestedLabel: string | null;
   reasonCodes: readonly string[];
   contextReferenceIds: readonly string[];
   continuity: SkillHandoffContinuity;
 }
+
+/**
+ * A handler's own decision about what should follow the result it just produced (FRD v1.166,
+ * handoff audit scope 3). It can only select a transition already allowlisted in
+ * SKILL_HANDOFF_DEFINITIONS -- the registry stays the governance boundary, the handler supplies
+ * the per-result relevance the static table cannot know.
+ */
+export interface AskFollowUpNomination {
+  goal: string;
+  reasonCodes?: readonly string[];
+  label?: string;
+}
+
+export const FOLLOW_UP_LABEL_MAX_LENGTH = 80;
 
 export interface SkillHandoffContinuity {
   propertyId: string | null;
@@ -160,8 +176,37 @@ export function validateSkillHandoffDefinitions(
 }
 
 /**
+ * Checks a handler's nomination against the allowlist and shape limits without needing a result,
+ * so a handler test can assert its nominations are ones the resolver will accept.
+ */
+export function validateFollowUpNomination(
+  sourceOperationId: AskOperationId,
+  nomination: AskFollowUpNomination,
+  definitions: readonly SkillHandoffDefinition[] = SKILL_HANDOFF_DEFINITIONS,
+): string[] {
+  const issues: string[] = [];
+  if (!definitions.some((definition) => definition.sourceOperationId === sourceOperationId && definition.suggestedGoal === nomination.goal)) {
+    issues.push(`${sourceOperationId}: follow-up goal "${nomination.goal}" is not allowlisted in SKILL_HANDOFF_DEFINITIONS`);
+  }
+  if (nomination.reasonCodes && (!nomination.reasonCodes.length || nomination.reasonCodes.length > 8 || nomination.reasonCodes.some((code) => !REASON_CODE_PATTERN.test(code)))) {
+    issues.push(`${sourceOperationId}: invalid follow-up reason codes`);
+  }
+  if (nomination.label !== undefined && (!nomination.label.trim() || nomination.label.length > FOLLOW_UP_LABEL_MAX_LENGTH || /[\r\n]/.test(nomination.label))) {
+    issues.push(`${sourceOperationId}: invalid follow-up label`);
+  }
+  return issues;
+}
+
+/**
  * Produces metadata only. It cannot invoke an adapter, operation, or peer Skill.
  * The next user turn must pass through Ask's normal routing and authorization.
+ *
+ * Three modes, keyed on `result.followUp`:
+ *  - undefined: legacy static behaviour -- the first eligible, relevant definition for the source operation.
+ *  - null: the handler explicitly declines any follow-up (same effect as suppressSkillHandoff).
+ *  - nomination: the handler picked a goal; it must match an allowlisted definition for this source and
+ *    still passes every status/policy/health/context check. A nomination that fails any check yields no
+ *    handoff -- it never falls back to the static entry, which would reintroduce the irrelevant follow-up.
  */
 export function resolveSkillHandoffSuggestion(input: {
   sourceOperationId: AskOperationId;
@@ -173,13 +218,18 @@ export function resolveSkillHandoffSuggestion(input: {
   parameters?: Readonly<Record<string, unknown>>;
 }): SkillHandoffSuggestion | null {
   if (input.result.suppressSkillHandoff) return null;
+  if (input.result.followUp === null) return null;
   if (input.result.confirmation || input.result.clarification || (input.result.captureRequests?.length ?? 0) > 0) return null;
   const source = getSkillForOperation(input.sourceOperationId);
   if (!source) return null;
   const consumer = input.consumer ?? 'ASK';
+  const nomination = input.result.followUp;
+  if (nomination && validateFollowUpNomination(input.sourceOperationId, nomination).length) return null;
   for (const handoff of SKILL_HANDOFF_DEFINITIONS) {
     if (handoff.sourceOperationId !== input.sourceOperationId || !handoff.eligibleStatuses.includes(input.result.status)) continue;
-    if (handoff.isRelevant && !handoff.isRelevant({ result: input.result, parameters: input.parameters ?? input.result.parameters ?? {} })) continue;
+    if (nomination) {
+      if (handoff.suggestedGoal !== nomination.goal) continue;
+    } else if (handoff.isRelevant && !handoff.isRelevant({ result: input.result, parameters: input.parameters ?? input.result.parameters ?? {} })) continue;
     const target = SKILL_DEFINITIONS[handoff.targetSkillId as keyof typeof SKILL_DEFINITIONS];
     if (!target || target.id === source.id || !target.supportedGoals.includes(handoff.suggestedGoal)) continue;
     const policy = resolveEffectiveSkillOperationPolicy(target.id, handoff.targetOperationId, consumer);
@@ -192,7 +242,8 @@ export function resolveSkillHandoffSuggestion(input: {
     return Object.freeze({
       suggestedNextSkillId: target.id,
       suggestedGoal: handoff.suggestedGoal,
-      reasonCodes: Object.freeze([...handoff.reasonCodes]),
+      suggestedLabel: nomination?.label?.trim() || null,
+      reasonCodes: Object.freeze([...(nomination?.reasonCodes ?? handoff.reasonCodes)]),
       contextReferenceIds: Object.freeze([...handoff.contextReferenceIds]),
       continuity: Object.freeze({
         propertyId: input.continuity?.propertyId ?? null,

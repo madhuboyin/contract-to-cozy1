@@ -878,6 +878,8 @@ const AskExecutionResponseBaseSchema = z.object({
   skillHandoff: z.object({
     suggestedNextSkillId: z.string().trim().min(1).max(100),
     suggestedGoal: z.string().trim().min(1).max(160),
+    // Display-only; absent on executions persisted before FRD v1.166.
+    suggestedLabel: z.string().trim().min(1).max(80).nullable().default(null),
     reasonCodes: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{2,79}$/)).min(1).max(8),
     contextReferenceIds: z.array(z.string().trim().min(1).max(128)).max(8),
     continuity: z.object({

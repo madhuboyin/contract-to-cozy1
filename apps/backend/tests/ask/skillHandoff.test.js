@@ -43,6 +43,7 @@ test('Ask returns a typed suggestion but never invokes the target Skill', () => 
   assert.deepEqual(suggestion, {
     suggestedNextSkillId: 'maintenance',
     suggestedGoal: 'understand-maintenance-status',
+    suggestedLabel: null,
     reasonCodes: ['HOME_RECORD_REVIEWED'],
     contextReferenceIds: [],
     continuity: {
@@ -153,4 +154,50 @@ test('document-promotion and buyer-lifecycle handoffs decline outcomes their rea
   assert.equal(go('DOCUMENT_PROMOTION_CONFIRM', 'DOCUMENT_PROMOTION_REJECTED'), null);
   for (const code of ['BUYER_JOURNEY_RESUMED', 'BUYER_LIFECYCLE_DATE_UPDATED']) assert.ok(go('BUYER_LIFECYCLE_UPDATE', code), code);
   for (const code of ['BUYER_JOURNEY_PAUSED', 'BUYER_JOURNEY_CANCELLED']) assert.equal(go('BUYER_LIFECYCLE_UPDATE', code), null, code);
+});
+
+test('handler follow-up nominations: null declines, allowlisted goals pass, everything else yields nothing (never the static fallback)', () => {
+  const { validateFollowUpNomination } = require('../../src/services/skills/skillHandoff.ts');
+  const go = (sourceOperationId, followUp, extra = {}) => resolveSkillHandoffSuggestion({ sourceOperationId, result: answered({ followUp, ...extra }) });
+
+  // undefined keeps the legacy static entry.
+  assert.equal(go('HOME_ACTIONS', undefined)?.suggestedGoal, 'understand-maintenance-status');
+  assert.equal(go('HOME_ACTIONS', undefined)?.suggestedLabel, null);
+  // null = the handler explicitly declines.
+  assert.equal(go('HOME_ACTIONS', null), null);
+  // A valid nomination carries its label and reason codes but still resolves through the allowlisted definition.
+  const nominated = go('HOME_ACTIONS', { goal: 'understand-maintenance-status', label: 'See what is scheduled', reasonCodes: ['MAINTENANCE_FOLLOW_UP'] });
+  assert.equal(nominated.suggestedNextSkillId, 'maintenance');
+  assert.equal(nominated.suggestedLabel, 'See what is scheduled');
+  assert.deepEqual([...nominated.reasonCodes], ['MAINTENANCE_FOLLOW_UP']);
+  assert.equal(Object.isFrozen(nominated), true);
+  // Omitted label/reason codes fall back to the definition's.
+  const bare = go('HOME_ACTIONS', { goal: 'understand-maintenance-status' });
+  assert.equal(bare.suggestedLabel, null);
+  assert.deepEqual([...bare.reasonCodes], ['HOME_ACTION_REVIEWED']);
+  // Not allowlisted for this source: rejected, and does NOT fall back to the static HOME_ACTIONS entry.
+  assert.equal(go('HOME_ACTIONS', { goal: 'review-coverage-gaps' }), null);
+  assert.equal(go('HOME_ACTIONS', { goal: 'made-up-goal' }), null);
+  // Malformed label / reason codes are rejected.
+  assert.equal(go('HOME_ACTIONS', { goal: 'understand-maintenance-status', label: 'x'.repeat(81) }), null);
+  assert.equal(go('HOME_ACTIONS', { goal: 'understand-maintenance-status', label: 'two\nlines' }), null);
+  assert.equal(go('HOME_ACTIONS', { goal: 'understand-maintenance-status', reasonCodes: ['lowercase'] }), null);
+  // Nominations still respect status eligibility and the existing suppress/pending gates.
+  assert.equal(resolveSkillHandoffSuggestion({ sourceOperationId: 'HOME_ACTIONS', result: { status: 'UNAVAILABLE', blocks: [], suggestions: [], followUp: { goal: 'understand-maintenance-status' } } }), null);
+  assert.equal(go('HOME_ACTIONS', { goal: 'understand-maintenance-status' }, { suppressSkillHandoff: true }), null);
+  assert.equal(go('HOME_ACTIONS', { goal: 'understand-maintenance-status' }, { captureRequests: [{}] }), null);
+  // A nomination bypasses isRelevant (the handler already made that call) but not the allowlist.
+  assert.equal(resolveSkillHandoffSuggestion({ sourceOperationId: 'INSPECTION_FINDING_UPDATE', result: { status: 'COMPLETED', reasonCode: 'INSPECTION_FINDING_DISMISSED', blocks: [], suggestions: [], followUp: { goal: 'review-home-actions-feed' } } })?.suggestedGoal, 'review-home-actions-feed');
+  // The exported validator lets a handler test assert its nominations are acceptable.
+  assert.deepEqual(validateFollowUpNomination('HOME_ACTIONS', { goal: 'understand-maintenance-status', label: 'Ok' }), []);
+  assert.equal(validateFollowUpNomination('HOME_ACTIONS', { goal: 'nope' }).length, 1);
+});
+
+test('the response contract carries suggestedLabel and defaults it for executions persisted before it existed', () => {
+  // skillHandoff is default(nullable(object)); unwrap both layers to reach the object shape.
+  const handoff = AskExecutionResponseSchema.shape.skillHandoff.unwrap().unwrap();
+  assert.equal(handoff.shape.suggestedLabel.parse(undefined), null);
+  assert.equal(handoff.shape.suggestedLabel.parse('See what is scheduled'), 'See what is scheduled');
+  assert.equal(handoff.shape.suggestedLabel.safeParse('x'.repeat(81)).success, false);
+  assert.equal(handoff.shape.suggestedLabel.safeParse('').success, false);
 });

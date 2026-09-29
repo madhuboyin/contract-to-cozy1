@@ -1,5 +1,5 @@
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
-import type { SkillHandoffSuggestion } from '../skills/skillHandoff';
+import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/skillHandoff';
 import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
 import { validateAskOperationSemanticPackages } from './askOperationSemanticPackages';
 
@@ -311,6 +311,11 @@ export interface AskOperationResult {
   skillHandoff?: SkillHandoffSuggestion | null;
   /** The requested answer is complete and should not be followed by a generic cross-skill suggestion. */
   suppressSkillHandoff?: boolean;
+  /**
+   * The handler's own choice of follow-up for this result. `undefined` keeps the static registry
+   * behaviour; `null` declines any follow-up; a nomination must match an allowlisted definition.
+   */
+  followUp?: AskFollowUpNomination | null;
   parameters?: Record<string, unknown>;
 }
 
