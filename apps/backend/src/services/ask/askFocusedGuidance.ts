@@ -156,6 +156,27 @@ function resolveGroupDReplacementGuidanceRouting(
   return { operationId: 'REPLACEMENT_GUIDANCE', entityId: subject.id, message: `Should I repair or replace ${subject.label}?` };
 }
 
+// Group B (gap audit §17): recall review and inspection-finding review. Both were classified as
+// "no existing operation covers this" in the original audit; inspection-finding review turned out,
+// on inspection, to already have a fully-built read+write operation (INSPECTION_FINDINGS/
+// INSPECTION_FINDING_UPDATE, complete with confirm-gated accept/dismiss/resolve item actions) --
+// only routing was missing, so this is a Group-A-style fix, not new-operation work. Recall review
+// had no covering operation at all, so RECALL_REVIEW (recallReview.handler.ts) was built read-only;
+// confirm/dismiss/resolve mutations are a deferred follow-up noted in that file.
+function resolveGroupBRecordReviewRouting(action: RankedHomeAction): { operationId: AskOperationId; message: string } | null {
+  if (action.lineageId.startsWith('recall:')) {
+    return { operationId: 'RECALL_REVIEW', message: 'Show my open recall matches' };
+  }
+  const parsed = parseHomeActionHref(action.primaryCta.href);
+  // Matches both the reported single-finding href (/inspection-hub/{reportId}?findingId=...) and
+  // the no-finding fallback (/inspection-hub/open-items) -- INSPECTION_FINDINGS shows the same
+  // property-scoped list regardless, so both resolve to the same in-Ask answer.
+  if (parsed && /^\/dashboard\/properties\/[^/]+\/inspection-hub\/[^/]+$/.test(parsed.pathname)) {
+    return { operationId: 'INSPECTION_FINDINGS', message: 'Show my open inspection findings' };
+  }
+  return null;
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -195,7 +216,8 @@ export function buildFocusedHomeActionGuidance(
   const title = focusedTitle(action);
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
   const groupDRouting = !groupARouting ? resolveGroupDReplacementGuidanceRouting(action) : null;
-  const routing = groupARouting ?? groupDRouting;
+  const groupBRecordReviewRouting = !groupARouting && !groupDRouting ? resolveGroupBRecordReviewRouting(action) : null;
+  const routing = groupARouting ?? groupDRouting ?? groupBRecordReviewRouting;
   const checklist = !routing && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;

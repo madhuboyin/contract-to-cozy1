@@ -269,6 +269,47 @@ test('Group D repair/replace decision routes to REPLACEMENT_GUIDANCE with the it
   assert.equal(financialPrimary.interactionType, undefined);
 });
 
+test('Group B record-review destinations route to their (existing or new) Ask operation instead of navigating', () => {
+  const recallAction = {
+    ...weatherAction(),
+    lineageId: 'recall:recall-1:item-1',
+    primaryCta: { label: 'Review recall', href: '/dashboard/properties/property-1/recalls' },
+  };
+  const recallResult = buildFocusedHomeActionGuidance(recallAction, 'context-v1');
+  const recallPrimary = recallResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${recallAction.id}`);
+  assert.equal(recallPrimary.interactionType, 'START_WORKFLOW');
+  assert.equal(recallPrimary.operationId, 'RECALL_REVIEW');
+  assert.equal(recallPrimary.entityType, undefined);
+  assert.equal(recallPrimary.href, undefined);
+
+  // With a matched finding (the reported CTA shape).
+  const findingAction = {
+    ...weatherAction(),
+    lineageId: 'inspection-finding:finding-1',
+    primaryCta: { label: 'Review finding', href: '/dashboard/properties/property-1/inspection-hub/report-1?findingId=finding-1' },
+  };
+  const findingResult = buildFocusedHomeActionGuidance(findingAction, 'context-v1');
+  const findingPrimary = findingResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${findingAction.id}`);
+  assert.equal(findingPrimary.interactionType, 'START_WORKFLOW');
+  assert.equal(findingPrimary.operationId, 'INSPECTION_FINDINGS');
+
+  // No-finding fallback href resolves the same way.
+  const openItemsAction = {
+    ...weatherAction(),
+    lineageId: 'inspection-finding:finding-2',
+    primaryCta: { label: 'Review finding', href: '/dashboard/properties/property-1/inspection-hub/open-items' },
+  };
+  const openItemsResult = buildFocusedHomeActionGuidance(openItemsAction, 'context-v1');
+  const openItemsPrimary = openItemsResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${openItemsAction.id}`);
+  assert.equal(openItemsPrimary.operationId, 'INSPECTION_FINDINGS');
+});
+
 test('focused Ask preserves neutral pre-snapshot HVAC guidance without manufacturing a verdict', () => {
   const action = {
     ...weatherAction(),

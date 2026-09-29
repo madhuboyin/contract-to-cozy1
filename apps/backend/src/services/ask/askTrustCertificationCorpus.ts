@@ -120,6 +120,9 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'APPLIANCE_FAILURE_RISK', message: 'Which of our appliances are closest to failing?', category: 'COLLOQUIAL' },
   { operationId: 'MAINTENANCE_BUDGET_FORECAST', message: 'What does the budget planner say we will spend on maintenance?', category: 'COLLOQUIAL' },
   { operationId: 'WARRANTY_LOOKUP', message: 'How long is the warranty on the dishwasher good for?', category: 'COLLOQUIAL' },
+  // Home Action focused-guidance CTA audit, Group B recall-review slice (gap audit §17; FRD
+  // v1.161). Appended at the END, as above -- fixture ids are positional.
+  { operationId: 'RECALL_REVIEW', message: 'Has any of my recorded equipment been recalled?', category: 'COLLOQUIAL' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -206,6 +209,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   OPERATIONAL_WORK_UPDATE: 'The selected home-work item can be accepted, deferred, snoozed, or completed through its governed workflow.',
   INSPECTION_FINDINGS: 'The confirmed inspection report has one unresolved major roof finding.',
   INSPECTION_FINDING_UPDATE: 'The selected inspection finding can be accepted as tracked work after confirmation.',
+  RECALL_REVIEW: 'Two open recall matches are shown, one marked critical severity with a manufacturer remedy.',
   DOCUMENT_PROMOTION_REVIEW: 'Two document-derived facts are waiting for homeowner confirmation before becoming trusted home records.',
   DOCUMENT_PROMOTION_CONFIRM: 'The selected extracted fact can be promoted into the canonical home record after confirmation.',
   CAPABILITY_DISCOVERY: 'The guided records workflow is available for organizing this home paperwork.',

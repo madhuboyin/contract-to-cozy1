@@ -40,6 +40,7 @@ import './handlers/homeActions.handler';
 import './handlers/propertySummary.handler';
 import './handlers/capitalPlanning.handler';
 import './handlers/inspection.handler';
+import './handlers/recallReview.handler';
 import './handlers/documents.handler';
 import './handlers/quotes.handler';
 import './handlers/refinance.handler';

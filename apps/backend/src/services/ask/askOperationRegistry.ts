@@ -85,6 +85,10 @@ export type AskOperationId =
   | 'OPERATIONAL_WORK_UPDATE'
   | 'INSPECTION_FINDINGS'
   | 'INSPECTION_FINDING_UPDATE'
+  // Home Action focused-guidance CTA audit, Group B recall-review slice (gap audit §17; FRD
+  // v1.161). Read-only: no existing operation covered recalls at all. Confirm/dismiss/resolve
+  // mutations are a deliberately deferred follow-up (see recallReview.handler.ts).
+  | 'RECALL_REVIEW'
   | 'DOCUMENT_PROMOTION_REVIEW'
   | 'DOCUMENT_PROMOTION_CONFIRM'
   | 'CAPABILITY_DISCOVERY'
@@ -385,6 +389,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   OPERATIONAL_WORK_UPDATE: definition('OPERATIONAL_WORK_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'home-operations.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   INSPECTION_FINDINGS: definition('INSPECTION_FINDINGS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inspection-findings.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   INSPECTION_FINDING_UPDATE: definition('INSPECTION_FINDING_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-findings.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  RECALL_REVIEW: definition('RECALL_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'recalls.review', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   DOCUMENT_PROMOTION_REVIEW: definition('DOCUMENT_PROMOTION_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'document-promotion.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   // IW-FRESH-003 fix: LIMITATION added so confirmDocumentPromotionConfirm's
   // "Saved; list could not refresh" reconciliation-failure block (same
@@ -762,6 +767,7 @@ const claimTransitionPattern = /\b(?:submit|advance|move|transition|approve|deny
 const incidentContinuationPattern = /\b(?:emergency|incident)\b.{0,80}\b(?:over|contained|resolved|document|record|follow up|claim)\b|\b(?:document|record|follow up on)\b.{0,60}\b(?:emergency|incident)\b/i;
 const inspectionFindingUpdatePattern = /\b(?:accept|dismiss|resolve|close|track)\b.{0,80}\binspection (?:finding|issue)\b|\binspection (?:finding|issue)\b.{0,80}\b(?:accept|dismiss|resolve|close|track)\b/i;
 const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b.{0,70}\binspection (?:findings?|issues?)\b|\bwhat did (?:the |my )?inspection find\b/i;
+const recallReviewPattern = /\b(?:show|review|list|what|open|unresolved|any|has|have|been)\b.{0,60}\brecall(?:s|ed|ing)?\b|\brecall(?:s|ed|ing)?\b.{0,60}\b(?:show|review|list|open|unresolved|affect(?:ed|ing)? (?:me|us|this home))\b|\b(?:is|has|have)\b.{0,40}\b(?:my|this|our)\b.{0,40}\brecalled\b/i;
 const documentPromotionConfirmPattern = /\b(?:confirm|reject|promote|apply)\b.{0,80}\b(?:document|extraction|extracted|policy fact|inspection report)\b/i;
 const documentPromotionReviewPattern = /(?:\b(?:show|review|list|what)\b.{0,80}\b(?:document|documnt|extraction|extracted)\b.{0,50}\b(?:review|confirmation|pending|promotion|facts?)\b|\b(?:review|show|list)\b.{0,40}\bpending\b.{0,40}\b(?:document|documnt|extraction)\b)/i;
 // Checked after documentPromotionConfirm/ReviewPattern above (both require
@@ -1167,6 +1173,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (inspectionFindingUpdatePattern.test(message)) return resolved('INSPECTION_FINDING_UPDATE', 0.98);
   if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96);
+  if (recallReviewPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('RECALL_REVIEW', 0.96);
+  }
   if (documentPromotionConfirmPattern.test(message)) return resolved('DOCUMENT_PROMOTION_CONFIRM', 0.98);
   if (documentPromotionReviewPattern.test(message)) return resolved('DOCUMENT_PROMOTION_REVIEW', 0.96);
   if (documentLookupPattern.test(message) && !explicitCapabilityPattern.test(message)) {

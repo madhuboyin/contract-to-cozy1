@@ -73,7 +73,10 @@ const ROWS: readonly ObservationTuple[] = [
   ['046-expected', '046', 'BUYER_TASK_UPDATE', .3265, true], ['046-competitor', '046', 'BUYER_TASK_CREATE', .2813, false],
   ['047-expected', '047', 'BUYER_MOVE_STATUS', .3212, true], ['047-competitor', '047', 'BUYER_DEADLINES', .2129, false],
   ['048-expected', '048', 'BUYER_FINANCING_READINESS', .2035, true], ['048-competitor', '048', 'BUYER_DEADLINES', .1779, false],
-  ['049-expected', '049', 'BUYER_TITLE_ESCROW_READINESS', .9339, true], ['049-competitor', '049', 'INSPECTION_FINDINGS', .5783, false],
+  // Home Action focused-guidance CTA audit, Group B recall-review slice (FRD v1.161): 049's
+  // competitor re-derived to RECALL_REVIEW (was INSPECTION_FINDINGS .5783) after that new
+  // operation's semantic package was added to the candidate pool; the expected score is unchanged.
+  ['049-expected', '049', 'BUYER_TITLE_ESCROW_READINESS', .9339, true], ['049-competitor', '049', 'RECALL_REVIEW', .5812, false],
   ['050-expected', '050', 'BUYER_WALKTHROUGH_READINESS', .4485, true], ['050-competitor', '050', 'BUYER_TASK_CREATE', .2122, false],
   ['051-expected', '051', 'BUYER_DISCLOSURE_FUNDS_READINESS', .9413, true], ['051-competitor', '051', 'HOME_CHANGE_SUMMARY', .6382, false],
   ['052-expected', '052', 'BUYER_CLOSING_DAY_READINESS', .5134, true], ['052-competitor', '052', 'BUYER_DEADLINES', .2162, false],
@@ -179,6 +182,9 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.124: fixture 095 (WARRANTY_LOOKUP), re-derived from the retriever; no existing row changed. Of the swept candidates,
   // this one kept every Skill routing case resolved ("Show my inspecion findings" 0.4487) and put the expected operation ahead.
   ['095-expected', '095', 'WARRANTY_LOOKUP', .6778, true], ['095-competitor', '095', 'PRICE_FINALIZATIONS_LIST', .6253, false],
+  // Home Action focused-guidance CTA audit, Group B recall-review slice (FRD v1.161): fixture 096
+  // (RECALL_REVIEW), derived from the live retriever the same way every row above was.
+  ['096-expected', '096', 'RECALL_REVIEW', .4198, true], ['096-competitor', '096', 'INVENTORY_LOOKUP', .6498, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(
