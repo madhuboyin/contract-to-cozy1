@@ -25,7 +25,9 @@ describe('buildConciergeStateStrip', () => {
       ['What needs attention', 3, 'CRITICAL'],
       ['Plan ahead', 0, 'DEFAULT'],
     ]);
+    expect(strip.chips.slice(0, 2).map((chip) => chip.prompt.context?.operationId)).toEqual(['HOME_ACTIONS', 'HOME_ACTIONS']);
     expect(strip.urgent?.title).toBe('Action a');
+    expect(strip.urgent?.prompt.context?.operationId).toBe('HOME_ACTIONS');
   });
 
   it('preserves the server projection even when an item carries a disclosed state flag', () => {
@@ -54,6 +56,7 @@ describe('buildConciergeStateStrip', () => {
     expect(chip?.label).toBe('2 important changes');
     expect(chip?.tone).toBe('CRITICAL');
     expect(chip?.prompt.question).toBe('What changed around my home lately?');
+    expect(chip?.prompt.context?.operationId).toBe('HOME_CHANGE_SUMMARY');
   });
 
   it('offers to continue the open decision and carries its thread id', () => {

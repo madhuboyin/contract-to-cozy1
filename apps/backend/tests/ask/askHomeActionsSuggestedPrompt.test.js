@@ -37,6 +37,12 @@ test('first-party Home Actions planning prompt routes directly', () => {
   assert.equal(routing.requiresClarification, false);
 });
 
+test('the Plan ahead landing copy also routes when typed without launch context', () => {
+  const routing = resolveAskRoutingCascade('Show me what I should plan ahead for');
+  assert.equal(routing.operation.operationId, 'HOME_ACTIONS');
+  assert.equal(routing.requiresClarification, false);
+});
+
 test('populated and empty canonical Home Actions pass initial and clarified trust', () => {
   for (const status of ['ANSWERED', 'READY_WITH_LIMITATIONS']) {
     for (const populated of [true, false]) {

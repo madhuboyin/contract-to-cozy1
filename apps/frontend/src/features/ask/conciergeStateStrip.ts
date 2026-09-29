@@ -58,7 +58,13 @@ function explainPrioritySection(items: PriorityItem[], section: 'ATTENTION' | 'P
   return { reasons };
 }
 
-const prompt = (id: string, question: string, categoryId: AskCapabilityPrompt['categoryId'], categoryLabel: string): AskCapabilityPrompt => ({ id, categoryId, categoryLabel, question });
+const prompt = (
+  id: string,
+  question: string,
+  categoryId: AskCapabilityPrompt['categoryId'],
+  categoryLabel: string,
+  operationId: string,
+): AskCapabilityPrompt => ({ id, categoryId, categoryLabel, question, context: { operationId } });
 
 export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStateStrip {
   const notes: string[] = [];
@@ -98,14 +104,14 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
       detail: attentionItems[0]?.title ?? 'Nothing needs attention right now.',
       explanation: explainPrioritySection(attentionItems, 'ATTENTION', view.generatedAt),
       tone: doNow > 0 ? 'CRITICAL' : attentionItems.length > 0 ? 'CAUTION' : 'DEFAULT', source: 'ATTENTION',
-      prompt: prompt('strip-needs-attention', 'Show me what needs attention now or soon', 'PLAN_MONITOR', 'Plan'),
+      prompt: prompt('strip-needs-attention', 'Show me what needs attention now or soon', 'PLAN_MONITOR', 'Plan', 'HOME_ACTIONS'),
     });
     chips.push({
       id: 'strip-plan-ahead', label: 'Plan ahead', count: planAheadItems.length,
       detail: planAheadItems[0]?.title ?? 'Nothing to plan right now.',
       explanation: explainPrioritySection(planAheadItems, 'PLAN_AHEAD', view.generatedAt),
       tone: 'DEFAULT', source: 'ATTENTION',
-      prompt: prompt('strip-plan-ahead', 'Show me what I should plan ahead for', 'PLAN_MONITOR', 'Plan'),
+      prompt: prompt('strip-plan-ahead', 'Show me what I should plan ahead for', 'PLAN_MONITOR', 'Plan', 'HOME_ACTIONS'),
     });
   }
 
@@ -122,7 +128,7 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
       if (detected) reasons.push(`The latest was detected ${detected}${effective ? ` and takes effect ${effective}` : ''}.`);
       chips.push({
         id: 'strip-changes', label: `${important.length} important ${plural(important.length, 'change', 'changes')}`, detail: newest.summary, explanation: { reasons }, tone: urgent ? 'CRITICAL' : 'CAUTION', source: 'DISCOVERY',
-        prompt: prompt('strip-changes', 'What changed around my home lately?', 'UNDERSTAND', 'Understand'),
+        prompt: prompt('strip-changes', 'What changed around my home lately?', 'UNDERSTAND', 'Understand', 'HOME_CHANGE_SUMMARY'),
       });
     }
   }
@@ -140,7 +146,7 @@ export function buildConciergeStateStrip(view: ConciergeHomeView): ConciergeStat
   const urgent = item && item.consumerPriority !== 'NO_ACTION' ? {
     title: item.title,
     priority: item.consumerPriority,
-    prompt: { id: `attention-${item.homeActionId}`, categoryId: item.askCategoryId, categoryLabel: item.askCategoryLabel, question: item.askQuestion, subject: item.subject ?? undefined, context: { entityType: 'HOME_ACTION', entityId: item.homeActionId, actionId: item.homeActionId, capabilityId: 'home-operations' } } satisfies AskCapabilityPrompt,
+    prompt: { id: `attention-${item.homeActionId}`, categoryId: item.askCategoryId, categoryLabel: item.askCategoryLabel, question: item.askQuestion, subject: item.subject ?? undefined, context: { entityType: 'HOME_ACTION', entityId: item.homeActionId, actionId: item.homeActionId, capabilityId: 'home-operations', operationId: 'HOME_ACTIONS' } } satisfies AskCapabilityPrompt,
   } : null;
 
   // ACUI-001: the launch headline. Unknown or unavailable state falls back to the generic prompt rather than claiming the home is fine.
