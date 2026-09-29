@@ -74,8 +74,9 @@ test('declared item-action messages and natural phrasing route to HOME_EVENT_COR
   assert.notEqual(routeOf('What room is the roof replacement linked to?'), 'HOME_EVENT_CORRECT');
 });
 
-test('event correction actions are declared only for contributor-and-up on both event producers; edit handler registered', () => {
+test('event correction actions are declared only for contributor-and-up on the one remaining event producer; edit handler registered', () => {
   assert.match(body('function homeEventCorrectionItemActions(', 'function homeEventCorrectionConfirmation('), /if \(!canManage\) return undefined;/);
-  assert.equal((source.match(/actions: homeEventCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER\)/g) ?? []).length, 2);
+  // Property Summary P-2 no longer embeds a recent-events Timeline collection, so this drops from 2 to 1 (the inventory item's linked-event row).
+  assert.equal((source.match(/actions: homeEventCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER\)/g) ?? []).length, 1);
   assert.match(source, /HOME_EVENT_CORRECT: editHomeEventCorrectConfirmation/);
 });

@@ -73,9 +73,10 @@ test('declared item-action messages and natural phrasing route to INVENTORY_ITEM
   assert.notEqual(routeOf('What room is my dishwasher in?'), 'INVENTORY_ITEM_CORRECT');
 });
 
-test('correction item actions are only declared for contributor-and-up on all three inventory producers', () => {
+test('correction item actions are only declared for contributor-and-up on both inventory producers', () => {
   const helper = body('function inventoryCorrectionItemActions(', 'function inventoryCorrectionConfirmation(');
   assert.match(helper, /if \(!canManage\) return undefined;/);
   const uses = source.match(/actions: inventoryCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER\)/g) ?? [];
-  assert.equal(uses.length, 3, 'inventory-entity-selection, inventory-results, property-inventory');
+  // Property Summary P-2: property-inventory no longer embeds a copy of this list, so this drops from 3 to 2.
+  assert.equal(uses.length, 2, 'inventory-entity-selection, inventory-results');
 });

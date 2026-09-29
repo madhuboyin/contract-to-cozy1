@@ -47,6 +47,28 @@ describe('isCalmAdopter', () => {
     expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'inventory-entity-selection' }]))).toBe(false);
     expect(isCalmAdopter(execution([summary()]))).toBe(false);
   });
+
+  it('Property Summary P-1: an explicit, focused room or completeness question is calm-adopted; the vague-overview dump that embeds the same block ids never is', () => {
+    // A focused room answer (ROOM_MAP presentation, focused: true) -- exactly what an explicit "show my home by room" produces.
+    expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'property-rooms', presentation: { pattern: 'ROOM_MAP', focused: true } }]))).toBe(true);
+    // A focused completeness answer -- exactly what an explicit "how complete is my home record?" produces.
+    expect(isCalmAdopter(execution([summary(), { type: 'GROUPED_LIST', id: 'property-completeness' }]))).toBe(true);
+    // The vague-overview dump embeds the unfocused room map alongside the core-facts TABLE only the dump ever declares.
+    expect(isCalmAdopter(execution([
+      summary(), { type: 'TABLE', id: 'property-core-facts' },
+      { type: 'GROUPED_LIST', id: 'property-rooms', presentation: { pattern: 'ROOM_MAP', focused: false } },
+    ]))).toBe(false);
+    // The dump can also carry a completeness section (some scopes are incomplete); that section alone must not flip the whole answer calm.
+    expect(isCalmAdopter(execution([
+      summary(), { type: 'TABLE', id: 'property-core-facts' },
+      { type: 'GROUPED_LIST', id: 'property-completeness' },
+    ]))).toBe(false);
+    // P-2's synthesized vague-overview answer has no list of its own -- its own SUMMARY id is what identifies it.
+    expect(isCalmAdopter(execution([
+      { type: 'SUMMARY', id: 'property-summary', title: 't', body: 'b', tone: 'DEFAULT', actions: [] },
+      { type: 'EVIDENCE', id: 'property-summary-evidence', title: 'Record freshness', items: [] },
+    ]))).toBe(true);
+  });
 });
 
 describe('calmHeadline', () => {

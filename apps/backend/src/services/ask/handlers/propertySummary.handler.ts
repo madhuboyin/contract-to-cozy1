@@ -17,9 +17,9 @@ import { normalizeAnswers } from '../../../modules/propertyContext/application/c
 import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
 import { getPropertyRecordOverview } from '../../propertyRecordOverview.service';
 import { humanDate } from '../askFormatting';
-import { AREA_CAPTURE_ANCHORS, AREA_CAPTURE_MESSAGES, areaCaptureFallbackHref, areaCaptureProgress, areaFallbackAnchor, areaLabel, areaProgressBlock, ensurePropertyAccess, homeEventCorrectionItemActions, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
-import { EVENT_ADD_MESSAGE, ROOM_ADD_MESSAGE, roomRenameItemActions, WARRANTY_ADD_MESSAGE, warrantyCorrectionItemActions } from '../handlers/homeRecordWrites.handler';
-import { INVENTORY_ADD_MESSAGE, inventoryAddItemAction, inventoryCorrectionItemActions } from '../handlers/inventory.handler';
+import { AREA_CAPTURE_ANCHORS, AREA_CAPTURE_MESSAGES, areaCaptureFallbackHref, areaCaptureProgress, areaFallbackAnchor, areaLabel, areaProgressBlock, ensurePropertyAccess, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
+import { ROOM_ADD_MESSAGE, roomRenameItemActions } from '../handlers/homeRecordWrites.handler';
+import { INVENTORY_ADD_MESSAGE } from '../handlers/inventory.handler';
 import { roomMapFacts } from '../support/roomMap';
 
 
@@ -58,6 +58,50 @@ export function propertyCompletenessProgress(
     })),
     actions: [],
   };
+}
+
+// Property Summary P-2 (ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md §16, FRD v1.154): PROPERTY_SUMMARY is a conversational synthesis operation,
+// not an aggregate rendering of every property-record collection. A vague overview question ("Tell me about my home") gets a short,
+// grounded prose synthesis -- never a serialization of every table the backend happens to expose. Inventory, warranties and documents
+// already have their own dedicated, filterable, calm-certified answers (INVENTORY_LOOKUP/WARRANTY_LOOKUP/DOCUMENT_LOOKUP); embedding
+// uncertified copies of them here would only duplicate worse versions of already-shipped work. Household has no dedicated read operation
+// yet, so it is dropped without a redirect invented for it. Timeline is not reproduced either (HOME_TIMELINE_EVENTS/HOME_CHANGE_SUMMARY
+// own that); "a recent material change" is deliberately deferred here (it would need HOME_CHANGE_SUMMARY's own live-action reconciliation,
+// not just its materiality filter, to avoid mentioning a change that reconciliation would have dropped as stale) -- "What changed
+// recently?" is offered as a standing follow-up regardless, which answers it properly through that operation.
+
+/** One or two grounded prose sentences from recorded values only; an unrecorded field is omitted, never printed as "Not recorded". */
+export function propertyOverviewFactsSentence(property: {
+  dwellingType: string | null; yearBuilt: number | null; propertySize: number | null; bedrooms: number | null; bathrooms: number | null;
+}): string | null {
+  const hasDwelling = Boolean(property.dwellingType) && property.dwellingType !== 'UNKNOWN';
+  const noun = hasDwelling ? readablePropertyValue(property.dwellingType).toLowerCase() : 'home';
+  const bedsBaths = property.bedrooms != null && property.bathrooms != null ? `${property.bedrooms}-bedroom, ${property.bathrooms}-bath ` : '';
+  const built = property.yearBuilt != null ? ` built in ${property.yearBuilt}` : '';
+  const size = property.propertySize != null ? `, with ${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft of living space` : '';
+  if (!bedsBaths && !hasDwelling && !built && !size) return null;
+  return `This is a ${bedsBaths}${noun}${built}${size}.`;
+}
+
+/**
+ * At most one status observation, in priority order: an actionable completeness issue (only when something is genuinely missing,
+ * conflicted or stale -- never automatic), otherwise a plain reassurance. A recent material change would sit between these (see the
+ * header note above for why it is not implemented yet).
+ */
+export function propertyOverviewStatusObservation(pendingDetailCount: number): string {
+  if (pendingDetailCount > 0) {
+    return `${pendingDetailCount} home detail${pendingDetailCount === 1 ? '' : 's'} still need${pendingDetailCount === 1 ? 's' : ''} review, but nothing in the current record suggests an urgent issue.`;
+  }
+  return 'Nothing in the current record suggests an urgent issue.';
+}
+
+/** Two or three contextual follow-ups, not a catalog of every domain -- each launches its own certified operation in-conversation. */
+export function propertyOverviewSuggestions(pendingDetailCount: number): string[] {
+  return [
+    ...(pendingDetailCount > 0 ? ['What details are missing?'] : []),
+    'Show me my home by room.',
+    'What changed recently?',
+  ].slice(0, 3);
 }
 
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
@@ -109,8 +153,6 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   const inventory = overview.sections.inventory.status === 'AVAILABLE' ? overview.sections.inventory.data : null;
   const documents = overview.sections.documents.status === 'AVAILABLE' ? overview.sections.documents.data : null;
   const household = overview.sections.household.status === 'AVAILABLE' ? overview.sections.household.data : null;
-  const warranties = overview.sections.warranties.status === 'AVAILABLE' ? overview.sections.warranties.data : null;
-  const timeline = overview.tools.homeTimeline.status === 'AVAILABLE' ? overview.tools.homeTimeline.data : null;
   const incompleteScopes = (completeness?.scopes ?? [])
     .filter((scope) => scope.completenessPercent < 100
       || scope.missingFactKeys.length > 0
@@ -133,110 +175,34 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       ? 'No pending governed property details were identified. The available Property Context is complete and current.'
       : `${completenessCounts.missing} missing, ${completenessCounts.conflicted} conflicted, and ${completenessCounts.stale} stale detail${pendingDetailCount === 1 ? '' : 's'} were found across ${incompleteScopes.length} area${incompleteScopes.length === 1 ? '' : 's'}. ${captureRequests.length ? 'The highest-priority detail is ready to answer below.' : 'Open the property record to review the affected areas.'}`
     : 'Property Context details are temporarily unavailable, so Ask cannot reliably determine which details are pending.';
+  const vagueOverview = !roomFocus && !completenessFocus;
+  const factsSentence = vagueOverview ? propertyOverviewFactsSentence(property) : null;
+  const statusObservation = vagueOverview ? propertyOverviewStatusObservation(pendingDetailCount) : null;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'property-summary',
     title: roomFocus
       ? rooms
         ? `${rooms.count} room${rooms.count === 1 ? '' : 's'} recorded`
         : `Rooms for ${propertyName}`
-      : completenessFocus && percent != null
-      ? `${propertyName}’s Property Context is ${percent}% complete`
-      : `Here is the current Living Home Record for ${propertyName}`,
+      : completenessFocus
+      ? percent != null
+        ? `${propertyName}’s Property Context is ${percent}% complete`
+        : `Here is the current Living Home Record for ${propertyName}`
+      : `Here's the short version of ${propertyName}`,
     body: roomFocus
       ? rooms
         ? 'Select a room to see the items recorded there.'
         : 'Room details are temporarily unavailable for this home.'
       : completenessFocus
       ? completenessBody
-      : `${context ? `${context.knownFactCount} governed property facts are currently known.` : 'Property Context details are temporarily unavailable.'} The record contains ${rooms?.count ?? 'an unknown number of'} room${rooms?.count === 1 ? '' : 's'}, ${inventory?.totalCount ?? 'an unknown number of'} inventory item${inventory?.totalCount === 1 ? '' : 's'}, and ${documents?.totalCount ?? 'an unknown number of'} document${documents?.totalCount === 1 ? '' : 's'}. ${degradedSections.length ? `${degradedSections.join(', ')} could not be fully loaded, so this is a partial summary.` : 'All summary sections loaded successfully.'}`,
-    tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100) ? 'CAUTION' : 'DEFAULT',
-    actions: roomFocus
+      : [factsSentence, statusObservation].filter((part): part is string => Boolean(part)).join(' '),
+    tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : completenessFocus && (degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100)) ? 'CAUTION' : 'DEFAULT',
+    actions: roomFocus || vagueOverview
       ? []
-      : [{ id: 'open-property-record', label: completenessFocus && pendingDetailCount > 0 ? 'Review missing details' : completenessFocus ? 'Review home details' : 'Open property record', href: propertyHref, style: 'PRIMARY' }],
+      : [{ id: 'open-property-record', label: pendingDetailCount > 0 ? 'Review missing details' : 'Review home details', href: propertyHref, style: 'PRIMARY' }],
   }];
 
-  if (!completenessFocus) {
-    blocks.push({
-      type: 'TABLE', id: 'property-core-facts', title: 'Core property facts',
-      description: 'Values come from the canonical property record. “Not recorded” is not inferred from other fields.',
-      columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }],
-      rows: [
-        { id: 'address', values: { fact: 'Address', value: `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` } },
-        { id: 'dwelling', values: { fact: 'Dwelling type', value: readablePropertyValue(property.dwellingType) } },
-        { id: 'use', values: { fact: 'Property use', value: readablePropertyValue(property.propertyUse) } },
-        { id: 'occupancy', values: { fact: 'Occupancy', value: readablePropertyValue(property.occupancyStatus) } },
-        { id: 'year-built', values: { fact: 'Year built', value: readablePropertyValue(property.yearBuilt) } },
-        { id: 'size', values: { fact: 'Living area', value: property.propertySize == null ? 'Not recorded' : `${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft` } },
-        { id: 'beds-baths', values: { fact: 'Bedrooms / bathrooms', value: `${property.bedrooms == null ? 'Not recorded' : property.bedrooms} / ${property.bathrooms == null ? 'Not recorded' : property.bathrooms}` } },
-        { id: 'heating-cooling', values: { fact: 'Heating / cooling', value: `${readablePropertyValue(property.heatingType)} / ${readablePropertyValue(property.coolingType)}` } },
-        { id: 'roof', values: { fact: 'Roof type', value: readablePropertyValue(property.roofType) } },
-      ],
-      actions: [],
-    });
-    if (inventory) {
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-inventory', title: 'Systems and inventory',
-        description: inventory.totalCount > 50
-          ? 'Showing the first 50 canonical inventory records. Open home inventory for the full collection.'
-          : 'Select an item to inspect its current canonical details without leaving Ask Cozy.',
-        sections: [{
-          id: 'inventory', title: 'Recorded items', count: inventory.totalCount,
-          items: inventory.items.slice(0, 50).map((item) => ({
-            id: item.id, title: item.name, description: null, entityType: 'INVENTORY_ITEM', href: null, actions: inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
-            status: item.isVerified ? 'VERIFIED' : null,
-            meta: [readablePropertyValue(item.category), readablePropertyValue(item.condition), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`],
-          })),
-        }],
-        actions: [
-          ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
-          { id: 'open-inventory', label: 'Open home inventory', href: `${propertyHref}/inventory`, style: 'SECONDARY' as const },
-        ],
-      });
-    }
-    if (household) {
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-household', title: 'Household access',
-        description: household.totalCount > 50
-          ? 'Showing the first 50 canonical household members. Open household access for the full collection.'
-          : 'Select a household member to inspect their current canonical role without leaving Ask Cozy.',
-        sections: [{
-          id: 'household', title: 'Household members', count: household.totalCount,
-          items: household.items.slice(0, 50).map((member) => ({
-            id: member.id, title: member.displayName?.trim() || `${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email,
-            description: null, entityType: 'HOUSEHOLD_MEMBER', href: null,
-            status: member.isPrimaryOwner ? 'PRIMARY OWNER' : null,
-            meta: [readablePropertyValue(member.role), `Joined ${humanDate(member.joinedAt) ?? 'date unavailable'}`],
-          })),
-        }],
-        actions: [{ id: 'open-household', label: 'Open household access', href: `${propertyHref}/household`, style: 'SECONDARY' }],
-      });
-    }
-    if (warranties) {
-      // Owner-only corrections: actions only on warranties the requester's own
-      // homeownerProfile added (see WARRANTY_CORRECTION_FIELDS).
-      const ownedWarrantyIds = access.role !== HouseholdRole.VIEWER
-        ? new Set((await prisma.warranty.findMany({ where: { propertyId, homeownerProfile: { userId } }, select: { id: true } })).map((row) => row.id))
-        : new Set<string>();
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-warranties', title: 'Warranties',
-        description: warranties.totalCount > 50
-          ? 'Showing the first 50 canonical warranty records. Open Warranties for the full collection.'
-          : 'Select a warranty to inspect its current canonical details without leaving Ask Cozy.',
-        sections: [{
-          id: 'warranties', title: 'Recorded warranties', count: warranties.totalCount,
-          items: warranties.items.slice(0, 50).map((warranty) => ({
-            id: warranty.id, title: warranty.providerName, description: null, entityType: 'WARRANTY', href: null, actions: warrantyCorrectionItemActions(access.role !== HouseholdRole.VIEWER, ownedWarrantyIds.has(warranty.id)),
-            status: warranty.expiryDate > new Date() ? 'ACTIVE' : 'EXPIRED',
-            meta: [readablePropertyValue(warranty.category), `Expires ${humanDate(warranty.expiryDate) ?? 'date unavailable'}`],
-          })),
-        }],
-        actions: [
-          ...(access.role !== HouseholdRole.VIEWER ? [{ id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW' as const, message: WARRANTY_ADD_MESSAGE, operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const }] : []),
-          { id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' as const },
-        ],
-      });
-    }
-    if (rooms) {
+  if (roomFocus && rooms) {
       // IW-PRES-019 (FRD v1.79): the rooms render as a room map by stored floor level, even when no floor is recorded
       // (then with a hint); each room carries its recorded item count and open maintenance tasks.
       const anyFloor = rooms.items.slice(0, 50).some((room) => typeof room.floorLevel === 'number');
@@ -249,7 +215,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             : 'Select a room to inspect its current canonical details without leaving Ask Cozy.',
           rooms.items.length && !anyFloor ? `Floors aren't recorded yet${canManageRooms ? '; open a room to set its floor' : ''}.` : null,
         ].filter(Boolean).join(' '),
-        presentation: { pattern: 'ROOM_MAP', ...(roomFocus ? { focused: true } : {}) },
+        // Rooms are reachable only through an explicit focused question now (P-2 dropped the vague-overview dump this used to be embedded in), so this is always the focused presentation.
+        presentation: { pattern: 'ROOM_MAP', focused: true },
         sections: [{
           id: 'rooms', title: 'Recorded rooms', count: rooms.count,
           items: rooms.items.slice(0, 50).map((room) => {
@@ -263,39 +230,14 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             };
           }),
         }],
-        actions: [
-          ...(access.role !== HouseholdRole.VIEWER ? [{ id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW' as const, message: ROOM_ADD_MESSAGE, operationId: 'ROOM_CREATE', style: 'PRIMARY' as const }] : []),
-          ...(!roomFocus ? [{ id: 'open-rooms', label: 'Open Rooms', href: `${propertyHref}/rooms`, style: 'SECONDARY' as const }] : []),
-        ],
+        // No "Open Rooms" link: this is only ever reached through an explicit focused room question now, never embedded in a larger answer.
+        actions: access.role !== HouseholdRole.VIEWER
+          ? [{ id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW' as const, message: ROOM_ADD_MESSAGE, operationId: 'ROOM_CREATE', style: 'PRIMARY' as const }]
+          : [],
       });
-    }
-    if (documents) {
-      // Home Records is the canonical page for documents. A transitional legacy row has no page of its own (the legacy Documents workspace is
-      // retired); its inline detail still works.
-      const documentsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
-      blocks.push({
-        type: 'GROUPED_LIST', filters: [], id: 'property-documents', title: 'Documents',
-        description: documents.totalCount > 50
-          ? 'Showing the 50 most recent document records. Open Home Records for the full collection.'
-          : 'Select a document to inspect its current details without leaving Ask Cozy.',
-        sections: [{
-          id: 'documents', title: 'Recorded documents', count: documents.totalCount,
-          items: documents.items.slice(0, 50).map((document) => ({
-            // entityType routes the row to its own inline detail: a Home Record through the record route, a transitional legacy document
-            // through the legacy document route. Each row carries only its own store's status.
-            id: document.id, title: document.title, description: null,
-            entityType: document.source === 'HOME_RECORD' ? 'PROPERTY_RECORD' : 'DOCUMENT',
-            href: null,
-            status: document.verification ?? (document.needsReview ? 'NEEDS_REVIEW' : document.expiry === 'EXPIRED' ? 'EXPIRED' : null),
-            meta: [document.kindLabel, `Added ${humanDate(document.addedAt) ?? 'date unavailable'}`, ...(document.transitional ? ['older vault'] : [])],
-          })),
-        }],
-        actions: [{ id: 'open-documents', label: 'Open Home Records', href: documentsHref, style: 'SECONDARY' }],
-      });
-    }
   }
 
-  if (incompleteScopes.length) {
+  if (completenessFocus && incompleteScopes.length) {
     // IW-PRES-020 (FRD v1.91): the ring leads the list of areas that can improve.
     const ring = completeness ? propertyCompletenessProgress(completeness, incompleteScopes, propertyId, canImproveContext) : null;
     if (ring) blocks.push(ring);
@@ -317,30 +259,6 @@ async function propertySummaryResult(userId: string, propertyId: string, message
     });
   }
 
-  const recentEvents = timeline?.recent ?? [];
-  const canAddEvent = access.role !== HouseholdRole.VIEWER;
-  // The block also appears on a home with no confirmed events yet, so a contributor still has the Add entry point.
-  if (!completenessFocus && timeline && (recentEvents.length > 0 || canAddEvent)) {
-    blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'property-recent-events', title: 'Recent verified home activity',
-      description: recentEvents.length
-        ? `${timeline.confirmedCount} current confirmed or evidence-verified event${timeline.confirmedCount === 1 ? '' : 's'} are visible to you. Showing the most recent records.`
-        : 'No confirmed or evidence-verified events are recorded for this home yet.',
-      sections: [{
-        id: 'recent-events', title: 'Home Timeline', count: recentEvents.length,
-        items: recentEvents.map((event) => ({
-          id: event.id, title: event.title, description: null,
-          meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
-          status: event.verificationStatus, href: null, entityType: 'HOME_EVENT', actions: homeEventCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
-        })),
-      }],
-      actions: [
-        ...(canAddEvent ? [{ id: 'add-timeline-event', label: 'Add a timeline event', interactionType: 'START_WORKFLOW' as const, message: EVENT_ADD_MESSAGE, operationId: 'CAPTURE_EVENT_CONFIRM', style: 'PRIMARY' as const }] : []),
-        { id: 'open-home-timeline', label: 'Open home timeline', href: `${propertyHref}/timeline`, style: 'SECONDARY' as const },
-      ],
-    });
-  }
-
   const freshness = [
     { label: 'Core property record', source: 'Property', observedAt: property.updatedAt.toISOString() },
     ...(documents?.latest ? [{ label: 'Latest document', source: `Documents · ${documents.latest.title}`, observedAt: documents.latest.addedAt.toISOString() }] : []),
@@ -348,13 +266,10 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       ? [{ label: 'Systems and inventory', source: 'Home Inventory', observedAt: overview.tools.statusBoard.data.updatedAt.toISOString() }]
       : []),
   ];
-  blocks.push({ type: 'EVIDENCE', id: 'property-summary-evidence', title: 'Record freshness', items: freshness });
+  if (!roomFocus) blocks.push({ type: 'EVIDENCE', id: 'property-summary-evidence', title: 'Record freshness', items: freshness });
 
   const permissionLimited = Boolean(activeRequirement && !canImproveContext);
   const limited = captureRequests.length > 0 || degradedSections.length > 0 || permissionLimited || pendingDetailCount > 0 || (percent != null && percent < 100);
-  const responseBlocks = roomFocus
-    ? blocks.filter((block) => ['property-summary', 'property-rooms'].includes(block.id))
-    : blocks;
   return {
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length
@@ -367,14 +282,14 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             ? 'PROPERTY_SUMMARY_INCOMPLETE'
             : undefined,
     contextVersion: evaluation.contextVersion,
-    suppressSkillHandoff: roomFocus,
-    captureRequests: roomFocus ? [] : captureRequests,
-    blocks: responseBlocks,
+    suppressSkillHandoff: roomFocus || vagueOverview,
+    captureRequests: completenessFocus ? captureRequests : [],
+    blocks,
     suggestions: roomFocus
       ? []
       : completenessFocus
       ? ['Summarize my home record', 'Show incomplete inventory records', 'List pending maintenance tasks']
-      : ['How complete is my property profile?', 'Show incomplete inventory records', 'What maintenance is pending?'],
+      : propertyOverviewSuggestions(pendingDetailCount),
   };
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { AskExecutionResponse } from './types';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.11 (IW-CALM-001..012, FRD v1.111): calm conversational answers. Slice A adopted the
-// Maintenance answer, and Inventory followed (ACUI I-1, FRD v1.121) Warranties after it (W-1, v1.124) Claims after that (C-1, v1.127) Home Event Radar after that (R-1, v1.132) and Documents after that (D-1, v1.135); a result of any other domain keeps its current rendering (IW-CALM-012: no half-converted domain).
+// Maintenance answer, and Inventory followed (ACUI I-1, FRD v1.121) Warranties after it (W-1, v1.124) Claims after that (C-1, v1.127) Home Event Radar after that (R-1, v1.132) Documents after that (D-1, v1.135) and Property Summary's two already-focused sub-answers (rooms, completeness) after that (Property Summary P-1); a result of any other domain, and Property Summary's own vague-overview dump, keeps its current rendering (IW-CALM-012: no half-converted domain).
 // Default (September 25, 2026): calm is ON for everyone. `?calm=0` returns to the previous presentation and is remembered on that
 // browser; `NEXT_PUBLIC_ASK_CALM_ANSWERS=false` at build time is the release kill switch.
 
@@ -42,8 +42,24 @@ export function useCalmAnswers(): boolean {
 
 /** The domains that have adopted the calm anatomy. Identified by the block the domain's own handler declares. */
 export function isCalmAdopter(execution: Pick<AskExecutionResponse, 'blocks'>): boolean {
-  return execution.blocks.some((block) => (block.type === 'GROUPED_LIST' && (block.id === 'maintenance-groups' || block.id === 'inventory-results' || block.id === 'warranty-results' || block.id === 'incident-claim-list' || block.id === 'home-event-radar-feed' || block.id === 'document-lookup-groups'))
-    || (block.type === 'PRIORITY_LIST' && block.id === 'home-actions-priority-list'));
+  const blocks = execution.blocks;
+  // Property Summary P-1: only its two already-focused sub-answers (an explicit room or completeness question) are
+  // calm-adopted, never the vague-overview dump that embeds a copy of every domain's own list (ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md
+  // §16). The dump is the only branch that ever declares the core-facts TABLE, so its absence is what distinguishes a
+  // focused sub-answer from the dump -- both `property-rooms` and `property-completeness` are also reachable from
+  // inside the dump, where they must NOT flip the whole execution into calm mode.
+  const isPropertySummaryDump = blocks.some((block) => block.type === 'TABLE' && block.id === 'property-core-facts');
+  const hasFocusedRoomsOrCompleteness = blocks.some((block) => block.type === 'GROUPED_LIST' && (block.id === 'property-rooms' || block.id === 'property-completeness'));
+  // Property Summary P-2's synthesized vague-overview answer declares only its own SUMMARY and EVIDENCE blocks -- no
+  // list of its own to identify it by, so its own SUMMARY id is the signal (gated the same way as the dump exclusion,
+  // and excluded when the room/completeness clause below already claims the execution).
+  const isPropertySummarySynthesis = !isPropertySummaryDump && !hasFocusedRoomsOrCompleteness
+    && blocks.some((block) => block.type === 'SUMMARY' && block.id === 'property-summary');
+  return isPropertySummarySynthesis || blocks.some((block) => (block.type === 'GROUPED_LIST' && (
+    block.id === 'maintenance-groups' || block.id === 'inventory-results' || block.id === 'warranty-results' || block.id === 'incident-claim-list' || block.id === 'home-event-radar-feed' || block.id === 'document-lookup-groups'
+    || (block.id === 'property-rooms' && block.presentation?.pattern === 'ROOM_MAP' && block.presentation.focused === true)
+    || (block.id === 'property-completeness' && !isPropertySummaryDump)
+  )) || (block.type === 'PRIORITY_LIST' && block.id === 'home-actions-priority-list'));
 }
 
 /** IW-CONV-047: a calm Home Actions answer keeps the governed ranked view as its one artifact. */

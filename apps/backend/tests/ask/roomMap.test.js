@@ -48,7 +48,8 @@ test.afterEach(() => {
   evaluateModule.evaluateFeatureContext = originals.evaluate;
 });
 
-const invoke = (role = 'OWNER', message = 'Give me a summary of my home record.') => capabilityInvoke('PROPERTY_SUMMARY', { userId: 'u1', propertyId: 'p1', message }, { propertyAccess: { role, userId: 'u1', propertyId: 'p1' } });
+// Property Summary P-2: rooms are reachable only through an explicit focused room question now, never embedded in the vague overview.
+const invoke = (role = 'OWNER', message = 'Show me my home by room') => capabilityInvoke('PROPERTY_SUMMARY', { userId: 'u1', propertyId: 'p1', message }, { propertyAccess: { role, userId: 'u1', propertyId: 'p1' } });
 const roomsBlock = (result) => result.blocks.find((block) => block.id === 'property-rooms');
 
 test('room tile facts: recorded items and open maintenance tasks, singular and plural, nothing when no task is open', () => {
@@ -77,7 +78,7 @@ test('the rooms list declares the room map with each room\'s floor, item count a
   ]);
   const result = await invoke();
   const block = roomsBlock(result);
-  assert.deepEqual(block.presentation, { pattern: 'ROOM_MAP' });
+  assert.deepEqual(block.presentation, { pattern: 'ROOM_MAP', focused: true });
   const items = block.sections[0].items;
   assert.deepEqual(items.map((item) => [item.id, item.floorLevel, item.countLabel, item.badgeLabel ?? null, item.tone ?? null]), [
     ['kitchen', 0, '7 items', '2 open tasks', 'CAUTION'],
@@ -93,7 +94,7 @@ test('the rooms list declares the room map with each room\'s floor, item count a
 test('with no floor recorded the map stays, with a hint that says how to set one only to someone who can', async () => {
   install([room('kitchen', { name: 'Kitchen' }), room('den', { name: 'Den' })]);
   const owner = roomsBlock(await invoke());
-  assert.deepEqual(owner.presentation, { pattern: 'ROOM_MAP' });
+  assert.deepEqual(owner.presentation, { pattern: 'ROOM_MAP', focused: true });
   assert.match(owner.description, /Floors aren't recorded yet; open a room to set its floor\.$/);
   install([room('kitchen', { name: 'Kitchen' })], 'VIEWER');
   const viewer = roomsBlock(await invoke('VIEWER'));

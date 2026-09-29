@@ -52,7 +52,9 @@ test('owner-only: propose, confirm and edit all verify the requester owns the wa
   const edit = body('async function editWarrantyCorrectConfirmation(', 'const EDIT_CONFIRMATION_HANDLERS');
   assert.match(edit, /homeownerProfile\.userId !== userId/);
   assert.match(body('function warrantyCorrectionItemActions(', 'function warrantyCorrectionConfirmation('), /if \(!canManage \|\| !owned\) return undefined;/);
-  assert.match(source, /warrantyCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER, ownedWarrantyIds\.has\(warranty\.id\)\)/);
+  // Property Summary P-2 no longer embeds a second copy of this list (it had its own ownedWarrantyIds/access.role call
+  // shape); WARRANTY_LOOKUP's own canWrite/ownedIds call is the one remaining producer.
+  assert.match(source, /warrantyCorrectionItemActions\(canWrite, ownedIds\.has\(entry\.record\.id\)\)/);
 });
 
 test('confirm writes a NARROWED patch through updateWarranty with freshness, replay and date-order guards', () => {

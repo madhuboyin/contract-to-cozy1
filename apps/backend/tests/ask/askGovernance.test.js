@@ -161,42 +161,35 @@ test('TABLE blocks carry a true-vs-shown count like GROUPED_LIST sections alread
   assert.match(orchestrator, /Showing the \$\{upcoming\.length\} soonest of \$\{totalCount\} windows/);
 });
 
-test('Property Summary declares recent HomeEvent identity for inline detail and a separate timeline choice', () => {
+// Property Summary P-2 (ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md §16, FRD v1.154): the vague-overview branch no longer embeds a Timeline,
+// Documents, Inventory, Household or Warranties collection -- Inventory/Warranties/Documents already have their own dedicated,
+// filterable, calm-certified answers (embedding uncertified copies here duplicated worse versions of already-shipped work); Timeline is
+// owned by HOME_TIMELINE_EVENTS/HOME_CHANGE_SUMMARY, not Property Summary; Household has no dedicated read operation yet, so it is
+// dropped without a redirect invented for it. Rooms is the one exception: its producer is unchanged, just reachable only through an
+// explicit focused room question now (never embedded in the vague overview) -- see the room-map governance test file for its coverage.
+test('Property Summary no longer embeds a recent-events Timeline collection in the vague overview (P-2)', () => {
   const orchestrator = readAskOrchestratorSources();
-  const start = orchestrator.indexOf("id: 'property-recent-events'");
-  const end = orchestrator.indexOf("const freshness =", start);
-  assert.ok(start > 0 && end > start, 'property-recent-events producer not found');
-  const producer = orchestrator.slice(start, end);
-  assert.match(producer, /id: event\.id[\s\S]*href: null, entityType: 'HOME_EVENT'/);
-  assert.match(producer, /id: 'open-home-timeline'[\s\S]*label: 'Open home timeline'[\s\S]*style: 'SECONDARY'/);
-  assert.doesNotMatch(producer, /status: event\.verificationStatus, href: `\$\{propertyHref\}\/timeline`/);
-});
-
-test('Property Summary declares bounded InventoryRoom identities for inline detail and a separate Rooms choice', () => {
-  const orchestrator = readAskOrchestratorSources();
-  const start = orchestrator.indexOf("id: 'property-rooms'");
-  const end = orchestrator.indexOf("if (incompleteScopes.length)", start);
-  assert.ok(start > 0 && end > start, 'property-rooms producer not found');
-  const producer = orchestrator.slice(start, end);
-  assert.match(producer, /rooms\.items\.slice\(0, 50\)/);
-  assert.match(producer, /id: room\.id[\s\S]*entityType: 'INVENTORY_ROOM'[\s\S]*href: null/);
-  assert.match(producer, /id: 'open-rooms'[\s\S]*label: 'Open Rooms'[\s\S]*style: 'SECONDARY'/);
+  assert.doesNotMatch(orchestrator, /id: 'property-recent-events'/);
 
   const roomInsights = readFileSync(resolve(__dirname, '../../src/services/roomInsights.service.ts'), 'utf8');
   assert.match(roomInsights, /APIError\('Room not found', 404, 'ROOM_NOT_FOUND'\)/);
 });
 
-test('Property Summary declares bounded Document identities for inline detail and a separate Documents choice', () => {
+test('Property Summary declares bounded InventoryRoom identities for inline detail, reachable only through an explicit focused room question (P-2)', () => {
   const orchestrator = readAskOrchestratorSources();
-  const start = orchestrator.indexOf("id: 'property-documents'");
-  const end = orchestrator.indexOf("if (incompleteScopes.length)", start);
-  assert.ok(start > 0 && end > start, 'property-documents producer not found');
+  const start = orchestrator.indexOf("id: 'property-rooms'");
+  const end = orchestrator.indexOf("if (completenessFocus && incompleteScopes.length)", start);
+  assert.ok(start > 0 && end > start, 'property-rooms producer not found');
   const producer = orchestrator.slice(start, end);
-  assert.match(producer, /documents\.items\.slice\(0, 50\)/);
-  // Each row routes to its own inline detail by source: a Home Record through the record route, a transitional legacy document through the
-  // document route (a legacy row has no page link: the legacy Documents workspace is retired).
-  assert.match(producer, /id: document\.id[\s\S]*entityType: document\.source === 'HOME_RECORD' \? 'PROPERTY_RECORD' : 'DOCUMENT'[\s\S]*href: null/);
-  assert.match(producer, /id: 'open-documents'[\s\S]*label: 'Open Home Records'[\s\S]*style: 'SECONDARY'/);
+  assert.match(producer, /rooms\.items\.slice\(0, 50\)/);
+  assert.match(producer, /id: room\.id[\s\S]*entityType: 'INVENTORY_ROOM'[\s\S]*href: null/);
+  // P-2: no "Open Rooms" link -- this is only ever reached through an explicit focused room question now, never embedded in a larger answer.
+  assert.doesNotMatch(producer, /id: 'open-rooms'/);
+});
+
+test('Property Summary no longer embeds a Documents collection in the vague overview (P-2); the canonical inventory service is unchanged', () => {
+  const orchestrator = readAskOrchestratorSources();
+  assert.doesNotMatch(orchestrator, /id: 'property-documents'/);
 
   const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
   assert.match(overview, /linkedCount: linkedDocuments,[\s\S]*items: documentRows/);
@@ -205,50 +198,35 @@ test('Property Summary declares bounded Document identities for inline detail an
   assert.doesNotMatch(overview, /prisma\.document\.findMany/);
 });
 
-test('Property Summary declares bounded InventoryItem identities for inline detail and a separate inventory choice', () => {
+test('Property Summary no longer embeds an Inventory collection in the vague overview (P-2); the shared overview and detail dispatch are unchanged', () => {
   const orchestrator = readAskOrchestratorSources();
-  const start = orchestrator.indexOf("id: 'property-inventory'");
-  const end = orchestrator.indexOf("if (household)", start);
-  assert.ok(start > 0 && end > start, 'property-inventory producer not found');
-  const producer = orchestrator.slice(start, end);
-  assert.match(producer, /inventory\.items\.slice\(0, 50\)/);
-  assert.match(producer, /id: item\.id[\s\S]*entityType: 'INVENTORY_ITEM'[\s\S]*href: null/);
-  assert.match(producer, /id: 'open-inventory'[\s\S]*label: 'Open home inventory'[\s\S]*style: 'SECONDARY'/);
+  assert.doesNotMatch(orchestrator, /id: 'property-inventory'/);
 
   const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
   assert.match(overview, /withDocumentCount: itemRows\.filter\(\(item\) => item\.documents\.length > 0\)\.length,[\s\S]*items: itemRows/);
 
+  // The frontend dispatch entry stays (shared with INVENTORY_LOOKUP's own 'inventory-results' block); it is simply unreachable from
+  // Property Summary now, not removed, since a future dedicated read could still reuse it.
   const groupedListBlock = readFileSync(resolve(__dirname, '../../../frontend/src/components/ask/blocks/GroupedListBlock.tsx'), 'utf8');
   assert.match(groupedListBlock, /INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set\(\[[^\]]*'property-inventory'[^\]]*\]\)/);
 });
 
-test('Property Summary declares bounded HouseholdMember identities for inline detail and a separate household choice', () => {
+test('Property Summary no longer embeds a Household collection in the vague overview (P-2); Household has no dedicated read operation yet', () => {
   const orchestrator = readAskOrchestratorSources();
-  const start = orchestrator.indexOf("id: 'property-household'");
-  const end = orchestrator.indexOf("if (rooms)", start);
-  assert.ok(start > 0 && end > start, 'property-household producer not found');
-  const producer = orchestrator.slice(start, end);
-  assert.match(producer, /household\.items\.slice\(0, 50\)/);
-  assert.match(producer, /id: member\.id[\s\S]*entityType: 'HOUSEHOLD_MEMBER'[\s\S]*href: null/);
-  assert.match(producer, /id: 'open-household'[\s\S]*label: 'Open household access'[\s\S]*style: 'SECONDARY'/);
+  assert.doesNotMatch(orchestrator, /id: 'property-household'/);
 
   const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
   assert.match(overview, /prisma\.householdMember\.findMany\(\{[\s\S]*user: \{ select: \{ firstName: true, lastName: true, email: true \} \}/);
   assert.match(overview, /roles: Object\.entries\(householdRows\.reduce[\s\S]*items: householdRows/);
 
+  // HouseholdResultList stays -- pinned, not deleted, for a future dedicated household read operation.
   const groupedListBlock = readFileSync(resolve(__dirname, '../../../frontend/src/components/ask/blocks/GroupedListBlock.tsx'), 'utf8');
   assert.match(groupedListBlock, /block\.id === 'property-household'[\s\S]*HouseholdResultList/);
 });
 
-test('Property Summary declares bounded Warranty identities for inline detail and a separate warranties choice', () => {
+test('Property Summary no longer embeds a Warranties collection in the vague overview (P-2); WARRANTY_LOOKUP already owns the certified answer', () => {
   const orchestrator = readAskOrchestratorSources();
-  const start = orchestrator.indexOf("id: 'property-warranties'");
-  const end = orchestrator.indexOf("if (rooms)", start);
-  assert.ok(start > 0 && end > start, 'property-warranties producer not found');
-  const producer = orchestrator.slice(start, end);
-  assert.match(producer, /warranties\.items\.slice\(0, 50\)/);
-  assert.match(producer, /id: warranty\.id[\s\S]*entityType: 'WARRANTY'[\s\S]*href: null/);
-  assert.match(producer, /id: 'open-warranties'[\s\S]*label: 'Open Warranties'[\s\S]*style: 'SECONDARY'/);
+  assert.doesNotMatch(orchestrator, /id: 'property-warranties'/);
 
   const overview = readFileSync(resolve(__dirname, '../../src/services/propertyRecordOverview.service.ts'), 'utf8');
   assert.match(overview, /prisma\.warranty\.findMany\(\{[\s\S]*where: \{ propertyId \}/);
