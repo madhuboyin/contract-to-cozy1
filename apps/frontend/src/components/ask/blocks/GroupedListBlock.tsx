@@ -36,6 +36,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
     const next = block.sections.find((section) => section.id === 'next-step');
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];
     const facts = block.sections.find((section) => section.id === 'known-details')?.items ?? [];
+    const checklist = block.sections.find((section) => section.id === 'checklist');
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{block.title}</p>
@@ -58,6 +59,22 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
               </div>
             ))}
           </dl>
+        )}
+        {checklist && checklist.items.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{checklist.title}</p>
+            <ul className="mt-2 space-y-2">
+              {checklist.items.map((item) => (
+                <li key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-slate-950">{item.title}</p>
+                    {item.meta.length > 0 && <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.meta[0]}</span>}
+                  </div>
+                  {item.description && <p className="mt-1 text-sm leading-5 text-slate-600">{item.description}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
       </section>

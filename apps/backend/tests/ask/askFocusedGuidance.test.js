@@ -123,6 +123,55 @@ test('Group A home-action CTAs route to the matching Ask operation instead of na
   assert.match(seasonalPrimary.message, /\b(?:seasonal|winter|spring|summer|fall|autumn)\b/i);
 });
 
+test('Group B health-factor checklist renders inline instead of only navigating', () => {
+  const currentYear = new Date().getFullYear();
+
+  const ageAction = {
+    ...weatherAction(),
+    signal: 'Age Factor',
+    primaryCta: { label: 'See age-related checklist', href: '/dashboard/properties/property-1/focus/health/age-factor' },
+  };
+  const ageResult = buildFocusedHomeActionGuidance(ageAction, 'context-v1', { yearBuilt: currentYear - 12 });
+  const ageFocused = ageResult.blocks.find((block) => block.id === 'focused-home-action-guidance');
+  const ageChecklistSection = ageFocused.sections.find((section) => section.id === 'checklist');
+  assert.ok(ageChecklistSection, 'age-factor checklist section should be present');
+  assert.ok(ageChecklistSection.items.length > 0);
+  const agePrimary = ageFocused.actions.find((candidate) => candidate.id === `home-action-primary-${ageAction.id}`);
+  assert.equal(agePrimary.href, ageAction.primaryCta.href);
+  assert.equal(agePrimary.style, 'SECONDARY', 'CTA should be demoted once the checklist answers inline');
+  assert.equal(agePrimary.interactionType, undefined);
+
+  const hvacAction = {
+    ...weatherAction(),
+    signal: 'HVAC Age',
+    primaryCta: { label: 'Book an HVAC check', href: '/dashboard/properties/property-1/focus/health/hvac-age' },
+  };
+  const hvacResult = buildFocusedHomeActionGuidance(hvacAction, 'context-v1', { hvacInstallYear: currentYear - 15 });
+  const hvacChecklist = hvacResult.blocks.find((block) => block.id === 'focused-home-action-guidance').sections.find((section) => section.id === 'checklist');
+  assert.ok(hvacChecklist, 'HVAC-age checklist section should be present');
+  assert.ok(hvacChecklist.items.length > 0);
+
+  // Missing the underlying year field: no checklist, same as the traditional page's own gating,
+  // and the CTA stays the original PRIMARY navigation (no regression for a case we can't answer).
+  const noDataAction = {
+    ...weatherAction(),
+    signal: 'Age Factor',
+    primaryCta: { label: 'See age-related checklist', href: '/dashboard/properties/property-1/focus/health/age-factor' },
+  };
+  const noDataResult = buildFocusedHomeActionGuidance(noDataAction, 'context-v1', { yearBuilt: null });
+  const noDataFocused = noDataResult.blocks.find((block) => block.id === 'focused-home-action-guidance');
+  assert.equal(noDataFocused.sections.find((section) => section.id === 'checklist'), undefined);
+  const noDataPrimary = noDataFocused.actions.find((candidate) => candidate.id === `home-action-primary-${noDataAction.id}`);
+  assert.equal(noDataPrimary.style, 'PRIMARY');
+  assert.equal(noDataPrimary.href, noDataAction.primaryCta.href);
+
+  // No propertyFacts argument at all (existing callers before this change): unaffected, same as before.
+  const noFactsResult = buildFocusedHomeActionGuidance(noDataAction, 'context-v1');
+  const noFactsFocused = noFactsResult.blocks.find((block) => block.id === 'focused-home-action-guidance');
+  assert.equal(noFactsFocused.sections.find((section) => section.id === 'checklist'), undefined);
+  assert.equal(noFactsFocused.actions[0].style, 'PRIMARY');
+});
+
 test('Group C savings-benefits resume action (has actionId) and unmapped destinations still navigate', () => {
   const resumeAction = {
     ...weatherAction(),

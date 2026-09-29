@@ -1,6 +1,7 @@
 import type { AskOperationResult } from './askOperationRegistry';
 import type { AskOperationId } from './askOperationRegistry';
 import type { RankedHomeAction } from '../homeActions.service';
+import { resolveHealthFactorChecklist, urgencyLabel, type HealthFactorChecklistProperty } from './healthFactorChecklist';
 
 export type HomeActionPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
 
@@ -100,6 +101,17 @@ function resolveGroupAAskRouting(href: string | undefined): { operationId: AskOp
   return null;
 }
 
+// Group B, health-factor checklist slice (gap audit §17). A health-insight Home Action with no
+// matched inventory item routes here (homeActionSourcePromotion.service.ts's buildInsightAction),
+// e.g. the reported "See age-related checklist" case. Unlike Group A, no existing Ask operation
+// covers this content, so it is rendered inline (see healthFactorChecklist.ts) rather than routed.
+export function isHealthFactorFocusHref(href: string | undefined): boolean {
+  if (!href) return false;
+  const parsed = parseHomeActionHref(href);
+  if (!parsed) return false;
+  return /^\/dashboard\/properties\/[^/]+\/focus\/health\/[^/]+$/.test(parsed.pathname);
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -134,9 +146,13 @@ export function focusedHomeActionCategory(action: RankedHomeAction): {
 export function buildFocusedHomeActionGuidance(
   action: RankedHomeAction,
   contextVersion: string | null,
+  propertyFacts?: HealthFactorChecklistProperty,
 ): AskOperationResult {
   const title = focusedTitle(action);
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
+  const checklist = !groupARouting && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
+    ? resolveHealthFactorChecklist(action.signal, propertyFacts)
+    : null;
   const primaryAction = groupARouting
     ? {
       id: `home-action-primary-${action.id}`,
@@ -150,7 +166,9 @@ export function buildFocusedHomeActionGuidance(
       id: `home-action-primary-${action.id}`,
       label: action.primaryCta.label,
       href: action.primaryCta.href,
-      style: 'PRIMARY' as const,
+      // The checklist is now answered inline (see the `checklist` section below), so the
+      // traditional page becomes an optional escape hatch rather than the sole destination.
+      style: checklist ? 'SECONDARY' as const : 'PRIMARY' as const,
     };
 
   const timing = action.timing.dueAt
@@ -229,6 +247,18 @@ export function buildFocusedHomeActionGuidance(
         title: fact.label,
         description: fact.value,
         meta: [],
+        status: null,
+        href: null,
+      })),
+    }] : []), ...(checklist ? [{
+      id: 'checklist',
+      title: checklist.title,
+      count: checklist.items.length,
+      items: checklist.items.map((item) => ({
+        id: `${action.id}-checklist-${item.id}`,
+        title: item.system,
+        description: `${item.ageNote} ${item.action}`,
+        meta: [urgencyLabel(item.urgency)],
         status: null,
         href: null,
       })),

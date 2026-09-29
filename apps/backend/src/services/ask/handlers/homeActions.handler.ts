@@ -16,7 +16,7 @@ import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
 import { buildPriorityListView } from '../../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds } from '../../decisionPlatform/homeActionUsefulnessFeedback.service';
-import { buildFocusedHomeActionGuidance, homeActionPriorityFilter } from '../askFocusedGuidance';
+import { buildFocusedHomeActionGuidance, homeActionPriorityFilter, isHealthFactorFocusHref } from '../askFocusedGuidance';
 import {
   dashboardSectionRepresentativeActions,
   projectHomeActionDashboardSections,
@@ -339,7 +339,15 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         suggestions: ['What else needs my attention?'],
       };
     }
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion);
+    // Group B health-factor checklist slice (gap audit §17): the checklist needs property
+    // year fields the Home Action feed itself doesn't carry. Fetched only for this one case.
+    const propertyFacts = isHealthFactorFocusHref(focusedAction.primaryCta.href)
+      ? await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { yearBuilt: true, hvacInstallYear: true, waterHeaterInstallYear: true, roofReplacementYear: true },
+      })
+      : null;
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined);
   }
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);
