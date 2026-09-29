@@ -86,9 +86,12 @@ export type AskOperationId =
   | 'INSPECTION_FINDINGS'
   | 'INSPECTION_FINDING_UPDATE'
   // Home Action focused-guidance CTA audit, Group B recall-review slice (gap audit §17; FRD
-  // v1.161). Read-only: no existing operation covered recalls at all. Confirm/dismiss/resolve
-  // mutations are a deliberately deferred follow-up (see recallReview.handler.ts).
+  // v1.161). Read-only: no existing operation covered recalls at all.
   | 'RECALL_REVIEW'
+  // Group B recall-mutation follow-up (gap audit §17; FRD v1.163): confirm, dismiss, or resolve a
+  // recall match, the write sibling RECALL_REVIEW's own note deferred -- same read/write split as
+  // INSPECTION_FINDINGS/INSPECTION_FINDING_UPDATE.
+  | 'RECALL_MATCH_UPDATE'
   | 'DOCUMENT_PROMOTION_REVIEW'
   | 'DOCUMENT_PROMOTION_CONFIRM'
   | 'CAPABILITY_DISCOVERY'
@@ -390,6 +393,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   INSPECTION_FINDINGS: definition('INSPECTION_FINDINGS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inspection-findings.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   INSPECTION_FINDING_UPDATE: definition('INSPECTION_FINDING_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-findings.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   RECALL_REVIEW: definition('RECALL_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'recalls.review', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
+  RECALL_MATCH_UPDATE: definition('RECALL_MATCH_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'recalls.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   DOCUMENT_PROMOTION_REVIEW: definition('DOCUMENT_PROMOTION_REVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'document-promotion.review', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE']),
   // IW-FRESH-003 fix: LIMITATION added so confirmDocumentPromotionConfirm's
   // "Saved; list could not refresh" reconciliation-failure block (same
@@ -745,7 +749,14 @@ const warrantyLookupPattern = new RegExp([
   String.raw`\bhow long\b.{0,40}\bwarrant(?:y|ies)\b`,
   String.raw`\bwhen (?:does|do|will|is|are)\b.{0,40}\bwarrant(?:y|ies)\b.{0,30}\b(?:end|expire|expires|run out|runs out|up)\b`,
 ].join('|'), 'i');
-const warrantyLookupOtherIntentPattern = /\b(?:claims?|file|filing|add|new|create|record a|save|buy|purchase|renew|cancel|extend|extended|register|transfer|correct|fix|change|update|edit|rename|delete|remove|missing|without|uncovered|gaps?|lack(?:s|ing)?|exposure|insurance|policy|premium|repair|replace|worth|should i|remind|notify|alert|warn|monitor|price|cost|quote|compare|coverage (?:analysis|review))\b/i;
+// "file"/"filing" require a following article/possessive (mirroring "record a"'s own convention
+// just below) so a routine "warranty on file" or "warranty information on file" phrase -- common,
+// benign wording this codebase's own answer copy uses -- is not mistaken for the filing-a-claim
+// intent this exclusion exists for. Group B recall-mutation follow-up (gap audit §17; FRD v1.163)
+// found this: a recalibration from adding new routing evidence exposed a message this bare "file"
+// token was already silently routing away from WARRANTY_LOOKUP before that recalibration too (code-
+// traced, not a regression this change introduced -- see the same-numbered FRD note for detail).
+const warrantyLookupOtherIntentPattern = /\b(?:claims?|(?:file|filing) (?:a|an|my|our)|add|new|create|record a|save|buy|purchase|renew|cancel|extend|extended|register|transfer|correct|fix|change|update|edit|rename|delete|remove|missing|without|uncovered|gaps?|lack(?:s|ing)?|exposure|insurance|policy|premium|repair|replace|worth|should i|remind|notify|alert|warn|monitor|price|cost|quote|compare|coverage (?:analysis|review))\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?))\b/i;
 // Deliberately checked before coveragePattern in the cascade below:
 // "compare my insurance coverage" contains coveragePattern's own bare
@@ -767,6 +778,10 @@ const claimTransitionPattern = /\b(?:submit|advance|move|transition|approve|deny
 const incidentContinuationPattern = /\b(?:emergency|incident)\b.{0,80}\b(?:over|contained|resolved|document|record|follow up|claim)\b|\b(?:document|record|follow up on)\b.{0,60}\b(?:emergency|incident)\b/i;
 const inspectionFindingUpdatePattern = /\b(?:accept|dismiss|resolve|close|track)\b.{0,80}\binspection (?:finding|issue)\b|\binspection (?:finding|issue)\b.{0,80}\b(?:accept|dismiss|resolve|close|track)\b/i;
 const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b.{0,70}\binspection (?:findings?|issues?)\b|\bwhat did (?:the |my )?inspection find\b/i;
+// Checked before recallReviewPattern below (same order as inspection's update-before-review cascade):
+// "confirm/dismiss/resolve/close" never appears in recallReviewPattern's own trigger verbs
+// (show/review/list/open/unresolved/any/has/have/been), so there is no ambiguity to resolve here.
+const recallMatchUpdatePattern = /\b(?:confirm|dismiss|resolve|close)\b.{0,80}\brecall(?:s|ed|ing)?\b|\brecall(?:s|ed|ing)?\b.{0,80}\b(?:confirm|dismiss|resolve|close)\b/i;
 const recallReviewPattern = /\b(?:show|review|list|what|open|unresolved|any|has|have|been)\b.{0,60}\brecall(?:s|ed|ing)?\b|\brecall(?:s|ed|ing)?\b.{0,60}\b(?:show|review|list|open|unresolved|affect(?:ed|ing)? (?:me|us|this home))\b|\b(?:is|has|have)\b.{0,40}\b(?:my|this|our)\b.{0,40}\brecalled\b/i;
 const documentPromotionConfirmPattern = /\b(?:confirm|reject|promote|apply)\b.{0,80}\b(?:document|extraction|extracted|policy fact|inspection report)\b/i;
 const documentPromotionReviewPattern = /(?:\b(?:show|review|list|what)\b.{0,80}\b(?:document|documnt|extraction|extracted)\b.{0,50}\b(?:review|confirmation|pending|promotion|facts?)\b|\b(?:review|show|list)\b.{0,40}\bpending\b.{0,40}\b(?:document|documnt|extraction)\b)/i;
@@ -1173,6 +1188,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (inspectionFindingUpdatePattern.test(message)) return resolved('INSPECTION_FINDING_UPDATE', 0.98);
   if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96);
+  if (recallMatchUpdatePattern.test(message)) return resolved('RECALL_MATCH_UPDATE', 0.98);
   if (recallReviewPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('RECALL_REVIEW', 0.96);
   }

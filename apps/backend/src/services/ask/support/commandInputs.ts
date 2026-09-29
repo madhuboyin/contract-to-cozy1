@@ -146,6 +146,15 @@ export const InspectionResolutionSchema = z.object({
   costCents: z.number().int().min(0).max(1_000_000_000).nullable(),
 }).strict();
 
+// Group B recall-mutation follow-up (gap audit §17; FRD v1.163). No cost field, unlike
+// InspectionResolutionSchema above -- recalls.service.ts's resolveRecallMatch has no cost parameter.
+export type RecallResolution = z.infer<typeof RecallResolutionSchema>;
+
+export const RecallResolutionSchema = z.object({
+  resolutionType: z.enum(['FIXED', 'REPLACED', 'REFUNDED', 'NOT_APPLICABLE', 'IGNORED', 'OTHER']),
+  resolutionNotes: z.string().trim().min(1).max(1000).nullable(),
+}).strict();
+
 export const GuidanceJourneyCommandInputSchema = z.object({
   scopeCategory: z.enum(['ITEM', 'SERVICE']),
   scopeId: z.string().trim().min(1).max(160),

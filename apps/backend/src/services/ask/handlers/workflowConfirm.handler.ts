@@ -15,8 +15,10 @@ import { PropertySaleCaseService } from '../../propertySaleCase.service';
 import { guidanceJourneyService } from '../../guidanceEngine/guidanceJourney.service';
 import { getOrCreateQuoteComparisonWorkspace } from '../../quoteComparison.service';
 import { upsertNotificationPreference } from '../../notificationPreference.service';
-import { asInputJson, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, InspectionResolution, InspectionResolutionSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, QuoteWorkspaceCommandInputSchema } from '../askHandlerSupport';
+import { asInputJson, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, InspectionResolution, InspectionResolutionSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, QuoteWorkspaceCommandInputSchema, RecallResolution, RecallResolutionSchema } from '../askHandlerSupport';
 import { INSPECTION_RESOLUTION_DEFAULT, inspectionFindingVersion, inspectionResolutionEditableFields } from '../handlers/inspection.handler';
+import { RECALL_RESOLUTION_DEFAULT, recallMatchVersion, recallReviewHref, recallResolutionEditableFields } from '../handlers/recallReview.handler';
+import { confirmRecallMatch, dismissRecallMatch, resolveRecallMatch } from '../../recalls.service';
 import { quoteWorkspaceContextVersion } from '../handlers/quotes.handler';
 import { refinanceMonitorBlock, refinanceMonitorContextVersion } from '../handlers/refinance.handler';
 import { SALE_READINESS_ITEM_STATUS_LABELS, saleCaseHref, sellerPrepItemContextVersion } from '../handlers/sellHoldRent.handler';
@@ -75,6 +77,62 @@ export async function editInspectionFindingResolveConfirmation(
     where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
     data: {
       parametersJson: asInputJson({ ...parameters, inspectionResolution: resolution, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
+      resultJson: asInputJson({
+        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
+        ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),
+      }),
+    },
+  });
+  if (editWrite.count !== 1) throw Object.assign(new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  await prisma.askExecutionEvent.create({
+    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
+  });
+  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
+  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+}
+
+// Group B recall-mutation follow-up (gap audit §17; FRD v1.163). Same edit-in-place pattern as
+// editInspectionFindingResolveConfirmation above, minus the cost field (recalls.service.ts's
+// resolveRecallMatch has none).
+export async function editRecallMatchResolveConfirmation(
+  execution: AskExecution,
+  parameters: Record<string, unknown>,
+  input: EditAskConfirmation,
+  userId: string,
+): Promise<AskExecutionResponse> {
+  void userId;
+  const existing = RecallResolutionSchema.safeParse(parameters.recallResolution);
+  if (parameters.recallMatchAction !== 'RESOLVE' || !existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
+  const unknownField = Object.keys(input.edits).find((key) => !['resolutionType', 'resolutionNotes'].includes(key));
+  if (unknownField) throw Object.assign(new Error('Only the resolution type and notes can be edited.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const next: RecallResolution = { ...existing.data };
+  if (input.edits.resolutionType !== undefined) {
+    const resolutionType = RecallResolutionSchema.shape.resolutionType.safeParse(input.edits.resolutionType.trim());
+    if (!resolutionType.success) throw Object.assign(new Error('Choose one of the listed resolution types.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+    next.resolutionType = resolutionType.data;
+  }
+  if (input.edits.resolutionNotes !== undefined) {
+    if (input.edits.resolutionNotes.trim().length > 1000) throw Object.assign(new Error('Keep the notes to 1000 characters or fewer.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+    next.resolutionNotes = input.edits.resolutionNotes.trim() || null;
+  }
+  const resolution = RecallResolutionSchema.parse(next);
+  const matchId = typeof parameters.recallMatchId === 'string' ? parameters.recallMatchId : '';
+  const match = await prisma.recallMatch.findFirst({ where: { id: matchId, propertyId: execution.propertyId! }, include: { recall: true } });
+  if (!match) throw Object.assign(new Error('This recall match is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  const nextVersion = input.confirmationVersion + 1;
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const href = recallReviewHref(execution.propertyId!);
+  const newConfirmation = {
+    confirmationId: `recall-match-${match.id}-${nextVersion}`, version: nextVersion, title: 'Resolve this recall match?', description: match.recall.title,
+    fields: [{ label: 'Recall', value: match.recall.title }, { label: 'Severity', value: String(match.recall.severity).toLowerCase() }, { label: 'Action', value: 'resolve' }],
+    editableFields: recallResolutionEditableFields(resolution), confirmLabel: 'Resolve match',
+    consentText: 'I reviewed this recall match and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString(),
+  };
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'recall-match-review', title: 'Review resolve action', body: 'Resolving records how this recall was handled on the canonical recall match.', tone: 'CAUTION' as const, actions: [{ id: 'open-recalls', label: 'Review in Recalls & Safety Alerts', href, style: 'SECONDARY' as const }] };
+  const editWrite = await prisma.askExecution.updateMany({
+    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
+    data: {
+      parametersJson: asInputJson({ ...parameters, recallResolution: resolution, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
       resultJson: asInputJson({
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
         ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),
@@ -271,6 +329,60 @@ async function confirmInspectionFindingUpdate(ctx: ConfirmCapabilityContext): Pr
         suggestions: ['Show remaining inspection findings'],
       });
     }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
+}
+
+// Group B recall-mutation follow-up (gap audit §17; FRD v1.163), the write sibling RECALL_REVIEW's
+// own read slice (FRD v1.161) deferred. No batch mode -- unlike inspection findings, the traditional
+// RecallMatchCard.tsx has no deck/batch UI to mirror, only per-card single actions.
+async function confirmRecallMatchUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const matchId = parameters.recallMatchId;
+  const action = parameters.recallMatchAction;
+  if (typeof matchId !== 'string' || !['CONFIRM', 'DISMISS', 'RESOLVE'].includes(String(action))) throw Object.assign(new Error('The recall match action is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const match = await prisma.recallMatch.findFirst({ where: { id: matchId, propertyId: execution.propertyId }, include: { recall: true } });
+  if (!match) throw Object.assign(new Error('The selected recall match is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const currentVersion = recallMatchVersion(match);
+  const alreadyApplied = (action === 'CONFIRM' && Boolean(match.confirmedAt) && match.status === 'OPEN')
+    || (action === 'DISMISS' && match.status === 'DISMISSED')
+    || (action === 'RESOLVE' && match.status === 'RESOLVED');
+  if (parameters.recallMatchContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This recall match changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  if (!alreadyApplied) {
+    if (action === 'CONFIRM') await confirmRecallMatch(execution.propertyId, match.id);
+    else if (action === 'DISMISS') await dismissRecallMatch(execution.propertyId, match.id);
+    else {
+      // Older proposals (before an edit) carry no resolution; they get the traditional dialog's default type.
+      const resolution = RecallResolutionSchema.safeParse(parameters.recallResolution ?? RECALL_RESOLUTION_DEFAULT);
+      if (!resolution.success) throw Object.assign(new Error('The resolution details are invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+      await resolveRecallMatch({
+        propertyId: execution.propertyId, matchId: match.id,
+        resolutionType: resolution.data.resolutionType,
+        resolutionNotes: resolution.data.resolutionNotes,
+      });
+    }
+  }
+  const artifactType = 'RECALL_MATCH';
+  const artifactId = match.id;
+  const href = recallReviewHref(execution.propertyId);
+  const matchReasonCode = action === 'CONFIRM' ? 'RECALL_MATCH_CONFIRMED' : action === 'DISMISS' ? 'RECALL_MATCH_DISMISSED' : 'RECALL_MATCH_RESOLVED';
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: matchReasonCode,
+    blocks: [{
+      type: 'WORKFLOW_PROGRESS', id: `recall-match-updated-${match.id}`, title: 'Recall match updated', status: 'COMPLETED',
+      description: action === 'CONFIRM' ? 'The canonical recall match now reflects a confirmed product identity.' : action === 'DISMISS' ? 'The canonical recall match and any linked maintenance task were updated.' : 'The canonical recall match now records how this recall was handled.',
+      details: [{ label: 'Recall', value: match.recall.title }, { label: 'Action', value: String(action).toLowerCase() }],
+      actions: [{ id: 'open-recalls', label: 'Open Recalls & Safety Alerts', href, style: 'PRIMARY' }],
+    }], suggestions: ['Show remaining recall matches'],
+  };
+  // Same reconciliation this whole arc's writes already use -- see ASK_MUTATION_IMPACT_MAP's RECALL_MATCH_UPDATE entry.
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({
+      type: 'BOUNDARY', id: `recall-match-refresh-failed-${match.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
+      body: 'This update was saved to the canonical recall match. The recall matches list you were viewing could not refresh automatically -- ask "Show my open recall matches" to see its current state.',
+      suggestions: ['Show my open recall matches'],
+    });
+  }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 
@@ -558,6 +670,7 @@ registerConfirmCapabilityHandler('incident-claim.file', confirmClaimFile);
 registerConfirmCapabilityHandler('incident-claim.transition', confirmClaimTransition);
 
 registerConfirmCapabilityHandler('inspection-findings.update', confirmInspectionFindingUpdate);
+registerConfirmCapabilityHandler('recalls.update', confirmRecallMatchUpdate);
 
 registerConfirmCapabilityHandler('seller-prep.item-decision', confirmSellerPrepItemDecision);
 

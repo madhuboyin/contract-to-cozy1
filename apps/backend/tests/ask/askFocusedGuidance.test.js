@@ -9,6 +9,7 @@ const {
   focusedHomeActionQuestion,
   focusedOperationForLaunchContext,
   homeActionPriorityFilter,
+  isPropertyContextCaptureAction,
 } = require('../../src/services/ask/askFocusedGuidance.ts');
 
 test('landing section prompts preserve the dashboard priority partitions', () => {
@@ -308,6 +309,80 @@ test('Group B record-review destinations route to their (existing or new) Ask op
     .find((block) => block.id === 'focused-home-action-guidance')
     .actions.find((candidate) => candidate.id === `home-action-primary-${openItemsAction.id}`);
   assert.equal(openItemsPrimary.operationId, 'INSPECTION_FINDINGS');
+});
+
+function digitalTwinFactReviewAction() {
+  return {
+    ...weatherAction(),
+    id: 'home-digital-twin-fact-review:component-1',
+    lineageId: 'home-digital-twin-fact-review:component-1',
+    presentation: { ...weatherAction().presentation, subject: { kind: 'INVENTORY_ITEM', id: 'item-1', label: 'Refrigerator' } },
+    propertyContextFeature: {
+      featureKey: 'CAPITAL_TIMELINE',
+      operationKey: 'RUN_TIMELINE',
+      operationInput: { inventoryItemId: 'item-1' },
+    },
+    primaryCta: {
+      kind: 'CORRECT_FACT',
+      label: 'Confirm Refrigerator details',
+      href: '/dashboard/resolution-center?propertyId=property-1&sourceActionId=home-digital-twin-fact-review%3Acomponent-1',
+    },
+  };
+}
+
+function fakeCaptureRequest(action) {
+  return {
+    requirementId: 'req-1',
+    captureKey: 'INVENTORY_ITEM_PURCHASE_DATE',
+    classification: 'ENHANCEMENT_ACCURACY',
+    state: 'UNKNOWN',
+    title: "Refrigerator's purchase date",
+    question: 'About when was the Refrigerator purchased?',
+    helpText: null,
+    inputSchema: { type: 'DATE' },
+    allowNotSure: true,
+    sensitivity: 'STANDARD',
+    destinationLabel: 'Saved to this home’s Property Context',
+    fallbackHref: action.primaryCta.href,
+    confirmationText: null,
+    expectedContextVersion: 'context-v1',
+  };
+}
+
+test('isPropertyContextCaptureAction identifies a CORRECT_FACT CTA carrying a propertyContextFeature ref', () => {
+  assert.equal(isPropertyContextCaptureAction(digitalTwinFactReviewAction()), true);
+  assert.equal(isPropertyContextCaptureAction(weatherAction()), false, 'a REVIEW cta with no propertyContextFeature is not capture-shaped');
+  const ctaOnlyAction = { ...weatherAction(), primaryCta: { kind: 'CORRECT_FACT', label: 'Fix', href: '/dashboard/resolution-center' } };
+  assert.equal(isPropertyContextCaptureAction(ctaOnlyAction), false, 'CORRECT_FACT alone with no propertyContextFeature is not enough');
+});
+
+test('Group B resolution-center capture slice renders an inline captureRequest instead of only navigating', () => {
+  const action = digitalTwinFactReviewAction();
+  const captureRequest = fakeCaptureRequest(action);
+
+  const result = buildFocusedHomeActionGuidance(action, 'context-v1', undefined, captureRequest);
+  assert.deepEqual(result.captureRequests, [captureRequest]);
+  assert.deepEqual(result.parameters, {
+    focusedHomeActionId: action.id,
+    captureFeature: action.propertyContextFeature,
+  });
+  const primary = result.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${action.id}`);
+  assert.equal(primary.href, action.primaryCta.href, 'the resolution-center escape hatch stays available');
+  assert.equal(primary.style, 'SECONDARY', 'CTA should be demoted once the fact is asked inline');
+  assert.equal(primary.interactionType, undefined);
+
+  // No captureRequest supplied (e.g. the handler found nothing active to ask, or the household
+  // role can't improve context): unaffected, same PRIMARY navigation as before this slice.
+  const noCaptureResult = buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null);
+  assert.equal(noCaptureResult.captureRequests, undefined);
+  assert.deepEqual(noCaptureResult.parameters, { focusedHomeActionId: action.id });
+  const noCapturePrimary = noCaptureResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${action.id}`);
+  assert.equal(noCapturePrimary.style, 'PRIMARY');
+  assert.equal(noCapturePrimary.href, action.primaryCta.href);
 });
 
 test('focused Ask preserves neutral pre-snapshot HVAC guidance without manufacturing a verdict', () => {

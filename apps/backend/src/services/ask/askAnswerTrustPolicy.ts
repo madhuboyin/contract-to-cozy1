@@ -82,7 +82,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // FRD v1.43: INSPECTION_FINDINGS had no entry, so even its "Open Inspection Hub" link was stripped; the finding
   // actions are shown in the inline detail only when the live state allows them.
   INSPECTION_FINDINGS: new Set(['open-inspection', 'finding-accept', 'finding-dismiss', 'finding-resolve']),
+  RECALL_REVIEW: new Set(['open-recalls', 'recall-confirm', 'recall-dismiss', 'recall-resolve']),
   INSPECTION_FINDING_UPDATE: new Set(['open-inspection', 'open-finding']),
+  RECALL_MATCH_UPDATE: new Set(['open-recalls']),
   // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
   DOCUMENT_LOOKUP: new Set(['open-documents', 'open-documents-list']),
   INCIDENT_CLAIM_STATUS: new Set(['open-incidents', 'open-claims', 'open-incidents-list', 'open-claims-list', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),

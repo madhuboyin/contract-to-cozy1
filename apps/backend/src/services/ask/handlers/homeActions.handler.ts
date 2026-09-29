@@ -16,7 +16,8 @@ import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
 import { buildPriorityListView } from '../../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds } from '../../decisionPlatform/homeActionUsefulnessFeedback.service';
-import { buildFocusedHomeActionGuidance, homeActionPriorityFilter, isHealthFactorFocusHref } from '../askFocusedGuidance';
+import { buildFocusedHomeActionGuidance, homeActionPriorityFilter, isHealthFactorFocusHref, isPropertyContextCaptureAction } from '../askFocusedGuidance';
+import { askCaptureRequest } from '../support/capture';
 import {
   dashboardSectionRepresentativeActions,
   projectHomeActionDashboardSections,
@@ -341,13 +342,34 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     }
     // Group B health-factor checklist slice (gap audit §17): the checklist needs property
     // year fields the Home Action feed itself doesn't carry. Fetched only for this one case.
-    const propertyFacts = isHealthFactorFocusHref(focusedAction.primaryCta.href)
-      ? await prisma.property.findUnique({
-        where: { id: propertyId },
-        select: { yearBuilt: true, hvacInstallYear: true, waterHeaterInstallYear: true, roofReplacementYear: true },
-      })
+    // Group B resolution-center capture slice (gap audit §17): evaluate the action's OWN
+    // propertyContextFeature (not the generic HOME_ACTIONS/VIEW_FEED evaluation above) so the
+    // capture card asks exactly the fact this specific action needs.
+    const [propertyFacts, featureCaptureEvaluation] = await Promise.all([
+      isHealthFactorFocusHref(focusedAction.primaryCta.href)
+        ? prisma.property.findUnique({
+          where: { id: propertyId },
+          select: { yearBuilt: true, hvacInstallYear: true, waterHeaterInstallYear: true, roofReplacementYear: true },
+        })
+        : Promise.resolve(null),
+      isPropertyContextCaptureAction(focusedAction) && focusedAction.propertyContextFeature
+        ? evaluateFeatureContext(propertyId, userId, focusedAction.propertyContextFeature)
+        : Promise.resolve(null),
+    ]);
+    const featureCaptureRequirement = featureCaptureEvaluation?.requirements[0];
+    const featureCaptureSupported = featureCaptureRequirement
+      && access.role !== HouseholdRole.VIEWER
+      && featureCaptureRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
+      && featureCaptureRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
+    const captureRequest = featureCaptureSupported
+      ? askCaptureRequest(
+        featureCaptureRequirement,
+        featureCaptureEvaluation!.contextVersion,
+        'Saved to this home’s Property Context',
+        focusedAction.primaryCta.href,
+      )
       : null;
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined);
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest);
   }
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);

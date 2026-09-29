@@ -185,6 +185,9 @@ const ROWS: readonly ObservationTuple[] = [
   // Home Action focused-guidance CTA audit, Group B recall-review slice (FRD v1.161): fixture 096
   // (RECALL_REVIEW), derived from the live retriever the same way every row above was.
   ['096-expected', '096', 'RECALL_REVIEW', .4198, true], ['096-competitor', '096', 'INVENTORY_LOOKUP', .6498, false],
+  // Group B recall-mutation follow-up (gap audit §17; FRD v1.163): fixture 097 (RECALL_MATCH_UPDATE),
+  // derived from the live retriever the same way every row above was.
+  ['097-expected', '097', 'RECALL_MATCH_UPDATE', .4063, true], ['097-competitor', '097', 'RECALL_REVIEW', .1851, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

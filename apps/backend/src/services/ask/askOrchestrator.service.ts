@@ -28,7 +28,7 @@ import './handlers/miscHandlers.handler';
 export { operationalWorkCompletionObservedResult } from './handlers/miscHandlers.handler';
 import './handlers/captureConfirm.handler';
 import './handlers/workflowConfirm.handler';
-export { saleReadinessItemConflictDescription, editInspectionFindingResolveConfirmation } from './handlers/workflowConfirm.handler';
+export { saleReadinessItemConflictDescription, editInspectionFindingResolveConfirmation, editRecallMatchResolveConfirmation } from './handlers/workflowConfirm.handler';
 import './handlers/recordConfirm.handler';
 import './handlers/hvacConfirm.handler';
 import './handlers/buyerConfirm.handler';
@@ -96,6 +96,7 @@ export { HOME_TIMELINE_ASK_LIMIT, homeTimelineCategory, homeTimelinePlacement, h
 export { homeUpgradeComparison, homeUpgradeScenariosFromView } from './handlers/homeUpgradePlanner.handler';
 export { hvacDecisionStartContextVersion, hvacDecisionThreadVersionFingerprint, HVAC_VERDICT_RANK, hvacDecisionStartResult, hvacSpecialistEngageResult, HvacSpecialistEngageDependencies } from './handlers/hvacDecision.handler';
 export { INSPECTION_FINDING_ACTIONS, inspectionFindingItemActions, inspectionFindingActionAllowed, inspectionFindingItemActionsFor, INSPECTION_FINDING_BATCH_ACTIONS, INSPECTION_FINDING_DECK_PRESENTATION, inspectionFindingDeckFacts, inspectionHubHref, INSPECTION_RESOLUTION_DEFAULT, inspectionResolutionEditableFields, inspectionFindingVersion } from './handlers/inspection.handler';
+export { RECALL_MATCH_ACTIONS, recallMatchItemActions, recallMatchActionAllowed, recallMatchItemActionsFor, recallReviewHref, RECALL_RESOLUTION_DEFAULT, recallResolutionEditableFields, recallMatchVersion } from './handlers/recallReview.handler';
 export { inventoryService, inventoryCategoryLabel, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_CORRECTION_FIELDS, INVENTORY_ROOM_LINK_FIELD, inventoryFieldCurrent, inventoryFieldValueError, inventoryRoomLinkOptions, inventoryCorrectionCombinedBlocker, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldDisplay, inventoryItemContextVersion, inventoryCorrectionItemActions, inventoryCorrectionConfirmation, INVENTORY_ADD_MESSAGE, INVENTORY_CREATE_CAPTURE_KEY, INVENTORY_NO_ROOM_VALUE, inventoryAddItemAction, inventoryCreateRooms, inventoryCreateContextVersion, inventoryCreateBlocker, inventoryItemCreateResult } from './handlers/inventory.handler';
 export { maintenanceMoney, maintenanceWorkflowVersion, extractMaintenanceDueDate, maintenanceTaskCreateResult, maintenanceTaskVersion, maintenanceConflictDescription, maintenanceCompletionMatch, extractMaintenanceCompletionInput, maintenanceTaskCompleteResult, maintenanceUpdateAction, maintenanceUpdateSubject, maintenanceTaskUpdateResult, maintenanceMonitorSubject, loadAskViewState, mergeMaintenanceViewContinuation, maintenanceOpenTimingGroups, maintenanceShelfFacts, resolveMaintenanceCollectionOffset, maintenanceResult } from './handlers/maintenance.handler';
 export { materialSpecsFromView } from './handlers/materialSpecs.handler';

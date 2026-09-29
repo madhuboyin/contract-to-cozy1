@@ -39,7 +39,8 @@ test('every Ask operation has a complete governed definition', () => {
   // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41, 2026-09-22).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 114);
+  // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 115);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -60,7 +61,8 @@ test('every material Ask command has governed confirmation, authorization, cance
   // + CAPTURE_EVIDENCE_CONFIRM (Phase 2 external review, §8/§4.2; FRD §23).
   // + HOME_EVENT_RADAR_MARK_DONE/FEEDBACK (FRD v1.40; HOME_EVENT_RADAR_STATE is a direct write, not a command).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 42);
+  // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 43);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);

@@ -605,6 +605,10 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   // The finding's own status/work-disposition is exactly what INSPECTION_FINDINGS's
   // list shows per row.
   INSPECTION_FINDING_UPDATE: ['INSPECTION_FINDINGS'],
+  // Group B recall-mutation follow-up (gap audit §17; FRD v1.163): the match's own disposition is
+  // exactly what RECALL_REVIEW's list shows per row -- same reasoning as INSPECTION_FINDING_UPDATE
+  // one entry above.
+  RECALL_MATCH_UPDATE: ['RECALL_REVIEW'],
   // The item's status is exactly what SELLER_PREP_CHECKLIST's list shows per row.
   SELLER_PREP_ITEM_DECISION: ['SELLER_PREP_CHECKLIST'],
   // The corrected date is shown on the inventory lists and the Property Summary inventory collection.

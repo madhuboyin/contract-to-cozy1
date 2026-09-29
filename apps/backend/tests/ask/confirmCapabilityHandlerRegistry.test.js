@@ -23,7 +23,8 @@ test('every one of the 42 confirmation-required Ask commands resolves to a regis
   // + CAPTURE_EVIDENCE_CONFIRM (Phase 2 external review, §8/§4.2; FRD §23).
   // + HOME_EVENT_RADAR_MARK_DONE/FEEDBACK (FRD v1.40).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
-  assert.equal(commandIds.length, 42);
+  // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
+  assert.equal(commandIds.length, 43);
   assert.deepEqual(validateConfirmCapabilityHandlerRegistry(), []);
 });
 

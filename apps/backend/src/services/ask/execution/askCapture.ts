@@ -431,10 +431,22 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     });
     canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'HOME_ACTIONS') {
+    // Group B resolution-center capture slice (gap audit §17): a focused single-action turn
+    // stores its OWN propertyContextFeature (buildFocusedHomeActionGuidance's `captureFeature`
+    // parameter) -- when present, capture and recompute must target THAT feature, not the
+    // generic HOME_ACTIONS/VIEW_FEED scope the unfocused Home Actions list evaluates.
+    const homeActionsParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const focusedCaptureFeature = homeActionsParameters.captureFeature && typeof homeActionsParameters.captureFeature === 'object' && !Array.isArray(homeActionsParameters.captureFeature)
+      ? homeActionsParameters.captureFeature as { featureKey?: unknown; operationKey?: unknown; operationInput?: unknown }
+      : null;
+    const useFocusedFeature = typeof focusedCaptureFeature?.featureKey === 'string' && typeof focusedCaptureFeature?.operationKey === 'string';
     const capture = await captureFeatureContext(execution.propertyId, userId, {
       ...input,
-      featureKey: 'HOME_ACTIONS',
-      operationKey: 'VIEW_FEED',
+      featureKey: useFocusedFeature ? focusedCaptureFeature!.featureKey as string : 'HOME_ACTIONS',
+      operationKey: useFocusedFeature ? focusedCaptureFeature!.operationKey as string : 'VIEW_FEED',
+      ...(useFocusedFeature ? { operationInput: (focusedCaptureFeature!.operationInput as Record<string, unknown> | undefined) ?? {} } : {}),
     });
     if (!capture || typeof capture !== 'object' || Array.isArray(capture)
       || !('captureId' in capture) || typeof capture.captureId !== 'string'
@@ -444,8 +456,13 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     captureId = capture.captureId;
     capturedContextVersion = capture.contextVersion;
     const operation = resolveAskOperation(execution.message);
+    const focusedHomeActionId = typeof homeActionsParameters.focusedHomeActionId === 'string' ? homeActionsParameters.focusedHomeActionId : null;
     result = await executeOperation({
       userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation,
+      // Re-derives the SAME focused single-action card (rather than falling back to the
+      // unfocused list) the exact way the original turn was launched -- see
+      // homeActions.handler.ts's `home-actions.feed` registration.
+      ...(focusedHomeActionId ? { launchContext: { surface: 'ASK_CAPTURE', entityType: 'HOME_ACTION', actionId: focusedHomeActionId } } : {}),
     });
     canonicalOwner = 'PropertyContext';
   } else if (execution.operationId === 'COVERAGE_GAPS') {

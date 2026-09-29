@@ -22,6 +22,10 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'CLAIM_FILE',
   'CLAIM_TRANSITION',
   'INSPECTION_FINDING_UPDATE',
+  // Group B recall-mutation follow-up (gap audit §17; FRD v1.163), deferred by the RECALL_REVIEW
+  // read slice (FRD v1.161): confirm/dismiss/resolve a RecallMatch, mirroring
+  // INSPECTION_FINDING_UPDATE's shape one entry above.
+  'RECALL_MATCH_UPDATE',
   'DOCUMENT_PROMOTION_CONFIRM',
   // Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31). The real
   // write path PropertySaleCaseService.setItemDecision exposes -- WAIVE/
@@ -118,6 +122,7 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   CLAIM_FILE: command('CLAIM_FILE', 'CLAIM_FILE', 'incident-claim.file', 'CONTRIBUTOR', 'CLAIM', ['EDIT', 'STOP'], { title: 'Claim not created', body: 'No claim, checklist, Operational Work Item, or timeline event was created.', suggestion: 'Show my recorded claims' }),
   CLAIM_TRANSITION: command('CLAIM_TRANSITION', 'CLAIM_TRANSITION', 'incident-claim.transition', 'CONTRIBUTOR', 'CLAIM', ['EDIT', 'REOPEN'], { title: 'Claim status not changed', body: 'The claim, timeline, and linked Operational Work Item were not changed.', suggestion: 'Show my recorded claims' }),
   INSPECTION_FINDING_UPDATE: command('INSPECTION_FINDING_UPDATE', 'INSPECTION_FINDING_UPDATE', 'inspection-findings.update', 'CONTRIBUTOR', 'INSPECTION_FINDING', ['EDIT', 'REOPEN'], { title: 'Inspection finding not changed', body: 'The finding and any linked Operational Work Item remain unchanged.', suggestion: 'Show my open inspection findings' }),
+  RECALL_MATCH_UPDATE: command('RECALL_MATCH_UPDATE', 'RECALL_MATCH_UPDATE', 'recalls.update', 'CONTRIBUTOR', 'RECALL_MATCH', ['EDIT', 'REOPEN'], { title: 'Recall match not changed', body: 'The recall match record was not changed.', suggestion: 'Show my open recall matches' }),
   DOCUMENT_PROMOTION_CONFIRM: command('DOCUMENT_PROMOTION_CONFIRM', 'DOCUMENT_PROMOTION_CONFIRM', 'document-promotion.confirm', 'CONTRIBUTOR', 'DOCUMENT_PROMOTION', ['EDIT'], { title: 'Document candidate not promoted', body: 'No extracted candidate became canonical Home Record truth.', suggestion: 'Show pending document reviews' }),
   OPERATIONAL_WORK_UPDATE: command('OPERATIONAL_WORK_UPDATE', 'OPERATIONAL_WORK_UPDATE', 'home-operations.update', 'CONTRIBUTOR', 'OPERATIONAL_WORK_ITEM', ['EDIT', 'REOPEN', 'STOP'], { title: 'Operational Work not changed', body: 'The work item lifecycle, schedule, and evidence remain unchanged.', suggestion: 'Show my home operations' }),
   ROOM_CREATE: command('ROOM_CREATE', 'ROOM_CREATE', 'room.create', 'CONTRIBUTOR', 'INVENTORY_ROOM', ['EDIT', 'STOP'], { title: 'Room not added', body: 'No room was added.', suggestion: 'Show my rooms' }),

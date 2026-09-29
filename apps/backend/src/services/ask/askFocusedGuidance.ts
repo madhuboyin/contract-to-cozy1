@@ -1,6 +1,7 @@
 import type { AskOperationResult } from './askOperationRegistry';
 import type { AskOperationId } from './askOperationRegistry';
 import type { RankedHomeAction } from '../homeActions.service';
+import type { AskCaptureRequest } from '../../productFramework/ask/ask.contract';
 import { resolveHealthFactorChecklist, urgencyLabel, type HealthFactorChecklistProperty } from './healthFactorChecklist';
 
 export type HomeActionPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
@@ -156,6 +157,25 @@ function resolveGroupDReplacementGuidanceRouting(
   return { operationId: 'REPLACEMENT_GUIDANCE', entityId: subject.id, message: `Should I repair or replace ${subject.label}?` };
 }
 
+// Group B (gap audit §17), resolution-center capture slice. The reclassification note above (see
+// "Group B re-classification" comment on isHealthFactorFocusHref) found this third Group B shape:
+// a `CORRECT_FACT` CTA whose href is literally `/dashboard/resolution-center` (the
+// home-digital-twin-fact-review producer in homeActionSourcePromotion.service.ts, covering HVAC/
+// water heater/roof/appliance lifecycle facts alike -- one producer, many components) carries a
+// `propertyContextFeature` ref that is exactly what ResolutionCenterClient.tsx's own
+// PropertyContextCapturePanel already consumes (its `canCaptureResolutionInline` uses this same
+// CORRECT_FACT + propertyContextFeature test). Rather than porting that Sheet/drawer into Ask, this
+// reuses Ask's OWN generic inline-capture contract (AskCaptureRequest, the same mechanism
+// HOME_SAVINGS/OWNERSHIP_COSTS/CAPITAL_RESERVE_PLAN already drive from evaluateFeatureContext) --
+// the missing fact is asked and answered as a chat-native capture card, no new frontend surface.
+export function isPropertyContextCaptureAction(action: RankedHomeAction): boolean {
+  return Boolean(
+    action.primaryCta.kind === 'CORRECT_FACT'
+      && action.propertyContextFeature?.featureKey
+      && action.propertyContextFeature?.operationKey,
+  );
+}
+
 // Group B (gap audit §17): recall review and inspection-finding review. Both were classified as
 // "no existing operation covers this" in the original audit; inspection-finding review turned out,
 // on inspection, to already have a fully-built read+write operation (INSPECTION_FINDINGS/
@@ -212,6 +232,7 @@ export function buildFocusedHomeActionGuidance(
   action: RankedHomeAction,
   contextVersion: string | null,
   propertyFacts?: HealthFactorChecklistProperty,
+  captureRequest?: AskCaptureRequest | null,
 ): AskOperationResult {
   const title = focusedTitle(action);
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
@@ -222,6 +243,7 @@ export function buildFocusedHomeActionGuidance(
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
   const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
+  const hasFeatureCapture = !routing && !checklist && Boolean(captureRequest);
   const primaryAction = routing
     ? {
       id: `home-action-primary-${action.id}`,
@@ -240,8 +262,9 @@ export function buildFocusedHomeActionGuidance(
       // traditional page becomes an optional escape hatch rather than the sole destination.
       // A Group C whole-tool destination is honestly secondary for the same reason -- the
       // SUMMARY/GROUPED_LIST content above it is the actual answer, navigation is correct but
-      // not the primary action.
-      style: checklist || isGroupCDestination ? 'SECONDARY' as const : 'PRIMARY' as const,
+      // not the primary action. Same for a Group B feature-capture case: the missing fact is now
+      // asked inline as a captureRequest card, so the resolution-center escape hatch is optional.
+      style: checklist || isGroupCDestination || hasFeatureCapture ? 'SECONDARY' as const : 'PRIMARY' as const,
     };
 
   const timing = action.timing.dueAt
@@ -364,8 +387,15 @@ export function buildFocusedHomeActionGuidance(
     status: limited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: limited ? action.recommendationResponse.reasonCode : 'HOME_ACTION_FOCUSED_GUIDANCE',
     contextVersion,
-    parameters: { focusedHomeActionId: action.id },
+    parameters: {
+      focusedHomeActionId: action.id,
+      // Lets askCapture.ts's HOME_ACTIONS capture-submission branch write to (and recompute) the
+      // SAME feature this specific action evaluated, instead of the generic HOME_ACTIONS/VIEW_FEED
+      // scope the unfocused Home Actions list uses.
+      ...(hasFeatureCapture && action.propertyContextFeature ? { captureFeature: action.propertyContextFeature } : {}),
+    },
     blocks,
+    ...(hasFeatureCapture && captureRequest ? { captureRequests: [captureRequest] } : {}),
     suggestions: isPreparation ? [] : ['What else needs my attention?'],
   };
 }

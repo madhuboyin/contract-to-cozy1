@@ -23,7 +23,8 @@ test('every one of the 86 Ask operations has a coverage-matrix entry with no reg
   // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
-  assert.equal(operationIds.length, 114);
+  // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
+  assert.equal(operationIds.length, 115);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -94,7 +95,7 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM', 'MAJOR_EVENT_ENTRY',
   'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'CAPTURE_EVIDENCE_CONFIRM',
   'REFINANCE_ANALYSIS', 'SELL_HOLD_RENT_ANALYSIS', 'SELL_HOLD_RENT_GOAL_CAPTURE',
-  'HOME_ACTIONS', 'MAINTENANCE_FORECAST', 'HOME_CHANGE_SUMMARY', 'INSPECTION_FINDINGS', 'RECALL_REVIEW', 'INTELLIGENCE_ENVELOPE_QUERY',
+  'HOME_ACTIONS', 'MAINTENANCE_FORECAST', 'HOME_CHANGE_SUMMARY', 'INSPECTION_FINDINGS', 'RECALL_REVIEW', 'RECALL_MATCH_UPDATE', 'INTELLIGENCE_ENVELOPE_QUERY',
   'BUYER_PLAN_STATUS', 'BUYER_DEADLINES', 'BUYER_DOCUMENT_READINESS', 'BUYER_INSPECTION_REVIEW',
   'BUYER_TASK_COMPLETE', 'BUYER_TASK_CREATE', 'BUYER_TASK_UPDATE', 'BUYER_MOVE_STATUS',
   'BUYER_FINANCING_READINESS', 'BUYER_TITLE_ESCROW_READINESS', 'BUYER_WALKTHROUGH_READINESS',
@@ -149,7 +150,7 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 114);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 115);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
@@ -158,7 +159,8 @@ test('Stage 2 fields are TRACED with real notes only for operations actually tra
   // + HOME_EVENT_RADAR_STATE/MARK_DONE/FEEDBACK (Home Event Radar writes, FRD v1.40, 2026-09-22).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
-  assert.equal(operationIds.length, 114);
+  // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
+  assert.equal(operationIds.length, 115);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

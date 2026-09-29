@@ -123,6 +123,10 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   // Home Action focused-guidance CTA audit, Group B recall-review slice (gap audit §17; FRD
   // v1.161). Appended at the END, as above -- fixture ids are positional.
   { operationId: 'RECALL_REVIEW', message: 'Has any of my recorded equipment been recalled?', category: 'COLLOQUIAL' },
+  // Group B recall-mutation follow-up (gap audit §17; FRD v1.163). Appended at the END, as above --
+  // fixture ids are positional (a prior insert-mid-array mistake silently renumbered every fixture
+  // after it and desynced askRoutingCalibrationEvidence.ts's own position-keyed snapshot).
+  { operationId: 'RECALL_MATCH_UPDATE', message: 'Mark the dishwasher recall match resolved', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -210,6 +214,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   INSPECTION_FINDINGS: 'The confirmed inspection report has one unresolved major roof finding.',
   INSPECTION_FINDING_UPDATE: 'The selected inspection finding can be accepted as tracked work after confirmation.',
   RECALL_REVIEW: 'Two open recall matches are shown, one marked critical severity with a manufacturer remedy.',
+  RECALL_MATCH_UPDATE: 'The selected recall match can be confirmed, dismissed, or resolved after confirmation.',
   DOCUMENT_PROMOTION_REVIEW: 'Two document-derived facts are waiting for homeowner confirmation before becoming trusted home records.',
   DOCUMENT_PROMOTION_CONFIRM: 'The selected extracted fact can be promoted into the canonical home record after confirmation.',
   CAPABILITY_DISCOVERY: 'The guided records workflow is available for organizing this home paperwork.',
