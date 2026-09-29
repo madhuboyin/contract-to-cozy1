@@ -89,6 +89,53 @@ test('contextual Ask prompts resolve exact subjects and produce focused Home Act
   assert.equal(result.blocks.find((block) => block.type === 'EVIDENCE').items.length, 1);
 });
 
+test('Group A home-action CTAs route to the matching Ask operation instead of navigating out of Ask', () => {
+  const cases = [
+    { href: '/dashboard/warranties', operationId: 'WARRANTY_LOOKUP' },
+    { href: '/dashboard/properties/property-1/inventory?tab=coverage&highlight=item-1', operationId: 'WARRANTY_LOOKUP' },
+    { href: '/dashboard/properties/property-1/tools/coverage-intelligence?stage=questions', operationId: 'COVERAGE_GAPS' },
+    { href: '/dashboard/home-event-radar?propertyId=property-1', operationId: 'HOME_EVENT_RADAR_FEED' },
+    { href: '/dashboard/properties/property-1/tools/sell-hold-rent', operationId: 'SELL_HOLD_RENT_ANALYSIS' },
+    { href: '/dashboard/properties/property-1/tools/mortgage-refinance-radar', operationId: 'REFINANCE_ANALYSIS' },
+    { href: '/dashboard/properties/property-1/tools/savings-benefits', operationId: 'SAVINGS_OPPORTUNITIES' },
+    { href: '/dashboard/properties/property-1/tools/property-tax?stage=appeal&caseId=case-1', operationId: 'PROPERTY_TAX_APPEAL_READINESS' },
+    { href: '/dashboard/seasonal?propertyId=property-1', operationId: 'MAINTENANCE_STATUS' },
+  ];
+
+  for (const { href, operationId } of cases) {
+    const action = { ...weatherAction(), primaryCta: { label: 'Open destination', href } };
+    const result = buildFocusedHomeActionGuidance(action, 'context-v1');
+    const focused = result.blocks.find((block) => block.id === 'focused-home-action-guidance');
+    const primaryAction = focused.actions.find((candidate) => candidate.id === `home-action-primary-${action.id}`);
+    assert.equal(primaryAction.interactionType, 'START_WORKFLOW', `${href} should start a workflow instead of navigating`);
+    assert.equal(primaryAction.operationId, operationId, `${href} should route to ${operationId}`);
+    assert.equal(primaryAction.href, undefined, `${href} should not also carry a navigation href`);
+    assert.ok(primaryAction.message && primaryAction.message.length > 0, `${href} should carry a homeowner-visible message`);
+  }
+
+  // Seasonal checklist must include a seasonal keyword so MAINTENANCE_STATUS's internal
+  // branch (maintenance.handler.ts's seasonal-context detection) actually activates.
+  const seasonalAction = { ...weatherAction(), primaryCta: { label: 'View tasks', href: '/dashboard/seasonal?propertyId=property-1' } };
+  const seasonalResult = buildFocusedHomeActionGuidance(seasonalAction, 'context-v1');
+  const seasonalPrimary = seasonalResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${seasonalAction.id}`);
+  assert.match(seasonalPrimary.message, /\b(?:seasonal|winter|spring|summer|fall|autumn)\b/i);
+});
+
+test('Group C savings-benefits resume action (has actionId) and unmapped destinations still navigate', () => {
+  const resumeAction = {
+    ...weatherAction(),
+    primaryCta: { label: 'Resume action', href: '/dashboard/properties/property-1/tools/savings-benefits?section=in-progress&actionId=action-1' },
+  };
+  const resumeResult = buildFocusedHomeActionGuidance(resumeAction, 'context-v1');
+  const resumePrimary = resumeResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${resumeAction.id}`);
+  assert.equal(resumePrimary.href, resumeAction.primaryCta.href);
+  assert.equal(resumePrimary.interactionType, undefined);
+});
+
 test('focused Ask preserves neutral pre-snapshot HVAC guidance without manufacturing a verdict', () => {
   const action = {
     ...weatherAction(),

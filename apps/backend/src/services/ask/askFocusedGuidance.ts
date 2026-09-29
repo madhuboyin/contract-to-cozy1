@@ -31,6 +31,75 @@ function sentence(value: string): string {
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
+// Home Action focused-guidance CTA fix, Group A (gap audit §17; FRD v1.156).
+// `action.primaryCta.href` is taken verbatim from the governed Home Action
+// feed (shared with the traditional dashboard), so a focused-guidance turn's
+// only action used to navigate the whole browser out of Ask. These eight
+// destinations already have a certified Ask operation that reads the same
+// data the traditional page would show -- routing to it in-Ask (via the same
+// START_WORKFLOW pattern warranties.handler.ts/homeEventRadar.handler.ts
+// already use for their own declared actions) keeps the homeowner in the
+// conversation instead. Matched on `primaryCta.href` (the only signal this
+// module receives) against the exact destinations the audit traced per-site
+// in homeActionSourcePromotion.service.ts -- not a guess from the label,
+// which is homeowner-facing copy, not a stable routing key. Groups B/C/D
+// (drawer candidates, whole stateful tools, and guided journeys) are
+// deliberately untouched here and keep navigating.
+function parseHomeActionHref(href: string): { pathname: string; params: URLSearchParams } | null {
+  try {
+    const url = new URL(href, 'https://internal.invalid');
+    return { pathname: url.pathname, params: url.searchParams };
+  } catch {
+    return null;
+  }
+}
+
+function propertyToolPath(tool: string): RegExp {
+  return new RegExp(`^/dashboard/properties/[^/]+/tools/${tool}$`);
+}
+
+function resolveGroupAAskRouting(href: string | undefined): { operationId: AskOperationId; message: string } | null {
+  if (!href) return null;
+  const parsed = parseHomeActionHref(href);
+  if (!parsed) return null;
+  const { pathname, params } = parsed;
+
+  if (pathname === '/dashboard/warranties') {
+    return { operationId: 'WARRANTY_LOOKUP', message: 'Show my warranties' };
+  }
+  // Coverage-renewal's Warranty case (loadCoverageRenewalActions) links to the inventory
+  // coverage tab, not /dashboard/warranties, but is the same underlying warranty record.
+  if (/^\/dashboard\/properties\/[^/]+\/inventory$/.test(pathname) && params.get('tab') === 'coverage') {
+    return { operationId: 'WARRANTY_LOOKUP', message: 'Show my warranties' };
+  }
+  if (propertyToolPath('coverage-intelligence').test(pathname) && params.get('stage') === 'questions') {
+    return { operationId: 'COVERAGE_GAPS', message: 'What coverage gaps do I have?' };
+  }
+  if (pathname === '/dashboard/home-event-radar') {
+    return { operationId: 'HOME_EVENT_RADAR_FEED', message: 'Show my Home Event Radar feed' };
+  }
+  if (propertyToolPath('sell-hold-rent').test(pathname)) {
+    return { operationId: 'SELL_HOLD_RENT_ANALYSIS', message: 'Should I sell, hold, or rent this property?' };
+  }
+  if (propertyToolPath('mortgage-refinance-radar').test(pathname)) {
+    return { operationId: 'REFINANCE_ANALYSIS', message: 'Should I refinance my mortgage?' };
+  }
+  // Excludes the in-progress ?section=in-progress&actionId=... resume case (Group C):
+  // that is a specific, already-started benefit action, not the general opportunities list.
+  if (propertyToolPath('savings-benefits').test(pathname) && !params.has('actionId')) {
+    return { operationId: 'SAVINGS_OPPORTUNITIES', message: 'What savings opportunities are available for this home?' };
+  }
+  if (propertyToolPath('property-tax').test(pathname) && params.get('stage') === 'appeal') {
+    return { operationId: 'PROPERTY_TAX_APPEAL_READINESS', message: 'What is the status of my property tax appeal?' };
+  }
+  // The seasonal-checklist branch inside MAINTENANCE_STATUS only activates on a seasonal
+  // keyword in the message (maintenance.handler.ts); forcing the operation still requires it.
+  if (pathname === '/dashboard/seasonal') {
+    return { operationId: 'MAINTENANCE_STATUS', message: 'What is on my seasonal checklist?' };
+  }
+  return null;
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -67,13 +136,22 @@ export function buildFocusedHomeActionGuidance(
   contextVersion: string | null,
 ): AskOperationResult {
   const title = focusedTitle(action);
-  const primaryHref = action.primaryCta.href;
-  const primaryAction = {
-    id: `home-action-primary-${action.id}`,
-    label: action.primaryCta.label,
-    href: primaryHref,
-    style: 'PRIMARY' as const,
-  };
+  const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
+  const primaryAction = groupARouting
+    ? {
+      id: `home-action-primary-${action.id}`,
+      label: action.primaryCta.label,
+      interactionType: 'START_WORKFLOW' as const,
+      message: groupARouting.message,
+      operationId: groupARouting.operationId,
+      style: 'PRIMARY' as const,
+    }
+    : {
+      id: `home-action-primary-${action.id}`,
+      label: action.primaryCta.label,
+      href: action.primaryCta.href,
+      style: 'PRIMARY' as const,
+    };
 
   const timing = action.timing.dueAt
     ? `Due ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(action.timing.dueAt))}`
