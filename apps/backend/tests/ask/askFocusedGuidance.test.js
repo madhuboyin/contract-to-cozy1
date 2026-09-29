@@ -217,6 +217,58 @@ test('Group C whole-tool destinations still navigate but are demoted to a second
   assert.equal(unmappedPrimary.style, 'PRIMARY');
 });
 
+test('Group D repair/replace decision routes to REPLACEMENT_GUIDANCE with the item entity, instead of navigating', () => {
+  const hvacAction = {
+    ...weatherAction(),
+    id: 'repair-replace:analysis-1',
+    lineageId: 'repair-replace:item-1',
+    presentation: { ...weatherAction().presentation, subject: { kind: 'INVENTORY_ITEM', id: 'item-1', label: 'Furnace' } },
+    primaryCta: { label: 'Review Decision', href: '/dashboard/properties/property-1/inventory/items/item-1/replace-repair' },
+  };
+  const hvacResult = buildFocusedHomeActionGuidance(hvacAction, 'context-v1');
+  const hvacPrimary = hvacResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${hvacAction.id}`);
+  assert.equal(hvacPrimary.interactionType, 'START_WORKFLOW');
+  assert.equal(hvacPrimary.operationId, 'REPLACEMENT_GUIDANCE');
+  assert.equal(hvacPrimary.entityType, 'INVENTORY_ITEM');
+  assert.equal(hvacPrimary.entityId, 'item-1');
+  assert.equal(hvacPrimary.href, undefined);
+  assert.equal(hvacPrimary.style, 'PRIMARY');
+  assert.match(hvacPrimary.message, /Furnace/);
+
+  // Same routing whether or not an active guided journey changed the destination href --
+  // the underlying decision content is the same either way, only the traditional href varies.
+  const journeyAction = {
+    ...weatherAction(),
+    id: 'repair-replace:analysis-2',
+    lineageId: 'appliance-repair-replace:item-2',
+    presentation: { ...weatherAction().presentation, subject: { kind: 'INVENTORY_ITEM', id: 'item-2', label: 'Refrigerator' } },
+    primaryCta: { label: 'Continue journey', href: '/dashboard/properties/property-1/tools/guidance-overview?journeyId=journey-1&itemId=item-2' },
+  };
+  const journeyResult = buildFocusedHomeActionGuidance(journeyAction, 'context-v1');
+  const journeyPrimary = journeyResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${journeyAction.id}`);
+  assert.equal(journeyPrimary.operationId, 'REPLACEMENT_GUIDANCE');
+  assert.equal(journeyPrimary.entityId, 'item-2');
+
+  // A guidance journey with no INVENTORY_ITEM subject (the financial/weather continuation case) is
+  // not routed -- it has no existing Ask operation yet and keeps navigating unaffected.
+  const financialAction = {
+    ...weatherAction(),
+    lineageId: 'guidance:journey-3',
+    presentation: { ...weatherAction().presentation, subject: { kind: 'GUIDANCE_JOURNEY', id: 'journey-3', label: 'Out-of-Pocket Exposure' } },
+    primaryCta: { label: 'Review exposure', href: '/dashboard/properties/property-1/tools/guidance-overview?journeyId=journey-3' },
+  };
+  const financialResult = buildFocusedHomeActionGuidance(financialAction, 'context-v1');
+  const financialPrimary = financialResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${financialAction.id}`);
+  assert.equal(financialPrimary.href, financialAction.primaryCta.href);
+  assert.equal(financialPrimary.interactionType, undefined);
+});
+
 test('focused Ask preserves neutral pre-snapshot HVAC guidance without manufacturing a verdict', () => {
   const action = {
     ...weatherAction(),

@@ -133,6 +133,29 @@ export function isGroupCWholeToolDestination(action: RankedHomeAction): boolean 
   return false;
 }
 
+// Group D (gap audit §17), repair/replace decision slice only. The other Group D destination --
+// the generic financial/weather guided-journey continuation (homeActionSourcePromotion.service.ts's
+// "journey" producer, href resolved per journey type via resolveGuidanceHref) -- genuinely has no
+// existing Ask operation that reads a specific GuidanceJourney's current-step state
+// (GUIDANCE_JOURNEYS_LIST only lists all journeys with a still-external href per item); building
+// that is real new-operation work, not done here. The repair/replace decision, by contrast,
+// already has a fully-capable operation: REPLACEMENT_GUIDANCE (non-HVAC items) delegates
+// internally to the durable HVAC Decision Platform for HVAC items via hvacDecisionStartResult,
+// which is the SAME "continue the tracked HVAC decision" content this Home Action's own copy
+// already promises. Identified by lineageId prefix, not href -- the producer's href varies (a
+// bare item page, or a guidance-overview journey URL) depending on whether an active guided
+// journey exists for the item, but the underlying decision content is the same either way.
+const REPAIR_REPLACE_LINEAGE_PREFIXES = ['repair-replace:', 'appliance-repair-replace:'];
+
+function resolveGroupDReplacementGuidanceRouting(
+  action: RankedHomeAction,
+): { operationId: AskOperationId; entityId: string; message: string } | null {
+  if (!REPAIR_REPLACE_LINEAGE_PREFIXES.some((prefix) => action.lineageId.startsWith(prefix))) return null;
+  const subject = action.presentation?.subject;
+  if (!subject || subject.kind !== 'INVENTORY_ITEM') return null;
+  return { operationId: 'REPLACEMENT_GUIDANCE', entityId: subject.id, message: `Should I repair or replace ${subject.label}?` };
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -171,17 +194,20 @@ export function buildFocusedHomeActionGuidance(
 ): AskOperationResult {
   const title = focusedTitle(action);
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
-  const checklist = !groupARouting && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
+  const groupDRouting = !groupARouting ? resolveGroupDReplacementGuidanceRouting(action) : null;
+  const routing = groupARouting ?? groupDRouting;
+  const checklist = !routing && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
-  const isGroupCDestination = !groupARouting && !checklist && isGroupCWholeToolDestination(action);
-  const primaryAction = groupARouting
+  const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
+  const primaryAction = routing
     ? {
       id: `home-action-primary-${action.id}`,
       label: action.primaryCta.label,
       interactionType: 'START_WORKFLOW' as const,
-      message: groupARouting.message,
-      operationId: groupARouting.operationId,
+      message: routing.message,
+      operationId: routing.operationId,
+      ...(groupDRouting ? { entityType: 'INVENTORY_ITEM', entityId: groupDRouting.entityId } : {}),
       style: 'PRIMARY' as const,
     }
     : {
