@@ -359,7 +359,9 @@ export function buildFocusedHomeActionGuidance(
         href: null,
       })),
     }] : [])],
-    actions: [primaryAction],
+    // The inline checklist IS the destination page's content, so linking back to it is a redundant
+    // round trip out of Ask -- omit the action entirely rather than demote it.
+    actions: checklist ? [] : [primaryAction],
   }, {
     type: 'EVIDENCE',
     id: 'focused-home-action-evidence',
@@ -396,6 +398,10 @@ export function buildFocusedHomeActionGuidance(
     },
     blocks,
     ...(hasFeatureCapture && captureRequest ? { captureRequests: [captureRequest] } : {}),
+    // The generic HOME_ACTIONS -> MAINTENANCE_STATUS handoff ("Understand maintenance status") is
+    // unrelated to the one action being viewed, and the recommended step is already the first
+    // section above -- offering it again as a "Suggested next step" only misleads.
+    suppressSkillHandoff: true,
     suggestions: isPreparation ? [] : ['What else needs my attention?'],
   };
 }

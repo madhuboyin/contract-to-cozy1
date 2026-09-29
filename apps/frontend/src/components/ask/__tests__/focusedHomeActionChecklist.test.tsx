@@ -27,7 +27,7 @@ const block: GroupedList = {
       { id: 'item-2', title: 'Plumbing', description: 'Homes built 1978–1995 may have polybutylene pipes. Have a plumber identify your pipe material.', meta: ['Act now'] },
     ] },
   ],
-  actions: [{ id: 'home-action-primary-1', label: 'See age-related checklist', href: '/dashboard/properties/property-1/focus/health/age-factor', style: 'SECONDARY' }],
+  actions: [],
 };
 
 function Harness() {
@@ -52,6 +52,6 @@ test('the checklist section renders inline alongside the existing next-step and 
   // Existing sections are unaffected by the addition.
   expect(screen.getByText('Book a general home inspection')).toBeInTheDocument();
   expect(screen.getByText(/Older homes accumulate/)).toBeInTheDocument();
-  // The CTA remains available, demoted to secondary now that the answer is inline.
-  expect(screen.getByRole('link', { name: /See age-related checklist/ })).toBeInTheDocument();
+  // No redundant CTA back to the page whose content is already inline.
+  expect(screen.queryByRole('link', { name: /See age-related checklist/ })).not.toBeInTheDocument();
 });
