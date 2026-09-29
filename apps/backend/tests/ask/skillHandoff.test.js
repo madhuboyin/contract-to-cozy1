@@ -121,3 +121,36 @@ test('orchestration persists handoffs and startup validation is fail-fast', () =
   assert.match(metrics, /labelNames: \['source_skill', 'target_skill', 'outcome'\]/);
   assert.equal(SKILL_DEFINITIONS.maintenance.supportedGoals.includes('understand-maintenance-status'), true);
 });
+
+test('inspection-finding handoff only fires when work was actually created (accept), not for dismiss/resolve', () => {
+  const completed = (reasonCode, parameters) => ({ status: 'COMPLETED', reasonCode, blocks: [], suggestions: [], ...(parameters ? { parameters } : {}) });
+  const go = (result, parameters) => resolveSkillHandoffSuggestion({ sourceOperationId: 'INSPECTION_FINDING_UPDATE', result, parameters });
+  assert.equal(go(completed('INSPECTION_FINDING_ACCEPTED'))?.suggestedGoal, 'review-home-actions-feed');
+  assert.equal(go(completed('INSPECTION_FINDING_DISMISSED')), null);
+  assert.equal(go(completed('INSPECTION_FINDING_RESOLVED')), null);
+  assert.equal(go(completed('INSPECTION_FINDING_BATCH_UPDATED'), { inspectionFindingBatch: [{ action: 'DISMISS' }] }), null);
+  assert.equal(go(completed('INSPECTION_FINDING_BATCH_UPDATED'), { inspectionFindingBatch: [{ action: 'DISMISS' }, { action: 'ACCEPT' }] })?.suggestedGoal, 'review-home-actions-feed');
+});
+
+test('confirmed writes resolve their handoff -- COMPLETED-only definitions are unreachable otherwise', () => {
+  const root = resolve(__dirname, '../../src/services/ask/execution');
+  const confirm = readFileSync(resolve(root, 'askConfirm.ts'), 'utf8');
+  const execute = readFileSync(resolve(root, 'executeOperation.ts'), 'utf8');
+  // Both paths go through the one shared resolver; only it may call resolveSkillHandoffSuggestion.
+  assert.match(confirm, /resolveAskSkillHandoff\(\{ operationId: confirmedOperationId/);
+  assert.match(execute, /export function resolveAskSkillHandoff/);
+  assert.equal((execute.match(/resolveSkillHandoffSuggestion\(/g) ?? []).length, 1);
+  // Resolved before the confirmed result is validated and persisted, so it is stored on the execution.
+  assert.ok(confirm.indexOf('resolveAskSkillHandoff(') < confirm.indexOf('validateAskConfirmedCompletion({'));
+  // Every COMPLETED-only definition must be one the confirm path can actually emit.
+  const completedOnly = SKILL_HANDOFF_DEFINITIONS.filter((d) => d.eligibleStatuses.every((status) => status === 'COMPLETED')).map((d) => d.sourceOperationId);
+  assert.deepEqual(completedOnly.sort(), ['BUYER_LIFECYCLE_UPDATE', 'CLAIM_FILE', 'CLAIM_TRANSITION', 'DOCUMENT_PROMOTION_CONFIRM', 'INSPECTION_FINDING_UPDATE']);
+});
+
+test('document-promotion and buyer-lifecycle handoffs decline outcomes their reason code does not describe', () => {
+  const go = (sourceOperationId, reasonCode) => resolveSkillHandoffSuggestion({ sourceOperationId, result: { status: 'COMPLETED', reasonCode, blocks: [], suggestions: [] } });
+  assert.equal(go('DOCUMENT_PROMOTION_CONFIRM', 'DOCUMENT_PROMOTION_CONFIRMED')?.suggestedGoal, 'summarize-property-record');
+  assert.equal(go('DOCUMENT_PROMOTION_CONFIRM', 'DOCUMENT_PROMOTION_REJECTED'), null);
+  for (const code of ['BUYER_JOURNEY_RESUMED', 'BUYER_LIFECYCLE_DATE_UPDATED']) assert.ok(go('BUYER_LIFECYCLE_UPDATE', code), code);
+  for (const code of ['BUYER_JOURNEY_PAUSED', 'BUYER_JOURNEY_CANCELLED']) assert.equal(go('BUYER_LIFECYCLE_UPDATE', code), null, code);
+});

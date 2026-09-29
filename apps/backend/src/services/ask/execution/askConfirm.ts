@@ -12,7 +12,7 @@ import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperation
 import { operationalUnavailableResult, skillRuntimeUnavailableReason } from '../capabilityHandlerRegistry';
 import { confirmCapabilityInvoke } from '../confirmCapabilityHandlerRegistry';
 import { asInputJson, assertSkillResultBlocksAllowed, audienceApplicabilityResult, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, journeyContextFrom, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus } from '../askHandlerSupport';
-import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
+import { reconcileAskExecutionSideEffects, resolveAskSkillHandoff } from '../execution/executeOperation';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
 import { getSkillForOperation } from '../../skills/skillRegistry';
 import { validateSkillExecutionBinding } from '../../skills/skillExecutionBinding';
@@ -350,6 +350,9 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   }
   let saved: typeof execution;
   const confirmedOperationId = execution.operationId as AskOperationId;
+  // Write-side handoffs (CLAIM_FILE, INSPECTION_FINDING_UPDATE, ...) are COMPLETED-only, and confirmed
+  // results never pass through executeOperation's finalize -- resolve here or they can never fire.
+  result = { ...result, skillHandoff: resolveAskSkillHandoff({ operationId: confirmedOperationId, result, propertyId: execution.propertyId, parameters }) };
   const confirmedValidation = validateAskConfirmedCompletion({
     question: execution.message,
     operationId: confirmedOperationId,

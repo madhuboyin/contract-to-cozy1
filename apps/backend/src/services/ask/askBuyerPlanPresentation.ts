@@ -44,6 +44,8 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
         tone: 'CAUTION',
         actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
       }],
+      // Pre-close buyer answer: the HOME_ACTIONS -> MAINTENANCE_STATUS handoff is about a home they own.
+      suppressSkillHandoff: true,
       suggestions: ['Summarize this home record before closing.'],
     };
   }
@@ -125,6 +127,8 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
     reasonCode: distinctBlockers.length ? 'BUYER_PLAN_HAS_BLOCKERS' : undefined,
     contextVersion: context.contextVersion,
     blocks,
+    // Pre-close buyer answer: the HOME_ACTIONS -> MAINTENANCE_STATUS handoff is about a home they own.
+    suppressSkillHandoff: true,
     suggestions: ['Summarize this home record before closing.', 'What are the ownership costs for this home after purchase?'],
   };
 }

@@ -24,6 +24,11 @@ export interface SkillHandoffContinuity {
   returnDestination: string | null;
 }
 
+export interface SkillHandoffRelevanceInput {
+  result: AskOperationResult;
+  parameters: Readonly<Record<string, unknown>>;
+}
+
 export interface SkillHandoffDefinition {
   sourceOperationId: AskOperationId;
   targetSkillId: string;
@@ -32,6 +37,12 @@ export interface SkillHandoffDefinition {
   eligibleStatuses: readonly AskExecutionStatus[];
   reasonCodes: readonly string[];
   contextReferenceIds: readonly string[];
+  /**
+   * Optional per-result relevance gate. The static table can only key on source operation and
+   * status; this lets a definition decline results where its follow-up would not fit (e.g. a
+   * dismissal creates no work to review).
+   */
+  isRelevant?: (input: SkillHandoffRelevanceInput) => boolean;
 }
 
 // These are transitions Ask may offer, not executable Skill dependencies.
@@ -87,16 +98,24 @@ export const SKILL_HANDOFF_DEFINITIONS: readonly SkillHandoffDefinition[] = Obje
     sourceOperationId: 'INSPECTION_FINDING_UPDATE', targetSkillId: 'home-operations', targetOperationId: 'HOME_ACTIONS',
     suggestedGoal: 'review-home-actions-feed', eligibleStatuses: Object.freeze(['COMPLETED'] as AskExecutionStatus[]),
     reasonCodes: Object.freeze(['INSPECTION_WORK_RECONCILED'] as string[]), contextReferenceIds: Object.freeze([] as string[]),
+    // Only accepting a finding creates/reuses Operational Work; dismiss and resolve leave nothing new to review.
+    isRelevant: ({ result, parameters }: SkillHandoffRelevanceInput) => result.reasonCode === 'INSPECTION_FINDING_ACCEPTED'
+      || (Array.isArray(parameters.inspectionFindingBatch)
+        && (parameters.inspectionFindingBatch as Array<{ action?: unknown }>).some((entry) => entry?.action === 'ACCEPT')),
   }),
   Object.freeze({
     sourceOperationId: 'DOCUMENT_PROMOTION_CONFIRM', targetSkillId: 'property-record', targetOperationId: 'PROPERTY_SUMMARY',
     suggestedGoal: 'summarize-property-record', eligibleStatuses: Object.freeze(['COMPLETED'] as AskExecutionStatus[]),
     reasonCodes: Object.freeze(['DOCUMENT_FACT_PROMOTED'] as string[]), contextReferenceIds: Object.freeze([] as string[]),
+    // Only a confirmed promotion changes the property record; a rejection leaves nothing new to summarize.
+    isRelevant: ({ result }: SkillHandoffRelevanceInput) => ['DOCUMENT_PROMOTION_CONFIRMED'].includes(String(result.reasonCode)),
   }),
   Object.freeze({
     sourceOperationId: 'BUYER_LIFECYCLE_UPDATE', targetSkillId: 'property-record', targetOperationId: 'PROPERTY_SUMMARY',
     suggestedGoal: 'summarize-property-record', eligibleStatuses: Object.freeze(['COMPLETED'] as AskExecutionStatus[]),
     reasonCodes: Object.freeze(['BUYER_LIFECYCLE_RECORDED'] as string[]), contextReferenceIds: Object.freeze([] as string[]),
+    // A resume or date change leaves an active purchase worth re-verifying; pause and cancel do not.
+    isRelevant: ({ result }: SkillHandoffRelevanceInput) => ['BUYER_JOURNEY_RESUMED', 'BUYER_LIFECYCLE_DATE_UPDATED'].includes(String(result.reasonCode)),
   }),
 ]);
 
@@ -151,6 +170,7 @@ export function resolveSkillHandoffSuggestion(input: {
   controls?: SkillHealthControls;
   availableContextReferenceIds?: readonly string[];
   continuity?: Partial<SkillHandoffContinuity>;
+  parameters?: Readonly<Record<string, unknown>>;
 }): SkillHandoffSuggestion | null {
   if (input.result.suppressSkillHandoff) return null;
   if (input.result.confirmation || input.result.clarification || (input.result.captureRequests?.length ?? 0) > 0) return null;
@@ -159,6 +179,7 @@ export function resolveSkillHandoffSuggestion(input: {
   const consumer = input.consumer ?? 'ASK';
   for (const handoff of SKILL_HANDOFF_DEFINITIONS) {
     if (handoff.sourceOperationId !== input.sourceOperationId || !handoff.eligibleStatuses.includes(input.result.status)) continue;
+    if (handoff.isRelevant && !handoff.isRelevant({ result: input.result, parameters: input.parameters ?? input.result.parameters ?? {} })) continue;
     const target = SKILL_DEFINITIONS[handoff.targetSkillId as keyof typeof SKILL_DEFINITIONS];
     if (!target || target.id === source.id || !target.supportedGoals.includes(handoff.suggestedGoal)) continue;
     const policy = resolveEffectiveSkillOperationPolicy(target.id, handoff.targetOperationId, consumer);

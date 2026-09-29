@@ -134,6 +134,52 @@ async function dispatchOperationAdapter(
   );
 }
 
+/**
+ * Single resolution point for the optional cross-Skill follow-up card, shared by the read path
+ * (finalize below) and the confirm path (askConfirm.ts) so a COMPLETED write result gets the same
+ * governed handoff as an ANSWERED read. Metadata only -- never invokes the target.
+ */
+export function resolveAskSkillHandoff(input: {
+  operationId: AskOperationId;
+  result: AskOperationResult;
+  propertyId?: string | null;
+  launchContext?: CreateAskExecutionRequest['launchContext'];
+  parameters?: Readonly<Record<string, unknown>>;
+}) {
+  const { result, launchContext } = input;
+  const controls = readAskOperationalControls();
+  const skillHandoff = resolveSkillHandoffSuggestion({
+    sourceOperationId: input.operationId,
+    result,
+    consumer: 'ASK',
+    controls: {
+      consumerEnabled: controls.consumerEnabled,
+      domainEnabled: controls.domainEnabled,
+      skillEnabled: controls.skillEnabled,
+      operationEnabled: controls.operationEnabled,
+      adapterEnabled: controls.adapterEnabled,
+      contextProviderEnabled: controls.contextProviderEnabled,
+    },
+    parameters: input.parameters,
+    continuity: {
+      propertyId: input.propertyId ?? null,
+      sourceEntityType: launchContext?.entityType ?? null,
+      sourceEntityId: launchContext?.entityId ?? null,
+      sourceHomeActionId: launchContext?.actionId ?? null,
+      decisionThreadId: typeof result.parameters?.decisionThreadId === 'string' ? result.parameters.decisionThreadId : launchContext?.decisionThreadId ?? (launchContext?.entityType === 'DECISION_THREAD' ? launchContext.entityId ?? null : null),
+      workItemId: typeof result.parameters?.operationalWorkItemId === 'string' ? result.parameters.operationalWorkItemId : launchContext?.workItemId ?? null,
+      journeyId: launchContext?.journeyId ?? null,
+      contextVersion: result.contextVersion ?? launchContext?.contextVersion ?? null,
+      returnDestination: launchContext?.returnTo ?? null,
+    },
+  });
+  const skill = getSkillForOperation(input.operationId);
+  if (skill && skillHandoff) {
+    askSkillHandoffsTotal.inc({ source_skill: skill.id, target_skill: skillHandoff.suggestedNextSkillId, outcome: 'SUGGESTED' });
+  }
+  return skillHandoff;
+}
+
 export async function executeOperationCore(input: { userId: string; sessionId: string; executionId: string; message: string; propertyId?: string | null; operation: AskOperationResolution; launchContext?: CreateAskExecutionRequest['launchContext']; continuationCursor?: string | null; suppliedInput?: Record<string, unknown> | null }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
   const controls = readAskOperationalControls();
   const definition = getAskOperationDefinition(input.operation.operationId);
@@ -366,33 +412,7 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   }
   const finalize = async (): Promise<AskOperationResult> => {
     const controls = readAskOperationalControls();
-    const skillHandoff = resolveSkillHandoffSuggestion({
-      sourceOperationId: input.operation.operationId,
-      result,
-      consumer: 'ASK',
-      controls: {
-        consumerEnabled: controls.consumerEnabled,
-        domainEnabled: controls.domainEnabled,
-        skillEnabled: controls.skillEnabled,
-        operationEnabled: controls.operationEnabled,
-        adapterEnabled: controls.adapterEnabled,
-        contextProviderEnabled: controls.contextProviderEnabled,
-      },
-      continuity: {
-        propertyId: input.propertyId ?? null,
-        sourceEntityType: input.launchContext?.entityType ?? null,
-        sourceEntityId: input.launchContext?.entityId ?? null,
-        sourceHomeActionId: input.launchContext?.actionId ?? null,
-        decisionThreadId: typeof result.parameters?.decisionThreadId === 'string' ? result.parameters.decisionThreadId : input.launchContext?.decisionThreadId ?? (input.launchContext?.entityType === 'DECISION_THREAD' ? input.launchContext.entityId ?? null : null),
-        workItemId: typeof result.parameters?.operationalWorkItemId === 'string' ? result.parameters.operationalWorkItemId : input.launchContext?.workItemId ?? null,
-        journeyId: input.launchContext?.journeyId ?? null,
-        contextVersion: result.contextVersion ?? input.launchContext?.contextVersion ?? null,
-        returnDestination: input.launchContext?.returnTo ?? null,
-      },
-    });
-    if (skill && skillHandoff) {
-      askSkillHandoffsTotal.inc({ source_skill: skill.id, target_skill: skillHandoff.suggestedNextSkillId, outcome: 'SUGGESTED' });
-    }
+    const skillHandoff = resolveAskSkillHandoff({ operationId: input.operation.operationId, result, propertyId: input.propertyId, launchContext: input.launchContext });
     const suggestionAwareResult = suppressRepeatedAskSuggestions(
       { ...result, skillHandoff },
       input.message,

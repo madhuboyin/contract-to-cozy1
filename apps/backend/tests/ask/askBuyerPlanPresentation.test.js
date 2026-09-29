@@ -120,6 +120,7 @@ test('BUYER_* classifier fixes do not hijack any operation\'s own registered neg
 test('buyer Home Actions reads the canonical next task and links its exact plan section', () => {
   const result = buildBuyerPlanHomeActionsResult(context());
   assert.equal(result.status, 'ANSWERED');
+  assert.equal(result.suppressSkillHandoff, true, 'pre-close buyer must not get the homeowner maintenance handoff');
   assert.equal(result.contextVersion, 'buyer-v1');
   assert.match(result.blocks[0].title, /Review the Closing Disclosure/);
   assert.equal(
@@ -135,6 +136,7 @@ test('candidate purchases do not fall through to homeowner recommendations', () 
   const result = buildBuyerPlanHomeActionsResult(context({ presentationMode: 'CANDIDATE', overview: null }));
   assert.equal(result.status, 'READY_WITH_LIMITATIONS');
   assert.equal(result.reasonCode, 'BUYER_PLAN_NOT_ACTIVE');
+  assert.equal(result.suppressSkillHandoff, true);
   assert.match(result.blocks[0].body, /not substitute homeowner recommendations/);
   assert.equal(matchesHomeActionsAnswerContract(result), true);
 });
