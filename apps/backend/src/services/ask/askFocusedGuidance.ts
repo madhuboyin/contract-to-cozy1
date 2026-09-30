@@ -91,6 +91,20 @@ function resolveGroupAAskRouting(href: string | undefined): { operationId: AskOp
   if (propertyToolPath('savings-benefits').test(pathname) && !params.has('actionId')) {
     return { operationId: 'SAVINGS_OPPORTUNITIES', message: 'What savings opportunities are available for this home?' };
   }
+  // Sweep of the remaining producers (gap audit §17; FRD v1.170): the incident producer's fallback
+  // destination when there is neither a weather-preparation page nor a proposed-action URL. Same
+  // precedent as inspection-hub/:reportId above -- an entity-detail href routes to the operation that
+  // reads that record set. INCIDENT_CLAIM_STATUS is property-wide (scoped by the word "incidents"; the phrasing is one the deterministic router recognises without the forced hint), so
+  // the focused incident is in the list, not singled out. The bare /incidents list is not matched: it
+  // only ever appears as a secondary escalation link, and only the primary CTA is routed here.
+  if (/^\/dashboard\/properties\/[^/]+\/incidents\/[^/]+$/.test(pathname)) {
+    return { operationId: 'INCIDENT_CLAIM_STATUS', message: 'What incidents are recorded for this home?' };
+  }
+  // A project with no renovation case (that is Group C, matched above by its /renovations/ path). The
+  // phrase names the tracker explicitly: the tracked-projects router excludes create/start/permit wording.
+  if (/^\/dashboard\/properties\/[^/]+\/projects\/[^/]+$/.test(pathname)) {
+    return { operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my projects in the project tracker' };
+  }
   if (propertyToolPath('property-tax').test(pathname) && params.get('stage') === 'appeal') {
     return { operationId: 'PROPERTY_TAX_APPEAL_READINESS', message: 'What is the status of my property tax appeal?' };
   }

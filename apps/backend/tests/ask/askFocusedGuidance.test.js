@@ -470,3 +470,39 @@ test('accepted work follows the card\'s own governed controls, and keeps the lin
   const other = build({ ...acceptedWorkAction(), presentation: { ...acceptedWorkAction().presentation, variant: 'PLAIN' } }, { canManageWork: true });
   assert.deepEqual(other.map((candidate) => candidate.label), ['Open work']);
 });
+
+// Sweep of the remaining producers (FRD v1.170): incident-detail and project-detail fallbacks.
+test('incident-detail and project-detail primary CTAs route to their Ask operation, and only those paths', () => {
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+  const primaryFor = (href, overrides = {}) => {
+    const action = { ...weatherAction(), ...overrides, primaryCta: { label: 'Review', href } };
+    return buildFocusedHomeActionGuidance(action, 'context-v1').blocks
+      .find((block) => block.id === 'focused-home-action-guidance').actions
+      .find((candidate) => candidate.id === `home-action-primary-${action.id}`);
+  };
+
+  for (const [href, operationId] of [
+    ['/dashboard/properties/property-1/incidents/incident-1', 'INCIDENT_CLAIM_STATUS'],
+    ['/dashboard/properties/property-1/projects/project-1', 'PROJECT_TRACKER_PROJECTS'],
+  ]) {
+    const primary = primaryFor(href);
+    assert.equal(primary.interactionType, 'START_WORKFLOW', href);
+    assert.equal(primary.operationId, operationId, href);
+    assert.equal(primary.href, undefined, `${href} must not also navigate`);
+    // The message must route to the same operation by itself, not only via the forced hint: a phrasing the
+    // deterministic router does not recognise would fall through to the remote-generation fallback.
+    assert.equal(resolveAskOperation(primary.message).operationId, operationId, `${primary.message} must route deterministically`);
+  }
+
+  // Not matched: the bare lists (an incident list only ever appears as a secondary escalation link;
+  // /projects is an onboarding activation handoff that must keep carrying its activation context).
+  for (const href of ['/dashboard/properties/property-1/incidents', '/dashboard/properties/property-1/projects', '/dashboard/properties/property-1/incidents/incident-1/edit']) {
+    const primary = primaryFor(href);
+    assert.equal(primary.href, href, `${href} should still navigate`);
+    assert.equal(primary.interactionType, undefined, href);
+  }
+  // A project with a renovation case stays Group C (navigation, demoted), not the tracker list.
+  const renovation = primaryFor('/dashboard/properties/property-1/renovations/case-1');
+  assert.equal(renovation.href, '/dashboard/properties/property-1/renovations/case-1');
+  assert.equal(renovation.style, 'SECONDARY');
+});
