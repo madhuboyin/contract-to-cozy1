@@ -5,6 +5,11 @@ import type { AskCaptureRequest } from '../../productFramework/ask/ask.contract'
 import { resolveHealthFactorChecklist, urgencyLabel, type HealthFactorChecklistProperty } from './healthFactorChecklist';
 import { buildPolicyConflictSection } from './policyConflictPresentation';
 import type { ConflictedInsurancePolicyTerm } from '../coverageConflict.service';
+import { isAppliancesInsight } from './healthGapCapture';
+
+// Must equal INVENTORY_ADD_MESSAGE in handlers/inventory.handler.ts (pinned by test): the handler recognises the
+// declared add action by this exact text, and importing it here would pull that handler's registrations into this pure module.
+export const INVENTORY_ADD_ACTION_MESSAGE = 'Add an item to my home inventory.';
 
 export type HomeActionPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
 
@@ -278,7 +283,14 @@ export function buildFocusedHomeActionGuidance(
   contextVersion: string | null,
   propertyFacts?: HealthFactorChecklistProperty,
   captureRequest?: AskCaptureRequest | null,
-  options: { canContribute?: boolean; policyConflict?: ConflictedInsurancePolicyTerm | null } = {},
+  options: {
+    canContribute?: boolean;
+    policyConflict?: ConflictedInsurancePolicyTerm | null;
+    // The feature a derived inline capture targets (health-insight data gaps); falls back to the action's own.
+    captureFeature?: { featureKey: string; operationKey: string; operationInput?: Record<string, unknown> } | null;
+    // Appliances recorded for this home, when this is the Appliances insight; null/undefined otherwise.
+    applianceCount?: number | null;
+  } = {},
 ): AskOperationResult {
   const title = focusedTitle(action);
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
@@ -294,8 +306,21 @@ export function buildFocusedHomeActionGuidance(
     : null;
   // Resolvable inline only when the conflict is shown with its actions; otherwise the (exactly targeted) link stays.
   const policyConflictResolvableInline = Boolean(policyConflictSection && options.canContribute === true);
+  // Appliances insight: the existing inventory-create workflow, one item at a time. The bulk form stays as the
+  // secondary link -- it is bulk administration, which the decisions keep as a page destination.
+  const applianceAddAction = !routing && !checklist && !acceptedWorkActions && !policyConflictSection
+    && options.canContribute === true && typeof options.applianceCount === 'number' && isAppliancesInsight(action)
+    ? {
+      id: `home-action-add-appliance-${action.id}`,
+      label: options.applianceCount > 0 ? 'Add another appliance' : 'Add an appliance',
+      interactionType: 'START_WORKFLOW' as const,
+      message: INVENTORY_ADD_ACTION_MESSAGE,
+      operationId: 'INVENTORY_ITEM_CREATE',
+      style: 'PRIMARY' as const,
+    }
+    : null;
   const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
-  const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && !policyConflictSection && Boolean(captureRequest);
+  const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && !policyConflictSection && !applianceAddAction && Boolean(captureRequest);
   const primaryAction = routing
     ? {
       id: `home-action-primary-${action.id}`,
@@ -413,7 +438,9 @@ export function buildFocusedHomeActionGuidance(
     }] : []), ...(policyConflictSection ? [policyConflictSection] : [])],
     // The inline checklist IS the destination page's content, so linking back to it is a redundant
     // round trip out of Ask -- omit the action entirely rather than demote it.
-    actions: checklist || policyConflictResolvableInline ? [] : acceptedWorkActions ?? [primaryAction],
+    actions: checklist || policyConflictResolvableInline
+      ? []
+      : acceptedWorkActions ?? (applianceAddAction ? [applianceAddAction, { ...primaryAction, style: 'SECONDARY' as const }] : [primaryAction]),
   }, {
     type: 'EVIDENCE',
     id: 'focused-home-action-evidence',
@@ -446,7 +473,7 @@ export function buildFocusedHomeActionGuidance(
       // Lets askCapture.ts's HOME_ACTIONS capture-submission branch write to (and recompute) the
       // SAME feature this specific action evaluated, instead of the generic HOME_ACTIONS/VIEW_FEED
       // scope the unfocused Home Actions list uses.
-      ...(hasFeatureCapture && action.propertyContextFeature ? { captureFeature: action.propertyContextFeature } : {}),
+      ...(hasFeatureCapture && (options.captureFeature ?? action.propertyContextFeature) ? { captureFeature: options.captureFeature ?? action.propertyContextFeature } : {}),
     },
     blocks,
     ...(hasFeatureCapture && captureRequest ? { captureRequests: [captureRequest] } : {}),

@@ -14,6 +14,7 @@ import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../../homeAc
 import { buildBuyerPlanHomeActionsResult } from '../askBuyerPlanPresentation';
 import { resolveHomeActionsFollowUp } from '../homeActionsFollowUp';
 import { policyConflictTermIdFromLineage } from '../policyConflictPresentation';
+import { deriveHealthGapCapture, isAppliancesInsight } from '../healthGapCapture';
 import { getConflictedInsurancePolicyTerms } from '../../coverageConflict.service';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
@@ -361,18 +362,35 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         ? evaluateFeatureContext(propertyId, userId, focusedAction.propertyContextFeature)
         : Promise.resolve(null),
     ]);
-    const featureCaptureRequirement = featureCaptureEvaluation?.requirements[0];
+    // Health-insight data gap (FRD v1.172): when the action carries no feature of its own, derive one from the
+    // insight's factor and ask for the first fact still unknown. One fact per turn; after it is saved, the
+    // capture-submit path re-derives this same card, which asks for the next one.
+    const derivedCapture = !featureCaptureEvaluation && access.role !== HouseholdRole.VIEWER
+      ? await deriveHealthGapCapture(focusedAction, (feature) => evaluateFeatureContext(propertyId, userId, feature))
+      : null;
+    const captureEvaluation = featureCaptureEvaluation ?? derivedCapture?.evaluation ?? null;
+    const captureFeature = featureCaptureEvaluation ? (focusedAction.propertyContextFeature ?? null) : derivedCapture?.feature ?? null;
+    const featureCaptureRequirement = captureEvaluation?.requirements[0];
     const featureCaptureSupported = featureCaptureRequirement
       && access.role !== HouseholdRole.VIEWER
       && featureCaptureRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
       && featureCaptureRequirement.capture.inputSchema.type !== 'RELATIONAL_SELECT_CREATE';
-    const captureRequest = featureCaptureSupported
+    const baseCaptureRequest = featureCaptureSupported
       ? askCaptureRequest(
         featureCaptureRequirement,
-        featureCaptureEvaluation!.contextVersion,
+        captureEvaluation!.contextVersion,
         'Saved to this home’s Property Context',
         focusedAction.primaryCta.href,
       )
+      : null;
+    // A "Not sure" answer is stored as an explicit UNKNOWN observation, which Property Context still evaluates as
+    // unknown, so the re-derived card would ask the same question again. A derived data-gap card exists only to fill a
+    // missing fact, so it does not offer "Not sure"; leaving the card (or the page link) is how a homeowner declines.
+    const captureRequest = baseCaptureRequest && derivedCapture ? { ...baseCaptureRequest, allowNotSure: false } : baseCaptureRequest;
+    // Appliances insight (FRD v1.172): one appliance at a time through the existing inventory-create workflow. The
+    // count only decides the wording ("Add an appliance" vs "Add another appliance"); it uses the producer's own filter.
+    const applianceCount = isAppliancesInsight(focusedAction) && access.role !== HouseholdRole.VIEWER
+      ? await prisma.inventoryItem.count({ where: { propertyId, category: 'APPLIANCE' } })
       : null;
     // Policy-fact conflict (FRD v1.171): read the live conflict for this exact term, the same detection the producer uses,
     // so the answer shows the current pending-vs-confirmed values and never a stale snapshot.
@@ -380,7 +398,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     const policyConflict = conflictTermId
       ? (await getConflictedInsurancePolicyTerms(propertyId, prisma)).find((term) => term.termId === conflictTermId) ?? null
       : null;
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict });
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict, captureFeature, applianceCount });
   }
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);
