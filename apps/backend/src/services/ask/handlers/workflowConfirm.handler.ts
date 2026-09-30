@@ -13,6 +13,7 @@ import { assertCoverageConflictFree } from '../../coverageConflict.service';
 import { createOrUpdateRefinanceRateMonitor } from '../../../refinanceRadar/refinanceRateMonitor.service';
 import { PropertySaleCaseService } from '../../propertySaleCase.service';
 import { guidanceJourneyService } from '../../guidanceEngine/guidanceJourney.service';
+import { reportRecallMatchStep, type RecallMatchReportAction, type RecallMatchReportRow } from '../../guidanceEngine/guidanceToolReporting';
 import { getOrCreateQuoteComparisonWorkspace } from '../../quoteComparison.service';
 import { upsertNotificationPreference } from '../../notificationPreference.service';
 import { asInputJson, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, InspectionResolution, InspectionResolutionSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, QuoteWorkspaceCommandInputSchema, RecallResolution, RecallResolutionSchema } from '../askHandlerSupport';
@@ -347,20 +348,28 @@ async function confirmRecallMatchUpdate(ctx: ConfirmCapabilityContext): Promise<
     || (action === 'DISMISS' && match.status === 'DISMISSED')
     || (action === 'RESOLVE' && match.status === 'RESOLVED');
   if (parameters.recallMatchContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This recall match changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  // Reported to the guidance engine exactly as the traditional recalls controller does (Guided Journey FRD, Phase 0).
+  // The report is idempotent, so it also runs when the write was already applied (for example in the Desktop UI, where
+  // the same report has already been made and is de-duplicated).
+  let reportRow: RecallMatchReportRow = match;
   if (!alreadyApplied) {
-    if (action === 'CONFIRM') await confirmRecallMatch(execution.propertyId, match.id);
-    else if (action === 'DISMISS') await dismissRecallMatch(execution.propertyId, match.id);
+    if (action === 'CONFIRM') reportRow = { ...match, ...(await confirmRecallMatch(execution.propertyId, match.id)) };
+    else if (action === 'DISMISS') reportRow = { ...match, ...(await dismissRecallMatch(execution.propertyId, match.id)) };
     else {
       // Older proposals (before an edit) carry no resolution; they get the traditional dialog's default type.
       const resolution = RecallResolutionSchema.safeParse(parameters.recallResolution ?? RECALL_RESOLUTION_DEFAULT);
       if (!resolution.success) throw Object.assign(new Error('The resolution details are invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-      await resolveRecallMatch({
-        propertyId: execution.propertyId, matchId: match.id,
-        resolutionType: resolution.data.resolutionType,
-        resolutionNotes: resolution.data.resolutionNotes,
-      });
+      reportRow = {
+        ...match,
+        ...(await resolveRecallMatch({
+          propertyId: execution.propertyId, matchId: match.id,
+          resolutionType: resolution.data.resolutionType,
+          resolutionNotes: resolution.data.resolutionNotes,
+        })),
+      };
     }
   }
+  await reportRecallMatchStep(execution.propertyId, action as RecallMatchReportAction, reportRow, userId);
   const artifactType = 'RECALL_MATCH';
   const artifactId = match.id;
   const href = recallReviewHref(execution.propertyId);

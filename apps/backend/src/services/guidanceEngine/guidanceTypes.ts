@@ -197,6 +197,8 @@ export type GuidanceToolCompletionInput = {
   reasonCode?: string | null;
   reasonMessage?: string | null;
   metadata?: Record<string, unknown> | null;
+  /** When set, a replayed report (same key) does not add a second evidence row. */
+  dedupeKey?: string | null;
 };
 
 export type GuidanceEvidenceType =

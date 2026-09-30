@@ -20,6 +20,8 @@ const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrust
 const { RecallResolutionSchema } = require('../../src/services/ask/askHandlerSupport.ts');
 const recallsService = require('../../src/services/recalls.service.ts');
 const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+const { guidanceJourneyService } = require('../../src/services/guidanceEngine/guidanceJourney.service.ts');
+const { buildRecallMatchCompletion } = require('../../src/services/guidanceEngine/guidanceToolReporting.ts');
 
 const realPrisma = prismaModule.prisma;
 const originals = {
@@ -27,11 +29,14 @@ const originals = {
   dismissRecallMatch: recallsService.dismissRecallMatch,
   resolveRecallMatch: recallsService.resolveRecallMatch,
   resolveAccess: propertyAccess.resolvePropertyAccess,
+  recordToolCompletion: guidanceJourneyService.recordToolCompletion,
 };
 const UPDATED_AT = new Date('2026-09-29T00:00:00.000Z');
 let accessRole;
 let match;
 let calls;
+let reports;
+let reportFailure;
 
 function install() {
   accessRole = 'CONTRIBUTOR';
@@ -42,6 +47,9 @@ function install() {
     inventoryItem: { name: 'Dishwasher', isVerified: false, manufacturer: null, modelNumber: null },
   };
   calls = { confirm: [], dismiss: [], resolve: [] };
+  reports = [];
+  reportFailure = false;
+  guidanceJourneyService.recordToolCompletion = async (input) => { if (reportFailure) throw new Error('guidance down'); reports.push(input); return {}; };
   const models = {
     askExecution: { findMany: async () => [] },
     recallMatch: {
@@ -66,6 +74,7 @@ function restore() {
   prismaModule.prisma = realPrisma;
   Object.assign(recallsService, { confirmRecallMatch: originals.confirmRecallMatch, dismissRecallMatch: originals.dismissRecallMatch, resolveRecallMatch: originals.resolveRecallMatch });
   propertyAccess.resolvePropertyAccess = originals.resolveAccess;
+  guidanceJourneyService.recordToolCompletion = originals.recordToolCompletion;
 }
 
 test.beforeEach(install);
@@ -168,4 +177,47 @@ test('every declared recall match action canned message proposes exactly its own
     assert.equal(result.parameters.recallMatchId, 'match-1');
     assert.equal(result.parameters.recallMatchAction, action.action, action.id);
   }
+});
+
+// Guided-journey continuation FRD, Phase 0: an Ask recall write reports to the guidance engine exactly as the
+// traditional recalls controller does, so a journey does not stay stuck when the homeowner finishes in Ask.
+test('each Ask recall action reports the same guidance step and proof as the traditional controller', async () => {
+  const conn = (action, extra = {}) => ({ recallMatchId: 'match-1', recallMatchAction: action, recallMatchContextVersion: version(), ...extra });
+  await confirm(conn('CONFIRM'));
+  await confirm(conn('DISMISS'));
+  await confirm(conn('RESOLVE'));
+  assert.deepEqual(reports.map((r) => [r.stepKey, r.status, r.producedData.proofType]), [
+    ['safety_alert', 'COMPLETED', 'recall_confirmation'],
+    ['recall_resolution', 'SKIPPED', 'recall_dismissal'],
+    ['recall_resolution', 'COMPLETED', 'recall_resolution'],
+  ]);
+  for (const r of reports) {
+    assert.equal(r.sourceToolKey, 'recalls');
+    assert.equal(r.sourceEntityType, 'RECALL_MATCH');
+    assert.equal(r.sourceEntityId, 'match-1');
+    assert.equal(r.signalIntentFamily, 'recall_detected');
+    assert.equal(r.issueDomain, 'SAFETY');
+    assert.equal(r.propertyId, 'p1');
+    assert.equal(r.actorUserId, 'u1');
+  }
+  assert.equal(new Set(reports.map((r) => r.dedupeKey)).size, 3, 'each action has its own dedupe key');
+  // Same payload the controller builds.
+  const row = { id: 'match-1', status: 'OPEN', recallId: 'r1' };
+  assert.deepEqual(buildRecallMatchCompletion('p1', 'DISMISS', row).producedData, { proofType: 'recall_dismissal', proofId: 'match-1', status: 'OPEN', recallId: 'r1' });
+});
+
+test('a replayed Ask confirmation reports with the same dedupe key, and an already-applied action still reports', async () => {
+  await confirm({ recallMatchId: 'match-1', recallMatchAction: 'DISMISS', recallMatchContextVersion: version() });
+  match.status = 'DISMISSED';
+  await confirm({ recallMatchId: 'match-1', recallMatchAction: 'DISMISS', recallMatchContextVersion: 'stale-but-already-applied' });
+  assert.equal(calls.dismiss.length, 1, 'the write is not repeated');
+  assert.equal(reports.length, 2);
+  assert.equal(reports[0].dedupeKey, reports[1].dedupeKey);
+});
+
+test('a guidance reporting failure never fails the Ask write', async () => {
+  reportFailure = true;
+  const response = await confirm({ recallMatchId: 'match-1', recallMatchAction: 'CONFIRM', recallMatchContextVersion: version() });
+  assert.equal(calls.confirm.length, 1);
+  assert.ok(response);
 });

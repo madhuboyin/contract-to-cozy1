@@ -153,3 +153,26 @@ an executed test per requirement above (for Phase 0, a confirmed recall match ad
 replay does not double-report; for Phase 1, the operation over fixtures covering active, blocked, branched, completed,
 dismissed and missing journeys, with the boundary and guard shown); and a statement of what was not exercised against a
 real database or browser.
+
+## 8. Phase 0 outcome (implemented)
+
+**Labels:** *executed* = ran in a test; *code-traced* = read in code only.
+
+- **Shared helper (executed).** `services/guidanceEngine/guidanceToolReporting.ts` builds the recall completion payload
+  once (`buildRecallMatchCompletion`) and reports it with `reportRecallMatchStep` (best-effort, never throws). The
+  recalls controller's three inline reports were replaced by it, so the Desktop and Ask payloads cannot diverge.
+- **Idempotency (executed at the call level; code-traced at the database).** `GuidanceToolCompletionInput` gained an
+  optional `dedupeKey`, passed through to the evidence row. Key: `recalls:<propertyId>:<matchId>:<confirm|dismiss|resolve>`.
+  A replay hits the existing unique-key handling (P2002 returns the existing row). Step status needs no guard
+  (COMPLETED to COMPLETED is allowed). The P2002 path was not exercised against a real database.
+- **Ask parity (executed).** `confirmRecallMatchUpdate` now reports after the write, and also when the action was already
+  applied (for example it was done in the Desktop UI), relying on the dedupe key. A reporting failure does not fail the
+  write (executed).
+- **Known limit (unchanged from §3.4, methodology §15).** The report is still a best-effort step after the write, so a
+  failure leaves the step incomplete with no retry. Persisting the intent with the write is still open question 5.
+- **Audit of the other mirrors (code-traced).** The radar state report (`homeEventRadar.controller.ts`) and the
+  replace/repair report are both gated on a `guidanceJourneyId` in the request body. Ask's radar writes
+  (`HOME_EVENT_RADAR_STATE`, radar mark-done) and the replace/repair analysis carry no journey context, so there is
+  nothing to report to today. They become relevant only when Phase 1 carries the journey through the launch context;
+  they are deferred to then, not fixed. Coverage decision, do-nothing, home-savings, price-finalization,
+  negotiation-shield and project-tracker have no Ask write that mirrors them.

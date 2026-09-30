@@ -9,7 +9,7 @@ import {
   resolveRecallMatch,
 } from '../services/recalls.service';
 import { RecallResolutionType } from '@prisma/client';
-import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { reportRecallMatchStep } from '../services/guidanceEngine/guidanceToolReporting';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
@@ -44,29 +44,7 @@ export async function confirmMatch(req: Request, res: Response) {
   try {
     const row = await confirmRecallMatch(propertyId, matchId);
 
-    try {
-      await guidanceJourneyService.recordToolCompletion({
-        propertyId,
-        signalIntentFamily: 'recall_detected',
-        issueDomain: 'SAFETY',
-        inventoryItemId: row.inventoryItemId ?? null,
-        sourceToolKey: 'recalls',
-        sourceEntityType: 'RECALL_MATCH',
-        sourceEntityId: row.id,
-        stepKey: 'safety_alert',
-        status: 'COMPLETED',
-        producedData: {
-          proofType: 'recall_confirmation',
-          proofId: row.id,
-          status: row.status,
-          confidencePct: row.confidencePct,
-          method: row.method,
-          recallId: row.recallId,
-        },
-      });
-    } catch (guidanceError) {
-      logger.warn({ guidanceError }, '[GUIDANCE] recall confirm hook failed');
-    }
+    await reportRecallMatchStep(propertyId, 'CONFIRM', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -92,29 +70,7 @@ export async function dismissMatch(req: Request, res: Response) {
   try {
     const row = await dismissRecallMatch(propertyId, matchId);
 
-    try {
-      await guidanceJourneyService.recordToolCompletion({
-        propertyId,
-        signalIntentFamily: 'recall_detected',
-        issueDomain: 'SAFETY',
-        inventoryItemId: row.inventoryItemId ?? null,
-        sourceToolKey: 'recalls',
-        sourceEntityType: 'RECALL_MATCH',
-        sourceEntityId: row.id,
-        stepKey: 'recall_resolution',
-        status: 'SKIPPED',
-        reasonCode: 'USER_DISMISSED',
-        reasonMessage: 'User dismissed recall match.',
-        producedData: {
-          proofType: 'recall_dismissal',
-          proofId: row.id,
-          status: row.status,
-          recallId: row.recallId,
-        },
-      });
-    } catch (guidanceError) {
-      logger.warn({ guidanceError }, '[GUIDANCE] recall dismiss hook failed');
-    }
+    await reportRecallMatchStep(propertyId, 'DISMISS', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -154,30 +110,7 @@ export async function resolveMatch(req: Request, res: Response) {
       resolutionNotes: resolutionNotes || null,
     });
 
-    try {
-      await guidanceJourneyService.recordToolCompletion({
-        propertyId,
-        signalIntentFamily: 'recall_detected',
-        issueDomain: 'SAFETY',
-        inventoryItemId: row.inventoryItemId ?? null,
-        sourceToolKey: 'recalls',
-        sourceEntityType: 'RECALL_MATCH',
-        sourceEntityId: row.id,
-        stepKey: 'recall_resolution',
-        status: 'COMPLETED',
-        producedData: {
-          proofType: 'recall_resolution',
-          proofId: row.id,
-          status: row.status,
-          resolutionType: row.resolutionType,
-          resolutionNotes: row.resolutionNotes,
-          resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
-          recallId: row.recallId,
-        },
-      });
-    } catch (guidanceError) {
-      logger.warn({ guidanceError }, '[GUIDANCE] recall resolve hook failed');
-    }
+    await reportRecallMatchStep(propertyId, 'RESOLVE', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

@@ -1258,6 +1258,7 @@ export class GuidanceJourneyService {
       journey: transitioned.journey,
       step: transitioned.step,
       resolvedStepKey,
+      dedupeKey: input.dedupeKey ?? null,
     });
 
     const next = await guidanceStepResolverService.resolveNextStep({
