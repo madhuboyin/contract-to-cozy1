@@ -1,0 +1,155 @@
+# Ask Cozy — Guided Journey Continuation (design)
+
+Status: **design, nothing built** (September 30, 2026). Closes the last open item of Group D in
+`ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` §17: a Home Action whose CTA continues a guided journey still navigates
+out of Ask, because Ask has no operation that reads or advances one specific journey.
+
+Evidence labels (per `docs/architecture/AUDIT_METHODOLOGY.md` §1): **[E]** executed (ran the code or query and saw the
+output), **[T]** code-traced (read the source, did not run it), **[I]** inferred (extrapolated from a pattern). Nothing
+here was run against production data except where stated.
+
+## 1. What exists today
+
+| # | Finding | Label |
+| - | --- | --- |
+| F1 | A `GuidanceJourney` has a lifecycle status (`NOT_STARTED`, `ACTIVE`, `BRANCHED`, `COMPLETED`, `ABORTED`, `ARCHIVED`, `DISMISSED`), a decision stage, an execution readiness, a current step, missing context keys, an optional inventory item, a parent journey (branching), and `sourceAskExecutionId` (Ask already creates journeys). | T |
+| F2 | A `GuidanceJourneyStep` carries `stepKey`, `stepType`, an optional `toolKey` and `routePath` (most steps name the tool they launch; both columns are nullable), required and missing context keys, a safety tier with `professionalBoundary`, `conservativeFallback` and `emergencyEscalation` text, blocked and skipped reasons, `producedDataJson`, and linked `GuidanceStepEvidence`. | T |
+| F3 | There is no "mark step complete" mutation. A step completes when a tool reports completion through `recordToolCompletion`, and a completion from source `frontend` requires a **proof-backed** payload (`proofType` plus one id field). The check is shape-only: it does not verify the id refers to a real record. | T |
+| F4 | The reporting is done by **HTTP controllers**, not domain services: homeSavings, projectTracker, doNothingSimulator, booking, homeEventRadar, coverageAnalysis, replaceRepairAnalysis, recalls, priceFinalization and negotiationShield, each calling the domain service and then reporting the step in a separate `try`. | T |
+| F5 | **No Ask handler calls `recordToolCompletion`** (`grep -c` over `services/ask/handlers/*.ts`, every count 0). Ask calls domain services directly, so a write done in Ask never advances a journey. | E |
+| F6 | The one concrete instance: the recalls controller reports `safety_alert` COMPLETED on confirm, `recall_resolution` SKIPPED (`USER_DISMISSED`) on dismiss, and `recall_resolution` on resolve, each with proof (`proofId` = the match id). Ask's `RECALL_MATCH_UPDATE` (FRD v1.163) performs the same three writes through `confirmRecallMatch`/`dismissRecallMatch`/`resolveRecallMatch` and reports none of them. A recall confirmed in Ask leaves its journey step incomplete. | T |
+| F7 | Journey completion hooks (`guidanceCompletionHooks.service.ts`) fire once when the WHOLE journey completes: inventory condition write-back, a `VERIFIED_RESOLUTION` home event, work-item sync. They write back only when a required step has non-self-reported evidence; self-reported evidence yields a `MILESTONE` event badged `USER_REPORTED`. "Completing a step is not the same as certifying the physical outcome." | T |
+| F8 | `getStepSkipPolicy` (template registry) governs skipping; `GUIDANCE_ENGINE.md` states required steps cannot be skipped silently. `blockGuidanceStep` takes reason code and missing context keys. | T |
+| F9 | An execution guard (`guidanceBookingGuard.service.ts`, `GET .../guidance/execution-guard`) decides whether booking, inspection scheduling or claim escalation is allowed for a journey. | T |
+| F10 | `resolveNextStepWithIntelligence` enriches the next step with **AI advice**. The deterministic resolver is `guidanceStepResolverService.resolveNextStep`. The existing Ask list handler is documented as never asking for AI advice. | T |
+| F11 | Ask has `GUIDANCE_JOURNEYS_LIST` (read; each item links to `?journeyId=`) and `GUIDANCE_JOURNEY_CREATE` (confirmation-gated). Its own boundary text says completing, skipping and dismissing steps "stay on the page". Both belong to the `guidance-overview` and `home-operations` skills. | T |
+| F12 | The precedent for an entity-keyed continuation already exists: `focusedOperationForLaunchContext` routes `entityType: 'DECISION_THREAD'` to `HVAC_DECISION_CONTINUE` (a VIEWER-floor read that returns decision progress). | T |
+| F13 | The journey Home Action carries `relatedJourneyId`. Its primary CTA links to a resolved destination (a tool page when one is known, otherwise Guidance Overview with `?journeyId=`, extended with launch parameters for financial journeys) only when `recommendationResponse.materialActionAllowed`; otherwise it links to Guidance Overview. How the destination is resolved per step was not traced in full. Weather and financial journeys have their own presentation variants. | T |
+| F14 | The desktop already runs some steps **inline** in the journey page (`GuidanceStepCta.tsx`): history-verify, replace-repair, coverage-intelligence, service-price-radar, the replacement-* steps, recalls, negotiation-shield, price-finalization. The rest open a scoped workspace link. | T |
+| F15 | The template registry's steps launch 28 tool keys. By count: booking 20, coverage-intelligence 19, guidance-overview 14, documents 7, inspection-report 6, service-price-radar 5, project-completion 4, then 3 or fewer each (replacement-*, recalls, ownership-costs, home-savings, quote-comparison, project-tracker, maintenance, incidents, do-nothing-simulator, capital-timeline, home-event-radar, negotiation-shield, price-finalization, history-verify, `frontend`). | E |
+| F16 | Ask registers 115 operations. Many tool keys have a plausibly matching one (coverage, recalls, ownership costs, savings, do-nothing, quotes, maintenance, incidents, radar, inspection, documents); `booking` has none and is an approved external-flow boundary. The mapping by name is **inferred**, not verified per step. | E / I |
+| F17 | A new operation that is skill-less must be added to `KNOWN_UNGOVERNED_OPERATIONS` or the backend fails at boot (the 2026-09-29 production crashloop). An operation with an owning skill avoids that. The startup validators can be called directly without booting the app. | E |
+
+## 2. Requirements (what, not how)
+
+1. From a journey Home Action, a journey list item, or a stated intent, the homeowner can see one journey's state in Ask:
+   where it is, the current step and why it matters, what blocks it, what has been done and with what evidence.
+2. Ask never completes a step on the homeowner's word alone. A step completes only when the underlying action
+   produced proof, reported exactly as the desktop reports it (F3, F7).
+3. A write performed in Ask reports the same step completion the desktop would (F5, F6). This is a correctness
+   requirement on existing operations, independent of the new one.
+4. Safety governance on each step (`professionalBoundary`, `conservativeFallback`, `emergencyEscalation`) and the
+   execution guard (F9) are honoured and shown; an unavailable execution step is shown as unavailable, never hidden
+   and never substituted.
+5. The next step comes from the deterministic resolver; no LLM is involved (F10, `feedback_ask_llm_last_resort`).
+6. A step is handled in Ask only when an Ask operation exists AND can produce the proof the step needs; otherwise the
+   link to the step's tool is the honest path (Group C reasoning).
+7. Missing context that blocks a step is asked for inline with the existing Property Context capture, not a new form.
+8. Skipping or dismissing is a user choice with a reason, governed by the skip policy, behind an explicit confirmation.
+9. The view refreshes when the journey changes, and a stale action never writes to a journey that has moved on.
+10. Role floors: read is VIEWER; anything that writes is CONTRIBUTOR.
+
+## 3. Proposed design (one way to meet the requirements)
+
+### 3.1 The operation
+
+`GUIDANCE_JOURNEY_CONTINUE`: a read, VIEWER floor, deterministic, added to the **existing `guidance-overview` skill**
+(new goal `continue-guided-journey`, new adapter `guidance-overview.continue`, consumer policy and allowed blocks
+extended). An owning skill means no `KNOWN_UNGOVERNED_OPERATIONS` entry (F17). Entered by launch context, like the
+decision thread precedent (F12): `entityType: 'GUIDANCE_JOURNEY'` with the journey id in `entityId`, never by a free-text
+pattern. It reads the journey through the same service the page uses, without AI enrichment (F10).
+
+### 3.2 What it returns
+
+- A summary: journey title (reusing the list handler's labels), progress, readiness, and the current step.
+- A step list (GROUPED_LIST) with each step's status, marking the current one; blocked steps show the reason.
+- A `BOUNDARY` block from the current step's governance fields (F2), and the execution-guard result for execution
+  steps (F9).
+- Evidence so far, labelled self-reported or verified (F7), so the homeowner can see what a completion would certify.
+- Missing context keys that block the step, offered as an inline capture when a capture definition exists.
+- The handoff for the current step (3.3).
+- If the journey is `BRANCHED`, the operation follows the branch to the child journey and says so. If it is
+  `COMPLETED`, `DISMISSED` or gone, it answers that plainly and does not substitute another journey.
+
+### 3.3 Step handlers
+
+A registry keyed by `toolKey` (and `stepKey` where a tool needs it) classifies every step:
+
+| Mode | Meaning | Examples (by name, to be verified per step) |
+| --- | --- | --- |
+| `IN_ASK` | launches an existing Ask operation, carrying `journeyId` and `stepKey` in the launch context | recalls, coverage questions, ownership costs, savings, do-nothing, radar, inspection findings, documents review |
+| `INLINE_CAPTURE` | the step only needs context facts | steps blocked on missing context |
+| `NAVIGATE` | keep the link, with a one-line reason | booking (external-flow boundary), anything with no operation that can produce proof |
+
+A test requires every tool key in the template registry to be classified, so a new template step cannot silently
+default. `IN_ASK` is chosen per step only after Phase 0/2 confirm the operation reports completion (3.4).
+
+### 3.4 Completion parity (the prerequisite)
+
+Move the reporting out of the controllers into the domain action, or into one shared helper
+(`reportJourneyToolCompletion`) called by both the controller and the Ask confirm handler, so the two surfaces cannot
+diverge. It must be idempotent per `(journey, step, proofId)` (methodology §14): a replayed confirm must not report
+twice. Because the desktop reports in a separate best-effort `try` after the domain write, a failure leaves the step
+incomplete with no retry (methodology §15); the shared helper should persist the intent with the write or be
+re-runnable from the record, and that choice is a question in §5.
+
+### 3.5 Entry points
+
+- `focusedOperationForLaunchContext`: `GUIDANCE_JOURNEY` maps to `GUIDANCE_JOURNEY_CONTINUE`.
+- In `buildFocusedHomeActionGuidance`, an action with `relatedJourneyId` becomes a `START_WORKFLOW` to the operation
+  with `entityType: 'GUIDANCE_JOURNEY'` (the same shape as Groups A and D), replacing the navigation CTA.
+- Each item of the existing journey list gets the same action.
+- The refresh fix (FRD v1.169) already preserves `entityType`/`entityId`, so a refreshed continuation stays on its
+  journey.
+
+### 3.6 Skip and dismiss
+
+Offered only after 3.4, each as its own confirmation-gated operation over the existing skip and dismiss services, with a
+reason the homeowner chooses, honouring `getStepSkipPolicy`, never for a required step the policy forbids. Both are
+CONTRIBUTOR. This is deliberately a later phase.
+
+## 4. Phases
+
+0. **Completion parity for existing Ask writes.** Fix `RECALL_MATCH_UPDATE` (F6) with the shared helper; audit the other
+   nine controllers against the Ask writes that mirror them (only `RECALL_MATCH_UPDATE` is known to; the others are
+   reads today, which must be confirmed, not assumed). Independent, small, and worth doing even if nothing else ships.
+1. **Read continuation.** The operation, the skill extension, the launch-context entry, the focused-guidance routing,
+   the journey-list action, the boundary and guard handling, branch following, the tool-key classification (all
+   `NAVIGATE` at first), tests, the startup-validator run, FRD notes.
+2. **`IN_ASK` handlers**, one tool key at a time, each only after its operation reports completion.
+3. **Skip and dismiss.**
+
+## 5. Open questions for product (recommended default in brackets)
+
+1. Start with Phase 0 alone, before any new operation? [Yes: it fixes a live gap.]
+2. Should a journey in `NOT_STARTED` be startable from Ask (a confirmation), or shown read-only? [Read-only first.]
+3. Skip and dismiss in Ask at all, or keep them on the page? [Keep on the page until Phase 3 is wanted.]
+4. Reporting failure policy (3.4): re-runnable from the domain record, or persisted intent? [Re-runnable from the record.]
+5. Should a self-reported step completion ever be offered in Ask? [No; the desktop's own "frontend" completions need proof.]
+6. Is the weather and financial journey presentation (F13) in scope, or only the generic journey? [Generic first.]
+
+## 6. Adversarial pass (what could make this wrong)
+
+- **Parity may be wider than one operation.** F5 is executed, but the audit of the other nine controllers is not done;
+  Phase 0 must do it before any `IN_ASK` claim.
+- **The proof check is shape-only (F3).** Ask could satisfy it with any id. The design therefore reports only ids the
+  Ask write itself produced, never ids from a message.
+- **Branching and multiple journeys per item.** The read must resolve the live journey (follow `BRANCHED`), or it would
+  show a superseded one. Not yet traced in depth.
+- **A stale action.** A `START_WORKFLOW` carrying a journey id can outlive the journey state; the operation must read
+  live state and the confirm paths must recheck it.
+- **Tool-key mapping is by name (F16, inferred).** A tool with a matching operation name may not produce the proof the
+  step needs; that is exactly why handlers are enabled per step, not per tool key.
+- **The execution guard covers three target actions only (F9).** Other execution-type steps rely on their own tool's
+  checks; the design must not imply broader protection.
+- **Not measured:** how many journeys exist in production and in which states. A read-only count by status and tool key
+  would size the work before Phase 1.
+
+## 7. Verification plan
+
+Each phase ends with: `tsc`; the startup validators called directly (skill registry, handoff, intelligence, capability
+registry); the full chunked Ask suite (new files under `execution/` or `handlers/` trip the orchestrator guardrail);
+an executed test per requirement above (for Phase 0, a confirmed recall match advances its journey step with proof and a
+replay does not double-report; for Phase 1, the operation over fixtures covering active, blocked, branched, completed,
+dismissed and missing journeys, with the boundary and guard shown); and a statement of what was not exercised against a
+real database or browser.
