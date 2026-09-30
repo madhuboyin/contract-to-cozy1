@@ -1,6 +1,6 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.163
+**Version:** 1.164
 **Date:** September 29, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
@@ -427,6 +427,24 @@ Ask Cozy must retain ContractToCozy's visual identity and differentiate through 
 **IW-SHELL-007 — Feedback proximity.** Response-level feedback and correction controls appear near the response they affect and carry exact execution/result identity. They must not be confused with record-level mutation actions.
 
 **IW-SHELL-008 — No duplicated navigation burden.** The shell must not keep two full-width left sidebars open when doing so materially constrains the conversation. It uses responsive collapse, a compact application rail, or an overlay/drawer while keeping both conversation history and traditional product navigation reachable.
+
+**IW-SHELL-009 — Conversation-oriented left navigation.** The full-page Ask Cozy experience must provide a persistent left navigation rail on desktop and an equivalent accessible drawer or nested view on mobile. The rail organizes the conversational workspace; it must not divide Ask Cozy into domain modes such as “Home,” “Work,” or “Record.” A homeowner may ask about maintenance, records, coverage, decisions, finances, or any other supported domain from the same active conversation and composer.
+
+**IW-SHELL-010 — Required left-navigation contents.** The expanded rail must provide:
+
+- a prominent **New conversation** control;
+- searchable, grouped conversation history with the active conversation identified, as governed by §11.8;
+- pinned or saved conversations when that capability is available;
+- a conditional **Continue where you left off** region when resumable Ask work exists; and
+- an account area anchored at the bottom of the rail, visually separated from conversation navigation.
+
+The rail must not show an empty “Active work” destination. Resumable work is surfaced only when it exists, and “work” must not ambiguously refer to both unfinished Ask workflows and home maintenance tasks.
+
+**IW-SHELL-011 — Domain destinations are contextual, not Ask modes.** Maintenance, Home Record, coverage, finances, and other traditional product surfaces must not appear as peer modes in the Ask Cozy conversation rail. When a traditional surface provides useful review, bulk management, or functionality not available inline, Ask may expose it as a clearly secondary, context-specific action such as “Open maintenance schedule” or “View in Home Record.” Traditional application navigation remains reachable under IW-SHELL-008 and IW-TRAD-001 without competing with the conversation rail.
+
+**IW-SHELL-012 — Account identity and Log out.** The account area must identify the signed-in homeowner sufficiently to prevent account ambiguity and provide a plainly labeled **Log out** action. Log out must invoke the canonical application logout flow, invalidate or clear locally held authenticated and property-specific state, and return the homeowner to the unauthenticated entry experience. It must not be hidden behind domain navigation, require leaving Ask Cozy first, or be styled as a primary conversational action. While logout is in progress, duplicate activation must be prevented; failure handling must not leave the interface falsely indicating that the user is logged out.
+
+**IW-SHELL-013 — Responsive and accessible navigation behavior.** On desktop, the rail may collapse to preserve a comfortable conversation width, but New conversation, history access, account identity, and Log out must remain reachable. On mobile, the same functions must be available through an accessible drawer or nested navigation view. Opening, closing, or collapsing navigation must preserve the active conversation, property scope, composer draft, focus continuity, and browser navigation behavior. All controls require visible labels or accessible names, keyboard operation, and clear focus treatment.
 
 ### 11.8 Conversation history rail
 
@@ -1151,7 +1169,7 @@ The program is complete when:
 - no ordinary record click or primary action implicitly navigates away from Ask;
 - every rendered control has a tested typed dispatch outcome;
 - presentation selection and responsive transformations satisfy IW-PRES-001–022 without losing semantics or actions;
-- the conversational shell and history experience satisfy IW-SHELL-001–008, IW-HIST-001–018, and applicable desktop/mobile requirements;
+- the conversational shell and history experience satisfy IW-SHELL-001–013, IW-HIST-001–018, and applicable desktop/mobile requirements;
 - recent conversations remain reachable during an active chat with search, property-safe restoration, URL identity, lifecycle controls, and responsive parity;
 - desktop and mobile provide equivalent supported outcomes;
 - canonical authorization, validation, confirmation, idempotency, and reconciliation remain intact;
