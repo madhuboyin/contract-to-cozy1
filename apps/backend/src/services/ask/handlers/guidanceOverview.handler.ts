@@ -183,6 +183,8 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
   const followedBranch = options.requestedJourneyId !== journey.id;
   const missing: string[] = (journey.missingContextKeys ?? []).filter((key: unknown): key is string => typeof key === 'string');
   const blockedReason = current?.status === 'BLOCKED' ? current.blockedReason ?? 'Something else needs to be done first.' : null;
+  // Phase 2: a step Ask can complete with recorded proof offers the in-Ask path as the primary action (never when blocked).
+  const currentInAsk = current ? askGuidanceStepMode(current.toolKey, current.stepKey).inAsk ?? null : null;
   const blocks: AskPresentationBlock[] = [];
 
   blocks.push({
@@ -194,13 +196,18 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
       blockedReason ? `Blocked: ${blockedReason}` : null,
       GUIDANCE_READINESS_LABELS[journey.executionReadiness] ? `Readiness: ${GUIDANCE_READINESS_LABELS[journey.executionReadiness]}.` : null,
     ].filter(Boolean).join(' '),
-    tone: blockedReason ? 'CAUTION' : 'DEFAULT', actions: [openAction],
+    tone: blockedReason ? 'CAUTION' : 'DEFAULT', actions: currentInAsk && !blockedReason && !options.guard?.blocked
+      ? [{
+        id: 'continue-step-in-ask', label: currentInAsk.label, interactionType: 'START_WORKFLOW' as const, message: currentInAsk.message,
+        operationId: currentInAsk.operationId, style: 'PRIMARY' as const,
+      }, { ...openAction, style: 'SECONDARY' as const }]
+      : [openAction],
   });
 
   const section = (key: string, label: string, list: typeof steps) => ({
     id: `guidance-journey-${key}`, title: label, count: list.length,
     items: list.map((step) => {
-      const mode = askGuidanceStepMode(step.toolKey);
+      const mode = askGuidanceStepMode(step.toolKey, step.stepKey);
       return {
         id: step.id, title: step.label,
         description: step.id === current?.id ? (step.description ?? null) : null,
@@ -208,7 +215,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
           step.id === current?.id ? 'Current step' : null,
           step.status === 'BLOCKED' && step.blockedReason ? `Blocked: ${step.blockedReason}` : null,
           step.status === 'SKIPPED' && step.skippedReason ? `Skipped: ${step.skippedReason}` : null,
-          step.id === current?.id && mode.mode === 'NAVIGATE' ? mode.reason : null,
+          step.id === current?.id && mode.mode !== 'INLINE_CAPTURE' ? mode.reason : null,
         ].filter((value): value is string => Boolean(value)),
         status: STEP_STATUS_LABELS[step.status] ?? step.status,
         href: step.id === current?.id ? pageHref : null,

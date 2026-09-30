@@ -181,13 +181,13 @@ test('every block survives the answer-trust validator and the page link the acti
   assert.equal(block(validated, 'guidance-journey-summary').actions.length, 1);
 });
 
-test('every tool key the template registry launches is classified, and none claims IN_ASK before its operation reports completion', () => {
+test('every tool key the template registry launches is classified, and tool keys stay NAVIGATE (only named steps are IN_ASK)', () => {
   const templates = [...listGuidanceTemplates(), DEFAULT_TEMPLATE];
   const keys = new Set(templates.flatMap((template) => (template.steps ?? []).map((s) => s.toolKey).filter(Boolean)));
   assert.ok(keys.size >= 25);
   for (const key of keys) assert.ok(ASK_GUIDANCE_STEP_TOOL_MODES[key], `${key} is not classified in askGuidanceStepHandlers.ts`);
   for (const key of Object.keys(ASK_GUIDANCE_STEP_TOOL_MODES)) assert.ok(keys.has(key), `${key} is classified but no template step uses it`);
-  assert.deepEqual([...new Set(Object.values(ASK_GUIDANCE_STEP_TOOL_MODES).map((m) => m.mode))], ['NAVIGATE'], 'Phase 1 classifies every key NAVIGATE');
+  assert.deepEqual([...new Set(Object.values(ASK_GUIDANCE_STEP_TOOL_MODES).map((m) => m.mode))], ['NAVIGATE'], 'tool-level defaults are all NAVIGATE');
   assert.equal(askGuidanceStepMode('not-a-tool').mode, 'NAVIGATE');
   assert.equal(askGuidanceStepMode(null).mode, 'NAVIGATE');
 });
@@ -229,4 +229,54 @@ test('a Home Action tied to a journey continues it in Ask; a more specific answe
   const fallback = none.blocks.find((b) => b.id === 'focused-home-action-guidance').actions[0];
   assert.equal(fallback.operationId, undefined);
   assert.ok(fallback.href);
+});
+
+// Phase 2, first slice: the recalls steps a recall write actually reports.
+const { ASK_GUIDANCE_IN_ASK_STEPS } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
+const { buildRecallMatchCompletion } = require('../../src/services/guidanceEngine/guidanceToolReporting.ts');
+
+test('IN_ASK steps are exactly the steps the recall write reports, and each operation exists', () => {
+  const reported = new Set(['CONFIRM', 'DISMISS', 'RESOLVE'].map((a) => `recalls:${buildRecallMatchCompletion('p1', a, { id: 'm1' }).stepKey}`));
+  assert.deepEqual(new Set(Object.keys(ASK_GUIDANCE_IN_ASK_STEPS)), reported);
+  for (const [key, entry] of Object.entries(ASK_GUIDANCE_IN_ASK_STEPS)) {
+    assert.ok(ASK_OPERATION_DEFINITIONS[entry.operationId], `${key}: unknown operation`);
+    const [toolKey, stepKey] = key.split(':');
+    const templates = [...listGuidanceTemplates(), DEFAULT_TEMPLATE];
+    assert.ok(templates.some((t) => t.steps.some((s) => s.toolKey === toolKey && s.stepKey === stepKey)), `${key} is not a template step`);
+  }
+  assert.equal(askGuidanceStepMode('recalls', 'safety_alert').mode, 'IN_ASK');
+  assert.equal(askGuidanceStepMode('recalls', 'review_remedy_instructions').mode, 'NAVIGATE', 'nothing in Ask reports the remedy step');
+  assert.equal(askGuidanceStepMode('recalls').mode, 'NAVIGATE');
+  assert.equal(askGuidanceStepMode('booking', 'safety_alert').mode, 'NAVIGATE');
+});
+
+test('a current recall step offers the in-Ask review as the primary action; blocked or guarded steps and other tools do not', async () => {
+  const recallStep = (status, overrides = {}) => step('safety_alert', status, 1, { toolKey: 'recalls', ...overrides });
+  stored = journey({ currentStepKey: 'safety_alert', steps: [recallStep('IN_PROGRESS')] });
+  const result = await invoke(launch());
+  const [primary, secondary] = block(result, 'guidance-journey-summary').actions;
+  assert.deepEqual({ id: primary.id, t: primary.interactionType, o: primary.operationId, m: primary.message, s: primary.style }, { id: 'continue-step-in-ask', t: 'START_WORKFLOW', o: 'RECALL_REVIEW', m: 'Show my open recall matches', s: 'PRIMARY' });
+  assert.equal(secondary.id, 'open-guidance-overview');
+  assert.equal(secondary.style, 'SECONDARY');
+  assert.ok(block(result, 'guidance-journey-steps').sections[0].items[0].meta.some((line) => /recorded on this journey the same way as on the page/.test(line)));
+
+  stored = journey({ currentStepKey: 'safety_alert', steps: [recallStep('BLOCKED', { blockedReason: 'Wait' })] });
+  assert.deepEqual(block(await invoke(launch()), 'guidance-journey-summary').actions.map((a) => a.id), ['open-guidance-overview']);
+
+  stored = journey({ currentStepKey: 'recall_resolution', steps: [step('recall_resolution', 'PENDING', 1, { toolKey: 'recalls', decisionStage: 'EXECUTION' })] });
+  guardResult = { blocked: true, blockedReason: 'Confirm the match first.' };
+  assert.deepEqual(block(await invoke(launch()), 'guidance-journey-summary').actions.map((a) => a.id), ['open-guidance-overview']);
+  guardResult = { blocked: false, blockedReason: null };
+  assert.equal(block(await invoke(launch()), 'guidance-journey-summary').actions[0].id, 'continue-step-in-ask');
+
+  stored = journey();
+  assert.deepEqual(block(await invoke(launch()), 'guidance-journey-summary').actions.map((a) => a.id), ['open-guidance-overview']);
+});
+
+test('the in-Ask action survives the answer-trust validator', async () => {
+  stored = journey({ currentStepKey: 'safety_alert', steps: [step('safety_alert', 'PENDING', 1, { toolKey: 'recalls', label: 'Confirm the recall' })] });
+  const raw = await invoke(launch());
+  const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'guidance-overview.continue', operationId: 'GUIDANCE_JOURNEY_CONTINUE', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-30T00:00:00.000Z' }] } } };
+  const { result: validated } = validateAskAnswerTrust({ question: 'Continue this guided journey.', operationId: 'GUIDANCE_JOURNEY_CONTINUE', result, propertyId: 'p1' });
+  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['continue-step-in-ask', 'open-guidance-overview']);
 });

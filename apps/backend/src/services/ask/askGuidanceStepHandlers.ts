@@ -5,8 +5,8 @@
 //   INLINE_CAPTURE the step only needs context facts Ask can capture inline
 //   NAVIGATE       keep the link to the step's tool, with the reason
 //
-// Phase 1 classifies every tool key NAVIGATE: a key moves to IN_ASK only after its Ask operation reports completion
-// (Phase 0 did that for recalls; the operation that continues a recall step from a journey comes with Phase 2).
+// Tool keys are all NAVIGATE by default; a STEP moves to IN_ASK only after its Ask operation reports that step's
+// completion (Phase 0 did that for two recall steps; see ASK_GUIDANCE_IN_ASK_STEPS below).
 // A test requires every tool key used by the template registry to be classified, so a new template step cannot
 // silently default.
 
@@ -45,8 +45,28 @@ export const ASK_GUIDANCE_STEP_TOOL_MODES: Readonly<Record<string, { mode: AskGu
   'service-price-radar': { mode: 'NAVIGATE', reason: NOT_YET },
 });
 
+// Phase 2 (design 3.3: "by toolKey, and stepKey where a tool needs it"). A step is IN_ASK only when an Ask operation
+// performs the domain write AND reports THIS step's completion with proof, exactly as the page does. The recalls tool
+// has three steps but only two are reported by a recall write (guidanceToolReporting.buildRecallMatchCompletion:
+// `safety_alert` on confirm, `recall_resolution` on dismiss and resolve); `review_remedy_instructions` is reported by
+// nothing in Ask, so it stays NAVIGATE. A test ties this table to the reporting helper so they cannot drift.
+export type AskGuidanceInAskStep = { operationId: string; message: string; label: string; reason: string };
+
+export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAskStep>> = Object.freeze({
+  'recalls:safety_alert': {
+    operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here',
+    reason: 'You can confirm the recall match here; it is recorded on this journey the same way as on the page.',
+  },
+  'recalls:recall_resolution': {
+    operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here',
+    reason: 'You can dismiss or resolve the recall match here; it is recorded on this journey the same way as on the page.',
+  },
+});
+
 /** An unclassified (or absent) tool key is NAVIGATE: Ask never claims to handle a step it has not been cleared for. */
-export function askGuidanceStepMode(toolKey: string | null | undefined): { mode: AskGuidanceStepMode; reason: string } {
+export function askGuidanceStepMode(toolKey: string | null | undefined, stepKey?: string | null): { mode: AskGuidanceStepMode; reason: string; inAsk?: AskGuidanceInAskStep } {
+  const inAsk = toolKey && stepKey ? ASK_GUIDANCE_IN_ASK_STEPS[`${toolKey}:${stepKey}`] : undefined;
+  if (inAsk) return { mode: 'IN_ASK', reason: inAsk.reason, inAsk };
   return (toolKey ? ASK_GUIDANCE_STEP_TOOL_MODES[toolKey] : undefined)
     ?? { mode: 'NAVIGATE', reason: NOT_YET };
 }

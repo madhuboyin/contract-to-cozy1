@@ -127,7 +127,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_TIMELINE_EVENTS: new Set(['open-home-timeline']),
   MATERIAL_SPECS_LIST: new Set(['open-material-specs']),
   GUIDANCE_JOURNEYS_LIST: new Set(['open-guidance-overview']),
-  GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview']),
+  GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview', 'continue-step-in-ask']),
   HOA_COMPLIANCE_STATUS: new Set(['open-hoa-compliance']),
   PRICE_FINALIZATIONS_LIST: new Set(['open-price-finalization']),
   DO_NOTHING_SIMULATION: new Set(['open-do-nothing-simulator']),
