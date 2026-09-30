@@ -1666,7 +1666,8 @@ export class GuidanceJourneyService {
     return true;
   }
 
-  async getJourneyById(propertyId: string, journeyId: string, userId?: string | null) {
+  // `includeAIAdvice: false` is the deterministic read (Ask's guided-journey continuation must never ask for AI advice).
+  async getJourneyById(propertyId: string, journeyId: string, userId?: string | null, options?: { includeAIAdvice?: boolean }) {
     const { guidanceJourney } = getGuidanceModels();
 
     const fetchJourney = (id: string) =>
@@ -1751,7 +1752,7 @@ export class GuidanceJourneyService {
       journey,
       signal: journey.primarySignal ?? null,
       next,
-      includeAIAdvice: true,
+      includeAIAdvice: options?.includeAIAdvice ?? true,
       userId,
     });
 

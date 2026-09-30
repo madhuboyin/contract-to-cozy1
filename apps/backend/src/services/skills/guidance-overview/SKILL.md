@@ -19,10 +19,11 @@ Review the guided journeys under way on Guidance Overview: each issue's steps do
 ## Operations
 
 - `GUIDANCE_JOURNEYS_LIST`
+- `GUIDANCE_JOURNEY_CONTINUE` (reached only by a launch context naming one journey; never by message)
 
 ## Consumers
 
-- ASK: GUIDANCE_JOURNEYS_LIST
+- ASK: GUIDANCE_JOURNEYS_LIST, GUIDANCE_JOURNEY_CONTINUE
 
 ## Canonical ownership and boundaries
 

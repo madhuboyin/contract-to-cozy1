@@ -56,7 +56,7 @@ const TAXONOMY = Object.freeze({
   'home-timeline': ['HOME_TIMELINE_EVENTS'],
   'material-specs': ['MATERIAL_SPECS_LIST'],
   'property-brief': ['PROPERTY_BRIEFS_LIST'],
-  'guidance-overview': ['GUIDANCE_JOURNEYS_LIST'],
+  'guidance-overview': ['GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE'],
   'hoa-compliance': ['HOA_COMPLIANCE_STATUS'],
   'price-finalization': ['PRICE_FINALIZATIONS_LIST'],
   'do-nothing-simulator': ['DO_NOTHING_SIMULATION'],

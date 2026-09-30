@@ -16,6 +16,7 @@ const {
   ASK_INTERACTION_COVERAGE_MATRIX,
   validateAskInteractionCoverageMatrix,
   ASK_DIRECT_MUTATION_OPERATION_IDS,
+  ASK_LAUNCH_ONLY_READ_OPERATION_IDS,
 } = require('../../src/services/ask/askInteractionCoverageMatrix.ts');
 
 test('every one of the 86 Ask operations has a coverage-matrix entry with no registry drift', () => {
@@ -24,7 +25,7 @@ test('every one of the 86 Ask operations has a coverage-matrix entry with no reg
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(operationIds.length, 115);
+  assert.equal(operationIds.length, 116);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -62,7 +63,7 @@ test('a non-message-routable (internal) operation is classified INTERNAL_CAPTURE
     if (!def.messageRoutable) {
       const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
       // A recorded IW-CONF-001 direct write (ASK_DIRECT_MUTATION_OPERATION_IDS) is DIRECT_MUTATION instead.
-      const expected = entry.confirmationCapable ? 'CONFIRMED_MUTATION' : ASK_DIRECT_MUTATION_OPERATION_IDS.has(operationId) ? 'DIRECT_MUTATION' : 'INTERNAL_CAPTURE';
+      const expected = entry.confirmationCapable ? 'CONFIRMED_MUTATION' : ASK_DIRECT_MUTATION_OPERATION_IDS.has(operationId) ? 'DIRECT_MUTATION' : ASK_LAUNCH_ONLY_READ_OPERATION_IDS.has(operationId) ? 'READ_RESULT' : 'INTERNAL_CAPTURE';
       assert.equal(entry.rollClass, expected, `${operationId}: expected ${expected}`);
     }
   }
@@ -131,7 +132,7 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'HOME_TIMELINE_EVENTS',
   'MATERIAL_SPECS_LIST',
   'PROPERTY_BRIEFS_LIST',
-  'GUIDANCE_JOURNEYS_LIST',
+  'GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE',
   'HOA_COMPLIANCE_STATUS',
   'PRICE_FINALIZATIONS_LIST',
   'DO_NOTHING_SIMULATION',
@@ -150,7 +151,7 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 115);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 116);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
@@ -160,7 +161,8 @@ test('Stage 2 fields are TRACED with real notes only for operations actually tra
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(operationIds.length, 115);
+  // + GUIDANCE_JOURNEY_CONTINUE (guided journey continuation Phase 1).
+  assert.equal(operationIds.length, 116);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

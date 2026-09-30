@@ -115,6 +115,7 @@ export type AskOperationId =
   | 'MATERIAL_SPECS_LIST'
   | 'PROPERTY_BRIEFS_LIST'
   | 'GUIDANCE_JOURNEYS_LIST'
+  | 'GUIDANCE_JOURNEY_CONTINUE'
   | 'HOA_COMPLIANCE_STATUS'
   | 'PRICE_FINALIZATIONS_LIST'
   | 'DO_NOTHING_SIMULATION'
@@ -293,6 +294,10 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // Reached only by "Plan this action" on an event's recommended action, and "Notification settings" on the feed.
   'HOME_EVENT_RADAR_TASK',
   'HOME_EVENT_RADAR_PREFERENCES',
+  // Guided journey continuation (FRD ASK_COZY_GUIDED_JOURNEY_CONTINUATION_FRD, Phase 1): a read reached only by a launch
+  // context naming one journey (a Home Action or a journey list item). Not retrievable by message: it would compete with
+  // GUIDANCE_JOURNEYS_LIST for "where am I in my guided journey?".
+  'GUIDANCE_JOURNEY_CONTINUE',
 ]);
 
 export function isAskMessageRoutableOperation(operationId: AskOperationId): boolean {
@@ -452,6 +457,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   HOA_COMPLIANCE_STATUS: definition('HOA_COMPLIANCE_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'hoa-compliance.status', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   // FRD v1.65: reads getPropertyGuidance, the call GET /properties/:id/guidance makes for the Guidance Overview page.
   GUIDANCE_JOURNEYS_LIST: definition('GUIDANCE_JOURNEYS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.journeys', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
+  // Guided journey continuation Phase 1: reads one journey through guidanceJourneyService.getJourneyById without AI advice.
+  GUIDANCE_JOURNEY_CONTINUE: definition('GUIDANCE_JOURNEY_CONTINUE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.continue', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY', 'EMPTY_STATE']),
   // FRD v1.63: reads listPropertyBriefs, the call GET /properties/:id/property-briefs makes for the Property Brief page.
   PROPERTY_BRIEFS_LIST: definition('PROPERTY_BRIEFS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property-brief.briefs', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   MATERIAL_SPECS_LIST: definition('MATERIAL_SPECS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'material-specs.list', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),

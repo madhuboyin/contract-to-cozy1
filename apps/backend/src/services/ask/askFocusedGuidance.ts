@@ -31,6 +31,7 @@ export function focusedOperationForLaunchContext(context?: {
 }): AskOperationId | null {
   if (context?.entityType === 'HOME_ACTION' && (context.actionId || context.entityId)) return 'HOME_ACTIONS';
   if (context?.entityType === 'DECISION_THREAD' && context.entityId) return 'HVAC_DECISION_CONTINUE';
+  if (context?.entityType === 'GUIDANCE_JOURNEY' && context.entityId) return 'GUIDANCE_JOURNEY_CONTINUE';
   if (context?.entityType === 'INVENTORY_ITEM' && context.entityId) return 'REPLACEMENT_GUIDANCE';
   return null;
 }
@@ -247,6 +248,14 @@ function resolveGroupBRecordReviewRouting(action: RankedHomeAction): { operation
   return null;
 }
 
+// Group D (guided journey continuation, Phase 1; FRD ASK_COZY_GUIDED_JOURNEY_CONTINUATION_FRD section 3.5): an action
+// tied to a guided journey continues it in Ask through GUIDANCE_JOURNEY_CONTINUE, a read of that one journey. It
+// completes nothing (steps finish in their tools), so the page link stays as the secondary way in.
+function resolveGroupDJourneyRouting(action: RankedHomeAction): { operationId: AskOperationId; entityType: string; entityId: string; message: string } | null {
+  if (!action.relatedJourneyId) return null;
+  return { operationId: 'GUIDANCE_JOURNEY_CONTINUE', entityType: 'GUIDANCE_JOURNEY', entityId: action.relatedJourneyId, message: 'Continue this guided journey.' };
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -296,14 +305,17 @@ export function buildFocusedHomeActionGuidance(
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
   const groupDRouting = !groupARouting ? resolveGroupDReplacementGuidanceRouting(action) : null;
   const groupBRecordReviewRouting = !groupARouting && !groupDRouting ? resolveGroupBRecordReviewRouting(action) : null;
-  const routing = groupARouting ?? groupDRouting ?? groupBRecordReviewRouting;
-  const checklist = !routing && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
+  const specificRouting = groupARouting ?? groupDRouting ?? groupBRecordReviewRouting;
+  const checklist = !specificRouting && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
-  const acceptedWorkActions = !routing && !checklist ? resolveAcceptedWorkActions(action, options.canContribute === true) : null;
-  const policyConflictSection = !routing && !checklist && !acceptedWorkActions && options.policyConflict?.conflicts.length
+  const acceptedWorkActions = !specificRouting && !checklist ? resolveAcceptedWorkActions(action, options.canContribute === true) : null;
+  const policyConflictSection = !specificRouting && !checklist && !acceptedWorkActions && options.policyConflict?.conflicts.length
     ? buildPolicyConflictSection(options.policyConflict, options.canContribute === true)
     : null;
+  // Lowest priority: a journey-linked action that has a more specific inline answer keeps that answer.
+  const groupDJourneyRouting = !specificRouting && !checklist && !acceptedWorkActions && !policyConflictSection ? resolveGroupDJourneyRouting(action) : null;
+  const routing = specificRouting ?? groupDJourneyRouting;
   // Resolvable inline only when the conflict is shown with its actions; otherwise the (exactly targeted) link stays.
   const policyConflictResolvableInline = Boolean(policyConflictSection && options.canContribute === true);
   // Appliances insight: the existing inventory-create workflow, one item at a time. The bulk form stays as the
@@ -329,6 +341,7 @@ export function buildFocusedHomeActionGuidance(
       message: routing.message,
       operationId: routing.operationId,
       ...(groupDRouting ? { entityType: 'INVENTORY_ITEM', entityId: groupDRouting.entityId } : {}),
+      ...(groupDJourneyRouting ? { entityType: groupDJourneyRouting.entityType, entityId: groupDJourneyRouting.entityId } : {}),
       style: 'PRIMARY' as const,
     }
     : {

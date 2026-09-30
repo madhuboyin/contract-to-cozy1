@@ -176,3 +176,41 @@ real database or browser.
   nothing to report to today. They become relevant only when Phase 1 carries the journey through the launch context;
   they are deferred to then, not fixed. Coverage decision, do-nothing, home-savings, price-finalization,
   negotiation-shield and project-tracker have no Ask write that mirrors them.
+
+## 9. Phase 1 outcome (implemented; read continuation)
+
+Status line above (section heading "design, nothing built") is superseded: Phases 0 and 1 are built; Phases 2 and 3 are not.
+
+- **Operation (executed).** `GUIDANCE_JOURNEY_CONTINUE`: `RECORD_QUERY`, deterministic, VIEWER, owned by `guidance-overview`
+  (goal `continue-guided-journey`, adapter `guidance-overview.continue`), so no `KNOWN_UNGOVERNED_OPERATIONS` entry. It is
+  **non-routable** (in `ASK_INTERNAL_OPERATION_IDS`): reached only by a launch context with `entityType: 'GUIDANCE_JOURNEY'`,
+  never by a message, so it cannot compete with `GUIDANCE_JOURNEYS_LIST` for "where am I in my guided journey?". The
+  coverage matrix gained `ASK_LAUNCH_ONLY_READ_OPERATION_IDS` (classed `READ_RESULT`, enforced by the validator) because the
+  existing non-routable classes were capture and write only.
+- **What it reads (executed against stubs).** `getJourneyById(propertyId, journeyId, null, { includeAIAdvice: false })` (the
+  new option defaults to true, so no other caller changes). The service already follows `BRANCHED` to the live child; the
+  answer says so (`GUIDANCE_JOURNEY_BRANCH_FOLLOWED`). Completed, dismissed, archived, missing and suppressed journeys are
+  answered plainly and never replaced by another journey. An unexpected service error propagates.
+- **What it shows.** Progress and current step; steps grouped still to do / done / skipped (template-removed steps hidden, as
+  the page does); blocked reason; the current step's `professionalBoundary`, `conservativeFallback` and `emergencyEscalation`;
+  the execution guard result only when the current step is an execution step (targets mirror the guard service's own step
+  matching, three named targets plus generic `EXECUTION`), shown as "not available yet", never hidden; missing context keys as
+  a plain list; evidence labelled Verified, Reported by you (not verified) or Recorded by the tool, with rejected and
+  superseded rows left out.
+- **Entry points (executed).** `focusedOperationForLaunchContext` maps `GUIDANCE_JOURNEY`. A Home Action with
+  `relatedJourneyId` becomes a `START_WORKFLOW` to the operation at the **lowest** priority: Group A, the repair/replace
+  lineage, recall/inspection review, the health checklist, accepted-work actions and policy-conflict actions all keep their
+  own answer. Each item of `GUIDANCE_JOURNEYS_LIST` gets a `CONVERSATION_CONTINUE` action ("See this journey here") and keeps
+  its page link; the existing frontend dispatch handles it with no frontend change (code-traced).
+- **Tool-key classification (executed).** `askGuidanceStepHandlers.ts` classifies all 27 tool keys the template registry uses
+  as `NAVIGATE`, each with a reason (booking: external flow; `frontend`: completed on the page with its own proof; the rest:
+  Ask does not yet complete the step with recorded proof). A test fails if a template step uses an unclassified key, if a
+  classified key is unused, or if any key claims `IN_ASK` in Phase 1. Only the current step links to its tool.
+- **Not done, on purpose.** Inline capture of missing context (design 3.2, requirement 7): the keys are listed and the homeowner
+  is pointed to the home record; building a per-key capture definition is deferred to Phase 2 because no per-key mapping was
+  traced. The `NOT_STARTED` journey is shown read-only (open question 2's default). Weather and financial variants use the
+  generic presentation (open question 6's default). Skip and dismiss are Phase 3.
+- **Verification.** `tests/ask/guidanceJourneyContinue.test.js` (13 tests); startup validators called directly, 0 issues across
+  the operation, audience, domain command, capability and confirm handler, skill, adapter, conflict, evaluation, handoff,
+  lineage, dependency, intelligence and coverage-matrix registries; typecheck; chunked Ask suite. Not exercised against a real
+  database (the journey service, guard and protection context were stubbed) or a browser.

@@ -40,7 +40,7 @@ test('every Ask operation has a complete governed definition', () => {
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41, 2026-09-22).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 115);
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 116);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);

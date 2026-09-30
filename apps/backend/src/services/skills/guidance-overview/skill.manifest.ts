@@ -12,19 +12,25 @@ export const GUIDANCE_OVERVIEW_SKILL = Object.freeze({
   displayName: 'Guidance Overview',
   description: "Review the guided journeys under way on Guidance Overview: each issue's steps done, the next step and anything blocking it.",
   homeownerJobs: ['STAY_AHEAD'],
-  supportedGoals: ['review-guided-journeys'],
+  supportedGoals: ['review-guided-journeys', 'continue-guided-journey'],
   aliases: ['guidance overview', 'guided journeys', 'step-by-step plans'],
   operations: [{
     operationId: 'GUIDANCE_JOURNEYS_LIST',
     version: '1.0',
     requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
     optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
+  }, {
+    // Phase 1 of the guided-journey continuation design: one journey's state, reached only by a launch context.
+    operationId: 'GUIDANCE_JOURNEY_CONTINUE',
+    version: '1.0',
+    requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+    optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   }],
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
-  allowedAdapters: [{ id: 'guidance-overview.journeys', version: '1.0' }],
+  allowedAdapters: [{ id: 'guidance-overview.journeys', version: '1.0' }, { id: 'guidance-overview.continue', version: '1.0' }],
   allowedExternalConnectors: [],
-  consumerPolicy: [{ consumer: 'ASK', operations: ['GUIDANCE_JOURNEYS_LIST'] }],
+  consumerPolicy: [{ consumer: 'ASK', operations: ['GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE'] }],
   autonomyLevel: 1,
   riskPolicy: {
     effects: ['READ'],
@@ -33,11 +39,12 @@ export const GUIDANCE_OVERVIEW_SKILL = Object.freeze({
     reversibility: 'REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
     { type: 'OPERATION_CONTRACT', id: 'GUIDANCE_JOURNEYS_LIST', version: '1.0', required: true },
+    { type: 'OPERATION_CONTRACT', id: 'GUIDANCE_JOURNEY_CONTINUE', version: '1.0', required: true },
   ],
   contextBudget: {
     maxFacts: 50,

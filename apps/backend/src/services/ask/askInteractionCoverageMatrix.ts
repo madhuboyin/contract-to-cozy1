@@ -45,6 +45,12 @@ export const ASK_DIRECT_MUTATION_OPERATION_IDS: ReadonlySet<AskOperationId> = ne
   'HOME_EVENT_RADAR_STATE',
 ]);
 
+// Non-routable READS: reached only by a launch context naming one record, never by message. They are classed
+// READ_RESULT (not INTERNAL_CAPTURE, which is for capture commands).
+export const ASK_LAUNCH_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
+  'GUIDANCE_JOURNEY_CONTINUE',
+]);
+
 export type AskInteractionClass =
   | 'READ_RESULT'
   | 'FILTER_REFINEMENT'
@@ -1203,6 +1209,21 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
     handoff: { status: 'TRACED', notes: 'The page is /dashboard/hoa?propertyId=; each violation links to its guidance journey (guidance-overview?journeyId=) as the page does, or to Guidance Overview when none is linked.' },
   },
+  GUIDANCE_JOURNEY_CONTINUE: {
+    track: 'Home intelligence and work',
+    rollClass: 'READ_RESULT',
+    canonicalOwner: 'guidance-overview.continue',
+    roleFloor: 'VIEWER',
+    messageRoutable: false,
+    confirmationCapable: false,
+    correctionModes: [],
+    note: 'Guided journey continuation, Phase 1 (docs/product/ASK_COZY_GUIDED_JOURNEY_CONTINUATION_FRD.md). Reads ONE journey through guidanceJourneyService.getJourneyById with includeAIAdvice false (deterministic), follows a BRANCHED journey to its live child and says so, applies the same protection-context suppression the list applies, and shows the current step\'s governance text and the execution guard for execution steps. Reached only by a launch context with entityType GUIDANCE_JOURNEY (Home Action with relatedJourneyId, or a journey list item); non-routable so it cannot compete with GUIDANCE_JOURNEYS_LIST. Completes, skips and dismisses nothing: every step keeps its link, classified NAVIGATE in askGuidanceStepHandlers.ts.',
+    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- SUMMARY (progress, current step, blocked reason, readiness, page link), GROUPED_LIST (still to do / done / skipped), EVIDENCE (recorded proof, labelled verified or reported by you), BOUNDARY (step governance, guard, missing details), EMPTY_STATE for a missing, suppressed or ended journey.' },
+    freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request. getJourneyById runs the same idempotent self-healing reconciliation the page runs.' },
+    idempotency: { status: 'TRACED', notes: 'Read; the reconciliation writes are idempotent repairs.' },
+    reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
+    handoff: { status: 'TRACED', notes: 'Links to /tools/guidance-overview?journeyId= for the exact journey; the current step is the only step with a link.' },
+  },
   GUIDANCE_JOURNEYS_LIST: {
     track: 'Home intelligence and work',
     rollClass: 'READ_RESULT',
@@ -1497,6 +1518,8 @@ export function validateAskInteractionCoverageMatrix(): string[] {
     const hasCommand = Object.values(ASK_DOMAIN_COMMAND_REGISTRY).some((c) => c.operationId === operationId);
     if (entry.confirmationCapable !== hasCommand) issues.push(`${operationId}: confirmationCapable=${entry.confirmationCapable} no longer matches domain command registry (has entry: ${hasCommand})`);
     if (hasCommand && entry.rollClass !== 'CONFIRMED_MUTATION') issues.push(`${operationId}: has a domain command but rollClass is "${entry.rollClass}", not CONFIRMED_MUTATION`);
+    const isLaunchOnlyRead = ASK_LAUNCH_ONLY_READ_OPERATION_IDS.has(operationId);
+    if (isLaunchOnlyRead && (def.messageRoutable || entry.rollClass !== 'READ_RESULT')) issues.push(`${operationId}: a launch-only read must be non-routable and READ_RESULT`);
     const isDirect = ASK_DIRECT_MUTATION_OPERATION_IDS.has(operationId);
     if (isDirect && hasCommand) issues.push(`${operationId}: listed as a direct mutation but also has a domain command`);
     if (isDirect !== (entry.rollClass === 'DIRECT_MUTATION')) issues.push(`${operationId}: rollClass "${entry.rollClass}" does not match ASK_DIRECT_MUTATION_OPERATION_IDS membership (${isDirect})`);
