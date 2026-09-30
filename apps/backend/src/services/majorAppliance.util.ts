@@ -11,12 +11,16 @@ export const MAJOR_APPLIANCE_TYPES = [
 
 export type MajorApplianceType = typeof MAJOR_APPLIANCE_TYPES[number];
 
+// ORDER MATTERS: the first type whose pattern matches wins. Types whose names contain another type's keyword are listed
+// BEFORE it. MICROWAVE_HOOD comes ahead of OVEN_RANGE because "range hood" and "over-the-range microwave" contain the
+// word "range"; with the range pattern first, both were classified as an oven/range. DISHWASHER precedes WASHER_DRYER
+// for the same reason ("dishwasher" contains "washer").
 const MAJOR_APPLIANCE_PATTERNS: Record<MajorApplianceType, RegExp[]> = {
   DISHWASHER: [/dish\s*washer/i, /dishwasher/i],
   REFRIGERATOR: [/refrigerator/i, /fridge/i, /freezer/i],
+  MICROWAVE_HOOD: [/microwave/i, /micro\s*wave/i, /range\s*hood/i, /vent\s*hood/i, /exhaust\s*hood/i],
   OVEN_RANGE: [/\boven\b/i, /\brange\b/i, /\bstove\b/i, /cooktop/i, /cook\s*top/i],
   WASHER_DRYER: [/washer/i, /dryer/i, /laundry/i, /washing\s*machine/i],
-  MICROWAVE_HOOD: [/microwave/i, /micro\s*wave/i, /range\s*hood/i, /vent\s*hood/i, /exhaust\s*hood/i],
   WATER_SOFTENER: [/water\s*softener/i, /softener/i, /water\s*conditioner/i],
 };
 

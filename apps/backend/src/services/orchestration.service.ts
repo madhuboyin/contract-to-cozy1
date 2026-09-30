@@ -53,6 +53,7 @@ import {
   resolveCanonicalAssetLabel,
   type HomeAction,
 } from '../productFramework';
+import { detectAssetIdentityConflict, isRiskActionable, normalizeUpper } from './riskRowIdentity';
 
 
 type DerivedFrom = {
@@ -371,9 +372,7 @@ export function adaptOrchestratedActionToHomeAction(
   const actionName = coverageItemDisplayName ?? action.title;
   const namedAssetLabel = resolveCanonicalAssetLabel(actionName);
   const typedAssetLabel = isCoverageAction ? null : resolveCanonicalAssetLabel(action.systemType);
-  const assetIdentityConflict = Boolean(
-    namedAssetLabel && typedAssetLabel && namedAssetLabel !== typedAssetLabel,
-  );
+  const assetIdentityConflict = detectAssetIdentityConflict(namedAssetLabel, typedAssetLabel);
   // A homeowner-facing name is closer to the source observation than a broad
   // or stale system classification. Never let a conflicting systemType rewrite
   // the card identity and rationale into a different appliance.
@@ -1412,10 +1411,6 @@ function isPastDate(d: Date): boolean {
   return x.getTime() < today.getTime();
 }
 
-function normalizeUpper(raw: unknown): string {
-  return String(raw ?? '').trim().toUpperCase();
-}
-
 function toNumberSafe(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   const n = typeof v === 'number' ? v : Number(v);
@@ -1429,25 +1424,6 @@ function pushUniqueReason(
   if (!reasons.some(r => r.reason === entry.reason)) {
     reasons.push(entry);
   }
-}
-
-function isRiskActionable(d: any): boolean {
-  const HIGH_LEVELS = new Set(['HIGH', 'CRITICAL']);
-  const ACTION_STATUSES = new Set([
-    'NEEDS_ATTENTION',
-    'ACTION_REQUIRED',
-    'MISSING_DATA',
-    'NEEDS_REVIEW',
-  ]);
-
-  const riskLevel = normalizeUpper(d?.riskLevel ?? d?.severity);
-  const status = normalizeUpper(d?.status);
-  const hasRecommendedAction =
-    typeof d?.recommendedAction === 'string' && d.recommendedAction.trim().length > 0;
-
-  return Boolean(
-    HIGH_LEVELS.has(riskLevel) || ACTION_STATUSES.has(status) || hasRecommendedAction
-  );
 }
 
 function countRiskActions(details: any[]): number {
