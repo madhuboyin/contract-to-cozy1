@@ -1,4 +1,5 @@
-const ASSET_DISPLAY_LABELS: Record<string, string> = {
+// Exported so the SQL measurement file's copy of this table can be compared to it by test.
+export const ASSET_DISPLAY_LABELS: Record<string, string> = {
   HVAC_FURNACE: 'HVAC Furnace',
   HVAC_HEAT_PUMP: 'HVAC Heat Pump',
   HVAC_FURNACE_FILTER: 'HVAC Filter',
