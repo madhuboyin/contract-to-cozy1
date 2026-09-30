@@ -282,7 +282,9 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             ? 'PROPERTY_SUMMARY_INCOMPLETE'
             : undefined,
     contextVersion: evaluation.contextVersion,
-    suppressSkillHandoff: roomFocus || vagueOverview,
+    // Never offer the generic maintenance follow-up: it is unrelated to completing the property record
+    // and duplicates the capture card in completeness mode (handoff audit, FRD v1.167).
+    followUp: null,
     captureRequests: completenessFocus ? captureRequests : [],
     blocks,
     suggestions: roomFocus

@@ -112,7 +112,7 @@ test('the production answer checker keeps a conversational room-map answer intac
   assert.equal(result.blocks[0].title, '2 rooms recorded');
   assert.equal(result.blocks[0].body, 'Select a room to see the items recorded there.');
   assert.deepEqual(result.blocks[0].actions, []);
-  assert.equal(result.suppressSkillHandoff, true);
+  assert.equal(result.followUp, null, 'Property Summary always declines a handoff');
   assert.deepEqual(result.suggestions, []);
   assert.deepEqual(result.captureRequests, []);
   const checked = validateAskAnswerTrustPipeline({

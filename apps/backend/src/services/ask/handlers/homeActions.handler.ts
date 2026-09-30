@@ -12,6 +12,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../../homeActions.service';
 import { buildBuyerPlanHomeActionsResult } from '../askBuyerPlanPresentation';
+import { resolveHomeActionsFollowUp } from '../homeActionsFollowUp';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
 import { buildPriorityListView } from '../../decisionPlatform/priorityListPolicy';
@@ -173,6 +174,8 @@ async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: st
 
   return {
     status: unavailableCount > 0 || degradedCount > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
+    // Several properties' feeds, never merged: a single-property maintenance follow-up would be ambiguous.
+    followUp: null,
     reasonCode: unavailableCount > 0 ? 'HOME_ACTION_ALL_PROPERTY_PARTIAL' : degradedCount > 0 ? 'HOME_ACTION_ALL_PROPERTY_PRODUCER_UNAVAILABLE' : 'HOME_ACTION_ALL_PROPERTY_VIEW',
     contextVersion: createHash('sha256').update(JSON.stringify(perProperty.map(({ property, feed }) => ({ id: property.id, count: feed?.actions.length ?? null, generatedAt: feed?.generatedAt ?? null, unavailableProducers: feed?.diagnostics.unavailableProducers ?? null })))).digest('hex'),
     blocks: [{
@@ -523,6 +526,8 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     contextVersion: evaluation.contextVersion,
     captureRequests,
     blocks,
+    // Offered only when the canonical feed (not just the capped cards) has actionable maintenance.
+    followUp: resolveHomeActionsFollowUp({ feedActions: feed.actions, displayedActions: selectedActions }),
     suggestions: ['Anything urgent?', 'What should I plan?', 'What can wait?'],
   };
 }

@@ -216,6 +216,8 @@ export function resolveSkillHandoffSuggestion(input: {
   availableContextReferenceIds?: readonly string[];
   continuity?: Partial<SkillHandoffContinuity>;
   parameters?: Readonly<Record<string, unknown>>;
+  /** Target operations not worth suggesting right now (just answered this session, or already recommended elsewhere in the response). */
+  excludeTargetOperationIds?: ReadonlySet<string>;
 }): SkillHandoffSuggestion | null {
   if (input.result.suppressSkillHandoff) return null;
   if (input.result.followUp === null) return null;
@@ -227,6 +229,7 @@ export function resolveSkillHandoffSuggestion(input: {
   if (nomination && validateFollowUpNomination(input.sourceOperationId, nomination).length) return null;
   for (const handoff of SKILL_HANDOFF_DEFINITIONS) {
     if (handoff.sourceOperationId !== input.sourceOperationId || !handoff.eligibleStatuses.includes(input.result.status)) continue;
+    if (input.excludeTargetOperationIds?.has(handoff.targetOperationId)) continue;
     if (nomination) {
       if (handoff.suggestedGoal !== nomination.goal) continue;
     } else if (handoff.isRelevant && !handoff.isRelevant({ result: input.result, parameters: input.parameters ?? input.result.parameters ?? {} })) continue;

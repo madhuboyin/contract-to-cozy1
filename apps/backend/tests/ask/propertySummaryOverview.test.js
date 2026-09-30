@@ -91,7 +91,7 @@ test('a vague overview question: a headline naming the home, grounded prose, one
   assert.equal(summary.tone, 'DEFAULT');
   assert.deepEqual(summary.actions, []);
   assert.deepEqual(result.captureRequests, []);
-  assert.equal(result.suppressSkillHandoff, true);
+  assert.equal(result.followUp, null, 'Property Summary always declines a handoff');
   assert.deepEqual(result.suggestions, propertyOverviewSuggestions(pending));
   // No TABLE and no embedded collection blocks -- only the synthesis and its evidence.
   assert.deepEqual(result.blocks.map((block) => block.id), ['property-summary', 'property-summary-evidence']);

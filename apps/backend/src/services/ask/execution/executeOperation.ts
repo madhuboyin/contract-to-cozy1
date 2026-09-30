@@ -23,7 +23,7 @@ import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../.
 import { ASK_OPERATION_CAPABILITY } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
 import { getSkillAdapter } from '../../skills/adapters/skillAdapterRegistry';
 import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelemetry';
-import { resolveSkillHandoffSuggestion } from '../../skills/skillHandoff';
+import { resolveSkillHandoffSuggestion, SKILL_HANDOFF_DEFINITIONS } from '../../skills/skillHandoff';
 import { applyAskAudiencePresentation } from '../askAudiencePresentation';
 import { validateAskAnswerTrustPipeline } from '../askAnswerTrustValidator';
 import { attachAskAuthoritativeSourceEvidence, includeAskContextSourceEvidence } from '../askAnswerTrustPolicy';
@@ -145,8 +145,24 @@ export function resolveAskSkillHandoff(input: {
   propertyId?: string | null;
   launchContext?: CreateAskExecutionRequest['launchContext'];
   parameters?: Readonly<Record<string, unknown>>;
+  /** Operations completed earlier in this session; a handoff whose target is one of them is not repeated. */
+  recentCompletedOperationIds?: ReadonlySet<string>;
 }) {
   const { result, launchContext } = input;
+  // Never suggest a target the user just finished, or one the "What comes next" capability list in this
+  // same response already recommends -- two cards pointing at the same place is noise (handoff audit).
+  const recommendedCapabilityIds = new Set<string>();
+  for (const block of result.blocks) {
+    if (block.type === 'CAPABILITY_LIST') for (const capability of block.capabilities) recommendedCapabilityIds.add(capability.id);
+  }
+  const excludeTargetOperationIds = new Set<string>();
+  for (const definition of SKILL_HANDOFF_DEFINITIONS) {
+    if (definition.sourceOperationId !== input.operationId) continue;
+    const capabilityId = ASK_OPERATION_CAPABILITY[definition.targetOperationId];
+    if (input.recentCompletedOperationIds?.has(definition.targetOperationId) || (capabilityId && recommendedCapabilityIds.has(capabilityId))) {
+      excludeTargetOperationIds.add(definition.targetOperationId);
+    }
+  }
   const controls = readAskOperationalControls();
   const skillHandoff = resolveSkillHandoffSuggestion({
     sourceOperationId: input.operationId,
@@ -161,6 +177,7 @@ export function resolveAskSkillHandoff(input: {
       contextProviderEnabled: controls.contextProviderEnabled,
     },
     parameters: input.parameters,
+    excludeTargetOperationIds,
     continuity: {
       propertyId: input.propertyId ?? null,
       sourceEntityType: launchContext?.entityType ?? null,
@@ -389,6 +406,7 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   // suppressing the analogous thing for a different response shape.
   let recentCompletedMessages: string[] = [];
   let recentCompletedCapabilityIds: ReadonlySet<string> = new Set();
+  let recentCompletedOperationIds: ReadonlySet<string> = new Set();
   try {
     const recent = await prisma.askExecution.findMany({
       where: {
@@ -402,6 +420,7 @@ export async function executeOperation(input: { userId: string; sessionId: strin
       select: { message: true, operationId: true },
     });
     recentCompletedMessages = recent.map((execution) => execution.message);
+    recentCompletedOperationIds = new Set(recent.map((execution) => execution.operationId).filter((operationId): operationId is string => Boolean(operationId)));
     recentCompletedCapabilityIds = new Set(
       recent
         .map((execution) => (execution.operationId ? ASK_OPERATION_CAPABILITY[execution.operationId as AskOperationId] : undefined))
@@ -412,7 +431,7 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   }
   const finalize = async (): Promise<AskOperationResult> => {
     const controls = readAskOperationalControls();
-    const skillHandoff = resolveAskSkillHandoff({ operationId: input.operation.operationId, result, propertyId: input.propertyId, launchContext: input.launchContext });
+    const skillHandoff = resolveAskSkillHandoff({ operationId: input.operation.operationId, result, propertyId: input.propertyId, launchContext: input.launchContext, recentCompletedOperationIds });
     const suggestionAwareResult = suppressRepeatedAskSuggestions(
       { ...result, skillHandoff },
       input.message,
