@@ -3,6 +3,8 @@ import type { AskOperationId } from './askOperationRegistry';
 import type { RankedHomeAction } from '../homeActions.service';
 import type { AskCaptureRequest } from '../../productFramework/ask/ask.contract';
 import { resolveHealthFactorChecklist, urgencyLabel, type HealthFactorChecklistProperty } from './healthFactorChecklist';
+import { buildPolicyConflictSection } from './policyConflictPresentation';
+import type { ConflictedInsurancePolicyTerm } from '../coverageConflict.service';
 
 export type HomeActionPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
 
@@ -182,9 +184,9 @@ function resolveGroupDReplacementGuidanceRouting(
 // message with a loose pattern a title like "Finish the deck" would confuse. REPORTED_COMPLETE keeps its
 // "Review completion" navigation (verification is not an Ask operation), and a viewer keeps it too, since
 // the operation needs CONTRIBUTOR.
-function resolveAcceptedWorkActions(action: RankedHomeAction, canManageWork: boolean) {
+function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boolean) {
   const workItem = action.workItem;
-  if (!canManageWork || !workItem || action.presentation?.variant !== 'ACCEPTED_WORK') return null;
+  if (!canContribute || !workItem || action.presentation?.variant !== 'ACCEPTED_WORK') return null;
   if (workItem.state === 'REPORTED_COMPLETE') return null;
   const common = {
     interactionType: 'START_WORKFLOW' as const,
@@ -276,7 +278,7 @@ export function buildFocusedHomeActionGuidance(
   contextVersion: string | null,
   propertyFacts?: HealthFactorChecklistProperty,
   captureRequest?: AskCaptureRequest | null,
-  options: { canManageWork?: boolean } = {},
+  options: { canContribute?: boolean; policyConflict?: ConflictedInsurancePolicyTerm | null } = {},
 ): AskOperationResult {
   const title = focusedTitle(action);
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
@@ -286,9 +288,14 @@ export function buildFocusedHomeActionGuidance(
   const checklist = !routing && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
-  const acceptedWorkActions = !routing && !checklist ? resolveAcceptedWorkActions(action, options.canManageWork === true) : null;
+  const acceptedWorkActions = !routing && !checklist ? resolveAcceptedWorkActions(action, options.canContribute === true) : null;
+  const policyConflictSection = !routing && !checklist && !acceptedWorkActions && options.policyConflict?.conflicts.length
+    ? buildPolicyConflictSection(options.policyConflict, options.canContribute === true)
+    : null;
+  // Resolvable inline only when the conflict is shown with its actions; otherwise the (exactly targeted) link stays.
+  const policyConflictResolvableInline = Boolean(policyConflictSection && options.canContribute === true);
   const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
-  const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && Boolean(captureRequest);
+  const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && !policyConflictSection && Boolean(captureRequest);
   const primaryAction = routing
     ? {
       id: `home-action-primary-${action.id}`,
@@ -403,10 +410,10 @@ export function buildFocusedHomeActionGuidance(
         status: null,
         href: null,
       })),
-    }] : [])],
+    }] : []), ...(policyConflictSection ? [policyConflictSection] : [])],
     // The inline checklist IS the destination page's content, so linking back to it is a redundant
     // round trip out of Ask -- omit the action entirely rather than demote it.
-    actions: checklist ? [] : acceptedWorkActions ?? [primaryAction],
+    actions: checklist || policyConflictResolvableInline ? [] : acceptedWorkActions ?? [primaryAction],
   }, {
     type: 'EVIDENCE',
     id: 'focused-home-action-evidence',

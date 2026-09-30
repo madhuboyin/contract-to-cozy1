@@ -37,6 +37,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];
     const facts = block.sections.find((section) => section.id === 'known-details')?.items ?? [];
     const checklist = block.sections.find((section) => section.id === 'checklist');
+    const policyConflicts = block.sections.find((section) => section.id === 'policy-conflicts');
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{block.title}</p>
@@ -71,6 +72,43 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                     {item.meta.length > 0 && <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.meta[0]}</span>}
                   </div>
                   {item.description && <p className="mt-1 text-sm leading-5 text-slate-600">{item.description}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {/* FRD v1.171: each conflicting policy fact is resolved here through the existing confirmation-gated
+            DOCUMENT_PROMOTION_CONFIRM. Without this branch the section would be silently dropped, exactly as the
+            checklist section would be by this fixed-id renderer. */}
+        {policyConflicts && policyConflicts.items.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{policyConflicts.title}</p>
+            <ul className="mt-2 space-y-2">
+              {policyConflicts.items.map((item) => (
+                <li key={item.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-slate-950">{item.title}</p>
+                    {item.meta.length > 0 && <span className="shrink-0 text-xs text-slate-500">{item.meta[0]}</span>}
+                  </div>
+                  {item.description && <p className="mt-1 text-sm leading-5 text-slate-700">{item.description}</p>}
+                  {item.actions && item.actions.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.actions.map((itemAction) => (
+                        <button
+                          key={itemAction.id}
+                          type="button"
+                          disabled={itemActionsDisabled}
+                          onClick={() => onItemAction(item.entityType, item.id, itemAction.message, itemAction.operationId, itemAction.interactionType)}
+                          className={cn(
+                            'min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50',
+                            itemAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                          )}
+                        >
+                          {itemAction.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

@@ -2980,7 +2980,7 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
 // conflicting fact (the new extraction, the existing confirmed value) so
 // neither is silently discarded, per HI-DOC-004's "retain both evidence
 // references."
-const POLICY_FACT_LABELS: Record<string, string> = {
+export const POLICY_FACT_LABELS: Record<string, string> = {
   POLICY_FORM: 'Policy form',
   ANNUAL_PREMIUM: 'Annual premium',
   ALL_PERIL_DEDUCTIBLE: 'Deductible',
@@ -3006,7 +3006,7 @@ type PolicyFactSnapshot = {
   updatedAt: Date;
 };
 
-function formatPolicyFactValue(fact: PolicyFactSnapshot): string {
+export function formatPolicyFactValue(fact: PolicyFactSnapshot): string {
   switch (fact.valueType) {
     case 'AMOUNT': return fact.amountValue != null ? formatHomeActionCurrency(Number(fact.amountValue)) : 'unknown';
     case 'BOOLEAN': return fact.booleanValue == null ? 'unknown' : (fact.booleanValue ? 'yes' : 'no');
@@ -3072,7 +3072,9 @@ async function loadInsurancePolicyFactConflictActions(propertyId: string, db: Ho
       primaryCta: {
         kind: 'CORRECT_FACT',
         label: 'Review conflicting policy details',
-        href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,
+        // Carries the exact policy: the tool's PolicyRecordReadinessPanel otherwise falls back to the first
+        // APPLICABLE policy and then the latest by expiry, which need not be the one that raised this action.
+        href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence?policyId=${encodeURIComponent(term.policyId)}`,
       },
       secondaryCtas: [],
       feedbackControls: RECOMMENDATION_FEEDBACK,

@@ -35,6 +35,8 @@ export default function CoverageIntelligenceToolClient() {
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const requestedStage = searchParams.get('stage');
+  // The exact policy a Home Action refers to (FRD v1.171). Without it the panel guesses: first applicable policy, then latest expiry.
+  const requestedPolicyId = searchParams.get('policyId');
   const legacyTab = searchParams.get('tab');
   const activeStage: CoverageStage =
     requestedStage === 'questions' ||
@@ -169,7 +171,7 @@ export default function CoverageIntelligenceToolClient() {
       {/* Tab content */}
       {activeStage === 'current' && (
         <div id="coverage-stage-current" role="tabpanel" className="space-y-4">
-          <PolicyRecordReadinessPanel propertyId={propertyId} />
+          <PolicyRecordReadinessPanel propertyId={propertyId} policyId={requestedPolicyId} />
           <PropertyContextCapturePanel
             propertyId={propertyId}
             featureKey="COVERAGE_INTELLIGENCE"

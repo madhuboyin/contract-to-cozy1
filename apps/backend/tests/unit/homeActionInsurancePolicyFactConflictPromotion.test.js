@@ -93,6 +93,10 @@ test('a pending fact that differs from a confirmed value on another term produce
   assert.ok(action.whyItMatters.includes('Annual premium'));
   assert.equal(action.evidence.length, 2, 'one entry for the new extraction, one for the confirmed value');
   assert.equal(action.primaryCta.kind, 'CORRECT_FACT');
+  // FRD v1.171: the fallback link carries the exact policy, not a bare tool URL the panel would resolve by guessing.
+  const href = new URL(action.primaryCta.href, 'https://x.invalid');
+  assert.equal(href.pathname, '/dashboard/properties/property-1/tools/coverage-intelligence');
+  assert.equal(href.searchParams.get('policyId'), 'policy-1');
 });
 
 test('a pending fact that matches the confirmed value produces no conflict', async () => {

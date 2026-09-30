@@ -435,7 +435,7 @@ function acceptedWorkAction(overrides = {}) {
 
 test('accepted work offers Complete and Snooze in Ask instead of navigating to Work', () => {
   const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
-  const result = buildFocusedHomeActionGuidance(acceptedWorkAction(), 'context-v1', undefined, null, { canManageWork: true });
+  const result = buildFocusedHomeActionGuidance(acceptedWorkAction(), 'context-v1', undefined, null, { canContribute: true });
   const actions = result.blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
   assert.deepEqual(actions.map((candidate) => candidate.label), ['Mark complete', 'Snooze reminders']);
   assert.deepEqual(actions.map((candidate) => candidate.style), ['PRIMARY', 'SECONDARY']);
@@ -457,17 +457,17 @@ test('accepted work offers Complete and Snooze in Ask instead of navigating to W
 test('accepted work follows the card\'s own governed controls, and keeps the link where Ask cannot act', () => {
   const build = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options).blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
   // Not completion-eligible: Snooze only, promoted to primary.
-  const snoozeOnly = build(acceptedWorkAction({ feedbackControls: ['CORRECT_FACT', 'SNOOZE'] }), { canManageWork: true });
+  const snoozeOnly = build(acceptedWorkAction({ feedbackControls: ['CORRECT_FACT', 'SNOOZE'] }), { canContribute: true });
   assert.deepEqual(snoozeOnly.map((candidate) => [candidate.label, candidate.style]), [['Snooze reminders', 'PRIMARY']]);
   // Completion reported: verification is not an Ask operation, so the navigation stays.
-  const reported = build(acceptedWorkAction({ workItem: { id: 'work-1', state: 'REPORTED_COMPLETE' }, primaryCta: { label: 'Review completion', href: '/dashboard/properties/property-1/home-operations?focusWorkItemId=work-1&openManage=1' } }), { canManageWork: true });
+  const reported = build(acceptedWorkAction({ workItem: { id: 'work-1', state: 'REPORTED_COMPLETE' }, primaryCta: { label: 'Review completion', href: '/dashboard/properties/property-1/home-operations?focusWorkItemId=work-1&openManage=1' } }), { canContribute: true });
   assert.deepEqual(reported.map((candidate) => [candidate.label, candidate.style, Boolean(candidate.href)]), [['Review completion', 'PRIMARY', true]]);
   // A viewer, or a caller that does not say, fails closed to the navigation (the operation needs CONTRIBUTOR).
-  for (const options of [{ canManageWork: false }, undefined, {}]) {
+  for (const options of [{ canContribute: false }, undefined, {}]) {
     assert.deepEqual(build(acceptedWorkAction(), options).map((candidate) => candidate.label), ['Open work']);
   }
   // Only accepted work is affected.
-  const other = build({ ...acceptedWorkAction(), presentation: { ...acceptedWorkAction().presentation, variant: 'PLAIN' } }, { canManageWork: true });
+  const other = build({ ...acceptedWorkAction(), presentation: { ...acceptedWorkAction().presentation, variant: 'PLAIN' } }, { canContribute: true });
   assert.deepEqual(other.map((candidate) => candidate.label), ['Open work']);
 });
 

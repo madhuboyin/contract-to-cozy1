@@ -13,6 +13,8 @@ import { evaluateFeatureContext } from '../../../modules/propertyContext/applica
 import { getHomeActionFeed, type HomeActionEmptyStateReason } from '../../homeActions.service';
 import { buildBuyerPlanHomeActionsResult } from '../askBuyerPlanPresentation';
 import { resolveHomeActionsFollowUp } from '../homeActionsFollowUp';
+import { policyConflictTermIdFromLineage } from '../policyConflictPresentation';
+import { getConflictedInsurancePolicyTerms } from '../../coverageConflict.service';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
 import { buildPriorityListView } from '../../decisionPlatform/priorityListPolicy';
@@ -372,7 +374,13 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         focusedAction.primaryCta.href,
       )
       : null;
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canManageWork: access.role !== HouseholdRole.VIEWER });
+    // Policy-fact conflict (FRD v1.171): read the live conflict for this exact term, the same detection the producer uses,
+    // so the answer shows the current pending-vs-confirmed values and never a stale snapshot.
+    const conflictTermId = policyConflictTermIdFromLineage(focusedAction.lineageId);
+    const policyConflict = conflictTermId
+      ? (await getConflictedInsurancePolicyTerms(propertyId, prisma)).find((term) => term.termId === conflictTermId) ?? null
+      : null;
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict });
   }
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);
