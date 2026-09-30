@@ -674,6 +674,40 @@ test('conflicting appliance name and system type fail closed instead of mixing c
   assert.doesNotMatch(action.primaryCta.href, /providers/);
 });
 
+test('an asset identity conflict tied to an inventory item links to that exact item, not the list', () => {
+  const build = (relatedEntity) => adaptOrchestratedActionToHomeAction({
+    id: 'risk-conflicting-appliance-item',
+    actionKey: 'risk:conflicting-appliance-item',
+    source: 'RISK',
+    propertyId: 'property-1',
+    title: 'Washer',
+    description: null,
+    systemType: 'DISHWASHER',
+    category: 'APPLIANCE',
+    riskLevel: 'HIGH',
+    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+    confidence: { score: 0.85, level: 'HIGH', explanation: [] },
+    priority: 80,
+    cta: { show: true, label: 'Schedule Service', reason: 'ACTION_REQUIRED' },
+    suppression: { suppressed: false, reasons: [] },
+    signalSources: [],
+    primarySignalSource: null,
+    overdue: false,
+    createdAt: new Date('2026-08-31T12:00:00.000Z'),
+    ...(relatedEntity ? { relatedEntity } : {}),
+  });
+
+  const exact = build({ type: 'INVENTORY_ITEM', id: 'item 1/x' });
+  assert.equal(exact.primaryCta.label, 'Review asset details');
+  const href = new URL(exact.primaryCta.href, 'https://x.invalid');
+  assert.equal(href.pathname, '/dashboard/properties/property-1/inventory');
+  assert.equal(href.searchParams.get('tab'), 'items');
+  assert.equal(href.searchParams.get('openItemId'), 'item 1/x', 'the id survives encoding intact');
+  // No item to point at (or a non-inventory entity): the list, exactly as before.
+  assert.equal(build(null).primaryCta.href, '/dashboard/properties/property-1/inventory');
+  assert.equal(build({ type: 'CHECKLIST_ITEM', id: 'c1' }).primaryCta.href, '/dashboard/properties/property-1/inventory');
+});
+
 test('coverage recommendations preserve item context and open the item coverage review', () => {
   const action = adaptOrchestratedActionToHomeAction({
     id: 'coverage-gap:property-1:dishwasher-item',

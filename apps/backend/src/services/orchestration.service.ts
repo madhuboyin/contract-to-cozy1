@@ -404,8 +404,12 @@ export function adaptOrchestratedActionToHomeAction(
   const serviceHref = isServiceAction && !critical && !assetIdentityConflict
     ? buildProviderSearchHref(action, displayTitle)
     : null;
+  // The exact item when the source row is tied to one (the inventory page opens that item's drawer from
+  // `openItemId`); the bare list only when there is no item to point at, e.g. a property-level risk row.
   const identityReviewHref = assetIdentityConflict
-    ? `/dashboard/properties/${encodeURIComponent(action.propertyId)}/inventory`
+    ? action.relatedEntity?.type === 'INVENTORY_ITEM'
+      ? `/dashboard/properties/${encodeURIComponent(action.propertyId)}/inventory?tab=items&openItemId=${encodeURIComponent(action.relatedEntity.id)}`
+      : `/dashboard/properties/${encodeURIComponent(action.propertyId)}/inventory`
     : null;
   const coverageHref = isCoverageAction
     ? buildInventoryCoverageHref(action)
