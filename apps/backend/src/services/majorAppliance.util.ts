@@ -72,3 +72,34 @@ export function classifiedApplianceType(existing: { sourceHash?: string | null; 
   const fromTag = tag ? tag.slice(APPLIANCE_TYPE_TAG_PREFIX.length) : '';
   return fromTag || null;
 }
+
+export type ApplianceIdentityTagPlan =
+  | { action: 'SKIP'; reason: 'NOT_APPLIANCE' | 'NO_CANONICAL_HASH' }
+  | { action: 'OK'; type: string }
+  | { action: 'CONFLICT'; type: string; conflictingTypeTags: string[] }
+  | { action: 'RESTORE'; type: string; tags: string[]; added: string[] };
+
+/**
+ * What it takes to bring an already-classified appliance's system-managed identity tags back in line with its
+ * canonical source hash. Only ever ADDS the two tags; it never removes or rewrites anything.
+ *
+ * Only an item with a canonical `property_appliance::<TYPE>` hash is repairable, because the hash is the durable
+ * record that older edits did not erase. If the item carries a type tag that names a DIFFERENT type it is reported
+ * as a conflict and left alone: which of the two is right is a decision for the homeowner, not for a repair.
+ * Shared by the repair service method and the script's dry run, so the report can never disagree with the write.
+ */
+export function planApplianceIdentityTags(item: { category?: string | null; sourceHash?: string | null; tags?: readonly string[] | null }): ApplianceIdentityTagPlan {
+  if (String(item.category) !== 'APPLIANCE') return { action: 'SKIP', reason: 'NOT_APPLIANCE' };
+  const type = item.sourceHash?.startsWith(PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX)
+    ? item.sourceHash.slice(PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX.length)
+    : '';
+  if (!type) return { action: 'SKIP', reason: 'NO_CANONICAL_HASH' };
+
+  const tags = [...(item.tags ?? [])];
+  const expectedTypeTag = `${APPLIANCE_TYPE_TAG_PREFIX}${type}`;
+  const conflictingTypeTags = tags.filter((tag) => tag.startsWith(APPLIANCE_TYPE_TAG_PREFIX) && tag !== expectedTypeTag);
+  if (conflictingTypeTags.length) return { action: 'CONFLICT', type, conflictingTypeTags };
+
+  const added = [PROPERTY_APPLIANCE_TAG, expectedTypeTag].filter((tag) => !tags.includes(tag));
+  return added.length ? { action: 'RESTORE', type, tags: [...tags, ...added], added } : { action: 'OK', type };
+}

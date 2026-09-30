@@ -12,6 +12,7 @@ import {
   formatMajorApplianceType,
   inferMajorApplianceType,
   classifiedApplianceType,
+  planApplianceIdentityTags,
   APPLIANCE_TYPE_TAG_PREFIX,
   PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
 } from './majorAppliance.util';
@@ -878,4 +879,41 @@ export class InventoryService {
     if (!p) throw new APIError('Insurance policy not found for property', 404, 'INSURANCE_NOT_FOUND');
   }
 
+
+  /**
+   * One-item repair (FRD v1.174): restore an already-classified appliance's system-managed identity tags from its
+   * surviving canonical source hash. Older edits overwrote the tags while the hash survived. Narrow by design: it
+   * only adds the two tags, never touches the name, hash or any other field, and skips (rather than guesses) when the
+   * item has no canonical hash or carries a type tag naming a different type. It deliberately does not go through
+   * `updateItem`, whose room requirement would reject a legacy roomless appliance and which does far more than a
+   * repair should. It still emits the standard property-change signal so derived data is recomputed.
+   * Idempotent, and guarded against a concurrent edit (the write only applies to the row version that was read).
+   */
+  async restoreApplianceIdentityTags(propertyId: string, itemId: string) {
+    const existing = await prisma.inventoryItem.findFirst({
+      where: { id: itemId, propertyId },
+      select: { id: true, category: true, tags: true, sourceHash: true, updatedAt: true },
+    });
+    if (!existing) return { status: 'NOT_FOUND' as const };
+
+    const plan = planApplianceIdentityTags(existing);
+    if (plan.action === 'SKIP') return { status: 'SKIPPED' as const, reason: plan.reason };
+    if (plan.action === 'OK') return { status: 'UNCHANGED' as const, type: plan.type };
+    if (plan.action === 'CONFLICT') return { status: 'CONFLICT' as const, type: plan.type, conflictingTypeTags: plan.conflictingTypeTags };
+
+    const changedAt = new Date();
+    const sourceRevision = `revised:${crypto.randomUUID()}`;
+    const written = await prisma.$transaction(async (tx) => {
+      const result = await tx.inventoryItem.updateMany({
+        where: { id: itemId, propertyId, updatedAt: existing.updatedAt },
+        data: { tags: plan.tags },
+      });
+      if (result.count !== 1) return false;
+      await emitInventoryItemPropertyChange(tx, { propertyId, itemId, mutation: 'REVISED', sourceRevision, changedAt });
+      return true;
+    });
+    return written
+      ? { status: 'RESTORED' as const, type: plan.type, added: plan.added }
+      : { status: 'CHANGED_CONCURRENTLY' as const };
+  }
 }
