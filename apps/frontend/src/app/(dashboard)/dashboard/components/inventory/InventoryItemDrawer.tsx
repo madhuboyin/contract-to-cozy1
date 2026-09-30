@@ -800,8 +800,13 @@ useEffect(() => {
         coverageNotRequired,
       };
   
+      // The form has no tag control, and tags are system-managed (an appliance's classification lives in them). Sending
+      // `tags: []` on an update used to overwrite them, so an update never carries tags; create keeps its default.
+      const { tags: _systemManagedTags, ...updatePayload } = payload;
+      void _systemManagedTags;
+
       if (isEdit && props.initialItem) {
-        await updateInventoryItem(props.propertyId, props.initialItem.id, payload);
+        await updateInventoryItem(props.propertyId, props.initialItem.id, updatePayload);
         await refreshItemDocs();
       } else {
         if (draftId) {
@@ -826,7 +831,7 @@ useEffect(() => {
             throw new Error('Draft was confirmed but item id was missing in response.');
           }
 
-          await updateInventoryItem(props.propertyId, createdItemId, payload);
+          await updateInventoryItem(props.propertyId, createdItemId, updatePayload);
           savedItemId = createdItemId;
           created = true;
         } else {

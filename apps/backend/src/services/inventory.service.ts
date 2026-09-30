@@ -11,6 +11,8 @@ import { generateForecast } from './maintenancePrediction.service';
 import {
   formatMajorApplianceType,
   inferMajorApplianceType,
+  classifiedApplianceType,
+  APPLIANCE_TYPE_TAG_PREFIX,
   PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
 } from './majorAppliance.util';
 import { assertSafeUrl } from '../utils/ssrfGuard';
@@ -538,34 +540,44 @@ export class InventoryService {
     }
     
     if (String(nextCategory) === 'APPLIANCE') {
-      const inferredType = inferMajorApplianceType(nextName);
-      
-      if (inferredType) {
-        const sourceHash = `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${inferredType}`;
-        
-        // Check if another item with this type exists
-        const canonical = await prisma.inventoryItem.findFirst({
-          where: { propertyId, sourceHash },
-          select: { id: true },
-        });
-  
-        if (canonical && canonical.id !== itemId) {
-          const friendlyName = formatMajorApplianceType(inferredType).toLowerCase();
-          throw new APIError(
-            `A ${friendlyName} already exists for this property.`,
-            409,
-            'APPLIANCE_ALREADY_EXISTS'
-          );
-        }
-  
-        // Update sourceHash if this item is becoming a major appliance
-        if (!existing.sourceHash?.startsWith(PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX)) {
+      // An item that is already classified keeps its classification: a rename must not reclassify it, and its
+      // system-managed identity tags must survive an edit that carries no (or an empty) tag list -- the Inventory
+      // drawer sends `tags: []` on every save, which used to overwrite them while the source hash survived, leaving
+      // the two out of step. The name only classifies an item that has no classification yet.
+      const classifiedType = classifiedApplianceType(existing);
+      const effectiveType = classifiedType ?? inferMajorApplianceType(nextName);
+
+      if (effectiveType) {
+        const sourceHash = `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${effectiveType}`;
+
+        // Duplicate prevention only matters when this item is about to take ownership of the hash; an item that
+        // already owns it cannot conflict with itself, and a rename of a classified item never changes its type.
+        if (existing.sourceHash !== sourceHash) {
+          const canonical = await prisma.inventoryItem.findFirst({
+            where: { propertyId, sourceHash },
+            select: { id: true },
+          });
+
+          if (canonical && canonical.id !== itemId) {
+            const friendlyName = formatMajorApplianceType(effectiveType).toLowerCase();
+            throw new APIError(
+              `A ${friendlyName} already exists for this property.`,
+              409,
+              'APPLIANCE_ALREADY_EXISTS'
+            );
+          }
+
           (patch as any).sourceHash = sourceHash;
-          (patch as any).tags = mergeTags(existing.tags, patch.tags, [
-            TAG_PROPERTY_APPLIANCE,
-            `APPLIANCE_TYPE:${inferredType}`,
-          ]);
         }
+
+        // Incoming tags are additive here, never a replacement, so system-managed identity tags cannot be erased.
+        const mergedTags = mergeTags(existing.tags, patch.tags, [
+          TAG_PROPERTY_APPLIANCE,
+          `${APPLIANCE_TYPE_TAG_PREFIX}${effectiveType}`,
+        ]);
+        const existingTagSet = new Set(existing.tags ?? []);
+        const tagsChanged = mergedTags.length !== existingTagSet.size || mergedTags.some((tag) => !existingTagSet.has(tag));
+        if ('tags' in patch || tagsChanged) (patch as any).tags = mergedTags;
       }
     }
     // Validate relations

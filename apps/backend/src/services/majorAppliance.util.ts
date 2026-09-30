@@ -50,3 +50,25 @@ export function formatMajorApplianceType(type: string | null | undefined) {
     .trim();
 }
 
+
+export const APPLIANCE_TYPE_TAG_PREFIX = 'APPLIANCE_TYPE:';
+export const PROPERTY_APPLIANCE_TAG = 'PROPERTY_APPLIANCE';
+
+/**
+ * The major-appliance classification an inventory item already carries, if any.
+ *
+ * The canonical source hash is the durable record of the classification (it is what duplicate prevention keys on and
+ * it survives edits); the `APPLIANCE_TYPE:` tag is derived metadata that older edits could erase, so the hash is read
+ * first and the tag only as a fallback. The item NAME is deliberately not consulted: a name is a homeowner-facing label
+ * and is the weakest evidence of type ("KitchenAid KDTM404" is a dishwasher without saying so), so it may only classify
+ * an item that has no classification yet, never reclassify one that does.
+ */
+export function classifiedApplianceType(existing: { sourceHash?: string | null; tags?: readonly string[] | null }): string | null {
+  if (existing.sourceHash?.startsWith(PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX)) {
+    const fromHash = existing.sourceHash.slice(PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX.length);
+    if (fromHash) return fromHash;
+  }
+  const tag = (existing.tags ?? []).find((candidate) => candidate.startsWith(APPLIANCE_TYPE_TAG_PREFIX));
+  const fromTag = tag ? tag.slice(APPLIANCE_TYPE_TAG_PREFIX.length) : '';
+  return fromTag || null;
+}
