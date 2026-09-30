@@ -75,6 +75,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
           contextVersion: promptContext?.contextVersion,
           returnTo: promptContext?.returnTo ?? (safeBackTo || null),
           sourceExecutionId: promptContext?.sourceExecutionId,
+          handoffFromExecutionId: promptContext?.handoffFromExecutionId,
           operationId: promptContext?.operationId,
           documentId: promptContext?.documentId,
           batchDecisions: promptContext?.batchDecisions,

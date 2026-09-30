@@ -12,6 +12,7 @@ import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperation
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
 import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlocksAllowed, audienceTelemetryFor, discoverableAskOperationIds, ensureAskServiceAccountEligibility, ensurePropertyAccess, enterAskPropertyTimezoneContext, mapPersistedExecution, maybeSynthesizeDeterministicResult, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus, withAskTimeout } from '../askHandlerSupport';
 import { executeOperation } from '../execution/executeOperation';
+import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttribution, type AskHandoffAttribution } from './askHandoffTelemetry';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
 import { resolveAskFollowUpMessage } from '../askFollowUpContext';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
@@ -141,6 +142,20 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     },
   });
   await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'RECEIVED', metadataJson: asInputJson({ surface: input.launchContext?.surface ?? 'unknown' }) } });
+  // Handoff acceptance telemetry (FRD v1.168). Reached only for a genuinely new execution -- the duplicate
+  // clientRequestId return above never gets here, so a replayed request cannot double-count OPENED.
+  let handoffAttribution: AskHandoffAttribution | null = null;
+  if (input.launchContext?.handoffFromExecutionId) {
+    try {
+      handoffAttribution = await resolveHandoffAttribution(userId, input.launchContext.handoffFromExecutionId);
+      if (handoffAttribution) {
+        recordHandoffOutcome('OPENED', handoffAttribution);
+        await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'SKILL_HANDOFF_OPENED', metadataJson: asInputJson({ sourceExecutionId: handoffAttribution.sourceExecutionId, sourceSkill: handoffAttribution.sourceSkill, targetSkill: handoffAttribution.targetSkill }) } });
+      }
+    } catch {
+      // Telemetry must never fail the answer the user asked for.
+    }
+  }
 
   // Bounded, durable follow-up resolution: reads the most recent typed
   // execution in this session (not raw chat history) and, only for a
@@ -435,6 +450,10 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
       },
     });
     askExecutionsTotal.inc({ operation: operation.operationId, status: result.status, generation_mode: generationMode });
+    if (handoffAttribution) {
+      const launchedOutcome = classifyLaunchedOutcome(handoffAttribution, operation.operationId, result.status);
+      if (launchedOutcome) recordHandoffOutcome(launchedOutcome, handoffAttribution);
+    }
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
     const resolvedProperty = await propertySummary(executionPropertyId);
     // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger

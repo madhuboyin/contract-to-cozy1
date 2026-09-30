@@ -832,6 +832,10 @@ export const CreateAskExecutionRequestSchema = z.object({
     // that still-visible result in place once its mutation succeeds,
     // instead of leaving it showing stale pending/complete state.
     sourceExecutionId: z.string().trim().max(160).nullable().optional(),
+    // FRD v1.168: the execution whose Skill-handoff card ("Suggested next step") was clicked. Telemetry only --
+    // deliberately separate from sourceExecutionId, which drives in-place refresh. The server derives every
+    // metric label from that execution's own stored handoff and never trusts the client for them.
+    handoffFromExecutionId: z.string().trim().max(160).nullable().optional(),
     // ASK_COZY_INTERACTION_MODEL_UI_FRD ACT-001/ACT-003: a declared item
     // action's own registered operation (GroupedListItemActionSchema.operationId
     // above), threaded through so the server can route directly to it

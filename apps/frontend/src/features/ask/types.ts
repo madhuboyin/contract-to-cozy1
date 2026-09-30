@@ -294,6 +294,8 @@ export interface CreateAskExecutionPayload {
     contextVersion?: string | null;
     returnTo?: string | null;
     sourceExecutionId?: string | null;
+    /** Telemetry only (FRD v1.168): the execution whose Skill-handoff card was clicked. Distinct from sourceExecutionId, which drives in-place refresh. */
+    handoffFromExecutionId?: string | null;
     operationId?: string | null;
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22): the id of a Document
     // already uploaded via POST /api/documents/property/:propertyId/evidence-upload, carried the same way
@@ -406,6 +408,8 @@ export interface AskCapabilityPrompt {
     // action (e.g. "Complete") was clicked from, so its confirm handler can
     // refresh that still-visible list once the mutation succeeds.
     sourceExecutionId?: string;
+    // Mirrors CreateAskExecutionPayload.launchContext.handoffFromExecutionId, above.
+    handoffFromExecutionId?: string;
     // ACT-001/ACT-003: a declared item action's own registered operation,
     // routing directly instead of relying on free-text pattern matching.
     operationId?: string;

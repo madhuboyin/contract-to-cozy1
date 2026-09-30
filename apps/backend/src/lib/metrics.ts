@@ -106,7 +106,7 @@ export const askSkillRoutingDurationSeconds = new Histogram({
 
 export const askSkillHandoffsTotal = new Counter({
   name: 'ask_skill_handoffs_total',
-  help: 'Governed Skill handoff suggestions by bounded registered source, target, and outcome',
+  help: 'Governed Skill handoffs by bounded registered source, target, and outcome (SUGGESTED, OPENED, COMPLETED, MISROUTED)',
   labelNames: ['source_skill', 'target_skill', 'outcome'] as const,
   registers: [register],
 });

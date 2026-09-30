@@ -31,3 +31,19 @@ test('the handoff card sends the routable prompt and displays the label', () => 
   expect(source).toMatch(/\{label\}<\/button><p className="mt-2 text-xs text-teal-800">Ask will check access/);
   expect(source).not.toMatch(/void ask\(label/);
 });
+
+// Handoff acceptance telemetry (FRD v1.168): the click identifies itself as a handoff so the server can
+// record OPENED/COMPLETED. It must NOT reuse sourceExecutionId, which drives in-place refresh and request keys.
+test('the handoff click carries handoffFromExecutionId and never sourceExecutionId', () => {
+  const card = readFileSync(join(__dirname, '../../../components/ask/workspace/ExecutionCard.tsx'), 'utf8');
+  const click = card.slice(card.indexOf('void ask(prompt, undefined,'), card.indexOf('void ask(prompt, undefined,') + 700);
+  expect(click).toContain('handoffFromExecutionId: execution.executionId');
+  expect(click).not.toContain('sourceExecutionId');
+});
+
+test('the request builder forwards handoffFromExecutionId into the launch context', () => {
+  const request = readFileSync(join(__dirname, '../../../components/ask/workspace/useAskRequest.ts'), 'utf8');
+  expect(request).toContain('handoffFromExecutionId: promptContext?.handoffFromExecutionId');
+  const types = readFileSync(join(__dirname, '../types.ts'), 'utf8');
+  expect(types.match(/handoffFromExecutionId\?:/g)).toHaveLength(2);
+});
