@@ -482,6 +482,27 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   return finalize();
 }
 
+// A refresh re-runs the execution's own question, so it must re-run it in the same FOCUS. This previously
+// passed only { surface, sourceExecutionId }, dropping the entity the execution was launched against: a focused
+// Home Action answer came back as the unfocused "N Home Actions are ready to review" feed, and every one of the
+// ~15 handlers that read launchContext.entityId (replacement guidance, maintenance task, ...) lost its target.
+// Only focus is restored. One-shot mutation hints (operationId, documentId, batchDecisions), the stale
+// contextVersion, and returnTo are deliberately NOT carried: handlers gate declared add/attach actions on
+// surface !== 'ASK_REFRESH' plus operationId, and a refresh must never re-issue those.
+const REFRESH_PRESERVED_FOCUS_FIELDS = ['entityType', 'entityId', 'actionId', 'decisionThreadId', 'workItemId', 'journeyId'] as const;
+
+export function refreshLaunchContext(execution: { id: string; launchContextJson?: unknown }): NonNullable<CreateAskExecutionRequest['launchContext']> {
+  const stored = execution.launchContextJson && typeof execution.launchContextJson === 'object' && !Array.isArray(execution.launchContextJson)
+    ? execution.launchContextJson as Record<string, unknown>
+    : {};
+  const focus: Record<string, string> = {};
+  for (const field of REFRESH_PRESERVED_FOCUS_FIELDS) {
+    const value = stored[field];
+    if (typeof value === 'string' && value.trim()) focus[field] = value;
+  }
+  return { ...focus, surface: 'ASK_REFRESH', sourceExecutionId: execution.id };
+}
+
 export async function refreshAskExecutionAfterConflict(userId: string, executionId: string): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution || !execution.propertyId) {
@@ -507,7 +528,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   // fixes this for all three callers of this function: the explicit
   // Refresh button, the automatic post-mutation refresh (MAINT-005), and
   // the Ask-workspace return-trip revalidation after a Maintenance edit.
-  const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation, launchContext: { surface: 'ASK_REFRESH', sourceExecutionId: execution.id } });
+  const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation, launchContext: refreshLaunchContext(execution) });
   // RES-001/RES-003/MAINT-003: refreshing a result does not change which
   // result it continues, nor what it originally answered -- both are
   // preserved from whatever this row already had via the one shared

@@ -372,7 +372,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         focusedAction.primaryCta.href,
       )
       : null;
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest);
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canManageWork: access.role !== HouseholdRole.VIEWER });
   }
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);

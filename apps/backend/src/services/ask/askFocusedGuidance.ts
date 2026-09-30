@@ -157,6 +157,35 @@ function resolveGroupDReplacementGuidanceRouting(
   return { operationId: 'REPLACEMENT_GUIDANCE', entityId: subject.id, message: `Should I repair or replace ${subject.label}?` };
 }
 
+// Group E (gap audit §17; FRD v1.169): accepted Operational Work. appendAcceptedOperationalWork
+// (homeActions.service.ts) is a producer the original 27-site classification never covered -- it is a
+// different file from homeActionSourcePromotion.service.ts -- so its "Open work" CTA (href
+// /dashboard/properties/:id/home-operations?focusWorkItemId=...&openManage=1) still navigated out of Ask.
+// OPERATIONAL_WORK_UPDATE already resolves the exact item from launchContext.entityId and runs the same
+// confirmation-gated transitions the desktop card offers, so the CTA becomes those declared actions. What is
+// offered mirrors the card's own governed `feedbackControls` (COMPLETE is only there when the work is
+// completion-eligible); messages deliberately omit the title, because the handler infers the verb from the
+// message with a loose pattern a title like "Finish the deck" would confuse. REPORTED_COMPLETE keeps its
+// "Review completion" navigation (verification is not an Ask operation), and a viewer keeps it too, since
+// the operation needs CONTRIBUTOR.
+function resolveAcceptedWorkActions(action: RankedHomeAction, canManageWork: boolean) {
+  const workItem = action.workItem;
+  if (!canManageWork || !workItem || action.presentation?.variant !== 'ACCEPTED_WORK') return null;
+  if (workItem.state === 'REPORTED_COMPLETE') return null;
+  const common = {
+    interactionType: 'START_WORKFLOW' as const,
+    operationId: 'OPERATIONAL_WORK_UPDATE',
+    entityType: 'WORK_ITEM',
+    entityId: workItem.id,
+  };
+  const controls = new Set<string>(action.feedbackControls);
+  const actions = [
+    ...(controls.has('COMPLETE') ? [{ ...common, id: `home-action-complete-${action.id}`, label: 'Mark complete', message: 'Complete this work item.', style: 'PRIMARY' as const }] : []),
+    ...(controls.has('SNOOZE') ? [{ ...common, id: `home-action-snooze-${action.id}`, label: 'Snooze reminders', message: 'Snooze this work item.', style: (controls.has('COMPLETE') ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' }] : []),
+  ];
+  return actions.length ? actions : null;
+}
+
 // Group B (gap audit §17), resolution-center capture slice. The reclassification note above (see
 // "Group B re-classification" comment on isHealthFactorFocusHref) found this third Group B shape:
 // a `CORRECT_FACT` CTA whose href is literally `/dashboard/resolution-center` (the
@@ -233,6 +262,7 @@ export function buildFocusedHomeActionGuidance(
   contextVersion: string | null,
   propertyFacts?: HealthFactorChecklistProperty,
   captureRequest?: AskCaptureRequest | null,
+  options: { canManageWork?: boolean } = {},
 ): AskOperationResult {
   const title = focusedTitle(action);
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
@@ -242,8 +272,9 @@ export function buildFocusedHomeActionGuidance(
   const checklist = !routing && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
+  const acceptedWorkActions = !routing && !checklist ? resolveAcceptedWorkActions(action, options.canManageWork === true) : null;
   const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
-  const hasFeatureCapture = !routing && !checklist && Boolean(captureRequest);
+  const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && Boolean(captureRequest);
   const primaryAction = routing
     ? {
       id: `home-action-primary-${action.id}`,
@@ -361,7 +392,7 @@ export function buildFocusedHomeActionGuidance(
     }] : [])],
     // The inline checklist IS the destination page's content, so linking back to it is a redundant
     // round trip out of Ask -- omit the action entirely rather than demote it.
-    actions: checklist ? [] : [primaryAction],
+    actions: checklist ? [] : acceptedWorkActions ?? [primaryAction],
   }, {
     type: 'EVIDENCE',
     id: 'focused-home-action-evidence',

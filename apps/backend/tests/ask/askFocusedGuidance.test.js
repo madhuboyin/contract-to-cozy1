@@ -414,3 +414,59 @@ test('focused Ask preserves neutral pre-snapshot HVAC guidance without manufactu
   assert.match(rendered, /start or resume the tracked HVAC decision/i);
   assert.doesNotMatch(rendered, /favors (?:repair|replacement)|replace immediately|verdict:/i);
 });
+
+// Group E (FRD v1.169): accepted Operational Work's "Open work" CTA was navigating out of Ask.
+function acceptedWorkAction(overrides = {}) {
+  return {
+    ...weatherAction(),
+    id: 'operational-work:work-1',
+    lineageId: 'operational-work:work-1',
+    source: { kind: 'MAINTENANCE' },
+    signal: 'Seal driveway cracks before freezing',
+    recommendedAction: 'Seal driveway cracks before freezing',
+    expectedOutcome: 'Complete the task and record the outcome.',
+    presentation: { variant: 'ACCEPTED_WORK', summary: 'Fill cracks in driveway and apply sealant if needed', keyFacts: [], factGroups: [] },
+    primaryCta: { label: 'Open work', href: '/dashboard/properties/property-1/home-operations?focusWorkItemId=work-1&openManage=1' },
+    workItem: { id: 'work-1', workKey: 'k', state: 'ACCEPTED', acceptanceState: 'ACCEPTED', disposition: 'ACTIVE' },
+    feedbackControls: ['CORRECT_FACT', 'SNOOZE', 'COMPLETE', 'ALREADY_DONE'],
+    ...overrides,
+  };
+}
+
+test('accepted work offers Complete and Snooze in Ask instead of navigating to Work', () => {
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+  const result = buildFocusedHomeActionGuidance(acceptedWorkAction(), 'context-v1', undefined, null, { canManageWork: true });
+  const actions = result.blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
+  assert.deepEqual(actions.map((candidate) => candidate.label), ['Mark complete', 'Snooze reminders']);
+  assert.deepEqual(actions.map((candidate) => candidate.style), ['PRIMARY', 'SECONDARY']);
+  for (const candidate of actions) {
+    assert.equal(candidate.interactionType, 'START_WORKFLOW');
+    assert.equal(candidate.operationId, 'OPERATIONAL_WORK_UPDATE');
+    assert.equal(candidate.entityType, 'WORK_ITEM');
+    assert.equal(candidate.entityId, 'work-1');
+    assert.equal(candidate.href, undefined, 'must not also navigate');
+    // The message alone routes to the operation even without the forced hint.
+    assert.equal(resolveAskOperation(candidate.message).operationId, 'OPERATIONAL_WORK_UPDATE');
+  }
+  // Verb inference in the handler is loose (complete|done|finished): a title must never be in the message.
+  assert.ok(actions.every((candidate) => !candidate.message.includes('driveway')));
+  assert.match(actions[0].message, /^Complete\b/);
+  assert.match(actions[1].message, /^Snooze\b/);
+});
+
+test('accepted work follows the card\'s own governed controls, and keeps the link where Ask cannot act', () => {
+  const build = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options).blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
+  // Not completion-eligible: Snooze only, promoted to primary.
+  const snoozeOnly = build(acceptedWorkAction({ feedbackControls: ['CORRECT_FACT', 'SNOOZE'] }), { canManageWork: true });
+  assert.deepEqual(snoozeOnly.map((candidate) => [candidate.label, candidate.style]), [['Snooze reminders', 'PRIMARY']]);
+  // Completion reported: verification is not an Ask operation, so the navigation stays.
+  const reported = build(acceptedWorkAction({ workItem: { id: 'work-1', state: 'REPORTED_COMPLETE' }, primaryCta: { label: 'Review completion', href: '/dashboard/properties/property-1/home-operations?focusWorkItemId=work-1&openManage=1' } }), { canManageWork: true });
+  assert.deepEqual(reported.map((candidate) => [candidate.label, candidate.style, Boolean(candidate.href)]), [['Review completion', 'PRIMARY', true]]);
+  // A viewer, or a caller that does not say, fails closed to the navigation (the operation needs CONTRIBUTOR).
+  for (const options of [{ canManageWork: false }, undefined, {}]) {
+    assert.deepEqual(build(acceptedWorkAction(), options).map((candidate) => candidate.label), ['Open work']);
+  }
+  // Only accepted work is affected.
+  const other = build({ ...acceptedWorkAction(), presentation: { ...acceptedWorkAction().presentation, variant: 'PLAIN' } }, { canManageWork: true });
+  assert.deepEqual(other.map((candidate) => candidate.label), ['Open work']);
+});
