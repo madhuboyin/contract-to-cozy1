@@ -162,3 +162,32 @@ test('script --apply surfaces items edited mid-run so they can be re-run, and re
   assert.match(concurrent.out, /CHANGED_CONCURRENTLY\s+2/);
   assert.match(concurrent.out, /2 item\(s\) were edited while the script ran and were skipped, not overwritten\. Re-run to pick them up\./);
 });
+
+// The pgAdmin SQL twin cannot be executed here (no database), so the invariants a typo would break are pinned.
+test('the SQL twin uses the same constants and rules as the plan, and is a dry run until COMMIT is typed', () => {
+  const { readFileSync } = require('node:fs');
+  const { PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX, APPLIANCE_TYPE_TAG_PREFIX, PROPERTY_APPLIANCE_TAG } = require('../../src/services/majorAppliance.util.ts');
+  const sql = readFileSync(resolve(backend, 'scripts/2026-09-30-restore-appliance-identity-tags.sql'), 'utf8');
+  const code = sql.split('\n').filter((line) => !line.trim().startsWith('--')).join('\n');
+
+  // The literal lengths in left()/substring() must equal the real prefixes.
+  assert.equal(PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX.length, 20);
+  assert.equal(APPLIANCE_TYPE_TAG_PREFIX.length, 15);
+  assert.ok(code.includes(`left(i."sourceHash", 20) = '${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}'`));
+  assert.ok(code.includes('substring(i."sourceHash" from 21)'));
+  assert.ok(code.includes(`left(t, 15) = '${APPLIANCE_TYPE_TAG_PREFIX}'`));
+  assert.ok(code.includes(`'${PROPERTY_APPLIANCE_TAG}'`));
+  // '_' is a LIKE wildcard, so the hash prefix must never be matched with LIKE.
+  assert.doesNotMatch(code, /LIKE\s+'property_appliance/i);
+
+  // Only APPLIANCE rows with a non-empty type; conflicts excluded from the write; only tags and updatedAt are set.
+  const update = code.slice(code.indexOf('UPDATE inventory_items'), code.indexOf('ROLLBACK;'));
+  assert.ok(update.includes("i.category = 'APPLIANCE'") && update.includes('length(i."sourceHash") > 20'));
+  assert.match(update, /AND NOT EXISTS \(\s*SELECT 1 FROM unnest\(COALESCE\(i\.tags, ARRAY\[\]::text\[\]\)\) t\s*WHERE left\(t, 15\) = 'APPLIANCE_TYPE:' AND t <> /);
+  assert.deepEqual([...update.matchAll(/^\s{2}("?\w+"?) = /gm)].map((match) => match[1]), ['tags', '"updatedAt"']);
+
+  // A dry run until someone deliberately edits it: ROLLBACK is live, COMMIT appears only in comments.
+  assert.match(code, /\bBEGIN;/);
+  assert.match(code, /\bROLLBACK;/);
+  assert.doesNotMatch(code, /^\s*COMMIT;/m);
+});

@@ -29,9 +29,12 @@
 //   npx ts-node scripts/restore-appliance-identity-tags.ts --property=<propertyId>  (limit to one property)
 //   npx ts-node scripts/restore-appliance-identity-tags.ts --apply                  (actually writes)
 //
+// A SQL version of this repair, for running in pgAdmin, is scripts/2026-09-30-restore-appliance-identity-tags.sql
+// (same rules; it does not emit the property-change signal this script does).
+//
 // Verify afterwards (expect only the CONFLICT rows the dry run listed):
 //   SELECT count(*) FROM inventory_items
-//   WHERE category = 'APPLIANCE' AND "sourceHash" LIKE 'property_appliance::%'
+//   WHERE category = 'APPLIANCE' AND left("sourceHash", 20) = 'property_appliance::'
 //     AND NOT ('PROPERTY_APPLIANCE' = ANY(tags)
 //              AND ('APPLIANCE_TYPE:' || substring("sourceHash" from 21)) = ANY(tags));
 
