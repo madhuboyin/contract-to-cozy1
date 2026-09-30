@@ -20,10 +20,11 @@ Review the guided journeys under way on Guidance Overview: each issue's steps do
 
 - `GUIDANCE_JOURNEYS_LIST`
 - `GUIDANCE_JOURNEY_CONTINUE` (reached only by a launch context naming one journey; never by message)
+- `GUIDANCE_STEP_SKIP` and `GUIDANCE_JOURNEY_DISMISS` (confirmed, CONTRIBUTOR floor; reached only by the declared actions on the continuation view)
 
 ## Consumers
 
-- ASK: GUIDANCE_JOURNEYS_LIST, GUIDANCE_JOURNEY_CONTINUE
+- ASK: GUIDANCE_JOURNEYS_LIST, GUIDANCE_JOURNEY_CONTINUE, GUIDANCE_STEP_SKIP, GUIDANCE_JOURNEY_DISMISS
 
 ## Canonical ownership and boundaries
 

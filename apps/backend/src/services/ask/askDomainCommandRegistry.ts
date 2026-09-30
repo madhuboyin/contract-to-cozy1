@@ -57,6 +57,9 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   // Home Event Radar task create-or-link and notification settings (FRD v1.41).
   'HOME_EVENT_RADAR_TASK',
   'HOME_EVENT_RADAR_PREFERENCES',
+  // Guided journey continuation Phase 3: skip a step, dismiss a journey (both confirmation-gated).
+  'GUIDANCE_STEP_SKIP',
+  'GUIDANCE_JOURNEY_DISMISS',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -166,6 +169,9 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   // EDIT: the created or linked task is corrected in Maintenance. There is no unlink (the traditional page has none).
   HOME_EVENT_RADAR_TASK: command('HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_TASK', 'home-event-radar.task', 'CONTRIBUTOR', 'PROPERTY_RADAR_TASK_LINK', ['EDIT'], { title: 'Nothing planned', body: 'No maintenance task was added or linked.', suggestion: 'Show my home event radar feed' }),
   HOME_EVENT_RADAR_PREFERENCES: command('HOME_EVENT_RADAR_PREFERENCES', 'HOME_EVENT_RADAR_PREFERENCES', 'home-event-radar.preferences', 'CONTRIBUTOR', 'PROPERTY_RADAR_NOTIFICATION_PREFERENCE', ['EDIT'], { title: 'Settings not saved', body: 'Your Home Event Radar notification settings were not changed.', suggestion: 'Show my home event radar feed' }),
+  // REOPEN: a skipped step can be reopened on the Guidance Overview page (SKIPPED to PENDING); Ask does not offer that yet.
+  GUIDANCE_STEP_SKIP: command('GUIDANCE_STEP_SKIP', 'GUIDANCE_STEP_SKIP', 'guidance-overview.step-skip', 'CONTRIBUTOR', 'GUIDANCE_JOURNEY_STEP', ['REOPEN'], { title: 'Step not skipped', body: 'The guided journey step was not changed.', suggestion: 'Show my guided journeys' }),
+  GUIDANCE_JOURNEY_DISMISS: command('GUIDANCE_JOURNEY_DISMISS', 'GUIDANCE_JOURNEY_DISMISS', 'guidance-overview.journey-dismiss', 'CONTRIBUTOR', 'GUIDANCE_JOURNEY', [], { title: 'Journey not dismissed', body: 'The guided journey was not changed.', suggestion: 'Show my guided journeys' }),
   HOME_EVENT_RADAR_FEEDBACK: command('HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_FEEDBACK', 'home-event-radar.feedback', 'CONTRIBUTOR', 'PROPERTY_RADAR_FEEDBACK', ['EDIT'], { title: 'Feedback not sent', body: 'No feedback was recorded for this event.', suggestion: 'Show my home event radar feed' }),
 });
 

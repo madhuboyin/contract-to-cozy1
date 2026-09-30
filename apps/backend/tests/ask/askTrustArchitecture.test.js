@@ -66,6 +66,9 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'HOME_EVENT_VISIBILITY',
     // Home Event Radar writes (FRD v1.40): reached only from the declared actions on a monitored event.
     'GUIDANCE_JOURNEY_CONTINUE',
+    // Guided journey continuation Phase 3: confirmation-gated, reached only by declared actions on the continuation view.
+    'GUIDANCE_STEP_SKIP',
+    'GUIDANCE_JOURNEY_DISMISS',
     'HOME_EVENT_RADAR_STATE',
     'HOME_EVENT_RADAR_MARK_DONE',
     'HOME_EVENT_RADAR_FEEDBACK',

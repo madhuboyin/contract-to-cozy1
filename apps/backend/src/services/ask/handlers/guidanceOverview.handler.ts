@@ -10,14 +10,23 @@ import { titleCase } from '../askFormatting';
 import { guidanceBookingGuardService } from '../../guidanceEngine/guidanceBookingGuard.service';
 import { mapGuidanceEvidence, mapGuidanceJourney, mapGuidanceStep } from '../../guidanceEngine/guidanceMapper';
 import { askGuidanceStepMode } from '../askGuidanceStepHandlers';
+import { HouseholdRole } from '@prisma/client';
+import { createHash } from 'node:crypto';
+import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
+import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { guidanceStepResolverService } from '../../guidanceEngine/guidanceStepResolver.service';
+import { getStepSkipPolicy } from '../../guidanceEngine/guidanceTemplateRegistry';
+import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
 
 // Guidance Overview capability-card slice (FRD v1.65, product option A): reads guidanceJourneyService.getPropertyGuidance
 // and then drops journeys whose primary signal the protection-context reconciliation suppresses -- what
 // GET /properties/:id/guidance does for the Guidance Overview page (the route also emits TOOL_USED analytics, which Ask
 // does not). Dismissed journeys are hidden, as the page's hook hides them. The read runs the same self-healing
 // reconciliation the page GET runs, and never asks for AI advice. The page's landing view shows at most three journeys
-// already under way; Ask lists every surfaced one, grouped by the page's urgency labels. Read-only: completing,
-// skipping and dismissing steps stay on the page, and starting a journey is GUIDANCE_JOURNEY_CREATE.
+// already under way; Ask lists every surfaced one, grouped by the page's urgency labels. This list is read-only; starting
+// a journey is GUIDANCE_JOURNEY_CREATE, and skipping a step / dismissing a journey (Phase 3 of the journey continuation
+// design) are GUIDANCE_STEP_SKIP / GUIDANCE_JOURNEY_DISMISS, confirmation-gated and reached from the continuation view.
 type GuidancePayload = Awaited<ReturnType<typeof guidanceJourneyService.getPropertyGuidance>>;
 // The page's own labels: GuidanceActionCard urgency, guidanceDisplay buildJourneyTitle / formatReadinessLabel, and
 // Guidance Overview's DOMAIN_FOCUS_LABELS for a journey with no linked item.
@@ -131,6 +140,9 @@ registerCapabilityHandler('guidance-overview.journeys', async (envelope) => guid
 // Deterministic: guidanceJourneyService.getJourneyById is called with includeAIAdvice false. It follows a BRANCHED
 // journey to its live child (the service does), and says so. Nothing is completed, skipped or dismissed here, and no
 // step is finished on the homeowner's word: the steps link to their tools.
+export const GUIDANCE_STEP_SKIP_MESSAGE = 'Skip this guided journey step.';
+export const GUIDANCE_JOURNEY_DISMISS_MESSAGE = 'Dismiss this guided journey.';
+
 type ContinueGuard = { blocked: boolean; blockedReason: string | null; targetAction: string } | null;
 
 const STEP_STATUS_LABELS: Record<string, string> = {
@@ -161,7 +173,7 @@ function journeyTitleFor(journey: any): string {
   return `${subject}: ${title}`;
 }
 
-export function guidanceJourneyContinuation(journey: any, propertyId: string, options: { requestedJourneyId: string; guard?: ContinueGuard }): AskOperationResult {
+export function guidanceJourneyContinuation(journey: any, propertyId: string, options: { requestedJourneyId: string; guard?: ContinueGuard; canContribute?: boolean }): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`;
   const openAction = { id: 'open-guidance-overview', label: 'Open Guidance Overview', href: pageHref, style: 'PRIMARY' as const };
   const boundary = (body: string): AskPresentationBlock => ({
@@ -203,7 +215,17 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
       }, { ...openAction, style: 'SECONDARY' as const }]
       : [openAction],
   });
+  if (options.canContribute === true && ['ACTIVE', 'NOT_STARTED'].includes(String(journey.status))) {
+    const summaryBlock = blocks[blocks.length - 1] as Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
+    summaryBlock.actions = [...summaryBlock.actions, {
+      id: 'dismiss-guided-journey', label: 'Dismiss this journey', interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_JOURNEY_DISMISS_MESSAGE,
+      operationId: 'GUIDANCE_JOURNEY_DISMISS', entityType: 'GUIDANCE_JOURNEY', entityId: journey.id, style: 'QUIET' as const,
+    }];
+  }
 
+  const skippable = (step: { stepKey: string; status: string }) => options.canContribute === true
+    && ['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(step.status)
+    && getStepSkipPolicy(journey.journeyTypeKey ?? null, step.stepKey) !== 'DISALLOWED';
   const section = (key: string, label: string, list: typeof steps) => ({
     id: `guidance-journey-${key}`, title: label, count: list.length,
     items: list.map((step) => {
@@ -219,6 +241,14 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
         ].filter((value): value is string => Boolean(value)),
         status: STEP_STATUS_LABELS[step.status] ?? step.status,
         href: step.id === current?.id ? pageHref : null,
+        // Phase 3: skipping the current step, never when policy forbids it (the confirmation re-checks everything).
+        ...(step.id === current?.id && skippable(step) ? {
+          entityType: 'GUIDANCE_STEP',
+          actions: [{
+            id: 'skip-guided-journey-step', label: 'Skip this step', message: GUIDANCE_STEP_SKIP_MESSAGE, style: 'QUIET' as const,
+            interactionType: 'MUTATE_RECORD' as const, operationId: 'GUIDANCE_STEP_SKIP',
+          }],
+        } : {}),
       };
     }),
   });
@@ -293,7 +323,179 @@ async function guidanceJourneyContinueResult(userId: string, propertyId: string,
       guard = { blocked: result.blocked, blockedReason: result.blockedReason, targetAction: target };
     }
   }
-  return guidanceJourneyContinuation(journey, propertyId, { requestedJourneyId: journeyId, guard });
+  const access = await ensurePropertyAccess(userId, propertyId);
+  return guidanceJourneyContinuation(journey, propertyId, { requestedJourneyId: journeyId, guard, canContribute: access.role !== HouseholdRole.VIEWER });
 }
 
 registerCapabilityHandler('guidance-overview.continue', async (envelope) => guidanceJourneyContinueResult(envelope.userId, envelope.propertyId!, envelope.launchContext));
+
+// ---------------------------------------------------------------------------
+// Guided journey continuation, Phase 3: skip one step / dismiss one journey. Both are confirmation-gated writes over the
+// same services the Guidance Overview page's controllers call (guidanceStepResolverService.markStepStatus with reason
+// code USER_SKIPPED, guidanceJourneyService.dismissJourney), reached only by the declared actions on the continuation
+// view (declared-action-only start, write rule 3). The services enforce the skip policy, the prerequisite steps and the
+// transition rules; the propose step refuses early what policy forbids, and the confirm step re-reads the live state.
+// ---------------------------------------------------------------------------
+const guidanceWriteError = (message: string, code: string) => Object.assign(new Error(message), { code });
+
+const guidanceWriteBoundary = (propertyId: string, title: string, body: string, status: 'BLOCKED' | 'NOT_APPLICABLE', reasonCode: string): AskOperationResult => ({
+  status, reasonCode,
+  blocks: [{ type: 'BOUNDARY', id: 'guidance-step-boundary', title, body, severity: 'INFO', suggestions: ['Show my guided journeys'] }],
+  suggestions: ['Show my guided journeys'],
+});
+
+export const guidanceStepContextVersion = (step: { id: string; status: string; updatedAt: Date | string }, journey: { status: string; version?: number | null }) =>
+  createHash('sha256').update(`${step.id}:${step.status}:${new Date(step.updatedAt).toISOString()}:${journey.status}:${journey.version ?? 0}`).digest('hex');
+export const guidanceJourneyDismissContextVersion = (journey: { id: string; status: string; version?: number | null }) =>
+  createHash('sha256').update(`${journey.id}:${journey.status}:${journey.version ?? 0}`).digest('hex');
+
+async function loadGuidanceStepForWrite(propertyId: string, stepId: string) {
+  return getGuidanceModels().guidanceJourneyStep.findFirst({
+    where: { id: stepId, journey: { propertyId } },
+    include: { journey: { select: { id: true, status: true, version: true, journeyTypeKey: true, issueDomain: true, primarySignal: { select: { signalIntentFamily: true } }, inventoryItem: { select: { name: true } } } } },
+  });
+}
+
+async function loadGuidanceJourneyForWrite(propertyId: string, journeyId: string) {
+  return getGuidanceModels().guidanceJourney.findFirst({
+    where: { id: journeyId, propertyId },
+    select: { id: true, status: true, version: true, issueDomain: true, primarySignal: { select: { signalIntentFamily: true } }, inventoryItem: { select: { name: true } } },
+  });
+}
+
+async function guidanceStepSkipResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const stepId = launchContext?.entityType === 'GUIDANCE_STEP' ? launchContext.entityId : null;
+  const declared = launchContext?.operationId === 'GUIDANCE_STEP_SKIP' && launchContext.surface !== 'ASK_REFRESH' && message.trim() === GUIDANCE_STEP_SKIP_MESSAGE;
+  if (!stepId || !declared) return guidanceWriteBoundary(propertyId, 'Choose the step from its journey', 'Open the guided journey and use the step\'s own action. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_STEP_REQUIRED');
+  if (access.role === HouseholdRole.VIEWER) return guidanceWriteBoundary(propertyId, 'A contributor or owner is needed', 'Only a contributor or owner can skip a step in Ask. Nothing was changed.', 'BLOCKED', 'GUIDANCE_STEP_PERMISSION_REQUIRED');
+  const step = await loadGuidanceStepForWrite(propertyId, stepId);
+  if (!step) return guidanceWriteBoundary(propertyId, 'This step is no longer available', 'It was removed or does not belong to this home. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_STEP_NOT_FOUND');
+  if (!['ACTIVE', 'NOT_STARTED'].includes(String(step.journey.status))) {
+    return guidanceWriteBoundary(propertyId, 'This journey is no longer active', 'Steps of a journey that is finished, dismissed or branched cannot be skipped. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_STEP_JOURNEY_NOT_ACTIVE');
+  }
+  if (step.status === 'SKIPPED') {
+    return { status: 'COMPLETED', reasonCode: 'GUIDANCE_STEP_ALREADY_SKIPPED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-step-skip-${step.id}`, title: 'Already skipped', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Step', value: step.label }], actions: [] }], suggestions: ['Show my guided journeys'] };
+  }
+  if (step.status === 'COMPLETED') return guidanceWriteBoundary(propertyId, 'This step is already done', 'A completed step is not skipped. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_STEP_ALREADY_COMPLETED');
+  if (getStepSkipPolicy(step.journey.journeyTypeKey ?? null, step.stepKey) === 'DISALLOWED') {
+    return guidanceWriteBoundary(propertyId, 'This step cannot be skipped', 'This step is required by the plan\'s policy, so it has to be finished rather than skipped. Nothing was changed.', 'BLOCKED', 'GUIDANCE_STEP_SKIP_DISALLOWED');
+  }
+  const contextVersion = guidanceStepContextVersion(step, step.journey);
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const consequence = step.isRequired || getStepSkipPolicy(step.journey.journeyTypeKey ?? null, step.stepKey) === 'DISCOURAGED'
+    ? 'This step is recommended. Skipping it can reduce confidence in the plan and delay resolution.'
+    : 'You can skip this step; the plan carries on with the next one.';
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_STEP_SKIP_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      guidanceStepId: step.id, guidanceStepContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'guidance-step-skip-review', title: `Review skipping "${step.label}"`, body: `Nothing has changed yet. ${consequence}`, tone: 'CAUTION', actions: [] }],
+    confirmation: {
+      confirmationId: `guidance-step-skip-${step.id}-1`, version: 1, title: `Skip "${step.label}"?`, description: consequence,
+      fields: [{ label: 'Step', value: step.label }, { label: 'Journey', value: journeyTitleFor(step.journey) }],
+      editableFields: [], confirmLabel: 'Skip step', consentText: 'I want to skip this step of the guided journey.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+async function guidanceJourneyDismissResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const journeyId = launchContext?.entityType === 'GUIDANCE_JOURNEY' ? launchContext.entityId : null;
+  const declared = launchContext?.operationId === 'GUIDANCE_JOURNEY_DISMISS' && launchContext.surface !== 'ASK_REFRESH' && message.trim() === GUIDANCE_JOURNEY_DISMISS_MESSAGE;
+  if (!journeyId || !declared) return guidanceWriteBoundary(propertyId, 'Choose the journey first', 'Open the guided journey and use its own action. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_JOURNEY_REQUIRED');
+  if (access.role === HouseholdRole.VIEWER) return guidanceWriteBoundary(propertyId, 'A contributor or owner is needed', 'Only a contributor or owner can dismiss a journey in Ask. Nothing was changed.', 'BLOCKED', 'GUIDANCE_JOURNEY_PERMISSION_REQUIRED');
+  const journey = await loadGuidanceJourneyForWrite(propertyId, journeyId);
+  if (!journey) return guidanceWriteBoundary(propertyId, 'This journey is no longer available', 'It was removed or does not belong to this home. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_JOURNEY_NOT_FOUND');
+  if (journey.status === 'DISMISSED') {
+    return { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_ALREADY_DISMISSED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-dismiss-${journey.id}`, title: 'Already dismissed', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Journey', value: journeyTitleFor(journey) }], actions: [] }], suggestions: ['Show my guided journeys'] };
+  }
+  if (!['ACTIVE', 'NOT_STARTED'].includes(String(journey.status))) {
+    return guidanceWriteBoundary(propertyId, 'This journey cannot be dismissed', 'Only a journey that is still open can be dismissed. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_JOURNEY_NOT_OPEN');
+  }
+  const contextVersion = guidanceJourneyDismissContextVersion(journey);
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_JOURNEY_DISMISS_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      guidanceJourneyId: journey.id, guidanceJourneyDismissContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'guidance-journey-dismiss-review', title: `Review dismissing ${journeyTitleFor(journey)}`, body: 'Nothing has changed yet. A dismissed journey leaves your guided journeys list, and Ask cannot reopen it; a new plan can be started later.', tone: 'CAUTION', actions: [] }],
+    confirmation: {
+      confirmationId: `guidance-journey-dismiss-${journey.id}-1`, version: 1, title: 'Dismiss this guided journey?', description: `${journeyTitleFor(journey)}. A dismissed journey cannot be reopened; a new plan can be started later.`,
+      fields: [{ label: 'Journey', value: journeyTitleFor(journey) }],
+      editableFields: [], confirmLabel: 'Dismiss journey', consentText: 'I do not want to pursue this guided journey.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+async function guidanceWriteReceipt(ctx: ConfirmCapabilityContext, id: string, block: Extract<AskPresentationBlock, { type: 'WORKFLOW_PROGRESS' }>, reasonCode: string, artifactType: string): Promise<ConfirmCapabilityResult> {
+  const result: AskOperationResult = { status: 'COMPLETED', reasonCode, blocks: [block], suggestions: ['Show my guided journeys'] };
+  const refresh = await reconcileAskExecutionSideEffects(ctx.userId, ctx.execution, ctx.parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({ type: 'BOUNDARY', id: `guidance-refresh-failed-${id}`, severity: 'CAUTION', title: 'Saved; view could not refresh', body: 'This was saved. The journey view you were looking at could not refresh automatically; ask "Show my guided journeys" to see its current state.', suggestions: ['Show my guided journeys'] });
+  }
+  return { result, artifactType, artifactId: id, refreshedExecutions: refresh.refreshedExecutions };
+}
+
+// A service refusal (policy, prerequisites, transition) is the homeowner's answer, not a crash.
+function guidanceServiceRefusal(error: any): never {
+  if (error?.code && typeof error.statusCode === 'number' && error.statusCode < 500) {
+    throw guidanceWriteError(error.message, error.code === 'GUIDANCE_STEP_SKIP_DISALLOWED' || error.code === 'GUIDANCE_PREREQUISITE_INCOMPLETE' ? 'ASK_CONFIRMATION_NOT_ACTIVE' : 'ASK_CONTEXT_VERSION_CONFLICT');
+  }
+  throw error;
+}
+
+async function confirmGuidanceStepSkip(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access } = ctx;
+  if (access.role === HouseholdRole.VIEWER) throw guidanceWriteError('A contributor or owner is required to skip a step in Ask.', 'ASK_PERMISSION_REQUIRED');
+  const stepId = typeof parameters.guidanceStepId === 'string' ? parameters.guidanceStepId : null;
+  if (!stepId) throw guidanceWriteError('The step selection is invalid.', 'ASK_CONFIRMATION_NOT_ACTIVE');
+  const step = await loadGuidanceStepForWrite(execution.propertyId, stepId);
+  if (!step) throw guidanceWriteError('This guided journey step is no longer available.', 'ASK_CONTEXT_VERSION_CONFLICT');
+  const alreadyApplied = step.status === 'SKIPPED';
+  if (!alreadyApplied) {
+    if (parameters.guidanceStepContextVersion !== guidanceStepContextVersion(step, step.journey)) {
+      throw guidanceWriteError('This step changed while confirmation was open. Review it and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+    }
+    try {
+      await guidanceStepResolverService.markStepStatus({ propertyId: execution.propertyId, stepId, nextStatus: 'SKIPPED', reasonCode: 'USER_SKIPPED', actorUserId: userId });
+    } catch (error) { guidanceServiceRefusal(error); }
+  }
+  return guidanceWriteReceipt(ctx, step.id, {
+    type: 'WORKFLOW_PROGRESS', id: `guidance-step-skip-${step.id}`, title: alreadyApplied ? 'Already skipped' : 'Step skipped', status: 'COMPLETED',
+    description: alreadyApplied ? 'Nothing was changed.' : 'The journey carries on with its next step.',
+    details: [{ label: 'Step', value: step.label }, { label: 'Journey', value: journeyTitleFor(step.journey) }], actions: [],
+  }, alreadyApplied ? 'GUIDANCE_STEP_ALREADY_SKIPPED' : 'GUIDANCE_STEP_SKIPPED', 'GUIDANCE_JOURNEY_STEP');
+}
+
+async function confirmGuidanceJourneyDismiss(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access } = ctx;
+  if (access.role === HouseholdRole.VIEWER) throw guidanceWriteError('A contributor or owner is required to dismiss a journey in Ask.', 'ASK_PERMISSION_REQUIRED');
+  const journeyId = typeof parameters.guidanceJourneyId === 'string' ? parameters.guidanceJourneyId : null;
+  if (!journeyId) throw guidanceWriteError('The journey selection is invalid.', 'ASK_CONFIRMATION_NOT_ACTIVE');
+  const journey = await loadGuidanceJourneyForWrite(execution.propertyId, journeyId);
+  if (!journey) throw guidanceWriteError('This guided journey is no longer available.', 'ASK_CONTEXT_VERSION_CONFLICT');
+  const alreadyApplied = journey.status === 'DISMISSED';
+  if (!alreadyApplied) {
+    if (parameters.guidanceJourneyDismissContextVersion !== guidanceJourneyDismissContextVersion(journey)) {
+      throw guidanceWriteError('This journey changed while confirmation was open. Review it and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+    }
+    await guidanceJourneyService.dismissJourney(execution.propertyId, journeyId, userId, null);
+  }
+  return guidanceWriteReceipt(ctx, journey.id, {
+    type: 'WORKFLOW_PROGRESS', id: `guidance-journey-dismiss-${journey.id}`, title: alreadyApplied ? 'Already dismissed' : 'Journey dismissed', status: 'COMPLETED',
+    description: alreadyApplied ? 'Nothing was changed.' : 'It no longer appears in your guided journeys.',
+    details: [{ label: 'Journey', value: journeyTitleFor(journey) }], actions: [],
+  }, alreadyApplied ? 'GUIDANCE_JOURNEY_ALREADY_DISMISSED' : 'GUIDANCE_JOURNEY_DISMISSED', 'GUIDANCE_JOURNEY');
+}
+
+registerCapabilityHandler('guidance-overview.step-skip', async (envelope) => guidanceStepSkipResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('guidance-overview.journey-dismiss', async (envelope) => guidanceJourneyDismissResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+registerConfirmCapabilityHandler('guidance-overview.step-skip', confirmGuidanceStepSkip);
+registerConfirmCapabilityHandler('guidance-overview.journey-dismiss', confirmGuidanceJourneyDismiss);

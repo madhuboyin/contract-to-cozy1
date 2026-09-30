@@ -18,6 +18,7 @@ const { listGuidanceTemplates, DEFAULT_TEMPLATE } = require('../../src/services/
 const { guidanceJourneyService } = require('../../src/services/guidanceEngine/guidanceJourney.service.ts');
 const { guidanceBookingGuardService } = require('../../src/services/guidanceEngine/guidanceBookingGuard.service.ts');
 const protectionContext = require('../../src/services/protection/context.ts');
+const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const { getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 
@@ -26,7 +27,9 @@ const originals = {
   getJourneyById: guidanceJourneyService.getJourneyById,
   guard: guidanceBookingGuardService.evaluateExecutionGuard,
   protection: protectionContext.getProtectionContextDecisions,
+  access: propertyAccess.resolvePropertyAccess,
 };
+let accessRole = 'CONTRIBUTOR';
 let calls;
 let stored;
 let suppressed;
@@ -56,6 +59,8 @@ function install() {
     return stored;
   };
   guidanceBookingGuardService.evaluateExecutionGuard = async (request) => { calls.push(['guard', request]); return { ...guardResult, targetAction: request.targetAction }; };
+  accessRole = 'CONTRIBUTOR';
+  propertyAccess.resolvePropertyAccess = async () => ({ role: accessRole, userId: 'u1', propertyId: 'p1' });
   protectionContext.getProtectionContextDecisions = async () => ({ reconciliation: { suppressedGuidanceSignalIds: suppressed, suppressionReasons: {} } });
 }
 test.beforeEach(install);
@@ -64,10 +69,13 @@ test.afterEach(() => {
   guidanceJourneyService.getJourneyById = originals.getJourneyById;
   guidanceBookingGuardService.evaluateExecutionGuard = originals.guard;
   protectionContext.getProtectionContextDecisions = originals.protection;
+  propertyAccess.resolvePropertyAccess = originals.access;
 });
 
 const launch = (entityId = 'j1') => ({ surface: 'ASK_WORKSPACE', entityType: 'GUIDANCE_JOURNEY', entityId, operationId: 'GUIDANCE_JOURNEY_CONTINUE' });
 const invoke = (launchContext) => capabilityInvoke('GUIDANCE_JOURNEY_CONTINUE', { userId: 'u1', propertyId: 'p1', message: 'Continue this guided journey.', launchContext }, { propertyAccess: { role: 'VIEWER', userId: 'u1', propertyId: 'p1' } });
+// The summary's actions without the Phase 3 dismiss action (offered to contributors on open journeys).
+const primaryIds = (result) => block(result, 'guidance-journey-summary').actions.map((a) => a.id).filter((id) => id !== 'dismiss-guided-journey');
 const block = (result, id) => result.blocks.find((candidate) => candidate.id === id);
 
 test('reads the named journey without AI advice, behind the viewer floor, and shows progress, current step and the steps by status', async () => {
@@ -178,7 +186,7 @@ test('every block survives the answer-trust validator and the page link the acti
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'guidance-overview.continue', operationId: 'GUIDANCE_JOURNEY_CONTINUE', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-30T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Continue this guided journey.', operationId: 'GUIDANCE_JOURNEY_CONTINUE', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((b) => b.id), result.blocks.map((b) => b.id));
-  assert.equal(block(validated, 'guidance-journey-summary').actions.length, 1);
+  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['open-guidance-overview', 'dismiss-guided-journey']);
 });
 
 test('every tool key the template registry launches is classified, and tool keys stay NAVIGATE (only named steps are IN_ASK)', () => {
@@ -261,16 +269,16 @@ test('a current recall step offers the in-Ask review as the primary action; bloc
   assert.ok(block(result, 'guidance-journey-steps').sections[0].items[0].meta.some((line) => /recorded on this journey the same way as on the page/.test(line)));
 
   stored = journey({ currentStepKey: 'safety_alert', steps: [recallStep('BLOCKED', { blockedReason: 'Wait' })] });
-  assert.deepEqual(block(await invoke(launch()), 'guidance-journey-summary').actions.map((a) => a.id), ['open-guidance-overview']);
+  assert.deepEqual(primaryIds(await invoke(launch())), ['open-guidance-overview']);
 
   stored = journey({ currentStepKey: 'recall_resolution', steps: [step('recall_resolution', 'PENDING', 1, { toolKey: 'recalls', decisionStage: 'EXECUTION' })] });
   guardResult = { blocked: true, blockedReason: 'Confirm the match first.' };
-  assert.deepEqual(block(await invoke(launch()), 'guidance-journey-summary').actions.map((a) => a.id), ['open-guidance-overview']);
+  assert.deepEqual(primaryIds(await invoke(launch())), ['open-guidance-overview']);
   guardResult = { blocked: false, blockedReason: null };
   assert.equal(block(await invoke(launch()), 'guidance-journey-summary').actions[0].id, 'continue-step-in-ask');
 
   stored = journey();
-  assert.deepEqual(block(await invoke(launch()), 'guidance-journey-summary').actions.map((a) => a.id), ['open-guidance-overview']);
+  assert.deepEqual(primaryIds(await invoke(launch())), ['open-guidance-overview']);
 });
 
 test('the in-Ask action survives the answer-trust validator', async () => {
@@ -278,5 +286,148 @@ test('the in-Ask action survives the answer-trust validator', async () => {
   const raw = await invoke(launch());
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'guidance-overview.continue', operationId: 'GUIDANCE_JOURNEY_CONTINUE', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-30T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Continue this guided journey.', operationId: 'GUIDANCE_JOURNEY_CONTINUE', result, propertyId: 'p1' });
-  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['continue-step-in-ask', 'open-guidance-overview']);
+  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['continue-step-in-ask', 'open-guidance-overview', 'dismiss-guided-journey']);
+});
+
+// ───────────────────────────── Phase 3: skip a step, dismiss a journey ─────────────────────────────
+const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
+const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
+const { guidanceStepResolverService } = require('../../src/services/guidanceEngine/guidanceStepResolver.service.ts');
+const { guidanceStepContextVersion, guidanceJourneyDismissContextVersion, GUIDANCE_STEP_SKIP_MESSAGE, GUIDANCE_JOURNEY_DISMISS_MESSAGE } = require('../../src/services/ask/askOrchestrator.service.ts');
+
+const UPDATED = new Date('2026-09-30T00:00:00.000Z');
+let writes;
+let dbStep;
+let dbJourney;
+const writeOriginals = { mark: guidanceStepResolverService.markStepStatus, dismiss: guidanceJourneyService.dismissJourney };
+
+function installWrites() {
+  writes = [];
+  dbJourney = { id: 'j1', status: 'ACTIVE', version: 3, journeyTypeKey: 'asset_lifecycle_resolution', issueDomain: 'ASSET_LIFECYCLE', primarySignal: { signalIntentFamily: 'lifecycle_end_or_past_life' }, inventoryItem: { name: 'Water heater' } };
+  dbStep = { id: 's1', stepKey: 'repair_replace_decision', label: 'Decide repair or replace', status: 'IN_PROGRESS', isRequired: true, updatedAt: UPDATED, journey: dbJourney };
+  prismaModule.prisma = new Proxy({}, { get(_t, model) {
+    if (model === 'then') return undefined;
+    if (model === 'guidanceJourneyStep') return { findFirst: async ({ where }) => (where.id === dbStep.id ? { ...dbStep, journey: dbJourney } : null) };
+    if (model === 'guidanceJourney') return { findFirst: async ({ where }) => (where.id === dbJourney.id ? dbJourney : null) };
+    if (model === 'askExecution') return { findMany: async () => [] };
+    if (String(model).startsWith('guidance')) return {};
+    throw new Error(`Unexpected prisma.${String(model)} access`);
+  } });
+  guidanceStepResolverService.markStepStatus = async (input) => { writes.push(['skip', input]); dbStep = { ...dbStep, status: 'SKIPPED' }; return {}; };
+  guidanceJourneyService.dismissJourney = async (...args) => { writes.push(['dismiss', ...args]); dbJourney = { ...dbJourney, status: 'DISMISSED' }; return {}; };
+}
+test.beforeEach(installWrites);
+test.afterEach(() => { guidanceStepResolverService.markStepStatus = writeOriginals.mark; guidanceJourneyService.dismissJourney = writeOriginals.dismiss; });
+
+const skipLaunch = (overrides = {}) => ({ surface: 'ASK_WORKSPACE', entityType: 'GUIDANCE_STEP', entityId: 's1', operationId: 'GUIDANCE_STEP_SKIP', sourceExecutionId: 'exec-view', ...overrides });
+const dismissLaunch = (overrides = {}) => ({ surface: 'ASK_WORKSPACE', entityType: 'GUIDANCE_JOURNEY', entityId: 'j1', operationId: 'GUIDANCE_JOURNEY_DISMISS', sourceExecutionId: 'exec-view', ...overrides });
+const proposeWrite = (op, message, launchContext, role = 'CONTRIBUTOR') => capabilityInvoke(op, { userId: 'u1', propertyId: 'p1', message, launchContext }, { propertyAccess: { role, userId: 'u1', propertyId: 'p1' } });
+const confirmWrite = (op, parameters, role = 'CONTRIBUTOR') => confirmCapabilityInvoke(op, { userId: 'u1', execution: { id: 'exec-w', propertyId: 'p1', sessionId: 's', userId: 'u1', operationId: op, createdAt: new Date() }, parameters, access: { role }, command: getAskDomainCommandByOperation(op) });
+const codeOfP = async (promise) => { try { await promise; return null; } catch (error) { return error.code ?? `NO_CODE:${error.message}`; } };
+
+test('skip: proposing writes nothing, then confirming calls the same service the page does with the same reason code', async () => {
+  const proposal = await proposeWrite('GUIDANCE_STEP_SKIP', GUIDANCE_STEP_SKIP_MESSAGE, skipLaunch());
+  assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+  assert.equal(proposal.confirmation.confirmLabel, 'Skip step');
+  assert.deepEqual(writes, [], 'proposing never writes');
+  assert.equal(proposal.parameters.sourceExecutionId, 'exec-view');
+  const { result, artifactType, artifactId } = await confirmWrite('GUIDANCE_STEP_SKIP', proposal.parameters);
+  assert.deepEqual(writes, [['skip', { propertyId: 'p1', stepId: 's1', nextStatus: 'SKIPPED', reasonCode: 'USER_SKIPPED', actorUserId: 'u1' }]]);
+  assert.equal(result.reasonCode, 'GUIDANCE_STEP_SKIPPED');
+  assert.deepEqual([artifactType, artifactId], ['GUIDANCE_JOURNEY_STEP', 's1']);
+  // A replay of the same confirmation does not write again.
+  const again = await confirmWrite('GUIDANCE_STEP_SKIP', proposal.parameters);
+  assert.equal(again.result.reasonCode, 'GUIDANCE_STEP_ALREADY_SKIPPED');
+  assert.equal(writes.length, 1);
+});
+
+test('skip: only the declared action starts it, and policy, state and role refuse before any confirmation', async () => {
+  const refuse = async (launchContext, message = GUIDANCE_STEP_SKIP_MESSAGE, role) => proposeWrite('GUIDANCE_STEP_SKIP', message, launchContext, role);
+  assert.equal((await refuse(skipLaunch({ surface: 'ASK_REFRESH' }))).reasonCode, 'GUIDANCE_STEP_REQUIRED');
+  assert.equal((await refuse(skipLaunch({ operationId: 'GUIDANCE_JOURNEY_CONTINUE' }))).reasonCode, 'GUIDANCE_STEP_REQUIRED');
+  assert.equal((await refuse(skipLaunch(), 'skip it please')).reasonCode, 'GUIDANCE_STEP_REQUIRED');
+  assert.equal((await refuse(undefined)).reasonCode, 'GUIDANCE_STEP_REQUIRED');
+  accessRole = 'VIEWER';
+  assert.equal((await refuse(skipLaunch(), GUIDANCE_STEP_SKIP_MESSAGE, 'VIEWER')).reasonCode, 'ASK_PERMISSION_REQUIRED', 'the capability layer blocks a viewer before the handler runs');
+  accessRole = 'CONTRIBUTOR';
+  dbStep = { ...dbStep, stepKey: 'check_coverage' };
+  assert.equal((await refuse(skipLaunch())).reasonCode, 'GUIDANCE_STEP_SKIP_DISALLOWED');
+  dbStep = { ...dbStep, stepKey: 'verify_history', status: 'COMPLETED' };
+  assert.equal((await refuse(skipLaunch())).reasonCode, 'GUIDANCE_STEP_ALREADY_COMPLETED');
+  dbStep = { ...dbStep, status: 'PENDING' };
+  dbJourney = { ...dbJourney, status: 'COMPLETED' };
+  assert.equal((await refuse(skipLaunch())).reasonCode, 'GUIDANCE_STEP_JOURNEY_NOT_ACTIVE');
+  dbJourney = { ...dbJourney, status: 'ACTIVE' };
+  assert.equal((await refuse(skipLaunch({ entityId: 'other' }))).reasonCode, 'GUIDANCE_STEP_NOT_FOUND');
+  assert.deepEqual(writes, []);
+});
+
+test('skip: confirm re-reads live state (stale, viewer) and returns a service refusal as a readable error', async () => {
+  const proposal = await proposeWrite('GUIDANCE_STEP_SKIP', GUIDANCE_STEP_SKIP_MESSAGE, skipLaunch());
+  assert.equal(await codeOfP(confirmWrite('GUIDANCE_STEP_SKIP', proposal.parameters, 'VIEWER')), 'ASK_PERMISSION_REQUIRED');
+  dbStep = { ...dbStep, status: 'BLOCKED' };
+  assert.equal(await codeOfP(confirmWrite('GUIDANCE_STEP_SKIP', proposal.parameters)), 'ASK_CONTEXT_VERSION_CONFLICT');
+  dbStep = { ...dbStep, status: 'IN_PROGRESS' };
+  guidanceStepResolverService.markStepStatus = async () => { throw Object.assign(new Error('Complete earlier required steps before changing this step.'), { statusCode: 400, code: 'GUIDANCE_PREREQUISITE_INCOMPLETE' }); };
+  const error = await confirmWrite('GUIDANCE_STEP_SKIP', proposal.parameters).catch((e) => e);
+  assert.equal(error.code, 'ASK_CONFIRMATION_NOT_ACTIVE');
+  assert.match(error.message, /earlier required steps/);
+  guidanceStepResolverService.markStepStatus = async () => { throw Object.assign(new Error('db'), { statusCode: 500, code: 'X' }); };
+  assert.match((await confirmWrite('GUIDANCE_STEP_SKIP', proposal.parameters).catch((e) => e)).message, /^db$/, 'a server error is not dressed up');
+});
+
+test('dismiss: confirm-gated, says it cannot be reopened, idempotent, and stale or viewer attempts are refused', async () => {
+  const proposal = await proposeWrite('GUIDANCE_JOURNEY_DISMISS', GUIDANCE_JOURNEY_DISMISS_MESSAGE, dismissLaunch());
+  assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+  assert.match(proposal.confirmation.description, /cannot be reopened/);
+  assert.deepEqual(writes, []);
+  assert.equal(await codeOfP(confirmWrite('GUIDANCE_JOURNEY_DISMISS', proposal.parameters, 'VIEWER')), 'ASK_PERMISSION_REQUIRED');
+  const { result } = await confirmWrite('GUIDANCE_JOURNEY_DISMISS', proposal.parameters);
+  assert.deepEqual(writes, [['dismiss', 'p1', 'j1', 'u1', null]]);
+  assert.equal(result.reasonCode, 'GUIDANCE_JOURNEY_DISMISSED');
+  assert.equal((await confirmWrite('GUIDANCE_JOURNEY_DISMISS', proposal.parameters)).result.reasonCode, 'GUIDANCE_JOURNEY_ALREADY_DISMISSED');
+  assert.equal(writes.length, 1);
+  // A journey that moved on since the proposal is refused.
+  dbJourney = { ...dbJourney, status: 'ACTIVE', version: 4 };
+  assert.equal(await codeOfP(confirmWrite('GUIDANCE_JOURNEY_DISMISS', proposal.parameters)), 'ASK_CONTEXT_VERSION_CONFLICT');
+  // Only open journeys, only the declared action.
+  dbJourney = { ...dbJourney, status: 'COMPLETED' };
+  assert.equal((await proposeWrite('GUIDANCE_JOURNEY_DISMISS', GUIDANCE_JOURNEY_DISMISS_MESSAGE, dismissLaunch())).reasonCode, 'GUIDANCE_JOURNEY_NOT_OPEN');
+  dbJourney = { ...dbJourney, status: 'ACTIVE' };
+  assert.equal((await proposeWrite('GUIDANCE_JOURNEY_DISMISS', GUIDANCE_JOURNEY_DISMISS_MESSAGE, dismissLaunch({ surface: 'ASK_REFRESH' }))).reasonCode, 'GUIDANCE_JOURNEY_REQUIRED');
+  accessRole = 'VIEWER';
+  assert.equal((await proposeWrite('GUIDANCE_JOURNEY_DISMISS', GUIDANCE_JOURNEY_DISMISS_MESSAGE, dismissLaunch(), 'VIEWER')).reasonCode, 'ASK_PERMISSION_REQUIRED');
+});
+
+test('the continuation view offers skip on the current step only when policy allows, and dismiss only to contributors on open journeys', async () => {
+  const withStep = (stepKey, status = 'IN_PROGRESS') => journey({ journeyTypeKey: 'asset_lifecycle_resolution', currentStepKey: stepKey, steps: [step(stepKey, status, 1, { toolKey: 'coverage-intelligence' })] });
+  const items = (result) => block(result, 'guidance-journey-steps').sections.flatMap((s) => s.items);
+  stored = withStep('repair_replace_decision');
+  let result = await invoke(launch());
+  const current = items(result)[0];
+  assert.equal(current.entityType, 'GUIDANCE_STEP');
+  assert.deepEqual(current.actions.map((a) => [a.id, a.interactionType, a.operationId, a.message]), [['skip-guided-journey-step', 'MUTATE_RECORD', 'GUIDANCE_STEP_SKIP', GUIDANCE_STEP_SKIP_MESSAGE]]);
+  const dismiss = block(result, 'guidance-journey-summary').actions.find((a) => a.id === 'dismiss-guided-journey');
+  assert.deepEqual({ t: dismiss.interactionType, o: dismiss.operationId, et: dismiss.entityType, ei: dismiss.entityId, m: dismiss.message }, { t: 'START_WORKFLOW', o: 'GUIDANCE_JOURNEY_DISMISS', et: 'GUIDANCE_JOURNEY', ei: 'j1', m: GUIDANCE_JOURNEY_DISMISS_MESSAGE });
+
+  stored = withStep('check_coverage');
+  assert.equal(items(await invoke(launch()))[0].actions, undefined, 'a DISALLOWED step is not offered for skipping');
+  stored = journey({ status: 'COMPLETED' });
+  assert.equal(block(await invoke(launch()), 'guidance-journey-summary').actions.some((a) => a.id === 'dismiss-guided-journey'), false);
+  stored = withStep('repair_replace_decision');
+  accessRole = 'VIEWER';
+  result = await invoke(launch());
+  assert.equal(items(result)[0].actions, undefined, 'viewers are not offered the write');
+  assert.equal(block(result, 'guidance-journey-summary').actions.some((a) => a.id === 'dismiss-guided-journey'), false);
+});
+
+test('the registry facts: both writes are non-routable, contributor-floor, confirmation-gated and owned by guidance-overview', () => {
+  for (const op of ['GUIDANCE_STEP_SKIP', 'GUIDANCE_JOURNEY_DISMISS']) {
+    assert.equal(ASK_OPERATION_DEFINITIONS[op].messageRoutable, false);
+    assert.equal(ASK_OPERATION_DEFINITIONS[op].propertyRoleFloor, 'CONTRIBUTOR');
+    assert.equal(getAskDomainCommandByOperation(op).roleFloor, 'CONTRIBUTOR');
+    assert.equal(getSkillForOperation(op).id, 'guidance-overview');
+  }
+  assert.equal(guidanceStepContextVersion(dbStep, dbJourney).length, 64);
+  assert.notEqual(guidanceJourneyDismissContextVersion(dbJourney), guidanceJourneyDismissContextVersion({ ...dbJourney, version: 4 }));
 });

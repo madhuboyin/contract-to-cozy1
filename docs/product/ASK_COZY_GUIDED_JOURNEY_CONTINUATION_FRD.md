@@ -236,3 +236,31 @@ Status line above (section heading "design, nothing built") is superseded: Phase
 - **Not done.** Every other tool key. Each needs its own Ask operation that performs the domain write and reports that step
   (the audit in section 8 found none of the other nine controllers has an Ask write that mirrors it), so each is a
   separate build, not a flag flip. Inline capture of missing context is also still open.
+
+## 11. Phase 3 outcome (implemented; skip a step, dismiss a journey)
+
+- **Two new operations (executed against stubs).** `GUIDANCE_STEP_SKIP` and `GUIDANCE_JOURNEY_DISMISS`: `COMMAND`, CONTRIBUTOR,
+  confirmation-gated domain commands, non-routable, owned by `guidance-overview` (adapters `guidance-overview.step-skip` /
+  `.journey-dismiss`, `MUTATION_PREPARATION`). 118 operations, 45 domain commands. They are reached only by declared actions on
+  the continuation view and start only for the exact declared message, never on an `ASK_REFRESH` re-run (write rule 3).
+- **Same services the page uses.** Skip calls `guidanceStepResolverService.markStepStatus` with reason code `USER_SKIPPED` and no
+  message, exactly what `POST .../steps/:stepId/skip` does with the page's own body; dismiss calls
+  `guidanceJourneyService.dismissJourney` with no reason text. The service keeps enforcing the skip policy (DISALLOWED), the
+  reason requirement, prerequisite steps and transition rules; the propose step refuses DISALLOWED, completed, already-ended
+  and missing targets early, and a service refusal at confirm is returned as a readable error (policy and prerequisites as
+  `ASK_CONFIRMATION_NOT_ACTIVE`, other 4xx as `ASK_CONTEXT_VERSION_CONFLICT`); a 5xx is not dressed up.
+- **Stale actions (requirement 9).** The context version hashes the step (id, status, updatedAt) plus the journey (status,
+  version) for skip, and the journey (id, status, version) for dismiss. A changed target rejects the confirm; an
+  already-skipped or already-dismissed target returns an "already" receipt with no second write. The source continuation view
+  and the journey list refresh through `ASK_MUTATION_IMPACT_MAP`.
+- **What is offered.** On the current step only, "Skip this step" (an item action) when the viewer is a contributor, the step is
+  pending, in progress or blocked, and its policy is not DISALLOWED. "Dismiss this journey" (a summary action) for contributors
+  on ACTIVE or NOT_STARTED journeys. Viewers are offered neither, and a viewer who reaches the operation is blocked by the
+  capability layer (`ASK_PERMISSION_REQUIRED`), with the handler's own check behind it.
+- **Decision recorded: dismiss has no correction mode.** The guidance service has no way to reopen a dismissed journey (no route,
+  no service method), so the command declares none and `askGovernance.test.js` carries a one-line exception to its "every
+  command has a correction mode" invariant. The confirmation card says it cannot be reopened and a new plan can be started.
+  Skip declares `REOPEN` because the page can restore a skipped step; Ask does not offer that yet.
+- **Gaps against requirement 8.** The homeowner does not choose a reason: Ask sends `USER_SKIPPED` (and no dismiss reason), the
+  same as the page's own button. A chosen-reason or free-text field would need the edit-confirmation route per operation and was
+  left out. Not exercised against a database or browser; the journey service, step resolver and models were stubbed.

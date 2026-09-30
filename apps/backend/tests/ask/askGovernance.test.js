@@ -40,7 +40,8 @@ test('every Ask operation has a complete governed definition', () => {
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41, 2026-09-22).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 116);
+  // + GUIDANCE_STEP_SKIP and GUIDANCE_JOURNEY_DISMISS (guided journey continuation Phase 3).
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 118);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -62,13 +63,16 @@ test('every material Ask command has governed confirmation, authorization, cance
   // + HOME_EVENT_RADAR_MARK_DONE/FEEDBACK (FRD v1.40; HOME_EVENT_RADAR_STATE is a direct write, not a command).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 43);
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 45);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);
     assert.equal(definition.supportsCancelBeforeExecution, true);
     assert.ok(['CONTRIBUTOR', 'OWNER'].includes(definition.roleFloor));
-    assert.ok(definition.correctionModes.length > 0);
+    // GUIDANCE_JOURNEY_DISMISS is the one recorded exception: the guidance service has no way to reopen a dismissed journey
+    // (no route, no service method; only a new journey can be started), so claiming a correction mode would be false.
+    // The confirmation card says so before the homeowner confirms.
+    if (definition.id !== 'GUIDANCE_JOURNEY_DISMISS') assert.ok(definition.correctionModes.length > 0);
     assert.ok(definition.cancellation.title);
     assert.ok(definition.cancellation.body);
     assert.equal(ASK_OPERATION_DEFINITIONS[definition.operationId].propertyRoleFloor, definition.roleFloor);

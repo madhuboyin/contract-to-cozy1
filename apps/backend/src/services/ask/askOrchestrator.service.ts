@@ -85,7 +85,7 @@ export { claimConflictDescription, CLAIM_TYPE_PATTERNS, ClaimFileWorkflowInputSc
 export { coverageComparisonStrip } from './handlers/coverage.handler';
 export { DIY_ACTIVE_STATUSES, diyProjectsFromView } from './handlers/diyProjectCenter.handler';
 export { doNothingSimulationFromView } from './handlers/doNothingSimulator.handler';
-export { guidanceJourneysFromView, guidanceJourneyContinuation, guidanceGuardTargetForStep } from './handlers/guidanceOverview.handler';
+export { guidanceJourneysFromView, guidanceJourneyContinuation, guidanceGuardTargetForStep, guidanceStepContextVersion, guidanceJourneyDismissContextVersion, GUIDANCE_STEP_SKIP_MESSAGE, GUIDANCE_JOURNEY_DISMISS_MESSAGE } from './handlers/guidanceOverview.handler';
 export { hoaComplianceFromView } from './handlers/hoaCompliance.handler';
 export { isAllPropertyAttentionRequest, buildAllPropertyHomeActionSection, formatUnavailableHomeActionProducers, homeActionShelfFacts, loadOptionalBuyerPlanContext } from './handlers/homeActions.handler';
 export { digitalWillHandoffProgress, digitalWillFromView } from './handlers/homeDigitalWill.handler';
