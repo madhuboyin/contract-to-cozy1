@@ -696,7 +696,10 @@ const inventoryItemCorrectPattern = new RegExp(
   // The other detail fields require "inventory" or "appliance", not a bare "item"/"system": "edit the notes on this
   // checklist item" must not be captured.
   + String.raw`|\b(?:correct|fix|change|update|edit|set)\b.{0,40}\b(?:condition|brand|manufacturer|model(?:\s+(?:name|number))?|serial(?:\s+(?:number|no))?|(?:purchase|replacement)\s+(?:cost|price|value)|notes?|room|category)\b.{0,60}\b(?:inventory|appliance)\b`
-  + String.raw`|\b(?:inventory|appliance)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:condition|brand|manufacturer|model(?:\s+(?:name|number))?|serial(?:\s+(?:number|no))?|(?:purchase|replacement)\s+(?:cost|price|value)|notes?|room|category)\b`,
+  + String.raw`|\b(?:inventory|appliance)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:condition|brand|manufacturer|model(?:\s+(?:name|number))?|serial(?:\s+(?:number|no))?|(?:purchase|replacement)\s+(?:cost|price|value)|notes?|room|category)\b`
+  // A rename or a "name" correction. Unlike the fields above, "name" and "rename" are ordinary words in task, event,
+  // warranty and room titles, so a message that is clearly about one of those things is left to its own operation.
+  + String.raw`|(?!.*\b(?:task|checklist|reminder|maintenance|event|warranty|document|project|journey|room)\b)(?:\b(?:correct|fix|change|update|edit|set)\b.{0,40}\bname\b.{0,60}\b(?:inventory|appliance)\b|\b(?:inventory|appliance)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\bname\b|\brename\b.{0,60}\b(?:inventory|appliance)\b|\b(?:inventory|appliance)\b.{0,60}\brename\b)`,
   'i',
 );
 // Timeline event title/date correction (Phase 3 write slice 2). Requires an

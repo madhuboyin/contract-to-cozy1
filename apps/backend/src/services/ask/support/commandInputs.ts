@@ -81,7 +81,7 @@ export const RadarTaskInputSchema = z.object({
 
 export const InventoryItemCorrectionInputSchema = z.object({
   itemId: z.string().trim().min(1).max(160),
-  field: z.enum(['installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model', 'serialNo', 'purchaseCostCents', 'replacementCostCents', 'notes', 'category', 'roomId']),
+  field: z.enum(['name', 'installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model', 'serialNo', 'purchaseCostCents', 'replacementCostCents', 'notes', 'category', 'roomId']),
   // null until the homeowner supplies (or edits in) a value; confirm rejects null.
   value: z.string().max(2000).nullable(),
 }).strict();

@@ -22,7 +22,7 @@ import { humanDate } from '../askFormatting';
 import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom } from '../handlers/propertySummary.handler';
 import { areaCaptureFallbackHref, areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, WARRANTY_CORRECTION_FIELDS, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from '../handlers/homeRecordWrites.handler';
-import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionCombinedBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryRoomLinkOptions, inventoryService } from '../handlers/inventory.handler';
+import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryRoomLinkOptions, inventoryService } from '../handlers/inventory.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { recordDocumentPromotionOutcome } from '../../decisionPlatform/outcomeObservationService';
 import { applyWriteBacks } from '../../inspectionWriteBack.service';
@@ -221,7 +221,7 @@ async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promi
     throw Object.assign(new Error('This inventory item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   }
   if (!alreadyApplied) {
-    const combinedBlocker = inventoryCorrectionCombinedBlocker(item, field, normalized);
+    const combinedBlocker = await inventoryCorrectionBlocker(execution.propertyId!, item, field, normalized);
     if (combinedBlocker) throw Object.assign(new Error(combinedBlocker), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
     await inventoryService.updateItem(execution.propertyId!, item.id, inventoryFieldPatch(field, normalized));
     // The traditional item PATCH controller (not the service) marks these five analyses stale; repeat them so an
@@ -656,7 +656,7 @@ export async function editInventoryItemCorrectConfirmation(
   const valueEdit = inventoryFieldNormalized(existing.data.field, input.edits.value);
   const item = await prisma.inventoryItem.findFirst({ where: { id: existing.data.itemId, propertyId: execution.propertyId! } });
   if (!item) throw Object.assign(new Error('The selected inventory item is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-  const combinedBlocker = inventoryCorrectionCombinedBlocker(item, existing.data.field, valueEdit);
+  const combinedBlocker = await inventoryCorrectionBlocker(execution.propertyId!, item, existing.data.field, valueEdit);
   if (combinedBlocker) throw Object.assign(new Error(combinedBlocker), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
   const updatedInput = InventoryItemCorrectionInputSchema.parse({ ...existing.data, value: valueEdit });
   const nextVersion = input.confirmationVersion + 1;

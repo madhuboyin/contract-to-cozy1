@@ -815,7 +815,7 @@ test('INVENTORY_ITEM_CORRECT edit re-validates a room value against live data (s
   };
   const edit = body('async function editInventoryItemCorrectConfirmation(', 'const EDIT_CONFIRMATION_HANDLERS');
   assert.match(edit, /await inventoryFieldValueError\(execution\.propertyId!, existing\.data\.field, input\.edits\.value\)/, 'the edited value is re-validated against live data, not the stale proposal');
-  assert.match(edit, /inventoryCorrectionCombinedBlocker\(item, existing\.data\.field, valueEdit\)/, 'a category/room edit is re-checked against the writer\'s own combined rules');
+  assert.match(edit, /await inventoryCorrectionBlocker\(execution\.propertyId!, item, existing\.data\.field, valueEdit\)/, 'a category/room/name edit is re-checked against the writer\'s own combined rules and, for a rename, its live-data rule');
 });
 
 test('the room existence check and the option list for INVENTORY_ITEM_CORRECT are both scoped to this property', () => {

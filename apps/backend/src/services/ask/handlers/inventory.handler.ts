@@ -10,7 +10,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 import { isWaterHeaterInventoryName } from '../../repairReplaceEligibility';
-import { formatMajorApplianceType, inferMajorApplianceType, PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX } from '../../majorAppliance.util';
+import { classifiedApplianceType, formatMajorApplianceType, inferMajorApplianceType, PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX } from '../../majorAppliance.util';
 import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../../inventory.service';
 import { type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
@@ -482,6 +482,10 @@ const INVENTORY_CATEGORY_OPTIONS: readonly CorrectionOption[] = INVENTORY_CATEGO
 export const INVENTORY_CORRECTION_NO_ROOM_VALUE = 'NONE';
 
 export const INVENTORY_CORRECTION_FIELDS = {
+  // The homeowner-facing label only (max matches the inventory update validator). It is NOT the item's appliance
+  // classification: a rename never reclassifies a classified appliance (InventoryService.updateItem), and the
+  // appliance type is corrected through its own governed control, never by editing the name or a raw tag.
+  name: { label: 'name', action: 'Rename item', message: 'Rename this inventory item.', kind: 'TEXT' as InventoryFieldKind, max: 120, options: [] as readonly CorrectionOption[] },
   installedOn: { label: 'installed date', action: 'Correct install date', message: 'Correct the install date of this inventory item.', kind: 'DATE' as InventoryFieldKind, max: 0, options: [] as readonly CorrectionOption[] },
   purchasedOn: { label: 'purchase date', action: 'Correct purchase date', message: 'Correct the purchase date of this inventory item.', kind: 'DATE' as InventoryFieldKind, max: 0, options: [] as readonly CorrectionOption[] },
   lastServicedOn: { label: 'last serviced date', action: 'Correct last serviced date', message: 'Correct the last serviced date of this inventory item.', kind: 'DATE' as InventoryFieldKind, max: 0, options: [] as readonly CorrectionOption[] },
@@ -507,6 +511,8 @@ export const INVENTORY_ROOM_LINK_FIELD: InventoryCorrectionField = 'roomId';
 
 // Cost fields are checked before the date fields: "purchase cost" and "purchase date" share a word.
 function inventoryCorrectionField(message: string): InventoryCorrectionField | null {
+  // "rename" is unambiguous. The bare noun "name" is checked last because an item's own title can contain it.
+  if (/\brename\b/i.test(message)) return 'name';
   if (/\breplacement\b.{0,12}\b(?:cost|price|value)\b/i.test(message)) return 'replacementCostCents';
   if (/\b(?:purchase[d]?|bought)\b.{0,12}\b(?:cost|price|amount)\b/i.test(message)) return 'purchaseCostCents';
   if (/\binstall(?:ed|ation)?\b/i.test(message)) return 'installedOn';
@@ -519,6 +525,7 @@ function inventoryCorrectionField(message: string): InventoryCorrectionField | n
   if (/\bserial\b/i.test(message)) return 'serialNo';
   if (/\bmodel\b/i.test(message)) return 'model';
   if (/\bnotes?\b/i.test(message)) return 'notes';
+  if (/\bname\b/i.test(message)) return 'name';
   return null;
 }
 
@@ -564,12 +571,52 @@ export async function inventoryRoomLinkOptions(propertyId: string): Promise<Corr
 // itself enforces), or null. Pre-checked before offering or accepting a value so a doomed confirmation is never
 // shown, and re-checked at confirm against live data as the writer's own defense in depth.
 export function inventoryCorrectionCombinedBlocker(item: { name: string; category: string; roomId: string | null }, field: InventoryCorrectionField, normalized: string): string | null {
+  // A new name is subject to the same water-heater rule updateItem enforces for an appliance.
+  if (field === 'name') {
+    return String(item.category) === 'APPLIANCE' && isWaterHeaterInventoryName(normalized)
+      ? 'A water heater is a plumbing system, so it cannot be an appliance. Correct the category to Plumbing first.'
+      : null;
+  }
   if (field !== 'category' && field !== INVENTORY_ROOM_LINK_FIELD) return null;
   const nextCategory = field === 'category' ? normalized : item.category;
   const nextRoomId = field === INVENTORY_ROOM_LINK_FIELD ? (normalized === INVENTORY_CORRECTION_NO_ROOM_VALUE ? null : normalized) : item.roomId;
   if (String(nextCategory) === 'APPLIANCE' && isWaterHeaterInventoryName(item.name)) return 'Water heaters are plumbing systems. Choose the Plumbing category instead.';
   if (ROOM_REQUIRED_CATEGORIES.has(String(nextCategory)) && !nextRoomId) return 'Appliances and belongings need a room. Correct the room first, or choose a category that does not require one.';
   return null;
+}
+
+/**
+ * Rename-specific rule that needs live data: an appliance with NO classification yet is classified from its name
+ * the first time it is edited, and that classification may not duplicate another item's (one major appliance of
+ * each type per home). A classified appliance keeps its type on rename, so it can never hit this. Mirrors the
+ * writer's own rule so a doomed confirmation is never shown and the writer's 409 is never the homeowner's first
+ * word about it.
+ */
+export async function inventoryNameClassificationBlocker(
+  propertyId: string,
+  item: { id: string; category: string; tags?: readonly string[] | null; sourceHash?: string | null },
+  normalizedName: string,
+): Promise<string | null> {
+  if (String(item.category) !== 'APPLIANCE') return null;
+  if (classifiedApplianceType(item)) return null;
+  const inferred = inferMajorApplianceType(normalizedName);
+  if (!inferred) return null;
+  const owner = await prisma.inventoryItem.findFirst({
+    where: { propertyId, sourceHash: `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${inferred}` },
+    select: { id: true },
+  });
+  return owner && owner.id !== item.id ? `A ${formatMajorApplianceType(inferred).toLowerCase()} already exists for this property.` : null;
+}
+
+/** Every reason a correction cannot be applied to this item right now: the pure combined-state rules, then the live-data ones. */
+export async function inventoryCorrectionBlocker(
+  propertyId: string,
+  item: { id: string; name: string; category: string; roomId: string | null; tags?: readonly string[] | null; sourceHash?: string | null },
+  field: InventoryCorrectionField,
+  normalized: string,
+): Promise<string | null> {
+  return inventoryCorrectionCombinedBlocker(item, field, normalized)
+    ?? (field === 'name' ? await inventoryNameClassificationBlocker(propertyId, item, normalized) : null);
 }
 
 export function inventoryFieldNormalized(field: InventoryCorrectionField, value: string): string {
@@ -652,8 +699,8 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
   if (!field) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'INVENTORY_CORRECTION_FIELD_REQUIRED',
-      ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', `Which detail should change for ${selected.name}? Ask can correct its dates, condition, brand, model, serial number, costs, notes, room, or category.`),
-      blocks: [{ type: 'SUMMARY', id: 'inventory-correct-field', title: `Which detail should change for ${selected.name}?`, body: 'Say which one: install date, purchase date, last serviced date, condition, brand, model, serial number, purchase cost, replacement cost, or notes. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', `Which detail should change for ${selected.name}? Ask can correct its name, dates, condition, brand, model, serial number, costs, notes, room, or category.`),
+      blocks: [{ type: 'SUMMARY', id: 'inventory-correct-field', title: `Which detail should change for ${selected.name}?`, body: 'Say which one: name, install date, purchase date, last serviced date, condition, brand, model, serial number, purchase cost, replacement cost, or notes. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [`Correct the install date of ${selected.name}`, `Correct the purchase date of ${selected.name}`],
     };
   }

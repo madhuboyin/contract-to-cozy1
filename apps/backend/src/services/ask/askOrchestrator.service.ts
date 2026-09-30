@@ -18,6 +18,8 @@ import './execution/askConfirm';
 export { confirmAskExecution, editAskConfirmation, cancelAskExecution } from './execution/askConfirm';
 import './execution/askCapture';
 export { submitAskCapture, recordAskCaptureEvent, recordAskCaptureFailure } from './execution/askCapture';
+import './execution/askHandoffTelemetry';
+export { resolveHandoffAttribution, recordHandoffOutcome, classifyLaunchedOutcome } from './execution/askHandoffTelemetry';
 import './execution/askFeedback';
 export { requestAskCorrection, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from './execution/askFeedback';
 import './execution/askSessions';
