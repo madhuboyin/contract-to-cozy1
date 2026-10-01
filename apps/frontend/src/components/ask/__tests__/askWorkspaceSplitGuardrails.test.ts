@@ -43,6 +43,11 @@ describe('AskWorkspace split guardrails', () => {
     expect(read(path.join(workspaceDir, 'support.ts'))).not.toMatch(/from '\.\/(CaptureCards|ConciergeHome|ConversationHistoryNav|ExecutionCard)'/);
   });
 
+  it('pins footer follow-ups to the answer that declared them', () => {
+    const source = read(path.join(askDir, 'AskWorkspace.tsx'));
+    expect(source).toContain('latestExecution ? { sourceExecutionId: latestExecution.executionId } : undefined');
+  });
+
   it('pins the full-page composer to a stable dynamic viewport without sticky positioning', () => {
     const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
     const layout = read(dashboardLayout);

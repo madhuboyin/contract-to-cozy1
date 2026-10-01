@@ -22,3 +22,9 @@ test('Ask presents repair/replace decision factors as a responsive table with ex
   assert.match(source, /'Favors repair'/);
   assert.doesNotMatch(source, /type: 'GROUPED_LIST'[^\n]+id: 'repair-replace-trace'/);
 });
+
+test('repair or replace reserve follow-up names the resolved inventory item', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/miscHandlers.handler.ts'), 'utf8');
+  assert.match(source, /`How much should I reserve for \$\{item\.name\} replacement\?`/);
+  assert.doesNotMatch(source, /How much should I reserve for this item\?/);
+});

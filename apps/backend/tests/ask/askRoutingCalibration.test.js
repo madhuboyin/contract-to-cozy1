@@ -85,6 +85,10 @@ test('product-authored reserve and general home-deadline prompts resolve to thei
   assert.equal(reserve.operation.operationId, 'CAPITAL_RESERVE_PLAN');
   assert.equal(reserve.requiresClarification, false);
 
+  const itemReserve = resolveAskRoutingCascade('How much should I reserve for Water Heater replacement?');
+  assert.equal(itemReserve.operation.operationId, 'CAPITAL_RESERVE_PLAN');
+  assert.equal(itemReserve.requiresClarification, false);
+
   const deadlines = resolveAskRoutingCascade('Monitor my important home deadlines.');
   assert.equal(deadlines.operation.operationId, 'HOME_DEADLINE_MONITOR');
   assert.equal(deadlines.requiresClarification, false);

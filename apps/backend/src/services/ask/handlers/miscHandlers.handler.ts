@@ -273,7 +273,9 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     { type: 'TABLE', id: 'repair-replace-trace', title: 'Decision factors', description: 'How the item and its recorded history influenced this recommendation.', columns: [{ key: 'factor', label: 'Factor' }, { key: 'evidence', label: 'Evidence used' }, { key: 'effect', label: 'Effect on recommendation' }], rows: factorRows, totalCount: analysis.decisionTrace.length, actions: [] },
     { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },
     { type: 'BOUNDARY', id: 'repair-replace-boundary', title: 'Planning guidance—not a diagnosis or quote', body: 'A qualified technician should diagnose safety, performance, and repairability. Actual repair and replacement prices, efficiency gains, warranties, and code requirements may differ.', severity: 'INFO', suggestions: [] }],
-    suggestions: ['How much should I reserve for this item?', 'Show my capital timeline'],
+    // Suggestions are submitted as new turns, so keep the inventory referent
+    // explicit instead of making the router guess what "this item" means.
+    suggestions: [`How much should I reserve for ${item.name} replacement?`, 'Show my capital timeline'],
   };
 }
 
