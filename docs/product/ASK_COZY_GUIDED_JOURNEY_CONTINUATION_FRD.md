@@ -261,6 +261,11 @@ Status line above (section heading "design, nothing built") is superseded: Phase
   no service method), so the command declares none and `askGovernance.test.js` carries a one-line exception to its "every
   command has a correction mode" invariant. The confirmation card says it cannot be reopened and a new plan can be started.
   Skip declares `REOPEN` because the page can restore a skipped step; Ask does not offer that yet.
+- **Decision (2026-10-01): irreversible dismiss stays offered from Ask.** Product confirmed the lean to keep "Dismiss this
+  journey" in Ask. It stays confirmation-gated (the card says it cannot be reopened and a new plan can be started), CONTRIBUTOR
+  only, with no correction mode and no reason text. This closes the open item; nothing in code changed. Revisit only if a
+  reopen path is added to the guidance service (then declare a correction mode) or live use shows accidental dismissals.
+
 - **Gaps against requirement 8.** The homeowner does not choose a reason: Ask sends `USER_SKIPPED` (and no dismiss reason), the
   same as the page's own button. A chosen-reason or free-text field would need the edit-confirmation route per operation and was
   left out. Not exercised against a database or browser; the journey service, step resolver and models were stubbed.
