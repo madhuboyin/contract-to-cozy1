@@ -789,6 +789,33 @@ repro and tests are *executed*; why two accepted items exist is *inferred* (prod
   plan for them (they would no longer match their old identity), and tests that two producers now resolve to one key while
   different assets and different tasks stay separate.
 
+### 16.7 Live data cleanup result and the deeper duplicate (2026-10-01)
+
+**Labels:** every result below is *user-run in production, read from the user's screenshots* (I ran no SQL); the code
+statements are *code-traced*.
+
+- **Cleanup applied and durable.** The later-due accepted item (`d0849e7c…`, due 2026-09-29, `risk-assessment` key) was superseded by
+  the earlier-due one (`88f92c7e…`, due 2026-09-15, `action-center` key) through the reversible duplicate decision
+  (`supersededByWorkItemId` set, one `SOURCE_RECONCILED` event with `decision: DUPLICATE`, actor SYSTEM). No session was left
+  idle in a transaction; no `PROPOSED` work item exists for the detectors. Reverse with
+  `UPDATE operational_work_items SET "supersededByWorkItemId" = NULL WHERE id = 'd0849e7c…'`.
+- **The deeper duplicate.** Two open `PropertyMaintenanceTask` rows exist for the same detectors, both PENDING:
+  "Safety Smoke CO Detectors" (source ACTION_CENTER, `actionKey` `<propertyId>:ACTION_CENTER:SAFETY_SMOKE_CO_DETECTORS`) and
+  "Smoke & CO Detector Check" (source RISK_ASSESSMENT, `…:RISK_ASSESSMENT:SAFETY_SMOKE_CO_DETECTORS`). `PropertyMaintenanceTask` is
+  unique on `(propertyId, actionKey)` and the key includes the source, so two producers create two tasks; each task's
+  `actionKey` becomes the `maintenance-…` part of its work key, which is why two work items existed. Superseding a work item
+  does not touch its task: the Maintenance page, checklist and reminders are not examined here and may still carry both.
+- **Side finding.** Neither accepted work item has an `operational_work_executions` row. In `appendAcceptedOperationalWork` the
+  "Mark done" control requires a primary execution of type `MAINTENANCE_TASK`, so these cards probably do not offer it.
+  Not verified in the UI.
+- **Follow-up scope update (not started).** The canonical-key follow-up in §16.6 moves up a level: the duplicate identity is the
+  maintenance task key, not only the work key. Scope: (1) audit every producer that creates a `PropertyMaintenanceTask` for a
+  tracked asset (action center, risk assessment, seasonal checklist) and the `actionKey` each emits; (2) decide one canonical
+  task per tracked asset (an asset-keyed identity that does not include the source) and what happens to existing pairs (merge
+  or retire one task, with reminders and `lastCompletedAt` history preserved); (3) then derive the work key from that
+  canonical identity; (4) tests that two sources resolve to one task and one work item while different assets and tasks stay
+  separate. No task rows were changed or deleted, because that has reminder and history side effects and needs a decision first.
+
 ---
 
 ## 17. Resolution Center canonical projection and identity integrity
