@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Archive, ArrowLeft, Clock3, Plus, Search, Sparkles } from 'lucide-react';
+import { Archive, ArrowLeft, Clock3, LogOut, Plus, Search, Sparkles, UserRound } from 'lucide-react';
 import { askHistoryGroupLabel } from '@/features/ask/historyGrouping';
 import { useCalmAnswers } from '@/features/ask/calmAnswers';
 import { cn } from '@/lib/utils';
@@ -54,7 +54,7 @@ export function recentSessionStatus(status: AskRecentSessionSummary['latestStatu
   return 'Not available';
 }
 
-export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel, statusSlot }: {
+export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel, statusSlot, accountName, accountEmail, loggingOut = false, onLogout }: {
   items: AskRecentSessionSummary[];
   // IW-HIST-003/011 (FRD v1.71): the pinned group (recent view only) and the explicit archived view.
   pinnedItems?: AskRecentSessionSummary[];
@@ -82,6 +82,10 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
   backLabel?: string;
   // IW-CALM-007 (FRD v1.112): the refresh-status dot, shown beside New conversation when the page header is hidden on wide screens.
   statusSlot?: ReactNode;
+  accountName?: string;
+  accountEmail?: string;
+  loggingOut?: boolean;
+  onLogout?: () => void;
 }) {
   // IW-CALM-008 (FRD v1.111): in the calm shell the rail carries no brand block and no explanatory copy.
   const calm = useCalmAnswers();
@@ -168,6 +172,13 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
       <div className="border-t border-slate-200 pt-3">
         {backHref && <Link href={backHref} className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"><ArrowLeft className="h-4 w-4" />{backLabel || 'Back to Home'}</Link>}
         {!calm && <p className="mt-2 px-3 text-[11px] leading-4 text-slate-400">{scope === 'ALL_HOMES' ? 'Conversations across homes you can access.' : 'Recent conversations for the selected home.'} ContractToCozy navigation remains available above.</p>}
+        {(accountName || accountEmail || onLogout) && <div className="mt-2 border-t border-slate-200 pt-3" aria-label="Account">
+          <div className="flex items-center gap-2 px-3 py-1.5">
+            <UserRound className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+            <div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-800">{accountName || 'Signed in'}</p>{accountEmail && <p className="truncate text-[11px] text-slate-500">{accountEmail}</p>}</div>
+          </div>
+          {onLogout && <button type="button" disabled={loggingOut} onClick={onLogout} className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-60"><LogOut className="h-4 w-4" aria-hidden="true" />{loggingOut ? 'Logging out…' : 'Log out'}</button>}
+        </div>}
       </div>
     </nav>
   );

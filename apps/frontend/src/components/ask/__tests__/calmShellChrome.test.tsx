@@ -107,7 +107,7 @@ describe('FollowUpRow', () => {
 });
 
 const nav = () => render(<ConversationHistoryNav items={[]} activeSessionId="s" loading={false} loadingMore={false} hasMore={false} issue={null} openingId={null} query="" scope="THIS_HOME" selectedHomeAvailable
-  onQueryChange={jest.fn()} onScopeChange={jest.fn()} onOpen={jest.fn()} onNew={jest.fn()} onLoadMore={jest.fn()} backHref="/dashboard" backLabel="Back to Home" />);
+  onQueryChange={jest.fn()} onScopeChange={jest.fn()} onOpen={jest.fn()} onNew={jest.fn()} onLoadMore={jest.fn()} backHref="/dashboard" backLabel="Back to Home" accountName="Ada Homeowner" accountEmail="ada@example.com" onLogout={jest.fn()} />);
 
 describe('ConversationHistoryNav in the calm shell', () => {
   beforeEach(() => window.localStorage.clear());
@@ -119,6 +119,9 @@ describe('ConversationHistoryNav in the calm shell', () => {
     expect(screen.queryByText(/navigation remains available above/)).toBeNull();
     expect(screen.getByPlaceholderText('Search conversations')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to Home/ })).toBeInTheDocument();
+    expect(screen.getByText('Ada Homeowner')).toBeInTheDocument();
+    expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
   });
   it('keeps the current copy when the setting is off', () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '0');

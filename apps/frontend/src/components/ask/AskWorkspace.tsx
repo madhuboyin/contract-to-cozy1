@@ -1,8 +1,7 @@
 'use client';
-
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, BookOpen, CheckCircle2, ChevronsLeft, History, Home, Loader2, Maximize2, RefreshCw, Send, Sparkles, Square, Trash2, Wrench } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronsLeft, History, Loader2, Maximize2, RefreshCw, Send, Sparkles, Square, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -46,17 +45,17 @@ import { resolveHistoryRailExpanded, useHistoryRailPreference } from '@/features
 import { useSelectedPropertyLabel } from './workspace/useSelectedPropertyLabel';
 import { buildConciergeStateStrip } from '@/features/ask/conciergeStateStrip';
 import { AskShellHeader } from './workspace/AskShellHeader';
-// Re-exported for existing test imports (`from '../AskWorkspace'`); the
-// registry in ./blocks/registry.tsx is the actual implementation now.
+import { useAskAccount } from './workspace/useAskAccount';
+import { CollapsedConversationRail } from './workspace/CollapsedConversationRail';
+// Re-exported for existing test imports; ./blocks/registry.tsx is the implementation.
 export { BlockView };
 // The history rail and the draft key moved to ./workspace/; re-exported for existing imports.
 export { ConversationHistoryNav } from './workspace/ConversationHistoryNav';
 export { draftStorageKey } from './workspace/support';
-
 export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; launchSurface?: string; launchCapabilityId?: string }) {
+  const { accountName, accountEmail, loggingOut, handleLogout } = useAskAccount();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
-  // A notification deep link (e.g. a monitor-fired reminder) carries the
-  // property the answer is scoped to, but the globally-selected property
+  // A notification deep link carries the answer's property, but the globally-selected property
   // (from a prior page/localStorage) may differ. Sync it in immediately so
   // the effects below never run a pass against the wrong property — that
   // stale pass would otherwise both waste a fetch and, for the session
@@ -327,7 +326,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               <SheetDescription>Start something new or continue a conversation from an accessible home.</SheetDescription>
             </SheetHeader>
             <div className="mt-5 min-h-0 flex-1">
-              <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} />
+              <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} accountName={accountName} accountEmail={accountEmail} loggingOut={loggingOut} onLogout={() => void handleLogout()} />
             </div>
           </SheetContent>
         </Sheet>
@@ -348,21 +347,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{askUnavailable ? 'Ask Cozy is temporarily unavailable. Your saved data is unchanged.' : loading ? 'Ask is checking your home record.' : error ? `Ask error: ${error}` : executions.length ? `Ask response updated. Latest status: ${executions[executions.length - 1].status.toLowerCase().replace(/_/g, ' ')}.` : 'Ask is ready.'}</div>
       <div className="flex min-h-0 flex-1">
         {mode === 'page' && !askUnavailable && (
-          railExpanded && !calm ? (
+          railExpanded ? (
           <aside id="ask-history-rail" className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
             {calm && <button type="button" id="ask-history-toggle" onClick={() => { setHistorySearchInput(''); railToggled.current = true; chooseRailPreference('collapsed'); }} aria-expanded="true" aria-controls="ask-history-rail" className="mb-2 inline-flex min-h-8 items-center gap-1.5 self-end rounded-lg px-2 text-xs font-medium text-slate-500 hover:bg-slate-200/60 hover:text-slate-800"><ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />Hide history</button>}
-            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} />
+            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} accountName={accountName} accountEmail={accountEmail} loggingOut={loggingOut} onLogout={() => void handleLogout()} />
           </aside>
           ) : (
-          <aside className="hidden w-40 shrink-0 flex-col border-r border-stone-200 bg-[#f4f2ed] px-3 py-5 lg:flex" aria-label="Ask Cozy navigation">
-            <p className="px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-950">Ask Cozy</p>
-            <nav className="mt-5 space-y-1" aria-label="Ask Cozy sections">
-              <button type="button" onClick={startNewSession} aria-current={showLanding ? 'page' : undefined} className={cn('flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', showLanding ? 'bg-emerald-950 text-white' : 'text-slate-700 hover:bg-stone-200/70')}><Home className="h-4 w-4" aria-hidden="true" />Home</button>
-              <Link href={`/dashboard/maintenance${selectedPropertyId ? `?propertyId=${encodeURIComponent(selectedPropertyId)}` : ''}`} className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><Wrench className="h-4 w-4" aria-hidden="true" />Work</Link>
-              {selectedPropertyId && <Link href={`/dashboard/properties/${encodeURIComponent(selectedPropertyId)}`} className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><BookOpen className="h-4 w-4" aria-hidden="true" />Record</Link>}
-              <button type="button" id="ask-history-toggle" onClick={() => setHistoryDrawerOpen(true)} aria-expanded={historyDrawerOpen} className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition hover:bg-stone-200/70"><History className="h-4 w-4" aria-hidden="true" />History</button>
-            </nav>
-          </aside>
+          <CollapsedConversationRail accountLabel={accountName || accountEmail} loggingOut={loggingOut} onNew={startNewSession} onExpand={() => { railToggled.current = true; chooseRailPreference('expanded'); }} onLogout={() => void handleLogout()} />
           )
         )}
         <div className="flex min-w-0 flex-1 flex-col">

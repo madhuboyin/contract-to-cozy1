@@ -9,6 +9,15 @@ const read = (file: string) => fs.readFileSync(file, 'utf8');
 const workspaceFiles = fs.readdirSync(workspaceDir).filter((name) => /\.tsx?$/.test(name));
 
 describe('AskWorkspace split guardrails', () => {
+  it('keeps collapsed navigation conversation-oriented instead of exposing domain modes', () => {
+    const source = read(path.join(workspaceDir, 'CollapsedConversationRail.tsx'));
+    expect(source).toContain('aria-label="Ask Cozy conversation navigation"');
+    expect(source).toContain('aria-label="New conversation"');
+    expect(source).toContain('aria-label="History"');
+    expect(source).not.toContain('>Work</Link>');
+    expect(source).not.toContain('>Record</Link>');
+    expect(read(path.join(askDir, 'AskWorkspace.tsx'))).not.toContain('railExpanded && !calm');
+  });
   it('AskWorkspace.tsx stays under its ceiling and holds only the AskWorkspace component', () => {
     const source = read(path.join(askDir, 'AskWorkspace.tsx'));
     expect(source.split('\n').length).toBeLessThanOrEqual(450);
@@ -18,7 +27,7 @@ describe('AskWorkspace split guardrails', () => {
   });
 
   it('no workspace file imports AskWorkspace, and each stays below 700 lines', () => {
-    expect(workspaceFiles.sort()).toEqual(['CaptureCards.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'support.ts', 'useAskRequest.ts', 'useComposerKeys.ts', 'useConversationHistory.ts', 'usePendingWork.ts', 'useResponseContextPanel.ts', 'useResultRefresh.ts', 'useSelectedPropertyLabel.ts', 'useSessionHistoryActions.ts', 'useSessionLifecycle.ts']);
+    expect(workspaceFiles.sort()).toEqual(['AskShellHeader.tsx', 'CaptureCards.tsx', 'CollapsedConversationRail.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'support.ts', 'useAskAccount.ts', 'useAskRequest.ts', 'useComposerKeys.ts', 'useConversationHistory.ts', 'usePendingWork.ts', 'useResponseContextPanel.ts', 'useResultRefresh.ts', 'useSelectedPropertyLabel.ts', 'useSessionHistoryActions.ts', 'useSessionLifecycle.ts']);
     for (const name of workspaceFiles) {
       const source = read(path.join(workspaceDir, name));
       expect(source).not.toMatch(/from '(\.\.\/)?(\.\/)?AskWorkspace'/);
