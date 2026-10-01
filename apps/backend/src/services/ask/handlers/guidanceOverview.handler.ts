@@ -205,6 +205,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
       `${progress.completedCount} of ${progress.totalCount} steps done.`,
       followedBranch ? 'This plan branched from an earlier one, so this is the plan now in progress.' : null,
       current ? `Current step: ${current.label}.` : 'Every step is done or set aside.',
+      current && !currentInAsk && !blockedReason ? `This step is finished on Guidance Overview${current.toolKey && current.toolKey !== 'frontend' ? ` (${titleCase(current.toolKey)})` : ''}, not in Ask, because Ask cannot record its proof yet.` : null,
       blockedReason ? `Blocked: ${blockedReason}` : null,
       GUIDANCE_READINESS_LABELS[journey.executionReadiness] ? `Readiness: ${GUIDANCE_READINESS_LABELS[journey.executionReadiness]}.` : null,
     ].filter(Boolean).join(' '),
@@ -213,7 +214,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
         id: 'continue-step-in-ask', label: currentInAsk.label, interactionType: 'START_WORKFLOW' as const, message: currentInAsk.message,
         operationId: currentInAsk.operationId, style: 'PRIMARY' as const,
       }, { ...openAction, style: 'SECONDARY' as const }]
-      : [openAction],
+      : [current && !blockedReason ? { ...openAction, label: 'Continue on Guidance Overview' } : openAction],
   });
   if (options.canContribute === true && ['ACTIVE', 'NOT_STARTED'].includes(String(journey.status))) {
     const summaryBlock = blocks[blocks.length - 1] as Extract<AskPresentationBlock, { type: 'SUMMARY' }>;

@@ -366,3 +366,21 @@ operation, canonical completion write, unambiguous proof for that exact step).
   Further IN_ASK steps need product to define the step's proof and, for most, a new Ask write. For quote comparison that means
   agreeing what proves "compared" (for example two or more confirmed, comparable quotes) and building Ask writes for adding
   quotes, with page and Ask reporting through one shared helper (§8 pattern). No such work is scheduled.
+
+## 15. Live finding: "Open Guidance Overview" on a NAVIGATE step (copy fix, 2026-10-01)
+
+**Labels:** the report is *user-observed* (HVAC "Coverage Gap" journey, current step "Estimate uninsured service cost"); the trace
+is *code-traced*; the tests are *executed*.
+
+- **Cause.** Not a bug in routing: the step's tool (`service-price-radar`) is NAVIGATE (§9), so the only primary action was the
+  page link, labelled "Open Guidance Overview", under copy saying the step is "finished in its own tool". The label did not say
+  the step continues on that page, and the copy named no tool.
+- **Why not link straight to the tool.** The desktop builds a step's link in `resolveGuidanceStepHref`
+  (`features/guidance/utils/guidanceDisplay.ts`): per-tool special cases, a focused step page for some tools, and journey
+  context appended so the step's proof is attributed. Re-implementing that server-side would duplicate and drift from it, and a
+  bare tool URL could lose the journey linkage. The overview page stays the target.
+- **Change.** For a current step that is not IN_ASK and not blocked, the primary action is labelled "Continue on Guidance
+  Overview" and the summary says the step is finished on Guidance Overview (naming the tool, except the generic `frontend` key)
+  because Ask cannot record its proof yet. Ended journeys and the journey list keep "Open Guidance Overview". No target or
+  behaviour change. Not browser-verified.
+- **Still true.** Leaving Ask for this step is by design until product defines the step's proof and an Ask write exists (§14).

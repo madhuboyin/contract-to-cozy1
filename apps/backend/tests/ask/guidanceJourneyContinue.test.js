@@ -94,6 +94,9 @@ test('reads the named journey without AI advice, behind the viewer floor, and sh
   assert.ok(current.meta.some((line) => /finished in its own tool/.test(line)), 'a NAVIGATE step says why it is not finished in Ask');
   assert.equal(current.href, '/dashboard/properties/p1/tools/guidance-overview?journeyId=j1');
   assert.equal(sections[0].items[1].href, null, 'only the current step links');
+  // A NAVIGATE step says plainly it continues on Guidance Overview (not "open the overview" as if it were a menu).
+  assert.match(summary.body, /finished on Guidance Overview/);
+  assert.equal(summary.actions.find((a) => a.id === 'open-guidance-overview').label, 'Continue on Guidance Overview');
 });
 
 test('a BRANCHED journey is followed to its live child and says so', async () => {
