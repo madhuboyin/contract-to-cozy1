@@ -1013,6 +1013,59 @@ export function acceptedOperationalWorkHomeCopy(item: AcceptedOperationalWorkCop
   };
 }
 
+/**
+ * Accepted-work projections are appended after every dedup pass, and the only
+ * guard against showing one twice is the work item id. Two active accepted
+ * items for the same asset with the same task title (for example the two
+ * "Smoke & CO Detector Check" items created when each of two earlier duplicate
+ * cards was accepted) would otherwise stack as identical cards. Display only:
+ * the losing work items stay active in Home Operations. Collapses only on the
+ * same canonical asset (inventory item, or a known tracked asset named by the
+ * title) AND the same normalized title, keeping the earliest due date.
+ * An item that names no asset is never collapsed.
+ */
+export function collapseDuplicateAcceptedWork(projected: RankedHomeAction[]): RankedHomeAction[] {
+  const dueMs = (action: RankedHomeAction) => {
+    const parsed = Date.parse(action.timing.dueAt ?? '');
+    return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+  };
+  const groups = new Map<string, RankedHomeAction[]>();
+  const result: RankedHomeAction[] = [];
+  for (const action of projected) {
+    const subject = action.presentation?.subject;
+    const assetKey = subject?.kind === 'INVENTORY_ITEM' && subject.id.trim()
+      ? `item:${subject.id.trim()}`
+      : (() => {
+        const label = resolveCanonicalAssetLabel(action.signal);
+        return label ? `asset:${normalizedSignal(label)}` : null;
+      })();
+    const title = normalizedSignal(action.signal);
+    if (!assetKey || !title) {
+      result.push(action);
+      continue;
+    }
+    const key = `${assetKey}|${title}`;
+    const group = groups.get(key);
+    if (group) group.push(action);
+    else groups.set(key, [action]);
+  }
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      result.push(group[0]);
+      continue;
+    }
+    const [winner, ...rest] = [...group].sort((a, b) => dueMs(a) - dueMs(b) || a.id.localeCompare(b.id));
+    result.push({
+      ...winner,
+      deduplication: {
+        ...winner.deduplication,
+        mergedActionIds: [...new Set([...winner.deduplication.mergedActionIds, ...rest.map((entry) => entry.id)])],
+      },
+    });
+  }
+  return result;
+}
+
 /** @homeActionProducer Appends accepted-work Home Actions to the supplied feed array. */
 export async function appendAcceptedOperationalWork(
   propertyId: string,
@@ -1158,7 +1211,7 @@ export async function appendAcceptedOperationalWork(
       fatigueSuppressed: false,
     });
   }
-  return [...actions, ...projected]
+  return [...actions, ...collapseDuplicateAcceptedWork(projected)]
     .sort((a, b) => HOME_ACTION_PRIORITY_ORDER[a.priority] - HOME_ACTION_PRIORITY_ORDER[b.priority] || b.ranking.score - a.ranking.score)
     .map((action, index) => ({ ...action, ranking: { ...action.ranking, rank: index + 1 } }));
 }

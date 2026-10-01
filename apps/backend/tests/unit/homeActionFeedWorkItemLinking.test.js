@@ -221,6 +221,43 @@ test('the accepted-work projection humanizes a stale enum work-item title', asyn
   acceptedWorkRows.length = 0;
 });
 
+const acceptedRow = (id, title, dueAt, overrides = {}) => ({
+  id, propertyId: 'property-1', title, homeownerReason: 'Check the detectors.', expectedOutcome: 'Complete the task and record the outcome.',
+  state: 'ACCEPTED', acceptanceState: 'ACCEPTED', disposition: null, priority: 'PLAN', safetyTier: 'LOW_CONSEQUENCE',
+  dueAt, dueWindowStart: null, dueWindowEnd: null, snoozedUntil: null, supersededByWorkItemId: null, confidence: 0.6, missingContext: [],
+  subjectType: 'PROPERTY', subjectId: 'property-1', sourceVersion: 'v1', workKey: `work-${id}`,
+  createdAt: new Date('2026-08-01T00:00:00.000Z'), updatedAt: new Date('2026-08-20T00:00:00.000Z'), executions: [], ...overrides,
+});
+
+test('two active accepted items for the same detector and task collapse to one card with the earliest due date', async () => {
+  acceptedWorkRows.length = 0;
+  acceptedWorkRows.push(
+    acceptedRow('wi-late', 'Smoke & CO Detector Check', new Date('2026-09-29T00:00:00.000Z')),
+    acceptedRow('wi-early', 'Smoke & CO Detector Check', new Date('2026-09-15T00:00:00.000Z')),
+  );
+  const result = await appendAcceptedOperationalWork('property-1', []);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].workItem.id, 'wi-early');
+  assert.equal(result[0].timing.dueAt, '2026-09-15T00:00:00.000Z');
+  assert.deepEqual(result[0].deduplication.mergedActionIds, ['operational-work:wi-late']);
+  acceptedWorkRows.length = 0;
+});
+
+test('accepted items collapse only for the same asset AND task: different assets, different tasks and unnamed assets stay separate', async () => {
+  acceptedWorkRows.length = 0;
+  acceptedWorkRows.push(
+    acceptedRow('a1', 'Smoke & CO Detector Check', new Date('2026-09-15T00:00:00.000Z')),
+    acceptedRow('a2', 'Replace the Smoke & CO Detector Check batteries', new Date('2026-09-20T00:00:00.000Z')),
+    acceptedRow('a3', 'Water Heater flush', new Date('2026-09-15T00:00:00.000Z')),
+    acceptedRow('a4', 'Water Heater flush', new Date('2026-09-22T00:00:00.000Z'), { subjectType: 'INVENTORY_ITEM', subjectId: 'wh-2' }),
+    acceptedRow('a5', 'Check the gutters', new Date('2026-09-15T00:00:00.000Z')),
+    acceptedRow('a6', 'Check the gutters', new Date('2026-09-22T00:00:00.000Z')),
+  );
+  const ids = (await appendAcceptedOperationalWork('property-1', [])).map((action) => action.workItem.id).sort();
+  assert.deepEqual(ids, ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']);
+  acceptedWorkRows.length = 0;
+});
+
 test('an eligible action is annotated with a resolved work item', async () => {
   reset();
   const [result] = await linkWorkItemsAndReconcile('property-1', [rankedAction()]);

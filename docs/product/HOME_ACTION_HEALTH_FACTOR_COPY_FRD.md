@@ -748,6 +748,25 @@ map hit vs. `humanizeIdentifier`), so no text heuristic could see they were one 
   systems. Unmapped asset classes still need either a registry entry or a durable
   inventory-item subject; title-only identity is not an acceptable fallback.
 
+### 16.5 Follow-up (2026-10-01): accepted-work cards bypassed the dedup passes
+
+**Labels:** the Ask Cozy screenshot (four "Smoke & CO Detector Check" cards) is *user-observed*; the cause is *code-traced*; the
+repro and tests are *executed*; why two accepted items exist is *inferred* (production rows not inspected).
+
+- **What was still stacking.** `appendAcceptedOperationalWork` runs after `rankAndDeduplicateHomeActions` and
+  `linkWorkItemsAndReconcile`, and its only guard was the work item id. Two active accepted `OperationalWorkItem` rows for the same
+  detector (likely the two earlier duplicate cards, each accepted separately; due 9/15 and 9/29) therefore showed as two identical
+  cards. Ask and Desktop read the same `getHomeActionFeed`, so both showed them; §17 removed any client-side title dedupe.
+- **Fix.** `collapseDuplicateAcceptedWork` collapses accepted projections only when they share the same canonical asset (inventory
+  item subject, or a known tracked asset named exactly by the title) AND the same normalized title. The earliest due date wins;
+  the others are listed in `deduplication.mergedActionIds`. Display only: the losing work items remain active in Home Operations.
+  An item that names no known asset is never collapsed. Tests: `homeActionFeedWorkItemLinking.test.js` (+2).
+- **Not changed.** (a) A capital-timeline "Plan for X replacement" card and an orchestration "Schedule service for X" card for an
+  asset that *is* an inventory item still keep separate keys (`replacement-item:` vs `asset-service-item:`); executed repro. That is
+  a product decision (replace vs service), not made here. (b) A suggestion card and an accepted-work card for the same asset are
+  not merged: hiding accepted work behind a suggestion, or the reverse, needs its own rule. (c) Closing the leftover duplicate work
+  item is a data cleanup, not code.
+
 ---
 
 ## 17. Resolution Center canonical projection and identity integrity
