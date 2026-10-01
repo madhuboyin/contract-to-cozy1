@@ -7,11 +7,12 @@ import { getSpeechRecognitionCtor, mergeDictation, transcriptFromEvent, voiceErr
 
 // Microphone button for the Ask composer (FRD v1.102). Renders nothing where the browser has no speech recognition.
 // It writes what it hears into the question box through `onChange` and never sends.
-export function VoiceInputButton({ getValue, onChange, disabled, large, lang }: {
+export function VoiceInputButton({ getValue, onChange, disabled, large, embedded = false, lang }: {
   getValue: () => string;
   onChange: (value: string) => void;
   disabled?: boolean;
   large?: boolean;
+  embedded?: boolean;
   lang?: string;
 }) {
   const [supported, setSupported] = useState(false);
@@ -46,8 +47,8 @@ export function VoiceInputButton({ getValue, onChange, disabled, large, lang }: 
       <button type="button" onClick={() => (listening ? recognition.current?.stop() : start())} disabled={disabled && !listening}
         aria-label={listening ? 'Stop dictation' : 'Dictate your question'} aria-pressed={listening}
         title={listening ? 'Stop dictation' : 'Dictate your question. Your browser may send the audio to its speech service.'}
-        className={cn('grid shrink-0 place-items-center border transition disabled:cursor-not-allowed disabled:opacity-40', large ? 'h-12 w-12 rounded-2xl' : 'h-10 w-10 rounded-xl',
-          listening ? 'border-red-300 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50')}>
+        className={cn('grid shrink-0 place-items-center transition disabled:cursor-not-allowed disabled:opacity-40', large ? 'h-12 w-12 rounded-2xl' : 'h-10 w-10 rounded-full', !embedded && 'border',
+          listening ? 'border-red-300 bg-red-50 text-red-700' : embedded ? 'text-slate-600 hover:bg-slate-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50')}>
         {listening ? <Square className="h-4 w-4" aria-hidden="true" /> : <Mic className="h-4 w-4" aria-hidden="true" />}
       </button>
       <span role="status" aria-live="polite" className="sr-only">{listening ? 'Listening' : message ?? ''}</span>

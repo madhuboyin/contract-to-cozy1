@@ -31,8 +31,8 @@ test('ACUI-001/002/003: the launch names the home and its state, each entry can 
   expect(firstCard && secondCard && Math.abs(firstCard.y - secondCard.y) < 2).toBe(true);
   expect(firstCard && secondCard && secondCard.x > firstCard.x + firstCard.width).toBe(true);
   expect(firstCard && composerBox && firstCard.y + firstCard.height < composerBox.y).toBe(true);
-  // The composer is the centre of the page, not a narrow utility field: 112 to 128px tall, and the same width as the cards.
-  expect(composerBox && composerBox.height >= 112 && composerBox.height <= 128).toBe(true);
+  // The Google-like composer stays as wide as the cards while using a compact single-line pill.
+  expect(composerBox && composerBox.height >= 56 && composerBox.height <= 72).toBe(true);
   const cardsBox = await page.getByRole('list', { name: 'Needs your attention' }).boundingBox();
   expect(cardsBox && composerBox && Math.abs(cardsBox.width - composerBox.width) < 2 && Math.abs(cardsBox.x - composerBox.x) < 2).toBe(true);
   // The summary is one line above the cards, and the suggestions stay on one row.
