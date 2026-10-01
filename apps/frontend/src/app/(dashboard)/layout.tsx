@@ -667,7 +667,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return;
     const media = window.matchMedia('(max-width: 1023px)');
     const applyPadding = () => {
-      document.body.style.paddingBottom = media.matches
+      document.body.style.paddingBottom = !isAskWorkspace && media.matches
         ? 'calc(4rem + env(safe-area-inset-bottom))'
         : '0px';
     };
@@ -677,7 +677,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       media.removeEventListener('change', applyPadding);
       document.body.style.paddingBottom = '';
     };
-  }, []);
+  }, [isAskWorkspace]);
 
   const handleDismissBanner = () => {
     localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
@@ -724,6 +724,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       <NotificationProvider>
       <PropertyProvider>
         <AppShell
+          viewportLocked={isAskWorkspace}
           leftNav={
             isAskWorkspace ? null : <aside className={cn(
               "hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl lg:fixed lg:top-[72px] lg:bottom-0 lg:z-40 lg:flex lg:flex-col transition-all duration-300",
@@ -790,7 +791,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           <main className={cn(
             'min-w-0 flex-1',
             isAskWorkspace
-              ? 'h-[100dvh] min-h-0 overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0'
+              ? 'h-full min-h-0 overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0'
               : 'pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8',
           )}>
             <PullToRefresh onRefresh={handleRefresh} disabled={!enablePullToRefresh} fill={isAskWorkspace}>

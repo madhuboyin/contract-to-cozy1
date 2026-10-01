@@ -46,7 +46,10 @@ describe('AskWorkspace split guardrails', () => {
   it('pins the full-page composer to a stable dynamic viewport without sticky positioning', () => {
     const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
     const layout = read(dashboardLayout);
-    expect(layout).toContain("'h-[100dvh] min-h-0 overflow-hidden");
+    expect(layout).toContain('viewportLocked={isAskWorkspace}');
+    expect(layout).toContain("'h-full min-h-0 overflow-hidden");
+    expect(workspace).toContain('data-ask-scroll-container');
+    expect(workspace).not.toContain('?.scrollIntoView');
     expect(layout).not.toContain('lg:h-[calc(100dvh-72px)]');
     expect(workspace).toContain("<footer className={cn('shrink-0 border-t");
     expect(workspace).not.toContain("<footer className={cn('sticky bottom-0");

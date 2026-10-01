@@ -165,12 +165,21 @@ export function humanizeReason(reason: string): string {
 export function restoreResultPosition(execution: AskExecutionResponse) {
   const article = document.getElementById(`ask-execution-${execution.executionId}`);
   if (!article) return;
+  const scrollContainer = article.closest<HTMLElement>('[data-ask-scroll-container]');
   const view = readResultView(window.sessionStorage, resultViewKey(execution.sessionId, execution.property?.id ?? 'general', execution.viewState?.resultId ?? execution.executionId));
   const selected = Array.from(article.querySelectorAll<HTMLElement>('[data-ask-task-id]')).find((row) => row.dataset.askTaskId === view.selectedTaskId);
+  const scrollInside = (target: HTMLElement, align: 'start' | 'center', savedOffset = 0) => {
+    if (!scrollContainer) return false;
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const inset = align === 'center' ? (scrollContainer.clientHeight - targetRect.height) / 2 : 16;
+    scrollContainer.scrollTo({ top: scrollContainer.scrollTop + targetRect.top - containerRect.top - inset - savedOffset });
+    return true;
+  };
   if (selected) {
-    selected.scrollIntoView({ block: 'center' });
+    if (!scrollInside(selected, 'center')) selected.scrollIntoView({ block: 'center' });
     selected.focus({ preventScroll: true });
   } else if (view.scrollOffset !== null) {
-    window.scrollBy({ top: article.getBoundingClientRect().top - view.scrollOffset });
-  } else article.scrollIntoView({ block: 'start' });
+    if (!scrollInside(article, 'start', view.scrollOffset)) window.scrollBy({ top: article.getBoundingClientRect().top - view.scrollOffset });
+  } else if (!scrollInside(article, 'start')) article.scrollIntoView({ block: 'start' });
 }

@@ -103,7 +103,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const stoppedRequests = useRef(new Set<number>());
   const inFlight = useRef<{ key: string; token: number; message: string } | null>(null);
   const deniedProperties = useRef(new Set<string>());
-  const endRef = useRef<HTMLDivElement>(null);
+  const conversationScrollRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeSessionRef = useRef('');
   const { refreshIssues, setRefreshIssues, refreshRequests, setRefreshRequests, redactAccessLostResult, refreshResult, updateExecution } = useResultRefresh({ executions, activeSessionRef, requests, deniedProperties, setExecutions, setPendingWork, setJustUpdatedExecutionId });
@@ -156,25 +156,16 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     || concierge.failureCode === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
   const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
   const safeBackTo = resolveDashboardBackHref(initialBackTo, '');
-
-
-
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
-
-
-
-
-
-
-
-
   useEffect(() => {
-    if (loading) endRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
+    if (loading && conversationScrollRef.current) conversationScrollRef.current.scrollTo({ top: conversationScrollRef.current.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }, [loading]);
   useEffect(() => {
     if (!justUpdatedExecutionId || loading) return;
     const timeout = window.setTimeout(() => {
-      document.getElementById(`ask-execution-${justUpdatedExecutionId}`)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      const target = document.getElementById(`ask-execution-${justUpdatedExecutionId}`);
+      const container = conversationScrollRef.current;
+      if (target && container) container.scrollTo({ top: container.scrollTop + target.getBoundingClientRect().top - container.getBoundingClientRect().top - 16, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
     }, 50);
     return () => window.clearTimeout(timeout);
   }, [justUpdatedExecutionId, loading]);
@@ -357,7 +348,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           )
         )}
         <div className="flex min-w-0 flex-1 flex-col">
-      <main className={cn('min-h-0 flex-1 overflow-y-auto', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
+      <main ref={conversationScrollRef} data-ask-scroll-container="" className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
         {calm && mode === 'page' && <h1 className="sr-only hidden lg:block">Ask Cozy</h1>}
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : askUnavailable ? (
           <section className="mx-auto mt-6 max-w-2xl rounded-3xl border border-amber-200 bg-amber-50/80 px-5 py-8 text-center sm:px-8" role="status" aria-labelledby="ask-paused-title">
@@ -433,7 +424,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               </AskActionReturnContext.Provider>;
             })}
             {pendingMessage ? <PendingTurn message={pendingMessage} /> : loading && <div className="flex items-center gap-3 rounded-2xl border border-teal-100 bg-white p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin text-teal-700" />Checking your home record…</div>}
-            <div ref={endRef} />
           </div>
         )}
       </main>

@@ -179,6 +179,23 @@ describe('restoreResultPosition', () => {
     expect(window.scrollBy).not.toHaveBeenCalled();
   });
 
+  it('restores inside the Ask transcript without scrolling the document', () => {
+    document.body.innerHTML = '<main data-ask-scroll-container><article id="ask-execution-e1"></article></main>';
+    const container = document.querySelector<HTMLElement>('[data-ask-scroll-container]')!;
+    const article = document.getElementById('ask-execution-e1')!;
+    Object.defineProperty(container, 'scrollTop', { value: 40, writable: true });
+    container.getBoundingClientRect = () => ({ top: 100 }) as DOMRect;
+    article.getBoundingClientRect = () => ({ top: 360 }) as DOMRect;
+    container.scrollTo = jest.fn();
+    article.scrollIntoView = jest.fn();
+    window.scrollBy = jest.fn();
+    save({ scrollOffset: null });
+    restoreResultPosition(exec('e1'));
+    expect(container.scrollTo).toHaveBeenCalledWith({ top: 284 });
+    expect(article.scrollIntoView).not.toHaveBeenCalled();
+    expect(window.scrollBy).not.toHaveBeenCalled();
+  });
+
   it('does nothing when the result is not on screen', () => {
     window.scrollBy = jest.fn();
     expect(() => restoreResultPosition(exec('missing'))).not.toThrow();

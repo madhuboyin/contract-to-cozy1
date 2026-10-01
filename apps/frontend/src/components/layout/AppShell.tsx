@@ -11,6 +11,7 @@
  */
 
 import React from 'react';
+import { cn } from '@/lib/utils';
 
 type AppShellProps = {
   leftNav?: React.ReactNode;
@@ -19,11 +20,12 @@ type AppShellProps = {
   banner?: React.ReactNode;
   children: React.ReactNode;
   sidebarCollapsed?: boolean;
+  viewportLocked?: boolean;
 };
 
-export function AppShell({ leftNav, mobileHeader, topBar, banner, children, sidebarCollapsed = false }: AppShellProps) {
+export function AppShell({ leftNav, mobileHeader, topBar, banner, children, sidebarCollapsed = false, viewportLocked = false }: AppShellProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--ctc-surface-base)] text-slate-950">
+    <div className={cn('flex flex-col bg-[var(--ctc-surface-base)] text-slate-950', viewportLocked ? 'h-[100dvh] min-h-0 overflow-hidden' : 'min-h-screen')}>
       {/* Top command bar (full width, fixed above everything) */}
       {topBar}
       
@@ -36,7 +38,7 @@ export function AppShell({ leftNav, mobileHeader, topBar, banner, children, side
 
         <div
           data-testid="app-shell-content"
-          className={`flex min-w-0 flex-1 flex-col transition-all duration-300 ${leftNav ? (sidebarCollapsed ? 'lg:pl-[64px]' : 'lg:pl-[246px]') : ''}`}
+          className={`flex min-h-0 min-w-0 flex-1 flex-col transition-all duration-300 ${leftNav ? (sidebarCollapsed ? 'lg:pl-[64px]' : 'lg:pl-[246px]') : ''}`}
         >
           {banner}
 
