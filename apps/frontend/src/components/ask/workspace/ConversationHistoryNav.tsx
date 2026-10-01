@@ -54,10 +54,12 @@ export function recentSessionStatus(status: AskRecentSessionSummary['latestStatu
   return 'Not available';
 }
 
-export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel, statusSlot, accountName, accountEmail, loggingOut = false, onLogout }: {
+export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = [], continuingId = null, view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onResumePending, onNew, onLoadMore, backHref, backLabel, statusSlot, accountName, accountEmail, loggingOut = false, onLogout }: {
   items: AskRecentSessionSummary[];
   // IW-HIST-003/011 (FRD v1.71): the pinned group (recent view only) and the explicit archived view.
   pinnedItems?: AskRecentSessionSummary[];
+  pendingWork?: AskPendingWorkItem[];
+  continuingId?: string | null;
   view?: 'RECENT' | 'ARCHIVED';
   onViewChange?: (view: 'RECENT' | 'ARCHIVED') => void;
   // IW-HIST-009..012, IW-HIST-014: the per-conversation session menu. Resolve false to keep the row's editor open.
@@ -76,6 +78,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
   onQueryChange: (query: string) => void;
   onScopeChange: (scope: 'THIS_HOME' | 'ALL_HOMES') => void;
   onOpen: (session: AskRecentSessionSummary) => void;
+  onResumePending?: (item: AskPendingWorkItem) => void;
   onNew: () => void;
   onLoadMore: () => void;
   backHref?: string;
@@ -102,16 +105,19 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
   }, []);
   const archivedView = view === 'ARCHIVED';
   const searching = Boolean(query.trim());
-  const showPinned = !archivedView && !searching && pinnedItems.length > 0;
-  const pinnedIds = new Set(showPinned ? pinnedItems.map((session) => session.sessionId) : []);
-  const periodGroups = items.filter((session) => !pinnedIds.has(session.sessionId)).reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
+  const needsYou = !archivedView && !searching && onResumePending ? pendingWork.slice(0, 2) : [];
+  const needsYouSessionIds = new Set(needsYou.map((item) => item.execution.sessionId));
+  const visiblePinnedItems = pinnedItems.filter((session) => !needsYouSessionIds.has(session.sessionId));
+  const showPinned = !archivedView && !searching && visiblePinnedItems.length > 0;
+  const pinnedIds = new Set(showPinned ? visiblePinnedItems.map((session) => session.sessionId) : []);
+  const periodGroups = items.filter((session) => !pinnedIds.has(session.sessionId) && !needsYouSessionIds.has(session.sessionId)).reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
     const label = askHistoryGroupLabel(session.lastActiveAt, calendar);
     const group = groups.find((candidate) => candidate.label === label);
     if (group) group.items.push(session);
     else groups.push({ label, items: [session] });
     return groups;
   }, []);
-  const grouped = [...(showPinned ? [{ label: 'Pinned', items: pinnedItems }] : []), ...periodGroups];
+  const grouped = [...(showPinned ? [{ label: 'Pinned', items: visiblePinnedItems }] : []), ...periodGroups];
   return (
     <nav className="flex min-h-0 flex-1 flex-col" aria-label="Ask Cozy conversations">
       {!calm && <div className="mb-4 flex items-center gap-2 px-1">
@@ -141,6 +147,15 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
       <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
         {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
         {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{archivedView ? 'Loading archived conversations…' : query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
+        {needsYou.length > 0 && <section className="mb-5" aria-labelledby="ask-history-needs-you">
+          <h3 id="ask-history-needs-you" className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-700">Needs you</h3>
+          <ul className="mt-1 space-y-1">{needsYou.map((item) => <li key={item.execution.executionId}>
+            <button type="button" disabled={Boolean(continuingId)} onClick={() => onResumePending?.(item)} className="w-full rounded-xl px-3 py-2 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:opacity-60">
+              <span className="block truncate text-sm font-medium text-slate-900">{item.execution.question}</span>
+              <span className="mt-0.5 block text-xs font-semibold text-teal-700">{continuingId === item.execution.executionId ? 'Opening…' : item.actionLabel}</span>
+            </button>
+          </li>)}</ul>
+        </section>}
         {grouped.length === 0 && !loading ? (
           // IW-CALM-008: with no history, no search and no error there is nothing to say, so the calm rail shows nothing.
           calm && !archivedView && !query.trim() && !issue ? null : <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{archivedView ? issue ? 'Archived conversations are unavailable right now.' : 'No archived conversations.' : query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversations match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>

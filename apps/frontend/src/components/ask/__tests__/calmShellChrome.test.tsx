@@ -106,8 +106,8 @@ describe('FollowUpRow', () => {
   });
 });
 
-const nav = () => render(<ConversationHistoryNav items={[]} activeSessionId="s" loading={false} loadingMore={false} hasMore={false} issue={null} openingId={null} query="" scope="THIS_HOME" selectedHomeAvailable
-  onQueryChange={jest.fn()} onScopeChange={jest.fn()} onOpen={jest.fn()} onNew={jest.fn()} onLoadMore={jest.fn()} backHref="/dashboard" backLabel="Back to Home" accountName="Ada Homeowner" accountEmail="ada@example.com" onLogout={jest.fn()} />);
+const nav = (overrides: Record<string, unknown> = {}) => render(<ConversationHistoryNav items={[]} activeSessionId="s" loading={false} loadingMore={false} hasMore={false} issue={null} openingId={null} query="" scope="THIS_HOME" selectedHomeAvailable
+  onQueryChange={jest.fn()} onScopeChange={jest.fn()} onOpen={jest.fn()} onNew={jest.fn()} onLoadMore={jest.fn()} backHref="/dashboard" backLabel="Back to Home" accountName="Ada Homeowner" accountEmail="ada@example.com" onLogout={jest.fn()} {...overrides} />);
 
 describe('ConversationHistoryNav in the calm shell', () => {
   beforeEach(() => window.localStorage.clear());
@@ -128,6 +128,20 @@ describe('ConversationHistoryNav in the calm shell', () => {
     nav();
     expect(screen.getByText('Your home assistant')).toBeInTheDocument();
     expect(screen.getByText(/navigation remains available above/)).toBeInTheDocument();
+  });
+  it('shows at most two actionable conversations under Needs you and removes their duplicate history rows', () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const onResumePending = jest.fn();
+    const recent = (sessionId: string, title: string) => ({ sessionId, title, property: { id: 'home', label: 'Home' }, latestStatus: 'NEEDS_CONFIRMATION', latestExecutionId: `e-${sessionId}`, executionCount: 1, lastActiveAt: new Date().toISOString(), pinned: false, archived: false, titleSetByUser: false });
+    const pending = (sessionId: string, question: string) => ({ pendingKind: 'CONFIRMATION', actionLabel: 'Review and confirm', execution: { executionId: `e-${sessionId}`, sessionId, question } });
+    nav({ items: [recent('s1', 'Finish task setup'), recent('s4', 'Ordinary recent chat')], pendingWork: [pending('s1', 'Finish task setup'), pending('s2', 'Add the purchase date'), pending('s3', 'Third pending item')], onResumePending });
+    expect(screen.getByRole('heading', { name: 'Needs you' })).toBeInTheDocument();
+    expect(screen.getAllByText('Finish task setup')).toHaveLength(1);
+    expect(screen.getByText('Add the purchase date')).toBeInTheDocument();
+    expect(screen.queryByText('Third pending item')).toBeNull();
+    expect(screen.getByText('Ordinary recent chat')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Finish task setup/ }));
+    expect(onResumePending).toHaveBeenCalledWith(expect.objectContaining({ execution: expect.objectContaining({ sessionId: 's1' }) }));
   });
 });
 

@@ -1,7 +1,7 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.164
-**Date:** September 29, 2026
+**Version:** 1.165
+**Date:** October 1, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
 
@@ -430,15 +430,15 @@ Ask Cozy must retain ContractToCozy's visual identity and differentiate through 
 
 **IW-SHELL-009 — Conversation-oriented left navigation.** The full-page Ask Cozy experience must provide a persistent left navigation rail on desktop and an equivalent accessible drawer or nested view on mobile. The rail organizes the conversational workspace; it must not divide Ask Cozy into domain modes such as “Home,” “Work,” or “Record.” A homeowner may ask about maintenance, records, coverage, decisions, finances, or any other supported domain from the same active conversation and composer.
 
-**IW-SHELL-010 — Required left-navigation contents.** The expanded rail must provide:
+**IW-SHELL-010 — Required left-navigation contents (revised October 1, 2026).** The expanded rail must provide:
 
 - a prominent **New conversation** control;
 - searchable, grouped conversation history with the active conversation identified, as governed by §11.8;
 - pinned or saved conversations when that capability is available;
-- a conditional **Continue where you left off** region when resumable Ask work exists; and
+- a conditional **Needs you** history group when an Ask conversation has authoritative pending input, confirmation, or recoverable execution state; and
 - an account area anchored at the bottom of the rail, visually separated from conversation navigation.
 
-The rail must not show an empty “Active work” destination. Resumable work is surfaced only when it exists, and “work” must not ambiguously refer to both unfinished Ask workflows and home maintenance tasks.
+The rail must not show an empty “Active work” or generic “Continue where you left off” destination. Ordinary continuation happens through conversation history. **Needs you** is reserved for actionable Ask state, shows at most two conversations, names the required next action, and hides those conversations from Pinned and Recent while they appear in the group. It is omitted when no conversation requires action; “work” must not ambiguously refer to both unfinished Ask workflows and home maintenance tasks.
 
 **IW-SHELL-011 — Domain destinations are contextual, not Ask modes.** Maintenance, Home Record, coverage, finances, and other traditional product surfaces must not appear as peer modes in the Ask Cozy conversation rail. When a traditional surface provides useful review, bulk management, or functionality not available inline, Ask may expose it as a clearly secondary, context-specific action such as “Open maintenance schedule” or “View in Home Record.” Traditional application navigation remains reachable under IW-SHELL-008 and IW-TRAD-001 without competing with the conversation rail.
 
@@ -970,7 +970,7 @@ A functionally correct journey fails quality review when it introduces unnecessa
 | IW-A34 | Rename a conversation and later receive another response | User title remains unchanged and is reflected in the rail/search results |
 | IW-A35 | Pin, unpin, archive, and restore a conversation | Navigation grouping changes correctly without changing canonical home data, authorization, or result freshness |
 | IW-A36 | Delete a conversation | Target and consequences are confirmed; the conversation is removed while canonical artifacts created through it remain intact |
-| IW-A37 | Open a pending conversation from its rail indicator | Exact pending workflow and required next input restore; no new mutation or duplicate execution occurs |
+| IW-A37 | Open a pending conversation from the **Needs you** history group | Exact pending workflow and required next input restore; no new mutation or duplicate execution occurs |
 | IW-A38 | Switch conversations while the prior request is in flight | Late response cannot enter the newly active conversation; outgoing draft/state are preserved according to policy |
 | IW-A39 | Open conversation history on mobile | Accessible drawer/nested view exposes equivalent history actions and returns focus/context correctly on select or close |
 | IW-A40 | Open sources/evidence on narrow and wide viewports | Wide view uses the contextual panel when space permits; narrow view uses an in-Ask sheet/view; claim mapping and conversation context remain intact |
