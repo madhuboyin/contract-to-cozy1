@@ -321,3 +321,16 @@ What the audit found about the keys themselves:
 `inventory_item_link` as the first entry; (b) first make producers emit canonical keys (so templates, not clients, declare
 what a step needs, e.g. per-step required facts), then build capture against that; (c) drop inline capture and use the slice
 elsewhere.
+
+**Decision (2026-09-30): option (c). Inline capture of missing context is stopped after this audit; nothing was built.**
+Option (a) would build unused infrastructure. Option (b) is a guidance-engine requirements redesign, not an Ask UI slice.
+
+**Future prerequisite for generic inline journey capture.** Before it is implemented, journey templates must declare typed
+required-context definitions tied to canonical fields or entity relationships, with authoritative readers and writers,
+satisfaction predicates, and recomputation behavior. It should start only when product requirements name concrete journey steps,
+the canonical facts they need, and the rules that satisfy them. Today's free-form `missingContextKeys` must not be converted
+directly into that registry; its marker semantics (`skipped:*`, `refresh_signal_context`) are preserved separately.
+
+**Selection rule for the next slice.** A step qualifies only if it has (1) a meaningful current user journey, (2) an existing Ask
+operation, (3) a canonical completion write, and (4) unambiguous proof that completes that exact step. Skip and dismiss are
+already shipped (Phase 3, `fe1c025e`) and are not candidates.
