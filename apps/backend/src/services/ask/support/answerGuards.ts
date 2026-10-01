@@ -186,8 +186,9 @@ export function askFailureStatus(error: unknown): Extract<AskExecutionStatus, 'F
 // an empty card with no way to retry.
 export function askFailureBlocks(error: unknown, retryable: boolean): AskPresentationBlock[] {
   const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
-  const { title, body } = code === 'AI_TIMEOUT'
-    ? { title: 'Ask timed out', body: 'Ask timed out while contacting its guidance provider. Record-based operations remain available.' }
+  const timedOut = code === 'AI_TIMEOUT' || (error instanceof Error && error.name === 'AskExecutionTimeoutError');
+  const { title, body } = timedOut
+    ? { title: 'Ask timed out', body: 'Ask exceeded its operational time limit. No changes were made; try again with current records.' }
     : code === 'AI_CIRCUIT_OPEN' || code === 'AI_UPSTREAM_ERROR' || code === 'AI_EMPTY_RESPONSE'
       ? { title: 'Guidance temporarily unavailable', body: 'Generated guidance is temporarily unavailable. Record-based Ask operations remain available.' }
       : { title: 'Ask could not complete this request', body: 'No changes were made. Your question is preserved below — you can try again.' };

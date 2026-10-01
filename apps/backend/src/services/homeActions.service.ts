@@ -1259,6 +1259,13 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
     logger.warn({ err: error, propertyId, userId }, 'Unified Home personalization materialization failed closed');
   }
   const environmentReport = await environmentReportPromise;
+  // A section-level failure is intentionally represented inside the report
+  // rather than thrown. Preserve that graceful degradation while still
+  // making it visible to Ask; otherwise a timed-out optional EPA lookup
+  // looks indistinguishable from a fully evaluated Environment Report.
+  if (environmentReport && environmentReport.sections.radon.status !== 'ok') {
+    environmentReportAvailable = false;
+  }
   const firstValueInsight = buildHomeFirstValueInsight(environmentReport);
   const promoted = await getPromotedHomeActions(propertyId, prisma, {
     includePersonalization: Boolean(personalization && !personalization.paused),

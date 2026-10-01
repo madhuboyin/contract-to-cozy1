@@ -493,6 +493,14 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     const failureStatus = askFailureStatus(caught);
     const retryable = failureStatus === 'FAILED_RETRYABLE';
     const errorCode = caught instanceof Error ? caught.name : 'ASK_EXECUTION_FAILED';
+    logger.warn({
+      err: caught,
+      executionId: execution.id,
+      operationId: operation.operationId,
+      propertyId: executionPropertyId,
+      elapsedMs: Date.now() - startedAt,
+      failureStatus,
+    }, '[ask] execution failed');
     const saved = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {

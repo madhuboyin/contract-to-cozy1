@@ -35,6 +35,10 @@ data:
   ASK_ENABLED: "true"
   ASK_REMOTE_GENERATION_ENABLED: "true"
   ASK_EXECUTION_TIMEOUT_MS: "15000"
+  # Optional EPA ArcGIS input to Environment Report/Home Actions. Keep it
+  # well below Ask's overall budget so a slow source degrades instead of
+  # failing the deterministic answer.
+  EPA_RADON_FETCH_TIMEOUT_MS: "2000"
   ASK_RAW_CONVERSATION_RETENTION_DAYS: "30"
   ASK_FEEDBACK_RETENTION_DAYS: "365"
 

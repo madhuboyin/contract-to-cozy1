@@ -17,6 +17,13 @@ import { SectionResult } from './types';
 const EPA_RADON_ZONE_QUERY_URL = 'https://geodata.epa.gov/arcgis/rest/services/ORD/ROE_Radon/MapServer/0/query';
 // Radon zone assignments are static — cache for a month.
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// The Environment Report is an optional Home Actions producer. It must not
+// consume most of Ask's 15-second execution budget when EPA's ArcGIS service
+// is slow. Keep this dependency independently bounded and briefly remember a
+// failure so two reads in the same page/Ask flow do not each pay the timeout.
+const DEFAULT_FETCH_TIMEOUT_MS = 2_000;
+const MAX_FETCH_TIMEOUT_MS = 5_000;
+const UNAVAILABLE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export interface RadonData {
   zone: 1 | 2 | 3;
@@ -39,6 +46,14 @@ const ZONE_DESCRIPTIONS: Record<1 | 2 | 3, string> = {
 };
 
 const cache = new TtlCache<RadonData>(CACHE_TTL_MS);
+const unavailableCache = new TtlCache<string>(UNAVAILABLE_CACHE_TTL_MS);
+
+export function readRadonFetchTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number(env.EPA_RADON_FETCH_TIMEOUT_MS);
+  return Number.isInteger(parsed) && parsed > 0
+    ? Math.min(parsed, MAX_FETCH_TIMEOUT_MS)
+    : DEFAULT_FETCH_TIMEOUT_MS;
+}
 
 function cacheKey(lat: number, lon: number): string {
   return `${lat.toFixed(3)},${lon.toFixed(3)}`;
@@ -61,9 +76,11 @@ export async function getRadonZone(lat: number, lon: number): Promise<SectionRes
   const key = cacheKey(lat, lon);
   const cached = cache.get(key);
   if (cached) return { status: 'ok', data: cached, fetchedAt: new Date().toISOString() };
+  const cachedUnavailableReason = unavailableCache.get(key);
+  if (cachedUnavailableReason) return { status: 'unavailable', reason: cachedUnavailableReason };
 
   const ctrl = new AbortController();
-  const timeout = setTimeout(() => ctrl.abort(), 12_000);
+  const timeout = setTimeout(() => ctrl.abort(), readRadonFetchTimeoutMs());
 
   try {
     const url = new URL(EPA_RADON_ZONE_QUERY_URL);
@@ -80,12 +97,14 @@ export async function getRadonZone(lat: number, lon: number): Promise<SectionRes
     const res = await fetch(requestUrl, { signal: ctrl.signal });
     if (!res.ok) {
       logger.error(`[ENV_RADON] EPA radon service returned ${res.status} for ${lat},${lon}`);
+      unavailableCache.set(key, 'http_error');
       return { status: 'unavailable', reason: 'http_error' };
     }
 
     const data = (await res.json()) as EpaRadonQueryResponse;
     const attrs = data?.features?.[0]?.attributes;
     if (!attrs || !isValidZone(attrs.RadonZone)) {
+      unavailableCache.set(key, 'no_zone_at_point');
       return { status: 'unavailable', reason: 'no_zone_at_point' };
     }
 
@@ -97,6 +116,7 @@ export async function getRadonZone(lat: number, lon: number): Promise<SectionRes
     };
 
     cache.set(key, result);
+    unavailableCache.delete(key);
     return { status: 'ok', data: result, fetchedAt: new Date().toISOString() };
   } catch (error: any) {
     if (error?.name === 'AbortError') {
@@ -104,6 +124,7 @@ export async function getRadonZone(lat: number, lon: number): Promise<SectionRes
     } else {
       logger.error({ err: error }, `[ENV_RADON] Fetch failed for ${lat},${lon}`);
     }
+    unavailableCache.set(key, 'fetch_error');
     return { status: 'unavailable', reason: 'fetch_error' };
   } finally {
     clearTimeout(timeout);
