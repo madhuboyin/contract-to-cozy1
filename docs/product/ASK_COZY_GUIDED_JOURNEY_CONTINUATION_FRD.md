@@ -334,3 +334,26 @@ directly into that registry; its marker semantics (`skipped:*`, `refresh_signal_
 **Selection rule for the next slice.** A step qualifies only if it has (1) a meaningful current user journey, (2) an existing Ask
 operation, (3) a canonical completion write, and (4) unambiguous proof that completes that exact step. Skip and dismiss are
 already shipped (Phase 3, `fe1c025e`) and are not candidates.
+
+## 14. Next-step selection audit: no qualifying step (`quote-comparison.compare_quotes` rejected)
+
+**Labels:** *code-traced*; nothing run. Audited 2026-09-30 against the §13 selection rule (meaningful journey, existing Ask
+operation, canonical completion write, unambiguous proof for that exact step).
+
+- **Steps whose page already reports completion** (coverage decision, project scope confirmation, home savings, do-nothing
+  simulator, negotiation shield, price finalization, booking, radar) have **no Ask operation that performs the same write**, so
+  they fail criterion 2. Recalls already shipped (§10).
+- **Steps with an Ask write but no completion report on either surface:** `maintenance.protect_exposed_systems`
+  (`MAINTENANCE_CREATE`; any task would complete it, so proof is ambiguous) and `inspection-report.assess_urgency`
+  (`INSPECTION_FINDING_UPDATE`; no defined step proof).
+- **`quote-comparison.compare_quotes` (template step 5 of the repair/replace journey; not required, skip ALLOWED).** The quote
+  service stores `guidanceJourneyId`, `guidanceStepKey` and `guidanceSignalIntentFamily` on the workspace
+  (`quoteComparison.service.ts`, get-or-create), so the journey linkage exists, but **nothing in the quote service or its routes
+  reports a completion**: the step does not advance from the quote tool on the page either. Ask has `QUOTE_COMPARISON_CREATE`
+  (creates the workspace, i.e. scope only) and `QUOTE_COMPARISON_REVIEW`; it has no write for adding quotes or selecting one.
+  The workspace existing is not proof that quotes were compared (that needs at least two comparable quotes, or a selection via
+  `selectQuoteForDecision`), and Ask cannot produce either. Fails criteria 3 and 4 as Ask stands.
+- **Conclusion.** The guided-journey continuation work is complete for the steps that qualify today (recalls, skip, dismiss).
+  Further IN_ASK steps need product to define the step's proof and, for most, a new Ask write. For quote comparison that means
+  agreeing what proves "compared" (for example two or more confirmed, comparable quotes) and building Ask writes for adding
+  quotes, with page and Ask reporting through one shared helper (§8 pattern). No such work is scheduled.
