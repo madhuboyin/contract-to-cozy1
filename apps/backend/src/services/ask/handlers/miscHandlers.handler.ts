@@ -30,6 +30,7 @@ import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelem
 import { resolveAskEnvelopeQueryScope } from '../askEnvelopeQueryScope';
 import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
 import { assertUserWorkItemTransition } from '../../../modules/homeOperations/domain/userGovernance';
+import { operationalWorkSnoozeDays } from '../operationalWorkSnooze';
 
 const replaceRepairService = new ReplaceRepairService();
 
@@ -334,7 +335,8 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
   if (targetState) {
     try { assertUserWorkItemTransition(selected, targetState); } catch (error) { return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_TRANSITION_NOT_ALLOWED', blocks: [{ type: 'BOUNDARY', id: 'operational-work-governance', title: 'This change belongs to the linked workflow', severity: 'INFO', body: error instanceof Error ? error.message : 'The requested transition is not available.', suggestions: [] }], suggestions: [] }; }
   }
-  const until = new Date(Date.now() + (/\bnext month\b/i.test(message) ? 30 : /\bweek\b/i.test(message) ? 7 : 14) * 86_400_000);
+  const snoozeDays = operationalWorkSnoozeDays(message);
+  const until = new Date(Date.now() + snoozeDays * 86_400_000);
   const contextVersion = createHash('sha256').update(`${selected.id}:${selected.state}:${selected.updatedAt.toISOString()}:${selected.snoozedUntil?.toISOString() ?? ''}`).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const observedResultLabel = observedResult === 'CONFIRMED_HEALTHY'

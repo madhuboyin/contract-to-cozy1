@@ -1,6 +1,6 @@
 'use client';
 
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
 import { resolveGroupedListView, type GroupedListPresentationPreference } from '@/features/ask/adaptivePresentation';
@@ -23,7 +23,7 @@ import { RadarEventResultList } from '../RadarEventResultList';
 import { ReserveAllocationResultList } from '../ReserveAllocationResultList';
 import { RoomResultList } from '../RoomResultList';
 import { WarrantyResultList } from '../WarrantyResultList';
-import { ActionLink, AskContextLink } from './context';
+import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 
 // B07 fix: exported (previously module-private, as part of AskWorkspace's
@@ -32,12 +32,24 @@ import type { AskBlockRenderer } from './types';
 // MaintenanceResultList's own export.
 export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
+  const workflowControls = useContext(AskBlockActionContext);
+  const [focusedDisclosure, setFocusedDisclosure] = useState<'DETAILS' | 'SNOOZE' | null>(null);
   if (block.id === 'focused-home-action-guidance') {
     const next = block.sections.find((section) => section.id === 'next-step');
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];
     const facts = block.sections.find((section) => section.id === 'known-details')?.items ?? [];
     const checklist = block.sections.find((section) => section.id === 'checklist');
     const policyConflicts = block.sections.find((section) => section.id === 'policy-conflicts');
+    const snoozeAction = block.actions.find((action) => action.interactionType === 'START_WORKFLOW' && /^Snooze reminders?$/i.test(action.label));
+    const primaryActions = block.actions.filter((action) => action !== snoozeAction);
+    const hasDetails = Boolean(why?.description || facts.length > 0);
+    const detailsOpen = focusedDisclosure === 'DETAILS';
+    const snoozeOpen = focusedDisclosure === 'SNOOZE';
+    const startSnooze = (message: string) => {
+      if (!snoozeAction || !workflowControls || workflowControls.disabled) return;
+      setFocusedDisclosure(null);
+      workflowControls.invoke({ ...snoozeAction, message });
+    };
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{block.title}</p>
@@ -49,17 +61,27 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
               {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
             </div>
           ))}
-          {why?.description && <p className="text-sm leading-5 text-slate-600">{why.description}</p>}
         </div>
-        {facts.length > 0 && (
-          <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {facts.slice(0, 6).map((fact) => (
-              <div key={fact.id} className="rounded-xl bg-slate-50 px-3 py-2">
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{fact.title}</dt>
-                <dd className="mt-0.5 text-sm font-medium text-slate-800">{fact.description}</dd>
+        {detailsOpen && hasDetails && (
+          <div id={`${block.id}-details`} className="mt-4 border-t border-slate-100 pt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Details</p>
+                {why?.description && <p className="mt-2 text-sm leading-5 text-slate-600">{why.description}</p>}
               </div>
-            ))}
-          </dl>
+              <button type="button" onClick={() => setFocusedDisclosure(null)} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Close<span className="sr-only"> details</span></button>
+            </div>
+            {facts.length > 0 && (
+              <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {facts.slice(0, 6).map((fact) => (
+                  <div key={fact.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{fact.title}</dt>
+                    <dd className="mt-0.5 text-sm font-medium text-slate-800">{fact.description}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
         )}
         {checklist && checklist.items.length > 0 && (
           <div className="mt-4">
@@ -114,7 +136,21 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             </ul>
           </div>
         )}
-        {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+        {(primaryActions.length > 0 || snoozeAction || hasDetails) && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+          {primaryActions.map((action) => <ActionLink key={action.id} action={action} />)}
+          {snoozeAction && <button type="button" disabled={!workflowControls || workflowControls.disabled} aria-expanded={snoozeOpen} aria-controls={`${block.id}-snooze`} onClick={() => setFocusedDisclosure(snoozeOpen ? null : 'SNOOZE')} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 disabled:opacity-50">{snoozeAction.label}</button>}
+          {hasDetails && <button type="button" aria-expanded={detailsOpen} aria-controls={`${block.id}-details`} onClick={() => setFocusedDisclosure(detailsOpen ? null : 'DETAILS')} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50">View details</button>}
+        </div>}
+        {snoozeOpen && snoozeAction && <div id={`${block.id}-snooze`} className="mt-3 rounded-xl border border-teal-100 bg-teal-50/40 p-3">
+          <p className="text-sm font-semibold text-slate-900">When should Cozy remind you?</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">You will review the date before the reminder is changed.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" disabled={workflowControls?.disabled} onClick={() => startSnooze('Snooze this work item until tomorrow.')} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-teal-300 hover:text-teal-800 disabled:opacity-50">Tomorrow</button>
+            <button type="button" disabled={workflowControls?.disabled} onClick={() => startSnooze('Snooze this work item for one week.')} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-teal-300 hover:text-teal-800 disabled:opacity-50">One week</button>
+            <button type="button" disabled={workflowControls?.disabled} onClick={() => startSnooze('Snooze this work item for two weeks.')} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-teal-300 hover:text-teal-800 disabled:opacity-50">Two weeks</button>
+            <button type="button" disabled={workflowControls?.disabled} onClick={() => startSnooze('Snooze this work item until next month.')} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-teal-300 hover:text-teal-800 disabled:opacity-50">One month</button>
+          </div>
+        </div>}
       </section>
     );
   }

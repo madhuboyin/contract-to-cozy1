@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { useMemo } from 'react';
 import { GenericGroupedListBlock } from '../blocks/GroupedListBlock';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
@@ -51,6 +51,8 @@ test('the checklist section renders inline alongside the existing next-step and 
   expect(screen.getByText(/Your HVAC is 12 years old/)).toBeInTheDocument();
   // Existing sections are unaffected by the addition.
   expect(screen.getByText('Book a general home inspection')).toBeInTheDocument();
+  expect(screen.queryByText(/Older homes accumulate/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'View details' }));
   expect(screen.getByText(/Older homes accumulate/)).toBeInTheDocument();
   // No redundant CTA back to the page whose content is already inline.
   expect(screen.queryByRole('link', { name: /See age-related checklist/ })).not.toBeInTheDocument();
