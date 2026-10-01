@@ -264,3 +264,60 @@ Status line above (section heading "design, nothing built") is superseded: Phase
 - **Gaps against requirement 8.** The homeowner does not choose a reason: Ask sends `USER_SKIPPED` (and no dismiss reason), the
   same as the page's own button. A chosen-reason or free-text field would need the edit-confirmation route per operation and was
   left out. Not exercised against a database or browser; the journey service, step resolver and models were stubbed.
+
+## 12. Radar continuation audit (decision: deferred, `home-event-radar` stays NAVIGATE)
+
+**Labels:** everything here is *code-traced* (files read, nothing run). Audited 2026-09-30 before any radar work was built.
+This corrects the §8 note that radar parity "becomes relevant once Phase 1 carries the journey": carrying the journey is not
+enough, as below.
+
+- **Reach is one step.** Only `energy_efficiency_resolution.review_energy_signal` uses `toolKey: 'home-event-radar'`
+  (`guidanceTemplateRegistry.ts`, skip policy DISALLOWED). Weather journeys route through `incidents`, not radar.
+- **What the page does.** `updateRadarMatchState` (`homeEventRadar.controller.ts`) reports the step only when the request
+  carries `guidanceJourneyId` and `guidanceStepKey`, and only for the states `saved`, `dismissed` and `acted_on`
+  (proof `radar-match:<id>:<state>`). The step is therefore completed by saving or dismissing *any* radar match, which
+  does not show the homeowner reviewed an energy signal. That rule is unresolved product semantics, not something Ask should copy.
+- **What Ask does.** `HOME_EVENT_RADAR_STATE` (direct write, recorded FRD exception) and `HOME_EVENT_RADAR_MARK_DONE`
+  (confirmation-gated) carry no journey context in their launch context and report no completion. The radar feed is the
+  general property feed, not scoped to a journey.
+- **Decision.** Radar stays NAVIGATE. In-Ask radar completion is deferred for narrow reach (one step, one journey) and
+  unresolved completion semantics. Nothing was built.
+- **If revisited.** (1) Journey id, step key and signal family must originate from the exact continuation view and stay bound
+  through the feed and every item action, including the mark-done confirm payload; a homeowner who opens the general radar feed
+  independently must never complete a journey. (2) Reuse the shared-helper pattern of §8 (`guidanceToolReporting.ts`, a
+  `dedupeKey`, used by both the controller and Ask). (3) Reporting stays best-effort after the canonical radar write succeeds.
+  (4) Settle first what proof completes `review_energy_signal`.
+
+## 13. Inline capture of missing context: pre-build audit (not built; needs a decision)
+
+**Labels:** *code-traced*. Product direction given for this slice: inline capture applies only to missing-context keys that
+map to an approved registry entry (label, canonical entity and field, capture schema, authorization, existing writer,
+confirmation requirement, recompute behavior); the view offers capture only when every requested field has an entry;
+unsupported, ambiguous, document-derived, external or multi-record keys stay NAVIGATE with an honest reason; after a confirmed
+capture write through the canonical service, recompute, remove only satisfied keys, refresh, and do not complete the step unless
+its completion contract says the facts are proof; support partial progress and disclose the rest.
+
+What the audit found about the keys themselves:
+
+- **`missingContextKeys` is a free-form string array** on `GuidanceJourney` and each step, with no vocabulary or schema.
+- **Producers in the current code** (every writer of the field in `apps/backend/src`):
+  1. `inventory_item_link`: `buyerAcquisition.service.ts`, for an inspection finding with no linked inventory item.
+  2. `refresh_signal_context`: the signal resolver's marker for a stale signal. It is a system flag, not a fact the homeowner holds.
+  3. `skipped:<stepKey>`: markers written when a required or non-ALLOWED step is skipped (and removed by repair code).
+  4. Anything a client sends: `POST` ingest-signal spreads `req.body` into `ingestSignal`, and `blockGuidanceStep` accepts
+     `missingContextKeys` from the body. The frontend types declare the field, but no frontend caller sends a value (searched).
+  The other `ingestSignal` callers (inspection hub, reserve fund, incidents, buyer repair signal) pass none.
+- **There is no recompute that clears a key when a fact is captured.** The only removals are the two repair paths that strip
+  `skipped:` markers. "Remove only the keys that are actually satisfied" would be new journey-service behavior, not a hook.
+- **Fit against the registry contract.** Of the three server keys, none is a simple capturable fact: `inventory_item_link` is
+  an entity link (choose among inventory items, or create one; multi-record) whose writer on the buyer side is not an Ask
+  operation today; the other two are markers. The `PURCHASE_DATE` / `CONDITION` / `REPLACEMENT_VALUE` vocabulary found in
+  `inventoryCoverageState.service.ts` belongs to coverage state, not to journey keys, so it is not reachable from a journey's list.
+- **Consequence.** Built to the stated contract today, the registry would be empty or hold at most one non-trivial entry
+  (`inventory_item_link`), and the view would continue to say "go to the home record" for everything else. The mechanism
+  (registry, partial progress, recompute, key removal) has real design cost against almost no live keys.
+
+**Open decision (not made):** (a) build the registry plus the journey-service key-removal contract anyway, with
+`inventory_item_link` as the first entry; (b) first make producers emit canonical keys (so templates, not clients, declare
+what a step needs, e.g. per-step required facts), then build capture against that; (c) drop inline capture and use the slice
+elsewhere.
