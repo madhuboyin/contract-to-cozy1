@@ -147,6 +147,6 @@ export function HouseholdResultList({ block, propertyId, onAccessLost, link }: {
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more household members are available through the full Household collection.</p>}
     </div>)}
     {detailMemberId && detailItem && <HouseholdMemberDetail key={detailMemberId} memberId={detailMemberId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
+    {block.actions.some((action) => action.href) && <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>}
   </section>;
 }

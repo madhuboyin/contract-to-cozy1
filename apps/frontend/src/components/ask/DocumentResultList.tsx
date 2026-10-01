@@ -162,6 +162,7 @@ export function DocumentResultList({ block, propertyId, onFilter, onPage, onAcce
     else setLocalDetailDocumentId(null);
     requestAnimationFrame(() => window.document.querySelector<HTMLElement>(`[data-document-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
+  const footerActions = block.actions.filter((action) => (calm || action.id !== 'open-documents-list') && action.href);
 
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
     <div className="border-b border-slate-100 p-4">
@@ -205,6 +206,6 @@ export function DocumentResultList({ block, propertyId, onFilter, onPage, onAcce
     {detailDocumentId && detailItem && (detailItem.entityType === 'PROPERTY_RECORD'
       ? <PropertyRecordAskDetail key={detailDocumentId} recordId={detailDocumentId} expectedPropertyId={propertyId} fallbackTitle={detailItem.title} href={detailItem.href ?? null} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />
       : <DocumentDetail key={detailDocumentId} documentId={detailDocumentId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />)}
-    <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.filter((action) => calm || action.id !== 'open-documents-list').map((action) => action.href && <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>
+    {footerActions.length > 0 && <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{footerActions.map((action) => <span key={action.id}>{link(action.href!, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>}
   </section>;
 }

@@ -16,6 +16,7 @@ import { CalmAnswerContext, CalmChromeContext, CalmReceiptContext, CalmSecondary
 import { BlockSequence, BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
+import { askAnswerWidth, askAnswerWidthClass } from '@/features/ask/answerLayout';
 import { handoffLabel, handoffPrompt } from '@/features/ask/skillHandoff';
 import { AskPromptAttribution, FOCUSABLE_SELECTOR, draftStorageKey } from './support';
 import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeCard, PropertySelectionCard } from './CaptureCards';
@@ -165,6 +166,7 @@ export function ExecutionCard({
   // IW-CONV-047: HOME_ACTIONS previously drew both its ranked PRIORITY_LIST and the same records again as shelves.
   // In the adopted calm anatomy the ranked list is the one primary artifact; the classic view keeps both for compatibility.
   const shownBlocks = calm ? calmArtifactBlocks(messageBlocks) : messageBlocks;
+  const answerWidth = askAnswerWidth(shownBlocks);
   // ACUI-005: the created record's link, for a calm receipt that has no action of its own.
   const receiptContinuation = calmChrome ? execution.blocks.flatMap((block) => block.type === 'OUTPUT_ARTIFACTS' ? block.items : []).find((item) => item.navigation)?.navigation ?? null : null;
   const refresh = async () => {
@@ -257,7 +259,7 @@ export function ExecutionCard({
     // in reduced emphasis and without a frame; it is never a second full copy of the previous look.
     return (
       <CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}>
-        <article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32">
+        <article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className={cn('mx-auto scroll-mt-28 space-y-3 lg:scroll-mt-32', askAnswerWidthClass(answerWidth))}>
           <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
           <details className={calmChrome ? undefined : 'rounded-2xl border border-slate-200 bg-slate-50/70 p-3'}>
             <summary className={calmChrome ? 'w-fit cursor-pointer list-none rounded-md px-1 text-xs text-slate-500 hover:text-slate-800 [&::-webkit-details-marker]:hidden' : 'cursor-pointer text-xs font-semibold text-slate-500'}>{calmChrome ? 'Earlier version of this answer · show' : 'Superseded by a refinement below · view original response'}</summary>
@@ -271,7 +273,7 @@ export function ExecutionCard({
   }
 
   return (
-    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}><ResultViewContext.Provider value={controls}><CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}><article id={`ask-execution-${execution.executionId}`} className="scroll-mt-28 space-y-3 lg:scroll-mt-32" onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
+    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}><ResultViewContext.Provider value={controls}><CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}><article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className={cn('mx-auto scroll-mt-28 space-y-3 lg:scroll-mt-32', askAnswerWidthClass(answerWidth))} onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
       const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
       if (!link) return;
       const url = new URL(link.href, window.location.origin);

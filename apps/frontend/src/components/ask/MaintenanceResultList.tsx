@@ -173,6 +173,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   const calm = useCalmAnswer();
   const calmChrome = useCalmChrome();
   const calmPrimaryActionId = calm ? calmPrimaryMaintenanceActionId(block.actions) : null;
+  const footerActions = calm ? calmMaintenanceActions(block.actions) : block.actions;
   const sectionFrame = calm ? 'py-1' : 'border-b border-slate-100 p-4';
   const [localDetailTaskId, setLocalDetailTaskId] = useState<string | null>(null);
   const [unavailableTaskIds, setUnavailableTaskIds] = useState<Set<string>>(() => new Set());
@@ -318,6 +319,6 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     {(calm || layout === 'SHELVES') && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
       {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
     </DetailSheetFrame>}
-    <div className={cn('flex flex-wrap gap-3 text-sm font-semibold text-teal-800', !calm && 'p-4')}>{(calm ? calmMaintenanceActions(block.actions) : block.actions).map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === calmPrimaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>
+    {footerActions.some((action) => action.href || action.interactionType === 'START_WORKFLOW') && <div data-ask-action-footer="" className={cn('flex flex-wrap gap-2 text-sm font-semibold text-teal-800', !calm && 'px-4 py-3')}>{footerActions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === calmPrimaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>}
   </section>;
 }

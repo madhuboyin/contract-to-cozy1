@@ -54,7 +54,7 @@ export function CompactAskCard({
       {...dataAttributes}
       className={cn(
         'relative flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-200 before:absolute before:inset-y-0 before:left-0 before:w-1 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md',
-        density === 'dense' ? 'min-h-36 p-3 pl-4' : 'min-h-44 p-4 pl-5',
+        density === 'dense' ? 'p-3 pl-4' : 'p-4 pl-5',
         TONE_EDGE[tone],
         selected ? 'border-teal-600 ring-1 ring-teal-600/20' : 'border-slate-200',
         className,
@@ -66,11 +66,11 @@ export function CompactAskCard({
         </span>
         {badge}
       </div>
-      <h4 className={cn('line-clamp-2 text-base font-semibold leading-5 text-slate-950', density === 'dense' ? 'mt-2' : 'mt-3 min-h-10')}>{title}</h4>
+      <h4 className={cn('line-clamp-2 text-base font-semibold leading-5 text-slate-950', density === 'dense' ? 'mt-2' : 'mt-3')}>{title}</h4>
       {summary && <div className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">{summary}</div>}
       {meta && <div className="mt-2 line-clamp-1 text-xs text-slate-500">{meta}</div>}
       {(action || secondary) && (
-        <div className={cn('mt-auto flex items-end justify-between gap-2', density === 'dense' ? 'min-h-10 pt-2' : 'min-h-11 pt-3')}>
+        <div className={cn('mt-auto flex items-end justify-between gap-2', density === 'dense' ? 'pt-2' : 'pt-3')}>
           <div className="min-w-0">{action}</div>
           {secondary && <div className="shrink-0">{secondary}</div>}
         </div>

@@ -173,7 +173,7 @@ export function InspectionFindingResultList({ block, propertyId, disabled, onAct
     {(['DECK', 'LIST'] as const).map((option) => <button key={option} type="button" aria-pressed={(deck ? 'DECK' : 'LIST') === option} onClick={() => onChooseLayout(option)}
       className={cn('min-h-8 rounded-lg px-2.5 text-xs font-semibold', (deck ? 'DECK' : 'LIST') === option ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>{option === 'DECK' ? 'One at a time' : 'List'}</button>)}
   </div>;
-  const footer = <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : null)}</div>;
+  const footer = block.actions.some((action) => action.href) ? <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : null)}</div> : null;
 
   if (deck && onAction) {
     return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-display-pattern="deck">

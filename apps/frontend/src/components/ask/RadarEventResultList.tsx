@@ -283,7 +283,7 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
           onClick={() => onFilter(filter.message)} className={cn('min-h-10 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60', filter.active ? 'bg-teal-700 text-white' : 'bg-white text-slate-700')}>{filter.label}</button>)}
       </div>}
     </div>;
-  const footer = <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : <ActionLink key={action.id} action={action} />)}</div>;
+  const footer = block.actions.some((action) => action.href || action.interactionType === 'START_WORKFLOW') ? <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div> : null;
 
   if (deck && onAction) {
     // A decision sent from the sheet closes it, so its result is seen at the end of the conversation.

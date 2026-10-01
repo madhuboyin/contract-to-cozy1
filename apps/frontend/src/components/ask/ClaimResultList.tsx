@@ -240,6 +240,6 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more are available on the full page.</p>}
     </div>)}
     {detailId && detailItem && <ClaimDetail key={detailId} claimId={detailId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
-    {calm && block.actions.some((action) => action.href) && <div className="flex flex-wrap gap-3 p-4 text-sm font-semibold text-teal-800">{block.actions.filter((action) => action.href).map((action) => <span key={action.id}>{link(action.href!, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>}
+    {calm && block.actions.some((action) => action.href) && <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{block.actions.filter((action) => action.href).map((action) => <span key={action.id}>{link(action.href!, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>}
   </section>;
 }

@@ -94,7 +94,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
       </ul>}
       {view && !loading && !failed && (
         <section className="mt-8 grid gap-4 sm:grid-cols-2" aria-label="Decisions and active work">
-          <article className="flex min-h-48 min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <article className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700" aria-hidden="true"><ShieldCheck className="h-5 w-5" /></span>
               <div><h3 className="font-semibold text-slate-950">Decisions to make</h3><p className="mt-0.5 text-sm text-slate-500">Choices that need your answer.</p></div>
@@ -113,7 +113,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
             </div>
           </article>
 
-          <article className="flex min-h-48 min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <article className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700" aria-hidden="true"><Milestone className="h-5 w-5" /></span>
               <div><h3 className="font-semibold text-slate-950">Active major moment</h3><p className="mt-0.5 text-sm text-slate-500">Your current project or guided plan.</p></div>

@@ -87,6 +87,14 @@ test('a document leaving the result clears selection rather than selecting a sub
 test('"Open Documents" remains available as a separate, secondary option', () => {
   render(<List response={execution()} />);
   expect(screen.getByText('Open Documents')).toBeInTheDocument();
+  expect(document.querySelector('[data-ask-action-footer]')).toBeInTheDocument();
+});
+
+test('does not reserve an empty action footer after a legacy navigation action is suppressed', () => {
+  const legacyOnly = execution();
+  legacyOnly.blocks = [{ ...block, actions: [{ id: 'open-documents-list', label: 'Open Documents', href: '/dashboard/properties/home/documents', style: 'SECONDARY' }] }];
+  render(<List response={legacyOnly} />);
+  expect(document.querySelector('[data-ask-action-footer]')).not.toBeInTheDocument();
 });
 
 test('Property Summary documents dispatch through the registry and open canonical detail inline', async () => {

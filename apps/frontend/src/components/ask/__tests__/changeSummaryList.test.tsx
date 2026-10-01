@@ -45,7 +45,7 @@ test('renders canonical titles as conversational action cards with exact work-it
 
   const firstCard = within(list).getByText('Chimney cleaning and inspection').closest('article');
   expect(firstCard).not.toBeNull();
-  expect(firstCard).toHaveClass('min-h-36');
+  expect(firstCard).not.toHaveClass('min-h-36');
   fireEvent.click(within(firstCard as HTMLElement).getByRole('button', { name: 'Review in Ask' }));
   expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ entityType: 'HOME_ACTION', entityId: 'work-1', operationId: 'HOME_ACTIONS' }));
   expect(within(firstCard as HTMLElement).getByRole('link', { name: /Full record/ })).toHaveAttribute(
