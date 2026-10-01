@@ -217,11 +217,15 @@ Status line above (section heading "design, nothing built") is superseded: Phase
 
 ## 10. Phase 2, slice 1 outcome (implemented; recalls steps only)
 
-- **What became IN_ASK.** Two steps, `recalls:safety_alert` and `recalls:recall_resolution` (`ASK_GUIDANCE_IN_ASK_STEPS` in
+- **What became IN_ASK.** Two step keys, `recalls:safety_alert` and `recalls:recall_resolution` (`ASK_GUIDANCE_IN_ASK_STEPS` in
   `askGuidanceStepHandlers.ts`). `askGuidanceStepMode(toolKey, stepKey)` is now step-aware; tool-level defaults stay
   NAVIGATE. `recalls:review_remedy_instructions` stays NAVIGATE because nothing in Ask (or on the recalls controller) reports
   it. A test ties the table to `buildRecallMatchCompletion`: the IN_ASK step keys must equal the step keys a confirm, dismiss
   and resolve report, each operation must exist, and each step must be a real template step (executed).
+- **Outcome per step key (executed, `guidanceToolReporting.ts`).** `safety_alert` is only ever reported COMPLETED (confirm or
+  dismiss). `recall_resolution` is reported COMPLETED on resolve and SKIPPED on dismiss, so "IN_ASK" means the key can be
+  advanced in Ask, not that it always completes. Skip and dismiss (§11) are journey management, not completion of the
+  underlying action.
 - **What the homeowner sees.** When the current step is one of those two and is not blocked and the execution guard (for the
   execution-stage `recall_resolution`) is not blocking, the continuation's primary action is "Review recall matches here"
   (`START_WORKFLOW` to `RECALL_REVIEW`, which lists the open matches with confirm, dismiss and resolve actions, each
