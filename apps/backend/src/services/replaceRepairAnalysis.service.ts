@@ -15,6 +15,7 @@ type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type UsageIntensity = 'LOW' | 'MEDIUM' | 'HIGH';
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 type Impact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+type RecommendationEffect = 'FAVORS_REPAIR' | 'FAVORS_REPLACEMENT' | 'NEUTRAL';
 
 export type ReplaceRepairOverrides = {
   estimatedNextRepairCostCents?: number;
@@ -48,6 +49,7 @@ export type ReplaceRepairAnalysisDTO = {
     label: string;
     detail?: string;
     impact: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+    recommendationEffect?: RecommendationEffect;
   }>;
 
   ageYears?: number;
@@ -65,6 +67,7 @@ type DecisionTraceItem = {
   label: string;
   detail?: string;
   impact: Impact;
+  recommendationEffect: RecommendationEffect;
 };
 
 type NextStep = {
@@ -534,6 +537,7 @@ export class ReplaceRepairService {
         label: 'Item profile analyzed',
         detail: `${item.name} (${item.category}) in ${item.condition} condition.`,
         impact: 'NEUTRAL',
+        recommendationEffect: 'NEUTRAL',
       },
       {
         label: 'Age and lifespan baseline',
@@ -542,41 +546,49 @@ export class ReplaceRepairService {
             ? `Estimated age ${ageYears} year(s) against default lifespan ${defaults.lifespanYears} year(s).`
             : `Age unavailable; used category default lifespan ${defaults.lifespanYears} year(s).`,
         impact: ageYears !== undefined && remainingYears <= 3 ? 'NEGATIVE' : 'NEUTRAL',
+        recommendationEffect: ageYears !== undefined && remainingYears <= 3 ? 'FAVORS_REPLACEMENT' : 'NEUTRAL',
       },
       {
         label: 'Remaining useful life',
         detail: `Estimated remaining years: ${remainingYears}.`,
         impact: remainingYears <= 3 ? 'NEGATIVE' : remainingYears >= 6 ? 'POSITIVE' : 'NEUTRAL',
+        recommendationEffect: remainingYears <= 3 ? 'FAVORS_REPLACEMENT' : remainingYears >= 6 ? 'FAVORS_REPAIR' : 'NEUTRAL',
       },
       {
         label: 'Repair history frequency',
         detail: `${repairsLast24m} repair/maintenance-like event(s) in the lookback window.`,
         impact: repairsLast24m >= 2 ? 'NEGATIVE' : repairsLast24m === 0 ? 'POSITIVE' : 'NEUTRAL',
+        recommendationEffect: repairsLast24m >= 2 ? 'FAVORS_REPLACEMENT' : repairsLast24m === 0 ? 'FAVORS_REPAIR' : 'NEUTRAL',
       },
       {
         label: 'Repair spend pressure',
         detail: `Recent repair spend: ${formatUsdFromCents(repairSpendLast24mCents)} (${(repairSpendRatio * 100).toFixed(0)}% of replacement).`,
         impact: repairSpendRatio >= 0.25 ? 'NEGATIVE' : repairSpendRatio <= 0.1 ? 'POSITIVE' : 'NEUTRAL',
+        recommendationEffect: repairSpendRatio >= 0.25 ? 'FAVORS_REPLACEMENT' : repairSpendRatio <= 0.1 ? 'FAVORS_REPAIR' : 'NEUTRAL',
       },
       {
         label: 'Failure probability estimate',
         detail: `Estimated annual failure probability ${(failureProb * 100).toFixed(0)}% after age/condition/usage adjustments.`,
         impact: failureProb >= 0.58 ? 'NEGATIVE' : failureProb <= 0.22 ? 'POSITIVE' : 'NEUTRAL',
+        recommendationEffect: failureProb >= 0.58 ? 'FAVORS_REPLACEMENT' : failureProb <= 0.22 ? 'FAVORS_REPAIR' : 'NEUTRAL',
       },
       {
         label: 'Next repair estimate',
         detail: `Estimated next repair cost: ${formatUsdFromCents(estimatedNextRepairCostCents)}.`,
         impact: repairToReplaceRatio >= 0.3 ? 'NEGATIVE' : 'NEUTRAL',
+        recommendationEffect: repairToReplaceRatio >= 0.3 ? 'FAVORS_REPLACEMENT' : 'NEUTRAL',
       },
       {
         label: 'Replacement estimate',
         detail: `Estimated replacement cost: ${formatUsdFromCents(estimatedReplacementCostCents)}.`,
         impact: estimatedReplacementCostCents <= 90000 ? 'POSITIVE' : 'NEUTRAL',
+        recommendationEffect: estimatedReplacementCostCents <= 90000 ? 'FAVORS_REPLACEMENT' : 'NEUTRAL',
       },
       {
         label: 'Expected annual repair risk',
         detail: `Expected annual repair risk: ${formatUsdFromCents(expectedAnnualRepairRiskCents)}.`,
         impact: expectedAnnualRepairRiskCents >= Math.round(estimatedReplacementCostCents * 0.3) ? 'NEGATIVE' : 'NEUTRAL',
+        recommendationEffect: expectedAnnualRepairRiskCents >= Math.round(estimatedReplacementCostCents * 0.3) ? 'FAVORS_REPLACEMENT' : 'NEUTRAL',
       },
       {
         label: 'Break-even outlook',
@@ -586,6 +598,8 @@ export class ReplaceRepairService {
             : 'Break-even could not be reliably estimated from current assumptions.',
         impact:
           breakEvenMonths !== null ? (breakEvenMonths <= 36 ? 'POSITIVE' : breakEvenMonths <= 72 ? 'NEUTRAL' : 'NEGATIVE') : 'NEUTRAL',
+        recommendationEffect:
+          breakEvenMonths !== null ? (breakEvenMonths <= 36 ? 'FAVORS_REPLACEMENT' : breakEvenMonths <= 72 ? 'NEUTRAL' : 'FAVORS_REPAIR') : 'NEUTRAL',
       },
     ];
 

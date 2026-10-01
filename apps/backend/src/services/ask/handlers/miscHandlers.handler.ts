@@ -235,6 +235,28 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     { id: 'replace', values: { path: 'Estimated replacement', amount: analysis.estimatedReplacementCostCents == null ? 'Not available' : money(analysis.estimatedReplacementCostCents / 100), meaning: 'Planning estimate—not a contractor or retailer quote' } },
     { id: 'risk', values: { path: 'Annual repair risk', amount: analysis.expectedAnnualRepairRiskCents == null ? 'Not available' : money(analysis.expectedAnnualRepairRiskCents / 100), meaning: 'Probability-weighted planning exposure' } },
   ];
+  const factorRows = analysis.decisionTrace.slice(0, 12).map((factor, index) => {
+    // Analyses saved before recommendationEffect was introduced still carry the
+    // original impact. Interpret those deterministically until recomputation.
+    const legacyEffect = factor.impact === 'NEGATIVE'
+      ? factor.label === 'Break-even outlook' ? 'FAVORS_REPAIR' : 'FAVORS_REPLACEMENT'
+      : factor.impact === 'POSITIVE'
+        ? ['Replacement estimate', 'Break-even outlook'].includes(factor.label) ? 'FAVORS_REPLACEMENT' : 'FAVORS_REPAIR'
+        : 'NEUTRAL';
+    const effect = factor.recommendationEffect ?? legacyEffect;
+    return {
+      id: `factor-${index}`,
+      values: {
+        factor: factor.label,
+        evidence: factor.detail || 'Not available',
+        effect: effect === 'FAVORS_REPLACEMENT'
+        ? 'Favors replacement'
+        : effect === 'FAVORS_REPAIR'
+          ? 'Favors repair'
+          : 'Neutral',
+      },
+    };
+  });
   return {
     status: captureRequests.length || analysis.confidence !== 'HIGH' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length ? 'LIFECYCLE_CONTEXT_OPTIONAL' : analysis.confidence !== 'HIGH' ? 'REPAIR_REPLACE_CONFIDENCE_LIMITED' : undefined,
@@ -247,7 +269,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
       tone: ['REPLACE_NOW', 'REPLACE_SOON'].includes(analysis.verdict) ? 'CAUTION' : 'DEFAULT',
       actions: [{ id: 'open-repair-replace', label: 'Open Repair vs Replace', href: `/dashboard/replace-repair?propertyId=${encodeURIComponent(propertyId)}&inventoryItemId=${encodeURIComponent(item.id)}`, style: 'PRIMARY' }],
     }, { type: 'TABLE', id: 'repair-replace-costs', title: 'Modeled decision inputs', description: 'Amounts are planning estimates from the canonical Repair vs Replace engine.', columns: [{ key: 'path', label: 'Measure' }, { key: 'amount', label: 'Amount' }, { key: 'meaning', label: 'How to interpret it' }], rows, actions: [] },
-    { type: 'GROUPED_LIST', filters: [], id: 'repair-replace-trace', title: 'Why the model reached this result', description: 'Decision factors are bounded to the item and its recorded history.', sections: [{ id: 'factors', title: 'Decision factors', count: analysis.decisionTrace.length, items: analysis.decisionTrace.slice(0, 12).map((factor, index) => ({ id: `factor-${index}`, title: factor.label, description: factor.detail, meta: [factor.impact], status: null, href: null })) }], actions: [] },
+    { type: 'TABLE', id: 'repair-replace-trace', title: 'Decision factors', description: 'How the item and its recorded history influenced this recommendation.', columns: [{ key: 'factor', label: 'Factor' }, { key: 'evidence', label: 'Evidence used' }, { key: 'effect', label: 'Effect on recommendation' }], rows: factorRows, totalCount: analysis.decisionTrace.length, actions: [] },
     { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },
     { type: 'BOUNDARY', id: 'repair-replace-boundary', title: 'Planning guidance—not a diagnosis or quote', body: 'A qualified technician should diagnose safety, performance, and repairability. Actual repair and replacement prices, efficiency gains, warranties, and code requirements may differ.', severity: 'INFO', suggestions: [] }],
     suggestions: ['How much should I reserve for this item?', 'Show my capital timeline'],
