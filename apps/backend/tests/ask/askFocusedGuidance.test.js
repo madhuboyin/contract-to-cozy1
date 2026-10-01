@@ -11,6 +11,7 @@ const {
   homeActionPriorityFilter,
   isPropertyContextCaptureAction,
 } = require('../../src/services/ask/askFocusedGuidance.ts');
+const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 
 test('landing section prompts preserve the dashboard priority partitions', () => {
   assert.deepEqual(homeActionPriorityFilter('Show me what needs attention now or soon'), ['NOW', 'SOON']);
@@ -138,8 +139,10 @@ test('Group B health-factor checklist renders inline instead of only navigating'
   const ageChecklistSection = ageFocused.sections.find((section) => section.id === 'checklist');
   assert.ok(ageChecklistSection, 'age-factor checklist section should be present');
   assert.ok(ageChecklistSection.items.length > 0);
-  assert.equal(ageChecklistSection.items[0].meta.length, 2, 'urgency and observed condition stay separately renderable');
+  assert.equal(ageChecklistSection.items[0].meta.length, 1, 'short metadata only carries urgency');
+  assert.ok(ageChecklistSection.items[0].condition, 'the observed condition has a typed field');
   assert.ok(ageChecklistSection.items[0].description, 'recommendation remains the row description');
+  for (const block of ageResult.blocks) AskPresentationBlockSchema.parse(block);
   assert.equal(ageResult.suppressSkillHandoff, true, 'generic maintenance handoff must not be offered for a focused action');
   assert.deepEqual(ageFocused.actions, [], 'no redundant CTA back to the page whose content is already inline');
 

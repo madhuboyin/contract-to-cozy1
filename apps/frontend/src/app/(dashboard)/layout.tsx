@@ -790,7 +790,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           <main className={cn(
             'min-w-0 flex-1',
             isAskWorkspace
-              ? 'min-h-0 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:h-[calc(100dvh-72px)] lg:pb-0'
+              ? 'h-[100dvh] min-h-0 overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0'
               : 'pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8',
           )}>
             <PullToRefresh onRefresh={handleRefresh} disabled={!enablePullToRefresh} fill={isAskWorkspace}>

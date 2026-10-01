@@ -132,6 +132,10 @@ const GroupedListItemSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().nullable().optional(),
+  // A recorded or derived condition is distinct from both the recommended
+  // next step (`description`) and short display metadata (`meta`). Keeping it
+  // typed prevents table renderers from depending on positional metadata.
+  condition: z.string().trim().min(1).max(500).nullable().optional(),
   meta: z.array(z.string()).max(6).default([]),
   status: z.string().nullable().optional(),
   href: z.string().nullable().optional(),

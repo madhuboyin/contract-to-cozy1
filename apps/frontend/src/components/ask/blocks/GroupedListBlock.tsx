@@ -92,7 +92,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   {checklist.items.map((item) => (
                     <tr key={item.id} className="block p-3 md:table-row md:p-0">
                       <th scope="row" className="block font-semibold text-slate-950 md:table-cell md:w-[16%] md:px-3 md:py-3 md:align-top">{item.title}</th>
-                      <td className="mt-2 block leading-5 text-slate-600 md:mt-0 md:table-cell md:w-[28%] md:px-3 md:py-3 md:align-top"><span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Current condition</span>{item.meta[1] ?? 'Not recorded'}</td>
+                      <td className="mt-2 block leading-5 text-slate-600 md:mt-0 md:table-cell md:w-[28%] md:px-3 md:py-3 md:align-top"><span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Current condition</span>{item.condition ?? 'Not recorded'}</td>
                       <td className="mt-2 block leading-5 text-slate-700 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Recommended action</span>{item.description}</td>
                       <td className="mt-2 block md:mt-0 md:table-cell md:w-[8.5rem] md:px-3 md:py-3 md:align-top">{item.meta[0] && <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">{item.meta[0]}</span>}</td>
                     </tr>

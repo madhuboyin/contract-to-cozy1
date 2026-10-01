@@ -52,6 +52,7 @@ export interface AskGroupedListItem {
   id: string;
   title: string;
   description?: string | null;
+  condition?: string | null;
   meta: string[];
   status?: string | null;
   href?: string | null;

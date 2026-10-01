@@ -5,6 +5,7 @@ import path from 'path';
 // and the shared helpers live in their own files. These checks keep it from growing back and stop an import cycle.
 const askDir = path.join(__dirname, '..');
 const workspaceDir = path.join(askDir, 'workspace');
+const dashboardLayout = path.join(askDir, '..', '..', 'app', '(dashboard)', 'layout.tsx');
 const read = (file: string) => fs.readFileSync(file, 'utf8');
 const workspaceFiles = fs.readdirSync(workspaceDir).filter((name) => /\.tsx?$/.test(name));
 
@@ -40,5 +41,14 @@ describe('AskWorkspace split guardrails', () => {
     expect(source).toMatch(/export \{ ConversationHistoryNav \} from '\.\/workspace\/ConversationHistoryNav'/);
     expect(source).toMatch(/export \{ draftStorageKey \} from '\.\/workspace\/support'/);
     expect(read(path.join(workspaceDir, 'support.ts'))).not.toMatch(/from '\.\/(CaptureCards|ConciergeHome|ConversationHistoryNav|ExecutionCard)'/);
+  });
+
+  it('pins the full-page composer to a stable dynamic viewport without sticky positioning', () => {
+    const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
+    const layout = read(dashboardLayout);
+    expect(layout).toContain("'h-[100dvh] min-h-0 overflow-hidden");
+    expect(layout).not.toContain('lg:h-[calc(100dvh-72px)]');
+    expect(workspace).toContain("<footer className={cn('shrink-0 border-t");
+    expect(workspace).not.toContain("<footer className={cn('sticky bottom-0");
   });
 });

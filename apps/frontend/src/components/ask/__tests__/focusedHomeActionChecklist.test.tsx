@@ -23,8 +23,8 @@ const block: GroupedList = {
     { id: 'next-step', title: 'Recommended next step', count: 1, items: [{ id: 'primary', title: 'Book a general home inspection', description: 'Age-related wear is worth a look.', meta: ['medium confidence'] }] },
     { id: 'why-it-matters', title: 'Why this matters', count: 1, items: [{ id: 'why', title: 'Age Factor', description: 'Older homes accumulate small deferred-maintenance items.', meta: [] }] },
     { id: 'checklist', title: 'Age-related checklist', count: 2, items: [
-      { id: 'item-1', title: 'HVAC', description: 'Get a service inspection.', meta: ['Review soon', 'Your HVAC is 12 years old. Typical lifespan is 15–20 years.'] },
-      { id: 'item-2', title: 'Plumbing', description: 'Have a plumber identify your pipe material.', meta: ['Act now', 'Homes built 1978–1995 may have polybutylene pipes.'] },
+      { id: 'item-1', title: 'HVAC', description: 'Get a service inspection.', condition: 'Your HVAC is 12 years old. Typical lifespan is 15–20 years.', meta: ['Review soon'] },
+      { id: 'item-2', title: 'Plumbing', description: 'Have a plumber identify your pipe material.', condition: 'Homes built 1978–1995 may have polybutylene pipes.', meta: ['Act now'] },
     ] },
   ],
   actions: [],

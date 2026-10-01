@@ -444,11 +444,8 @@ export function buildFocusedHomeActionGuidance(
         id: `${action.id}-checklist-${item.id}`,
         title: item.system,
         description: item.action,
-        // The GROUPED_LIST contract already carries ordered metadata. Keeping
-        // the observed condition separate from the recommendation lets Ask
-        // present this repeated structure as a real comparison table without
-        // parsing homeowner-facing prose in the browser.
-        meta: [urgencyLabel(item.urgency), item.ageNote],
+        condition: item.ageNote,
+        meta: [urgencyLabel(item.urgency)],
         status: null,
         href: null,
       })),
