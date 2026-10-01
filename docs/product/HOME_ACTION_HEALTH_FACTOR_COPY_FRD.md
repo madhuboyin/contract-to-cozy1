@@ -767,6 +767,28 @@ repro and tests are *executed*; why two accepted items exist is *inferred* (prod
   not merged: hiding accepted work behind a suggestion, or the reverse, needs its own rule. (c) Closing the leftover duplicate work
   item is a data cleanup, not code.
 
+### 16.6 Production confirmation and follow-up (2026-10-01)
+
+**Labels:** the two production queries are *user-run, shown to me as screenshots* (I did not run them); the adapter trace is
+*code-traced*.
+
+- **Confirmed.** Property `d8636cd4-…` had two active ACCEPTED `OperationalWorkItem` rows titled "Smoke & CO Detector Check"
+  (subject PROPERTY, due 2026-09-15 and 2026-09-29), with different work keys: `…maintenance-<propertyId>-action-center-safety-smoke-co-detectors`
+  and `…maintenance-<propertyId>-risk-assessment-safety-smoke-co-detec…`.
+- **Root cause.** For a MAINTENANCE-source action, `homeActionWorkItem.adapter.ts` (`resolveObligation`, ~line 131, and ~line 221)
+  builds the obligation slug as `maintenance-${action.source.entityId}`, so two producers projecting the same detector under their
+  own source entity ids mint two durable work items, and each was accepted.
+- **Live data.** Cleanup is the product's own reversible duplicate decision (`recordDuplicateDecision`: set
+  `supersededByWorkItemId` plus a `SOURCE_RECONCILED` event), keeping the earlier-due item. Run by the user (no migration scripts
+  or direct DB changes by me). Not verified after the fact: what the superseded item's producer card does once its work item is
+  superseded.
+- **Scoped follow-up (not started): canonical maintenance obligation key for known tracked assets.** Make the maintenance
+  obligation slug for an asset that `resolveCanonicalAssetLabel` recognises (smoke & CO detectors, HVAC, water heater, …) derive
+  from the canonical asset label instead of the producer's source entity id, so both producers resolve to one work item. Needs
+  first: an audit of every producer that emits a MAINTENANCE-source action, a list of existing work keys that would change and a
+  plan for them (they would no longer match their old identity), and tests that two producers now resolve to one key while
+  different assets and different tasks stay separate.
+
 ---
 
 ## 17. Resolution Center canonical projection and identity integrity
