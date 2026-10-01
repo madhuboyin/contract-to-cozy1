@@ -266,6 +266,10 @@ Status line above (section heading "design, nothing built") is superseded: Phase
   only, with no correction mode and no reason text. This closes the open item; nothing in code changed. Revisit only if a
   reopen path is added to the guidance service (then declare a correction mode) or live use shows accidental dismissals.
 
+- **Live verification (2026-10-01, user-reported, not run by me).** The user tested continue, recall steps, skip, dismiss and
+  the viewer account on the deployed build and reported no issues. I have no logs, screenshots or per-case detail, so this is
+  a summary of their report, not evidence I executed or inspected.
+
 - **Gaps against requirement 8.** The homeowner does not choose a reason: Ask sends `USER_SKIPPED` (and no dismiss reason), the
   same as the page's own button. A chosen-reason or free-text field would need the edit-confirmation route per operation and was
   left out. Not exercised against a database or browser; the journey service, step resolver and models were stubbed.
