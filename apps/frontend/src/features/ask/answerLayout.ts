@@ -16,11 +16,12 @@ const WIDE_BLOCK_TYPES = new Set<AskPresentationBlock['type']>([
  */
 export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
   return blocks.some((block) => WIDE_BLOCK_TYPES.has(block.type)
+    || (block.type === 'PRIORITY_LIST' && block.items.length > 1)
     || (block.type === 'GROUPED_LIST' && Boolean(block.presentation)))
     ? 'WIDE'
     : 'STANDARD';
 }
 
 export function askAnswerWidthClass(width: AskAnswerWidth): string {
-  return width === 'WIDE' ? 'w-full max-w-[1140px]' : 'w-full max-w-[920px]';
+  return width === 'WIDE' ? 'w-full max-w-[1140px]' : 'w-full max-w-[1080px]';
 }

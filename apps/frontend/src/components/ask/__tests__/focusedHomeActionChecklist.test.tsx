@@ -23,8 +23,8 @@ const block: GroupedList = {
     { id: 'next-step', title: 'Recommended next step', count: 1, items: [{ id: 'primary', title: 'Book a general home inspection', description: 'Age-related wear is worth a look.', meta: ['medium confidence'] }] },
     { id: 'why-it-matters', title: 'Why this matters', count: 1, items: [{ id: 'why', title: 'Age Factor', description: 'Older homes accumulate small deferred-maintenance items.', meta: [] }] },
     { id: 'checklist', title: 'Age-related checklist', count: 2, items: [
-      { id: 'item-1', title: 'HVAC', description: 'Your HVAC is 12 years old. Typical lifespan is 15–20 years. Get a service inspection.', meta: ['Review soon'] },
-      { id: 'item-2', title: 'Plumbing', description: 'Homes built 1978–1995 may have polybutylene pipes. Have a plumber identify your pipe material.', meta: ['Act now'] },
+      { id: 'item-1', title: 'HVAC', description: 'Get a service inspection.', meta: ['Review soon', 'Your HVAC is 12 years old. Typical lifespan is 15–20 years.'] },
+      { id: 'item-2', title: 'Plumbing', description: 'Have a plumber identify your pipe material.', meta: ['Act now', 'Homes built 1978–1995 may have polybutylene pipes.'] },
     ] },
   ],
   actions: [],
@@ -49,11 +49,16 @@ test('the checklist section renders inline alongside the existing next-step and 
   expect(screen.getByText('Review soon')).toBeInTheDocument();
   expect(screen.getByText('Act now')).toBeInTheDocument();
   expect(screen.getByText(/Your HVAC is 12 years old/)).toBeInTheDocument();
+  expect(screen.getByRole('table', { name: 'Age-related checklist' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Current condition' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Recommended action' })).toBeInTheDocument();
   // Existing sections are unaffected by the addition.
   expect(screen.getByText('Book a general home inspection')).toBeInTheDocument();
   expect(screen.queryByText(/Older homes accumulate/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'View details' }));
   expect(screen.getByText(/Older homes accumulate/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Hide details' })).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.queryByRole('button', { name: /Close details/ })).not.toBeInTheDocument();
   // No redundant CTA back to the page whose content is already inline.
   expect(screen.queryByRole('link', { name: /See age-related checklist/ })).not.toBeInTheDocument();
 });

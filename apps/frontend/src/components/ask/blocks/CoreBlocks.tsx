@@ -29,7 +29,7 @@ function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: '
   const headline = block.headline?.trim() || block.title;
   const supportLine = declared ? block.supportLine?.trim() || null : block.body;
   return (
-    <section data-calm-summary="" className={CALM_TONE_RULE[block.tone]}>
+    <section data-calm-summary="" className={cn('max-w-[800px]', CALM_TONE_RULE[block.tone])}>
       <h3 className="font-display text-[22px] font-medium leading-snug tracking-[-0.01em] text-slate-950 sm:text-[26px]">{headline}</h3>
       {supportLine && <p className={cn('mt-1 whitespace-pre-wrap text-sm leading-6', declared ? 'text-slate-500' : 'text-slate-700')}>{supportLine}</p>}
       {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}

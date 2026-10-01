@@ -138,6 +138,8 @@ test('Group B health-factor checklist renders inline instead of only navigating'
   const ageChecklistSection = ageFocused.sections.find((section) => section.id === 'checklist');
   assert.ok(ageChecklistSection, 'age-factor checklist section should be present');
   assert.ok(ageChecklistSection.items.length > 0);
+  assert.equal(ageChecklistSection.items[0].meta.length, 2, 'urgency and observed condition stay separately renderable');
+  assert.ok(ageChecklistSection.items[0].description, 'recommendation remains the row description');
   assert.equal(ageResult.suppressSkillHandoff, true, 'generic maintenance handoff must not be offered for a focused action');
   assert.deepEqual(ageFocused.actions, [], 'no redundant CTA back to the page whose content is already inline');
 

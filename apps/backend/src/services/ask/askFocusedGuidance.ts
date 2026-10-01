@@ -443,8 +443,12 @@ export function buildFocusedHomeActionGuidance(
       items: checklist.items.map((item) => ({
         id: `${action.id}-checklist-${item.id}`,
         title: item.system,
-        description: `${item.ageNote} ${item.action}`,
-        meta: [urgencyLabel(item.urgency)],
+        description: item.action,
+        // The GROUPED_LIST contract already carries ordered metadata. Keeping
+        // the observed condition separate from the recommendation lets Ask
+        // present this repeated structure as a real comparison table without
+        // parsing homeowner-facing prose in the browser.
+        meta: [urgencyLabel(item.urgency), item.ageNote],
         status: null,
         href: null,
       })),
