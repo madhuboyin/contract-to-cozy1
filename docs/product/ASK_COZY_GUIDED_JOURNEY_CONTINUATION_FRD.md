@@ -388,3 +388,30 @@ is *code-traced*; the tests are *executed*.
   because Ask cannot record its proof yet. Ended journeys and the journey list keep "Open Guidance Overview". No target or
   behaviour change. Not browser-verified.
 - **Still true.** Leaving Ask for this step is by design until product defines the step's proof and an Ask write exists (§14).
+
+## 16. `estimate_uninsured_cost` evaluated for IN_ASK: rejected, stays NAVIGATE (decision 2026-10-01)
+
+**Labels:** *code-traced*; nothing run. Evaluated after product proposed the proof rule "a scoped estimate for the journey's
+property, item, step and service category was generated and explicitly confirmed by the homeowner".
+
+- **Product mismatch, not missing wiring.** The step (`coverage_gap` journey, `toolKey: 'service-price-radar'`) promises an
+  uninsured-cost estimate. Service Price Radar does not produce one: `ServicePriceRadarService.createCheck` requires a
+  homeowner-supplied `quoteAmount` and benchmarks that quote against local prices, returning a verdict (the tool's guidance copy
+  is "Validate Price Before Hiring"). With no contractor quote there is nothing to generate.
+- **No page-side reporting to mirror.** The page sends `guidanceJourneyId`, `guidanceStepKey` and `guidanceSignalIntentFamily`
+  on check creation and the validator accepts them, but the controller and `createCheck` never use them, `ServiceRadarCheck`
+  has no journey or step columns, and nothing references `estimate_uninsured_cost`. Ask has only the read-only
+  `SERVICE_PRICE_CHECKS`; running a check is page-only.
+- **Options considered.** A: redefine the proof around benchmarking an existing quote (would silently change the journey
+  from "estimate cost" to "validate a quote"; needs an Ask create-check write, a confirm step and the shared reporting helper;
+  persisted journey/step columns would help page-side lineage and auditing but are a design choice, not proven mandatory, since
+  Ask could carry the identity in its execution/confirmation parameters and report the resulting check id). B: re-point the step
+  at a tool that estimates item-specific uncovered exposure (no existing tool clearly does, and an earlier true-cost capability
+  was rejected for that reason; it is a journey-template change). C: keep NAVIGATE.
+- **Decision: C.** `estimate_uninsured_cost` stays NAVIGATE (`service-price-radar` stays NAVIGATE in
+  `askGuidanceStepHandlers.ts`; the §15 copy already says it continues on Guidance Overview). The step is not renamed around the
+  current tool to qualify it.
+- **Future.** A true item-specific uninsured-cost estimator is a separate capability. When it exists, reassess this step against
+  the §13 selection rule without changing its intended homeowner outcome. Nothing was built; no code changed.
+- **Effect on §14.** No step qualifies for the next IN_ASK slice, now including this one. The slice list is empty until product
+  defines a step proof for a tool that actually produces the step's stated outcome.
