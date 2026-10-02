@@ -540,6 +540,7 @@ export async function maintenanceTaskCompleteResult(
 export function maintenanceUpdateAction(message: string): z.infer<typeof MaintenanceTaskUpdateInputSchema>['action'] {
   if (/\bunassign\b/i.test(message)) return 'UNASSIGN';
   if (/\bassign\b/i.test(message)) return 'ASSIGN';
+  if (/\b(?:remove|delete)\b/i.test(message)) return 'DELETE';
   if (/\b(?:archive|cancel)\b/i.test(message)) return 'ARCHIVE';
   if (/\b(?:reopen|restore)\b/i.test(message)) return 'REOPEN';
   if (/\b(?:reschedule|due date|move .{0,30}(?:to|until))\b/i.test(message)) return 'RESCHEDULE';
@@ -548,7 +549,7 @@ export function maintenanceUpdateAction(message: string): z.infer<typeof Mainten
 
 export function maintenanceUpdateSubject(message: string): string {
   return message.toLowerCase()
-    .replace(/\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore|maintenance|task|priority|due date)\b/g, ' ')
+    .replace(/\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|remove|delete|reopen|restore|maintenance|task|priority|due date)\b/g, ' ')
     .replace(/\b(?:to|on|until|for|as)\s+\d{4}-\d{2}-\d{2}\b/g, ' ')
     .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, ' ')
     .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -581,7 +582,10 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
       }], suggestions: tasks.slice(0, 3).map((task) => `Update ${task.title}`),
     };
   }
-  const action = maintenanceUpdateAction(message);
+  // Desktop's Remove is a permanent delete, which the service refuses for Action
+  // Center tasks (they can only be cancelled), so those get a cancel proposal instead.
+  const requestedAction = maintenanceUpdateAction(message);
+  const action = requestedAction === 'DELETE' && match.source === 'ACTION_CENTER' ? 'ARCHIVE' : requestedAction;
   const dueDate = extractMaintenanceDueDate(message, new Date(), 'UTC');
   const priority = /\burgent\b/i.test(message) ? MaintenanceTaskPriority.URGENT
     : /\bhigh(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.HIGH
@@ -609,7 +613,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     ...(action === 'UNASSIGN' ? { assigneeUserId: null } : {}),
   });
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  const actionLabel = { EDIT: 'update', RESCHEDULE: 'reschedule', ASSIGN: 'assign', UNASSIGN: 'unassign', ARCHIVE: 'archive', REOPEN: 'reopen' }[action];
+  const actionLabel = { EDIT: 'update', RESCHEDULE: 'reschedule', ASSIGN: 'assign', UNASSIGN: 'unassign', ARCHIVE: 'archive', REOPEN: 'reopen', DELETE: 'remove' }[action];
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'MAINTENANCE_UPDATE_CONFIRMATION_REQUIRED', contextVersion: maintenanceTaskVersion(match),
     // MAINT-005/A12: carried to confirm-time so the source list (if this
@@ -619,7 +623,9 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: `Review this ${actionLabel}`, body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${maintenanceHref}&taskId=${encodeURIComponent(match.id)}`, style: 'SECONDARY' }] }],
     confirmation: {
       confirmationId: `maintenance-update-${match.id}-1`, version: 1, title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${match.title}?`,
-      description: 'This command writes through the canonical Maintenance service and preserves downstream reconciliation.',
+      description: action === 'DELETE'
+        ? 'This permanently deletes the task from the shared Maintenance record. It cannot be undone.'
+        : 'This command writes through the canonical Maintenance service and preserves downstream reconciliation.',
       // MAINT-006: reschedule must show current vs. proposed date, plus any
       // recurrence consequence -- a task holds one mutable nextDueDate (no
       // separate occurrence record, see FRD §18's MAINT-007 resolution), so
@@ -640,7 +646,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
       // needs. `editAskConfirmation` below is the only place that ever
       // rebuilds this into a new version.
       editableFields: action === 'RESCHEDULE' ? [{ key: 'nextDueDate', label: 'New due date', type: 'DATE' as const, value: dueDate ?? '' }] : [],
-      confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Maintenance record.`, expiresAt: expiresAt.toISOString(),
+      confirmLabel: action === 'DELETE' ? 'Remove task' : `Confirm ${actionLabel}`, consentText: action === 'DELETE' ? 'I authorize permanently removing this task from the shared Maintenance record.' : `I authorize this ${actionLabel} of the shared Maintenance record.`, expiresAt: expiresAt.toISOString(),
     }, suggestions: [],
   };
 }
@@ -888,6 +894,11 @@ export async function maintenanceResult(
         ...(canManage ? [
           { id: 'complete', label: 'Complete', message: 'Complete this maintenance task.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_COMPLETE' },
           { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_UPDATE' },
+          // Parity with Desktop's Remove (a confirmation-gated permanent delete); Action
+          // Center tasks cannot be deleted, so theirs is a cancel.
+          task.source === 'ACTION_CENTER'
+            ? { id: 'remove', label: 'Cancel task', message: 'Cancel this maintenance task.', style: 'QUIET' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_UPDATE' }
+            : { id: 'remove', label: 'Remove task', message: 'Remove this maintenance task.', style: 'QUIET' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_UPDATE' },
         ] : []),
       ] : [],
       ...maintenanceShelfFacts({

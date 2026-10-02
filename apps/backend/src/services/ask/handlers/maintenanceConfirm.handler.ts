@@ -244,6 +244,23 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
+    if (candidate.data.action === 'DELETE') {
+      await PropertyMaintenanceTaskService.deleteTask(userId, current.id);
+      const removedResult: AskOperationResult = {
+        status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_REMOVED',
+        blocks: [{ type: 'WORKFLOW_PROGRESS', id: `maintenance-update-${current.id}`, title: 'Maintenance task removed', status: 'COMPLETED', description: 'The task was permanently removed from the shared Maintenance record.', details: [{ label: 'Task', value: current.title }, { label: 'Action', value: 'remove' }], actions: [] }],
+        confirmation: null, suggestions: ['What maintenance is pending?'],
+      };
+      const removedRefresh = await refreshAskSourceExecution(userId, execution.id, parameters);
+      if (removedRefresh.attemptedAndFailed) {
+        removedResult.blocks.push({
+          type: 'LIMITATION', id: `maintenance-list-refresh-failed-${current.id}`, title: 'Removed; list could not refresh',
+          body: 'The task was removed from the canonical Maintenance record. The list you were viewing could not refresh automatically -- ask "What maintenance is pending?" to see its current state.',
+          severity: 'CAUTION',
+        });
+      }
+      return { result: removedResult, artifactType: command.artifactType, artifactId: current.id, refreshedExecutions: removedRefresh.refreshedExecutions };
+    }
     if (candidate.data.action === 'ASSIGN' || candidate.data.action === 'UNASSIGN') {
       await householdService.assignTask(execution.propertyId, current.id, 'MAINTENANCE', candidate.data.assigneeUserId ?? null, userId);
     } else if (candidate.data.action === 'ARCHIVE') {

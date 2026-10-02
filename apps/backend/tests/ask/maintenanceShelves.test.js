@@ -108,7 +108,7 @@ test('the maintenance answer declares shelves, groups open tasks by timing, and 
   assert.equal(filter.tone, 'CRITICAL');
   assert.match(filter.timingLabel, /^Was due /);
   assert.equal(filter.amountLabel, 'Est. $25');
-  assert.deepEqual(filter.actions.map((action) => action.id), ['why-important', 'complete', 'reschedule']);
+  assert.deepEqual(filter.actions.map((action) => action.id), ['why-important', 'complete', 'reschedule', 'remove']);
   assert.equal(list.sections[1].items[0].tone, 'CAUTION');
   assert.equal(list.sections[3].items[0].timingLabel, 'No due date');
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
@@ -157,5 +157,5 @@ test('the answer checker passes the shelves answer through intact: chips, patter
   const list = checked.result.blocks.find((block) => block.id === 'maintenance-groups');
   assert.deepEqual(list.presentation, { pattern: 'SHELVES' });
   assert.deepEqual(list.sections.map((section) => section.id), ['overdue', 'due-soon']);
-  assert.deepEqual(list.sections[0].items[0].actions.map((action) => action.id), ['why-important', 'complete', 'reschedule']);
+  assert.deepEqual(list.sections[0].items[0].actions.map((action) => action.id), ['why-important', 'complete', 'reschedule', 'remove']);
 });

@@ -43,7 +43,7 @@ export type MaintenanceCompletionWorkflowInput = z.infer<typeof MaintenanceCompl
 
 export const MaintenanceTaskUpdateInputSchema = z.object({
   taskId: z.string().trim().min(1).max(160),
-  action: z.enum(['EDIT', 'RESCHEDULE', 'ASSIGN', 'UNASSIGN', 'ARCHIVE', 'REOPEN']),
+  action: z.enum(['EDIT', 'RESCHEDULE', 'ASSIGN', 'UNASSIGN', 'ARCHIVE', 'REOPEN', 'DELETE']),
   title: z.string().trim().min(3).max(160).optional(),
   priority: z.nativeEnum(MaintenanceTaskPriority).optional(),
   nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),

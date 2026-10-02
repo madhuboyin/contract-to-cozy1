@@ -107,6 +107,20 @@ test.each([
   expect(view().detailTarget).toBeNull();
 });
 
+test('the Remove task drawer action sends the exact task as a record mutation and closes the drawer', async () => {
+  jest.spyOn(api, 'getMaintenanceTask').mockResolvedValueOnce(liveTask('PENDING'));
+  const onItemAction = jest.fn();
+  const base = maintenanceBlock();
+  const remove = { id: 'remove', label: 'Remove task', message: 'Remove this maintenance task.', style: 'QUIET' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'MAINTENANCE_TASK_UPDATE' };
+  const block = { ...base, sections: base.sections.map((section) => ({ ...section, items: section.items.map((item) => ({ ...item, actions: [...(item.actions ?? []), remove] })) })) };
+  render(<Harness block={block} onItemAction={onItemAction} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Replace HVAC filter/ }));
+  const sheet = await screen.findByRole('dialog');
+  fireEvent.click(await within(sheet).findByRole('button', { name: 'Remove task' }));
+  expect(onItemAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'filter', 'Remove this maintenance task.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+});
+
 test('Escape and the browser Back button both close the sheet and clear the open detail', async () => {
   jest.spyOn(api, 'getMaintenanceTask').mockResolvedValue(liveTask('PENDING'));
   render(<Harness block={maintenanceBlock()} />);

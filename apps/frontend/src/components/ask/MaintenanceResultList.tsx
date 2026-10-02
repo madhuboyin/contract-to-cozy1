@@ -127,7 +127,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
           <div><dt className="text-xs text-slate-500">Source</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.source)}</dd></div>
         </dl>
         <p className="mt-3 text-xs text-slate-500">Current canonical record · updated {formatDate(task.updatedAt)}</p>
-        {actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{actions.map((action) => <button key={action.id} type="button" disabled={disabled} className={cn('min-h-10 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-700 text-white' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}</div>}
+        {actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{actions.map((action) => <button key={action.id} type="button" disabled={disabled} className={cn('min-h-10 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-700 text-white' : action.id === 'remove' ? 'border border-red-200 bg-white text-red-700' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}</div>}
       </>}
     </aside>
   );
