@@ -832,7 +832,7 @@ const PROPERTY_COMPLETENESS_PATTERNS = [
 export function isPropertyCompletenessRequest(message: string): boolean {
   return PROPERTY_COMPLETENESS_PATTERNS.some((pattern) => pattern.test(message));
 }
-const homeActionsPattern = /\b(?:what should i do next|what should i do before closing|what needs (?:my |our )?(?:attention|attension)|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what (?:should i|i should) plan|anything urgent|urgent home action|where should i start)\b/i;
+const homeActionsPattern = /\b(?:what should i do next|what should i do before closing|what (?:else )?needs (?:my |our )?(?:attention|attension)|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what (?:should i|i should) plan|anything urgent|urgent home action|where should i start)\b/i;
 // Phase 3 §24.5: a natural observation question about a registered property
 // component reads normalized derived intelligence. Detail/history/inventory
 // verbs remain owned by INVENTORY_LOOKUP below.

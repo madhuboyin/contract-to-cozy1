@@ -18,7 +18,17 @@ export const AskBlockActionContext = createContext<{
   invoke: (action: AskAction) => void;
 } | null>(null);
 
-export function AskContextLink({ href, ...props }: Omit<ComponentProps<typeof Link>, 'href'> & { href: string }) {
+// CAPITAL_RESERVE_PLAN already renders both canonical reads inside Ask. Keep
+// legacy and freshly-generated tool links in the conversation by targeting
+// those result sections instead of reopening the desktop tool workspace.
+function inlineAskTarget(href: string): string | null {
+  const path = href.split(/[?#]/, 1)[0];
+  if (/^\/dashboard\/properties\/[^/]+\/tools\/capital-timeline\/?$/.test(path)) return 'capital-timeline-table';
+  if (/^\/dashboard\/properties\/[^/]+\/tools\/reserve-fund\/?$/.test(path)) return 'reserve-allocations';
+  return null;
+}
+
+export function AskContextLink({ href, onClick, ...props }: Omit<ComponentProps<typeof Link>, 'href'> & { href: string }) {
   const askReturnHref = useContext(AskActionReturnContext);
   const controls = useContext(ResultViewContext);
   let destination = href;
@@ -34,8 +44,17 @@ export function AskContextLink({ href, ...props }: Omit<ComponentProps<typeof Li
     if (controls.view.selectedTaskId && !url.searchParams.has('taskId')) url.searchParams.set('taskId', controls.view.selectedTaskId);
     destination = `${url.pathname}${url.search}${url.hash}`;
   }
+  const inlineTarget = inlineAskTarget(destination);
   const contextualHref = askReturnHref ? addAskReturnContext(destination, askReturnHref) : destination;
-  return <Link href={contextualHref} {...props} />;
+  return <Link href={contextualHref} {...props} onClick={(event) => {
+    onClick?.(event);
+    if (event.defaultPrevented || !inlineTarget || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.currentTarget.target === '_blank') return;
+    const target = document.getElementById(inlineTarget);
+    if (!target) return;
+    event.preventDefault();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#${inlineTarget}`);
+    target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }} />;
 }
 
 export function ActionLink({ action }: { action: AskAction }) {

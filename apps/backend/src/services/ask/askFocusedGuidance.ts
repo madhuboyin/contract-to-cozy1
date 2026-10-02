@@ -12,6 +12,7 @@ import { isAppliancesInsight } from './healthGapCapture';
 export const INVENTORY_ADD_ACTION_MESSAGE = 'Add an item to my home inventory.';
 
 export type HomeActionPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
+type FocusedAskRouting = { operationId: AskOperationId; message: string; entityType?: string; entityId?: string };
 
 /** Keeps Ask landing section prompts aligned with the dashboard's canonical partitions. */
 export function homeActionPriorityFilter(message: string): HomeActionPriority[] | null {
@@ -68,7 +69,7 @@ function propertyToolPath(tool: string): RegExp {
   return new RegExp(`^/dashboard/properties/[^/]+/tools/${tool}$`);
 }
 
-function resolveGroupAAskRouting(href: string | undefined): { operationId: AskOperationId; message: string } | null {
+function resolveGroupAAskRouting(href: string | undefined): FocusedAskRouting | null {
   if (!href) return null;
   const parsed = parseHomeActionHref(href);
   if (!parsed) return null;
@@ -84,6 +85,15 @@ function resolveGroupAAskRouting(href: string | undefined): { operationId: AskOp
   }
   if (propertyToolPath('coverage-intelligence').test(pathname) && params.get('stage') === 'questions') {
     return { operationId: 'COVERAGE_GAPS', message: 'What coverage gaps do I have?' };
+  }
+  const itemCoverage = pathname.match(/^\/dashboard\/properties\/[^/]+\/inventory\/items\/([^/]+)\/coverage$/);
+  if (itemCoverage) {
+    return {
+      operationId: 'COVERAGE_GAPS',
+      message: 'Review coverage options for this item.',
+      entityType: 'INVENTORY_ITEM',
+      entityId: decodeURIComponent(itemCoverage[1]),
+    };
   }
   if (pathname === '/dashboard/home-event-radar') {
     return { operationId: 'HOME_EVENT_RADAR_FEED', message: 'Show my Home Event Radar feed' };
@@ -172,11 +182,11 @@ const REPAIR_REPLACE_LINEAGE_PREFIXES = ['repair-replace:', 'appliance-repair-re
 
 function resolveGroupDReplacementGuidanceRouting(
   action: RankedHomeAction,
-): { operationId: AskOperationId; entityId: string; message: string } | null {
+): FocusedAskRouting | null {
   if (!REPAIR_REPLACE_LINEAGE_PREFIXES.some((prefix) => action.lineageId.startsWith(prefix))) return null;
   const subject = action.presentation?.subject;
   if (!subject || subject.kind !== 'INVENTORY_ITEM') return null;
-  return { operationId: 'REPLACEMENT_GUIDANCE', entityId: subject.id, message: `Should I repair or replace ${subject.label}?` };
+  return { operationId: 'REPLACEMENT_GUIDANCE', entityType: 'INVENTORY_ITEM', entityId: subject.id, message: `Should I repair or replace ${subject.label}?` };
 }
 
 // Group E (gap audit §17; FRD v1.169): accepted Operational Work. appendAcceptedOperationalWork
@@ -234,7 +244,7 @@ export function isPropertyContextCaptureAction(action: RankedHomeAction): boolea
 // only routing was missing, so this is a Group-A-style fix, not new-operation work. Recall review
 // had no covering operation at all, so RECALL_REVIEW (recallReview.handler.ts) was built read-only;
 // confirm/dismiss/resolve mutations are a deferred follow-up noted in that file.
-function resolveGroupBRecordReviewRouting(action: RankedHomeAction): { operationId: AskOperationId; message: string } | null {
+function resolveGroupBRecordReviewRouting(action: RankedHomeAction): FocusedAskRouting | null {
   if (action.lineageId.startsWith('recall:')) {
     return { operationId: 'RECALL_REVIEW', message: 'Show my open recall matches' };
   }
@@ -251,7 +261,7 @@ function resolveGroupBRecordReviewRouting(action: RankedHomeAction): { operation
 // Group D (guided journey continuation, Phase 1; FRD ASK_COZY_GUIDED_JOURNEY_CONTINUATION_FRD section 3.5): an action
 // tied to a guided journey continues it in Ask through GUIDANCE_JOURNEY_CONTINUE, a read of that one journey. It
 // completes nothing (steps finish in their tools), so the page link stays as the secondary way in.
-function resolveGroupDJourneyRouting(action: RankedHomeAction): { operationId: AskOperationId; entityType: string; entityId: string; message: string } | null {
+function resolveGroupDJourneyRouting(action: RankedHomeAction): FocusedAskRouting | null {
   if (!action.relatedJourneyId) return null;
   return { operationId: 'GUIDANCE_JOURNEY_CONTINUE', entityType: 'GUIDANCE_JOURNEY', entityId: action.relatedJourneyId, message: 'Continue this guided journey.' };
 }
@@ -333,6 +343,9 @@ export function buildFocusedHomeActionGuidance(
     : null;
   const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
   const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && !policyConflictSection && !applianceAddAction && Boolean(captureRequest);
+  const routingEntity = routing?.entityType && routing.entityId
+    ? { entityType: routing.entityType, entityId: routing.entityId }
+    : {};
   const primaryAction = routing
     ? {
       id: `home-action-primary-${action.id}`,
@@ -340,8 +353,7 @@ export function buildFocusedHomeActionGuidance(
       interactionType: 'START_WORKFLOW' as const,
       message: routing.message,
       operationId: routing.operationId,
-      ...(groupDRouting ? { entityType: 'INVENTORY_ITEM', entityId: groupDRouting.entityId } : {}),
-      ...(groupDJourneyRouting ? { entityType: groupDJourneyRouting.entityType, entityId: groupDJourneyRouting.entityId } : {}),
+      ...routingEntity,
       style: 'PRIMARY' as const,
     }
     : {

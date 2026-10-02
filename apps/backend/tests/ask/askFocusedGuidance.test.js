@@ -97,6 +97,7 @@ test('Group A home-action CTAs route to the matching Ask operation instead of na
     { href: '/dashboard/warranties', operationId: 'WARRANTY_LOOKUP' },
     { href: '/dashboard/properties/property-1/inventory?tab=coverage&highlight=item-1', operationId: 'WARRANTY_LOOKUP' },
     { href: '/dashboard/properties/property-1/tools/coverage-intelligence?stage=questions', operationId: 'COVERAGE_GAPS' },
+    { href: '/dashboard/properties/property-1/inventory/items/oven-range-1/coverage?from=home-action', operationId: 'COVERAGE_GAPS', entityId: 'oven-range-1' },
     { href: '/dashboard/home-event-radar?propertyId=property-1', operationId: 'HOME_EVENT_RADAR_FEED' },
     { href: '/dashboard/properties/property-1/tools/sell-hold-rent', operationId: 'SELL_HOLD_RENT_ANALYSIS' },
     { href: '/dashboard/properties/property-1/tools/mortgage-refinance-radar', operationId: 'REFINANCE_ANALYSIS' },
@@ -105,7 +106,7 @@ test('Group A home-action CTAs route to the matching Ask operation instead of na
     { href: '/dashboard/seasonal?propertyId=property-1', operationId: 'MAINTENANCE_STATUS' },
   ];
 
-  for (const { href, operationId } of cases) {
+  for (const { href, operationId, entityId } of cases) {
     const action = { ...weatherAction(), primaryCta: { label: 'Open destination', href } };
     const result = buildFocusedHomeActionGuidance(action, 'context-v1');
     const focused = result.blocks.find((block) => block.id === 'focused-home-action-guidance');
@@ -114,6 +115,10 @@ test('Group A home-action CTAs route to the matching Ask operation instead of na
     assert.equal(primaryAction.operationId, operationId, `${href} should route to ${operationId}`);
     assert.equal(primaryAction.href, undefined, `${href} should not also carry a navigation href`);
     assert.ok(primaryAction.message && primaryAction.message.length > 0, `${href} should carry a homeowner-visible message`);
+    if (entityId) {
+      assert.equal(primaryAction.entityType, 'INVENTORY_ITEM');
+      assert.equal(primaryAction.entityId, entityId);
+    }
   }
 
   // Seasonal checklist must include a seasonal keyword so MAINTENANCE_STATUS's internal

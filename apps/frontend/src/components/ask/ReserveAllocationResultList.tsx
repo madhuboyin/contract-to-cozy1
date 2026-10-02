@@ -31,6 +31,14 @@ function formatDate(value: string | null | undefined): string {
   return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString();
 }
 
+function fundingCells(description: string | null | undefined): { monthly: string; target: string } {
+  if (!description) return { monthly: 'Not recorded', target: 'Not recorded' };
+  const match = description.match(/^(.+?)\/month\s+toward\s+(.+)$/i);
+  return match
+    ? { monthly: `${match[1]}/month`, target: match[2] }
+    : { monthly: description, target: 'Not recorded' };
+}
+
 // Same shape of exception as HouseholdMemberDetail/WarrantyDetail: the reserve-fund line-items endpoint
 // (reserveFundApi.listLineItems) has no per-line-item GET, only a list, so a retired-and-cleared or otherwise
 // removed line item is a data absence, never an HTTP 404 -- there is no shared-status ambiguity to resolve the
@@ -143,7 +151,7 @@ export function ReserveAllocationResultList({ block, propertyId, onAccessLost, l
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-reserve-allocation-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  return <section id={block.id} className="scroll-mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
@@ -151,19 +159,33 @@ export function ReserveAllocationResultList({ block, propertyId, onAccessLost, l
     {block.sections.map((section) => <div key={section.id} className="border-b border-slate-100 p-4">
       <h4 className="font-semibold">{section.title} · {section.count}</h4>
       {section.items.length === 0 && <p className="mt-2 text-sm text-slate-500">No reserve allocations are recorded yet.</p>}
-      <ul className="mt-3 space-y-3">
-        {section.items.map((item) => {
-          const selected = controls?.view.selectedTaskId === item.id;
-          return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <button type="button" data-reserve-allocation-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`reserve-allocation-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
-              {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ')}</span>}
-            </div>
-            {item.description && <p className="mt-1 text-xs text-slate-600">{item.description}</p>}
-            {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-600">{item.meta.join(' · ')}</p>}
-          </li>;
-        })}
-      </ul>
+      {section.items.length > 0 && <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+          <caption className="sr-only">{section.title}</caption>
+          <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <tr>
+              <th scope="col" className="px-4 py-3">Item</th>
+              <th scope="col" className="px-4 py-3">Monthly funding</th>
+              <th scope="col" className="px-4 py-3">Target</th>
+              <th scope="col" className="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {section.items.map((item) => {
+              const selected = controls?.view.selectedTaskId === item.id;
+              const funding = fundingCells(item.description);
+              return <tr key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('outline-offset-2', selected ? 'bg-teal-50' : 'bg-white hover:bg-slate-50/70')}>
+                <th scope="row" className="px-4 py-3 font-medium">
+                  <button type="button" data-reserve-allocation-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`reserve-allocation-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
+                </th>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-700">{funding.monthly}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-700">{funding.target}</td>
+                <td className="px-4 py-3"><span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{label(item.status ?? item.meta[0])}</span></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>}
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more allocations are available through the full Reserve Fund page.</p>}
     </div>)}
     {detailId && detailItem && <ReserveAllocationDetail key={detailId} lineItemId={detailId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />}

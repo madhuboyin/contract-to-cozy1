@@ -30,18 +30,19 @@ function coverageContextLabel(value: string): string {
   return labels[value] ?? value.toLowerCase().replace(/_/g, ' ');
 }
 
-async function coverageResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function coverageResult(userId: string, propertyId: string, message: string, inventoryItemId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const reviewHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&smart=gaps`;
   const allItems = await getCoverageReviewItems(propertyId);
   const expiryFocus = /\b(?:expire|expiring|expiry|renewal)\b/i.test(message);
   const evidenceFocus = /\b(?:evidence|document|proof)\b/i.test(message);
   const largestFocus = /\b(?:largest|highest|biggest|most exposure|expensive|high[ -]?value)\b/i.test(message);
+  const scopedItems = inventoryItemId ? allItems.filter((item) => item.inventoryItemId === inventoryItemId) : allItems;
   const focused = (expiryFocus
-    ? allItems.filter((item) => item.group === 'EXPIRED' || item.group === 'EXPIRING_SOON')
+    ? scopedItems.filter((item) => item.group === 'EXPIRED' || item.group === 'EXPIRING_SOON')
     : evidenceFocus
-      ? allItems.filter((item) => item.group === 'EVIDENCE_MISSING' || item.group === 'COVERAGE_UNCLEAR')
-      : allItems)
+      ? scopedItems.filter((item) => item.group === 'EVIDENCE_MISSING' || item.group === 'COVERAGE_UNCLEAR')
+      : scopedItems)
     .sort((a, b) => largestFocus
       ? (b.exposureCents ?? -1) - (a.exposureCents ?? -1)
       : (a.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER));
@@ -350,6 +351,11 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
   };
 }
 
-registerCapabilityHandler('coverage.review', async (envelope) => coverageResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('coverage.review', async (envelope) => coverageResult(
+  envelope.userId,
+  envelope.propertyId!,
+  envelope.message,
+  envelope.launchContext?.entityType === 'INVENTORY_ITEM' ? envelope.launchContext.entityId : null,
+));
 
 registerCapabilityHandler('coverage.comparison-status', async (envelope) => coverageComparisonStatusResult(envelope.userId, envelope.propertyId!));

@@ -43,6 +43,12 @@ test('the Plan ahead landing copy also routes when typed without launch context'
   assert.equal(routing.requiresClarification, false);
 });
 
+test('the focused-action follow-up routes back to the Home Actions feed without clarification', () => {
+  const routing = resolveAskRoutingCascade('What else needs my attention?');
+  assert.equal(routing.operation.operationId, 'HOME_ACTIONS');
+  assert.equal(routing.requiresClarification, false);
+});
+
 test('populated and empty canonical Home Actions pass initial and clarified trust', () => {
   for (const status of ['ANSWERED', 'READY_WITH_LIMITATIONS']) {
     for (const populated of [true, false]) {

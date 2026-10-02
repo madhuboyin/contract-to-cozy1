@@ -38,6 +38,27 @@ function Harness({ timeline, onAccessLost = () => {} }: { timeline: Timeline; on
 
 beforeEach(() => { window.sessionStorage.clear(); jest.clearAllMocks(); });
 
+test('capital-plan navigation stays in Ask and capital windows use inline detail instead of Open record', () => {
+  window.history.replaceState({}, '', '/dashboard/ask?propertyId=home');
+  Element.prototype.scrollIntoView = jest.fn();
+  const summary: Extract<AskPresentationBlock, { type: 'SUMMARY' }> = {
+    type: 'SUMMARY', id: 'capital-reserve-summary', title: 'Capital plan', body: 'Current plan.', tone: 'DEFAULT',
+    actions: [{ id: 'open-timeline', label: 'Open capital timeline', href: '/dashboard/properties/home/tools/capital-timeline', style: 'PRIMARY' }],
+  };
+  const { unmount } = render(<><BlockView block={summary} executionId="execution" propertyId="home" itemActionsDisabled={false} onItemAction={() => {}} onFilterClick={() => {}} onCollectionPage={() => {}} onAccessLost={() => {}} /><div id="capital-timeline-table" /></>);
+  fireEvent.click(screen.getByRole('link', { name: /Open capital timeline/ }));
+  expect(window.location.pathname).toBe('/dashboard/ask');
+  expect(window.location.hash).toBe('#capital-timeline-table');
+  expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  unmount();
+
+  render(<Harness timeline={block()} />);
+  expect(document.getElementById('capital-timeline-table')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Open record' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'List' }));
+  expect(screen.queryByRole('link', { name: /Water heater|Asphalt roof/ })).not.toBeInTheDocument();
+});
+
 test('on the track, the selected window opens its live canonical detail, re-read from the capital timeline', async () => {
   mockedGet.mockResolvedValueOnce(analysis([canonical()]));
   const { container } = render(<Harness timeline={block()} />);

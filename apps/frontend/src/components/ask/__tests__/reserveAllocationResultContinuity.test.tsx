@@ -50,13 +50,27 @@ function canonicalLineItem(overrides: Partial<ReserveFundLineItemDTO> = {}): Res
 
 beforeEach(() => { window.sessionStorage.clear(); jest.clearAllMocks(); });
 
+test('funding plan renders as a table with distinct funding fields', () => {
+  render(<List response={execution()} />);
+  expect(screen.getByRole('table', { name: 'Funding plan' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Item' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Monthly funding' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Target' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
+  const row = screen.getByRole('row', { name: /Water heater \$25\/month \$1,200 Active/ });
+  expect(row).toBeInTheDocument();
+});
+
 test('reserve allocation titles dispatch through the registry and open canonical allocation detail inline', async () => {
   window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
+  Element.prototype.scrollIntoView = jest.fn();
   mockedListLineItems.mockResolvedValueOnce([canonicalLineItem()]);
 
   render(<BlockView block={block} executionId="execution" propertyId="home" itemActionsDisabled={false} onItemAction={() => {}} onFilterClick={() => {}} onCollectionPage={() => {}} onAccessLost={() => {}} />);
   expect(screen.queryByRole('link', { name: 'Water heater' })).not.toBeInTheDocument();
-  expect(screen.getByRole('link', { name: /Open Reserve Fund/ })).toHaveAttribute('href', '/dashboard/properties/home/tools/reserve-fund');
+  fireEvent.click(screen.getByRole('link', { name: /Open Reserve Fund/ }));
+  expect(window.location.pathname).toBe('/dashboard/ask');
+  expect(window.location.hash).toBe('#reserve-allocations');
   fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
 
   await waitFor(() => expect(screen.getByText('Typical service life for this water heater type is 10-12 years; it was installed 11 years ago.')).toBeInTheDocument());
@@ -69,7 +83,7 @@ test('detail shows target cost, allocated monthly/balance, planning window, and 
   render(<List response={execution()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
   await waitFor(() => expect(screen.getByText(/Typical service life/)).toBeInTheDocument());
-  expect(screen.getByText('$1,200')).toBeInTheDocument();
+  expect(screen.getAllByText('$1,200')).toHaveLength(2);
   expect(screen.getByText('$25')).toBeInTheDocument();
   expect(screen.getByText('$450')).toBeInTheDocument();
   // Loose date match -- toLocaleDateString() is timezone-sensitive enough (UTC midnight can shift a full

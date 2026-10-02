@@ -76,7 +76,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
     </div>
   );
   if (layout === 'LIST' || !points) {
-    return <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}
+    return <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}
       <TimelineList block={block} onOpenDetail={hasWindowDetail ? openDetail : undefined} openDetailId={detailId} />
       {windowDetail}
     </section>;
@@ -99,7 +99,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline">
+    <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline">
       {heading}
       {categories.length > 1 && (
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Show types">
@@ -149,7 +149,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
             <ItemActionButtons className="mt-2" item={selected.item} actions={selected.item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />
             {hasWindowDetail && <button type="button" data-ask-detail-trigger={selected.item.id} data-ask-detail-block={block.id} aria-expanded={detailId === selected.item.id} onClick={() => openDetail(selected.item.id)}
               className="mt-2 mr-3 min-h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Details<span className="sr-only"> for {selected.item.label}</span></button>}
-            {selected.item.href && <AskContextLink href={selected.item.href} className="mt-2 inline-block text-xs font-semibold text-teal-700 hover:underline">Open record</AskContextLink>}
+            {selected.item.href && !hasWindowDetail && <AskContextLink href={selected.item.href} className="mt-2 inline-block text-xs font-semibold text-teal-700 hover:underline">Open record</AskContextLink>}
           </div>
           <div className="flex shrink-0 gap-1">
             <button type="button" onClick={() => step(-1)} aria-label="Previous event" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200"><ChevronLeft className="h-4 w-4" /></button>

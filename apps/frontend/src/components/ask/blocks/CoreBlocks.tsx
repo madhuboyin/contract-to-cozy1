@@ -178,7 +178,7 @@ export function TimelineList({ block, onOpenDetail, openDetailId }: {
         return (
           <li key={item.id} className="relative pb-4 before:absolute before:-left-[1.34rem] before:top-1 before:h-2.5 before:w-2.5 before:rounded-full before:bg-teal-700">
             <div className="flex flex-wrap items-center gap-2">
-              {item.href ? <AskContextLink href={item.href} className="font-semibold text-slate-900 hover:text-teal-700">{item.label}</AskContextLink> : <span className="font-semibold text-slate-900">{item.label}</span>}
+              {item.href && !onOpenDetail ? <AskContextLink href={item.href} className="font-semibold text-slate-900 hover:text-teal-700">{item.label}</AskContextLink> : <span className="font-semibold text-slate-900">{item.label}</span>}
               {dateLabel && <span className="text-xs text-slate-500">{dateLabel}</span>}
               {item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{item.status}</span>}
             </div>
