@@ -418,9 +418,14 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled, skillTelemetryTrace)
       : rawResult;
+    // The semantic layer guards against routing the wrong operation from free
+    // text; a declared item action named its operation explicitly, so a
+    // competing-operation score must not turn the clicked control into a
+    // "which request did you mean?" clarification. Deterministic checks still run.
+    const declaredOperationRan = Boolean(declaredItemActionOperationId) && operation.operationId === declaredItemActionOperationId;
     const validation = routingDecision.requiresClarification
       ? null
-      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled, language: routingDecision.language });
+      : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language });
     const result = validation?.result ?? presentedResult;
     if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
