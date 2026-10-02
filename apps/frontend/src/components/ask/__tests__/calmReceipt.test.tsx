@@ -70,6 +70,14 @@ describe('calm review and unknown outcome', () => {
     expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
   });
 
+  it('a reschedule with no date opens its date picker and blocks Confirm until a date is saved', () => {
+    const reschedule = { ...confirmation, title: 'Reschedule Chimney cleaning?', confirmLabel: 'Confirm reschedule', editableFields: [{ key: 'nextDueDate', label: 'New due date', type: 'DATE', value: '' }] };
+    card(execution({ status: 'NEEDS_CONFIRMATION', confirmation: reschedule, blocks: [] } as unknown as Partial<AskExecutionResponse>));
+    const picker = screen.getByLabelText('New due date');
+    expect(picker).toHaveAttribute('type', 'date');
+    expect(screen.getByRole('button', { name: 'Confirm reschedule' })).toBeDisabled();
+  });
+
   it('reconciles an unknown outcome with a status check, never a second execution invitation', () => {
     const { container } = card(execution({ status: 'RUNNING', confirmation, blocks: [] } as Partial<AskExecutionResponse>));
     expect(container.querySelector('[data-calm-outcome-unknown]')).toHaveTextContent('Outcome not yet known');

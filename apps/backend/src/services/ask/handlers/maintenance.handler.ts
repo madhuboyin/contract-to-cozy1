@@ -592,13 +592,13 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     ? members.find((member) => [member.user.email, member.user.firstName, `${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim()]
       .some((value) => value?.toLowerCase() === assigneeText || value?.toLowerCase().includes(assigneeText)))
     : null;
-  if ((action === 'RESCHEDULE' && !dueDate) || (action === 'ASSIGN' && !assignee) || (action === 'EDIT' && !priority)) {
+  // A reschedule with no date goes straight to the review card, whose New due date
+  // field is an empty date picker (Confirm is blocked until one is chosen).
+  if ((action === 'ASSIGN' && !assignee) || (action === 'EDIT' && !priority)) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'MAINTENANCE_UPDATE_VALUE_REQUIRED',
       ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', `What should change for ${match.title}?`),
-      blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'RESCHEDULE'
-        ? 'Include a date such as 2026-10-15.'
-        : action === 'ASSIGN' ? 'Name an active household member or use their email address.' : 'Specify the new priority: low, medium, high, or urgent.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'ASSIGN' ? 'Name an active household member or use their email address.' : 'Specify the new priority: low, medium, high, or urgent.', tone: 'CAUTION', actions: [] }],
       suggestions: action === 'ASSIGN' ? members.slice(0, 3).map((member) => `Assign ${match.title} to ${member.user.email}`) : [],
     };
   }
@@ -639,7 +639,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
       // CONF-002/CONF-003: the only editable-field case maintenance v1
       // needs. `editAskConfirmation` below is the only place that ever
       // rebuilds this into a new version.
-      editableFields: action === 'RESCHEDULE' && dueDate ? [{ key: 'nextDueDate', label: 'New due date', type: 'DATE' as const, value: dueDate }] : [],
+      editableFields: action === 'RESCHEDULE' ? [{ key: 'nextDueDate', label: 'New due date', type: 'DATE' as const, value: dueDate ?? '' }] : [],
       confirmLabel: `Confirm ${actionLabel}`, consentText: `I authorize this ${actionLabel} of the shared Maintenance record.`, expiresAt: expiresAt.toISOString(),
     }, suggestions: [],
   };

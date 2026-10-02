@@ -213,6 +213,11 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
       (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
       throw error;
     }
+    if (candidate.data.action === 'RESCHEDULE' && !candidate.data.nextDueDate) {
+      const error = new Error('Choose a new due date before confirming.');
+      (error as Error & { code?: string }).code = 'ASK_INVALID_CONFIRMATION_EDIT';
+      throw error;
+    }
     const current = await prisma.propertyMaintenanceTask.findFirst({ where: { id: candidate.data.taskId, propertyId: execution.propertyId } });
     if (!current) {
       const error = new Error('This task is no longer available. It may have been deleted.');
