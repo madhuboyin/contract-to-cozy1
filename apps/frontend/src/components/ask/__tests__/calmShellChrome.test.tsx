@@ -75,17 +75,31 @@ describe('CalmLanding', () => {
   });
 
   it('shows dashboard-parity decisions and active major moment below the Ask entry point', () => {
+    const onAsk = jest.fn();
     render(<CalmLanding view={view({
       homeContinuity: {
         state: 'AVAILABLE',
-        decisions: [{ id: 'decision-1', title: 'Choose furnace repair or replacement', summary: 'Compare the long-term cost.', href: '/dashboard/properties/home/home-operations?action=decision-1' }],
+        decisions: [{
+          id: 'decision-1',
+          title: 'Choose furnace repair or replacement',
+          summary: 'Compare the long-term cost.',
+          href: '/dashboard/properties/home/home-operations?action=decision-1',
+          askQuestion: 'What should I do next for “Choose furnace repair or replacement”?',
+          askCategoryId: 'MAINTAIN',
+          askCategoryLabel: 'Maintain',
+        }],
         activeMajorMoment: { kind: 'PROJECT', id: 'project-1', title: 'Roof repair', stage: 'IN_PROGRESS', context: null, blocker: 'Waiting for provider selection', nextMilestone: 'Select a contractor', href: '/dashboard/properties/home/projects/project-1' },
       },
-    })} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    })} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={onAsk} />);
     const continuity = screen.getByRole('region', { name: 'Decisions and active work' });
     expect(continuity).toHaveTextContent('Decisions to make');
     expect(continuity).toHaveTextContent('Choose furnace repair or replacement');
-    expect(screen.getByRole('link', { name: /Choose furnace repair or replacement/ })).toHaveAttribute('href', '/dashboard/properties/home/home-operations?action=decision-1');
+    fireEvent.click(screen.getByRole('button', { name: /Choose furnace repair or replacement/ }));
+    expect(onAsk).toHaveBeenCalledWith(expect.objectContaining({
+      question: 'What should I do next for “Choose furnace repair or replacement”?',
+      context: { propertyId: 'home', actionId: 'decision-1' },
+    }), 'DECISION');
+    expect(screen.queryByRole('link', { name: /Choose furnace repair or replacement/ })).toBeNull();
     expect(continuity).toHaveTextContent('Active major moment');
     expect(continuity).toHaveTextContent('Roof repair');
     expect(continuity).toHaveTextContent('Waiting for provider selection');

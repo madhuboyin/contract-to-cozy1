@@ -89,6 +89,10 @@ test('product-authored reserve and general home-deadline prompts resolve to thei
   assert.equal(itemReserve.operation.operationId, 'CAPITAL_RESERVE_PLAN');
   assert.equal(itemReserve.requiresClarification, false);
 
+  const earliestExpense = resolveAskRoutingCascade('Show my capital timeline with the earliest expense first.');
+  assert.equal(earliestExpense.operation.operationId, 'CAPITAL_RESERVE_PLAN');
+  assert.equal(earliestExpense.requiresClarification, false);
+
   const deadlines = resolveAskRoutingCascade('Monitor my important home deadlines.');
   assert.equal(deadlines.operation.operationId, 'HOME_DEADLINE_MONITOR');
   assert.equal(deadlines.requiresClarification, false);

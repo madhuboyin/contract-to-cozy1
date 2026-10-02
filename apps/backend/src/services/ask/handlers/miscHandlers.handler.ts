@@ -270,7 +270,9 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
       type: 'SUMMARY', id: 'repair-replace-guidance', title: `${item.name}: ${verdict}`,
       body: `${analysis.summary ?? `The canonical model currently indicates ${verdict}.`} Confidence is ${analysis.confidence.toLowerCase()}.${analysis.breakEvenMonths == null ? '' : ` Modeled break-even is about ${analysis.breakEvenMonths} months.`}`,
       tone: ['REPLACE_NOW', 'REPLACE_SOON'].includes(analysis.verdict) ? 'CAUTION' : 'DEFAULT',
-      actions: [{ id: 'open-repair-replace', label: 'Open Repair vs Replace', href: `/dashboard/replace-repair?propertyId=${encodeURIComponent(propertyId)}&inventoryItemId=${encodeURIComponent(item.id)}`, style: 'PRIMARY' }],
+      // The complete canonical Repair vs Replace analysis is already rendered
+      // below. Do not eject the homeowner to the legacy desktop surface.
+      actions: [],
     }, { type: 'TABLE', id: 'repair-replace-costs', title: 'Modeled decision inputs', description: 'Amounts are planning estimates from the canonical Repair vs Replace engine.', columns: [{ key: 'path', label: 'Measure' }, { key: 'amount', label: 'Amount' }, { key: 'meaning', label: 'How to interpret it' }], rows, actions: [] },
     { type: 'TABLE', id: 'repair-replace-trace', title: 'Decision factors', description: 'How the item and its recorded history influenced this recommendation.', columns: [{ key: 'factor', label: 'Factor' }, { key: 'evidence', label: 'Evidence used' }, { key: 'effect', label: 'Effect on recommendation' }], rows: factorRows, totalCount: analysis.decisionTrace.length, actions: [] },
     { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },

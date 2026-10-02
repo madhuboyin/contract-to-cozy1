@@ -181,12 +181,17 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
       const continuity = await getHomeContinuityProjection(propertyId, feedPromise);
       return {
         state: 'AVAILABLE',
-        decisions: continuity.decisions.map((action) => ({
-          id: action.id,
-          title: action.presentation?.headline ?? action.signal,
-          summary: action.presentation?.summary ?? action.recommendedAction ?? null,
-          href: action.primaryCta.href,
-        })),
+        decisions: continuity.decisions.map((action) => {
+          const category = focusedHomeActionCategory(action);
+          return {
+            id: action.id,
+            title: action.presentation?.headline ?? action.signal,
+            summary: action.presentation?.summary ?? action.recommendedAction ?? null,
+            href: action.primaryCta.href,
+            askQuestion: focusedHomeActionQuestion(action),
+            ...category,
+          };
+        }),
         activeMajorMoment: continuity.activeMajorMoment,
       };
     } catch (error) {

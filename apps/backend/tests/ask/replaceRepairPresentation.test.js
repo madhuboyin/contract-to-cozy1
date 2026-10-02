@@ -28,3 +28,9 @@ test('repair or replace reserve follow-up names the resolved inventory item', ()
   assert.match(source, /`How much should I reserve for \$\{item\.name\} replacement\?`/);
   assert.doesNotMatch(source, /How much should I reserve for this item\?/);
 });
+
+test('the complete repair or replace answer stays in Ask without a legacy desktop CTA', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/miscHandlers.handler.ts'), 'utf8');
+  assert.doesNotMatch(source, /label: 'Open Repair vs Replace'/);
+  assert.doesNotMatch(source, /href: `\/dashboard\/replace-repair/);
+});
