@@ -189,14 +189,18 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     if (controls) controls.openDetail(block.id, item.id);
     else setLocalDetailTaskId(item.id);
   };
-  const closeDetail = () => {
+  const closeDetail = (restoreFocus = true) => {
     const closingId = detailTaskId;
     if (controls) controls.closeDetail();
     else setLocalDetailTaskId(null);
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-maintenance-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
+    if (restoreFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-maintenance-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
 
-  const taskDetail = (taskId: string, item: Item) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={closeDetail} />;
+  // A drawer CTA starts a new Ask turn (explanation, date capture, review);
+  // the drawer must not stay open over it, and focus belongs to that turn,
+  // not the row that opened the drawer.
+  const drawerAction: typeof onAction = (...args) => { onAction(...args); closeDetail(false); };
+  const taskDetail = (taskId: string, item: Item, inSheet: boolean) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={inSheet ? drawerAction : onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={() => closeDetail()} />;
 
   return <section className={calm ? 'space-y-3' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white'} data-display-pattern={calm ? 'priority-stack' : layout === 'SHELVES' ? 'shelves' : undefined}>
     <div className={calm ? 'flex flex-wrap items-center justify-between gap-2' : 'border-b border-slate-100 p-4'}>
@@ -315,9 +319,9 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         </nav>}
       </div>;
     })}
-    {!calm && layout === 'LIST' && detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
+    {!calm && layout === 'LIST' && detailTaskId && detailItem && taskDetail(detailTaskId, detailItem, false)}
     {(calm || layout === 'SHELVES') && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
-      {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
+      {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem, true)}
     </DetailSheetFrame>}
     {footerActions.some((action) => action.href || action.interactionType === 'START_WORKFLOW') && <div data-ask-action-footer="" className={cn('flex flex-wrap gap-2 text-sm font-semibold text-teal-800', !calm && 'px-4 py-3')}>{footerActions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === calmPrimaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>}
   </section>;

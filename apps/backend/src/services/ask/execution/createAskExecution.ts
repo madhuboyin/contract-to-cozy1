@@ -275,6 +275,22 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
   // genuinely soft/contextual signals (contextualOperationId,
   // launchCapabilityOperationId) keep the narrow "nudge" gate; an explicit
   // declared control always forces, exactly as ACT-001/ACT-003 intend.
+  // A declared item action is authoritative even when free-text routing
+  // could not choose between operations (e.g. "Why is "X" important?" ->
+  // general guidance vs. document-candidate confirmation). Asking the
+  // homeowner to disambiguate a control they just clicked is wrong, so the
+  // declared operation replaces the clarification outcome. SAFETY still wins.
+  if (declaredItemActionOperationId && routingDecision.requiresClarification && routingDecision.stage !== 'SAFETY') {
+    const declaredOperation = getAskOperationDefinition(declaredItemActionOperationId);
+    routingDecision = {
+      language: routingDecision.language,
+      operation: { ...declaredOperation, confidence: 1 },
+      stage: 'DETERMINISTIC',
+      candidates: [{ operationId: declaredOperation.operationId, confidence: 1 }],
+      requiresClarification: false,
+      entityResolution: resolveAskEntityState({ message: routingMessage, operationId: declaredOperation.operationId, propertyId: executionPropertyId, launchEntityId: input.launchContext?.entityId, requiresProperty: declaredOperation.requiresProperty }),
+    };
+  }
   const shouldForceOperation = Boolean(forcedOperationId)
     && routingDecision.stage !== 'SAFETY'
     && !routingDecision.requiresClarification

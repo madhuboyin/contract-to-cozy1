@@ -92,6 +92,21 @@ test('an open task keeps Complete in the sheet, and it is sent with the task ide
   expect(onItemAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'filter', 'Complete this maintenance task.', 'MAINTENANCE_TASK_COMPLETE', 'MUTATE_RECORD');
 });
 
+test.each([
+  ['Why is this important?', 'Why?', 'GROUNDED_GUIDANCE', 'CONVERSATION_CONTINUE'],
+  ['Complete', 'Complete this maintenance task.', 'MAINTENANCE_TASK_COMPLETE', 'MUTATE_RECORD'],
+])('the %s drawer action sends the task identity and closes the drawer', async (label, message, operationId, interactionType) => {
+  jest.spyOn(api, 'getMaintenanceTask').mockResolvedValueOnce(liveTask('PENDING'));
+  const onItemAction = jest.fn();
+  render(<Harness block={maintenanceBlock()} onItemAction={onItemAction} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Replace HVAC filter/ }));
+  const sheet = await screen.findByRole('dialog');
+  fireEvent.click(await within(sheet).findByRole('button', { name: label }));
+  expect(onItemAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'filter', message, operationId, interactionType);
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(view().detailTarget).toBeNull();
+});
+
 test('Escape and the browser Back button both close the sheet and clear the open detail', async () => {
   jest.spyOn(api, 'getMaintenanceTask').mockResolvedValue(liveTask('PENDING'));
   render(<Harness block={maintenanceBlock()} />);
