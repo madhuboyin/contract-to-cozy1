@@ -1055,6 +1055,8 @@ A functionally correct journey fails quality review when it introduces unnecessa
 
 **October 2 duplicate-surface correction:** The `SELLER_PREP_CHECKLIST` result itself no longer displays **Open sale readiness checklist**, because the progress, items, details, and supported decisions are already present in the conversation. Focused Operational Work in `REPORTED_COMPLETE` state likewise omits its desktop review CTA: Ask displays the reported-completion state and recorded details inline, but does not imply that it can perform a verification workflow that is not registered. The existing inline **View details** disclosure remains available.
 
+**October 2 seller-prep continuation-loop correction:** This supersedes the seller-prep treatment of **What should I prioritize first?** above. The completed `SELLER_PREP_CHECKLIST` answer already contains the domain-ranked next steps and live item decisions, so it emits neither **What should I prioritize first?** nor **Open seller prep** as follow-ups; both were paraphrases that reopened the same checklist. The generic question **What should I prioritize first?** now routes to the governed `HOME_ACTIONS` priority feed. Only sale-specific language (for example, **Check my sale readiness**) routes directly to `SELLER_PREP_CHECKLIST`.
+
 ### Phase 0 — Authority and coverage
 
 - Adopt this FRD and add precedence notes to conflicting documents.

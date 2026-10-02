@@ -746,7 +746,7 @@ const renovationPermitPattern = /\b(?:renovation|remodel|addition|project|permit
 // cascade below for exactly that reason -- majorEventEntryResult's own
 // suggestion text already says "Check sale readiness" verbatim, which this
 // pattern is written to catch.
-const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling readiness|listing readiness)\b|\b(?:am i|are we|is (?:my|this|the) home)\b.{0,25}\bready\b.{0,25}\bto (?:sell|list)\b|\bcheck\b.{0,15}\b(?:sale|seller|selling)\b.{0,15}\breadiness\b|^\s*what should i prioritize first\??\s*$/i;
+const sellerPrepChecklistPattern = /\b(?:seller prep|sale readiness|selling readiness|listing readiness)\b|\b(?:am i|are we|is (?:my|this|the) home)\b.{0,25}\bready\b.{0,25}\bto (?:sell|list)\b|\bcheck\b.{0,15}\b(?:sale|seller|selling)\b.{0,15}\breadiness\b/i;
 // Phase 7, write-path slice (implementation plan §13; FRD §31). Requires an
 // explicit decision verb bidirectionally near "seller prep"/"sale
 // readiness"/"checklist" + "item" phrasing -- deliberately narrower than
@@ -832,7 +832,7 @@ const PROPERTY_COMPLETENESS_PATTERNS = [
 export function isPropertyCompletenessRequest(message: string): boolean {
   return PROPERTY_COMPLETENESS_PATTERNS.some((pattern) => pattern.test(message));
 }
-const homeActionsPattern = /\b(?:what should i do next|what should i do before closing|what (?:else )?needs (?:my |our )?(?:attention|attension)|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what (?:should i|i should) plan|anything urgent|urgent home action|where should i start)\b/i;
+const homeActionsPattern = /\b(?:what should i do next|what should i prioritize first|what should i do before closing|what (?:else )?needs (?:my |our )?(?:attention|attension)|next best action|highest priority|top priorit(?:y|ies)|home actions?|what can wait|what (?:should i|i should) plan|anything urgent|urgent home action|where should i start)\b/i;
 // Phase 3 §24.5: a natural observation question about a registered property
 // component reads normalized derived intelligence. Detail/history/inventory
 // verbs remain owned by INVENTORY_LOOKUP below.

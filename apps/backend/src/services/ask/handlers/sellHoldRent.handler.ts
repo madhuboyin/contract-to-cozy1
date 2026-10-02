@@ -390,9 +390,9 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     status: 'ANSWERED',
     reasonCode: openItems.length ? 'SELLER_PREP_ITEMS_OPEN' : 'SELLER_PREP_NO_OPEN_ITEMS',
     blocks,
-    suggestions: openItems.length
-      ? ['What should I prioritize first?', 'Open seller prep']
-      : ['Open Sell / Hold / Rent'],
+    // The checklist already contains its prioritized next steps and live item decisions.
+    // Do not suggest paraphrases that route straight back to this same operation.
+    suggestions: openItems.length ? [] : ['Open Sell / Hold / Rent'],
   };
 }
 
