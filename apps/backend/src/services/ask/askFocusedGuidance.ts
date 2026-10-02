@@ -178,7 +178,14 @@ export function isGroupCWholeToolDestination(action: RankedHomeAction): boolean 
 // already promises. Identified by lineageId prefix, not href -- the producer's href varies (a
 // bare item page, or a guidance-overview journey URL) depending on whether an active guided
 // journey exists for the item, but the underlying decision content is the same either way.
-const REPAIR_REPLACE_LINEAGE_PREFIXES = ['repair-replace:', 'appliance-repair-replace:'];
+const REPAIR_REPLACE_LINEAGE_PREFIXES = [
+  'repair-replace:',
+  'appliance-repair-replace:',
+  // Capital Timeline Home Actions use the same exact INVENTORY_ITEM subject
+  // and already promise a replacement-planning decision. Keep that decision
+  // in Ask through REPLACEMENT_GUIDANCE instead of reopening the desktop tool.
+  'home-capital-timeline-window:',
+];
 
 function resolveGroupDReplacementGuidanceRouting(
   action: RankedHomeAction,
@@ -375,6 +382,16 @@ export function buildFocusedHomeActionGuidance(
   const keyFacts = (action.presentation?.keyFacts ?? []).filter((fact) =>
     !/^(?:source|execution|task|work state)$/i.test(fact.label.trim()),
   );
+  const groupedDetailFacts: Array<{ label: string; value: string; groupLabel: string }> = action.presentation?.variant === 'ASSET_LIFECYCLE'
+    ? (action.presentation.factGroups ?? []).flatMap((group) => group.facts.map((fact) => ({
+      label: fact.label,
+      value: fact.value,
+      groupLabel: group.label,
+    })))
+    : [];
+  const detailFacts: Array<{ label: string; value: string; groupLabel: string }> = groupedDetailFacts.length > 0
+    ? groupedDetailFacts
+    : keyFacts.map((fact) => ({ label: fact.label, value: fact.value, groupLabel: 'Home details' }));
   const isPreparation = action.presentation?.variant === 'ENVIRONMENT_PREPARATION';
   const preparationFacts = isPreparation
     ? action.presentation?.factGroups
@@ -436,15 +453,15 @@ export function buildFocusedHomeActionGuidance(
         status: null,
         href: null,
       }],
-    }, ...(keyFacts.length ? [{
+    }, ...(detailFacts.length ? [{
       id: 'known-details',
       title: isPreparation ? 'Forecast and home details' : 'Known details',
-      count: keyFacts.filter((fact) => !isPreparation || fact.label !== 'Preparation').length,
-      items: keyFacts.filter((fact) => !isPreparation || fact.label !== 'Preparation').map((fact, index) => ({
+      count: detailFacts.filter((fact) => !isPreparation || fact.label !== 'Preparation').length,
+      items: detailFacts.filter((fact) => !isPreparation || fact.label !== 'Preparation').map((fact, index) => ({
         id: `${action.id}-fact-${index}`,
         title: fact.label,
         description: fact.value,
-        meta: [],
+        meta: [fact.groupLabel],
         status: null,
         href: null,
       })),

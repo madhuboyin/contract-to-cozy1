@@ -262,6 +262,37 @@ test('Group D repair/replace decision routes to REPLACEMENT_GUIDANCE with the it
   assert.equal(journeyPrimary.operationId, 'REPLACEMENT_GUIDANCE');
   assert.equal(journeyPrimary.entityId, 'item-2');
 
+  const capitalWindowAction = {
+    ...weatherAction(),
+    id: 'home-capital-timeline-window:window-1',
+    lineageId: 'home-capital-timeline-window:window-1',
+    presentation: {
+      ...weatherAction().presentation,
+      variant: 'ASSET_LIFECYCLE',
+      subject: { kind: 'INVENTORY_ITEM', id: 'item-3', label: 'Dishwasher' },
+      factGroups: [
+        { label: 'History', facts: [{ key: 'age', label: 'Age', value: '11.8 years', kind: 'DERIVED', source: 'Home Record', observedAt: null }] },
+        { label: 'Plan', facts: [{ key: 'budget', label: 'Estimated budget', value: '$821–$1,232', kind: 'DERIVED', source: 'Home Capital Timeline', observedAt: null }] },
+      ],
+    },
+    primaryCta: { label: 'Plan Dishwasher replacement', href: '/dashboard/properties/property-1/tools/capital-timeline?itemId=item-3' },
+  };
+  const capitalWindowResult = buildFocusedHomeActionGuidance(capitalWindowAction, 'context-v1');
+  const capitalWindowPrimary = capitalWindowResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .actions.find((candidate) => candidate.id === `home-action-primary-${capitalWindowAction.id}`);
+  assert.equal(capitalWindowPrimary.operationId, 'REPLACEMENT_GUIDANCE');
+  assert.equal(capitalWindowPrimary.entityType, 'INVENTORY_ITEM');
+  assert.equal(capitalWindowPrimary.entityId, 'item-3');
+  assert.equal(capitalWindowPrimary.href, undefined);
+  const capitalWindowDetails = capitalWindowResult.blocks
+    .find((block) => block.id === 'focused-home-action-guidance')
+    .sections.find((section) => section.id === 'known-details');
+  assert.deepEqual(capitalWindowDetails.items.map((item) => [item.meta[0], item.title, item.description]), [
+    ['History', 'Age', '11.8 years'],
+    ['Plan', 'Estimated budget', '$821–$1,232'],
+  ]);
+
   // A guidance journey with no INVENTORY_ITEM subject (the financial/weather continuation case) is
   // not routed -- it has no existing Ask operation yet and keeps navigating unaffected.
   const financialAction = {

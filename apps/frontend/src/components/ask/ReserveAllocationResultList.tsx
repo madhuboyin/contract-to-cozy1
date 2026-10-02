@@ -137,6 +137,10 @@ export function ReserveAllocationResultList({ block, propertyId, onAccessLost, l
   link: (href: string, label: ReactNode) => ReactNode;
 }) {
   const controls = useContext(ResultViewContext);
+  // This block is the canonical Reserve Fund read inside Ask. Older persisted
+  // results may still carry a link back to the full desktop tool; showing it
+  // directly beneath the same data is a redundant no-op, so omit it here too.
+  const footerActions = block.actions.filter((action) => !action.href || !/^\/dashboard\/properties\/[^/]+\/tools\/reserve-fund\/?(?:[?#].*)?$/.test(action.href));
   const [localDetailId, setLocalDetailId] = useState<string | null>(null);
   const detailId = controls ? controls.detailIdFor(block.id) : localDetailId;
   const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailId);
@@ -189,6 +193,6 @@ export function ReserveAllocationResultList({ block, propertyId, onAccessLost, l
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more allocations are available through the full Reserve Fund page.</p>}
     </div>)}
     {detailId && detailItem && <ReserveAllocationDetail key={detailId} lineItemId={detailId} expectedPropertyId={propertyId} fallbackItem={detailItem} onAccessLost={onAccessLost} onClose={closeDetail} />}
-    {block.actions.some((action) => action.href || action.interactionType === 'START_WORKFLOW') && <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>}
+    {footerActions.some((action) => action.href || action.interactionType === 'START_WORKFLOW') && <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{footerActions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>}
   </section>;
 }

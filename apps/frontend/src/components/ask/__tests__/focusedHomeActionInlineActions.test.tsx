@@ -14,7 +14,10 @@ const block: GroupedList = {
   sections: [
     { id: 'next-step', title: 'Recommended next step', count: 1, items: [{ id: 'primary', title: 'Book a chimney inspection', description: 'Use a qualified professional.', meta: ['low confidence'] }] },
     { id: 'why-it-matters', title: 'Why this matters', count: 1, items: [{ id: 'why', title: 'Safety', description: 'A blocked flue can create a fire or carbon-monoxide risk.', meta: [] }] },
-    { id: 'known-details', title: 'Known details', count: 1, items: [{ id: 'due', title: 'Due', description: 'Sep 23, 2026', meta: [] }] },
+    { id: 'known-details', title: 'Known details', count: 2, items: [
+      { id: 'age', title: 'Age', description: '11.8 years', meta: ['History'] },
+      { id: 'budget', title: 'Estimated budget', description: '$821–$1,232', meta: ['Plan'] },
+    ] },
   ],
   actions: [
     { id: 'home-action-complete-1', label: 'Mark complete', interactionType: 'START_WORKFLOW', message: 'Complete this work item.', operationId: 'OPERATIONAL_WORK_UPDATE', entityType: 'WORK_ITEM', entityId: 'work-1', style: 'PRIMARY' },
@@ -33,7 +36,10 @@ test('focused Home Action keeps details and snooze choices inline', () => {
   expect(screen.queryByText(/blocked flue/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'View details' }));
   expect(screen.getByText(/blocked flue/)).toBeInTheDocument();
-  expect(screen.getByText('Sep 23, 2026')).toBeInTheDocument();
+  expect(screen.getByRole('table', { name: 'Planning details' })).toBeInTheDocument();
+  expect(screen.getByRole('row', { name: /Guidance Planning rationale A blocked flue/ })).toBeInTheDocument();
+  expect(screen.getByRole('row', { name: 'History Age 11.8 years' })).toBeInTheDocument();
+  expect(screen.getByRole('row', { name: 'Plan Estimated budget $821–$1,232' })).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Snooze reminders' }));
   expect(screen.queryByText(/blocked flue/)).not.toBeInTheDocument();

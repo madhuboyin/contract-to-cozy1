@@ -66,17 +66,30 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           <div id={`${block.id}-details`} className="mt-4 border-t border-slate-100 pt-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Details</p>
-              {why?.description && <p className="mt-2 text-sm leading-5 text-slate-600">{why.description}</p>}
+              {why?.description && facts.length === 0 && <p className="mt-2 text-sm leading-5 text-slate-600">{why.description}</p>}
             </div>
             {facts.length > 0 && (
-              <dl className={cn('mt-3 grid gap-2', facts.length === 2 ? 'sm:grid-cols-2' : facts.length > 2 && 'sm:grid-cols-2 lg:grid-cols-3')}>
-                {facts.slice(0, 6).map((fact) => (
-                  <div key={fact.id} className="rounded-xl bg-slate-50 px-3 py-2">
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{fact.title}</dt>
-                    <dd className="mt-0.5 text-sm font-medium text-slate-800">{fact.description}</dd>
-                  </div>
-                ))}
-              </dl>
+              <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full min-w-[32rem] border-collapse text-left text-sm" aria-label="Planning details">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr><th scope="col" className="px-3 py-2.5">Category</th><th scope="col" className="px-3 py-2.5">Detail</th><th scope="col" className="px-3 py-2.5">Value</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {why?.description && <tr>
+                      <td className="px-3 py-2.5 text-slate-500">Guidance</td>
+                      <th scope="row" className="px-3 py-2.5 font-medium text-slate-700">Planning rationale</th>
+                      <td className="px-3 py-2.5 font-medium text-slate-900">{why.description}</td>
+                    </tr>}
+                    {facts.map((fact) => (
+                      <tr key={fact.id}>
+                        <td className="px-3 py-2.5 text-slate-500">{fact.meta[0] ?? 'Home details'}</td>
+                        <th scope="row" className="px-3 py-2.5 font-medium text-slate-700">{fact.title}</th>
+                        <td className="px-3 py-2.5 font-medium text-slate-900">{fact.description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}

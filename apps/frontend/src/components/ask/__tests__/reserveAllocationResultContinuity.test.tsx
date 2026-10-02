@@ -61,16 +61,14 @@ test('funding plan renders as a table with distinct funding fields', () => {
   expect(row).toBeInTheDocument();
 });
 
-test('reserve allocation titles dispatch through the registry and open canonical allocation detail inline', async () => {
+test('reserve allocation titles open canonical allocation detail inline without a redundant Reserve Fund footer link', async () => {
   window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
   Element.prototype.scrollIntoView = jest.fn();
   mockedListLineItems.mockResolvedValueOnce([canonicalLineItem()]);
 
   render(<BlockView block={block} executionId="execution" propertyId="home" itemActionsDisabled={false} onItemAction={() => {}} onFilterClick={() => {}} onCollectionPage={() => {}} onAccessLost={() => {}} />);
   expect(screen.queryByRole('link', { name: 'Water heater' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('link', { name: /Open Reserve Fund/ }));
-  expect(window.location.pathname).toBe('/dashboard/ask');
-  expect(window.location.hash).toBe('#reserve-allocations');
+  expect(screen.queryByRole('link', { name: /Open Reserve Fund/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
 
   await waitFor(() => expect(screen.getByText('Typical service life for this water heater type is 10-12 years; it was installed 11 years ago.')).toBeInTheDocument());
