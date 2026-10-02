@@ -96,6 +96,7 @@ test('Group A home-action CTAs route to the matching Ask operation instead of na
   const cases = [
     { href: '/dashboard/warranties', operationId: 'WARRANTY_LOOKUP' },
     { href: '/dashboard/properties/property-1/inventory?tab=coverage&highlight=item-1', operationId: 'WARRANTY_LOOKUP' },
+    { href: '/dashboard/properties/property-1/inventory?openItemId=water-heater-1', operationId: 'INVENTORY_LOOKUP', entityId: 'water-heater-1' },
     { href: '/dashboard/properties/property-1/tools/coverage-intelligence?stage=questions', operationId: 'COVERAGE_GAPS' },
     { href: '/dashboard/properties/property-1/inventory/items/oven-range-1/coverage?from=home-action', operationId: 'COVERAGE_GAPS', entityId: 'oven-range-1' },
     { href: '/dashboard/home-event-radar?propertyId=property-1', operationId: 'HOME_EVENT_RADAR_FEED' },
@@ -129,6 +130,23 @@ test('Group A home-action CTAs route to the matching Ask operation instead of na
     .find((block) => block.id === 'focused-home-action-guidance')
     .actions.find((candidate) => candidate.id === `home-action-primary-${seasonalAction.id}`);
   assert.match(seasonalPrimary.message, /\b(?:seasonal|winter|spring|summer|fall|autumn)\b/i);
+});
+
+test('provider booking remains an explicit secondary handoff instead of looking like an in-Ask scheduling action', () => {
+  const action = {
+    ...weatherAction(),
+    primaryCta: {
+      label: 'Schedule Service',
+      href: '/dashboard/providers?propertyId=property-1&category=PLUMBING&intent=service-booking&itemId=water-heater-1',
+    },
+  };
+  const focused = buildFocusedHomeActionGuidance(action, 'context-v1').blocks
+    .find((block) => block.id === 'focused-home-action-guidance');
+  const handoff = focused.actions[0];
+  assert.equal(handoff.label, 'Continue to provider search');
+  assert.equal(handoff.style, 'SECONDARY');
+  assert.equal(handoff.href, action.primaryCta.href);
+  assert.equal(handoff.interactionType, undefined);
 });
 
 test('Group B health-factor checklist renders inline instead of only navigating', () => {

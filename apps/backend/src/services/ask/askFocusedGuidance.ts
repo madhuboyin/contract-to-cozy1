@@ -83,6 +83,18 @@ function resolveGroupAAskRouting(href: string | undefined): FocusedAskRouting | 
   if (/^\/dashboard\/properties\/[^/]+\/inventory$/.test(pathname) && params.get('tab') === 'coverage') {
     return { operationId: 'WARRANTY_LOOKUP', message: 'Show my warranties' };
   }
+  // A withheld material action falls back to the exact inventory record so the
+  // homeowner can review missing facts before proceeding. The inventory read
+  // already has an inline canonical-detail surface; do not reopen the desktop
+  // inventory drawer for that review.
+  if (/^\/dashboard\/properties\/[^/]+\/inventory$/.test(pathname) && params.get('openItemId')) {
+    return {
+      operationId: 'INVENTORY_LOOKUP',
+      message: 'Show this inventory item in my Home Record.',
+      entityType: 'INVENTORY_ITEM',
+      entityId: params.get('openItemId')!,
+    };
+  }
   if (propertyToolPath('coverage-intelligence').test(pathname) && params.get('stage') === 'questions') {
     return { operationId: 'COVERAGE_GAPS', message: 'What coverage gaps do I have?' };
   }
@@ -164,6 +176,12 @@ export function isGroupCWholeToolDestination(action: RankedHomeAction): boolean 
   if (propertyToolPath('capital-timeline').test(pathname)) return true;
   if (propertyToolPath('savings-benefits').test(pathname) && params.has('actionId')) return true;
   return false;
+}
+
+function isProviderServiceHandoff(href: string | undefined): boolean {
+  if (!href) return false;
+  const parsed = parseHomeActionHref(href);
+  return Boolean(parsed && parsed.pathname === '/dashboard/providers' && parsed.params.get('intent') === 'service-booking');
 }
 
 // Group D (gap audit §17), repair/replace decision slice only. The other Group D destination --
@@ -349,6 +367,7 @@ export function buildFocusedHomeActionGuidance(
     }
     : null;
   const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
+  const isProviderHandoff = !routing && !checklist && isProviderServiceHandoff(action.primaryCta.href);
   const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && !policyConflictSection && !applianceAddAction && Boolean(captureRequest);
   const routingEntity = routing?.entityType && routing.entityId
     ? { entityType: routing.entityType, entityId: routing.entityId }
@@ -365,7 +384,7 @@ export function buildFocusedHomeActionGuidance(
     }
     : {
       id: `home-action-primary-${action.id}`,
-      label: action.primaryCta.label,
+      label: isProviderHandoff ? 'Continue to provider search' : action.primaryCta.label,
       href: action.primaryCta.href,
       // The checklist is now answered inline (see the `checklist` section below), so the
       // traditional page becomes an optional escape hatch rather than the sole destination.
@@ -373,7 +392,7 @@ export function buildFocusedHomeActionGuidance(
       // SUMMARY/GROUPED_LIST content above it is the actual answer, navigation is correct but
       // not the primary action. Same for a Group B feature-capture case: the missing fact is now
       // asked inline as a captureRequest card, so the resolution-center escape hatch is optional.
-      style: checklist || isGroupCDestination || hasFeatureCapture ? 'SECONDARY' as const : 'PRIMARY' as const,
+      style: checklist || isGroupCDestination || hasFeatureCapture || isProviderHandoff ? 'SECONDARY' as const : 'PRIMARY' as const,
     };
 
   const timing = action.timing.dueAt

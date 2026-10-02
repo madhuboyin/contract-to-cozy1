@@ -849,6 +849,8 @@ The rollout should prove reusable interaction patterns before expanding surface 
 7. **Attention and proactive work:** attention aggregation, dismissal/reminder policies, monitors, and proactive continuations.
 8. **Exception refinement:** external providers, booking/payment/account-linking, and approved admin/bulk boundaries.
 
+**Implemented clarification (October 2, 2026).** A focused Home Action that withholds a material action until an exact inventory record is reviewed now routes its **Review [item] details** control through `INVENTORY_LOOKUP` with the canonical `INVENTORY_ITEM` id; it no longer reopens the desktop Inventory drawer or depends on matching the homeowner-facing label. Provider search and booking remain an external-boundary exception: a provider-search destination is presented as the quiet secondary **Continue to provider search** handoff, not as a primary **Schedule Service** action that could imply scheduling happens inside Ask. The shared Ask link wrapper preserves the Ask return context, while the canonical provider-search URL preserves the property, service category, work category, item and originating Home Action key.
+
 Phases may overlap only when shared contracts do not conflict. Existing functionality remains available throughout; no big-bang cutover is required.
 
 ## 22. Accessibility requirements

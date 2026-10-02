@@ -6,6 +6,10 @@ require('ts-node/register');
 // ACUI I-2 (FRD v1.122): Inventory filters are a governed refinement. The real registered `inventory.lookup` handler runs against a
 // fake prisma and a fake inventory list, so what is asserted is the result the homeowner would get, not the source text.
 const prismaModule = require('../../src/lib/prisma.ts');
+const featureContext = require('../../src/modules/propertyContext/application/evaluateFeatureContext.ts');
+// A selected inventory record evaluates optional repair/replace context. These tests exercise
+// inventory selection/refinement, so keep that independent context source deterministic.
+featureContext.evaluateFeatureContext = async () => ({ contextVersion: 'context-v1', requirements: [] });
 require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { InventoryService } = require('../../src/services/inventory.service.ts');
@@ -49,6 +53,7 @@ function restore() {
   propertyAccess.resolvePropertyAccess = originals.resolveAccess;
 }
 const run = (message, sourceExecutionId) => capabilityInvoke('INVENTORY_LOOKUP', { userId: 'u1', propertyId: 'p1', message, launchContext: sourceExecutionId ? { surface: 'ASK_WORKSPACE', sourceExecutionId } : undefined });
+const runForItem = (message, entityId) => capabilityInvoke('INVENTORY_LOOKUP', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ITEM', entityId } });
 const list = (result) => result.blocks.find((block) => block.id === 'inventory-results');
 const summary = (result) => result.blocks.find((block) => block.id === 'inventory-summary');
 const ids = (result) => list(result).sections[0].items.map((entry) => entry.id).sort();
@@ -66,6 +71,16 @@ test('a fresh collection question carries a new view state, declared filters and
     assert.equal(summary(result).headline, '5 items recorded, 2 with missing details.');
     assert.deepEqual(active(result), ['category-all', 'status-all']);
     assert.ok(!list(result).filters.some((filter) => filter.id === 'clear-all'), 'nothing to clear yet');
+  } finally { restore(); }
+});
+
+test('a declared inventory-item handoff opens the exact canonical record without relying on label matching', async () => {
+  install();
+  try {
+    const result = await runForItem('Show this inventory item in my Home Record.', 'heatpump');
+    assert.equal(result.parameters.inventoryItemId, 'heatpump');
+    assert.equal(summary(result).title, 'Here is what the Home Record contains for Heat pump');
+    assert.deepEqual(ids(result), ['heatpump']);
   } finally { restore(); }
 });
 

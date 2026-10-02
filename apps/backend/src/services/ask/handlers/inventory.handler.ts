@@ -178,7 +178,13 @@ export function inventoryFilterChips(status: InventoryStatusFilter, category: In
   ];
 }
 
-async function inventoryLookupResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
+async function inventoryLookupResult(
+  userId: string,
+  propertyId: string,
+  message: string,
+  priorViewState?: AskViewState | null,
+  targetItemId?: string | null,
+): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
   const allItems = await inventoryService.listItems(propertyId, {});
@@ -214,7 +220,9 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
   const tokens = inventorySearchTokens(message);
 
   let matches = allItems;
-  if (categoryFilter) {
+  if (targetItemId) {
+    matches = allItems.filter((item) => item.id === targetItemId);
+  } else if (categoryFilter) {
     matches = allItems.filter((item) => inventoryMatchesCategory(item, categoryFilter));
   } else if (refinement) {
     // Every item, then the status focus below: a filter never depends on the words of an earlier question.
@@ -457,6 +465,7 @@ async function inventoryLookupResult(userId: string, propertyId: string, message
 registerCapabilityHandler('inventory.lookup', async (envelope) => inventoryLookupResult(
   envelope.userId, envelope.propertyId!, envelope.message,
   await loadInventoryViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
+  envelope.launchContext?.entityType === 'INVENTORY_ITEM' ? envelope.launchContext.entityId : null,
 ));
 
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 write slice: corrections on an exact
