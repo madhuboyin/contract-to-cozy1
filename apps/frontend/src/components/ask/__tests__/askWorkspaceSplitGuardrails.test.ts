@@ -53,6 +53,7 @@ describe('AskWorkspace split guardrails', () => {
     const layout = read(dashboardLayout);
     expect(layout).toContain('viewportLocked={isAskWorkspace}');
     expect(layout).toContain("'h-full min-h-0 overflow-hidden");
+    expect(read(path.join(askDir, '..', 'layout', 'AppShell.tsx'))).toContain('className="flex min-h-0 min-w-0 flex-1"');
     expect(workspace).toContain('data-ask-scroll-container');
     expect(workspace).not.toContain('?.scrollIntoView');
     expect(layout).not.toContain('lg:h-[calc(100dvh-72px)]');

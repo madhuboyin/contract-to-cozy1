@@ -21,6 +21,7 @@ test('a viewport-locked workspace cannot grow the outer document', () => {
   expect(container.firstChild).toHaveClass('h-[100dvh]', 'min-h-0', 'overflow-hidden');
   expect(container.firstChild).not.toHaveClass('min-h-screen');
   expect(screen.getByTestId('app-shell-content')).toHaveClass('min-h-0');
+  expect(screen.getByText('Ask workspace').parentElement).toHaveClass('min-h-0');
 });
 
 test('ordinary dashboard pages retain their expanded and collapsed sidebar offsets', () => {
