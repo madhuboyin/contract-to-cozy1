@@ -92,9 +92,9 @@ export const ConciergeHomeContinuitySchema = z.object({
     href: z.string(),
     // Ask Home opens the canonical decision as a focused Ask turn. The href
     // remains the traditional destination for other continuity consumers.
-    askQuestion: z.string().optional(),
-    askCategoryId: z.enum(['MAINTAIN', 'PROTECT', 'SAVE', 'PLAN_MONITOR']).optional(),
-    askCategoryLabel: z.enum(['Maintain', 'Protect', 'Save', 'Plan']).optional(),
+    askQuestion: z.string(),
+    askCategoryId: z.enum(['MAINTAIN', 'PROTECT', 'SAVE', 'PLAN_MONITOR']),
+    askCategoryLabel: z.enum(['Maintain', 'Protect', 'Save', 'Plan']),
   })),
   activeMajorMoment: z.object({
     kind: z.enum(['PROJECT', 'GUIDANCE_JOURNEY']),

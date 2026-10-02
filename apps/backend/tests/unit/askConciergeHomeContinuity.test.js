@@ -10,7 +10,10 @@ const { ConciergeHomeContinuitySchema } = require('../../src/productFramework/co
 test('Concierge Home continuity represents dashboard decisions and an active major moment', () => {
   const result = ConciergeHomeContinuitySchema.parse({
     state: 'AVAILABLE',
-    decisions: [{ id: 'decision-1', title: 'Choose repair or replacement', summary: 'Compare long-term cost.', href: '/dashboard/work' }],
+    decisions: [{
+      id: 'decision-1', title: 'Choose repair or replacement', summary: 'Compare long-term cost.', href: '/dashboard/work',
+      askQuestion: 'What should I do next for “Choose repair or replacement”?', askCategoryId: 'MAINTAIN', askCategoryLabel: 'Maintain',
+    }],
     activeMajorMoment: {
       kind: 'PROJECT', id: 'project-1', title: 'Roof repair', stage: 'IN_PROGRESS', context: null,
       blocker: 'Waiting for provider selection', nextMilestone: 'Select a contractor', href: '/dashboard/projects/project-1',
@@ -35,4 +38,7 @@ test('Unified Home and Ask Concierge consume the same continuity projection', ()
   assert.match(homeService, /decisions: RankedHomeAction\[\]/);
   assert.match(homeService, /const continuityRead = getHomeContinuityProjection\(propertyId, feedRead\)/);
   assert.match(concierge, /getHomeContinuityProjection\(propertyId, feedPromise\)/);
+  assert.match(concierge, /askCategoryId: category\.categoryId/);
+  assert.match(concierge, /askCategoryLabel: category\.categoryLabel/);
+  assert.doesNotMatch(concierge, /askQuestion: focusedHomeActionQuestion\(action\),\s*\.\.\.category/);
 });

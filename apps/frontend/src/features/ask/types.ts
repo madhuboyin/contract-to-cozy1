@@ -367,9 +367,9 @@ export interface ConciergeHomeView {
       title: string;
       summary: string | null;
       href: string;
-      askQuestion?: string;
-      askCategoryId?: 'MAINTAIN' | 'PROTECT' | 'SAVE' | 'PLAN_MONITOR';
-      askCategoryLabel?: 'Maintain' | 'Protect' | 'Save' | 'Plan';
+      askQuestion: string;
+      askCategoryId: 'MAINTAIN' | 'PROTECT' | 'SAVE' | 'PLAN_MONITOR';
+      askCategoryLabel: 'Maintain' | 'Protect' | 'Save' | 'Plan';
     }>;
     activeMajorMoment: null | {
       kind: 'PROJECT' | 'GUIDANCE_JOURNEY';

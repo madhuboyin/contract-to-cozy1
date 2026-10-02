@@ -189,7 +189,8 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
             summary: action.presentation?.summary ?? action.recommendedAction ?? null,
             href: action.primaryCta.href,
             askQuestion: focusedHomeActionQuestion(action),
-            ...category,
+            askCategoryId: category.categoryId,
+            askCategoryLabel: category.categoryLabel,
           };
         }),
         activeMajorMoment: continuity.activeMajorMoment,

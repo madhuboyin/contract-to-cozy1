@@ -97,7 +97,7 @@ describe('CalmLanding', () => {
     fireEvent.click(screen.getByRole('button', { name: /Choose furnace repair or replacement/ }));
     expect(onAsk).toHaveBeenCalledWith(expect.objectContaining({
       question: 'What should I do next for “Choose furnace repair or replacement”?',
-      context: { propertyId: 'home', actionId: 'decision-1' },
+      context: { propertyId: 'home', entityType: 'HOME_ACTION', entityId: 'decision-1', actionId: 'decision-1', capabilityId: 'home-operations', operationId: 'HOME_ACTIONS' },
     }), 'DECISION');
     expect(screen.queryByRole('link', { name: /Choose furnace repair or replacement/ })).toBeNull();
     expect(continuity).toHaveTextContent('Active major moment');

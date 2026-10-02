@@ -105,21 +105,16 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
                 : view.homeContinuity.decisions.length === 0
                   ? <p className="text-sm text-slate-500">No decisions need your attention.</p>
                   : view.homeContinuity.decisions.slice(0, 2).map((decision) => (
-                    decision.askQuestion && decision.askCategoryId && decision.askCategoryLabel
-                      ? <button key={decision.id} type="button" onClick={() => onAsk({
-                        id: `continuity-${decision.id}`,
-                        categoryId: decision.askCategoryId!,
-                        categoryLabel: decision.askCategoryLabel!,
-                        question: decision.askQuestion!,
-                        context: { propertyId: view.propertyId, actionId: decision.id },
-                      }, 'DECISION')} className="group block w-full rounded-xl border border-slate-200 p-3 text-left transition hover:border-teal-300 hover:bg-teal-50/40">
-                        <p className="line-clamp-1 text-sm font-semibold text-slate-950">{decision.title}</p>
-                        {decision.summary && decision.summary.trim().toLowerCase() !== decision.title.trim().toLowerCase() && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{decision.summary}</p>}
-                      </button>
-                      : <Link key={decision.id} href={decision.href} className="group block rounded-xl border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50/40">
+                    <button key={decision.id} type="button" onClick={() => onAsk({
+                      id: `continuity-${decision.id}`,
+                      categoryId: decision.askCategoryId,
+                      categoryLabel: decision.askCategoryLabel,
+                      question: decision.askQuestion,
+                      context: { propertyId: view.propertyId, entityType: 'HOME_ACTION', entityId: decision.id, actionId: decision.id, capabilityId: 'home-operations', operationId: 'HOME_ACTIONS' },
+                    }, 'DECISION')} className="group block w-full rounded-xl border border-slate-200 p-3 text-left transition hover:border-teal-300 hover:bg-teal-50/40">
                       <p className="line-clamp-1 text-sm font-semibold text-slate-950">{decision.title}</p>
                       {decision.summary && decision.summary.trim().toLowerCase() !== decision.title.trim().toLowerCase() && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{decision.summary}</p>}
-                      </Link>
+                    </button>
                   ))}
             </div>
           </article>
