@@ -32,6 +32,7 @@ test('Unified Home and Ask Concierge consume the same continuity projection', ()
   const concierge = fs.readFileSync(path.resolve(__dirname, '../../src/services/ask/execution/askConcierge.ts'), 'utf8');
 
   assert.match(homeService, /export async function getHomeContinuityProjection/);
+  assert.match(homeService, /decisions: RankedHomeAction\[\]/);
   assert.match(homeService, /const continuityRead = getHomeContinuityProjection\(propertyId, feedRead\)/);
   assert.match(concierge, /getHomeContinuityProjection\(propertyId, feedPromise\)/);
 });

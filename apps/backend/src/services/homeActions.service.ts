@@ -1553,7 +1553,10 @@ export async function recordHomeActionOpened(propertyId: string, actionId: strin
 type HomeActionFeedResult = Awaited<ReturnType<typeof getHomeActionFeed>>;
 
 export type HomeContinuityProjection = {
-  decisions: HomeAction[];
+  // Decisions are selected directly from the canonical ranked feed. Keep the
+  // ranked contract so downstream consumers can use the same governed action
+  // helpers without erasing ranking, deduplication, or lineage metadata.
+  decisions: RankedHomeAction[];
   activeMajorMoment: null | {
     kind: 'PROJECT' | 'GUIDANCE_JOURNEY';
     id: string;
