@@ -531,6 +531,390 @@ These are platform-level operations: safety boundaries, discovery, the general-g
 | `CAPTURE_EVIDENCE_CONFIRM` | `capture.evidence.confirm` | WRITE | Contributor | Attach an already-uploaded document as evidence for something reported directly from conversation |
 | `SELL_HOLD_RENT_GOAL_CAPTURE` | `sell-hold-rent.goal-capture` | WRITE | Contributor | Attach a durable sell/hold/rent decision thread from a stated intention to sell, directly from conversation |
 
+## Suggested next actions
+
+After an answer, Ask can show clickable follow-up prompts. There are three separate sources, and only the first is listed per operation below:
+
+1. **Suggestion chips from the operation itself.** Each handler returns a `suggestions` list of short prompts. Clicking one sends it as a new question that goes through normal routing. Repeats of the current or a recently completed question are removed by `askSuggestionPolicy.ts`.
+2. **Skill handoffs.** A small allowlist of "after X, offer Y" transitions (9 today, listed at the end of this section). They are drawn as a draftable next question and never run anything by themselves.
+3. **Dynamic next actions.** `askNextActions.ts` adds governed capability recommendations and missing-fact capture cards, ranked per user and home. These cannot be listed per operation because they depend on the home record.
+
+**How this list was built.** It was extracted from the source by parsing each handler and following the functions it calls (static analysis, 2026-10-02). Nothing was executed against real data, so treat it as the set of prompts an operation *can* offer, not what a given user sees:
+
+- Each operation lists prompts from every branch of its handler, including empty states, errors and permission messages.
+- A prompt shown as ‹…› contains a value filled in at runtime, such as a task or appliance name.
+- Where a handler also builds some prompts at runtime from a list it did not spell out, the row says "plus prompts built at runtime".
+- Prompts reached through a shared helper can appear under more than one operation. Operations that share a helper (for example the capability discovery card) show its prompts too.
+- Generic messages shared by every operation (feature switched off, property needed, permission denied) are left out.
+- "After confirming" lists prompts from the confirm step of a write operation.
+- Boundary operations list safety instructions in this field instead of questions.
+
+### Suggestions by operation
+
+#### Maintenance
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `MAINTENANCE_STATUS` | “Show overdue tasks only”<br>“What maintenance is due soon?”<br>“Create a maintenance task”<br>“Try this seasonal question again”<br>“Show completed ‹…› tasks”<br>“Show dismissed ‹…› tasks”<br>“What ‹…› tasks are pending?” |
+| `MAINTENANCE_TASK_CREATE` | “What maintenance is pending?”<br>“Open Maintenance instead”<br>**After confirming:** “What maintenance is still pending?” · “Create another maintenance task” |
+| `MAINTENANCE_TASK_COMPLETE` | “What maintenance is pending?”<br>“Create a maintenance task”<br>“Open Maintenance instead”<br>**After confirming:** “What maintenance is still pending?” · “Show maintenance completed this year” |
+| `MAINTENANCE_TASK_UPDATE` | “Update ‹…› (one per item)”<br>“Assign ‹…› to ‹…› (one per item)”<br>**After confirming:** “What maintenance is pending?” · “Reopen ‹…›” |
+| `MAINTENANCE_FORECAST` | “What maintenance is pending?” |
+| `HOME_DEADLINE_MONITOR` | “Remind me when ‹…› is due (one per item)”<br>**After confirming:** “Reschedule ‹…›” · “Archive ‹…›” · “What maintenance is still pending?” |
+
+#### Repair or Replace
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `REPLACEMENT_GUIDANCE` | “Should I repair or replace ‹…›? (one per item)”<br>“How much should I reserve for ‹…› replacement?”<br>“Show my capital timeline”<br>“Should I repair or replace my ‹…›? (one per item)”<br>“What changed about this decision?” |
+| `HVAC_DECISION_START` | “Should I repair or replace my ‹…›? (one per item)”<br>“What changed about this decision?” |
+| `HVAC_DECISION_CONTINUE` | “Show my active home decisions”<br>“Compare a new quote for this decision”<br>“Abandon this decision”<br>“What's the status of my ‹…› decision? (one per item)”<br>“Should I repair or replace my ‹…›?” |
+| `HVAC_SPECIALIST_ENGAGE` | “Should I repair or replace my furnace?”<br>“Help me decide about ‹…› from my Home Actions (one per item)”<br>“Open my Home Actions”<br>“What needs my attention?” |
+| `HVAC_DECISION_SCENARIO` | “Should I repair or replace my ‹…›?” |
+| `HVAC_DECISION_ABANDON` | None listed |
+| `HVAC_PREFERENCE_SAVE` | “Save that we plan to sell in about 18 months”<br>“Remember I want to minimize long-term cost”<br>**After confirming:** “Should I repair or replace my HVAC?” |
+| `HVAC_PREFERENCE_FORGET` | “Forget my ownership horizon”<br>“Forget my repair/replace approach”<br>**After confirming:** “Should I repair or replace my HVAC?” |
+| `HVAC_DECISION_OUTCOME_REPORT` | “Should I repair or replace my ‹…›?” |
+| `HVAC_DECISION_OUTCOME_VIEW` | “Should I repair or replace my ‹…›?”<br>“I replaced my ‹…›”<br>“That outcome is wrong for my ‹…›” |
+| `HVAC_DECISION_OUTCOME_UNLINK` | None listed |
+
+#### Refinance
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `REFINANCE_ANALYSIS` | “Show other home savings opportunities”<br>“Use the full Financing Profile instead”<br>“What rate would make refinancing worth reviewing?”<br>“Is refinancing worth it right now?”<br>“Notify me when rates reach this level”<br>“What rate would open a stronger opportunity?”<br>“Show me the Mortgage Refinance Radar” |
+| `REFINANCE_RATE_MONITOR` | “Notify me when 30-year rates reach 5.5%”<br>“Notify me when 15-year rates reach 4.75%”<br>“Is refinancing worth reviewing now?” |
+
+#### Property Record
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `PROPERTY_SUMMARY` | “Summarize my home record”<br>“Show incomplete inventory records”<br>“List pending maintenance tasks”<br>“What details are missing?”<br>“Show me my home by room.”<br>“What changed recently?” |
+| `INVENTORY_LOOKUP` | “Open home inventory”<br>“List all inventory items”<br>“Show incomplete inventory records”<br>“Which systems are nearing end of life?”<br>“List all appliances” |
+| `HOME_CHANGE_SUMMARY` | “Summarize my home record”<br>“What should I do next?” |
+| `INVENTORY_ITEM_CORRECT` | “Correct the install date of ‹…› (one per item)”<br>“Correct the install date of ‹…›”<br>“Correct the purchase date of ‹…›”<br>**After confirming:** “Show my home inventory” |
+| `HOME_EVENT_CORRECT` | “Correct the title of the timeline event ‹…› (one per item)”<br>“Correct the title of the timeline event ‹…›”<br>“Correct the date of the timeline event ‹…›” |
+| `HOME_EVENT_VISIBILITY` | “Change the visibility of the timeline event ‹…› (one per item)”<br>**After confirming:** “Show my home timeline” |
+| `WARRANTY_CORRECT` | “Correct the expiry date of the ‹…› warranty (one per item)”<br>“Correct the provider of the ‹…› warranty”<br>“Correct the expiry date of the ‹…› warranty”<br>**After confirming:** “Show my warranties” |
+| `ROOM_RENAME` | “Rename ‹…›”<br>“Change the ‹…› of ‹…›”<br>**After confirming:** “Show my rooms” |
+| `ROOM_CREATE` | “Show my rooms” |
+| `INVENTORY_ITEM_CREATE` | “Show my inventory”<br>**After confirming:** “Show my home inventory” |
+| `PROPERTY_CONTEXT_AREA_CAPTURE` | “How complete is my home record?” |
+
+#### Capital Planning
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `CAPITAL_RESERVE_PLAN` | “Show my home inventory”<br>“Show my capital timeline with the earliest expense first.”<br>“Should I repair or replace ‹…›?” |
+
+#### Coverage
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `COVERAGE_GAPS` | “Which gaps have the largest exposure?”<br>“Show warranties expiring soon”<br>“Which items are missing coverage evidence?” |
+| `COVERAGE_COMPARISON_STATUS` | “Which items have missing coverage?”<br>“Open coverage comparison” |
+
+#### Household
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOUSEHOLD_INVITATION` | “What can my current household role do?”<br>“Open household settings instead”<br>**After confirming:** “Who currently has access to this home?” |
+
+#### Ownership Cost
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `OWNERSHIP_COSTS` | “Add this detail and retry automatically”<br>“Open Ownership Costs”<br>“Show operating expenses only”<br>“Which category costs the most?”<br>“Where could I save money?”<br>“Show cash outflow including mortgage principal” |
+
+#### Property Tax
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `PROPERTY_TAX_APPEAL_READINESS` | “Show my recorded property-tax facts”<br>“Which tax facts are missing?”<br>“Open Property Tax Center” |
+
+#### Quote Comparison
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `QUOTE_COMPARISON_CREATE` | “Create a quote comparison for roofing”<br>“Create a quote comparison for plumbing” |
+| `QUOTE_COMPARISON_REVIEW` | “Create a quote comparison workspace for roofing bids”<br>“What makes these quotes incomparable?”<br>“Open quote comparison” |
+
+#### Renovation
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `RENOVATION_PERMIT_READINESS` | “What permits are already recorded?”<br>“Is ‹…› ready to start? (one per item)”<br>“What is blocking this renovation?” |
+
+#### Savings
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `SAVINGS_OPPORTUNITIES` | “Ask a household owner or contributor to improve the savings context”<br>“Which opportunity has the fastest payback?”<br>“Open Savings and Benefits to add installed systems”<br>“Where else could I save money?”<br>“What savings have I already realized?” |
+
+#### Sell, Hold, or Rent
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `SELL_HOLD_RENT_ANALYSIS` | “Ask a household owner or contributor to improve the property context”<br>“Open Sell / Hold / Rent”<br>“What assumptions matter most?”<br>“How much does this home cost each month?” |
+
+#### Break-Even
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `BREAK_EVEN_ANALYSIS` | “Should I sell, hold, or rent this home?”<br>“What does this home cost me each year?” |
+
+#### Around Your Home
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `NEIGHBORHOOD_CHANGE_FEED` | “What is happening near my home?”<br>“Show my home event radar feed” |
+
+#### Home Risk Replay
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `PAST_HAZARD_EXPOSURE` | “What is happening near my home?”<br>“Which of my systems are unprotected?” |
+
+#### Status Board
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOME_STATUS_BOARD` | “What maintenance is due?”<br>“Should I repair or replace my oldest appliance?” |
+
+#### Home Habit Coach
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOME_HABITS` | “What maintenance is due?”<br>“Show my status board” |
+
+#### Home Continuity Plan
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOME_DIGITAL_WILL` | “What home records do I have?”<br>“What maintenance is due?” |
+
+#### Plant Advisor care outlook
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `PLANT_CARE_OUTLOOK` | “What maintenance is due?” |
+
+#### Negotiation Shield
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `NEGOTIATION_SHIELD_CASES` | “Compare my service quotes” |
+
+#### Home Upgrade Planner
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOME_UPGRADE_SCENARIOS` | “What maintenance is due?” |
+
+#### DIY Project Center
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `DIY_PROJECTS` | “What maintenance is due?” |
+
+#### Project Tracker
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `PROJECT_TRACKER_PROJECTS` | “What maintenance is due?” |
+
+#### Service Price Radar
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `SERVICE_PRICE_CHECKS` | “Compare my service quotes” |
+
+#### Home Timeline
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOME_TIMELINE_EVENTS` | “What changed at my home recently?” |
+
+#### Material Specs
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `MATERIAL_SPECS_LIST` | “Summarize my home record” |
+
+#### Property Brief
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `PROPERTY_BRIEFS_LIST` | “Summarize my home record” |
+
+#### Guidance Overview
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `GUIDANCE_JOURNEYS_LIST` | “Start a step-by-step plan for this home project” |
+| `GUIDANCE_JOURNEY_CONTINUE` | “Show my guided journeys” |
+| `GUIDANCE_STEP_SKIP` | “Show my guided journeys” |
+| `GUIDANCE_JOURNEY_DISMISS` | “Show my guided journeys” |
+
+#### HOA Compliance
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOA_COMPLIANCE_STATUS` | “Is my renovation ready to start?” |
+
+#### Price Finalization
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `PRICE_FINALIZATIONS_LIST` | “Compare my service quotes” |
+
+#### Do-Nothing Simulator
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `DO_NOTHING_SIMULATION` | “What coverage gaps does my home have?”<br>“What are my monthly ownership costs?” |
+
+#### Warranties
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `WARRANTY_LOOKUP` | “Show my warranties”<br>“Which warranties expire within 60 days?” |
+
+#### Appliance Oracle
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `APPLIANCE_FAILURE_RISK` | “Show my inventory”<br>“When should I replace my water heater?” |
+
+#### Budget Planner
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `MAINTENANCE_BUDGET_FORECAST` | “What are my monthly ownership costs?” |
+
+#### Seller Preparation
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `MAJOR_EVENT_ENTRY` | “Should I sell, hold, or rent?”<br>“Check sale readiness”<br>“Is my renovation ready to start?”<br>“Do I need a permit?”<br>“Summarize my home record”<br>“What should I do next?”<br>“Show me another available option”<br>“What can help with this goal instead?”<br>“Help me compare contractor quotes”<br>“I want to plan future replacements”<br>“Can you monitor refinance rates?”<br>“Help me narrow these options”<br>“Show only tools ready for this home”<br>“What information does this tool need?”<br>“What result will I get?”<br>“Show another option” |
+
+#### Seller Prep Checklist
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `SELLER_PREP_CHECKLIST` | “Should I sell, hold, or rent this home?”<br>“What should I prioritize first?”<br>“Open seller prep”<br>“Open Sell / Hold / Rent” |
+| `SELLER_PREP_ITEM_DECISION` | None listed<br>**After confirming:** “Check my sale readiness” |
+
+#### Buyer & Closing
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `BUYER_PLAN_STATUS` | “What is due before closing?”<br>“Which transaction documents are missing?”<br>“What should I do next for this home?” |
+| `BUYER_DEADLINES` | “What should I do next for this purchase?”<br>“Which transaction documents are missing?”<br>“What should I do next for this home?” |
+| `BUYER_DOCUMENT_READINESS` | “What is due before closing?”<br>“Which inspection findings still need a decision?”<br>“What should I do next for this home?” |
+| `BUYER_INSPECTION_REVIEW` | “What should I do next for this purchase?”<br>“What is due before closing?”<br>“What should I do next for this home?” |
+| `BUYER_TASK_COMPLETE` | “What should I do next for this purchase?”<br>“What is due before closing?”<br>“Mark the ‹…› buyer plan task complete (one per item)” |
+| `BUYER_TASK_CREATE` | “What should I do next for this purchase?”<br>“Add final walkthrough photos to my buyer plan” |
+| `BUYER_TASK_UPDATE` | “What should I do next for this purchase?”<br>“Reschedule the ‹…› buyer plan task (one per item)”<br>“Assign ‹…› to ‹…› (one per item)” |
+| `BUYER_MOVE_STATUS` | “What should I do next for this purchase?”<br>“What is due before closing?”<br>“What should I do next for this home?” |
+| `BUYER_FINANCING_READINESS` | “What should I do next for this purchase?”<br>“What is due before closing?”<br>“What should I do next for this home?” |
+| `BUYER_TITLE_ESCROW_READINESS` | “What should I do next for this purchase?”<br>“What is due before closing?”<br>“What should I do next for this home?” |
+| `BUYER_WALKTHROUGH_READINESS` | “What should I do next for this purchase?”<br>“What is due before closing?”<br>“What should I do next for this home?” |
+| `BUYER_DISCLOSURE_FUNDS_READINESS` | “What should I do next for this purchase?”<br>“What is due before closing?”<br>“What do I need for closing day?”<br>“What should I do next for this home?” |
+| `BUYER_CLOSING_DAY_READINESS` | “What is due before closing?”<br>“What should I do next for this purchase?”<br>“What should I do next for this home?” |
+| `BUYER_CONTRACT_TIMELINE` | “What should I do next for this purchase?”<br>“What is due before closing?”<br>“What should I do next for this home?” |
+| `BUYER_NEGOTIATION_READINESS` | “Which inspection findings still need a decision?”<br>“What is due before closing?”<br>“What should I do next for this home?” |
+| `BUYER_COST_READINESS` | “What is due before closing?”<br>“What should I do next for this purchase?”<br>“What should I do next for this home?” |
+| `BUYER_FINDING_DISPOSITION` | “Which inspection findings still need a decision?”<br>“Move the ‹…› finding into my post-close plan (one per item)”<br>**After confirming:** “What should I do next for this purchase?” |
+| `BUYER_LIFECYCLE_UPDATE` | “What do I need for closing day?”<br>“What should I do next for this purchase?”<br>“Cancel this purchase: financing fell through” |
+
+#### Claims
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `INCIDENT_CLAIM_STATUS` | “What do I need for an insurance claim?”<br>“What should I do next?” |
+| `CLAIM_FILE` | None listed<br>**After confirming:** “What should I gather for this claim?” |
+| `CLAIM_TRANSITION` | “Review the claim and choose its next valid lifecycle step.”<br>“Show my open claims” |
+| `INCIDENT_CONTINUATION` | “File a water damage claim”<br>“What is the status of my open claim?” |
+
+#### Home Operations
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOME_ACTIONS` | “Summarize my home record”<br>“What maintenance is pending?”<br>“What else needs my attention?”<br>“Ask again to retry”<br>“Anything urgent?”<br>“What should I plan?”<br>“What can wait?”<br>“Summarize this home record before closing.”<br>“What are the ownership costs for this home after purchase?” |
+| `OPERATIONAL_WORK_UPDATE` | “Complete ‹…›; it is working as expected”<br>“Complete ‹…›; it still needs attention”<br>“Complete ‹…›; it failed again”<br>**After confirming:** “What needs my attention next?” |
+| `GUIDANCE_JOURNEY_CREATE` | “Start a guided plan for ‹…› (one per item)” |
+
+#### Inspection Findings
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `INSPECTION_FINDINGS` | “Accept ‹…› finding ‹…› as work (one per item)” |
+| `INSPECTION_FINDING_UPDATE` | “Show remaining inspection findings” |
+
+#### Document Review and Promotion
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `DOCUMENT_PROMOTION_REVIEW` | “Confirm document candidate ‹…› (one per item)” |
+| `DOCUMENT_PROMOTION_CONFIRM` | None listed<br>**After confirming:** “Show remaining document reviews” |
+
+#### Documents
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `DOCUMENT_LOOKUP` | “Show my documents”<br>“Open Home Records” |
+
+#### Query Intelligence Envelope
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `INTELLIGENCE_ENVELOPE_QUERY` | “Summarize my home record”<br>“Try the query again”<br>“Show more intelligence”<br>“Ask about a specific intelligence domain” |
+
+#### Home Event Radar
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `HOME_EVENT_RADAR_FEED` | “Ask again later”<br>“Show more monitored events” |
+| `HOME_EVENT_RADAR_STATE` | “Show my home event radar feed” |
+| `HOME_EVENT_RADAR_MARK_DONE` | “Show my home event radar feed” |
+| `HOME_EVENT_RADAR_FEEDBACK` | “Show my home event radar feed” |
+| `HOME_EVENT_RADAR_TASK` | “Show my home event radar feed” |
+| `HOME_EVENT_RADAR_PREFERENCES` | “Show my home event radar feed” |
+
+#### Operations that belong to no Skill
+
+| Operation | Suggested follow-ups |
+| --- | --- |
+| `RECALL_REVIEW` | “Open Recalls & Safety Alerts” |
+| `RECALL_MATCH_UPDATE` | None listed<br>**After confirming:** “Show remaining recall matches” · “Show my open recall matches” |
+| `CAPABILITY_DISCOVERY` | “Show me another available option”<br>“What can help with this goal instead?”<br>“Help me compare contractor quotes”<br>“I want to plan future replacements”<br>“Can you monitor refinance rates?”<br>“Help me narrow these options”<br>“Show only tools ready for this home”<br>“What information does this tool need?”<br>“What result will I get?”<br>“Show another option” |
+| `EMERGENCY_BOUNDARY` | “Follow instructions from emergency responders or the utility.”<br>“Do not wait for an app assessment when there may be immediate danger.” |
+| `UNSAFE_RESTRICTED_BOUNDARY` | “Review the safe permit, inspection, or policy-verification path.”<br>“Open only the records available for your selected home.”<br>“Consult the appropriate authority or qualified professional for a controlling determination.”<br>“What is required before my renovation can start?”<br>“Which home records should I verify?” |
+| `OUT_OF_SCOPE_BOUNDARY` | “What maintenance is pending?”<br>“Which items are missing coverage?”<br>“Is there a tool to help with refinancing?” |
+| `GROUNDED_GUIDANCE` | “What maintenance is pending?”<br>_plus prompts built at runtime_ |
+| `CAPTURE_FACT_CONFIRM` | None listed |
+| `CAPTURE_EVENT_CONFIRM` | None listed |
+| `CAPTURE_WARRANTY_CONFIRM` | None listed |
+| `CAPTURE_EVIDENCE_CONFIRM` | None listed |
+| `SELL_HOLD_RENT_GOAL_CAPTURE` | None listed |
+
+### Skill handoffs (suggested next Skill)
+
+Eligible only when the source operation finishes with one of the listed statuses. A handler can also pick which allowlisted handoff to show for a given result (`AskFollowUpNomination`).
+
+| After this operation | Suggest | Goal | When |
+| --- | --- | --- | --- |
+| `PROPERTY_SUMMARY` | `MAINTENANCE_STATUS` (maintenance) | `understand-maintenance-status` | answered or ready with limitations |
+| `BUYER_PLAN_STATUS` | `PROPERTY_SUMMARY` (property-record) | `summarize-property-record` | answered or ready with limitations |
+| `HOME_ACTIONS` | `MAINTENANCE_STATUS` (maintenance) | `understand-maintenance-status` | answered or ready with limitations |
+| `INCIDENT_CLAIM_STATUS` | `COVERAGE_GAPS` (coverage) | `review-coverage-gaps` | answered or ready with limitations |
+| `CLAIM_FILE` | `HOME_ACTIONS` (home-operations) | `review-home-actions-feed` | completed |
+| `CLAIM_TRANSITION` | `COVERAGE_GAPS` (coverage) | `review-coverage-gaps` | completed |
+| `INSPECTION_FINDING_UPDATE` | `HOME_ACTIONS` (home-operations) | `review-home-actions-feed` | completed |
+| `DOCUMENT_PROMOTION_CONFIRM` | `PROPERTY_SUMMARY` (property-record) | `summarize-property-record` | completed |
+| `BUYER_LIFECYCLE_UPDATE` | `PROPERTY_SUMMARY` (property-record) | `summarize-property-record` | completed |
+
 ## Other related components
 
 | Component | Plain-English role | Where |
