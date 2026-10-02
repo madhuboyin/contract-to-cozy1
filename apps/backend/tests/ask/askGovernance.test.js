@@ -386,6 +386,7 @@ test('golden and negative prompts route before remote generation', () => {
     ['Where can I save money on home costs?', 'SAVINGS_OPPORTUNITIES'],
     ['Show my appliance inventory', 'INVENTORY_LOOKUP'],
     ['Summarize my home record', 'PROPERTY_SUMMARY'],
+    ['Show my rooms', 'PROPERTY_SUMMARY'],
     ['Are there any pending details to be filled for the home?', 'PROPERTY_SUMMARY'],
     ['What information is missing from my property record?', 'PROPERTY_SUMMARY'],
     ['What do I still need to add to my home profile?', 'PROPERTY_SUMMARY'],

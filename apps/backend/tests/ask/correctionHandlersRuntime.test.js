@@ -1199,6 +1199,8 @@ test('ROOM_CREATE confirm creates the room with a narrowed body and repeats the 
   assert.deepEqual([...calls.markers].sort(), ['coverage', 'doNothing', 'risk']);
   assert.equal(result.reasonCode, 'ROOM_CREATED');
   assert.equal(result.blocks[0].title, 'Room added');
+  assert.deepEqual(result.blocks[0].actions, [], 'the receipt keeps the homeowner in Ask');
+  assert.deepEqual(result.suggestions, ['Show my rooms']);
   assert.deepEqual([artifactType, artifactId], ['INVENTORY_ROOM', 'room-new']);
 });
 

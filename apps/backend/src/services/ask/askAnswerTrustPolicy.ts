@@ -99,7 +99,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_EVENT_VISIBILITY: new Set(['open-timeline', 'open-home-timeline']),
   WARRANTY_CORRECT: new Set(['open-warranties']),
   ROOM_RENAME: new Set(['open-rooms']),
-  ROOM_CREATE: new Set(['open-rooms']),
+  ROOM_CREATE: new Set(),
   INVENTORY_ITEM_CREATE: new Set(['open-inventory', 'open-rooms']),
   PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['open-property-record', 'continue-area-capture']),
   // Every action id PROPERTY_SUMMARY actually emits: the record link, one secondary "open the full collection"

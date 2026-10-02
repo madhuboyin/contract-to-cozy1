@@ -126,3 +126,17 @@ test('the production answer checker keeps a conversational room-map answer intac
   assert.deepEqual(block.sections[0].items.map((item) => [item.title, item.badgeLabel ?? null]), [['KITCHEN_MAIN', '1 open task'], ['Den', null]]);
   assert.deepEqual(checked.semantic?.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
 });
+
+test('the receipt suggestion "Show my rooms" returns the focused room map without clarification', async () => {
+  install([room('primary', { name: 'Primary bedroom', type: 'BEDROOM', floorLevel: 1 })]);
+  const result = await invoke('OWNER', 'Show my rooms');
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'Show my rooms', operationId: 'PROPERTY_SUMMARY', propertyId: 'p1', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('PROPERTY_SUMMARY')]),
+  });
+  assert.equal(checked.result.status, result.status, 'answer trust must preserve the canonical room result');
+  assert.equal(checked.result.clarification, undefined);
+  assert.deepEqual(checked.result.blocks.map((block) => block.id), ['property-summary', 'property-rooms']);
+  assert.equal(checked.result.blocks[0].title, '1 room recorded');
+  assert.deepEqual(roomsBlock(checked.result).sections[0].items.map((item) => item.title), ['Primary bedroom']);
+});

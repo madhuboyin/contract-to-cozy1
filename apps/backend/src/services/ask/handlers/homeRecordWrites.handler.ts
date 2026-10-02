@@ -832,21 +832,19 @@ function roomCreateCaptureRequest(contextVersion: string, entered?: Partial<Room
 
 export async function roomCreateResult(userId: string, propertyId: string, suppliedInput: RoomCreateInput | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const roomsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/rooms`;
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'room-add-permission', title: 'A contributor or owner can add a room', body: 'Your role can view rooms but not add them. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }] }],
-      suggestions: [],
+      blocks: [{ type: 'SUMMARY', id: 'room-add-permission', title: 'A contributor or owner can add a room', body: 'Your role can view rooms but not add them. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      suggestions: ['Show my rooms'],
     };
   }
   const contextVersion = roomCreateContextVersion(propertyId);
-  const openRooms = { id: 'open-rooms', label: 'Open Rooms instead', href: roomsHref, style: 'SECONDARY' as const };
   if (!suppliedInput) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'ROOM_CREATE_INPUT_REQUIRED', contextVersion,
       parameters: { sourceExecutionId },
-      blocks: [{ type: 'SUMMARY', id: 'room-create-input', title: 'Add a room', body: 'Nothing has been added yet. Enter the details, then review them before the room is added.', tone: 'DEFAULT', actions: [openRooms] }],
+      blocks: [{ type: 'SUMMARY', id: 'room-create-input', title: 'Add a room', body: 'Nothing has been added yet. Enter the details, then review them before the room is added.', tone: 'DEFAULT', actions: [] }],
       captureRequests: [roomCreateCaptureRequest(contextVersion)], suggestions: [],
     };
   }
@@ -855,7 +853,7 @@ export async function roomCreateResult(userId: string, propertyId: string, suppl
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'ROOM_NAME_ALREADY_USED', contextVersion,
       parameters: { sourceExecutionId },
-      blocks: [{ type: 'SUMMARY', id: 'room-create-name-used', title: `A room named "${suppliedInput.name}" already exists`, body: 'Choose a different name. Nothing has been added.', tone: 'CAUTION', actions: [openRooms] }],
+      blocks: [{ type: 'SUMMARY', id: 'room-create-name-used', title: `A room named "${suppliedInput.name}" already exists`, body: 'Choose a different name. Nothing has been added.', tone: 'CAUTION', actions: [] }],
       captureRequests: [roomCreateCaptureRequest(contextVersion, suppliedInput)], suggestions: [],
     };
   }
@@ -863,7 +861,7 @@ export async function roomCreateResult(userId: string, propertyId: string, suppl
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'ROOM_CREATE_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { roomCreate: suppliedInput, roomCreateContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
-    blocks: [{ type: 'SUMMARY', id: 'room-create-review', title: 'Review this room', body: 'You entered these details. Nothing is added until you confirm.', tone: 'DEFAULT', actions: [openRooms] }],
+    blocks: [{ type: 'SUMMARY', id: 'room-create-review', title: 'Review this room', body: 'You entered these details. Nothing is added until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `room-create-${createHash('sha256').update(`${propertyId}:${suppliedInput.name}`).digest('hex').slice(0, 12)}-1`, version: 1,
       title: `Add the room "${suppliedInput.name}"?`,

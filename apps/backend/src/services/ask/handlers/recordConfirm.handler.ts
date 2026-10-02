@@ -531,7 +531,7 @@ async function confirmRoomCreate(ctx: ConfirmCapabilityContext): Promise<Confirm
       type: 'WORKFLOW_PROGRESS', id: `room-created-${roomId}`, title: alreadyAdded ? 'Room already added' : 'Room added', status: 'COMPLETED',
       description: 'The room is now part of your home record and dependent coverage analysis was marked for refresh.',
       details: [{ label: 'Room name', value: name }, { label: 'Type', value: roomTypeLabel(type) }, ...(floorLevel !== null ? [{ label: 'Floor level', value: String(floorLevel) }] : [])],
-      actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/rooms`, style: 'PRIMARY' }],
+      actions: [],
     }],
     suggestions: ['Show my rooms'],
   };
