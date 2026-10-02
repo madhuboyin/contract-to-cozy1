@@ -72,3 +72,12 @@ test('a single record uses labeled cards without presenting a meaningless view s
   expect(container.querySelector('[data-table-presentation="cards"]')).toBeInTheDocument();
   expect(screen.getByText('1 record. View: cards.')).toBeInTheDocument();
 });
+
+test('a producer can prefer a table for a single record without enabling a meaningless switch', () => {
+  const single = { ...block, id: 'ownership-cost-categories', preferredPresentation: 'TABLE' as const, rows: block.rows.slice(0, 1), totalCount: 1 };
+  const { container } = render(<Harness table={single} />);
+  expect(screen.queryByRole('group', { name: 'View Ownership costs' })).not.toBeInTheDocument();
+  expect(screen.getByRole('table', { name: 'Ownership costs' })).toBeInTheDocument();
+  expect(container.querySelector('[data-table-presentation="cards"]')).not.toBeInTheDocument();
+  expect(screen.getByText('1 record. View: table.')).toBeInTheDocument();
+});

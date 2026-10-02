@@ -14,6 +14,8 @@ const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAn
 const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 const { getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const win = (id, overrides = {}) => ({
   id, category: 'ROOF', windowStart: new Date('2027-03-15T12:00:00.000Z'), windowEnd: new Date('2029-03-14T12:00:00.000Z'), confidence: 'MEDIUM',
@@ -93,4 +95,10 @@ test('phrasings that scored below the relevance floor with the earlier answer ar
     });
     assert.equal(checked.result.status, 'ANSWERED', `${question}: ${JSON.stringify(checked.semantic)}`);
   }
+});
+
+test('repair-or-replace follow-up names a real capital-plan item instead of asking for an ambiguous oldest system', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/capitalPlanning.handler.ts'), 'utf8');
+  assert.match(source, /`Should I repair or replace \$\{firstNamedItem\}\?`/);
+  assert.doesNotMatch(source, /Should I repair or replace my oldest system\?/);
 });

@@ -11,6 +11,8 @@ const {
   attachAskAuthoritativeSourceEvidence,
   completedAskAuthoritativeSourceEvidence,
 } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const QUESTION = 'Where could I save money on this home?';
 
@@ -86,4 +88,13 @@ test('the savings contract rejects unrelated canonical response blocks', () => {
       body: 'Recorded monthly expenses.', tone: 'DEFAULT', actions: [],
     }],
   }), false);
+});
+
+test('savings results keep reviews inline and expose only registered domain continuations', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/savingsOwnership.handler.ts'), 'utf8');
+  assert.doesNotMatch(source, /label: 'Open Savings and Benefits'/);
+  assert.doesNotMatch(source, /label: 'Review all opportunities'/);
+  assert.match(source, /operationId: 'PROPERTY_TAX_APPEAL_READINESS'/);
+  assert.match(source, /operationId: 'COVERAGE_GAPS'/);
+  assert.match(source, /operationId: 'REFINANCE_ANALYSIS'/);
 });

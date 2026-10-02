@@ -78,7 +78,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
           opportunity.estimatedPaybackMonths == null ? null : `Estimated payback ${opportunity.estimatedPaybackMonths} months`,
         ].filter((value): value is string => Boolean(value)),
         status: opportunity.status,
-        href: `${workspaceHref}?family=RECURRING_COST&opportunityId=${encodeURIComponent(opportunity.id)}`,
+        href: null,
         paybackMonths: opportunity.estimatedPaybackMonths,
       };
     })
@@ -98,7 +98,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       description: match.description,
       meta: [value ? `Estimated ${value}` : 'Value not quantified', match.eligibilityLabel, match.sourceLabel, match.freshnessNote].filter((value): value is string => Boolean(value)),
       status: match.status,
-      href: `${workspaceHref}?family=BENEFIT&opportunityId=${encodeURIComponent(match.id)}`,
+      href: null,
     };
   });
 
@@ -112,7 +112,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       item.deadline ? `Deadline ${humanDate(new Date(item.deadline))}` : null,
     ].filter((value): value is string => Boolean(value)),
     status: item.statusLabel,
-    href: item.detailHref,
+    href: null,
   }));
 
   const realized = unified.realized.slice(0, 8).map((item) => ({
@@ -124,7 +124,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       item.verificationState ? `${item.verificationState.toLowerCase()} outcome` : 'Homeowner-recorded outcome',
     ],
     status: 'REALIZED',
-    href: item.detailHref,
+    href: null,
   }));
 
   const related = unified.relatedOpportunities.slice(0, 5).map((item) => ({
@@ -133,8 +133,22 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     description: item.summary,
     meta: ['Owned by its dedicated ContractToCozy analysis'],
     status: 'RELATED',
-    href: item.detailHref,
+    href: null,
   }));
+
+  const relatedActions: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['actions'] = [];
+  if (unified.relatedOpportunities.some((item) => item.domain === 'PROPERTY_TAX')) relatedActions.push({
+    id: 'review-property-tax-opportunity', label: 'Review property tax opportunity', interactionType: 'START_WORKFLOW',
+    message: 'Review my property-tax appeal readiness.', operationId: 'PROPERTY_TAX_APPEAL_READINESS', style: 'SECONDARY',
+  });
+  if (unified.relatedOpportunities.some((item) => item.domain === 'COVERAGE')) relatedActions.push({
+    id: 'review-coverage-opportunity', label: 'Review coverage gaps', interactionType: 'START_WORKFLOW',
+    message: 'Show my current coverage gaps.', operationId: 'COVERAGE_GAPS', style: 'SECONDARY',
+  });
+  if (unified.relatedOpportunities.some((item) => item.domain === 'REFINANCE')) relatedActions.push({
+    id: 'review-refinance-opportunity', label: 'Review refinance opportunity', interactionType: 'START_WORKFLOW',
+    message: 'Review my current refinance analysis.', operationId: 'REFINANCE_ANALYSIS', style: 'SECONDARY',
+  });
 
   const availableCount = recurring.length + reviewedBenefits.length;
   const hasAnyResult = availableCount + inProgress.length + realized.length + related.length > 0;
@@ -172,7 +186,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
         ? 'Open Savings and Benefits to run the governed analysis. Ask will not infer that no savings exist from an empty record.'
         : 'The sections below separate available estimates, actions already in progress, verified or homeowner-recorded outcomes, and opportunities owned by other domain tools.',
     tone: homeSavings.potentialAnnualSavings > 0 || availableCount > 0 ? 'POSITIVE' : 'DEFAULT',
-    actions: [{ id: 'open-savings', label: neverAnalyzed ? 'Run Savings and Benefits' : 'Open Savings and Benefits', href: workspaceHref, style: 'PRIMARY' }],
+    actions: neverAnalyzed ? [{ id: 'open-savings', label: 'Run analysis in Savings and Benefits', href: workspaceHref, style: 'SECONDARY' }] : [],
   }];
 
   if (hasAnyResult) {
@@ -186,7 +200,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
         { id: 'realized', title: 'Recorded realized savings', count: unified.totals.realizedCount, items: realized },
         { id: 'related', title: 'Related savings decisions', count: related.length, items: related },
       ].filter((section) => section.count > 0),
-      actions: [{ id: 'review-all-savings', label: 'Review all opportunities', href: workspaceHref, style: 'PRIMARY' }],
+      actions: relatedActions,
     });
   }
 
@@ -275,7 +289,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
         type: 'SUMMARY', id: 'ownership-costs-unavailable', title: 'A current ownership-cost total is not ready yet',
         body: 'Ask could not load a canonical ownership-cost snapshot. Missing categories are not treated as zero. Improve the home context below or open Ownership Costs to review and refresh its source records.',
         tone: 'CAUTION',
-        actions: [{ id: 'open-ownership-costs', label: 'Open Ownership Costs', href: workspaceHref, style: 'PRIMARY' }],
+        actions: [{ id: 'open-ownership-costs', label: 'Open Ownership Costs tool', href: workspaceHref, style: 'SECONDARY' }],
       }],
       suggestions: captureRequests.length ? ['Add this detail and retry automatically'] : ['Open Ownership Costs'],
     };
@@ -306,10 +320,13 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
       : `This home’s recorded ${lensLabel} is about ${monthly} per month`,
     body: `${annual} per year is included in the ${lensLabel} lens.${categoryFocus && largestCategory ? ` ${largestCategory.label} represents ${costs.snapshot.annualTotalCents > 0 ? Math.round(((largestCategory.amountCents ?? 0) / costs.snapshot.annualTotalCents) * 100) : 0}% of that recorded total.` : ''} ${money(costs.evidenceSummary.confirmedAnnualCents / 100)} is supported by confirmed or observed records and ${money(costs.evidenceSummary.estimatedAnnualCents / 100)} is estimated. ${missing.length ? `${missing.length} included categor${missing.length === 1 ? 'y is' : 'ies are'} still missing and not counted as zero.` : 'No included category is currently marked missing.'}`,
     tone: coverageLimited ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-ownership-costs', label: 'Review Ownership Costs', href: workspaceHref, style: 'PRIMARY' }],
+    // This answer already contains the current canonical ownership-cost
+    // review. Do not duplicate it with a desktop navigation CTA.
+    actions: [],
   }, {
     type: 'TABLE', id: 'ownership-cost-categories', title: 'Cost by category',
     description: `Categories included in the ${lensLabel} lens, ordered by annual amount.`,
+    preferredPresentation: 'TABLE',
     columns: [{ key: 'category', label: 'Category' }, { key: 'monthly', label: 'Monthly' }, { key: 'annual', label: 'Annual' }, { key: 'evidence', label: 'Evidence' }],
     rows: included.map((category) => ({
       id: category.category,
@@ -325,19 +342,15 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
 
   if (missing.length) {
     blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'ownership-cost-missing', title: 'Information that could improve this total',
+      type: 'TABLE', id: 'ownership-cost-missing', title: 'Information that could improve this total',
       description: 'These categories are applicable or unresolved, but no amount is currently included.',
-      sections: [{
-        id: 'missing', title: 'Missing from the selected lens', count: missing.length,
-        items: missing.map((category) => ({
-          id: category.category,
-          title: category.label,
-          description: category.missingDependencies.length ? category.missingDependencies.join(' · ') : 'No usable current amount is recorded.',
-          meta: [category.correction.label],
-          status: 'MISSING',
-          href: category.correction.href,
-        })),
-      }],
+      preferredPresentation: 'TABLE',
+      columns: [{ key: 'category', label: 'Category' }, { key: 'missing', label: 'Missing information' }, { key: 'nextStep', label: 'Suggested next step' }],
+      rows: missing.map((category) => ({ id: category.category, values: {
+        category: category.label,
+        missing: category.missingDependencies.length ? category.missingDependencies.join(' · ') : 'No usable current amount is recorded.',
+        nextStep: category.correction.label,
+      } })),
       actions: [],
     });
   }

@@ -219,6 +219,9 @@ const TableBlockSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().nullable().optional(),
+  // A producer may declare the clearest lossless default for a specific
+  // result. A homeowner's stored view choice still wins when choices apply.
+  preferredPresentation: z.enum(['AUTO', 'TABLE', 'CARDS']).optional(),
   columns: z.array(z.object({ key: z.string(), label: z.string() })).min(1).max(12),
   rows: z.array(z.object({ id: z.string(), values: z.record(z.string(), z.string()) })).max(100),
   // The true row count when the adapter truncated for display (e.g. a

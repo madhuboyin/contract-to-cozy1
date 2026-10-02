@@ -27,10 +27,13 @@ export type AdaptiveTableDecision = {
  * between registered, lossless table and labeled-card renderers.
  */
 export function resolveAdaptiveTablePresentation(block: TableBlock, preference: TablePresentationPreference): AdaptiveTableDecision {
-  if (block.rows.length <= 1) return { mode: 'CARDS', offersChoice: false, reason: 'SINGLE_RECORD' };
+  const effectivePreference = preference === 'AUTO' ? block.preferredPresentation ?? 'AUTO' : preference;
+  if (block.rows.length <= 1) return preference === 'AUTO' && block.preferredPresentation === 'TABLE'
+    ? { mode: 'TABLE', offersChoice: false, reason: 'USER_CHOICE' }
+    : { mode: 'CARDS', offersChoice: false, reason: 'SINGLE_RECORD' };
   if (block.columns.length <= 1) return { mode: 'CARDS', offersChoice: false, reason: 'INSUFFICIENT_COMPARISON_DIMENSIONS' };
-  if (preference === 'TABLE') return { mode: 'TABLE', offersChoice: true, reason: 'USER_CHOICE' };
-  if (preference === 'CARDS') return { mode: 'CARDS', offersChoice: true, reason: 'USER_CHOICE' };
+  if (effectivePreference === 'TABLE') return { mode: 'TABLE', offersChoice: true, reason: 'USER_CHOICE' };
+  if (effectivePreference === 'CARDS') return { mode: 'CARDS', offersChoice: true, reason: 'USER_CHOICE' };
   return { mode: 'RESPONSIVE', offersChoice: true, reason: 'RESPONSIVE_DEFAULT' };
 }
 

@@ -10,6 +10,8 @@ const {
   attachAskAuthoritativeSourceEvidence,
   completedAskAuthoritativeSourceEvidence,
 } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const QUESTIONS = [
   'What are my biggest ownership costs?',
@@ -98,4 +100,12 @@ test('ownership-cost contract rejects unrelated operation blocks', () => {
     status: 'ANSWERED', suggestions: [],
     blocks: [{ type: 'SUMMARY', id: 'savings-summary', title: 'Savings', body: 'Opportunities.', tone: 'DEFAULT', actions: [] }],
   }), false);
+});
+
+test('ownership-cost answers stay in Ask and render both recorded and missing categories as tables', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/savingsOwnership.handler.ts'), 'utf8');
+  assert.doesNotMatch(source, /label: 'Review Ownership Costs'/);
+  assert.match(source, /id: 'ownership-cost-categories'[\s\S]{0,300}preferredPresentation: 'TABLE'/);
+  assert.match(source, /type: 'TABLE', id: 'ownership-cost-missing'/);
+  assert.doesNotMatch(source, /type: 'GROUPED_LIST'[^\n]+id: 'ownership-cost-missing'/);
 });
