@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import type { AskPendingWorkItem } from '@/features/ask/types';
-import { askServiceIsPaused } from './support';
+import { askFailureCode, askServiceIsPaused } from './support';
 
 // Pending work (requests waiting on the person, across conversations): the load for the selected home, and dismissing
 // one. Moved out of AskWorkspace unchanged (P2, FRD v1.105). Resuming stays in the workspace because it switches the
@@ -46,6 +46,14 @@ export function usePendingWork({ selectedPropertyId, propertyMismatch, availabil
       setPendingWork((current) => current.filter((pending) => pending.execution.executionId !== item.execution.executionId));
       onDismissed();
     } catch (caught) {
+      // Pending work is a snapshot. Retention or another tab can remove the
+      // execution after that snapshot was loaded; in that case the requested
+      // end state is already true, so reconcile the stale row locally.
+      if (askFailureCode(caught) === 'ASK_EXECUTION_NOT_FOUND') {
+        setPendingWork((current) => current.filter((pending) => pending.execution.executionId !== item.execution.executionId));
+        onDismissed();
+        return;
+      }
       setError(caught instanceof Error ? caught.message : 'Could not dismiss this pending action.');
     } finally {
       setDismissingPendingId(null);

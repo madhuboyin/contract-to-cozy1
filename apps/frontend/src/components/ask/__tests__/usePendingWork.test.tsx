@@ -68,6 +68,31 @@ describe('usePendingWork', () => {
     expect(setError).toHaveBeenLastCalledWith('Could not dismiss this pending action.');
   });
 
+  it('reconciles an item that disappeared before it could be dismissed', async () => {
+    pending.mockResolvedValue({ success: true, data: { items: [item('a'), item('b')] } });
+    cancel.mockRejectedValue(Object.assign(new Error('An unexpected error occurred'), {
+      payload: { success: false, error: { code: 'ASK_EXECUTION_NOT_FOUND' } },
+    }));
+    const { hook, onDismissed, setError } = setup();
+    await waitFor(() => expect(ids(hook)).toEqual(['a', 'b']));
+    await act(async () => { await hook.result.current.dismissPendingWork(hook.result.current.pendingWork[0]); });
+    expect(ids(hook)).toEqual(['b']);
+    expect(onDismissed).toHaveBeenCalledTimes(1);
+    expect(setError).toHaveBeenCalledTimes(1);
+    expect(setError).toHaveBeenCalledWith(null);
+  });
+
+  it('keeps the item when cancellation fails for another reason', async () => {
+    pending.mockResolvedValue({ success: true, data: { items: [item('a')] } });
+    cancel.mockRejectedValue(new Error('Network error. Please check your connection.'));
+    const { hook, onDismissed, setError } = setup();
+    await waitFor(() => expect(ids(hook)).toEqual(['a']));
+    await act(async () => { await hook.result.current.dismissPendingWork(hook.result.current.pendingWork[0]); });
+    expect(ids(hook)).toEqual(['a']);
+    expect(onDismissed).not.toHaveBeenCalled();
+    expect(setError).toHaveBeenLastCalledWith('Network error. Please check your connection.');
+  });
+
   it('does not dismiss while a question runs, or a command recovery, or while another item is being resumed', async () => {
     pending.mockResolvedValue({ success: true, data: { items: [item('a'), item('r', 'COMMAND_RECOVERY')] } });
     cancel.mockResolvedValue({ success: true, data: { status: 'CANCELLED' } });
