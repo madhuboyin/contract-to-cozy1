@@ -204,7 +204,6 @@ test('Group C whole-tool destinations still navigate but are demoted to a second
   const cases = [
     { href: '/dashboard/properties/property-1/tools/savings-benefits?section=in-progress&actionId=action-1', overrides: {} },
     { href: '/dashboard/properties/property-1/renovations/case-1', overrides: {} },
-    { href: '/dashboard/properties/property-1/tools/sale-case?section=readiness&itemId=item-1', overrides: {} },
     { href: '/dashboard/properties/property-1/tools/capital-timeline?category=roof', overrides: {} },
     // Risk Premium Optimizer mitigation plan: identified by lineageId, not href (the href is a
     // per-item DIY/PROVIDER/CARRIER handoff link, not a fixed tool path).
@@ -242,6 +241,15 @@ test('Group C whole-tool destinations still navigate but are demoted to a second
     .find((block) => block.id === 'focused-home-action-guidance')
     .actions.find((candidate) => candidate.id === `home-action-primary-${unmappedAction.id}`);
   assert.equal(unmappedPrimary.style, 'PRIMARY');
+});
+
+test('focused sale-prep review continues with the checklist in Ask', () => {
+  const action = { ...weatherAction(), primaryCta: { label: 'Review sale-prep item', href: '/dashboard/properties/property-1/tools/sale-case?focusItemId=item-1' } };
+  const result = buildFocusedHomeActionGuidance(action, 'context-v1');
+  const primary = result.blocks.find((block) => block.id === 'focused-home-action-guidance').actions[0];
+  assert.equal(primary.interactionType, 'START_WORKFLOW');
+  assert.equal(primary.operationId, 'SELLER_PREP_CHECKLIST');
+  assert.equal(primary.href, undefined);
 });
 
 test('Group D repair/replace decision routes to REPLACEMENT_GUIDANCE with the item entity, instead of navigating', () => {
@@ -426,9 +434,7 @@ test('Group B resolution-center capture slice renders an inline captureRequest i
   const primary = result.blocks
     .find((block) => block.id === 'focused-home-action-guidance')
     .actions.find((candidate) => candidate.id === `home-action-primary-${action.id}`);
-  assert.equal(primary.href, action.primaryCta.href, 'the resolution-center escape hatch stays available');
-  assert.equal(primary.style, 'SECONDARY', 'CTA should be demoted once the fact is asked inline');
-  assert.equal(primary.interactionType, undefined);
+  assert.equal(primary, undefined, 'the inline capture replaces the redundant resolution-center CTA');
 
   // No captureRequest supplied (e.g. the handler found nothing active to ask, or the household
   // role can't improve context): unaffected, same PRIMARY navigation as before this slice.

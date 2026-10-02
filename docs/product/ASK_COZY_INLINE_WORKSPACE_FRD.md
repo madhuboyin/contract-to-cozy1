@@ -1051,6 +1051,8 @@ A functionally correct journey fails quality review when it introduces unnecessa
 
 **October 1 continuation correction:** Focused Home Action guidance's suggested follow-up, “What else needs my attention?”, routes deterministically back to `HOME_ACTIONS`; “else” no longer drops the prompt into generic clarification. Item-specific `/inventory/items/:itemId/coverage` Home Action CTAs route to `COVERAGE_GAPS` as an in-Ask workflow with the canonical `INVENTORY_ITEM` identity, and that handler scopes its authorized coverage records to the launched item. The traditional URL remains compatibility data, not the primary interaction.
 
+**October 2 focused-action and suggestion correction:** A focused Sale Prep Home Action's **Review sale-prep item** control now continues to the canonical `SELLER_PREP_CHECKLIST` inside Ask instead of opening the Sale Case desktop tool. A focused Home Record fact review (including Water Heater age/condition) uses its already-rendered inline capture and omits the redundant Resolution Center CTA. The exact suggested prompts **Which gaps have the largest exposure?** and **What should I prioritize first?** are deterministic continuations: the former accepts only the typed `COVERAGE_GAPS` response envelope, while the latter routes directly to `SELLER_PREP_CHECKLIST`; neither is allowed to degrade into presentation-version fallback or generic answer-relevance clarification.
+
 ### Phase 0 — Authority and coverage
 
 - Adopt this FRD and add precedence notes to conflicting documents.

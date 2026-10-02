@@ -31,6 +31,7 @@ test('sale-readiness / seller-prep phrasing routes to SELLER_PREP_CHECKLIST', ()
     "What's on my seller prep checklist?",
     'Am I ready to sell my house?',
     'Show my selling readiness',
+    'What should I prioritize first?',
   ]) {
     assert.equal(routeOf(message), 'SELLER_PREP_CHECKLIST', message);
   }

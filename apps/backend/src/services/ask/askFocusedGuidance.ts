@@ -113,6 +113,12 @@ function resolveGroupAAskRouting(href: string | undefined): FocusedAskRouting | 
   if (propertyToolPath('sell-hold-rent').test(pathname)) {
     return { operationId: 'SELL_HOLD_RENT_ANALYSIS', message: 'Should I sell, hold, or rent this property?' };
   }
+  // A focused sale-readiness Home Action already names the exact item in the
+  // answer above. Continue with the canonical checklist in Ask instead of
+  // sending the primary review CTA back to the Sale Case desktop tool.
+  if (propertyToolPath('sale-case').test(pathname)) {
+    return { operationId: 'SELLER_PREP_CHECKLIST', message: 'Check my sale readiness' };
+  }
   if (propertyToolPath('mortgage-refinance-radar').test(pathname)) {
     return { operationId: 'REFINANCE_ANALYSIS', message: 'Should I refinance my mortgage?' };
   }
@@ -500,7 +506,7 @@ export function buildFocusedHomeActionGuidance(
     }] : []), ...(policyConflictSection ? [policyConflictSection] : [])],
     // The inline checklist IS the destination page's content, so linking back to it is a redundant
     // round trip out of Ask -- omit the action entirely rather than demote it.
-    actions: checklist || policyConflictResolvableInline
+    actions: checklist || policyConflictResolvableInline || hasFeatureCapture
       ? []
       : acceptedWorkActions ?? (applianceAddAction ? [applianceAddAction, { ...primaryAction, style: 'SECONDARY' as const }] : [primaryAction]),
   }, {

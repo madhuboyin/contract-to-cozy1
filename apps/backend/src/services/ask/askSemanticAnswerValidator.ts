@@ -14,6 +14,7 @@ import { matchesRefinanceScenarioAnswerContract } from './askRefinanceScenarioIn
 import { matchesCapitalPlanAnswerContract } from './askCapitalPlanIntent';
 import { matchesHomeChangeSummaryAnswerContract } from './askHomeChangeIntent';
 import { matchesPropertySummaryAnswerContract } from './askPropertySummaryIntent';
+import { matchesCoverageGapsAnswerContract } from './askCoverageIntent';
 
 export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.6';
 
@@ -93,6 +94,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'MAINTENANCE_STATUS'
     && matchesMaintenanceStatusAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'COVERAGE_GAPS'
+    && matchesCoverageGapsAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
