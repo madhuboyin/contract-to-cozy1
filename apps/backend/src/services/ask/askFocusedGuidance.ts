@@ -228,9 +228,9 @@ function resolveGroupDReplacementGuidanceRouting(
 // confirmation-gated transitions the desktop card offers, so the CTA becomes those declared actions. What is
 // offered mirrors the card's own governed `feedbackControls` (COMPLETE is only there when the work is
 // completion-eligible); messages deliberately omit the title, because the handler infers the verb from the
-// message with a loose pattern a title like "Finish the deck" would confuse. REPORTED_COMPLETE keeps its
-// "Review completion" navigation (verification is not an Ask operation), and a viewer keeps it too, since
-// the operation needs CONTRIBUTOR.
+// message with a loose pattern a title like "Finish the deck" would confuse. REPORTED_COMPLETE is already
+// explained by the focused result and its details disclosure; because no Ask verification operation exists,
+// it emits no misleading review CTA rather than navigating back to the desktop work manager.
 function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boolean) {
   const workItem = action.workItem;
   if (!canContribute || !workItem || action.presentation?.variant !== 'ACCEPTED_WORK') return null;
@@ -359,6 +359,8 @@ export function buildFocusedHomeActionGuidance(
   const routing = specificRouting ?? groupDJourneyRouting;
   // Resolvable inline only when the conflict is shown with its actions; otherwise the (exactly targeted) link stays.
   const policyConflictResolvableInline = Boolean(policyConflictSection && options.canContribute === true);
+  const reportedCompletionExplainedInline = action.presentation?.variant === 'ACCEPTED_WORK'
+    && action.workItem?.state === 'REPORTED_COMPLETE';
   // Appliances insight: the existing inventory-create workflow, one item at a time. The bulk form stays as the
   // secondary link -- it is bulk administration, which the decisions keep as a page destination.
   const applianceAddAction = !routing && !checklist && !acceptedWorkActions && !policyConflictSection
@@ -506,7 +508,7 @@ export function buildFocusedHomeActionGuidance(
     }] : []), ...(policyConflictSection ? [policyConflictSection] : [])],
     // The inline checklist IS the destination page's content, so linking back to it is a redundant
     // round trip out of Ask -- omit the action entirely rather than demote it.
-    actions: checklist || policyConflictResolvableInline || hasFeatureCapture
+    actions: checklist || policyConflictResolvableInline || hasFeatureCapture || reportedCompletionExplainedInline
       ? []
       : acceptedWorkActions ?? (applianceAddAction ? [applianceAddAction, { ...primaryAction, style: 'SECONDARY' as const }] : [primaryAction]),
   }, {

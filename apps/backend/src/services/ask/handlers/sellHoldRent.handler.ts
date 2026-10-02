@@ -293,7 +293,6 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
 
   const access = await ensurePropertyAccess(userId, propertyId);
   const itemActions = sellerPrepItemActions(access.role);
-  const checklistHref = saleCaseHref(propertyId);
   const openItems = overview.readinessItems.filter((item) => item.status === 'OPEN');
   const pursuingItems = overview.readinessItems.filter((item) => item.status === 'PURSUING');
   const waivedItems = overview.readinessItems.filter((item) => item.status === 'WAIVED');
@@ -325,7 +324,10 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
       ? `${openItems.length} open item${openItems.length === 1 ? '' : 's'}${pursuingItems.length ? `, ${pursuingItems.length} already in progress` : ''}${waivedCount ? `, ${waivedCount} waived` : ''}.`
       : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
     tone: 'DEFAULT',
-    actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: checklistHref, style: 'SECONDARY' }],
+    // This response is the canonical sale-readiness checklist, including
+    // progress, item details, and every supported item decision. Do not add a
+    // redundant CTA that exits Ask for the desktop rendering of the same data.
+    actions: [],
   }];
 
   // IW-PRES-020 (FRD v1.80): the sale case's own readiness figure as a ring, with the must-address counts and the next

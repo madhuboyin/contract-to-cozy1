@@ -1053,6 +1053,8 @@ A functionally correct journey fails quality review when it introduces unnecessa
 
 **October 2 focused-action and suggestion correction:** A focused Sale Prep Home Action's **Review sale-prep item** control now continues to the canonical `SELLER_PREP_CHECKLIST` inside Ask instead of opening the Sale Case desktop tool. A focused Home Record fact review (including Water Heater age/condition) uses its already-rendered inline capture and omits the redundant Resolution Center CTA. The exact suggested prompts **Which gaps have the largest exposure?** and **What should I prioritize first?** are deterministic continuations: the former accepts only the typed `COVERAGE_GAPS` response envelope, while the latter routes directly to `SELLER_PREP_CHECKLIST`; neither is allowed to degrade into presentation-version fallback or generic answer-relevance clarification.
 
+**October 2 duplicate-surface correction:** The `SELLER_PREP_CHECKLIST` result itself no longer displays **Open sale readiness checklist**, because the progress, items, details, and supported decisions are already present in the conversation. Focused Operational Work in `REPORTED_COMPLETE` state likewise omits its desktop review CTA: Ask displays the reported-completion state and recorded details inline, but does not imply that it can perform a verification workflow that is not registered. The existing inline **View details** disclosure remains available.
+
 ### Phase 0 — Authority and coverage
 
 - Adopt this FRD and add precedence notes to conflicting documents.

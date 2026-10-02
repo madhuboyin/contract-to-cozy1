@@ -63,6 +63,7 @@ test('the checklist answer leads with the ring: its basis, the must-address coun
   install([item('verify-first', 'VERIFICATION_NEEDED', 'OPEN', { title: 'Verify the roof age' }), ...sixMustAddress()]);
   const result = await invoke();
   assert.deepEqual(result.blocks.map((block) => block.id), ['seller-prep-summary', 'seller-prep-progress', 'seller-prep-open-items']);
+  assert.deepEqual(result.blocks[0].actions, [], 'the checklist answer must not link back out to its desktop duplicate');
   const ring = progress(result);
   assert.equal(ring.percent, 43);
   assert.equal(ring.basis, '3 of 7 must-address items resolved or disclosed');
