@@ -36,8 +36,9 @@ test('focused Home Action keeps details and snooze choices inline', () => {
   expect(screen.queryByText(/blocked flue/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'View details' }));
   expect(screen.getByText(/blocked flue/)).toBeInTheDocument();
+  expect(screen.getByText('Planning rationale')).toBeInTheDocument();
   expect(screen.getByRole('table', { name: 'Planning details' })).toBeInTheDocument();
-  expect(screen.getByRole('row', { name: /Guidance Planning rationale A blocked flue/ })).toBeInTheDocument();
+  expect(screen.queryByRole('row', { name: /Guidance Planning rationale/ })).not.toBeInTheDocument();
   expect(screen.getByRole('row', { name: 'History Age 11.8 years' })).toBeInTheDocument();
   expect(screen.getByRole('row', { name: 'Plan Estimated budget $821–$1,232' })).toBeInTheDocument();
 

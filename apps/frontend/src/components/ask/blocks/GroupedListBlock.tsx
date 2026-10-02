@@ -66,7 +66,12 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           <div id={`${block.id}-details`} className="mt-4 border-t border-slate-100 pt-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Details</p>
-              {why?.description && facts.length === 0 && <p className="mt-2 text-sm leading-5 text-slate-600">{why.description}</p>}
+              {why?.description && (
+                <div className="mt-3 rounded-xl bg-slate-50 px-3 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Planning rationale</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-700">{why.description}</p>
+                </div>
+              )}
             </div>
             {facts.length > 0 && (
               <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
@@ -75,11 +80,6 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                     <tr><th scope="col" className="px-3 py-2.5">Category</th><th scope="col" className="px-3 py-2.5">Detail</th><th scope="col" className="px-3 py-2.5">Value</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
-                    {why?.description && <tr>
-                      <td className="px-3 py-2.5 text-slate-500">Guidance</td>
-                      <th scope="row" className="px-3 py-2.5 font-medium text-slate-700">Planning rationale</th>
-                      <td className="px-3 py-2.5 font-medium text-slate-900">{why.description}</td>
-                    </tr>}
                     {facts.map((fact) => (
                       <tr key={fact.id}>
                         <td className="px-3 py-2.5 text-slate-500">{fact.meta[0] ?? 'Home details'}</td>
