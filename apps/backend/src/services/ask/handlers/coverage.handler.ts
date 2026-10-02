@@ -113,7 +113,10 @@ async function coverageResult(userId: string, propertyId: string, message: strin
       ? `${confirmedGapCount} confirmed missing or expired, ${unclearCount} unclear, and ${allItems.filter((item) => item.group === 'EVIDENCE_MISSING').length} missing supporting evidence. Unknown records remain separate from confirmed gaps.`
       : 'No material item-level issue is surfaced from the recorded inventory, policies, warranties, responsibilities, and evidence. This is a record review—not a guarantee that every loss is covered.',
     tone: confirmedGapCount || unclearCount ? 'CAUTION' : focused.length ? 'DEFAULT' : 'POSITIVE',
-    actions: [{ id: 'open-coverage', label: 'Review or correct coverage', href: reviewHref, style: 'PRIMARY' }],
+    // The result below is already the canonical coverage review. Corrections
+    // are collected through its inline capture request, so a second primary
+    // action must not abandon the conversation for the inventory desktop.
+    actions: [],
   }];
   if (sections.length) blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'coverage-groups', title: 'Coverage review',

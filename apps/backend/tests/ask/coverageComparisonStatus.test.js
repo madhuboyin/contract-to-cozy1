@@ -45,6 +45,7 @@ test('bare coverage-gap phrasing (no compare/switch/shop verb) still routes to C
   assert.equal(routeOf('Which items have missing coverage?'), 'COVERAGE_GAPS');
   assert.equal(routeOf('What is uncovered in my home?'), 'COVERAGE_GAPS');
   assert.equal(routeOf('Show me my insurance coverage for the appliances'), 'COVERAGE_GAPS');
+  assert.equal(routeOf('Which gaps have the largest exposure?'), 'COVERAGE_GAPS');
 });
 
 // quoteComparisonReviewPattern (contractor quotes/bids/proposals/estimates)

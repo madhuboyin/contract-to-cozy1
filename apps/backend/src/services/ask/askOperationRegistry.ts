@@ -780,7 +780,7 @@ const warrantyLookupPattern = new RegExp([
 // token was already silently routing away from WARRANTY_LOOKUP before that recalibration too (code-
 // traced, not a regression this change introduced -- see the same-numbered FRD note for detail).
 const warrantyLookupOtherIntentPattern = /\b(?:claims?|(?:file|filing) (?:a|an|my|our)|add|new|create|record a|save|buy|purchase|renew|cancel|extend|extended|register|transfer|correct|fix|change|update|edit|rename|delete|remove|missing|without|uncovered|gaps?|lack(?:s|ing)?|exposure|insurance|policy|premium|repair|replace|worth|should i|remind|notify|alert|warn|monitor|price|cost|quote|compare|coverage (?:analysis|review))\b/i;
-const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?))\b/i;
+const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?)|gaps? (?:have|with|show(?:ing)?) (?:the )?(?:largest|highest|biggest|most) exposure)\b/i;
 // Deliberately checked before coveragePattern in the cascade below:
 // "compare my insurance coverage" contains coveragePattern's own bare
 // "insurance coverage" alternative, but a compare/switch/shop/equivalent
