@@ -1057,6 +1057,8 @@ A functionally correct journey fails quality review when it introduces unnecessa
 
 **October 2 seller-prep continuation-loop correction:** This supersedes the seller-prep treatment of **What should I prioritize first?** above. The completed `SELLER_PREP_CHECKLIST` answer already contains the domain-ranked next steps and live item decisions, so it emits neither **What should I prioritize first?** nor **Open seller prep** as follow-ups; both were paraphrases that reopened the same checklist. The generic question **What should I prioritize first?** now routes to the governed `HOME_ACTIONS` priority feed. Only sale-specific language (for example, **Check my sale readiness**) routes directly to `SELLER_PREP_CHECKLIST`.
 
+**October 2 Property Record capture receipt correction:** `PROPERTY_CONTEXT_AREA_CAPTURE` is an inline-complete journey. After a confirmed answer, its receipt no longer offers **Open property record**, and the area-progress block no longer carries the same desktop escape hatch. When more supported questions remain, **Continue with [area]** starts the next exact `PROPERTY_CONTEXT_AREA_CAPTURE` step inside Ask; when none remain, the receipt and completeness summary are the closure. The canonical write, idempotency receipt, freshness reconciliation, and property-level completeness suggestion are unchanged.
+
 ### Phase 0 — Authority and coverage
 
 - Adopt this FRD and add precedence notes to conflicting documents.
@@ -1405,6 +1407,12 @@ The October 2 audit of the `OWNERSHIP_COSTS`, `SAVINGS_OPPORTUNITIES`, and capit
 - Capital-plan repair-or-replace suggestions must identify the canonical item by name. The ambiguous “oldest system” wording is not emitted because it cannot provide a deterministic entity identity to the repair-or-replace operation.
 
 This is code-path and contract validation, not live browser certification. The focused ownership and savings contract suites and the adaptive-table component suite pass. The backend build failure found during validation was a stale projection type: `getHomeContinuityProjection` selects decisions directly from the canonical ranked Home Action feed but declared them as `HomeAction[]`, erasing ranking, deduplication, work-item, decision-lineage, and fatigue metadata before Ask Concierge called helpers that require `RankedHomeAction`. Its return contract now preserves `RankedHomeAction[]`; no cast or synthesized ranking data is used. No production or database environment was started.
+
+## Appendix C.2 — Home-summary and inventory conversation corrections (October 2, 2026)
+
+- A vague Property Summary keeps its concise status observation but presents the recorded core facts as a two-column table. Only canonical values that exist are included; missing values are omitted rather than rendered as “Not recorded”. This supersedes the prose-only presentation choice recorded in v1.154 without reintroducing embedded inventory, document, household, or timeline collections.
+- The `INVENTORY_ITEM_CREATE_INPUTS` capture uses the compact two-column workflow layout: name and category retain full width, while room, brand, and model use the available conversational-card width instead of separate full-width panels. The confirmation boundary and captured fields are unchanged.
+- An inventory list item legitimately exposes thirteen governed correction actions. The response contract now permits up to sixteen bounded item actions so the complete declared correction set remains schema-valid when an execution is persisted and restored. This fixes the generic “saved response needs to be refreshed” fallback for inventory-detail queries without dropping a correction path.
 
 ## Appendix D — Capability-card audit scope and implementation sequence
 

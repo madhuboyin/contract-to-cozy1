@@ -145,7 +145,11 @@ const GroupedListItemSchema = z.object({
   parentId: z.string().trim().min(1).max(160).nullable().optional(),
   // Additive for existing grouped-list producers: actionable rows opt in;
   // historical/non-actionable rows remain valid without emitting an empty list.
-  actions: z.array(GroupedListItemActionSchema).max(12).optional(),
+  // Inventory exposes thirteen governed correction fields on an inline
+  // record. Keep a bounded list, but allow the complete declared set so a
+  // valid inventory answer survives persistence instead of degrading to
+  // the generic schema-refresh fallback.
+  actions: z.array(GroupedListItemActionSchema).max(16).optional(),
   // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.72): typed display facts the shared patterns use. All optional and
   // additive; a renderer that does not know them keeps showing `description` and `meta`.
   tone: AskDisplayToneSchema.optional(),

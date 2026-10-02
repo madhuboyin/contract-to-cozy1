@@ -48,6 +48,14 @@ describe('AskWorkspace split guardrails', () => {
     expect(source).toContain('latestExecution ? { sourceExecutionId: latestExecution.executionId } : undefined');
   });
 
+  it('keeps the add-inventory workflow compact and balanced', () => {
+    const source = read(path.join(workspaceDir, 'CaptureCards.tsx'));
+    expect(source).toContain("request.captureKey === 'INVENTORY_ITEM_CREATE_INPUTS'");
+    expect(source).toContain("data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create'");
+    expect(source).toContain("compactInventoryCreate && (field.key === 'name' || field.key === 'category')");
+    expect(source).toContain('compact={compactWorkflow}');
+  });
+
   it('pins the full-page composer to a stable dynamic viewport without sticky positioning', () => {
     const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
     const layout = read(dashboardLayout);

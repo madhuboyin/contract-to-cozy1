@@ -183,7 +183,9 @@ test('confirming writes through captureFeatureContext for THIS question and scop
   assert.equal(input.idempotencyKey, `ask-area-${createHash('sha256').update(`area-exec:${card.parameters.areaCapture.requirementId}:1`).digest('hex').slice(0, 40)}`);
   assert.equal(result.reasonCode, 'AREA_CAPTURE_SAVED');
   assert.equal(result.blocks[0].title, 'Details saved');
+  assert.deepEqual(result.blocks[0].actions, [], 'the saved receipt must not navigate out of Ask');
   assert.match(result.blocks[0].details.find((detail) => detail.label === 'Areas updated').value, /Home systems, Maintenance responsibility/, 'the receipt names every area actually written');
+  assert.deepEqual(result.blocks[1].actions.map((action) => [action.label, action.operationId]), [['Continue with Home systems', 'PROPERTY_CONTEXT_AREA_CAPTURE']], 'remaining questions continue through the inline capture workflow only');
   assert.equal(artifactType, 'PROPERTY_CONTEXT');
 });
 

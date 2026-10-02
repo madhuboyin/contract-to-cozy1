@@ -83,6 +83,19 @@ export function propertyOverviewFactsSentence(property: {
   return `This is a ${bedsBaths}${noun}${built}${size}.`;
 }
 
+/** Compact overview facts for a scannable table. Only canonical recorded values are included. */
+export function propertyOverviewFactRows(property: {
+  dwellingType: string | null; yearBuilt: number | null; propertySize: number | null; bedrooms: number | null; bathrooms: number | null;
+}) {
+  return [
+    property.dwellingType && property.dwellingType !== 'UNKNOWN' ? { id: 'home-type', values: { detail: 'Home type', recordedValue: readablePropertyValue(property.dwellingType) } } : null,
+    property.yearBuilt != null ? { id: 'year-built', values: { detail: 'Year built', recordedValue: String(property.yearBuilt) } } : null,
+    property.propertySize != null ? { id: 'living-area', values: { detail: 'Living area', recordedValue: `${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft` } } : null,
+    property.bedrooms != null ? { id: 'bedrooms', values: { detail: 'Bedrooms', recordedValue: String(property.bedrooms) } } : null,
+    property.bathrooms != null ? { id: 'bathrooms', values: { detail: 'Bathrooms', recordedValue: String(property.bathrooms) } } : null,
+  ].filter((row): row is NonNullable<typeof row> => row !== null);
+}
+
 /**
  * At most one status observation, in priority order: an actionable completeness issue (only when something is genuinely missing,
  * conflicted or stale -- never automatic), otherwise a plain reassurance. A recent material change would sit between these (see the
@@ -176,7 +189,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       : `${completenessCounts.missing} missing, ${completenessCounts.conflicted} conflicted, and ${completenessCounts.stale} stale detail${pendingDetailCount === 1 ? '' : 's'} were found across ${incompleteScopes.length} area${incompleteScopes.length === 1 ? '' : 's'}. ${captureRequests.length ? 'The highest-priority detail is ready to answer below.' : 'Open the property record to review the affected areas.'}`
     : 'Property Context details are temporarily unavailable, so Ask cannot reliably determine which details are pending.';
   const vagueOverview = !roomFocus && !completenessFocus;
-  const factsSentence = vagueOverview ? propertyOverviewFactsSentence(property) : null;
+  const factRows = vagueOverview ? propertyOverviewFactRows(property) : [];
   const statusObservation = vagueOverview ? propertyOverviewStatusObservation(pendingDetailCount) : null;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'property-summary',
@@ -195,12 +208,23 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         : 'Room details are temporarily unavailable for this home.'
       : completenessFocus
       ? completenessBody
-      : [factsSentence, statusObservation].filter((part): part is string => Boolean(part)).join(' '),
+      : statusObservation ?? '',
     tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : completenessFocus && (degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100)) ? 'CAUTION' : 'DEFAULT',
     actions: roomFocus || vagueOverview
       ? []
       : [{ id: 'open-property-record', label: pendingDetailCount > 0 ? 'Review missing details' : 'Review home details', href: propertyHref, style: 'PRIMARY' }],
   }];
+
+  if (vagueOverview && factRows.length > 0) {
+    blocks.push({
+      type: 'TABLE', id: 'property-summary-facts', title: 'Home record summary',
+      description: 'Recorded facts from this home’s current canonical record.',
+      preferredPresentation: 'TABLE',
+      columns: [{ key: 'detail', label: 'Detail' }, { key: 'recordedValue', label: 'Recorded value' }],
+      rows: factRows,
+      actions: [],
+    });
+  }
 
   if (roomFocus && rooms) {
       // IW-PRES-019 (FRD v1.79): the rooms render as a room map by stored floor level, even when no floor is recorded

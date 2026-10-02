@@ -491,6 +491,8 @@ export function InlineCaptureCard({
     return field.when.operator === 'EQUALS' ? actual === field.when.value : actual !== field.when.value;
   });
   const compactMaintenanceTask = schema.type === 'GROUP' && request.captureKey === 'MAINTENANCE_TASK_INPUTS';
+  const compactInventoryCreate = schema.type === 'GROUP' && request.captureKey === 'INVENTORY_ITEM_CREATE_INPUTS';
+  const compactWorkflow = compactMaintenanceTask || compactInventoryCreate;
   const missingRequired = activeFields.some((field) => {
     if (!field.required) return false;
     const value = values[field.key];
@@ -554,8 +556,13 @@ export function InlineCaptureCard({
       {request.helpText && <p className="mt-1 text-xs leading-5 text-slate-500">{request.helpText}</p>}
       {policy.note && <p className="mt-2 text-xs font-semibold leading-5 text-slate-700">{policy.note}</p>}
       {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel} after you continue.</p>}
-      <div className={compactMaintenanceTask ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : undefined}>
-        {activeFields.map((field) => <div key={field.key} className={compactMaintenanceTask && (field.key === 'title' || field.key === 'description') ? 'md:col-span-2' : undefined}><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactMaintenanceTask} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>)}
+      <div className={compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : undefined}>
+        {activeFields.map((field) => {
+          const fullWidth = compactMaintenanceTask
+            ? field.key === 'title' || field.key === 'description'
+            : compactInventoryCreate && (field.key === 'name' || field.key === 'category');
+          return <div key={field.key} className={fullWidth ? 'md:col-span-2' : undefined}><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>;
+        })}
       </div>
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
       {(request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && (

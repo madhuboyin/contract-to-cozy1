@@ -17,6 +17,7 @@ const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const { resolveInventoryRefinement, inventoryFilterChips } = require('../../src/services/ask/handlers/inventory.handler.ts');
 const { isFilterContinuationMessage } = require('../../src/services/ask/askFollowUpContext.ts');
 const { matchesInventoryAnswerContract } = require('../../src/services/ask/askInventoryIntent.ts');
+const { mapPersistedExecution } = require('../../src/services/ask/support/executionState.ts');
 
 const realPrisma = prismaModule.prisma;
 const originals = { listItems: InventoryService.prototype.listItems, resolveAccess: propertyAccess.resolvePropertyAccess };
@@ -71,6 +72,25 @@ test('a fresh collection question carries a new view state, declared filters and
     assert.equal(summary(result).headline, '5 items recorded, 2 with missing details.');
     assert.deepEqual(active(result), ['category-all', 'status-all']);
     assert.ok(!list(result).filters.some((filter) => filter.id === 'clear-all'), 'nothing to clear yet');
+  } finally { restore(); }
+});
+
+test('the exact inventory-details prompt survives persistence without the schema-refresh fallback', async () => {
+  install();
+  try {
+    const result = await run('show inventory details');
+    const now = new Date('2026-10-02T12:00:00.000Z');
+    const mapped = mapPersistedExecution({
+      id: 'exec-inventory-details', sessionId: 'session-1', message: 'show inventory details', status: result.status,
+      reasonCode: result.reasonCode ?? null, propertyId: 'p1', operationId: 'INVENTORY_LOOKUP', operationVersion: '1.0',
+      intentFamily: 'RECORD_QUERY', contextVersion: result.contextVersion ?? null,
+      resultJson: { schemaVersion: '1.0', blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: null, clarification: null, suggestions: result.suggestions ?? [] },
+      parametersJson: result.parameters ?? null, createdAt: now, updatedAt: now,
+    }, { id: 'p1', label: '94 Ashford Dr' });
+    assert.notEqual(mapped.blocks[0]?.id, 'ask-schema-fallback');
+    assert.equal(mapped.status, 'ANSWERED');
+    assert.ok(mapped.blocks.some((block) => block.id === 'inventory-results'));
+    assert.equal(list(result).sections[0].items[0].actions.length, 13, 'all governed correction actions remain available');
   } finally { restore(); }
 });
 

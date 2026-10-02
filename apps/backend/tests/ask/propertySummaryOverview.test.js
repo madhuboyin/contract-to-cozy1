@@ -15,7 +15,7 @@ const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const getPropertyContextModule = require('../../src/modules/propertyContext/application/getPropertyContext.ts');
 const evaluateModule = require('../../src/modules/propertyContext/application/evaluateFeatureContext.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { propertyOverviewFactsSentence, propertyOverviewStatusObservation, propertyOverviewSuggestions } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
+const { propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewStatusObservation, propertyOverviewSuggestions } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
 const { PROPERTY_RECORD_CONTEXT_SCOPES } = require('../../src/services/propertyRecordOverview.service.ts');
 const { getContextCompleteness } = require('../../src/modules/propertyContext/application/getContextCompleteness.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
@@ -68,6 +68,19 @@ test('propertyOverviewFactsSentence composes from whichever facts are recorded, 
   assert.doesNotMatch(partial, /Not recorded/);
 });
 
+test('propertyOverviewFactRows exposes only recorded canonical facts in a scannable shape', () => {
+  assert.deepEqual(propertyOverviewFactRows({ dwellingType: 'TOWNHOUSE', yearBuilt: 1994, propertySize: 1933, bedrooms: 3, bathrooms: 2.5 }), [
+    { id: 'home-type', values: { detail: 'Home type', recordedValue: 'Townhouse' } },
+    { id: 'year-built', values: { detail: 'Year built', recordedValue: '1994' } },
+    { id: 'living-area', values: { detail: 'Living area', recordedValue: '1,933 sq ft' } },
+    { id: 'bedrooms', values: { detail: 'Bedrooms', recordedValue: '3' } },
+    { id: 'bathrooms', values: { detail: 'Bathrooms', recordedValue: '2.5' } },
+  ]);
+  assert.deepEqual(propertyOverviewFactRows({ dwellingType: null, yearBuilt: 1990, propertySize: null, bedrooms: null, bathrooms: null }), [
+    { id: 'year-built', values: { detail: 'Year built', recordedValue: '1990' } },
+  ]);
+});
+
 test('propertyOverviewStatusObservation is one priority-ordered sentence, never alarming over routine incompleteness', () => {
   assert.equal(propertyOverviewStatusObservation(0), 'Nothing in the current record suggests an urgent issue.');
   assert.equal(propertyOverviewStatusObservation(1), '1 home detail still needs review, but nothing in the current record suggests an urgent issue.');
@@ -79,22 +92,25 @@ test('propertyOverviewSuggestions offers two or three contextual follow-ups, not
   assert.deepEqual(propertyOverviewSuggestions(2), ['What details are missing?', 'Show me my home by room.', 'What changed recently?']);
 });
 
-test('a vague overview question: a headline naming the home, grounded prose, one priority-ordered status observation, no generic CTA', async () => {
+test('a vague overview question: a headline naming the home, a scannable facts table, one status observation, no generic CTA', async () => {
   const facts = { 'core.dwellingType': { state: 'KNOWN' } };
   install(facts);
   const result = await invoke();
   const summary = summaryOf(result);
   const pending = pendingCountOf(facts);
   assert.equal(summary.title, "Here's the short version of 94 Ashford Dr, Town");
-  assert.equal(summary.body, `This is a 3-bedroom, 2.5-bath townhouse built in 1994, with 1,933 sq ft of living space. ${propertyOverviewStatusObservation(pending)}`);
+  assert.equal(summary.body, propertyOverviewStatusObservation(pending));
   // Routine incompleteness never reads as an alarm in the vague overview, even though the status enum still reflects it honestly.
   assert.equal(summary.tone, 'DEFAULT');
   assert.deepEqual(summary.actions, []);
   assert.deepEqual(result.captureRequests, []);
   assert.equal(result.followUp, null, 'Property Summary always declines a handoff');
   assert.deepEqual(result.suggestions, propertyOverviewSuggestions(pending));
-  // No TABLE and no embedded collection blocks -- only the synthesis and its evidence.
-  assert.deepEqual(result.blocks.map((block) => block.id), ['property-summary', 'property-summary-evidence']);
+  const factsTable = result.blocks.find((block) => block.id === 'property-summary-facts');
+  assert.equal(factsTable.type, 'TABLE');
+  assert.equal(factsTable.preferredPresentation, 'TABLE');
+  assert.deepEqual(factsTable.rows, propertyOverviewFactRows(PROPERTY));
+  assert.deepEqual(result.blocks.map((block) => block.id), ['property-summary', 'property-summary-facts', 'property-summary-evidence']);
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
 });
 
