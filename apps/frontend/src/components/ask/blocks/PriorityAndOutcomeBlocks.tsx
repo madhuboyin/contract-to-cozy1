@@ -61,7 +61,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 tone={item.consumerPriority === 'DO_NOW' ? 'CRITICAL' : item.consumerPriority === 'PLAN_SOON' ? 'CAUTION' : item.consumerPriority === 'NO_ACTION' ? 'POSITIVE' : 'DEFAULT'}
                 badge={<span className={cn('rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{categoryLabel[item.consumerPriority]}</span>}
                 meta={item.deadlineAt ? <>Due {new Date(item.deadlineAt).toLocaleDateString()}</> : undefined}
-                action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
+                action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
                 secondary={<HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />}
               /> : <>
               <div className="flex flex-wrap items-center gap-2">
@@ -81,7 +81,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 {item.deadlineAt && ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}`}
               </p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div>{calm && item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}</div>
+                <div>{calm && item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}</div>
                 <HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />
               </div>
               </>}

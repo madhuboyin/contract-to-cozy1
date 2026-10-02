@@ -63,6 +63,6 @@ describe('Home Action shelves', () => {
     </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
     expect(screen.queryByRole('link', { name: 'Open Maintenance' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Review in Ask' }));
-    expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE');
+    expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE', undefined, 'a1');
   });
 });
