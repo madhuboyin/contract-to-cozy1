@@ -18,6 +18,8 @@ import { assertCoverageConflictFree } from '../../coverageConflict.service';
 import { queryIntelligenceEnvelope } from '../../intelligenceEnvelope';
 import { ReplaceRepairService } from '../../replaceRepairAnalysis.service';
 import { humanDate, money } from '../askFormatting';
+import { getAskPropertyTimezone } from '../askExecutionContext';
+import { buildMaintenanceImportanceResult } from '../support/maintenanceImportance';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HOME_CHANGE_SUMMARY_WINDOW_DAYS, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, MaintenanceCompletionWorkflowInput, RadarEnvelopeQuerySuppliedInput } from '../askHandlerSupport';
 import { EVENT_ADD_MESSAGE, EVIDENCE_ATTACH_TARGET_TYPES, type EvidenceAttachTargetType, eventAddResult, evidenceAttachResult, WARRANTY_ADD_MESSAGE, warrantyAddResult } from '../handlers/homeRecordWrites.handler';
 import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
@@ -525,38 +527,21 @@ function unsafeRestrictedResult(): AskOperationResult {
 }
 
 async function groundedGuidanceResult(input: { userId: string; sessionId: string; message: string; propertyId?: string | null; launchContext?: { entityType?: string | null; entityId?: string | null } }, trace?: SkillExecutionTimingTrace): Promise<AskOperationResult> {
-  // External review [P1] CTX-001: a launch entity (e.g. "Why is this
-  // important?" clicked from an exact maintenance row) was previously
-  // dropped entirely -- answerGroundedAsk only ever saw free message text
-  // and selected facts from it across the WHOLE property, so two tasks
-  // sharing a near-identical title ("Annual maintenance inspection" on two
-  // different systems) were indistinguishable to it. Resolving the exact
-  // task record here and folding its own identifying fields into both the
-  // question text (so selectRelevantAskFacts's token-overlap scoring can
-  // actually favor facts about that system/asset) and a dedicated evidence
-  // line anchors the answer to the specific record without having to
-  // change answerGroundedAsk's Gemini-backed claim-selection pipeline at
-  // all. A missing/inaccessible task (deleted, wrong property) falls back
-  // to the prior message-only behavior rather than failing the turn.
-  let taskAnchor: { title: string; description: string | null; category: string | null; assetType: string | null; roomName: string | null; updatedAt: Date } | null = null;
+  // CTX-001: a launch entity (e.g. "Why is this important?" clicked from an exact
+  // maintenance row) is answered from that task's own record, deterministically --
+  // the property-wide fact selector surfaced unrelated home events for it. A
+  // missing/inaccessible task (deleted, wrong property) is disclosed below rather
+  // than silently answered as if it were scoped.
   let taskAnchorMissing = false;
   if (input.propertyId && input.launchContext?.entityType === 'MAINTENANCE_TASK' && input.launchContext.entityId) {
     const task = await prisma.propertyMaintenanceTask.findFirst({
       where: { id: input.launchContext.entityId, propertyId: input.propertyId },
-      select: { title: true, description: true, category: true, assetType: true, updatedAt: true, room: { select: { name: true } } },
+      select: { title: true, description: true, assetType: true, updatedAt: true, source: true, priority: true, riskLevel: true, status: true, nextDueDate: true, isRecurring: true, frequency: true, estimatedCost: true, isSeasonal: true },
     });
-    // External review [P1] follow-up: folding only title/category/
-    // assetType/room into the question left this task's OWN description
-    // (task-specific rationale, homeowner or system-written) out of what
-    // the guidance engine sees; and a missing/inaccessible task (deleted,
-    // wrong property) used to fall back to an unscoped answer silently --
-    // taskAnchorMissing now discloses that instead.
-    if (task) taskAnchor = { title: task.title, description: task.description, category: task.category, assetType: task.assetType, roomName: task.room?.name ?? null, updatedAt: task.updatedAt };
-    else taskAnchorMissing = true;
+    if (task) return buildMaintenanceImportanceResult(task, new Date(), getAskPropertyTimezone());
+    taskAnchorMissing = true;
   }
-  const groundedMessage = taskAnchor
-    ? `${input.message} (Regarding the specific maintenance task "${taskAnchor.title}"${taskAnchor.category ? `, category ${taskAnchor.category}` : ''}${taskAnchor.assetType ? `, asset ${taskAnchor.assetType}` : ''}${taskAnchor.roomName ? `, in ${taskAnchor.roomName}` : ''}.${taskAnchor.description ? ` Task notes: ${taskAnchor.description.slice(0, 300)}` : ''})`
-    : input.message;
+  const groundedMessage = input.message;
   let answer: Awaited<ReturnType<typeof answerGroundedAsk>>;
   const modelStartedAt = process.hrtime.bigint();
   if (trace) {
@@ -571,23 +556,6 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
       sessionId: input.sessionId,
       message: groundedMessage,
       propertyId: input.propertyId ?? undefined,
-      // External review [P1] follow-up (MAINT-008): folding the task's
-      // description into groundedMessage only helps selectRelevantAskFacts
-      // favor OTHER aggregation facts about the same system -- it never
-      // makes the notes themselves usable by the answer. anchorFact routes
-      // them through the same deterministic fact-candidate/Gemini-selection
-      // pipeline as every other fact, so real task-specific rationale can
-      // actually appear in the answer instead of only the unrelated
-      // "Maintenance record (exact task)"/"task notes" evidence lines.
-      ...(taskAnchor?.description ? {
-        anchorFact: {
-          key: 'maintenanceTask.notes',
-          value: taskAnchor.description,
-          source: 'USER_REPORTED',
-          observedAt: taskAnchor.updatedAt.toISOString(),
-          confidence: 0.75,
-        },
-      } : {}),
     });
     askRemoteGenerationCharactersTotal.inc({ direction: 'output' }, answer.text.length);
     askRemoteGenerationTotal.inc({ outcome: 'success' });
@@ -612,29 +580,10 @@ async function groundedGuidanceResult(input: { userId: string; sessionId: string
     body: taskAnchorMissing ? `The specific maintenance task this question was about is no longer available, so this answer is not scoped to it. ${answer.text}` : answer.text,
     tone: taskAnchorMissing || answer.confidence.label === 'LOW' ? 'CAUTION' : 'DEFAULT', actions: [],
   }];
-  // External review [P1] follow-up (MAINT-008): the notes now flow through
-  // answerGroundedAsk as a real anchorFact candidate (see the call above),
-  // so when the model actually cites them, answer.evidence already carries
-  // a "maintenanceTask.notes" entry -- adding a second, always-present line
-  // here would just duplicate it. The standalone fallback line below only
-  // fires when the pipeline did NOT cite the notes (irrelevant to this
-  // specific question, or no property context at all), so the homeowner can
-  // still see and verify the actual task instruction that was available but
-  // not used, distinguished from Gemini-cited facts (the items below it)
-  // and from a missing/unresolved task (taskAnchorMissing's disclosure).
-  const notesCitedInAnswer = answer.evidence.some((item) => item.factKey === 'maintenanceTask.notes');
   const evidenceItems = [
-    // External review [P1] follow-up: this used to stamp the current
-    // request time rather than the task's own recorded observation time.
-    ...(taskAnchor ? [{ label: taskAnchor.title, source: 'Maintenance record (exact task)', observedAt: taskAnchor.updatedAt.toISOString() }] : []),
-    ...(taskAnchor?.description && !notesCitedInAnswer ? [{
-      label: taskAnchor.description.length > 200 ? `${taskAnchor.description.slice(0, 200)}…` : taskAnchor.description,
-      source: 'Maintenance record (task notes, not used in this answer)',
-      observedAt: taskAnchor.updatedAt.toISOString(),
-    }] : []),
     ...answer.evidence.map((item) => ({
-      label: item.factKey === 'maintenanceTask.notes' ? 'Maintenance record (task notes)' : item.label,
-      source: item.factKey === 'maintenanceTask.notes' ? 'Cited in this answer' : item.source,
+      label: item.label,
+      source: item.source,
       observedAt: item.observedAt,
     })),
   ];

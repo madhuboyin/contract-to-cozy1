@@ -14,7 +14,7 @@ import { MAINTENANCE_TASK_CONTEXT_PROVIDER, SEASONAL_CHECKLIST_CONTEXT_PROVIDER 
 import { generateForecast, listForecast } from '../../maintenancePrediction.service';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
-import { humanDate } from '../askFormatting';
+import { calendarAwareTimeZone, humanDate } from '../askFormatting';
 import { AskViewState, durableFreeTextClarification, ensurePropertyAccess, MaintenanceCompletionWorkflowInput, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskUpdateInputSchema, MaintenanceTaskWorkflowInput, MaintenanceTaskWorkflowInputSchema, MAX_RESULT_ITEMS, safeTimezone } from '../askHandlerSupport';
 import { formatAskMaintenanceDescription, formatAskMaintenanceScope, formatAskMaintenanceTitle } from '../askMaintenancePresentation';
 import { extractMaintenanceTaskTitle } from '../askMaintenanceTaskInput';
@@ -43,7 +43,7 @@ function localDateKey(value: Date, timeZone: string): string {
 
 function maintenanceDate(value: Date, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric', timeZone,
+    month: 'short', day: 'numeric', year: 'numeric', timeZone: calendarAwareTimeZone(value, timeZone),
   }).format(value);
 }
 

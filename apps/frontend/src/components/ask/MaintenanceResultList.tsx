@@ -28,10 +28,13 @@ function actionsForCanonicalStatus(actions: ItemAction[], status: string | null 
   return actions.filter((action) => action.interactionType !== 'MUTATE_RECORD');
 }
 
+// Due dates are stored as UTC-midnight calendar dates; local formatting would show the previous day in US timezones.
 function formatDate(value: Date | string | null): string {
   if (!value) return 'Not recorded';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString();
+  if (Number.isNaN(date.getTime())) return 'Not recorded';
+  const calendarDate = date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
+  return date.toLocaleDateString(undefined, calendarDate ? { timeZone: 'UTC' } : undefined);
 }
 
 function formatMoney(value: number | null): string {
@@ -121,7 +124,8 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
           <div><dt className="text-xs text-slate-500">Due</dt><dd className="mt-0.5 font-medium text-slate-900">{formatDate(task.nextDueDate)}</dd></div>
           <div><dt className="text-xs text-slate-500">Completed</dt><dd className="mt-0.5 font-medium text-slate-900">{formatDate(task.completedAt ?? task.lastCompletedDate)}</dd></div>
           <div><dt className="text-xs text-slate-500">Recurrence</dt><dd className="mt-0.5 font-medium text-slate-900">{task.isRecurring ? fieldLabel(task.frequency) : 'Does not repeat'}</dd></div>
-          <div><dt className="text-xs text-slate-500">Home system</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.assetType ?? task.serviceCategory)}</dd></div>
+          <div><dt className="text-xs text-slate-500">Category</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.serviceCategory)}</dd></div>
+          <div><dt className="text-xs text-slate-500">Home system</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.assetType)}</dd></div>
           <div><dt className="text-xs text-slate-500">Estimated cost</dt><dd className="mt-0.5 font-medium text-slate-900">{formatMoney(task.estimatedCost)}</dd></div>
           <div><dt className="text-xs text-slate-500">Actual cost</dt><dd className="mt-0.5 font-medium text-slate-900">{formatMoney(task.actualCost)}</dd></div>
           <div><dt className="text-xs text-slate-500">Source</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.source)}</dd></div>
