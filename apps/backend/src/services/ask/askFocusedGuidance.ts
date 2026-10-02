@@ -228,19 +228,26 @@ function resolveGroupDReplacementGuidanceRouting(
 // confirmation-gated transitions the desktop card offers, so the CTA becomes those declared actions. What is
 // offered mirrors the card's own governed `feedbackControls` (COMPLETE is only there when the work is
 // completion-eligible); messages deliberately omit the title, because the handler infers the verb from the
-// message with a loose pattern a title like "Finish the deck" would confuse. REPORTED_COMPLETE is already
-// explained by the focused result and its details disclosure; because no Ask verification operation exists,
-// it emits no misleading review CTA rather than navigating back to the desktop work manager.
+// message with a loose pattern a title like "Finish the deck" would confuse. A reported completion is not a
+// terminal state: Ask offers the governed verify/reopen decisions inline. Verification is limited to evidence
+// tiers where an explicit homeowner attestation is sufficient; regulated and safety work must use stronger
+// domain evidence and therefore only exposes the safe reopen action here.
 function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boolean) {
   const workItem = action.workItem;
   if (!canContribute || !workItem || action.presentation?.variant !== 'ACCEPTED_WORK') return null;
-  if (workItem.state === 'REPORTED_COMPLETE') return null;
   const common = {
     interactionType: 'START_WORKFLOW' as const,
     operationId: 'OPERATIONAL_WORK_UPDATE',
     entityType: 'WORK_ITEM',
     entityId: workItem.id,
   };
+  if (workItem.state === 'REPORTED_COMPLETE') {
+    const attestationCanVerify = ['LOW_CONSEQUENCE', 'MATERIAL_FINANCIAL'].includes(action.governance.safetyTier);
+    return [
+      ...(attestationCanVerify ? [{ ...common, id: `home-action-verify-${action.id}`, label: 'Confirm completion', message: 'Verify this reported completion; it is working as expected.', style: 'PRIMARY' as const }] : []),
+      { ...common, id: `home-action-reopen-${action.id}`, label: 'Still needs attention', message: 'Reopen this reported completion.', style: (attestationCanVerify ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' },
+    ];
+  }
   const controls = new Set<string>(action.feedbackControls);
   const actions = [
     ...(controls.has('COMPLETE') ? [{ ...common, id: `home-action-complete-${action.id}`, label: 'Mark complete', message: 'Complete this work item.', style: 'PRIMARY' as const }] : []),
@@ -359,8 +366,6 @@ export function buildFocusedHomeActionGuidance(
   const routing = specificRouting ?? groupDJourneyRouting;
   // Resolvable inline only when the conflict is shown with its actions; otherwise the (exactly targeted) link stays.
   const policyConflictResolvableInline = Boolean(policyConflictSection && options.canContribute === true);
-  const reportedCompletionExplainedInline = action.presentation?.variant === 'ACCEPTED_WORK'
-    && action.workItem?.state === 'REPORTED_COMPLETE';
   // Appliances insight: the existing inventory-create workflow, one item at a time. The bulk form stays as the
   // secondary link -- it is bulk administration, which the decisions keep as a page destination.
   const applianceAddAction = !routing && !checklist && !acceptedWorkActions && !policyConflictSection
@@ -508,7 +513,7 @@ export function buildFocusedHomeActionGuidance(
     }] : []), ...(policyConflictSection ? [policyConflictSection] : [])],
     // The inline checklist IS the destination page's content, so linking back to it is a redundant
     // round trip out of Ask -- omit the action entirely rather than demote it.
-    actions: checklist || policyConflictResolvableInline || hasFeatureCapture || reportedCompletionExplainedInline
+    actions: checklist || policyConflictResolvableInline || hasFeatureCapture
       ? []
       : acceptedWorkActions ?? (applianceAddAction ? [applianceAddAction, { ...primaryAction, style: 'SECONDARY' as const }] : [primaryAction]),
   }, {

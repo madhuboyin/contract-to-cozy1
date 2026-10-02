@@ -289,7 +289,9 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
 // registered HVAC engine (services/decisionPlatform/), not the generic
 // ReplaceRepairService heuristic.
 
-function operationalWorkAction(message: string): 'ACCEPT' | 'DEFER' | 'SNOOZE' | 'COMPLETE' | null {
+function operationalWorkAction(message: string): 'ACCEPT' | 'DEFER' | 'SNOOZE' | 'COMPLETE' | 'VERIFY' | 'REOPEN' | null {
+  if (/\b(?:verify|confirm(?:ed)? completion)\b/i.test(message)) return 'VERIFY';
+  if (/\b(?:reopen|still needs? attention)\b/i.test(message)) return 'REOPEN';
   if (/\bcomplete|done|finished\b/i.test(message)) return 'COMPLETE';
   if (/\bsnooze|hide reminders?\b/i.test(message)) return 'SNOOZE';
   if (/\bdefer|postpone|later\b/i.test(message)) return 'DEFER';
@@ -308,24 +310,26 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
   const selected = exactEntityMatch(items, message, launchContext);
   const action = operationalWorkAction(message);
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/home-actions`;
-  if (!selected || !action) return { status: 'NEEDS_ENTITY', reasonCode: 'OPERATIONAL_WORK_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'operational-work-targets', title: 'Choose tracked work and an action', description: 'Use the exact title or work-item id and say accept, defer, snooze, or complete.', sections: [{ id: 'work', title: 'Tracked Operational Work', count: items.length, items: items.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: `${String(item.state).toLowerCase().replace(/_/g, ' ')} · ${String(item.safetyTier).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(item.state), href })) }], actions: [{ id: 'open-work', label: 'Manage Home Actions', href, style: 'SECONDARY' }] }], suggestions: [] };
+  if (!selected || !action) return { status: 'NEEDS_ENTITY', reasonCode: 'OPERATIONAL_WORK_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'operational-work-targets', title: 'Choose tracked work and an action', description: 'Use the exact title or work-item id and say accept, defer, snooze, complete, verify, or reopen.', sections: [{ id: 'work', title: 'Tracked Operational Work', count: items.length, items: items.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: `${String(item.state).toLowerCase().replace(/_/g, ' ')} · ${String(item.safetyTier).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(item.state), href })) }], actions: [{ id: 'open-work', label: 'Manage Home Actions', href, style: 'SECONDARY' }] }], suggestions: [] };
   const execution = selected.executions.find((candidate) => candidate.role === 'PRIMARY');
   if (action === 'COMPLETE' && (selected.state !== 'ACCEPTED' || execution?.executionType !== 'MAINTENANCE_TASK')) return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_COMPLETION_REQUIRES_DOMAIN_WORKFLOW', blocks: [{ type: 'BOUNDARY', id: 'operational-work-completion-boundary', title: 'Complete this in its linked workflow', severity: 'INFO', body: 'Quick completion is available only for accepted maintenance-backed work. Project, guidance, booking, safety, and regulated work must record evidence and completion in the linked workflow.', suggestions: [] }, { type: 'SUMMARY', id: 'operational-work-manage', title: selected.title, body: `Current state: ${String(selected.state).toLowerCase().replace(/_/g, ' ')}. No change was made.`, tone: 'CAUTION', actions: [{ id: 'open-work', label: 'Manage action', href, style: 'PRIMARY' }] }], suggestions: [] };
-  const observedResult = action === 'COMPLETE'
+  if (['VERIFY', 'REOPEN'].includes(action) && selected.state !== 'REPORTED_COMPLETE') return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_REPORTED_COMPLETION_REQUIRED', blocks: [{ type: 'BOUNDARY', id: 'operational-work-reported-completion-boundary', title: 'There is no reported completion to review', severity: 'INFO', body: `This work is currently ${String(selected.state).toLowerCase().replace(/_/g, ' ')}. Refresh the action and choose an available next step.`, suggestions: [] }], suggestions: [] };
+  if (action === 'VERIFY' && !['LOW_CONSEQUENCE', 'MATERIAL_FINANCIAL'].includes(selected.safetyTier)) return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_VERIFICATION_REQUIRES_DOMAIN_EVIDENCE', blocks: [{ type: 'BOUNDARY', id: 'operational-work-verification-evidence-boundary', title: 'Verified evidence is required', severity: 'CAUTION', body: 'This regulated or safety-sensitive completion cannot be verified from homeowner attestation alone. Add the linked domain completion record or qualifying document evidence before approval.', suggestions: [] }], suggestions: [] };
+  const observedResult = ['COMPLETE', 'VERIFY'].includes(action)
     ? operationalWorkCompletionObservedResult(message)
     : null;
-  if (action === 'COMPLETE' && !observedResult) {
+  if (['COMPLETE', 'VERIFY'].includes(action) && !observedResult) {
     return {
       status: 'NEEDS_CLARIFICATION',
       reasonCode: 'OPERATIONAL_WORK_COMPLETION_RESULT_REQUIRED',
       ...durableFreeTextClarification(
         'OPERATIONAL_WORK_UPDATE',
-        `After completing ${selected.title}, was it working as expected, still needing attention, or failed again?`,
+        action === 'VERIFY' ? `Is ${selected.title} working as expected?` : `After completing ${selected.title}, was it working as expected, still needing attention, or failed again?`,
       ),
       blocks: [{
         type: 'SUMMARY',
         id: 'operational-work-completion-result',
-        title: `Record the result for ${selected.title}`,
+        title: `${action === 'VERIFY' ? 'Verify' : 'Record'} the result for ${selected.title}`,
         body: 'Ask will not infer a successful result from the word “complete.” State what you observed, then review the confirmation before anything changes.',
         tone: 'CAUTION',
         actions: [{ id: 'open-work', label: 'Manage action instead', href, style: 'SECONDARY' }],
@@ -337,7 +341,7 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
       ],
     };
   }
-  const targetState = action === 'ACCEPT' ? 'ACCEPTED' : action === 'DEFER' ? 'DEFERRED' : null;
+  const targetState = action === 'ACCEPT' ? 'ACCEPTED' : action === 'DEFER' ? 'DEFERRED' : action === 'REOPEN' ? 'REOPENED' : null;
   if (targetState) {
     try { assertUserWorkItemTransition(selected, targetState); } catch (error) { return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_TRANSITION_NOT_ALLOWED', blocks: [{ type: 'BOUNDARY', id: 'operational-work-governance', title: 'This change belongs to the linked workflow', severity: 'INFO', body: error instanceof Error ? error.message : 'The requested transition is not available.', suggestions: [] }], suggestions: [] }; }
   }
@@ -352,7 +356,9 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
       : observedResult === 'FAILED'
         ? 'Failed again'
         : null;
-  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'OPERATIONAL_WORK_CONFIRMATION_REQUIRED', contextVersion, parameters: { operationalWorkItemId: selected.id, operationalWorkAction: action, operationalWorkUntil: ['DEFER', 'SNOOZE'].includes(action) ? until.toISOString() : null, operationalWorkObservedResult: observedResult, operationalWorkContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'operational-work-review', title: `Review ${action.toLowerCase()} action`, body: action === 'SNOOZE' ? `Reminders will be suppressed until ${humanDate(until)} without changing the work state or due date.` : action === 'DEFER' ? `The work will move to deferred until ${humanDate(until)}.` : action === 'COMPLETE' ? 'The linked canonical maintenance task and Operational Work outcome will be completed together using the observed result shown below.' : 'The proposed work will become accepted homeowner work.', tone: 'CAUTION', actions: [{ id: 'open-work', label: 'Manage action', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `operational-work-${selected.id}-1`, version: 1, title: `${action[0]}${action.slice(1).toLowerCase()} ${selected.title}?`, description: 'Ask will recheck the current work state before applying this governed command.', fields: [{ label: 'Work', value: selected.title }, { label: 'Current state', value: String(selected.state).toLowerCase().replace(/_/g, ' ') }, { label: 'Action', value: action.toLowerCase() }, ...(observedResultLabel ? [{ label: 'Observed result', value: observedResultLabel }] : [])], editableFields: [], confirmLabel: `${action[0]}${action.slice(1).toLowerCase()} work`, consentText: action === 'COMPLETE' ? 'I authorize this update to the shared Operational Work record and confirm the observed result shown above is accurate.' : 'I authorize this update to the shared Operational Work record.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
+  const actionLabel = action === 'VERIFY' ? 'Confirm completion' : action === 'REOPEN' ? 'Still needs attention' : `${action[0]}${action.slice(1).toLowerCase()}`;
+  const reviewBody = action === 'SNOOZE' ? `Reminders will be suppressed until ${humanDate(until)} without changing the work state or due date.` : action === 'DEFER' ? `The work will move to deferred until ${humanDate(until)}.` : action === 'COMPLETE' ? 'The linked canonical maintenance task and Operational Work outcome will be completed together using the observed result shown below.' : action === 'VERIFY' ? 'Your confirmation will verify the reported completion, save the attestation as evidence, and close this action.' : action === 'REOPEN' ? 'The reported completion will be rejected and the action will return to active attention.' : 'The proposed work will become accepted homeowner work.';
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'OPERATIONAL_WORK_CONFIRMATION_REQUIRED', contextVersion, parameters: { operationalWorkItemId: selected.id, operationalWorkAction: action, operationalWorkUntil: ['DEFER', 'SNOOZE'].includes(action) ? until.toISOString() : null, operationalWorkObservedResult: observedResult, operationalWorkContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'operational-work-review', title: `Review ${actionLabel.toLowerCase()} action`, body: reviewBody, tone: 'CAUTION', actions: [] }], confirmation: { confirmationId: `operational-work-${selected.id}-1`, version: 1, title: `${actionLabel}: ${selected.title}?`, description: 'Ask will recheck the current work state before applying this governed command.', fields: [{ label: 'Work', value: selected.title }, { label: 'Current state', value: String(selected.state).toLowerCase().replace(/_/g, ' ') }, { label: 'Action', value: actionLabel }, ...(observedResultLabel ? [{ label: 'Observed result', value: observedResultLabel }] : [])], editableFields: [], confirmLabel: actionLabel, consentText: ['COMPLETE', 'VERIFY'].includes(action) ? 'I authorize this update to the shared Operational Work record and confirm the observed result shown above is accurate.' : 'I authorize this update to the shared Operational Work record.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
 }
 
 const HOME_CHANGE_SUMMARY_MAX_ITEMS = 10;

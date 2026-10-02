@@ -24,13 +24,16 @@ import { areaCaptureFallbackHref, areaCaptureProgress, areaLabel, areaProgressBl
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, WARRANTY_CORRECTION_FIELDS, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryRoomLinkOptions, inventoryService } from '../handlers/inventory.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
-import { recordDocumentPromotionOutcome } from '../../decisionPlatform/outcomeObservationService';
+import { recordDocumentPromotionOutcome, recordOperationalWorkOutcome } from '../../decisionPlatform/outcomeObservationService';
 import { applyWriteBacks } from '../../inspectionWriteBack.service';
 import { MaterialSpecService } from '../../materialSpec.service';
 import { confirmPolicyFact } from '../../insurancePolicyRecord.service';
 import { transitionWorkItem } from '../../../modules/homeOperations/application/transitionWorkItem.usecase';
 import { assertUserWorkItemTransition } from '../../../modules/homeOperations/domain/userGovernance';
 import { snoozeWorkItem } from '../../../modules/homeOperations/application/snoozeWorkItem.usecase';
+import { recordEvidence } from '../../../modules/homeOperations/application/recordEvidence.usecase';
+import { approveMaterialWorkItem, recordWorkEvent } from '../../../modules/homeOperations/infrastructure/workItemRepository';
+import { assertMaterialApprovalEvidenceSatisfiesPolicy } from '../../homeOperationsMaterialApprovalEvidence.service';
 import { completeAcceptedOperationalWorkItem } from '../../homeActionCompletion.service';
 import { resolveWorkItemRecommendationSnapshotId } from '../../decisionPlatform/homeActionDecisionLineage';
 
@@ -93,13 +96,13 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
   let artifactId: string;
     const workItemId = parameters.operationalWorkItemId;
     const action = parameters.operationalWorkAction;
-    if (typeof workItemId !== 'string' || !['ACCEPT', 'DEFER', 'SNOOZE', 'COMPLETE'].includes(String(action))) throw Object.assign(new Error('The Operational Work command is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    if (typeof workItemId !== 'string' || !['ACCEPT', 'DEFER', 'SNOOZE', 'COMPLETE', 'VERIFY', 'REOPEN'].includes(String(action))) throw Object.assign(new Error('The Operational Work command is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
     const observedResult = parameters.operationalWorkObservedResult;
-    if (action === 'COMPLETE' && !['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED'].includes(String(observedResult))) throw Object.assign(new Error('The Operational Work completion result is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    const item = await prisma.operationalWorkItem.findFirst({ where: { id: workItemId, propertyId: execution.propertyId }, include: { executions: true } });
+    if (['COMPLETE', 'VERIFY'].includes(String(action)) && !['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED'].includes(String(observedResult))) throw Object.assign(new Error('The Operational Work completion result is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const item = await prisma.operationalWorkItem.findFirst({ where: { id: workItemId, propertyId: execution.propertyId }, include: { executions: true, sources: true } });
     if (!item) throw Object.assign(new Error('The selected Operational Work item is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
     const currentVersion = createHash('sha256').update(`${item.id}:${item.state}:${item.updatedAt.toISOString()}:${item.snoozedUntil?.toISOString() ?? ''}`).digest('hex');
-    const alreadyApplied = action === 'ACCEPT' ? item.state === 'ACCEPTED' : action === 'DEFER' ? item.state === 'DEFERRED' : action === 'SNOOZE' ? item.snoozedUntil?.toISOString() === parameters.operationalWorkUntil : ['VERIFIED', 'CLOSED'].includes(item.state);
+    const alreadyApplied = action === 'ACCEPT' ? item.state === 'ACCEPTED' : action === 'DEFER' ? item.state === 'DEFERRED' : action === 'SNOOZE' ? item.snoozedUntil?.toISOString() === parameters.operationalWorkUntil : action === 'REOPEN' ? item.state === 'REOPENED' : ['VERIFIED', 'CLOSED'].includes(item.state);
     if (parameters.operationalWorkContextVersion !== currentVersion && !alreadyApplied) throw Object.assign(new Error('This work item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
     if (!alreadyApplied) {
       if (action === 'ACCEPT' || action === 'DEFER') {
@@ -108,6 +111,29 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
       } else if (action === 'SNOOZE') {
         if (typeof parameters.operationalWorkUntil !== 'string') throw Object.assign(new Error('The snooze date is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
         await snoozeWorkItem({ workItemId: item.id, snoozedUntil: new Date(parameters.operationalWorkUntil), actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:snooze` });
+      } else if (action === 'REOPEN') {
+        assertUserWorkItemTransition(item, 'REOPENED');
+        await transitionWorkItem({ workItemId: item.id, to: 'REOPENED', actorType: 'USER', actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:reopen` });
+      } else if (action === 'VERIFY') {
+        if (!['LOW_CONSEQUENCE', 'MATERIAL_FINANCIAL'].includes(item.safetyTier)) throw Object.assign(new Error('This completion requires verified domain evidence and cannot be approved from homeowner attestation alone.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+        const evidenceEntityId = `ask:${execution.id}:completion-attestation`;
+        await assertMaterialApprovalEvidenceSatisfiesPolicy(item, access.role, { evidenceType: 'USER_ATTESTATION', evidenceEntityId }, { observedResult: String(observedResult) });
+        const evidence = await recordEvidence({
+          workItemId: item.id,
+          evidenceType: 'USER_ATTESTATION',
+          evidenceEntityId,
+          verificationStatus: 'PENDING',
+          observedAt: new Date(),
+          actorUserId: userId,
+          idempotencyKey: `ask:${execution.id}:operational-work:verification-evidence`,
+        });
+        await prisma.operationalWorkEvidence.update({ where: { id: evidence.id }, data: { verificationStatus: 'VERIFIED' } });
+        if (item.materialApprovalRequired) {
+          await approveMaterialWorkItem(item.id, userId);
+          await recordWorkEvent({ workItemId: item.id, eventType: 'WORK_APPROVED', actorType: 'USER', actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:approval`, payload: { evidenceId: evidence.id, decisionNote: 'Confirmed through Ask after explicit homeowner review.' } });
+        }
+        const verified = await transitionWorkItem({ workItemId: item.id, to: 'VERIFIED', actorType: 'USER', actorUserId: userId, idempotencyKey: `ask:${execution.id}:operational-work:verify` });
+        await recordOperationalWorkOutcome({ propertyId: verified.propertyId, workItemId: verified.id, userId, costCents: null, recommendationSnapshotId: await resolveWorkItemRecommendationSnapshotId(verified.propertyId, verified.id) });
       } else await completeAcceptedOperationalWorkItem({
         workItemId: item.id,
         propertyId: execution.propertyId,
@@ -120,8 +146,9 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
       });
     }
     artifactType = 'OPERATIONAL_WORK_ITEM'; artifactId = item.id;
-    const workReasonCode = action === 'ACCEPT' ? 'OPERATIONAL_WORK_ACCEPTED' : action === 'DEFER' ? 'OPERATIONAL_WORK_DEFERRED' : action === 'SNOOZE' ? 'OPERATIONAL_WORK_SNOOZED' : 'OPERATIONAL_WORK_COMPLETED';
-    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
+    const workReasonCode = action === 'ACCEPT' ? 'OPERATIONAL_WORK_ACCEPTED' : action === 'DEFER' ? 'OPERATIONAL_WORK_DEFERRED' : action === 'SNOOZE' ? 'OPERATIONAL_WORK_SNOOZED' : action === 'VERIFY' ? 'OPERATIONAL_WORK_VERIFIED' : action === 'REOPEN' ? 'OPERATIONAL_WORK_REOPENED' : 'OPERATIONAL_WORK_COMPLETED';
+    const completionDecision = ['VERIFY', 'REOPEN'].includes(String(action));
+    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: action === 'VERIFY' ? 'Completion verified' : action === 'REOPEN' ? 'Action reopened' : 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : action === 'VERIFY' ? 'Your attestation was saved as verified evidence and this action is now complete.' : action === 'REOPEN' ? 'The reported completion was rejected and this action is active again.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: completionDecision ? [] : [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
     // all -- see ASK_MUTATION_IMPACT_MAP's OPERATIONAL_WORK_UPDATE entry.
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);

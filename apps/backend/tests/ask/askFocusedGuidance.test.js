@@ -519,15 +519,22 @@ test('accepted work offers Complete and Snooze in Ask instead of navigating to W
   assert.match(actions[1].message, /^Snooze\b/);
 });
 
-test('accepted work follows the card\'s own governed controls and does not eject reported completion to Desktop UI', () => {
+test('accepted work follows governed controls and resolves reported completion inside Ask', () => {
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
   const build = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options).blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
   // Not completion-eligible: Snooze only, promoted to primary.
   const snoozeOnly = build(acceptedWorkAction({ feedbackControls: ['CORRECT_FACT', 'SNOOZE'] }), { canContribute: true });
   assert.deepEqual(snoozeOnly.map((candidate) => [candidate.label, candidate.style]), [['Snooze reminders', 'PRIMARY']]);
-  // Completion reported: the answer and View details already explain the state. Verification is not an Ask
-  // operation, so no CTA is shown instead of navigating back to the desktop work manager.
+  // Completion reported: give a contributor the two decisions that actually close the loop.
   const reported = build(acceptedWorkAction({ workItem: { id: 'work-1', state: 'REPORTED_COMPLETE' }, primaryCta: { label: 'Review completion', href: '/dashboard/properties/property-1/home-operations?focusWorkItemId=work-1&openManage=1' } }), { canContribute: true });
-  assert.deepEqual(reported, []);
+  assert.deepEqual(reported.map((candidate) => [candidate.label, candidate.style]), [['Confirm completion', 'PRIMARY'], ['Still needs attention', 'SECONDARY']]);
+  assert.ok(reported.every((candidate) => candidate.operationId === 'OPERATIONAL_WORK_UPDATE' && candidate.href === undefined));
+  assert.match(reported[0].message, /^Verify\b/);
+  assert.match(reported[1].message, /^Reopen\b/);
+  assert.ok(reported.every((candidate) => resolveAskOperation(candidate.message).operationId === 'OPERATIONAL_WORK_UPDATE'));
+  // Homeowner attestation cannot verify regulated or safety-sensitive work, but reopening remains available.
+  const regulated = build(acceptedWorkAction({ governance: { ...weatherAction().governance, safetyTier: 'REGULATED_COVERAGE' }, workItem: { id: 'work-1', state: 'REPORTED_COMPLETE' } }), { canContribute: true });
+  assert.deepEqual(regulated.map((candidate) => [candidate.label, candidate.style]), [['Still needs attention', 'PRIMARY']]);
   // A viewer, or a caller that does not say, fails closed to the navigation (the operation needs CONTRIBUTOR).
   for (const options of [{ canContribute: false }, undefined, {}]) {
     assert.deepEqual(build(acceptedWorkAction(), options).map((candidate) => candidate.label), ['Open work']);

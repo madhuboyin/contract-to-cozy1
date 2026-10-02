@@ -210,7 +210,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   INTELLIGENCE_ENVELOPE_QUERY: 'The registered Envelope producers returned a bounded normalized view of this property intelligence.',
   HOME_EVENT_RADAR_FEED: "The canonical Home Event Radar feed shows this property's monitored events, grouped by source and severity.",
   HOME_ACTIONS: 'The Home Actions priority list puts the overdue safety inspection first.',
-  OPERATIONAL_WORK_UPDATE: 'The selected home-work item can be accepted, deferred, snoozed, or completed through its governed workflow.',
+  OPERATIONAL_WORK_UPDATE: 'The selected home-work item can be accepted, deferred, snoozed, completed, verified, or reopened through its governed workflow.',
   INSPECTION_FINDINGS: 'The confirmed inspection report has one unresolved major roof finding.',
   INSPECTION_FINDING_UPDATE: 'The selected inspection finding can be accepted as tracked work after confirmation.',
   RECALL_REVIEW: 'Two open recall matches are shown, one marked critical severity with a manufacturer remedy.',
