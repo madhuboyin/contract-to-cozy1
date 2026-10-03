@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Wrench, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Wrench, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
@@ -10,7 +10,7 @@ import { ActionLink } from './blocks/context';
 import { DetailSheetFrame } from './patterns/PatternParts';
 import { HorizontalTrack, ShelfCard } from './patterns/ShelvesView';
 import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
-import type { PropertyMaintenanceTask } from '@/types';
+import type { MaintenanceTaskPriority, PropertyMaintenanceTask } from '@/types';
 import { CompactAskCard } from './CompactAskCard';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -71,6 +71,9 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   const [task, setTask] = useState<PropertyMaintenanceTask | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draftDueDate, setDraftDueDate] = useState('');
+  const [draftPriority, setDraftPriority] = useState<MaintenanceTaskPriority>('MEDIUM');
   const headingRef = useRef<HTMLHeadingElement>(null);
   const callbacksRef = useRef({ onCanonicalTask, onUnavailable, onAccessLost });
   callbacksRef.current = { onCanonicalTask, onUnavailable, onAccessLost };
@@ -88,6 +91,9 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
           throw new Error('This task no longer belongs to the home used for this conversation.');
         }
         setTask(response.data);
+        setDraftDueDate(response.data.nextDueDate?.slice(0, 10) ?? '');
+        setDraftPriority(response.data.priority);
+        setEditing(false);
         callbacksRef.current.onCanonicalTask(response.data);
       })
       .catch((caught) => {
@@ -109,6 +115,17 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   }, [loading]);
 
   const actions = actionsForCanonicalStatus(fallbackItem.actions ?? [], task?.status);
+  const canEdit = actions.some((action) => action.operationId === 'MAINTENANCE_TASK_UPDATE' && action.interactionType === 'MUTATE_RECORD');
+  const hasDraftChanges = Boolean(task) && (draftDueDate !== (task?.nextDueDate?.slice(0, 10) ?? '') || draftPriority !== task?.priority);
+  const reviewDraftChanges = () => {
+    if (!task || !hasDraftChanges) return;
+    const dueChanged = draftDueDate !== (task.nextDueDate?.slice(0, 10) ?? '');
+    const priorityChanged = draftPriority !== task.priority;
+    const message = dueChanged
+      ? `Reschedule this maintenance task to ${draftDueDate}${priorityChanged ? ` and change priority to ${draftPriority.toLowerCase()} priority` : ''}.`
+      : `Change this maintenance task priority to ${draftPriority.toLowerCase()} priority.`;
+    onAction(fallbackItem.entityType, fallbackItem.id, message, 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
+  };
   return (
     <aside className="flex min-h-0 flex-1 flex-col bg-stone-50" aria-labelledby={`maintenance-detail-${taskId}`}>
       <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 bg-stone-50/95 px-5 py-4 backdrop-blur sm:px-8 sm:py-6">
@@ -128,7 +145,24 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
       {error && <div className="rounded-xl border border-amber-200 bg-white p-3" role="alert"><p className="text-sm font-semibold text-amber-900">{error === 'TASK_NOT_FOUND' ? 'Task no longer exists' : 'Could not verify the current task'}</p><p className="mt-1 text-sm text-slate-700">{error === 'TASK_NOT_FOUND' ? 'This task was removed after the Ask result was created.' : 'The current canonical record could not be loaded. Actions for this task are unavailable until the result is refreshed.'}</p><p className="mt-2 text-xs text-slate-500">The conversation remains available. Refresh this Ask result to reconcile with Maintenance.</p></div>}
       {task && <>
         {task.description && <p className="mt-3 text-sm leading-6 text-slate-700">{task.description}</p>}
-        <h5 className="mt-6 text-lg font-semibold text-slate-950">Details</h5>
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <h5 className="text-lg font-semibold text-slate-950">Details</h5>
+          {canEdit && !editing && <button type="button" disabled={disabled} onClick={() => setEditing(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:border-teal-300 disabled:opacity-50"><Pencil className="h-4 w-4" />Edit details</button>}
+        </div>
+        {canEdit && editing && <section aria-labelledby={`maintenance-edit-${taskId}`} className="mt-3 rounded-2xl border border-teal-200 bg-teal-50/60 p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div><h6 id={`maintenance-edit-${taskId}`} className="font-semibold text-slate-950">Edit task details</h6><p className="mt-1 text-sm text-slate-600">Review and confirm these changes in Ask before anything is saved.</p></div>
+            <button type="button" onClick={() => { setEditing(false); setDraftDueDate(task.nextDueDate?.slice(0, 10) ?? ''); setDraftPriority(task.priority); }} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-white" aria-label="Cancel editing task details"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-800">Next due date<input type="date" value={draftDueDate} onChange={(event) => setDraftDueDate(event.target.value)} className="mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950" /></label>
+            <label className="text-sm font-medium text-slate-800">Priority<select value={draftPriority} onChange={(event) => setDraftPriority(event.target.value as MaintenanceTaskPriority)} className="mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label>
+          </div>
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => { setEditing(false); setDraftDueDate(task.nextDueDate?.slice(0, 10) ?? ''); setDraftPriority(task.priority); }} className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+            <button type="button" disabled={disabled || !hasDraftChanges || !draftDueDate} onClick={reviewDraftChanges} className="min-h-10 rounded-xl bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Review changes</button>
+          </div>
+        </section>}
         <dl className="mt-3 grid gap-x-5 gap-y-4 rounded-2xl border border-slate-200 bg-white p-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <div><dt className="text-xs text-slate-500">Status</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.status)}</dd></div>
           <div><dt className="text-xs text-slate-500">Priority</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.priority)}</dd></div>

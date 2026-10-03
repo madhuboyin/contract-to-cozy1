@@ -17,9 +17,9 @@ function execution(revision = 1, executionId = 'execution'): AskExecutionRespons
     viewState: { resultId: 'result', revision, domainScopePhrase: 'hvac', dateScopePhrase: 'this month', statusFilter: 'ALL_OPEN', selectedTaskId: null },
   } as AskExecutionResponse;
 }
-function List({ response, onPage = () => {}, onAccessLost = () => {} }: { response: AskExecutionResponse; onPage?: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost?: () => void }) {
+function List({ response, onPage = () => {}, onAccessLost = () => {}, onAction = () => {} }: { response: AskExecutionResponse; onPage?: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost?: () => void; onAction?: jest.Mock | (() => void) }) {
   const controls = useResultView(response);
-  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onPage={onPage} onAction={() => {}} onAccessLost={onAccessLost} link={(_, label) => label} /></ResultViewContext.Provider>;
+  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onPage={onPage} onAction={onAction} onAccessLost={onAccessLost} link={(_, label) => label} /></ResultViewContext.Provider>;
 }
 beforeEach(() => { window.sessionStorage.clear(); jest.restoreAllMocks(); });
 
@@ -103,6 +103,39 @@ test('the task workspace moves between tasks in the current result without retur
   expect(screen.getByText('Task 2 of 8 in this view')).toBeInTheDocument();
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTarget).toEqual({ blockId: 'maintenance-groups', entityId: 'task-1' });
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+});
+
+test('workspace detail edits start the existing governed update confirmation with exact task identity', async () => {
+  const onAction = jest.fn();
+  const response = execution();
+  response.blocks = [{ ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], entityType: 'MAINTENANCE_TASK', actions: [
+    { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_UPDATE' },
+  ] }] }] }];
+  jest.spyOn(api, 'getMaintenanceTask').mockResolvedValueOnce({ success: true, data: {
+    id: 'task-0', propertyId: 'home', title: 'Task 0', description: null, status: 'PENDING', priority: 'MEDIUM', source: 'USER_CREATED',
+    nextDueDate: '2026-10-10T00:00:00.000Z',
+  } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>);
+  render(<List response={response} onAction={onAction} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Edit details' })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
+  expect(screen.getByText('Review and confirm these changes in Ask before anything is saved.')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Next due date'), { target: { value: '2026-11-15' } });
+  fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'HIGH' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  expect(onAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'task-0', 'Reschedule this maintenance task to 2026-11-15 and change priority to high priority.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
+  expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
+});
+
+test('workspace does not invent edit controls when the result declares no governed update action', async () => {
+  jest.spyOn(api, 'getMaintenanceTask').mockResolvedValueOnce({ success: true, data: {
+    id: 'task-0', propertyId: 'home', title: 'Task 0', description: null, status: 'PENDING', priority: 'MEDIUM', source: 'USER_CREATED',
+    nextDueDate: '2026-10-10T00:00:00.000Z',
+  } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>);
+  render(<List response={execution()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+  await waitFor(() => expect(screen.getByText('10/10/2026')).toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
 });
 
 test('browser back closes the current in-Ask detail without changing the conversation', async () => {
