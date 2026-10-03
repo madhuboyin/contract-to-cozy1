@@ -105,6 +105,30 @@ test('the task workspace moves between tasks in the current result without retur
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
 });
 
+test('task workspace navigation continues across server result pages', async () => {
+  const onPage = jest.fn();
+  jest.spyOn(api, 'getMaintenanceTask').mockImplementation(async (id) => ({ success: true, data: {
+    id, propertyId: 'home', title: id, description: `Canonical ${id}`, status: 'PENDING', priority: 'MEDIUM', source: 'USER_CREATED',
+  } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>));
+  const first = execution();
+  first.blocks = [{ ...block, sections: [{ ...block.sections[0], count: 16, offset: 0 }] }];
+  const rendered = render(<List response={first} onPage={onPage} />);
+  fireEvent.click(screen.getByRole('button', { name: /Show more open tasks/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Task 7' }));
+  await waitFor(() => expect(screen.getByText('Canonical task-7')).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Next maintenance task' }));
+  expect(onPage).toHaveBeenCalledWith('open', 'NEXT');
+  const second = execution(2, 'paged-execution');
+  second.blocks = [{ ...block, sections: [{ ...block.sections[0], count: 16, offset: 8, items: Array.from({ length: 8 }, (_, i) => ({ id: `task-${i + 8}`, title: `Task ${i + 8}`, meta: ['Due tomorrow'], description: `Details ${i + 8}`, status: 'PENDING' })) }] }];
+  rendered.rerender(<List response={second} onPage={onPage} />);
+  await waitFor(() => expect(screen.getByText('Canonical task-8')).toBeInTheDocument());
+  expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTarget).toEqual({ blockId: 'maintenance-groups', entityId: 'task-8' });
+  fireEvent.click(screen.getByRole('button', { name: 'Previous maintenance task' }));
+  expect(onPage).toHaveBeenLastCalledWith('open', 'PREVIOUS');
+  rendered.rerender(<List response={execution(3, 'paged-back')} onPage={onPage} />);
+  await waitFor(() => expect(screen.getByText('Canonical task-7')).toBeInTheDocument());
+});
+
 test('workspace detail edits start the existing governed update confirmation with exact task identity', async () => {
   const onAction = jest.fn();
   const response = execution();

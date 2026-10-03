@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Wrench, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
@@ -148,8 +148,8 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
           <p className="mt-1 text-xs text-slate-500">Task {position} of {total} in this view</p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" disabled={!onPrevious} onClick={() => onPrevious?.()} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white disabled:opacity-30" aria-label="Previous maintenance task"><ChevronLeft className="h-5 w-5" /></button>
-          <button type="button" disabled={!onNext} onClick={() => onNext?.()} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white disabled:opacity-30" aria-label="Next maintenance task"><ChevronRight className="h-5 w-5" /></button>
+          <button type="button" disabled={disabled || !onPrevious} onClick={() => onPrevious?.()} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white disabled:opacity-30" aria-label="Previous maintenance task"><ChevronLeft className="h-5 w-5" /></button>
+          <button type="button" disabled={disabled || !onNext} onClick={() => onNext?.()} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white disabled:opacity-30" aria-label="Next maintenance task"><ChevronRight className="h-5 w-5" /></button>
           <button type="button" onClick={onClose} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white" aria-label={`Close task detail for ${fallbackItem.title}`}><X className="h-5 w-5" /></button>
         </div>
       </header>
@@ -252,16 +252,48 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   const detailItems = block.sections.flatMap((section) => section.items);
   const detailIndex = detailItems.findIndex((item) => item.id === detailTaskId);
   const detailItem = detailIndex >= 0 ? detailItems[detailIndex] : undefined;
-  const openDetail = (item: Item) => {
+  const detailSectionIndex = block.sections.findIndex((section) => section.items.some((item) => item.id === detailTaskId));
+  const detailSection = detailSectionIndex >= 0 ? block.sections[detailSectionIndex] : undefined;
+  const detailSectionItemIndex = detailSection?.items.findIndex((item) => item.id === detailTaskId) ?? -1;
+  const openDetail = useCallback((item: Item) => {
     if (controls) controls.openDetail(block.id, item.id);
     else setLocalDetailTaskId(item.id);
-  };
+  }, [block.id, controls]);
   const closeDetail = (restoreFocus = true) => {
     const closingId = detailTaskId;
     if (controls) controls.closeDetail();
     else setLocalDetailTaskId(null);
     if (restoreFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-maintenance-detail-trigger="${CSS.escape(closingId ?? '')}"]`)?.focus());
   };
+  useEffect(() => {
+    const intent = controls?.view.detailPageIntent;
+    if (!intent || intent.blockId !== block.id) return;
+    const section = block.sections.find((candidate) => candidate.id === intent.sectionId);
+    if (!section || (section.offset ?? 0) === intent.fromOffset || section.items.length === 0) return;
+    const target = intent.direction === 'NEXT' ? section.items[0] : section.items[section.items.length - 1];
+    controls.change((view) => ({ ...view, detailPageIntent: null }));
+    openDetail(target);
+  }, [block.id, block.sections, controls, openDetail]);
+  const requestDetailPage = (sectionId: string, direction: 'NEXT' | 'PREVIOUS', fromOffset: number) => {
+    controls?.change((view) => ({ ...view, detailPageIntent: { blockId: block.id, sectionId, direction, fromOffset } }));
+    onPage(sectionId, direction);
+  };
+  const previousLoadedSection = detailSectionIndex > 0 ? [...block.sections.slice(0, detailSectionIndex)].reverse().find((section) => section.items.length > 0) : undefined;
+  const nextLoadedSection = detailSectionIndex >= 0 ? block.sections.slice(detailSectionIndex + 1).find((section) => section.items.length > 0) : undefined;
+  const previousDetail = detailSection && detailSectionItemIndex > 0
+    ? () => openDetail(detailSection.items[detailSectionItemIndex - 1])
+    : controls && detailSection && (detailSection.offset ?? 0) > 0
+      ? () => requestDetailPage(detailSection.id, 'PREVIOUS', detailSection.offset ?? 0)
+      : previousLoadedSection
+        ? () => openDetail(previousLoadedSection.items[previousLoadedSection.items.length - 1])
+        : null;
+  const nextDetail = detailSection && detailSectionItemIndex >= 0 && detailSectionItemIndex < detailSection.items.length - 1
+    ? () => openDetail(detailSection.items[detailSectionItemIndex + 1])
+    : controls && detailSection && (detailSection.offset ?? 0) + detailSection.items.length < detailSection.count
+      ? () => requestDetailPage(detailSection.id, 'NEXT', detailSection.offset ?? 0)
+      : nextLoadedSection
+        ? () => openDetail(nextLoadedSection.items[0])
+        : null;
 
   // A drawer CTA starts a new Ask turn (explanation, date capture, review);
   // the workspace must not stay open over it, and focus belongs to that turn,
@@ -269,8 +301,8 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   const workspaceAction: typeof onAction = (...args) => { onAction(...args); closeDetail(false); };
   const taskDetail = (taskId: string, item: Item) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled}
     position={detailIndex + 1} total={detailItems.length}
-    onPrevious={detailIndex > 0 ? () => openDetail(detailItems[detailIndex - 1]) : null}
-    onNext={detailIndex >= 0 && detailIndex < detailItems.length - 1 ? () => openDetail(detailItems[detailIndex + 1]) : null}
+    onPrevious={previousDetail}
+    onNext={nextDetail}
     onAction={workspaceAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={() => closeDetail()} />;
 
   return <section className={calm ? 'space-y-3' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white'} data-display-pattern={calm ? 'priority-stack' : layout === 'SHELVES' ? 'shelves' : undefined}>

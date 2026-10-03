@@ -4,6 +4,7 @@ export type ResultView = {
   selectedTaskId: string | null;
   detailTaskId: string | null;
   detailTarget: { blockId: string; entityId: string } | null;
+  detailPageIntent?: { blockId: string; sectionId: string; direction: 'NEXT' | 'PREVIOUS'; fromOffset: number } | null;
   expandedRows: string[];
   visibleCounts: Record<string, number>;
   presentationModes: Record<string, 'AUTO' | 'TABLE' | 'CARDS'>;
@@ -12,7 +13,7 @@ export type ResultView = {
   timelineLayouts?: Record<string, 'TRACK' | 'LIST'>;
   scrollOffset: number | null;
 };
-export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, detailTarget: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, groupedListModes: {}, scrollOffset: null };
+export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, detailTarget: null, detailPageIntent: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, groupedListModes: {}, scrollOffset: null };
 const PREFIX = 'ctc:ask-result-view:v1:';
 export const resultViewKey = (sessionId: string, propertyId: string, resultId: string) => `${PREFIX}${sessionId}:${propertyId}:${resultId}`;
 
@@ -27,6 +28,11 @@ export function readResultView(storage: Storage, key: string): ResultView {
       detailTarget: value.detailTarget && typeof value.detailTarget.blockId === 'string' && typeof value.detailTarget.entityId === 'string'
         && value.detailTarget.blockId.length <= 120 && value.detailTarget.entityId.length <= 200
         ? { blockId: value.detailTarget.blockId, entityId: value.detailTarget.entityId } : null,
+      detailPageIntent: value.detailPageIntent && typeof value.detailPageIntent.blockId === 'string'
+        && typeof value.detailPageIntent.sectionId === 'string' && ['NEXT', 'PREVIOUS'].includes(value.detailPageIntent.direction)
+        && Number.isInteger(value.detailPageIntent.fromOffset) && value.detailPageIntent.fromOffset >= 0
+        ? { blockId: value.detailPageIntent.blockId.slice(0, 120), sectionId: value.detailPageIntent.sectionId.slice(0, 120), direction: value.detailPageIntent.direction as 'NEXT' | 'PREVIOUS', fromOffset: value.detailPageIntent.fromOffset }
+        : null,
       expandedRows: Array.isArray(value.expandedRows) ? value.expandedRows.filter((id: unknown) => typeof id === 'string').slice(0, 100) : [],
       visibleCounts: Object.fromEntries(Object.entries(value.visibleCounts ?? {}).filter(([, count]) => Number.isInteger(count) && Number(count) >= 5 && Number(count) <= 100).map(([key, count]) => [key, Number(count)])),
       presentationModes: Object.fromEntries(Object.entries(value.presentationModes ?? {})
@@ -83,6 +89,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
     selectedTaskId: view.selectedTaskId && ids.has(view.selectedTaskId) ? view.selectedTaskId : null,
     detailTaskId: view.detailTaskId && ids.has(view.detailTaskId) ? view.detailTaskId : null,
     detailTarget,
+    detailPageIntent: view.detailPageIntent && groupedListIds.has(view.detailPageIntent.blockId) ? view.detailPageIntent : null,
     expandedRows: view.expandedRows.filter((id) => ids.has(id)),
     visibleCounts: Object.fromEntries(sections.map((section) => [section.id, Math.max(5, Math.min(view.visibleCounts[section.id] ?? 5, section.items.length))])),
     presentationModes: Object.fromEntries(Object.entries(view.presentationModes ?? {}).filter(([blockId]) => tableIds.has(blockId))),
