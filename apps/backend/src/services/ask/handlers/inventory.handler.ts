@@ -701,7 +701,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
         })) }],
         actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }],
       }],
-      suggestions: items.slice(0, 3).map((item) => `Correct the install date of ${item.name}`),
+      suggestions: items.slice(0, 3).map((item) => `Correct the install date of inventory item "${item.name}"`),
     };
   }
   const field = inventoryCorrectionField(message);
@@ -710,7 +710,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
       status: 'NEEDS_CLARIFICATION', reasonCode: 'INVENTORY_CORRECTION_FIELD_REQUIRED',
       ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', `Which detail should change for ${selected.name}? Ask can correct its name, dates, condition, brand, model, serial number, costs, notes, room, or category.`),
       blocks: [{ type: 'SUMMARY', id: 'inventory-correct-field', title: `Which detail should change for ${selected.name}?`, body: 'Say which one: name, install date, purchase date, last serviced date, condition, brand, model, serial number, purchase cost, replacement cost, or notes. Nothing has changed.', tone: 'CAUTION', actions: [] }],
-      suggestions: [`Correct the install date of ${selected.name}`, `Correct the purchase date of ${selected.name}`],
+      suggestions: [`Correct the install date of inventory item "${selected.name}"`, `Correct the purchase date of inventory item "${selected.name}"`],
     };
   }
   const current = inventoryFieldCurrent(selected, field);

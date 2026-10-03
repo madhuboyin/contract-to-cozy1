@@ -48,6 +48,7 @@ const WRITES = [
   ['Correct the condition of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the brand of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
   ['Set the purchase date for this inventory item', 'INVENTORY_ITEM_CORRECT'], ['Update the condition of this inventory item', 'INVENTORY_ITEM_CORRECT'],
   ['Update the brand of this inventory item', 'INVENTORY_ITEM_CORRECT'], ['Update the model of this inventory item', 'INVENTORY_ITEM_CORRECT'],
+  ['Correct the install date of inventory item "Microwave"', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the model of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the serial number of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the purchase cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the replacement cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the notes of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Please fix the serial number on my inventory record for the dryer', 'INVENTORY_ITEM_CORRECT'],

@@ -158,7 +158,7 @@ const positives: Record<AskOperationId, readonly string[]> = {
   RENOVATION_PERMIT_READINESS: ['Am I ready to start my renovation?', 'Is my renovation permit readiness blocked?', 'Can I start this home project?', 'Show permit readiness for my renovaton', 'Are the permissions in place to begin the remodel?'],
   SELLER_PREP_CHECKLIST: ['Check my sale readiness', 'Am I ready to sell my home?', 'What is on my seller prep checklist?', 'Is my home ready to list?', 'Show my selling readiness'],
   SELLER_PREP_ITEM_DECISION: ['Waive the seller prep item for the roof repair', 'I will pursue the gutter cleaning checklist item', 'Reopen the seller prep item I waived', 'Unpursue the checklist item I committed to'],
-  INVENTORY_ITEM_CORRECT: ['Correct the install date of this inventory item', 'Correct the purchase date of this inventory item', 'Correct the last serviced date of this inventory item', 'The date recorded on this inventory item is wrong, fix it'],
+  INVENTORY_ITEM_CORRECT: ['Correct the install date of this inventory item', 'Correct the install date of inventory item "Microwave"', 'Correct the purchase date of this inventory item', 'Correct the last serviced date of this inventory item', 'The date recorded on this inventory item is wrong, fix it'],
   HOME_EVENT_VISIBILITY: ['Change who can see this timeline event', 'Make this timeline event private', 'Share this timeline event in resale summaries', 'Change the visibility of this home event'],
   HOME_EVENT_RADAR_STATE: ['Save this monitored event.', 'Dismiss this monitored event.', 'Restore this dismissed monitored event.'],
   HOME_EVENT_RADAR_MARK_DONE: ['Mark this monitored event as done.', 'I handled this radar event, mark it done.'],

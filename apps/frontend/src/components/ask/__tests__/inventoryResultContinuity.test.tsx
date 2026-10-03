@@ -39,16 +39,25 @@ function canonicalItem(overrides: Partial<InventoryItem> = {}): InventoryItem {
 }
 beforeEach(() => { window.sessionStorage.clear(); jest.restoreAllMocks(); });
 
+test('inventory collections render as a responsive semantic table with one row per item', () => {
+  render(<List response={execution()} />);
+  const table = screen.getByRole('table', { name: 'Living Home Record inventory items' });
+  expect(table).toBeInTheDocument();
+  expect(screen.getAllByRole('row')).toHaveLength(4);
+  expect(screen.getByRole('columnheader', { name: 'Room / category' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Water heater' })).toBeInTheDocument();
+});
+
 test('clicking an inventory item title opens canonical detail inline without navigating', async () => {
   window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
-  jest.spyOn(api, 'getInventoryItem').mockResolvedValueOnce({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
+  jest.spyOn(api, 'getInventoryItem').mockResolvedValue({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
 
   render(<List response={execution()} />);
   expect(screen.queryByRole('link', { name: 'Water heater' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Water heater' }));
 
   await waitFor(() => expect(screen.getByText('Tank-style, in basement utility closet.')).toBeInTheDocument());
-  expect(screen.getByText('Rheem')).toBeInTheDocument();
+  expect(screen.getAllByText('Rheem')).toHaveLength(2);
   expect(screen.getByText('$850')).toBeInTheDocument();
   expect(window.location.pathname).toBe('/dashboard/ask');
   expect(window.location.search).toContain('sessionId=session');

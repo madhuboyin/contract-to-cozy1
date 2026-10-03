@@ -214,19 +214,27 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
       return <div key={section.id} className="border-b border-slate-100 p-4">
         <h4 className="font-semibold">{section.title} · {section.count}</h4>
         {section.items.length === 0 && <p className="mt-2 text-sm text-slate-500">No matching items.</p>}
-        <ul className="mt-3 space-y-3">
+        <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+          <table className="block w-full text-left text-sm md:table" aria-label={`${section.title} inventory items`}>
+            <thead className="hidden bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 md:table-header-group">
+              <tr><th scope="col" className="px-3 py-2.5">Item</th><th scope="col" className="px-3 py-2.5">Room / category</th><th scope="col" className="px-3 py-2.5">Brand / model</th><th scope="col" className="px-3 py-2.5">Condition</th></tr>
+            </thead>
+            <tbody className="block divide-y divide-slate-200 bg-white md:table-row-group">
           {section.items.slice(0, controls ? visible : section.items.length).map((item) => {
             const selected = controls?.view.selectedTaskId === item.id;
-            return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border p-3 outline-offset-2', selected ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <button type="button" data-inventory-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailItemId === item.id} aria-controls={`inventory-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
-                {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ')}</span>}
-              </div>
-              <p className="mt-1 text-xs text-slate-600">{item.meta.join(' · ')}</p>
-              {item.description && <p className="mt-2 text-sm text-slate-600">{item.description}</p>}
-            </li>;
+            return <tr key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('block p-3 outline-offset-2 md:table-row md:p-0', selected && 'bg-teal-50')}>
+              <th scope="row" className="block md:table-cell md:px-3 md:py-3 md:align-top">
+                <button type="button" data-inventory-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailItemId === item.id} aria-controls={`inventory-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-semibold text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
+                {item.description && <p className="font-normal text-xs leading-5 text-slate-500">{item.description}</p>}
+              </th>
+              <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Room / category:</span>{item.meta[0] ?? 'Not recorded'}</td>
+              <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Brand / model:</span>{item.meta[1] ?? 'Not recorded'}</td>
+              <td className="mt-1 block md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Condition:</span><span className="text-xs font-semibold text-slate-600">{item.status?.replace(/_/g, ' ') ?? 'Not recorded'}</span></td>
+            </tr>;
           })}
-        </ul>
+            </tbody>
+          </table>
+        </div>
         {controls && visible < section.items.length && <button type="button" className="mt-3 min-h-10 text-sm font-semibold text-teal-800" onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 5) } }))}>Show more {section.title.toLowerCase()} items ({offset + Math.min(visible, section.items.length)} of {section.count} reached)</button>}
         {(offset > 0 || offset + section.items.length < section.count) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
           <p className="text-xs text-slate-500">{calmChrome ? 'Showing' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
