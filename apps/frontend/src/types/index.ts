@@ -4247,6 +4247,8 @@ export type MaintenanceTaskRiskLevel =
   | 'LOW';
 
 export type MaintenanceTaskFrequency =
+  | 'DAILY'
+  | 'WEEKLY'
   | 'MONTHLY'
   | 'QUARTERLY'
   | 'SEMI_ANNUALLY'

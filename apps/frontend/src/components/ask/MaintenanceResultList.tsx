@@ -5,12 +5,13 @@ import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Wrench, X } f
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
+import { MAINTENANCE_SERVICE_CATEGORY_FILTER_OPTIONS } from '@/lib/config/serviceCategoryMapping';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
 import { DetailSheetFrame } from './patterns/PatternParts';
 import { HorizontalTrack, ShelfCard } from './patterns/ShelvesView';
 import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
-import type { MaintenanceTaskPriority, PropertyMaintenanceTask } from '@/types';
+import type { MaintenanceTaskFrequency, MaintenanceTaskPriority, MaintenanceTaskServiceCategory, PropertyMaintenanceTask } from '@/types';
 import { CompactAskCard } from './CompactAskCard';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
@@ -74,6 +75,8 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   const [editing, setEditing] = useState(false);
   const [draftDueDate, setDraftDueDate] = useState('');
   const [draftPriority, setDraftPriority] = useState<MaintenanceTaskPriority>('MEDIUM');
+  const [draftFrequency, setDraftFrequency] = useState<MaintenanceTaskFrequency | 'NONE'>('NONE');
+  const [draftServiceCategory, setDraftServiceCategory] = useState<MaintenanceTaskServiceCategory | ''>('');
   const headingRef = useRef<HTMLHeadingElement>(null);
   const callbacksRef = useRef({ onCanonicalTask, onUnavailable, onAccessLost });
   callbacksRef.current = { onCanonicalTask, onUnavailable, onAccessLost };
@@ -93,6 +96,8 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
         setTask(response.data);
         setDraftDueDate(response.data.nextDueDate?.slice(0, 10) ?? '');
         setDraftPriority(response.data.priority);
+        setDraftFrequency(response.data.isRecurring && response.data.frequency ? response.data.frequency : 'NONE');
+        setDraftServiceCategory(response.data.serviceCategory ?? '');
         setEditing(false);
         callbacksRef.current.onCanonicalTask(response.data);
       })
@@ -116,14 +121,22 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
 
   const actions = actionsForCanonicalStatus(fallbackItem.actions ?? [], task?.status);
   const canEdit = actions.some((action) => action.operationId === 'MAINTENANCE_TASK_UPDATE' && action.interactionType === 'MUTATE_RECORD');
-  const hasDraftChanges = Boolean(task) && (draftDueDate !== (task?.nextDueDate?.slice(0, 10) ?? '') || draftPriority !== task?.priority);
+  const originalFrequency = task?.isRecurring && task.frequency ? task.frequency : 'NONE';
+  const dueDateChanged = Boolean(task) && draftDueDate !== (task?.nextDueDate?.slice(0, 10) ?? '');
+  const priorityChanged = Boolean(task) && draftPriority !== task?.priority;
+  const frequencyChanged = Boolean(task) && draftFrequency !== originalFrequency;
+  const serviceCategoryChanged = Boolean(task) && draftServiceCategory !== (task?.serviceCategory ?? '');
+  const hasDraftChanges = dueDateChanged || priorityChanged || frequencyChanged || serviceCategoryChanged;
   const reviewDraftChanges = () => {
     if (!task || !hasDraftChanges) return;
-    const dueChanged = draftDueDate !== (task.nextDueDate?.slice(0, 10) ?? '');
-    const priorityChanged = draftPriority !== task.priority;
-    const message = dueChanged
-      ? `Reschedule this maintenance task to ${draftDueDate}${priorityChanged ? ` and change priority to ${draftPriority.toLowerCase()} priority` : ''}.`
-      : `Change this maintenance task priority to ${draftPriority.toLowerCase()} priority.`;
+    const changes = [
+      ...(priorityChanged ? [`change priority to ${draftPriority.toLowerCase()} priority`] : []),
+      ...(frequencyChanged ? [draftFrequency === 'NONE' ? 'make it a one-time task' : `set recurrence to ${draftFrequency.toLowerCase().replace(/_/g, ' ')}`] : []),
+      ...(serviceCategoryChanged && draftServiceCategory ? [`set service category to ${draftServiceCategory.toLowerCase().replace(/_/g, ' ')}`] : []),
+    ];
+    const message = dueDateChanged
+      ? `Reschedule this maintenance task to ${draftDueDate}${changes.length ? ` and ${changes.join(' and ')}` : ''}.`
+      : `Update this maintenance task: ${changes.join(' and ')}.`;
     onAction(fallbackItem.entityType, fallbackItem.id, message, 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
   };
   return (
@@ -152,15 +165,17 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
         {canEdit && editing && <section aria-labelledby={`maintenance-edit-${taskId}`} className="mt-3 rounded-2xl border border-teal-200 bg-teal-50/60 p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div><h6 id={`maintenance-edit-${taskId}`} className="font-semibold text-slate-950">Edit task details</h6><p className="mt-1 text-sm text-slate-600">Review and confirm these changes in Ask before anything is saved.</p></div>
-            <button type="button" onClick={() => { setEditing(false); setDraftDueDate(task.nextDueDate?.slice(0, 10) ?? ''); setDraftPriority(task.priority); }} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-white" aria-label="Cancel editing task details"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={() => { setEditing(false); setDraftDueDate(task.nextDueDate?.slice(0, 10) ?? ''); setDraftPriority(task.priority); setDraftFrequency(originalFrequency); setDraftServiceCategory(task.serviceCategory ?? ''); }} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-white" aria-label="Cancel editing task details"><X className="h-4 w-4" /></button>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-medium text-slate-800">Next due date<input type="date" value={draftDueDate} onChange={(event) => setDraftDueDate(event.target.value)} className="mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950" /></label>
             <label className="text-sm font-medium text-slate-800">Priority<select value={draftPriority} onChange={(event) => setDraftPriority(event.target.value as MaintenanceTaskPriority)} className="mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label>
+            <label className="text-sm font-medium text-slate-800">Recurrence<select value={draftFrequency} onChange={(event) => setDraftFrequency(event.target.value as MaintenanceTaskFrequency | 'NONE')} className="mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="NONE">One-time</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option><option value="QUARTERLY">Quarterly</option><option value="SEMI_ANNUALLY">Semi-annually</option><option value="ANNUALLY">Annually</option></select></label>
+            <label className="text-sm font-medium text-slate-800">Service category<select value={draftServiceCategory} onChange={(event) => setDraftServiceCategory(event.target.value as MaintenanceTaskServiceCategory | '')} className="mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-950"><option value="" disabled>Choose category</option>{MAINTENANCE_SERVICE_CATEGORY_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           </div>
           <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => { setEditing(false); setDraftDueDate(task.nextDueDate?.slice(0, 10) ?? ''); setDraftPriority(task.priority); }} className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
-            <button type="button" disabled={disabled || !hasDraftChanges || !draftDueDate} onClick={reviewDraftChanges} className="min-h-10 rounded-xl bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Review changes</button>
+            <button type="button" onClick={() => { setEditing(false); setDraftDueDate(task.nextDueDate?.slice(0, 10) ?? ''); setDraftPriority(task.priority); setDraftFrequency(originalFrequency); setDraftServiceCategory(task.serviceCategory ?? ''); }} className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+            <button type="button" disabled={disabled || !hasDraftChanges || (dueDateChanged && !draftDueDate) || (serviceCategoryChanged && !draftServiceCategory)} onClick={reviewDraftChanges} className="min-h-10 rounded-xl bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Review changes</button>
           </div>
         </section>}
         <dl className="mt-3 grid gap-x-5 gap-y-4 rounded-2xl border border-slate-200 bg-white p-5 text-sm sm:grid-cols-2 lg:grid-cols-3">

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register/transpile-only');
 
-const { maintenanceUpdateAction, maintenanceUpdateSubject } = require('../../src/services/ask/handlers/maintenance.handler');
+const { maintenanceUpdateAction, maintenanceUpdateRecurrence, maintenanceUpdateServiceCategory, maintenanceUpdateSubject } = require('../../src/services/ask/handlers/maintenance.handler');
 const { MaintenanceTaskUpdateInputSchema } = require('../../src/services/ask/support/commandInputs');
 
 test('the Remove CTA message maps to the DELETE action, Cancel stays ARCHIVE', () => {
@@ -19,4 +19,13 @@ test('remove/delete are not treated as part of the task subject', () => {
 
 test('the update input accepts DELETE without a date', () => {
   assert.equal(MaintenanceTaskUpdateInputSchema.parse({ taskId: 't1', action: 'DELETE' }).action, 'DELETE');
+});
+
+test('governed maintenance edits parse recurrence and service category without weakening schema validation', () => {
+  assert.deepEqual(maintenanceUpdateRecurrence('Set recurrence to every six months.'), { isRecurring: true, frequency: 'SEMI_ANNUALLY' });
+  assert.deepEqual(maintenanceUpdateRecurrence('Make this a one-time task.'), { isRecurring: false, frequency: null });
+  assert.equal(maintenanceUpdateServiceCategory('Set service category to appliance repair.'), 'APPLIANCE_REPAIR');
+  assert.equal(MaintenanceTaskUpdateInputSchema.parse({ taskId: 't1', action: 'EDIT', isRecurring: true, frequency: 'WEEKLY', serviceCategory: 'HVAC' }).frequency, 'WEEKLY');
+  assert.throws(() => MaintenanceTaskUpdateInputSchema.parse({ taskId: 't1', action: 'EDIT', isRecurring: true }));
+  assert.throws(() => MaintenanceTaskUpdateInputSchema.parse({ taskId: 't1', action: 'EDIT', isRecurring: false, frequency: 'MONTHLY' }));
 });

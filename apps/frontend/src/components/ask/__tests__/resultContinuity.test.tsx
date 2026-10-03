@@ -122,8 +122,10 @@ test('workspace detail edits start the existing governed update confirmation wit
   expect(screen.getByText('Review and confirm these changes in Ask before anything is saved.')).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Next due date'), { target: { value: '2026-11-15' } });
   fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'HIGH' } });
+  fireEvent.change(screen.getByLabelText('Recurrence'), { target: { value: 'SEMI_ANNUALLY' } });
+  fireEvent.change(screen.getByLabelText('Service category'), { target: { value: 'HVAC' } });
   fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
-  expect(onAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'task-0', 'Reschedule this maintenance task to 2026-11-15 and change priority to high priority.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
+  expect(onAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'task-0', 'Reschedule this maintenance task to 2026-11-15 and change priority to high priority and set recurrence to semi annually and set service category to hvac.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
   expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
 });
 

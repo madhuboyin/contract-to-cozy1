@@ -47,8 +47,18 @@ export const MaintenanceTaskUpdateInputSchema = z.object({
   title: z.string().trim().min(3).max(160).optional(),
   priority: z.nativeEnum(MaintenanceTaskPriority).optional(),
   nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  isRecurring: z.boolean().optional(),
+  frequency: z.nativeEnum(RecurrenceFrequency).nullable().optional(),
+  serviceCategory: z.nativeEnum(ServiceCategory).optional(),
   assigneeUserId: z.string().trim().min(1).max(160).nullable().optional(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.isRecurring === true && !value.frequency) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['frequency'], message: 'Choose how often this task repeats.' });
+  }
+  if (value.isRecurring === false && value.frequency !== null && value.frequency !== undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['frequency'], message: 'A one-time task cannot have a recurrence frequency.' });
+  }
+});
 
 export const RadarFeedbackInputSchema = z.object({
   matchId: z.string().trim().min(1).max(160),

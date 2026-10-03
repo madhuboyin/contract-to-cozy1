@@ -1,7 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
-import { HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, RecurrenceFrequency } from '@prisma/client';
+import { HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
@@ -555,6 +555,29 @@ export function maintenanceUpdateSubject(message: string): string {
     .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+export function maintenanceUpdateRecurrence(message: string): { isRecurring: boolean; frequency: RecurrenceFrequency | null } | null {
+  if (/\b(?:one[- ]time|does not repeat|do not repeat|stop repeating|non[- ]recurring)\b/i.test(message)) {
+    return { isRecurring: false, frequency: null };
+  }
+  const frequency = /\bsemi[- ]annually|\bevery six months?\b/i.test(message) ? RecurrenceFrequency.SEMI_ANNUALLY
+    : /\bquarterly\b|\bevery three months?\b/i.test(message) ? RecurrenceFrequency.QUARTERLY
+      : /\bannually\b|\byearly\b|\bevery year\b/i.test(message) ? RecurrenceFrequency.ANNUALLY
+        : /\bmonthly\b|\bevery month\b/i.test(message) ? RecurrenceFrequency.MONTHLY
+          : /\bweekly\b|\bevery week\b/i.test(message) ? RecurrenceFrequency.WEEKLY
+            : /\bdaily\b|\bevery day\b/i.test(message) ? RecurrenceFrequency.DAILY : null;
+  return frequency ? { isRecurring: true, frequency } : null;
+}
+
+export function maintenanceUpdateServiceCategory(message: string): ServiceCategory | undefined {
+  const normalized = message.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+  const categories = [
+    ServiceCategory.APPLIANCE_REPAIR, ServiceCategory.PEST_CONTROL, ServiceCategory.LANDSCAPING,
+    ServiceCategory.ELECTRICAL, ServiceCategory.PLUMBING, ServiceCategory.HANDYMAN,
+    ServiceCategory.CLEANING, ServiceCategory.LOCKSMITH, ServiceCategory.ROOFING, ServiceCategory.HVAC,
+  ];
+  return categories.find((category) => normalized.includes(category));
+}
+
 export async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string, launchTaskId?: string | null, sourceExecutionId?: string | null): Promise<AskOperationResult> {
   const [tasks, members] = await Promise.all([
     PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true }),
@@ -591,6 +614,8 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     : /\bhigh(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.HIGH
       : /\blow(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.LOW
         : /\bmedium(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.MEDIUM : undefined;
+  const recurrence = maintenanceUpdateRecurrence(message);
+  const serviceCategory = maintenanceUpdateServiceCategory(message);
   const assigneeText = message.match(/\bassign\b.{0,20}\bto\s+([^,.;]+)/i)?.[1]?.trim().toLowerCase();
   const assignee = action === 'ASSIGN' && assigneeText
     ? members.find((member) => [member.user.email, member.user.firstName, `${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim()]
@@ -598,17 +623,18 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     : null;
   // A reschedule with no date goes straight to the review card, whose New due date
   // field is an empty date picker (Confirm is blocked until one is chosen).
-  if ((action === 'ASSIGN' && !assignee) || (action === 'EDIT' && !priority)) {
+  if ((action === 'ASSIGN' && !assignee) || (action === 'EDIT' && !priority && !recurrence && !serviceCategory)) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'MAINTENANCE_UPDATE_VALUE_REQUIRED',
       ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', `What should change for ${match.title}?`),
-      blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'ASSIGN' ? 'Name an active household member or use their email address.' : 'Specify the new priority: low, medium, high, or urgent.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'ASSIGN' ? 'Name an active household member or use their email address.' : 'Specify a new priority, recurrence, or service category.', tone: 'CAUTION', actions: [] }],
       suggestions: action === 'ASSIGN' ? members.slice(0, 3).map((member) => `Assign ${match.title} to ${member.user.email}`) : [],
     };
   }
   const parsed = MaintenanceTaskUpdateInputSchema.parse({
     taskId: match.id, action,
     ...(dueDate ? { nextDueDate: dueDate } : {}), ...(priority ? { priority } : {}),
+    ...(recurrence ? recurrence : {}), ...(serviceCategory ? { serviceCategory } : {}),
     ...(action === 'ASSIGN' ? { assigneeUserId: assignee!.userId } : {}),
     ...(action === 'UNASSIGN' ? { assigneeUserId: null } : {}),
   });
@@ -638,6 +664,8 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
         ...(action === 'RESCHEDULE' ? [{ label: 'Current due date', value: humanDate(match.nextDueDate) ?? 'Not scheduled' }] : []),
         ...(action !== 'RESCHEDULE' && dueDate ? [{ label: 'New due date', value: dueDate }] : []),
         ...(priority ? [{ label: 'New priority', value: priority }] : []),
+        ...(recurrence ? [{ label: 'New recurrence', value: recurrence.isRecurring && recurrence.frequency ? recurrence.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' }] : []),
+        ...(serviceCategory ? [{ label: 'New service category', value: serviceCategory.toLowerCase().replace(/_/g, ' ') }] : []),
         ...(action === 'RESCHEDULE' && match.isRecurring && match.frequency
           ? [{ label: 'Recurrence', value: `Repeats ${match.frequency.toLowerCase().replace(/_/g, ' ')}; only this next due date changes` }]
           : []),
