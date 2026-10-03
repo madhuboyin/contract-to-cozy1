@@ -285,7 +285,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'ROOM_RENAME',
   // Reached only by the declared "Add a room" action: there is no message pattern for it and no fuzzy retrieval.
   'ROOM_CREATE',
-  // Reached only by the declared "Add an item" action: there is no message pattern for it and no fuzzy retrieval.
+  // Excluded from fuzzy retrieval. It is reached by the declared "Add an item" action or the narrow,
+  // deterministic inventoryCreatePattern below; both paths still require form review and confirmation.
   'INVENTORY_ITEM_CREATE',
   // Reached only by the declared "Fill in the missing details" action on a Property Summary completeness row.
   'PROPERTY_CONTEXT_AREA_CAPTURE',
@@ -717,6 +718,10 @@ const inventoryItemCorrectPattern = new RegExp(
   + String.raw`|(?!.*\b(?:task|checklist|reminder|maintenance|event|warranty|document|project|journey|room)\b)(?:\b(?:correct|fix|change|update|edit|set)\b.{0,40}\bname\b.{0,60}\b(?:inventory|appliance)\b|\b(?:inventory|appliance)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\bname\b|\brename\b.{0,60}\b(?:inventory|appliance)\b|\b(?:inventory|appliance)\b.{0,60}\brename\b)`,
   'i',
 );
+// Free-text inventory creation is intentionally deterministic rather than fuzzy: require an explicit write verb at
+// the start, exclude other governed record types and detail-correction nouns, then let the handler resolve the room
+// against this property's canonical room list. The handler never treats arbitrary trailing text as a room.
+const inventoryCreatePattern = /^\s*(?:please\s+)?(?:add|record|create)\s+(?!(?:(?:a|an|some|the|new)\s+)?(?:room|maintenance(?:\s+task)?|task|home\s+event|event|warranty|purchase\s+date|condition|brand|model|serial|notes?|cost|price)\b).{1,180}[.!?]*\s*$/i;
 // Timeline event title/date correction (Phase 3 write slice 2). Requires an
 // explicit correction verb, title/date/name, and the words "timeline event"
 // or "home event" -- checked before the maintenance/inventory patterns.
@@ -1135,6 +1140,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (inventoryItemCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_ITEM_CORRECT', 0.97);
+  }
+  if (inventoryCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('INVENTORY_ITEM_CREATE', 0.97);
   }
   if (maintenanceCompletePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_COMPLETE', 0.97);

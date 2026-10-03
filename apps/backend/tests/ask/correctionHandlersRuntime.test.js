@@ -1237,6 +1237,7 @@ test('ROOM_CREATE confirm maps a lost race on the unique name to a clear refusal
 const itemAddEnvelope = (launchContext, message = 'Add an item to my home inventory.') => ({ userId: 'u1', propertyId: 'p1', message, launchContext });
 const declaredItemAdd = { surface: 'ASK_WORKSPACE', operationId: 'INVENTORY_ITEM_CREATE', sourceExecutionId: 'source-summary-1' };
 const ROOM_KITCHEN = { id: '11111111-1111-4111-8111-111111111111', name: 'Kitchen' };
+const ROOM_DIRTY = { id: '22222222-2222-4222-8222-222222222222', name: 'Dirty' };
 function itemModels({ rooms = [ROOM_KITCHEN], existingByHash = null, earlier = null } = {}) {
   models.inventoryRoom = { findMany: async () => rooms };
   models.inventoryItem = {
@@ -1266,18 +1267,50 @@ test('Add item: the declared action returns the form (name, category, room with 
   assert.equal(calls.createItem.length, 0);
 });
 
-test('Add item: a refresh, a bare message or a missing declared action never starts or resets a form; a viewer is blocked', async () => {
+test('Add item: refresh and unrelated messages never start or reset a form; a viewer is blocked', async () => {
   itemModels();
-  for (const launchContext of [{ surface: 'ASK_REFRESH', sourceExecutionId: 'exec-1' }, { surface: 'ASK_WORKSPACE', operationId: 'PROPERTY_SUMMARY' }, undefined]) {
-    const result = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(launchContext));
+  for (const [launchContext, message] of [[{ surface: 'ASK_REFRESH', sourceExecutionId: 'exec-1' }, 'Add microwave to kitchen'], [{ surface: 'ASK_WORKSPACE', operationId: 'PROPERTY_SUMMARY' }, 'Show my inventory'], [undefined, 'Show my inventory']]) {
+    const result = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(launchContext, message));
     assert.equal(result.reasonCode, 'ASK_INVENTORY_CREATE_NOT_DIRECTLY_ROUTABLE', JSON.stringify(launchContext));
     assert.equal(result.captureRequests, undefined);
   }
-  assert.equal((await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(declaredItemAdd, 'add a dishwasher'))).reasonCode, 'ASK_INVENTORY_CREATE_NOT_DIRECTLY_ROUTABLE');
   accessRole = 'VIEWER';
   const blocked = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(declaredItemAdd));
   assert.equal(blocked.status, 'BLOCKED');
   assert.equal(blocked.captureRequests, undefined);
+});
+
+test('Add item: explicit free text pre-fills a meaningful item and exact canonical room without writing', async () => {
+  itemModels({ rooms: [ROOM_KITCHEN, ROOM_DIRTY] });
+  const result = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(undefined, 'add microwave to kitchen'));
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  assert.equal(result.blocks[0].title, 'Review the item details');
+  assert.deepEqual(result.captureRequests[0].currentAnswer, {
+    name: 'Microwave', category: 'APPLIANCE', roomId: ROOM_KITCHEN.id, brand: null, model: null,
+  });
+  assert.equal(calls.createItem.length, 0);
+});
+
+test('Add item: vague item language asks for the item but preserves an exact recorded room', async () => {
+  itemModels({ rooms: [ROOM_KITCHEN, ROOM_DIRTY] });
+  for (const [message, roomId] of [['add some junk to kitchen', ROOM_KITCHEN.id], ['add junk to dirty', ROOM_DIRTY.id]]) {
+    const result = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(undefined, message));
+    assert.equal(result.blocks[0].title, 'Which item should I record?');
+    assert.equal(result.captureRequests[0].currentAnswer.name, null);
+    assert.equal(result.captureRequests[0].currentAnswer.roomId, roomId);
+  }
+  assert.equal(calls.createItem.length, 0);
+});
+
+test('Add item: an unknown room produces a targeted room choice and keeps the parsed item', async () => {
+  itemModels();
+  const result = await capabilityInvoke('INVENTORY_ITEM_CREATE', itemAddEnvelope(undefined, 'add microwave to dirty'));
+  assert.equal(result.blocks[0].title, 'Choose a recorded room');
+  assert.match(result.blocks[0].body, /recorded room named "dirty"/i);
+  assert.equal(result.captureRequests[0].currentAnswer.name, 'Microwave');
+  assert.equal(result.captureRequests[0].currentAnswer.category, 'APPLIANCE');
+  assert.equal(result.captureRequests[0].currentAnswer.roomId, null);
+  assert.equal(calls.createItem.length, 0);
 });
 
 test('Add item: a valid submission builds the review card and keeps the form; the writer\'s own rules are surfaced before confirmation', async () => {
@@ -1322,6 +1355,8 @@ test('INVENTORY_ITEM_CREATE confirm creates the item through createItem with a n
   assert.deepEqual([...calls.markers].sort(), ['coverage', 'doNothing', 'risk']);
   assert.equal(result.reasonCode, 'INVENTORY_ITEM_CREATED');
   assert.equal(result.blocks[0].title, 'Item added');
+  assert.equal(result.blocks[0].details.find((detail) => detail.label === 'Room').value, 'Kitchen');
+  assert.deepEqual(result.suggestions, ['Set the purchase date for this inventory item', 'Update the condition of this inventory item', 'Update the model of this inventory item']);
   assert.deepEqual([artifactType, artifactId], ['INVENTORY_ITEM', 'item-new']);
   calls.createItem.length = 0;
   await invoke('INVENTORY_ITEM_CREATE', itemCreateParams(itemInput({ name: 'Furnace', category: 'HVAC', roomId: 'NONE', brand: null })));

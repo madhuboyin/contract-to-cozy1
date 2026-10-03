@@ -750,6 +750,52 @@ export const INVENTORY_CREATE_CAPTURE_KEY = 'INVENTORY_ITEM_CREATE_INPUTS';
 export const INVENTORY_NO_ROOM_VALUE = 'NONE';
 
 type InventoryCreateInput = z.infer<typeof InventoryCreateInputSchema>;
+type InventoryCreateSeed = { entered: Partial<InventoryCreateInput>; unresolvedRoomName?: string };
+
+const GENERIC_INVENTORY_ITEM_NAMES = new Set(['item', 'thing', 'something', 'stuff', 'junk']);
+
+function normalizedInventoryPhrase(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+function inferredInventoryCategory(name: string): InventoryCreateInput['category'] | undefined {
+  if (/\b(?:microwave|dishwasher|refrigerator|fridge|freezer|oven|range|washer|dryer)\b/i.test(name)) return 'APPLIANCE';
+  if (/\b(?:furnace|boiler|heat pump|air conditioner|hvac)\b/i.test(name)) return 'HVAC';
+  if (/\b(?:water heater|sump pump|faucet|toilet)\b/i.test(name)) return 'PLUMBING';
+  if (/\b(?:smoke detector|carbon monoxide detector|co detector|fire extinguisher)\b/i.test(name)) return 'SAFETY';
+  if (/\b(?:thermostat|smart lock|video doorbell|security camera)\b/i.test(name)) return 'SMART_HOME';
+  if (/\b(?:television|tv|computer|monitor|speaker)\b/i.test(name)) return 'ELECTRONICS';
+  if (/\b(?:sofa|couch|table|chair|desk|bed|dresser)\b/i.test(name)) return 'FURNITURE';
+  return undefined;
+}
+
+export function inventoryCreateSeedFromMessage(message: string, rooms: Array<{ id: string; name: string }>): InventoryCreateSeed | null {
+  const cleaned = message.trim().replace(/[.!?]+$/, '').trim();
+  if (normalizedInventoryPhrase(cleaned) === normalizedInventoryPhrase(INVENTORY_ADD_MESSAGE)) return { entered: {} };
+  const match = cleaned.match(/^(?:please\s+)?(?:add|record|create)\s+(.+)$/i);
+  if (!match) return null;
+  let remainder = match[1].trim();
+  remainder = remainder.replace(/^(?:an?\s+inventory\s+record\s+for\s+)/i, '');
+  let roomMention: string | undefined;
+  const placement = remainder.match(/^(.+?)\s+(?:to|in)\s+(.+)$/i);
+  if (placement) {
+    remainder = placement[1].trim();
+    roomMention = placement[2].trim().replace(/^(?:the|my)\s+/i, '');
+  }
+  const rawName = remainder.replace(/^(?:some|a|an|the|new)\s+/i, '').trim();
+  const normalizedName = normalizedInventoryPhrase(rawName);
+  const meaningfulName = normalizedName && !GENERIC_INVENTORY_ITEM_NAMES.has(normalizedName) ? rawName.replace(/^\w/, (letter) => letter.toUpperCase()) : undefined;
+  const resolvedRoom = roomMention
+    ? rooms.find((room) => normalizedInventoryPhrase(room.name) === normalizedInventoryPhrase(roomMention))
+    : undefined;
+  return {
+    entered: {
+      ...(meaningfulName ? { name: meaningfulName, category: inferredInventoryCategory(meaningfulName) } : {}),
+      ...(resolvedRoom ? { roomId: resolvedRoom.id } : {}),
+    },
+    ...(roomMention && !resolvedRoom ? { unresolvedRoomName: roomMention } : {}),
+  };
+}
 
 export const inventoryAddItemAction = () => ({ id: 'add-inventory-item', label: 'Add an item', interactionType: 'START_WORKFLOW' as const, message: INVENTORY_ADD_MESSAGE, operationId: 'INVENTORY_ITEM_CREATE', style: 'PRIMARY' as const });
 
@@ -804,7 +850,7 @@ export async function inventoryCreateBlocker(propertyId: string, input: Inventor
   return null;
 }
 
-export async function inventoryItemCreateResult(userId: string, propertyId: string, suppliedInput: InventoryCreateInput | undefined, sourceExecutionId: string | null, initialRoomId?: string | null): Promise<AskOperationResult> {
+export async function inventoryItemCreateResult(userId: string, propertyId: string, suppliedInput: InventoryCreateInput | undefined, sourceExecutionId: string | null, initialRoomId?: string | null, initialSeed?: InventoryCreateSeed): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
   if (access.role === HouseholdRole.VIEWER) {
@@ -818,12 +864,19 @@ export async function inventoryItemCreateResult(userId: string, propertyId: stri
   const contextVersion = inventoryCreateVersionFor(propertyId, rooms);
   const openInventory = { id: 'open-inventory', label: 'Open inventory instead', href: inventoryHref, style: 'SECONDARY' as const };
   if (!suppliedInput) {
-    const roomId = initialRoomId && rooms.some((room) => room.id === initialRoomId) ? initialRoomId : undefined;
+    const roomId = initialRoomId && rooms.some((room) => room.id === initialRoomId) ? initialRoomId : initialSeed?.entered.roomId;
+    const entered = { ...initialSeed?.entered, ...(roomId ? { roomId } : {}) };
+    const needsItemName = !entered.name;
+    const body = initialSeed?.unresolvedRoomName
+      ? `I couldn't find a recorded room named "${initialSeed.unresolvedRoomName}". Choose one of this home's rooms; the item details I could identify are kept below.`
+      : needsItemName
+        ? 'Tell me the specific item to record. The room I could identify is kept below.'
+        : 'Review the details I could identify, complete anything missing, then continue to confirmation.';
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'INVENTORY_CREATE_INPUT_REQUIRED', contextVersion,
       parameters: { sourceExecutionId },
-      blocks: [{ type: 'SUMMARY', id: 'inventory-create-input', title: 'Add an item', body: 'Nothing has been added yet. Enter the details, then review them before the item is added.', tone: 'DEFAULT', actions: [openInventory] }],
-      captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms, roomId ? { roomId } : undefined)], suggestions: [],
+      blocks: [{ type: 'SUMMARY', id: 'inventory-create-input', title: initialSeed?.unresolvedRoomName ? 'Choose a recorded room' : needsItemName ? 'Which item should I record?' : 'Review the item details', body: `${body} Nothing has been added yet.`, tone: initialSeed?.unresolvedRoomName ? 'CAUTION' : 'DEFAULT', actions: [openInventory] }],
+      captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms, entered)], suggestions: [],
     };
   }
   const blocker = await inventoryCreateBlocker(propertyId, suppliedInput, rooms);
@@ -869,7 +922,12 @@ registerCapabilityHandler('inventory.create', async (envelope) => {
     envelope.launchContext?.sourceExecutionId ?? null,
     envelope.launchContext?.entityType === 'INVENTORY_ROOM' ? envelope.launchContext.entityId ?? null : null,
   );
-  // A refresh of an in-progress add, or a bare message: never start (or reset) a form here.
+  if (envelope.launchContext?.surface !== 'ASK_REFRESH') {
+    const rooms = await inventoryCreateRooms(envelope.propertyId!);
+    const seed = inventoryCreateSeedFromMessage(envelope.message, rooms);
+    if (seed) return inventoryItemCreateResult(envelope.userId, envelope.propertyId!, undefined, null, null, seed);
+  }
+  // A refresh of an in-progress add, or a message outside the narrow explicit-create grammar: never start/reset a form.
   return {
     status: 'NOT_APPLICABLE', reasonCode: 'ASK_INVENTORY_CREATE_NOT_DIRECTLY_ROUTABLE',
     blocks: [{ type: 'SUMMARY', id: 'inventory-create-not-routable', title: 'Use the Add an item button', body: 'Items are added from the inventory list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],

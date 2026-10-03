@@ -63,12 +63,16 @@ test('floor labels follow Ask\'s floor convention: ground floor is 0, below zero
   ]);
 });
 
-test('the room map shows tiles by floor with item counts and open-task badges', async () => {
+test('the room map shows every room by default and keeps floor filters with counts and badges', async () => {
   render(<Harness />);
-  const ground = await screen.findByRole('list', { name: 'Ground floor, 2 rooms' });
-  const kitchen = within(ground).getByRole('button', { name: /Kitchen/ });
+  const all = await screen.findByRole('list', { name: 'All rooms, 4 rooms' });
+  expect(within(all).getAllByRole('button')).toHaveLength(4);
+  expect(screen.getByRole('button', { name: 'All rooms (4)' })).toHaveAttribute('aria-pressed', 'true');
+  const kitchen = within(all).getByRole('button', { name: /Kitchen/ });
   expect(kitchen).toHaveTextContent('7 items');
   expect(kitchen).toHaveTextContent('2 open tasks');
+  fireEvent.click(screen.getByRole('button', { name: /^Ground floor/ }));
+  expect(within(screen.getByRole('list', { name: 'Ground floor, 2 rooms' })).getAllByRole('button')).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { name: /^Other/ }));
   expect(within(screen.getByRole('list', { name: 'Other, 1 room' })).getByRole('button', { name: /Garage/ })).toHaveTextContent('1 open task');
 });

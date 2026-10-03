@@ -553,6 +553,7 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
   if (!candidate.success) throw Object.assign(new Error('The item to add is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const input = candidate.data;
   const propertyId = execution.propertyId!;
+  const rooms = await inventoryCreateRooms(propertyId);
   const refuse = (message: string) => Object.assign(new Error(message), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
   // createItem has no idempotency key: a same-named, same-category item created since this execution began is this
   // execution's own earlier write (a lease-reclaim retry). Checked first so the writer's own duplicate-appliance rule
@@ -567,7 +568,6 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
     itemId = earlier.id;
     alreadyAdded = true;
   } else {
-    const rooms = await inventoryCreateRooms(propertyId);
     const blocker = await inventoryCreateBlocker(propertyId, input, rooms);
     if (blocker) throw refuse(`${blocker.title}. ${blocker.body}`);
     try {
@@ -591,10 +591,14 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `inventory-created-${itemId}`, title: alreadyAdded ? 'Item already added' : 'Item added', status: 'COMPLETED',
       description: 'The item is now part of your home record and dependent coverage analysis was marked for refresh. Ask can correct its dates, condition, costs and notes from the inventory list.',
-      details: [{ label: 'Item name', value: input.name }, { label: 'Category', value: inventoryCategoryLabel(input.category) }, ...(input.brand ? [{ label: 'Brand', value: input.brand }] : []), ...(input.model ? [{ label: 'Model', value: input.model }] : [])],
+      details: [{ label: 'Item name', value: input.name }, { label: 'Category', value: inventoryCategoryLabel(input.category) }, { label: 'Room', value: input.roomId === INVENTORY_NO_ROOM_VALUE ? 'No room (whole-home)' : rooms.find((room) => room.id === input.roomId)?.name ?? 'Recorded room' }, ...(input.brand ? [{ label: 'Brand', value: input.brand }] : []), ...(input.model ? [{ label: 'Model', value: input.model }] : [])],
       actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`, style: 'PRIMARY' }],
     }],
-    suggestions: ['Show my home inventory'],
+    suggestions: [
+      'Set the purchase date for this inventory item',
+      'Update the condition of this inventory item',
+      input.brand ? 'Update the model of this inventory item' : 'Update the brand of this inventory item',
+    ],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {

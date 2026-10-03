@@ -32,8 +32,8 @@ const READS = [
   // read questions about visibility that must stay reads
   'Who can see my home timeline?', 'Which events are private?', 'What is the visibility of the roof replacement event?', 'Show my home timeline', 'Which events are shared in my resale pack?',
   'Make my property private', 'Change my privacy settings',
-  // the add-an-item action's own message and read questions near it: the add command is reached only by the declared action
-  'Add an item to my home inventory.', 'Add a room to my home record.', 'Fill in the missing structure details.', 'Fill in the missing safety details.', 'How many items are in my inventory?', 'Show my inventory', 'Do I have a dishwasher in my inventory?',
+  // other launch-only actions and read questions near inventory creation
+  'Add a room to my home record.', 'Fill in the missing structure details.', 'Fill in the missing safety details.', 'How many items are in my inventory?', 'Show my inventory', 'Do I have a dishwasher in my inventory?', 'What items are in the kitchen?',
   // read questions about a room's type and floor level
   'What type of room is the office?', 'What floor is the bedroom on?', 'What floor level is my basement room?', 'Show room types', 'What is the floor level of the kitchen?', 'Which floor is the laundry room on?',
   // wording that resembles a correction but belongs to other operations
@@ -41,9 +41,13 @@ const READS = [
 ];
 
 const WRITES = [
+  ['Add an item to my home inventory.', 'INVENTORY_ITEM_CREATE'], ['Add microwave to kitchen', 'INVENTORY_ITEM_CREATE'],
+  ['add some junk to kitchen', 'INVENTORY_ITEM_CREATE'], ['add junk to dirty', 'INVENTORY_ITEM_CREATE'],
   ['Correct the install date of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the purchase date of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the last serviced date of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['The install date on my water heater item is wrong, please fix the install date', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the condition of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the brand of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
+  ['Set the purchase date for this inventory item', 'INVENTORY_ITEM_CORRECT'], ['Update the condition of this inventory item', 'INVENTORY_ITEM_CORRECT'],
+  ['Update the brand of this inventory item', 'INVENTORY_ITEM_CORRECT'], ['Update the model of this inventory item', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the model of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the serial number of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the purchase cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the replacement cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the notes of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Please fix the serial number on my inventory record for the dryer', 'INVENTORY_ITEM_CORRECT'],

@@ -7,29 +7,35 @@ import { roomFloors } from '@/features/ask/displayPatterns';
 import type { AskGroupedListItem } from '@/features/ask/types';
 import { ItemDetailSheet, type ItemActionHandler } from './PatternParts';
 
-// IW-PRES-019 (FRD v1.72). Rooms as tiles, one floor at a time, grouped by the stored floor level. The grid is an
-// ordering, not a floor plan: tiles are all the same size and imply nothing about room sizes or positions.
+// IW-PRES-019 (FRD v1.72). Rooms as tiles, all visible by default with optional floor filters based on the stored
+// floor level. The grid is an ordering, not a floor plan: tiles are all the same size and imply nothing about room sizes or positions.
 // A domain list with its own live detail (Rooms, FRD v1.79) passes `onOpenRoom` and shows the detail itself.
 export function RoomMapView({ items, onItemAction, disabled, onOpenRoom }: { items: AskGroupedListItem[]; onItemAction: ItemActionHandler; disabled: boolean; onOpenRoom?: (item: AskGroupedListItem) => void }) {
   const floors = roomFloors(items);
-  const [floorKey, setFloorKey] = useState(floors[0]?.key ?? '');
+  const [floorKey, setFloorKey] = useState('all');
   const [openItem, setOpenItem] = useState<AskGroupedListItem | null>(null);
-  const floor = floors.find((entry) => entry.key === floorKey) ?? floors[0];
-  if (!floor) return null;
+  const floor = floors.find((entry) => entry.key === floorKey);
+  const visibleRooms = floor?.items ?? items;
+  const visibleLabel = floor?.label ?? 'All rooms';
+  if (items.length === 0) return null;
   return (
     <div className="space-y-3 p-4">
       {floors.length > 1 && (
         <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Floor">
+          <button type="button" aria-pressed={!floor} onClick={() => setFloorKey('all')}
+            className={cn('min-h-8 rounded-lg px-3 text-xs font-semibold', !floor ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>
+            All rooms <span className="font-normal text-slate-500">({items.length})</span>
+          </button>
           {floors.map((entry) => (
-            <button key={entry.key} type="button" aria-pressed={entry.key === floor.key} onClick={() => setFloorKey(entry.key)}
-              className={cn('min-h-8 rounded-lg px-3 text-xs font-semibold', entry.key === floor.key ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>
+            <button key={entry.key} type="button" aria-pressed={entry.key === floor?.key} onClick={() => setFloorKey(entry.key)}
+              className={cn('min-h-8 rounded-lg px-3 text-xs font-semibold', entry.key === floor?.key ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>
               {entry.label} <span className="font-normal text-slate-500">({entry.items.length})</span>
             </button>
           ))}
         </div>
       )}
-      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label={`${floor.label}, ${floor.items.length} room${floor.items.length === 1 ? '' : 's'}`}>
-        {floor.items.map((room) => (
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label={`${visibleLabel}, ${visibleRooms.length} room${visibleRooms.length === 1 ? '' : 's'}`}>
+        {visibleRooms.map((room) => (
           <li key={room.id}>
             <button type="button" onClick={() => (onOpenRoom ? onOpenRoom(room) : setOpenItem(room))} data-ask-room-tile={room.id} data-room-detail-trigger={room.id}
               className="group flex min-h-[4.75rem] w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-400 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600">
