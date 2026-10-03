@@ -3925,6 +3925,10 @@ model PropertyMaintenanceTask {
   // reset a plain boolean/timestamp flag.
   remindedForDueDate DateTime?
 
+  // Temporarily suppresses reminder delivery without changing the task's
+  // due date, status, or visibility. Completion/rescheduling clears it.
+  snoozedUntil DateTime?
+
   // Cost tracking
   estimatedCost      Decimal? @db.Decimal(10, 2)
   actualCost         Decimal? @db.Decimal(10, 2)

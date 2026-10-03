@@ -284,6 +284,7 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
           ...(candidate.data.isRecurring !== undefined ? { isRecurring: candidate.data.isRecurring } : {}),
           ...(candidate.data.frequency !== undefined ? { frequency: candidate.data.frequency } : {}),
           ...(candidate.data.serviceCategory !== undefined ? { serviceCategory: candidate.data.serviceCategory } : {}),
+          ...(candidate.data.snoozedUntil !== undefined ? { snoozedUntil: candidate.data.snoozedUntil } : {}),
         }, { expectedUpdatedAt: current.updatedAt, idempotencyKey: updateIdempotencyKey });
       } catch (raceError) {
         // The version check above rejects a change that already committed
@@ -307,6 +308,7 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
       blocks: [{ type: 'WORKFLOW_PROGRESS', id: `maintenance-update-${updated.id}`, title: 'Maintenance task updated', status: candidate.data.action === 'ARCHIVE' ? 'CANCELLED' : 'COMPLETED', description: 'The canonical Maintenance record and its downstream work state were updated.', details: [{ label: 'Task', value: updated.title }, { label: 'Action', value: candidate.data.action.toLowerCase() }, { label: 'Status', value: updated.status.toLowerCase().replace(/_/g, ' ') }, { label: 'Due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' },
         ...(candidate.data.isRecurring !== undefined || candidate.data.frequency !== undefined ? [{ label: 'Recurrence', value: updated.isRecurring && updated.frequency ? updated.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' }] : []),
         ...(candidate.data.serviceCategory !== undefined ? [{ label: 'Service category', value: updated.serviceCategory?.toLowerCase().replace(/_/g, ' ') ?? 'Not set' }] : []),
+        ...(candidate.data.action === 'SNOOZE' || candidate.data.action === 'UNSNOOZE' ? [{ label: 'Reminders', value: updated.snoozedUntil ? `Snoozed until ${humanDate(updated.snoozedUntil)}` : 'Active' }] : []),
         { label: 'Assignee', value: updated.assignedTo?.email ?? 'Unassigned' }], actions: [] }],
       confirmation: null, suggestions: candidate.data.action === 'ARCHIVE' ? [`Reopen ${updated.title}`] : ['What maintenance is pending?'],
     };

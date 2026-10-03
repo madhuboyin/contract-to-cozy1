@@ -4284,6 +4284,7 @@ export interface PropertyMaintenanceTask {
   isRecurring: boolean;
   frequency: MaintenanceTaskFrequency | null;
   lastCompletedDate: string | null;
+  snoozedUntil: string | null;
   
   // Cost
   estimatedCost: number | null;

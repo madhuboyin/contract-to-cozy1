@@ -48,6 +48,7 @@ export async function processMaintenanceReminders(options: {
       ...propertyFilter,
       status: 'PENDING',
       nextDueDate: { not: null, lte: horizon },
+      OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }],
     },
     include: {
       property: {

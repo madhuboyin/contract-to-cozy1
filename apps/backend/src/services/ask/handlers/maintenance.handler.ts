@@ -337,8 +337,8 @@ export async function maintenanceTaskCreateResult(
   };
 }
 
-export function maintenanceTaskVersion(task: { id: string; status: MaintenanceTaskStatus; updatedAt: Date }): string {
-  return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, updatedAt: task.updatedAt })).digest('hex');
+export function maintenanceTaskVersion(task: { id: string; status: MaintenanceTaskStatus; updatedAt: Date; snoozedUntil?: Date | null }): string {
+  return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, updatedAt: task.updatedAt, snoozedUntil: task.snoozedUntil ?? null })).digest('hex');
 }
 
 // External review [P1] FRESH-002/A10: a detected maintenance-task
@@ -538,6 +538,8 @@ export async function maintenanceTaskCompleteResult(
 }
 
 export function maintenanceUpdateAction(message: string): z.infer<typeof MaintenanceTaskUpdateInputSchema>['action'] {
+  if (/\b(?:resume|restore|unsnooze)\b.{0,24}\breminders?\b|\bunsnooze\b/i.test(message)) return 'UNSNOOZE';
+  if (/\bsnooze\b/i.test(message)) return 'SNOOZE';
   if (/\bunassign\b/i.test(message)) return 'UNASSIGN';
   if (/\bassign\b/i.test(message)) return 'ASSIGN';
   if (/\b(?:remove|delete)\b/i.test(message)) return 'DELETE';
@@ -549,10 +551,24 @@ export function maintenanceUpdateAction(message: string): z.infer<typeof Mainten
 
 export function maintenanceUpdateSubject(message: string): string {
   return message.toLowerCase()
-    .replace(/\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|remove|delete|reopen|restore|maintenance|task|priority|due date)\b/g, ' ')
+    .replace(/\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|remove|delete|reopen|restore|snooze|unsnooze|resume|reminders?|maintenance|task|priority|due date)\b/g, ' ')
     .replace(/\b(?:to|on|until|for|as)\s+\d{4}-\d{2}-\d{2}\b/g, ' ')
     .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, ' ')
     .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export function maintenanceSnoozedUntil(message: string, now: Date = new Date()): string | null | undefined {
+  if (/\b(?:resume|restore|unsnooze)\b.{0,24}\breminders?\b|\bunsnooze\b/i.test(message)) return null;
+  const explicit = message.match(/\b(?:until|through|to)\s+(\d{4}-\d{2}-\d{2})\b/i)?.[1];
+  if (explicit) return explicit;
+  const days = /\b(?:two|2)\s+weeks?\b/i.test(message) ? 14
+    : /\b(?:one|1|a)\s+months?\b/i.test(message) ? 30
+      : /\b(?:tomorrow|one|1)\s+days?\b/i.test(message) ? 1
+        : /\b(?:one|1|a)\s+weeks?\b/i.test(message) ? 7 : undefined;
+  if (!days) return undefined;
+  const date = new Date(now);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 export function maintenanceUpdateRecurrence(message: string): { isRecurring: boolean; frequency: RecurrenceFrequency | null } | null {
@@ -616,6 +632,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
         : /\bmedium(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.MEDIUM : undefined;
   const recurrence = maintenanceUpdateRecurrence(message);
   const serviceCategory = maintenanceUpdateServiceCategory(message);
+  const snoozedUntil = maintenanceSnoozedUntil(message);
   const assigneeText = message.match(/\bassign\b.{0,20}\bto\s+([^,.;]+)/i)?.[1]?.trim().toLowerCase();
   const assignee = action === 'ASSIGN' && assigneeText
     ? members.find((member) => [member.user.email, member.user.firstName, `${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim()]
@@ -623,12 +640,12 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     : null;
   // A reschedule with no date goes straight to the review card, whose New due date
   // field is an empty date picker (Confirm is blocked until one is chosen).
-  if ((action === 'ASSIGN' && !assignee) || (action === 'EDIT' && !priority && !recurrence && !serviceCategory)) {
+  if ((action === 'ASSIGN' && !assignee) || (action === 'SNOOZE' && !snoozedUntil) || (action === 'EDIT' && !priority && !recurrence && !serviceCategory)) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'MAINTENANCE_UPDATE_VALUE_REQUIRED',
       ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', `What should change for ${match.title}?`),
-      blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'ASSIGN' ? 'Name an active household member or use their email address.' : 'Specify a new priority, recurrence, or service category.', tone: 'CAUTION', actions: [] }],
-      suggestions: action === 'ASSIGN' ? members.slice(0, 3).map((member) => `Assign ${match.title} to ${member.user.email}`) : [],
+      blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'ASSIGN' ? 'Name an active household member or use their email address.' : action === 'SNOOZE' ? 'Choose when reminders should resume. The task and due date will stay unchanged.' : 'Specify a new priority, recurrence, or service category.', tone: 'CAUTION', actions: [] }],
+      suggestions: action === 'ASSIGN' ? members.slice(0, 3).map((member) => `Assign ${match.title} to ${member.user.email}`) : action === 'SNOOZE' ? [`Snooze reminders for ${match.title} for one week`] : [],
     };
   }
   const parsed = MaintenanceTaskUpdateInputSchema.parse({
@@ -637,9 +654,11 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     ...(recurrence ? recurrence : {}), ...(serviceCategory ? { serviceCategory } : {}),
     ...(action === 'ASSIGN' ? { assigneeUserId: assignee!.userId } : {}),
     ...(action === 'UNASSIGN' ? { assigneeUserId: null } : {}),
+    ...(action === 'SNOOZE' ? { snoozedUntil } : {}),
+    ...(action === 'UNSNOOZE' ? { snoozedUntil: null } : {}),
   });
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  const actionLabel = { EDIT: 'update', RESCHEDULE: 'reschedule', ASSIGN: 'assign', UNASSIGN: 'unassign', ARCHIVE: 'archive', REOPEN: 'reopen', DELETE: 'remove' }[action];
+  const actionLabel = { EDIT: 'update', RESCHEDULE: 'reschedule', ASSIGN: 'assign', UNASSIGN: 'unassign', ARCHIVE: 'archive', REOPEN: 'reopen', DELETE: 'remove', SNOOZE: 'snooze reminders for', UNSNOOZE: 'resume reminders for' }[action];
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'MAINTENANCE_UPDATE_CONFIRMATION_REQUIRED', contextVersion: maintenanceTaskVersion(match),
     // MAINT-005/A12: carried to confirm-time so the source list (if this
@@ -666,6 +685,8 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
         ...(priority ? [{ label: 'New priority', value: priority }] : []),
         ...(recurrence ? [{ label: 'New recurrence', value: recurrence.isRecurring && recurrence.frequency ? recurrence.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' }] : []),
         ...(serviceCategory ? [{ label: 'New service category', value: serviceCategory.toLowerCase().replace(/_/g, ' ') }] : []),
+        ...(action === 'SNOOZE' && snoozedUntil ? [{ label: 'Reminders resume', value: snoozedUntil }, { label: 'Due date', value: humanDate(match.nextDueDate) ?? 'Not scheduled (unchanged)' }] : []),
+        ...(action === 'UNSNOOZE' ? [{ label: 'Reminder suppression', value: 'Remove now' }] : []),
         ...(action === 'RESCHEDULE' && match.isRecurring && match.frequency
           ? [{ label: 'Recurrence', value: `Repeats ${match.frequency.toLowerCase().replace(/_/g, ' ')}; only this next due date changes` }]
           : []),

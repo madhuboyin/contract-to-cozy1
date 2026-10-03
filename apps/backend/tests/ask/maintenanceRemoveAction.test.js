@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register/transpile-only');
 
-const { maintenanceUpdateAction, maintenanceUpdateRecurrence, maintenanceUpdateServiceCategory, maintenanceUpdateSubject } = require('../../src/services/ask/handlers/maintenance.handler');
+const { maintenanceSnoozedUntil, maintenanceUpdateAction, maintenanceUpdateRecurrence, maintenanceUpdateServiceCategory, maintenanceUpdateSubject } = require('../../src/services/ask/handlers/maintenance.handler');
 const { MaintenanceTaskUpdateInputSchema } = require('../../src/services/ask/support/commandInputs');
 
 test('the Remove CTA message maps to the DELETE action, Cancel stays ARCHIVE', () => {
@@ -11,6 +11,16 @@ test('the Remove CTA message maps to the DELETE action, Cancel stays ARCHIVE', (
   assert.equal(maintenanceUpdateAction('Delete the chimney task'), 'DELETE');
   assert.equal(maintenanceUpdateAction('Cancel this maintenance task.'), 'ARCHIVE');
   assert.equal(maintenanceUpdateAction('Reschedule this maintenance task.'), 'RESCHEDULE');
+});
+
+test('maintenance reminder snooze is explicit, bounded, and does not masquerade as rescheduling', () => {
+  const now = new Date('2026-10-02T12:00:00.000Z');
+  assert.equal(maintenanceUpdateAction('Snooze reminders for this maintenance task for one week.'), 'SNOOZE');
+  assert.equal(maintenanceSnoozedUntil('Snooze reminders for this maintenance task for one week.', now), '2026-10-09');
+  assert.equal(maintenanceUpdateAction('Resume reminders for this maintenance task.'), 'UNSNOOZE');
+  assert.equal(maintenanceSnoozedUntil('Resume reminders for this maintenance task.', now), null);
+  assert.equal(MaintenanceTaskUpdateInputSchema.parse({ taskId: 't1', action: 'SNOOZE', snoozedUntil: '2026-10-09' }).snoozedUntil, '2026-10-09');
+  assert.throws(() => MaintenanceTaskUpdateInputSchema.parse({ taskId: 't1', action: 'SNOOZE' }));
 });
 
 test('remove/delete are not treated as part of the task subject', () => {

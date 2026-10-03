@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Wrench, X } from 'lucide-react';
+import { BellOff, BellRing, ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Wrench, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
@@ -77,6 +77,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   const [draftPriority, setDraftPriority] = useState<MaintenanceTaskPriority>('MEDIUM');
   const [draftFrequency, setDraftFrequency] = useState<MaintenanceTaskFrequency | 'NONE'>('NONE');
   const [draftServiceCategory, setDraftServiceCategory] = useState<MaintenanceTaskServiceCategory | ''>('');
+  const [guidanceTopic, setGuidanceTopic] = useState<'WHY' | 'WHEN' | 'COST' | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const callbacksRef = useRef({ onCanonicalTask, onUnavailable, onAccessLost });
   callbacksRef.current = { onCanonicalTask, onUnavailable, onAccessLost };
@@ -121,6 +122,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
 
   const actions = actionsForCanonicalStatus(fallbackItem.actions ?? [], task?.status);
   const canEdit = actions.some((action) => action.operationId === 'MAINTENANCE_TASK_UPDATE' && action.interactionType === 'MUTATE_RECORD');
+  const snoozeActive = Boolean(task?.snoozedUntil && new Date(task.snoozedUntil).getTime() > Date.now());
   const originalFrequency = task?.isRecurring && task.frequency ? task.frequency : 'NONE';
   const dueDateChanged = Boolean(task) && draftDueDate !== (task?.nextDueDate?.slice(0, 10) ?? '');
   const priorityChanged = Boolean(task) && draftPriority !== task?.priority;
@@ -191,9 +193,28 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
           <div><dt className="text-xs text-slate-500">Source</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.source)}</dd></div>
         </dl>
         <p className="mt-3 text-xs text-slate-500">Current canonical record · updated {formatDate(task.updatedAt)}</p>
+        <section className="mt-6" aria-labelledby={`maintenance-guidance-${taskId}`}>
+          <h5 id={`maintenance-guidance-${taskId}`} className="text-lg font-semibold text-slate-950">About this task</h5>
+          <p className="mt-1 text-sm text-slate-600">Quick answers from this task’s saved record. These do not start a new chat turn.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {([
+              ['WHY', 'Why is this on my list?'],
+              ['WHEN', 'When should I act?'],
+              ['COST', 'What cost is recorded?'],
+            ] as const).map(([topic, label]) => <button key={topic} type="button" aria-expanded={guidanceTopic === topic} onClick={() => setGuidanceTopic((current) => current === topic ? null : topic)} className={cn('min-h-11 rounded-xl border px-3 py-2 text-left text-sm font-semibold', guidanceTopic === topic ? 'border-teal-300 bg-teal-50 text-teal-900' : 'border-slate-200 bg-white text-slate-800 hover:border-teal-300')}>{label}</button>)}
+          </div>
+          {guidanceTopic && <div className="mt-2 rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700" role="status">
+            {guidanceTopic === 'WHY' && (task.description || `This task was added from ${fieldLabel(task.source)}. No additional rationale is recorded.`)}
+            {guidanceTopic === 'WHEN' && `${task.nextDueDate ? `It is due ${formatDate(task.nextDueDate)}` : 'No due date is recorded'}${task.isRecurring && task.frequency ? ` and repeats ${fieldLabel(task.frequency).toLowerCase()}` : ''}.${snoozeActive ? ` Reminders are snoozed until ${formatDate(task.snoozedUntil)}; the due date is unchanged.` : ''}`}
+            {guidanceTopic === 'COST' && (task.estimatedCost == null && task.actualCost == null ? 'No estimated or actual cost is recorded for this task.' : `Estimated cost: ${formatMoney(task.estimatedCost)}. Actual cost: ${formatMoney(task.actualCost)}.`)}
+          </div>}
+        </section>
       </>}
       </div>
-      {task && actions.length > 0 && <footer className="sticky bottom-0 flex flex-wrap gap-2 border-t border-stone-200 bg-stone-50/95 px-5 py-4 backdrop-blur sm:px-8">{actions.map((action) => <button key={action.id} type="button" disabled={disabled} className={cn('min-h-11 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-800 text-white' : action.id === 'remove' ? 'border border-red-200 bg-white text-red-700' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}</footer>}
+      {task && (actions.length > 0 || canEdit) && <footer className="sticky bottom-0 flex flex-wrap gap-2 border-t border-stone-200 bg-stone-50/95 px-5 py-4 backdrop-blur sm:px-8">
+        {canEdit && <button type="button" disabled={disabled} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, snoozeActive ? 'Resume reminders for this maintenance task.' : 'Snooze reminders for this maintenance task for one week.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD')}>{snoozeActive ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}{snoozeActive ? 'Resume reminders' : 'Snooze 1 week'}</button>}
+        {actions.map((action) => <button key={action.id} type="button" disabled={disabled} className={cn('min-h-11 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-800 text-white' : action.id === 'remove' ? 'border border-red-200 bg-white text-red-700' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}
+      </footer>}
     </aside>
   );
 }

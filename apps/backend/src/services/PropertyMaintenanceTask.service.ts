@@ -605,6 +605,8 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       const updateData: Record<string, unknown> = { status };
       if (status !== 'COMPLETED') return updateData;
 
+      updateData.snoozedUntil = null;
+
       updateData.lastCompletedDate = completionDetails?.completedAt ?? new Date();
       if (actualCost !== undefined) {
         updateData.actualCost = actualCost;
@@ -1216,6 +1218,7 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         frequency?: RecurrenceFrequency | null;
         nextDueDate?: string | null;
         serviceCategory?: ServiceCategory | null;
+        snoozedUntil?: string | null;
       },
       // External review [P1]: a caller that already validated a specific
       // `updatedAt` against a homeowner-reviewed version (e.g. a confirmation
@@ -1277,6 +1280,12 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
           data.isRecurring !== false && { frequency: data.frequency }),
         ...(data.nextDueDate !== undefined && {
           nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : null,
+          // A changed occurrence must not inherit reminder suppression from
+          // the previous schedule.
+          snoozedUntil: null,
+        }),
+        ...(data.snoozedUntil !== undefined && {
+          snoozedUntil: data.snoozedUntil ? new Date(data.snoozedUntil) : null,
         }),
         ...(data.serviceCategory !== undefined && {
           serviceCategory: data.serviceCategory,

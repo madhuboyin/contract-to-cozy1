@@ -43,7 +43,7 @@ export type MaintenanceCompletionWorkflowInput = z.infer<typeof MaintenanceCompl
 
 export const MaintenanceTaskUpdateInputSchema = z.object({
   taskId: z.string().trim().min(1).max(160),
-  action: z.enum(['EDIT', 'RESCHEDULE', 'ASSIGN', 'UNASSIGN', 'ARCHIVE', 'REOPEN', 'DELETE']),
+  action: z.enum(['EDIT', 'RESCHEDULE', 'ASSIGN', 'UNASSIGN', 'ARCHIVE', 'REOPEN', 'DELETE', 'SNOOZE', 'UNSNOOZE']),
   title: z.string().trim().min(3).max(160).optional(),
   priority: z.nativeEnum(MaintenanceTaskPriority).optional(),
   nextDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -51,12 +51,19 @@ export const MaintenanceTaskUpdateInputSchema = z.object({
   frequency: z.nativeEnum(RecurrenceFrequency).nullable().optional(),
   serviceCategory: z.nativeEnum(ServiceCategory).optional(),
   assigneeUserId: z.string().trim().min(1).max(160).nullable().optional(),
+  snoozedUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).strict().superRefine((value, context) => {
   if (value.isRecurring === true && !value.frequency) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['frequency'], message: 'Choose how often this task repeats.' });
   }
   if (value.isRecurring === false && value.frequency !== null && value.frequency !== undefined) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['frequency'], message: 'A one-time task cannot have a recurrence frequency.' });
+  }
+  if (value.action === 'SNOOZE' && !value.snoozedUntil) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['snoozedUntil'], message: 'Choose when reminders should resume.' });
+  }
+  if (value.action === 'UNSNOOZE' && value.snoozedUntil !== null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['snoozedUntil'], message: 'Resuming reminders must clear the snooze date.' });
   }
 });
 

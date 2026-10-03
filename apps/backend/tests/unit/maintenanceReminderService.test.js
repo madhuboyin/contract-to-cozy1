@@ -112,6 +112,7 @@ function task(overrides = {}) {
     status: 'PENDING',
     nextDueDate: new Date('2026-07-20T00:00:00.000Z'),
     remindedForDueDate: null,
+    snoozedUntil: null,
     assignedToUserId: null,
     actionKey: 'property-1:TEMPLATE:hvac-filter',
     property: { homeownerProfile: { userId: 'user-1' } },
@@ -148,6 +149,25 @@ test('reconciles canonical work before creating a governed notification for a du
   assert.equal(updates.length, 1);
   assert.equal(updates[0].where.id, 'task-1');
   assert.equal(updates[0].data.remindedForDueDate.toISOString(), task().nextDueDate.toISOString());
+});
+
+test('excludes actively snoozed tasks in the canonical reminder query', async () => {
+  let capturedWhere;
+  const servicePath = require.resolve('../../src/services/maintenanceReminder.service.ts');
+  const prismaPath = require.resolve('../../src/lib/prisma.ts');
+  require.cache[prismaPath] = {
+    id: prismaPath,
+    filename: prismaPath,
+    loaded: true,
+    exports: { prisma: { propertyMaintenanceTask: { findMany: async ({ where }) => { capturedWhere = where; return []; } } } },
+  };
+  delete require.cache[servicePath];
+  const { processMaintenanceReminders } = require(servicePath);
+  const now = new Date('2026-07-19T00:00:00.000Z');
+
+  await processMaintenanceReminders({ now });
+
+  assert.deepEqual(capturedWhere.OR, [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }]);
 });
 
 test('uses routine category/urgency for a task due well outside the material window', async () => {
