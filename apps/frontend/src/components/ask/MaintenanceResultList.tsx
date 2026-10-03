@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, Wrench, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Wrench, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
@@ -53,11 +53,15 @@ function taskSupportingFacts(item: Item): string[] {
   return [timing, context].filter((fact): fact is string => Boolean(fact)).slice(0, 2);
 }
 
-function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disabled, onAction, onCanonicalTask, onUnavailable, onAccessLost, onClose }: {
+function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disabled, position, total, onPrevious, onNext, onAction, onCanonicalTask, onUnavailable, onAccessLost, onClose }: {
   taskId: string;
   expectedPropertyId?: string;
   fallbackItem: Item;
   disabled: boolean;
+  position: number;
+  total: number;
+  onPrevious: (() => void) | null;
+  onNext: (() => void) | null;
   onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
   onCanonicalTask: (task: PropertyMaintenanceTask) => void;
   onUnavailable: (taskId: string) => void;
@@ -106,19 +110,26 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
 
   const actions = actionsForCanonicalStatus(fallbackItem.actions ?? [], task?.status);
   return (
-    <aside className="border-t border-teal-100 bg-teal-50/40 p-4" aria-labelledby={`maintenance-detail-${taskId}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
+    <aside className="flex min-h-0 flex-1 flex-col bg-stone-50" aria-labelledby={`maintenance-detail-${taskId}`}>
+      <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 bg-stone-50/95 px-5 py-4 backdrop-blur sm:px-8 sm:py-6">
+        <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Task detail</p>
-          <h4 ref={headingRef} tabIndex={-1} id={`maintenance-detail-${taskId}`} className="mt-1 text-lg font-semibold text-slate-950 outline-none">{task?.title ?? fallbackItem.title}</h4>
+          <h4 ref={headingRef} tabIndex={-1} id={`maintenance-detail-${taskId}`} className="mt-1 text-xl font-semibold text-slate-950 outline-none sm:text-2xl">{task?.title ?? fallbackItem.title}</h4>
+          <p className="mt-1 text-xs text-slate-500">Task {position} of {total} in this view</p>
         </div>
-        <button type="button" onClick={onClose} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white" aria-label={`Close task detail for ${fallbackItem.title}`}><X className="h-4 w-4" /></button>
-      </div>
-      {loading && <p className="mt-4 flex items-center gap-2 text-sm text-slate-600" role="status"><Loader2 className="h-4 w-4 animate-spin" />Loading the current maintenance record…</p>}
-      {error && <div className="mt-4 rounded-xl border border-amber-200 bg-white p-3" role="alert"><p className="text-sm font-semibold text-amber-900">{error === 'TASK_NOT_FOUND' ? 'Task no longer exists' : 'Could not verify the current task'}</p><p className="mt-1 text-sm text-slate-700">{error === 'TASK_NOT_FOUND' ? 'This task was removed after the Ask result was created.' : 'The current canonical record could not be loaded. Actions for this task are unavailable until the result is refreshed.'}</p><p className="mt-2 text-xs text-slate-500">The conversation remains available. Refresh this Ask result to reconcile with Maintenance.</p></div>}
+        <div className="flex shrink-0 items-center gap-1">
+          <button type="button" disabled={!onPrevious} onClick={() => onPrevious?.()} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white disabled:opacity-30" aria-label="Previous maintenance task"><ChevronLeft className="h-5 w-5" /></button>
+          <button type="button" disabled={!onNext} onClick={() => onNext?.()} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white disabled:opacity-30" aria-label="Next maintenance task"><ChevronRight className="h-5 w-5" /></button>
+          <button type="button" onClick={onClose} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white" aria-label={`Close task detail for ${fallbackItem.title}`}><X className="h-5 w-5" /></button>
+        </div>
+      </header>
+      <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6">
+      {loading && <p className="flex items-center gap-2 text-sm text-slate-600" role="status"><Loader2 className="h-4 w-4 animate-spin" />Loading the current maintenance record…</p>}
+      {error && <div className="rounded-xl border border-amber-200 bg-white p-3" role="alert"><p className="text-sm font-semibold text-amber-900">{error === 'TASK_NOT_FOUND' ? 'Task no longer exists' : 'Could not verify the current task'}</p><p className="mt-1 text-sm text-slate-700">{error === 'TASK_NOT_FOUND' ? 'This task was removed after the Ask result was created.' : 'The current canonical record could not be loaded. Actions for this task are unavailable until the result is refreshed.'}</p><p className="mt-2 text-xs text-slate-500">The conversation remains available. Refresh this Ask result to reconcile with Maintenance.</p></div>}
       {task && <>
         {task.description && <p className="mt-3 text-sm leading-6 text-slate-700">{task.description}</p>}
-        <dl className="mt-4 grid gap-x-5 gap-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <h5 className="mt-6 text-lg font-semibold text-slate-950">Details</h5>
+        <dl className="mt-3 grid gap-x-5 gap-y-4 rounded-2xl border border-slate-200 bg-white p-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <div><dt className="text-xs text-slate-500">Status</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.status)}</dd></div>
           <div><dt className="text-xs text-slate-500">Priority</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.priority)}</dd></div>
           <div><dt className="text-xs text-slate-500">Due</dt><dd className="mt-0.5 font-medium text-slate-900">{formatDate(task.nextDueDate)}</dd></div>
@@ -131,8 +142,9 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
           <div><dt className="text-xs text-slate-500">Source</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.source)}</dd></div>
         </dl>
         <p className="mt-3 text-xs text-slate-500">Current canonical record · updated {formatDate(task.updatedAt)}</p>
-        {actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{actions.map((action) => <button key={action.id} type="button" disabled={disabled} className={cn('min-h-10 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-700 text-white' : action.id === 'remove' ? 'border border-red-200 bg-white text-red-700' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}</div>}
       </>}
+      </div>
+      {task && actions.length > 0 && <footer className="sticky bottom-0 flex flex-wrap gap-2 border-t border-stone-200 bg-stone-50/95 px-5 py-4 backdrop-blur sm:px-8">{actions.map((action) => <button key={action.id} type="button" disabled={disabled} className={cn('min-h-11 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-800 text-white' : action.id === 'remove' ? 'border border-red-200 bg-white text-red-700' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}</footer>}
     </aside>
   );
 }
@@ -188,7 +200,9 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   }, [block]);
   const select = (id: string) => controls?.change((view) => ({ ...view, selectedTaskId: view.selectedTaskId === id ? null : id }));
   const detailTaskId = controls ? controls.detailIdFor(block.id) : localDetailTaskId;
-  const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailTaskId);
+  const detailItems = block.sections.flatMap((section) => section.items);
+  const detailIndex = detailItems.findIndex((item) => item.id === detailTaskId);
+  const detailItem = detailIndex >= 0 ? detailItems[detailIndex] : undefined;
   const openDetail = (item: Item) => {
     if (controls) controls.openDetail(block.id, item.id);
     else setLocalDetailTaskId(item.id);
@@ -201,10 +215,14 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   };
 
   // A drawer CTA starts a new Ask turn (explanation, date capture, review);
-  // the drawer must not stay open over it, and focus belongs to that turn,
-  // not the row that opened the drawer.
-  const drawerAction: typeof onAction = (...args) => { onAction(...args); closeDetail(false); };
-  const taskDetail = (taskId: string, item: Item, inSheet: boolean) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled} onAction={inSheet ? drawerAction : onAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={() => closeDetail()} />;
+  // the workspace must not stay open over it, and focus belongs to that turn,
+  // not the row that opened the workspace.
+  const workspaceAction: typeof onAction = (...args) => { onAction(...args); closeDetail(false); };
+  const taskDetail = (taskId: string, item: Item) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled}
+    position={detailIndex + 1} total={detailItems.length}
+    onPrevious={detailIndex > 0 ? () => openDetail(detailItems[detailIndex - 1]) : null}
+    onNext={detailIndex >= 0 && detailIndex < detailItems.length - 1 ? () => openDetail(detailItems[detailIndex + 1]) : null}
+    onAction={workspaceAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={() => closeDetail()} />;
 
   return <section className={calm ? 'space-y-3' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white'} data-display-pattern={calm ? 'priority-stack' : layout === 'SHELVES' ? 'shelves' : undefined}>
     <div className={calm ? 'flex flex-wrap items-center justify-between gap-2' : 'border-b border-slate-100 p-4'}>
@@ -323,10 +341,9 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         </nav>}
       </div>;
     })}
-    {!calm && layout === 'LIST' && detailTaskId && detailItem && taskDetail(detailTaskId, detailItem, false)}
-    {(calm || layout === 'SHELVES') && <DetailSheetFrame open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
-      {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem, true)}
-    </DetailSheetFrame>}
+    <DetailSheetFrame variant="WORKSPACE" open={Boolean(detailTaskId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Task detail: ${detailItem.title}` : 'Task detail'}>
+      {detailTaskId && detailItem && taskDetail(detailTaskId, detailItem)}
+    </DetailSheetFrame>
     {footerActions.some((action) => action.href || action.interactionType === 'START_WORKFLOW') && <div data-ask-action-footer="" className={cn('flex flex-wrap gap-2 text-sm font-semibold text-teal-800', !calm && 'px-4 py-3')}>{footerActions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === calmPrimaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>}
   </section>;
 }

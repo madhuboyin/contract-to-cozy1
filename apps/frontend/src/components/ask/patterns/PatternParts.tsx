@@ -65,15 +65,21 @@ export function ItemActionButtons({ item, actions, onItemAction, disabled, onDis
  * choice at the bottom.
  */
 /** The drawer / bottom-sheet frame alone, for a domain that renders its own detail inside it. */
-export function DetailSheetFrame({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode }) {
+export function DetailSheetFrame({ open, onOpenChange, title, children, variant = 'SHEET' }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode; variant?: 'SHEET' | 'WORKSPACE' }) {
+  const workspace = variant === 'WORKSPACE';
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/30" />
-        <Dialog.Content aria-describedby={undefined} data-ask-item-detail-sheet=""
-          className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col overflow-y-auto rounded-t-2xl bg-white shadow-xl outline-none sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[30rem] sm:rounded-none sm:rounded-l-2xl">
+        <Dialog.Content aria-describedby={undefined} data-ask-item-detail-sheet="" data-detail-presentation={workspace ? 'workspace' : 'sheet'}
+          className={cn(
+            'fixed z-50 flex flex-col overflow-y-auto bg-white shadow-xl outline-none',
+            workspace
+              ? 'inset-2 max-h-[calc(100dvh-1rem)] rounded-2xl sm:inset-x-6 sm:inset-y-8 sm:mx-auto sm:max-h-[calc(100dvh-4rem)] sm:w-[min(72rem,calc(100vw-3rem))] sm:rounded-3xl'
+              : 'inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[30rem] sm:rounded-none sm:rounded-l-2xl',
+          )}>
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
-          <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />
+          {!workspace && <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />}
           {children}
         </Dialog.Content>
       </Dialog.Portal>

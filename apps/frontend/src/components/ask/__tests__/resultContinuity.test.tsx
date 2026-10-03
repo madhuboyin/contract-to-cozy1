@@ -78,6 +78,9 @@ test('clicking a maintenance task title opens canonical detail inline without na
   fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
 
   await waitFor(() => expect(screen.getByText('Canonical task detail')).toBeInTheDocument());
+  expect(document.querySelector('[data-detail-presentation="workspace"]')).toBeInTheDocument();
+  expect(screen.getByText('Task 1 of 1 in this view')).toBeInTheDocument();
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   expect(screen.getByText('High')).toBeInTheDocument();
   expect(screen.getByText('$250')).toBeInTheDocument();
   expect(window.location.pathname).toBe('/dashboard/ask');
@@ -85,6 +88,21 @@ test('clicking a maintenance task title opens canonical detail inline without na
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTaskId).toBe('task-0');
   expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTarget).toEqual({ blockId: 'maintenance-groups', entityId: 'task-0' });
   expect(window.history.state.askDetail).toEqual({ key: resultViewKey('session', 'home', 'result'), blockId: 'maintenance-groups', entityId: 'task-0' });
+});
+
+test('the task workspace moves between tasks in the current result without returning to chat', async () => {
+  jest.spyOn(api, 'getMaintenanceTask').mockImplementation(async (id) => ({ success: true, data: {
+    id, propertyId: 'home', title: id === 'task-0' ? 'Task 0' : 'Task 1', description: `Canonical ${id}`, status: 'PENDING', priority: 'MEDIUM', source: 'USER_CREATED',
+  } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>));
+  render(<List response={execution()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+  await waitFor(() => expect(screen.getByText('Task 1 of 8 in this view')).toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'Previous maintenance task' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Next maintenance task' }));
+  await waitFor(() => expect(screen.getByText('Canonical task-1')).toBeInTheDocument());
+  expect(screen.getByText('Task 2 of 8 in this view')).toBeInTheDocument();
+  expect(readResultView(window.sessionStorage, resultViewKey('session', 'home', 'result')).detailTarget).toEqual({ blockId: 'maintenance-groups', entityId: 'task-1' });
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
 });
 
 test('browser back closes the current in-Ask detail without changing the conversation', async () => {
