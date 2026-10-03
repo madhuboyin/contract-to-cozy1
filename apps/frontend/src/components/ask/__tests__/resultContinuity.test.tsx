@@ -17,9 +17,9 @@ function execution(revision = 1, executionId = 'execution'): AskExecutionRespons
     viewState: { resultId: 'result', revision, domainScopePhrase: 'hvac', dateScopePhrase: 'this month', statusFilter: 'ALL_OPEN', selectedTaskId: null },
   } as AskExecutionResponse;
 }
-function List({ response, onPage = () => {}, onAccessLost = () => {}, onAction = () => {} }: { response: AskExecutionResponse; onPage?: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost?: () => void; onAction?: jest.Mock | (() => void) }) {
+function List({ response, onPage = () => {}, onAccessLost = () => {}, onAction = () => {}, onExecutionComplete }: { response: AskExecutionResponse; onPage?: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void; onAccessLost?: () => void; onAction?: jest.Mock | (() => void); onExecutionComplete?: (execution: AskExecutionResponse) => void }) {
   const controls = useResultView(response);
-  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onPage={onPage} onAction={onAction} onAccessLost={onAccessLost} link={(_, label) => label} /></ResultViewContext.Provider>;
+  return <ResultViewContext.Provider value={controls}><MaintenanceResultList block={response.blocks[0] as typeof block} propertyId={response.property?.id} disabled={false} onFilter={() => {}} onPage={onPage} onAction={onAction} onExecutionComplete={onExecutionComplete} onAccessLost={onAccessLost} link={(_, label) => label} /></ResultViewContext.Provider>;
 }
 beforeEach(() => { window.sessionStorage.clear(); jest.restoreAllMocks(); });
 
@@ -154,7 +154,7 @@ test('workspace detail edits start the existing governed update confirmation wit
   fireEvent.change(screen.getByLabelText('Recurrence'), { target: { value: 'SEMI_ANNUALLY' } });
   fireEvent.change(screen.getByLabelText('Service category'), { target: { value: 'HVAC' } });
   fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
-  await waitFor(() => expect(onAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'task-0', 'Reschedule this maintenance task to 2026-11-15 and change priority to high priority and set recurrence to semi annually and set service category to hvac.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD'));
+  await waitFor(() => expect(onAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'task-0', 'Reschedule this maintenance task to 2026-11-15 and change priority to high priority and set recurrence to semi annually and set service category to hvac.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD', undefined, undefined, 'WORKSPACE'));
   expect(screen.getByRole('dialog', { name: 'Task detail: Task 0' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Edit details' })).toBeInTheDocument();
 });
@@ -174,17 +174,21 @@ test('task actions review, confirm, and show their receipt without leaving the w
     confirmation: { confirmationId: 'snooze-1', version: 1, title: 'Snooze reminders for Task 0?', description: 'The due date stays unchanged.', fields: [{ label: 'Reminders resume', value: 'Oct 10, 2026' }], editableFields: [], confirmLabel: 'Confirm snooze', consentText: 'I authorize reminder suppression.', expiresAt: '2099-10-03T23:59:59.000Z' },
   } as unknown as AskExecutionResponse;
   const onAction = jest.fn().mockResolvedValue(confirmationExecution);
+  const onExecutionComplete = jest.fn();
   jest.spyOn(api, 'confirmAskExecution').mockResolvedValue({ success: true, data: { ...confirmationExecution, status: 'COMPLETED', confirmation: null, blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'done', title: 'Maintenance task updated', status: 'COMPLETED', description: 'Reminders were snoozed.', details: [], actions: [] }] } } as Awaited<ReturnType<typeof api.confirmAskExecution>>);
 
-  render(<List response={response} onAction={onAction} />);
+  render(<List response={response} onAction={onAction} onExecutionComplete={onExecutionComplete} />);
   fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Snooze 1 week' })).toBeInTheDocument());
   fireEvent.click(screen.getByRole('button', { name: 'Snooze 1 week' }));
   await waitFor(() => expect(screen.getByText('Snooze reminders for Task 0?')).toBeInTheDocument());
+  expect(onAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'task-0', 'Snooze reminders for this maintenance task for one week.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD', undefined, undefined, 'WORKSPACE');
+  expect(onExecutionComplete).not.toHaveBeenCalled();
   expect(screen.getByRole('dialog', { name: 'Task detail: Task 0' })).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText('I authorize reminder suppression.'));
   fireEvent.click(screen.getByRole('button', { name: 'Confirm snooze' }));
   await waitFor(() => expect(screen.getByText('Task action completed')).toBeInTheDocument());
+  expect(onExecutionComplete).toHaveBeenCalledWith(expect.objectContaining({ executionId: 'snooze-execution', status: 'COMPLETED' }));
   expect(screen.getByText('Reminders were snoozed.')).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: 'Task detail: Task 0' })).toBeInTheDocument();
 });

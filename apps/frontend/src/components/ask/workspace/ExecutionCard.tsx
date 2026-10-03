@@ -111,7 +111,7 @@ export function ExecutionCard({
   justUpdatedExecutionId: string | null;
   updateExecution: (updated: AskExecutionResponse) => void;
   loading: boolean;
-  ask: (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => Promise<AskExecutionResponse | void>;
+  ask: (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean }) => Promise<AskExecutionResponse | void>;
   retryExecution?: (execution: AskExecutionResponse) => Promise<void>;
   selectedPropertyId: string;
   setInput: (value: string) => void;
@@ -180,7 +180,7 @@ export function ExecutionCard({
   // REMIND_LATER once their domain policy lands; NAVIGATE once item
   // actions carry an href), it surfaces here instead of silently no-oping.
   const [itemActionIssue, setItemActionIssue] = useState<string | null>(null);
-  const dispatchItemAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string) => {
+  const dispatchItemAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string, presentation?: 'CONVERSATION' | 'WORKSPACE') => {
     setItemActionIssue(null);
     const dispatch = resolveItemActionDispatch(interactionType);
     if (dispatch.kind === 'ASK_WITH_ENTITY_CONTEXT') {
@@ -202,7 +202,7 @@ export function ExecutionCard({
         documentId,
         // FRD v1.41: undefined except for RadarEventDetail's "Plan this action" (the recommended action's code).
         actionId,
-      });
+      }, { presentInConversation: presentation !== 'WORKSPACE' });
     } else if (dispatch.kind === 'ASK_FILTER_ONLY') {
       return ask(message, undefined, { sourceExecutionId: execution.executionId });
     } else if (dispatch.kind === 'REFRESH') {
@@ -333,7 +333,7 @@ export function ExecutionCard({
         )}
         <div ref={bodyRef} className={cn('space-y-3', calmChrome && FRAMELESS_LISTS)}>
           <CalmReceiptContext.Provider value={receiptContinuation}><AskBlockActionContext.Provider value={{ disabled: loading || refreshing || refreshPending || Boolean(refreshError), invoke: dispatchBlockAction }}>
-            <BlockSequence blocks={shownBlocks} renderBlock={(block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>} />
+            <BlockSequence blocks={shownBlocks} renderBlock={(block, index) => <CalmSecondaryContext.Provider key={block.id} value={calmChrome && block.type === 'CAPABILITY_LIST' && index > 0}><BlockView block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled={loading || refreshing || refreshPending || Boolean(refreshError)} onItemAction={dispatchItemAction} onWorkspaceExecutionComplete={updateExecution} onBatchItemAction={(batch) => void ask(batch.message, undefined, { sourceExecutionId: execution.executionId, operationId: batch.operationId, entityType: batch.entityType, batchDecisions: batch.decisions })} onFilterClick={(message) => void ask(message, undefined, { sourceExecutionId: execution.executionId })} onCollectionPage={(sectionId, direction) => void ask(`${direction === 'NEXT' ? 'Show next' : 'Show previous'} maintenance results`, undefined, { sourceExecutionId: execution.executionId, entityType: 'ASK_COLLECTION_SECTION', entityId: sectionId, actionId: `${direction}_PAGE` })} onAccessLost={() => onAccessLost(execution)} onOpenContext={onOpenContext} /></CalmSecondaryContext.Provider>} />
             {hasResponseContext(execution) && !calmChrome && <ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} />}
           </AskBlockActionContext.Provider></CalmReceiptContext.Provider>
           {/* ACUI-003: the trust line sits directly under the core answer, before any capture, review or handoff card. */}

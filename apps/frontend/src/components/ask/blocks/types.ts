@@ -16,7 +16,10 @@ export type AskBlockRendererProps<TBlock extends AskPresentationBlock = AskPrese
   // omits it, since every other item action dispatches immediately with no out-of-band upload step first.
   // actionId (optional 7th param) exists only for RadarEventDetail's "Plan this action" (FRD v1.41): the
   // recommended action's code, sent as launchContext.actionId.
-  onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string) => void | Promise<AskExecutionResponse | void>;
+  onItemAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string, presentation?: 'CONVERSATION' | 'WORKSPACE') => void | Promise<AskExecutionResponse | void>;
+  // A modal workspace keeps proposal/review turns local, then publishes only
+  // the durable completed receipt into the surrounding conversation.
+  onWorkspaceExecutionComplete?: (execution: AskExecutionResponse) => void;
   // IW-PRES-015 (FRD v1.75): sends a card deck's collected decisions as one request, which returns one confirmation.
   // Optional: where a renderer is used without it, a deck that declares a batch falls back to the plain list.
   onBatchItemAction?: (batch: { operationId: string; entityType: string; message: string; decisions: AskBatchDecision[] }) => void;

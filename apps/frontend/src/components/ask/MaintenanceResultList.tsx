@@ -55,7 +55,7 @@ function taskSupportingFacts(item: Item): string[] {
   return [timing, context].filter((fact): fact is string => Boolean(fact)).slice(0, 2);
 }
 
-function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disabled, position, total, onPrevious, onNext, onAction, onCanonicalTask, onUnavailable, onAccessLost, onClose }: {
+function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disabled, position, total, onPrevious, onNext, onAction, onExecutionComplete, onCanonicalTask, onUnavailable, onAccessLost, onClose }: {
   taskId: string;
   expectedPropertyId?: string;
   fallbackItem: Item;
@@ -64,7 +64,8 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   total: number;
   onPrevious: (() => void) | null;
   onNext: (() => void) | null;
-  onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void | Promise<AskExecutionResponse | void>;
+  onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string, presentation?: 'CONVERSATION' | 'WORKSPACE') => void | Promise<AskExecutionResponse | void>;
+  onExecutionComplete?: (execution: AskExecutionResponse) => void;
   onCanonicalTask: (task: PropertyMaintenanceTask) => void;
   onUnavailable: (taskId: string) => void;
   onAccessLost: () => void;
@@ -162,7 +163,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   const beginInlineAction = async (message: string, operationId: string, interactionType: AskItemActionInteractionType) => {
     setActionPending(true); setActionError(null); setInlineExecution(null);
     try {
-      const execution = await onAction(fallbackItem.entityType, fallbackItem.id, message, operationId, interactionType);
+      const execution = await onAction(fallbackItem.entityType, fallbackItem.id, message, operationId, interactionType, undefined, undefined, 'WORKSPACE');
       if (execution) setInlineExecution(execution);
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : 'Could not start this task action.');
@@ -175,6 +176,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
     if (execution.status === 'COMPLETED') {
       try { await refreshCanonicalTask(); } catch { /* receipt remains authoritative if the removed task no longer loads */ }
       setEditing(false);
+      onExecutionComplete?.(execution);
     }
   };
   return (
@@ -288,13 +290,14 @@ export function calmPrimaryMaintenanceActionId(actions: Array<{ id: string; inte
   return actions.find((action) => action.interactionType === 'START_WORKFLOW')?.id ?? null;
 }
 
-export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, onAccessLost, link, layout = 'LIST', onChooseLayout }: {
+export function MaintenanceResultList({ block, propertyId, disabled, onFilter, onPage, onAction, onExecutionComplete, onAccessLost, link, layout = 'LIST', onChooseLayout }: {
   block: Block;
   propertyId?: string;
   disabled: boolean;
   onFilter: (message: string) => void;
   onPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void;
-  onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void | Promise<AskExecutionResponse | void>;
+  onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string, actionId?: string, presentation?: 'CONVERSATION' | 'WORKSPACE') => void | Promise<AskExecutionResponse | void>;
+  onExecutionComplete?: (execution: AskExecutionResponse) => void;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
   // IW-PRES-014 / IW-PRES-022: the server-declared shelves layout, and the homeowner's switch between it and the list.
@@ -372,7 +375,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
     position={detailIndex + 1} total={detailItems.length}
     onPrevious={previousDetail}
     onNext={nextDetail}
-    onAction={workspaceAction} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={() => closeDetail()} />;
+    onAction={workspaceAction} onExecutionComplete={onExecutionComplete} onCanonicalTask={(task) => setCanonicalStatuses((current) => ({ ...current, [task.id]: task.status }))} onUnavailable={(unavailableId) => setUnavailableTaskIds((current) => new Set(current).add(unavailableId))} onAccessLost={onAccessLost} onClose={() => closeDetail()} />;
 
   return <section className={calm ? 'space-y-3' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white'} data-display-pattern={calm ? 'priority-stack' : layout === 'SHELVES' ? 'shelves' : undefined}>
     <div className={calm ? 'flex flex-wrap items-center justify-between gap-2' : 'border-b border-slate-100 p-4'}>

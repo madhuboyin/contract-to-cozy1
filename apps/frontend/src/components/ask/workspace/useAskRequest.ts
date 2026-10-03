@@ -31,7 +31,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
   setJustUpdatedExecutionId: (value: string | null) => void;
   setRecentSessionsEpoch: Dispatch<SetStateAction<number>>;
 }) {
-  const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => {
+  const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean }) => {
     const message = question.trim();
     if (!message || !sessionId || loading) return;
     // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-003/CTX-002: capture which
@@ -93,15 +93,16 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
         return;
       }
       // Ask Cozy Stage 3, Phase 3 (implementation plan §19; FRD §16/§28).
-      // A synchronous conversational-capture candidate arrives inline as a
-      // full child execution on this same response -- spread it into the
-      // flat executions array so it renders (via its own confirmation
-      // field) exactly like any other execution. No new rendering code:
-      // ConfirmationCard/BlockView already operate per-executionId,
-      // agnostic to whether it arrived as the "main" response or here.
-      setExecutions((current) => mergeResultExecutions(current, [response.data!, ...(response.data!.childExecutions ?? [])]));
-      setJustUpdatedExecutionId(response.data.executionId);
-      if (mode === 'page') updateAskLocation({ sessionId: requestedSessionId, propertyId: response.data.property?.id ?? selectedPropertyId, executionId: response.data.executionId }, 'replace');
+      // A synchronous conversational-capture candidate normally arrives
+      // inline as a full child execution and is spread into the transcript.
+      // A modal workspace can explicitly defer that presentation: it owns
+      // proposal/review locally and publishes the execution only after it
+      // becomes a completed receipt.
+      if (options?.presentInConversation !== false) {
+        setExecutions((current) => mergeResultExecutions(current, [response.data!, ...(response.data!.childExecutions ?? [])]));
+        setJustUpdatedExecutionId(response.data.executionId);
+        if (mode === 'page') updateAskLocation({ sessionId: requestedSessionId, propertyId: response.data.property?.id ?? selectedPropertyId, executionId: response.data.executionId }, 'replace');
+      }
       setRecentSessionsEpoch((current) => current + 1);
       if (attribution) track('ask_prompt_outcome', {
         propertyId: selectedPropertyId ?? null,

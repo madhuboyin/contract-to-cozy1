@@ -65,6 +65,18 @@ describe('ask', () => {
     expect(create.mock.calls[0][0]).toMatchObject({ propertyId: 'p2', launchContext: { entityType: 'WARRANTY', entityId: 'w1', operationId: 'OP2', documentId: 'd1', returnTo: '/dashboard/x' } });
   });
 
+  it('returns a workspace execution without exposing its proposal in the conversation', async () => {
+    const proposed = exec('workspace-proposal', { status: 'NEEDS_CONFIRMATION' });
+    create.mockImplementation(() => ok(proposed));
+    const { hook, fns } = setup();
+    let result: unknown;
+    await act(async () => { result = await hook.result.current.ask('Reschedule this task', undefined, { entityType: 'MAINTENANCE_TASK', entityId: 'task-1' }, { presentInConversation: false }); });
+    expect(result).toBe(proposed);
+    expect(fns.setExecutions).not.toHaveBeenCalled();
+    expect(fns.setJustUpdatedExecutionId).not.toHaveBeenCalled();
+    expect(fns.setRecentSessionsEpoch).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing for an empty question, no session, or a running question', async () => {
     const empty = setup();
     await act(async () => { await empty.hook.result.current.ask('   '); });

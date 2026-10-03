@@ -305,9 +305,9 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // Maintenance keeps its own component in both layouts, so its live-record detail, paging and selection are the
   // same whichever the homeowner chooses. The pattern still comes only from the server's declaration.
   if (props.block.id === 'maintenance-groups') {
-    const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
+    const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onWorkspaceExecutionComplete, onAccessLost } = props;
     const declaresShelves = block.presentation?.pattern === 'SHELVES';
-    return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onAccessLost={onAccessLost}
+    return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onExecutionComplete={onWorkspaceExecutionComplete} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
       layout={decision.pattern === 'SHELVES' ? 'SHELVES' : 'LIST'}
       onChooseLayout={declaresShelves && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
