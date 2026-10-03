@@ -2,7 +2,7 @@
 
 import { ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { BellOff, BellRing, ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Wrench, X } from 'lucide-react';
-import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
+import type { AskExecutionResponse, AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { MAINTENANCE_SERVICE_CATEGORY_FILTER_OPTIONS } from '@/lib/config/serviceCategoryMapping';
@@ -13,6 +13,7 @@ import { HorizontalTrack, ShelfCard } from './patterns/ShelvesView';
 import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import type { MaintenanceTaskFrequency, MaintenanceTaskPriority, MaintenanceTaskServiceCategory, PropertyMaintenanceTask } from '@/types';
 import { CompactAskCard } from './CompactAskCard';
+import { ConfirmationCard, PendingOutcomeCard } from './workspace/CaptureCards';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -63,7 +64,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   total: number;
   onPrevious: (() => void) | null;
   onNext: (() => void) | null;
-  onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+  onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void | Promise<AskExecutionResponse | void>;
   onCanonicalTask: (task: PropertyMaintenanceTask) => void;
   onUnavailable: (taskId: string) => void;
   onAccessLost: () => void;
@@ -78,6 +79,9 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   const [draftFrequency, setDraftFrequency] = useState<MaintenanceTaskFrequency | 'NONE'>('NONE');
   const [draftServiceCategory, setDraftServiceCategory] = useState<MaintenanceTaskServiceCategory | ''>('');
   const [guidanceTopic, setGuidanceTopic] = useState<'WHY' | 'WHEN' | 'COST' | null>(null);
+  const [inlineExecution, setInlineExecution] = useState<AskExecutionResponse | null>(null);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const callbacksRef = useRef({ onCanonicalTask, onUnavailable, onAccessLost });
   callbacksRef.current = { onCanonicalTask, onUnavailable, onAccessLost };
@@ -100,6 +104,8 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
         setDraftFrequency(response.data.isRecurring && response.data.frequency ? response.data.frequency : 'NONE');
         setDraftServiceCategory(response.data.serviceCategory ?? '');
         setEditing(false);
+        setInlineExecution(null);
+        setActionError(null);
         callbacksRef.current.onCanonicalTask(response.data);
       })
       .catch((caught) => {
@@ -139,7 +145,37 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
     const message = dueDateChanged
       ? `Reschedule this maintenance task to ${draftDueDate}${changes.length ? ` and ${changes.join(' and ')}` : ''}.`
       : `Update this maintenance task: ${changes.join(' and ')}.`;
-    onAction(fallbackItem.entityType, fallbackItem.id, message, 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
+    setEditing(false);
+    void beginInlineAction(message, 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
+  };
+  const refreshCanonicalTask = async () => {
+    const response = await api.getMaintenanceTask(taskId);
+    if (response.success && response.data) {
+      setTask(response.data);
+      setDraftDueDate(response.data.nextDueDate?.slice(0, 10) ?? '');
+      setDraftPriority(response.data.priority);
+      setDraftFrequency(response.data.isRecurring && response.data.frequency ? response.data.frequency : 'NONE');
+      setDraftServiceCategory(response.data.serviceCategory ?? '');
+      callbacksRef.current.onCanonicalTask(response.data);
+    }
+  };
+  const beginInlineAction = async (message: string, operationId: string, interactionType: AskItemActionInteractionType) => {
+    setActionPending(true); setActionError(null); setInlineExecution(null);
+    try {
+      const execution = await onAction(fallbackItem.entityType, fallbackItem.id, message, operationId, interactionType);
+      if (execution) setInlineExecution(execution);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : 'Could not start this task action.');
+    } finally {
+      setActionPending(false);
+    }
+  };
+  const completeInlineAction = async (execution: AskExecutionResponse) => {
+    setInlineExecution(execution);
+    if (execution.status === 'COMPLETED') {
+      try { await refreshCanonicalTask(); } catch { /* receipt remains authoritative if the removed task no longer loads */ }
+      setEditing(false);
+    }
   };
   return (
     <aside className="flex min-h-0 flex-1 flex-col bg-stone-50" aria-labelledby={`maintenance-detail-${taskId}`}>
@@ -159,6 +195,17 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
       {loading && <p className="flex items-center gap-2 text-sm text-slate-600" role="status"><Loader2 className="h-4 w-4 animate-spin" />Loading the current maintenance record…</p>}
       {error && <div className="rounded-xl border border-amber-200 bg-white p-3" role="alert"><p className="text-sm font-semibold text-amber-900">{error === 'TASK_NOT_FOUND' ? 'Task no longer exists' : 'Could not verify the current task'}</p><p className="mt-1 text-sm text-slate-700">{error === 'TASK_NOT_FOUND' ? 'This task was removed after the Ask result was created.' : 'The current canonical record could not be loaded. Actions for this task are unavailable until the result is refreshed.'}</p><p className="mt-2 text-xs text-slate-500">The conversation remains available. Refresh this Ask result to reconcile with Maintenance.</p></div>}
       {task && <>
+        {(inlineExecution?.confirmation || inlineExecution?.status === 'RUNNING' || inlineExecution?.status === 'COMPLETED' || actionPending || actionError) && <section className="mb-4 rounded-2xl border border-teal-200 bg-white p-4" aria-live="polite">
+          {actionPending && <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><Loader2 className="h-4 w-4 animate-spin" />Preparing this action…</p>}
+          {actionError && <p className="text-sm text-red-700" role="alert">{actionError}</p>}
+          {inlineExecution?.confirmation && inlineExecution.status !== 'RUNNING' && <ConfirmationCard executionId={inlineExecution.executionId} confirmation={inlineExecution.confirmation} onCompleted={(updated) => void completeInlineAction(updated)} onAccessLost={onAccessLost} />}
+          {inlineExecution?.confirmation && inlineExecution.status === 'RUNNING' && <PendingOutcomeCard executionId={inlineExecution.executionId} confirmationVersion={inlineExecution.confirmation.version} onCompleted={(updated) => void completeInlineAction(updated)} onAccessLost={onAccessLost} />}
+          {inlineExecution?.status === 'COMPLETED' && <div>
+            <p className="text-sm font-semibold text-teal-900">Task action completed</p>
+            <p className="mt-1 text-sm text-slate-700">{(inlineExecution.blocks.find((block) => block.type === 'WORKFLOW_PROGRESS') as { description?: string } | undefined)?.description ?? 'The canonical maintenance record was updated.'}</p>
+            <button type="button" onClick={() => setInlineExecution(null)} className="mt-3 min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">Back to task</button>
+          </div>}
+        </section>}
         {task.description && <p className="mt-3 text-sm leading-6 text-slate-700">{task.description}</p>}
         <div className="mt-6 flex items-center justify-between gap-3">
           <h5 className="text-lg font-semibold text-slate-950">Details</h5>
@@ -212,8 +259,8 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
       </>}
       </div>
       {task && (actions.length > 0 || canEdit) && <footer className="sticky bottom-0 flex flex-wrap gap-2 border-t border-stone-200 bg-stone-50/95 px-5 py-3 backdrop-blur sm:px-6">
-        {canEdit && <button type="button" disabled={disabled} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, snoozeActive ? 'Resume reminders for this maintenance task.' : 'Snooze reminders for this maintenance task for one week.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD')}>{snoozeActive ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}{snoozeActive ? 'Resume reminders' : 'Snooze 1 week'}</button>}
-        {actions.map((action) => <button key={action.id} type="button" disabled={disabled} className={cn('min-h-11 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-800 text-white' : action.id === 'remove' ? 'border border-red-200 bg-white text-red-700' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}
+        {canEdit && <button type="button" disabled={disabled || actionPending || Boolean(inlineExecution?.confirmation)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => void beginInlineAction(snoozeActive ? 'Resume reminders for this maintenance task.' : 'Snooze reminders for this maintenance task for one week.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD')}>{snoozeActive ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}{snoozeActive ? 'Resume reminders' : 'Snooze 1 week'}</button>}
+        {actions.map((action) => <button key={action.id} type="button" disabled={disabled || actionPending || Boolean(inlineExecution?.confirmation)} className={cn('min-h-11 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-800 text-white' : action.id === 'remove' ? 'border border-red-200 bg-white text-red-700' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => action.operationId === 'GROUNDED_GUIDANCE' ? setGuidanceTopic('WHY') : void beginInlineAction(action.message, action.operationId, action.interactionType)}>{action.label}</button>)}
       </footer>}
     </aside>
   );
@@ -247,7 +294,7 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
   disabled: boolean;
   onFilter: (message: string) => void;
   onPage: (sectionId: string, direction: 'NEXT' | 'PREVIOUS') => void;
-  onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+  onAction: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void | Promise<AskExecutionResponse | void>;
   onAccessLost: () => void;
   link: (href: string, label: ReactNode) => ReactNode;
   // IW-PRES-014 / IW-PRES-022: the server-declared shelves layout, and the homeowner's switch between it and the list.
@@ -316,10 +363,11 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
         ? () => openDetail(nextLoadedSection.items[0])
         : null;
 
-  // A drawer CTA starts a new Ask turn (explanation, date capture, review);
-  // the workspace must not stay open over it, and focus belongs to that turn,
-  // not the row that opened the workspace.
-  const workspaceAction: typeof onAction = (...args) => { onAction(...args); closeDetail(false); };
+  // The task workspace owns the action's review and receipt. The same Ask
+  // execution is still appended to conversation history, but its governed
+  // confirmation is returned here so the homeowner never has to leave the
+  // task to complete it.
+  const workspaceAction: typeof onAction = (...args) => onAction(...args);
   const taskDetail = (taskId: string, item: Item) => <MaintenanceTaskDetail key={taskId} taskId={taskId} expectedPropertyId={propertyId} fallbackItem={item} disabled={disabled}
     position={detailIndex + 1} total={detailItems.length}
     onPrevious={previousDetail}

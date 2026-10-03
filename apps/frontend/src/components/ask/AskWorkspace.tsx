@@ -175,7 +175,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const { ask, retryExecution, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
 
-  const { submit, keyDown, isComposingRef } = useComposerKeys({ input, ask });
+  const { submit, keyDown, isComposingRef } = useComposerKeys({
+    input,
+    ask: async (question) => { await ask(question); },
+  });
 
 
   const { openingRecentSessionId, sessionActionId, sessionActionIssue, setSessionActionIssue, changeHistorySession, deleteHistorySession, openRecentSession } = useSessionHistoryActions({ selectedPropertyId, mode, loading, activeSessionRef, activeSessionPropertyRef, setRecentSessions, setPinnedSessions, setSearchSessions, setRecentSessionsEpoch, setServiceUnavailable, setSessionId, setExecutions, setConfirmClear, setJustUpdatedExecutionId, setError, setHistoryLoading, setInput, setHistoryDrawerOpen });

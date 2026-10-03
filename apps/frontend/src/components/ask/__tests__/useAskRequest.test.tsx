@@ -98,7 +98,7 @@ describe('ask', () => {
     let release: (v: unknown) => void = () => {};
     create.mockImplementation(() => new Promise((resolve) => { release = resolve; }));
     const moved = setup();
-    let pending: Promise<void> = Promise.resolve();
+    let pending: Promise<unknown> = Promise.resolve();
     act(() => { pending = moved.hook.result.current.ask('hi'); });
     moved.refs.activeSessionRef.current = 'other';
     await act(async () => { release({ success: true, data: exec('e1') }); await pending; });
@@ -159,7 +159,7 @@ describe('stopAsking and editAndResend', () => {
     let release: (v: unknown) => void = () => {};
     create.mockImplementation(() => new Promise((resolve) => { release = resolve; }));
     const { hook, fns, refs } = setup();
-    let pending: Promise<void> = Promise.resolve();
+    let pending: Promise<unknown> = Promise.resolve();
     act(() => { pending = hook.result.current.ask('Is my roof ok?'); });
     expect(refs.inFlight.current).toMatchObject({ message: 'Is my roof ok?' });
     act(() => hook.result.current.stopAsking());

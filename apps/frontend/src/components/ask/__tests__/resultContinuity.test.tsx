@@ -154,8 +154,39 @@ test('workspace detail edits start the existing governed update confirmation wit
   fireEvent.change(screen.getByLabelText('Recurrence'), { target: { value: 'SEMI_ANNUALLY' } });
   fireEvent.change(screen.getByLabelText('Service category'), { target: { value: 'HVAC' } });
   fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
-  expect(onAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'task-0', 'Reschedule this maintenance task to 2026-11-15 and change priority to high priority and set recurrence to semi annually and set service category to hvac.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD');
-  expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
+  await waitFor(() => expect(onAction).toHaveBeenCalledWith('MAINTENANCE_TASK', 'task-0', 'Reschedule this maintenance task to 2026-11-15 and change priority to high priority and set recurrence to semi annually and set service category to hvac.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD'));
+  expect(screen.getByRole('dialog', { name: 'Task detail: Task 0' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Edit details' })).toBeInTheDocument();
+});
+
+test('task actions review, confirm, and show their receipt without leaving the workspace', async () => {
+  const response = execution();
+  response.blocks = [{ ...block, sections: [{ ...block.sections[0], items: [{ ...block.sections[0].items[0], entityType: 'MAINTENANCE_TASK', actions: [
+    { id: 'reschedule', label: 'Reschedule', message: 'Reschedule this maintenance task.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_UPDATE' },
+  ] }] }] }];
+  const canonical = { success: true, data: {
+    id: 'task-0', propertyId: 'home', title: 'Task 0', description: 'Canonical task detail', status: 'PENDING', priority: 'HIGH', source: 'USER_CREATED',
+    nextDueDate: '2026-10-10T00:00:00.000Z', isRecurring: false, frequency: null, lastCompletedDate: null, snoozedUntil: null,
+  } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>;
+  jest.spyOn(api, 'getMaintenanceTask').mockResolvedValue(canonical);
+  const confirmationExecution = {
+    executionId: 'snooze-execution', sessionId: 'session', status: 'NEEDS_CONFIRMATION', question: 'Snooze reminders', blocks: [], captureRequests: [], suggestions: [],
+    confirmation: { confirmationId: 'snooze-1', version: 1, title: 'Snooze reminders for Task 0?', description: 'The due date stays unchanged.', fields: [{ label: 'Reminders resume', value: 'Oct 10, 2026' }], editableFields: [], confirmLabel: 'Confirm snooze', consentText: 'I authorize reminder suppression.', expiresAt: '2099-10-03T23:59:59.000Z' },
+  } as unknown as AskExecutionResponse;
+  const onAction = jest.fn().mockResolvedValue(confirmationExecution);
+  jest.spyOn(api, 'confirmAskExecution').mockResolvedValue({ success: true, data: { ...confirmationExecution, status: 'COMPLETED', confirmation: null, blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'done', title: 'Maintenance task updated', status: 'COMPLETED', description: 'Reminders were snoozed.', details: [], actions: [] }] } } as Awaited<ReturnType<typeof api.confirmAskExecution>>);
+
+  render(<List response={response} onAction={onAction} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Snooze 1 week' })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Snooze 1 week' }));
+  await waitFor(() => expect(screen.getByText('Snooze reminders for Task 0?')).toBeInTheDocument());
+  expect(screen.getByRole('dialog', { name: 'Task detail: Task 0' })).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('I authorize reminder suppression.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm snooze' }));
+  await waitFor(() => expect(screen.getByText('Task action completed')).toBeInTheDocument());
+  expect(screen.getByText('Reminders were snoozed.')).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Task detail: Task 0' })).toBeInTheDocument();
 });
 
 test('workspace does not invent edit controls when the result declares no governed update action', async () => {

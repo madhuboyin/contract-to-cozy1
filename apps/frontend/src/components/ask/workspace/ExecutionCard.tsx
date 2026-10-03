@@ -111,7 +111,7 @@ export function ExecutionCard({
   justUpdatedExecutionId: string | null;
   updateExecution: (updated: AskExecutionResponse) => void;
   loading: boolean;
-  ask: (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => Promise<void>;
+  ask: (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context']) => Promise<AskExecutionResponse | void>;
   retryExecution?: (execution: AskExecutionResponse) => Promise<void>;
   selectedPropertyId: string;
   setInput: (value: string) => void;
@@ -184,7 +184,7 @@ export function ExecutionCard({
     setItemActionIssue(null);
     const dispatch = resolveItemActionDispatch(interactionType);
     if (dispatch.kind === 'ASK_WITH_ENTITY_CONTEXT') {
-      void ask(message, undefined, {
+      return ask(message, undefined, {
         entityType: entityType ?? undefined, entityId, sourceExecutionId: execution.executionId,
         // ACT-001/ACT-003: every declared item action forces its own
         // operationId, regardless of interactionType. The declaring
@@ -204,7 +204,7 @@ export function ExecutionCard({
         actionId,
       });
     } else if (dispatch.kind === 'ASK_FILTER_ONLY') {
-      void ask(message, undefined, { sourceExecutionId: execution.executionId });
+      return ask(message, undefined, { sourceExecutionId: execution.executionId });
     } else if (dispatch.kind === 'REFRESH') {
       void refresh();
     } else {

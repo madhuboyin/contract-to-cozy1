@@ -111,6 +111,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
         status: response.data.status,
         succeeded: !response.data.status.startsWith('FAILED'),
       });
+      return response.data;
     } catch (caught) {
       if (activeSessionRef.current !== requestedSessionId || !requests.current.current(requestKey, requestToken)) return;
       setInput(message);
