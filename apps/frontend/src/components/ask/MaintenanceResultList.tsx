@@ -143,7 +143,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
   };
   return (
     <aside className="flex min-h-0 flex-1 flex-col bg-stone-50" aria-labelledby={`maintenance-detail-${taskId}`}>
-      <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 bg-stone-50/95 px-5 py-4 backdrop-blur sm:px-8 sm:py-6">
+      <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-200 bg-stone-50/95 px-5 py-4 backdrop-blur sm:px-6">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Task detail</p>
           <h4 ref={headingRef} tabIndex={-1} id={`maintenance-detail-${taskId}`} className="mt-1 text-xl font-semibold text-slate-950 outline-none sm:text-2xl">{task?.title ?? fallbackItem.title}</h4>
@@ -155,7 +155,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
           <button type="button" onClick={onClose} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white" aria-label={`Close task detail for ${fallbackItem.title}`}><X className="h-5 w-5" /></button>
         </div>
       </header>
-      <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6">
+      <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
       {loading && <p className="flex items-center gap-2 text-sm text-slate-600" role="status"><Loader2 className="h-4 w-4 animate-spin" />Loading the current maintenance record…</p>}
       {error && <div className="rounded-xl border border-amber-200 bg-white p-3" role="alert"><p className="text-sm font-semibold text-amber-900">{error === 'TASK_NOT_FOUND' ? 'Task no longer exists' : 'Could not verify the current task'}</p><p className="mt-1 text-sm text-slate-700">{error === 'TASK_NOT_FOUND' ? 'This task was removed after the Ask result was created.' : 'The current canonical record could not be loaded. Actions for this task are unavailable until the result is refreshed.'}</p><p className="mt-2 text-xs text-slate-500">The conversation remains available. Refresh this Ask result to reconcile with Maintenance.</p></div>}
       {task && <>
@@ -180,7 +180,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
             <button type="button" disabled={disabled || !hasDraftChanges || (dueDateChanged && !draftDueDate) || (serviceCategoryChanged && !draftServiceCategory)} onClick={reviewDraftChanges} className="min-h-10 rounded-xl bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Review changes</button>
           </div>
         </section>}
-        <dl className="mt-3 grid gap-x-5 gap-y-4 rounded-2xl border border-slate-200 bg-white p-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <dl className="mt-3 grid gap-x-5 gap-y-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <div><dt className="text-xs text-slate-500">Status</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.status)}</dd></div>
           <div><dt className="text-xs text-slate-500">Priority</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(task.priority)}</dd></div>
           <div><dt className="text-xs text-slate-500">Due</dt><dd className="mt-0.5 font-medium text-slate-900">{formatDate(task.nextDueDate)}</dd></div>
@@ -211,7 +211,7 @@ function MaintenanceTaskDetail({ taskId, expectedPropertyId, fallbackItem, disab
         </section>
       </>}
       </div>
-      {task && (actions.length > 0 || canEdit) && <footer className="sticky bottom-0 flex flex-wrap gap-2 border-t border-stone-200 bg-stone-50/95 px-5 py-4 backdrop-blur sm:px-8">
+      {task && (actions.length > 0 || canEdit) && <footer className="sticky bottom-0 flex flex-wrap gap-2 border-t border-stone-200 bg-stone-50/95 px-5 py-3 backdrop-blur sm:px-6">
         {canEdit && <button type="button" disabled={disabled} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, snoozeActive ? 'Resume reminders for this maintenance task.' : 'Snooze reminders for this maintenance task for one week.', 'MAINTENANCE_TASK_UPDATE', 'MUTATE_RECORD')}>{snoozeActive ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}{snoozeActive ? 'Resume reminders' : 'Snooze 1 week'}</button>}
         {actions.map((action) => <button key={action.id} type="button" disabled={disabled} className={cn('min-h-11 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50', action.style === 'PRIMARY' ? 'bg-teal-800 text-white' : action.id === 'remove' ? 'border border-red-200 bg-white text-red-700' : 'border border-slate-200 bg-white text-slate-800')} onClick={() => onAction(fallbackItem.entityType, fallbackItem.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}
       </footer>}

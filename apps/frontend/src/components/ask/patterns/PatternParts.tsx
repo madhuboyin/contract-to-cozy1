@@ -75,7 +75,7 @@ export function DetailSheetFrame({ open, onOpenChange, title, children, variant 
           className={cn(
             'fixed z-50 flex flex-col overflow-y-auto bg-white shadow-xl outline-none',
             workspace
-              ? 'inset-2 max-h-[calc(100dvh-1rem)] rounded-2xl sm:inset-x-6 sm:inset-y-8 sm:mx-auto sm:max-h-[calc(100dvh-4rem)] sm:w-[min(72rem,calc(100vw-3rem))] sm:rounded-3xl'
+              ? 'inset-2 max-h-[calc(100dvh-1rem)] rounded-2xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[calc(100dvh-6rem)] sm:w-[min(50rem,calc(100vw-4rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl'
               : 'inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[30rem] sm:rounded-none sm:rounded-l-2xl',
           )}>
           <Dialog.Title className="sr-only">{title}</Dialog.Title>

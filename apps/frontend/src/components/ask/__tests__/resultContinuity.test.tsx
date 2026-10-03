@@ -68,6 +68,7 @@ test('clicking a maintenance task title opens canonical detail inline without na
   jest.spyOn(api, 'getMaintenanceTask').mockResolvedValueOnce({ success: true, data: {
     id: 'task-0', propertyId: 'home', title: 'Task 0', description: 'Canonical task detail', status: 'PENDING', priority: 'HIGH', source: 'USER_CREATED',
     assetType: 'HVAC', riskLevel: null, nextDueDate: '2026-10-01T00:00:00.000Z', isRecurring: true, frequency: 'ANNUALLY', lastCompletedDate: null,
+    snoozedUntil: null,
     estimatedCost: 250, actualCost: null, serviceCategory: 'HVAC', serviceProviderId: null, bookingId: null, inventoryItemId: null, warrantyId: null,
     seasonalChecklistItemId: null, actionKey: null, createdAt: new Date('2026-09-01T00:00:00.000Z'), updatedAt: new Date('2026-09-17T00:00:00.000Z'), completedAt: null,
   } } as Awaited<ReturnType<typeof api.getMaintenanceTask>>);
@@ -78,7 +79,11 @@ test('clicking a maintenance task title opens canonical detail inline without na
   fireEvent.click(screen.getByRole('button', { name: 'Task 0' }));
 
   await waitFor(() => expect(screen.getByText('Canonical task detail')).toBeInTheDocument());
-  expect(document.querySelector('[data-detail-presentation="workspace"]')).toBeInTheDocument();
+  const workspace = document.querySelector('[data-detail-presentation="workspace"]');
+  expect(workspace).toBeInTheDocument();
+  expect(workspace).toHaveClass('sm:w-[min(50rem,calc(100vw-4rem))]');
+  expect(workspace).toHaveClass('sm:max-h-[calc(100dvh-6rem)]');
+  expect(workspace).not.toHaveClass('sm:w-[min(72rem,calc(100vw-3rem))]');
   expect(screen.getByText('Task 1 of 1 in this view')).toBeInTheDocument();
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   expect(screen.getByText('High')).toBeInTheDocument();
