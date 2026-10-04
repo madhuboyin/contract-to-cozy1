@@ -1,5 +1,6 @@
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction } from '../../productFramework/ask/ask.contract';
 import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/skillHandoff';
+import type { SuggestedNextActionCandidate } from './suggestedActions/suggestedNextActionCandidate';
 import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
 import { validateAskOperationSemanticPackages } from './askOperationSemanticPackages';
 
@@ -325,6 +326,11 @@ export interface AskOperationResult {
    * (Phase 2); handlers keep nominating through `suggestions` until their domain migrates. Persisted as the offered-action ledger.
    */
   suggestedNextActions?: SuggestedNextAction[];
+  /**
+   * Typed nominations a handler attaches for the shared finalizer (plan §5). Never persisted: the finalizer validates, evaluates,
+   * ranks and deduplicates them into `suggestedNextActions` and clears this field.
+   */
+  suggestedNextActionCandidates?: SuggestedNextActionCandidate[];
   skillHandoff?: SkillHandoffSuggestion | null;
   /** The requested answer is complete and should not be followed by a generic cross-skill suggestion. */
   suppressSkillHandoff?: boolean;

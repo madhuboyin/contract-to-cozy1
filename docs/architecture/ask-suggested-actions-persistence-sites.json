@@ -3,67 +3,99 @@
   "files": {
     "src/services/ask/askNotificationContinuation.service.ts": {
       "category": "ASK_SERVICE",
-      "sites": 1
+      "sites": 1,
+      "finalizer": "RECOVERY_PHASE_4",
+      "note": "proactive continuation execution; string suggestions only; Phase 4 decides its producer"
     },
     "src/services/ask/conversationalUnderstanding/conversationalCapture.ts": {
       "category": "CONVERSATIONAL_CAPTURE",
-      "sites": 2
+      "sites": 2,
+      "finalizer": "PENDING_INTERACTION",
+      "note": "child capture executions are created NEEDS_CONFIRMATION with suggestions: []"
     },
     "src/services/ask/execution/askCapture.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 4
+      "sites": 4,
+      "finalizer": "VIA_EXECUTE_OPERATION",
+      "note": "capture/replay results come from executeOperation; ledger preserved on refresh; unavailable branch is RECOVERY_PHASE_4"
     },
     "src/services/ask/execution/askClarification.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 5
+      "sites": 5,
+      "finalizer": "VIA_EXECUTE_OPERATION",
+      "note": "resumption and property selection run executeOperation; failure branches are RECOVERY_PHASE_4"
     },
     "src/services/ask/execution/askConfirm.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 7
+      "sites": 7,
+      "finalizer": "WIRED",
+      "note": "confirmed result calls the finalizer; expiry/conflict/cancel/unavailable branches are RECOVERY_PHASE_4"
     },
     "src/services/ask/execution/askFeedback.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 1
+      "sites": 1,
+      "finalizer": "PENDING_INTERACTION",
+      "note": "writes a clarification (no suggestions)"
     },
     "src/services/ask/execution/askRetry.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 1
+      "sites": 1,
+      "finalizer": "LEDGER_PRESERVING",
+      "note": "spreads the retried result and only adds continuesExecutionId"
     },
     "src/services/ask/execution/askSessions.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 2
+      "sites": 2,
+      "finalizer": "RECOVERY_PHASE_4",
+      "note": "skill-binding expiry and cancellation results"
     },
     "src/services/ask/execution/createAskExecution.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 4
+      "sites": 4,
+      "finalizer": "WIRED",
+      "note": "routing clarification calls the finalizer; the main result comes from executeOperation; failure + stale-selection recovery branches are RECOVERY_PHASE_4"
     },
     "src/services/ask/execution/executeOperation.ts": {
       "category": "EXECUTION_LIFECYCLE",
-      "sites": 1
+      "sites": 1,
+      "finalizer": "WIRED",
+      "note": "finalize() seam; refreshAskExecutionAfterConflict atomically replaces the stored ledger"
     },
     "src/services/ask/handlers/buyerConfirm.handler.ts": {
       "category": "CONFIRM_HANDLER",
-      "sites": 1
+      "sites": 1,
+      "finalizer": "PENDING_INTERACTION",
+      "note": "confirmation edit write"
     },
     "src/services/ask/handlers/maintenanceConfirm.handler.ts": {
       "category": "CONFIRM_HANDLER",
-      "sites": 1
+      "sites": 1,
+      "finalizer": "PENDING_INTERACTION",
+      "note": "confirmation edit write"
     },
     "src/services/ask/handlers/radarConfirm.handler.ts": {
       "category": "CONFIRM_HANDLER",
-      "sites": 1
+      "sites": 1,
+      "finalizer": "PENDING_INTERACTION",
+      "note": "confirmation edit write"
     },
     "src/services/ask/handlers/recordConfirm.handler.ts": {
       "category": "CONFIRM_HANDLER",
-      "sites": 5
+      "sites": 5,
+      "finalizer": "PENDING_INTERACTION",
+      "note": "confirmation edit writes"
     },
     "src/services/ask/handlers/workflowConfirm.handler.ts": {
       "category": "CONFIRM_HANDLER",
-      "sites": 2
+      "sites": 2,
+      "finalizer": "PENDING_INTERACTION",
+      "note": "confirmation edit writes"
     },
     "src/services/ask/support/executionState.ts": {
       "category": "ASK_SERVICE",
-      "sites": 1
+      "sites": 1,
+      "finalizer": "RECOVERY_PHASE_4",
+      "note": "unsupported-schema fallback result (no actions)"
     }
   }
 }

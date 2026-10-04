@@ -1,9 +1,9 @@
 # Ask Cozy High-Precision Suggested Next Actions — Implementation Plan
 
 **Date:** October 4, 2026
-**Status:** Phase 1 implemented (October 4, 2026; not live-verified); Phases 2-5 proposed
+**Status:** Phases 1-2 implemented (October 4, 2026; not live-verified); Phase 3 awaits approval of the Appendix B entry-gate packet; Phases 4-5 proposed
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.12; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.13; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -713,3 +713,49 @@ The five confirm handlers and conversational capture were not named in the plan'
 **Raw `suggestions:` declarations (same script, source only, tests excluded).** 81 files and 524 declarations: operation handlers 46 files / 439; Ask services 16 / 42; execution lifecycle 7 / 27; other domains 8 / 10; contracts 3 / 5; suggested-actions module 1 / 1. This is a discovery count, not a count of compact follow-up producers; Phase 3 classifies each.
 
 **Verification (executed locally; no live backend, browser, or database).** `tsc --noEmit` clean on the backend. New tests: `tests/ask/suggestedNextActionsPhase1.test.js` (27: contract invariants, deterministic ids, signer scope/rotation/degradation, ledger resolver rejections, typed history suppression, compatibility boundary) and `tests/ask/askSuggestionPersistenceSites.test.js` (4); frontend `followUps` and `calmShellChrome` suites extended. Full `npm run test:ask:chunked` run: 2 tests this work broke were found and fixed (a source-window assertion in `askGovernance` and the single-`askExecution.findMany` guard in `askNextActions`); the remaining 6 failures (`askGovernance` golden routing, `askImportGraphGuardrails` support re-exports, `askRoutingCalibration` reserve prompts, `correctionHandlersRuntime` inventory item actions, `healthGapCapture` derived capture, `skillEvaluationRegistry` routing fixtures) fail identically on an unmodified HEAD checkout and are not caused by this work. Frontend `src/components/ask` + `src/features/ask`: 4 pre-existing failures in `maintenanceShelves` and `displayPatterns` (extra `WORKSPACE` argument on item-action callbacks, in files this work does not touch). Not run: `next build`, the DB-backed integration suite, any browser verification. The `createAskExecution` rejection/rebind path is covered by resolver unit tests and source-shape guards, not by an executed end-to-end request; that and the live-environment checklist remain open.
+
+## Appendix B — Phase 2 implementation record and Phase 3 entry-gate packet
+
+### B.1 What shipped
+
+New modules under `apps/backend/src/services/ask/suggestedActions/`: `suggestedNextActionRegistry.ts` (limits, budget, ranking policy `sna-rank-1`, tier bases, weights, minimum score, source precedence, per-operation outcome vocabularies, the missing-fact capture mapping, TTL overrides, the domain freshness matrix, and `validateSuggestedNextActionRegistry()`), `suggestedNextActionCandidate.ts` (strict candidate schema; a candidate cannot declare state, score, id or expiry; materialization with registry TTL capped at the source execution), `suggestedNextActionEligibility.ts` (the eleven ordered rules as a pure evaluator over one pre-batched context, each failing with its own bounded reason code), `suggestedNextActionRanking.ts`, `suggestedNextActionDeduplication.ts` (semantic-identity grouping, reason-code merge, rich-card presentation-identity suppression), `suggestedNextActionPolicy.ts` (validate, evaluate, score, deduplicate, diversity re-scoring, discovery reserve, limit four, with counted diagnostics), `suggestedNextActionProducers.ts` (static producer registry), `suggestedNextActionEntityValidators.ts` (batched per-entity-type validators), `suggestedNextActionPresentationIdentities.ts`, `suggestedNextActionHistory.ts`, and `finalizeSuggestedNextActions.ts` (the shared finalizer).
+
+**Seams.** The finalizer is called from `executeOperation.ts` `finalize()` (read path, clarification resumption, property selection, capture and the conflict-refresh path, which atomically replaces the stored ledger), from `askConfirm.ts` for confirmed results, and from `createAskExecution.ts` for routing clarifications. `scripts/ask-suggestion-sites.js` now carries a reviewed finalizer classification for every persisting file (WIRED, VIA_EXECUTE_OPERATION, PENDING_INTERACTION, RECOVERY_PHASE_4, LEDGER_PRESERVING); an unclassified file fails `tests/ask/askSuggestionPersistenceSites.test.js`, which also asserts every WIRED file calls the finalizer and that only the finalizer and candidate module mint typed actions.
+
+**Behaviour guarantees (tested).** No nomination means no reads at all (no availability, entity, history or expiry query). Producer errors and over-budget nonessential producers are dropped and counted. A failed context load or entity validator ships the safe answer with no typed actions. An entity type with no registered validator fails closed. A handler cannot smuggle a final typed action; only candidates are accepted and the internal candidate field is never persisted. Output is deterministic under an injected clock, including under shuffled input.
+
+**Supporting change.** `discoverableAskOperationIds` is now a thin wrapper over the new `evaluateAskOperationAvailability`, which returns the first failing reason per operation (boundary, health, authorization, audience). The eligibility rules read that single source of truth, so there is no second copy of the filter to drift. Behaviour of the original function is unchanged (its capability-discovery tests pass).
+
+### B.2 Deviations and decisions made while implementing (review these)
+
+1. **`PENDING_WORK` added to the action source enum.** The plan listed a pending-work producer but no matching source value. Nothing has been persisted with the enum yet, so the addition is safe.
+2. **Minimum display score is 1060**, not an unspecified value. The plan asked for a minimum score; at lower values it could never omit anything. At 1060 a DISCOVERY action must earn 60 points of readiness, confidence or signal; every higher tier clears it comfortably. The registry validator rejects values that never omit.
+3. **`SUPPRESSED` verdict.** The plan names three eligibility states; interaction-conflict, history and safety-mode outcomes are intentional suppressions rather than "unavailable", so the evaluator returns an internal `SUPPRESSED` for them. It is never persisted or shown.
+4. **Rich item actions may declare `outcomeKey`** (optional, additive on the item action schema). Only an action that declares a registered outcome on a compact interaction publishes a presentation identity; nothing is inferred from label or message.
+5. **The Phase 1 stand-in `suppressRepeatedSuggestedNextActions` was removed**; typed history suppression now lives in eligibility rule 10 via `suggestedNextActionHistory.ts`. The string suppression stays until Phase 5.
+6. **`currentOutcomeKeyHashes` is plumbed but empty.** Only a domain's own handler knows what outcome it just produced; each Phase 3 migration fills it for its operation.
+7. **The string-compatibility producer is all-or-nothing per result**, because the frontend renders typed actions instead of strings; a partially mapped result would otherwise lose its unmapped chips.
+8. **Open Phase 3 task: the non-calm shell.** `AskWorkspace` renders `execution.suggestions` under each answer outside the calm shell and does not read typed actions. Calm-first is the product direction, but each migrated domain must also render typed actions there or accept that the non-calm shell shows its legacy strings.
+9. **The recovery branches remain string-only** (classified RECOVERY_PHASE_4): failure, expiry, cancel, conflict and stale-selection results. They become the platform-recovery producer in Phase 4, in SAFE_RECOVERY_ONLY mode, which the evaluator already supports.
+
+### B.3 Entry-gate packet (the Phase 3 gate in §9 requires your approval of these values)
+
+| Gate | Where | Value / status |
+| --- | --- | --- |
+| Versioned weights | `SCORE_WEIGHTS`, `SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION = sna-rank-1` | exact entity +100, current-result ownership +60, active goal +80, materiality 0/20/40/60, ready +40, confidence up to +40, recency penalty -150, diversity -50 per repeat capped at -150. Snapshot-pinned by hash in `suggestedNextActionsPhase2.test.js`. |
+| Tier bases | `TIER_BASE_SCORE` | CONTINUE 4000, RECORD_ACTION 3000, RELATED 2000, DISCOVERY 1000. Tests prove no tier can cross another after adjustments (max +380, min -300). |
+| Minimum score | `MIN_DISPLAY_SCORE` | 1060 (see B.2.2). |
+| Limits | `SUGGESTED_NEXT_ACTION_LIMITS` | 4 shown, 12 per producer, 60 total, 1 discovery action beside a stronger one. |
+| Latency / query thresholds | `SUGGESTED_NEXT_ACTION_BUDGET` | 250 ms pipeline budget (nonessential producers dropped first), at most 6 batched context queries. Initial values chosen for the Raspberry Pi; measured p50/p95 from `ask_suggested_actions_pipeline_duration_seconds` should replace them once typed producers exist. The 6-query ceiling is declared and documented, not yet enforced by a runtime counter. |
+| Source precedence | `SOURCE_PRECEDENCE` | PENDING_WORK, PLATFORM_STATE, ENTITY_ACTION, MISSING_DETAIL, OPERATION_RESULT, SKILL_HANDOFF, ACTIVE_GOAL, CAPABILITY_RECOMMENDATION, LANDING_STARTER. |
+| TTL rules | `SUGGESTED_NEXT_ACTION_DEFAULT_TTL_MS`, `OUTCOME_TTL_OVERRIDES_MS` | 30 min write/workflow, 24 h continue, per-outcome overrides (none yet), always capped at the source execution expiry. |
+| Domain freshness matrix | `DOMAIN_FRESHNESS_MATRIX` | Version helpers exist for inventory item, room, maintenance task, warranty, home event, radar match and inspection finding (a test confirms the exported ones still exist). **Claims has no exported helper**: it derives its version inline in `claims.handler.ts`, so its strategy is an explicit requery rule until the Claims migration step extracts one. |
+| Fact -> capture -> operation mapping | `MISSING_FACT_CAPTURES` | Complete for the 13 inventory correction fields (a test asserts it equals `INVENTORY_CORRECTION_FIELDS`). **Rooms, warranties, home events, maintenance and claims have no missing-detail mapping yet**; each domain adds its own with its migration, because the plan's missing-detail examples are inventory-only. |
+| Injected clock | `suggestedNextActionClock.ts` | Used by materialization; determinism tested. |
+| Outcome vocabularies | `SUGGESTED_ACTION_OUTCOMES` | `INVENTORY_ITEM_CORRECT` (13 outcomes) and `CAPTURE_FACT_CONFIRM`. Other domains declare theirs as they migrate; an operation with no entry cannot nominate a typed action. |
+
+**Decisions needed from you before Phase 3:** approve or change the weights, minimum score and 250 ms budget; confirm that the unenforced query ceiling is acceptable for now; confirm per-domain missing-detail mappings are added with each domain rather than up front.
+
+### B.4 Verification
+
+Executed locally: backend `tsc --noEmit` clean; `tests/ask/suggestedNextActionsPhase2.test.js` (40 tests), `suggestedNextActionsPhase1.test.js`, `askSuggestionPersistenceSites.test.js`, `askNextActions`, `askGovernance`, `askImportGraphGuardrails` and `askCapabilityDiscovery` run; the full chunked Ask run result is recorded in the commit message of the implementing change. The two failures in those files, `askGovernance` golden routing and `askImportGraphGuardrails` support re-exports, also fail on an unmodified checkout. Not run: any DB-backed suite, any live request. The finalizer's default loaders (`ensurePropertyAccess`, `evaluateAskOperationAvailability`, the execution-expiry read) and the three seam call sites are exercised only through injected dependencies and source-shape guards, never against a real database, and no typed producer exists yet, so the finalizer returns an empty ledger in production until Phase 3.

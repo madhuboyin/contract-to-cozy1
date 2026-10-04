@@ -1,6 +1,8 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
+import { loadCompletedSuggestedActionKeyHashes } from '../suggestedActions/suggestedNextActionHistory';
 import { AskExecution, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
@@ -353,6 +355,13 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   // Write-side handoffs (CLAIM_FILE, INSPECTION_FINDING_UPDATE, ...) are COMPLETED-only, and confirmed
   // results never pass through executeOperation's finalize -- resolve here or they can never fire.
   result = { ...result, skillHandoff: resolveAskSkillHandoff({ operationId: confirmedOperationId, result, propertyId: execution.propertyId, parameters }) };
+  // Plan §7.4: confirmed results never pass through executeOperation's finalize, so the shared finalizer runs here, before the
+  // confirmed-completion validation and persistence, to supply the next compact actions after a write.
+  result = await finalizeSuggestedNextActions({
+    result, executionId: execution.id, userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+    operationId: confirmedOperationId, message: execution.message,
+    completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: execution.id, sessionId: execution.sessionId, userId }),
+  });
   const confirmedValidation = validateAskConfirmedCompletion({
     question: execution.message,
     operationId: confirmedOperationId,

@@ -18,7 +18,9 @@ import type { CapabilityInvocationEnvelope } from '../capabilityInvocation.contr
 import { buildAskNextActionsBlock } from '../askNextActions';
 import { asInputJson, audienceApplicabilityResult, audienceTelemetryFor, ensurePropertyAccess, expireIfSkillBindingChanged, journeyContextFrom, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus } from '../askHandlerSupport';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
-import { suppressRepeatedAskSuggestions, suppressRepeatedSuggestedNextActions } from '../askSuggestionPolicy';
+import { suppressRepeatedAskSuggestions } from '../askSuggestionPolicy';
+import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
+import { loadCompletedSuggestedActionKeyHashes } from '../suggestedActions/suggestedNextActionHistory';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
 import { ASK_OPERATION_CAPABILITY } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
 import { getSkillAdapter } from '../../skills/adapters/skillAdapterRegistry';
@@ -407,7 +409,6 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   let recentCompletedMessages: string[] = [];
   let recentCompletedCapabilityIds: ReadonlySet<string> = new Set();
   let recentCompletedOperationIds: ReadonlySet<string> = new Set();
-  let completedSuggestedActionKeyHashes: ReadonlySet<string> = new Set();
   try {
     const recent = await prisma.askExecution.findMany({
       where: {
@@ -427,38 +428,25 @@ export async function executeOperation(input: { userId: string; sessionId: strin
         .map((execution) => (execution.operationId ? ASK_OPERATION_CAPABILITY[execution.operationId as AskOperationId] : undefined))
         .filter((capabilityId): capabilityId is string => Boolean(capabilityId)),
     );
-    try {
-      // Typed history: semantic-key hashes of suggested actions this session already selected (this turn's own selection included).
-      const selectedEvents = await prisma.askExecutionEvent.findMany({
-        where: {
-          eventType: 'SUGGESTED_ACTION_SELECTED',
-          OR: [
-            { executionId: input.executionId },
-            { execution: { sessionId: input.sessionId, userId: input.userId, status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] } } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-        select: { metadataJson: true },
-      });
-      completedSuggestedActionKeyHashes = new Set(selectedEvents.flatMap((event) => {
-        const hash = (event.metadataJson as { semanticKeyHash?: unknown } | null)?.semanticKeyHash;
-        return typeof hash === 'string' ? [hash] : [];
-      }));
-    } catch {
-      // Typed-action history is optional too, and kept separate so it can never discard the string history above.
-    }
   } catch {
     // Suggestion continuity is optional and must not block the answer.
   }
   const finalize = async (): Promise<AskOperationResult> => {
     const controls = readAskOperationalControls();
     const skillHandoff = resolveAskSkillHandoff({ operationId: input.operation.operationId, result, propertyId: input.propertyId, launchContext: input.launchContext, recentCompletedOperationIds });
-    const suggestionAwareResult = suppressRepeatedSuggestedNextActions(suppressRepeatedAskSuggestions(
+    // String history suppression stays until the string producers are retired (Phase 5); typed candidates go through the shared
+    // finalizer (plan §7.4), which owns eligibility, ranking, cross-surface deduplication and typed history suppression.
+    const stringSuppressed = suppressRepeatedAskSuggestions(
       { ...result, skillHandoff },
       input.message,
       recentCompletedMessages,
-    ), completedSuggestedActionKeyHashes);
+    );
+    const suggestionAwareResult = await finalizeSuggestedNextActions({
+      result: stringSuppressed, executionId: input.executionId, userId: input.userId, sessionId: input.sessionId,
+      propertyId: input.propertyId ?? null, operationId: input.operation.operationId, message: input.message,
+      completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: input.executionId, sessionId: input.sessionId, userId: input.userId }),
+      recentCompletedMessages,
+    });
     const validation = validateAskAnswerTrustPipeline({
       question: input.message,
       operationId: input.operation.operationId,

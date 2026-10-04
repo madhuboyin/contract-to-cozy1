@@ -1,0 +1,42 @@
+// Plan §7.3: result-card and block actions publish the same semantic identity fields to response finalization even though they
+// stay rendered in their richer surface. They never become follow-up candidates; their identities only suppress an equivalent
+// compact action before the response is persisted.
+//
+// Only a rich item action that declares a registered `outcomeKey` publishes an identity: without it the semantic key cannot be
+// formed, and the plan forbids inferring an outcome from label or message.
+import { suggestedNextActionSemanticKey } from './suggestedNextActionIdentity';
+import { isRegisteredOutcome } from './suggestedNextActionRegistry';
+import { SUGGESTED_NEXT_ACTION_INTERACTION_TYPES } from '../../../productFramework/ask/ask.contract';
+
+type Json = unknown;
+
+const COMPACT_INTERACTIONS = new Set<string>(SUGGESTED_NEXT_ACTION_INTERACTION_TYPES);
+const MAX_DEPTH = 6;
+const MAX_NODES = 2000;
+
+export function collectPresentationIdentities(blocks: readonly Json[], propertyId: string | null): Set<string> {
+  const identities = new Set<string>();
+  let visited = 0;
+  const walk = (node: Json, depth: number): void => {
+    if (depth > MAX_DEPTH || visited >= MAX_NODES || !node || typeof node !== 'object') return;
+    visited += 1;
+    if (Array.isArray(node)) { for (const entry of node) walk(entry, depth + 1); return; }
+    const record = node as Record<string, Json>;
+    const entityType = typeof record.entityType === 'string' ? record.entityType : null;
+    const entityId = typeof record.id === 'string' ? record.id : null;
+    if (Array.isArray(record.actions) && entityType && entityId) {
+      for (const action of record.actions) {
+        const a = action as Record<string, Json> | null;
+        if (!a || typeof a.operationId !== 'string' || typeof a.outcomeKey !== 'string' || typeof a.interactionType !== 'string') continue;
+        if (!COMPACT_INTERACTIONS.has(a.interactionType) || !isRegisteredOutcome(a.operationId, a.outcomeKey)) continue;
+        identities.add(suggestedNextActionSemanticKey({
+          operationId: a.operationId, interactionType: a.interactionType as 'CONVERSATION_CONTINUE' | 'MUTATE_RECORD' | 'START_WORKFLOW',
+          propertyId, entityType, entityId, outcomeKey: a.outcomeKey,
+        }));
+      }
+    }
+    for (const value of Object.values(record)) walk(value, depth + 1);
+  };
+  walk(blocks, 0);
+  return identities;
+}

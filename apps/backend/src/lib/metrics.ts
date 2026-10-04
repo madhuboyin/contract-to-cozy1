@@ -111,6 +111,28 @@ export const askSkillHandoffsTotal = new Counter({
   registers: [register],
 });
 
+export const askSuggestedActionsPipelineDurationSeconds = new Histogram({
+  name: 'ask_suggested_actions_pipeline_duration_seconds',
+  help: 'Shared Suggested Next Action finalizer duration (candidates through persisted ledger) by bounded mode',
+  labelNames: ['mode'] as const,
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+  registers: [register],
+});
+
+export const askSuggestedActionsCandidatesTotal = new Counter({
+  name: 'ask_suggested_actions_candidates_total',
+  help: 'Suggested Next Action candidates by pipeline stage (nominated, invalid, eligible, rejected, selected, dropped) and bounded mode',
+  labelNames: ['stage', 'mode'] as const,
+  registers: [register],
+});
+
+export const askSuggestedActionsProducerFailuresTotal = new Counter({
+  name: 'ask_suggested_actions_producer_failures_total',
+  help: 'Suggested Next Action producers dropped at runtime by registered producer id and bounded reason (ERROR, BUDGET)',
+  labelNames: ['producer', 'reason'] as const,
+  registers: [register],
+});
+
 export const askSkillContextProviderTotal = new Counter({
   name: 'ask_skill_context_provider_total',
   help: 'Skill context provider invocations by immutable provider version and bounded result status',

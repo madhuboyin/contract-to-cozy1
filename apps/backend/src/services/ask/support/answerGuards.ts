@@ -102,34 +102,50 @@ export function recordAskAnswerTrustMetrics(
   }
 }
 
-export async function discoverableAskOperationIds(input: {
+export type AskOperationUnavailableReason = 'BOUNDARY' | 'HEALTH' | 'AUTHORIZATION' | 'AUDIENCE';
+
+/**
+ * The single source of truth for "may this operation be offered/used here", with the first failing rule per operation
+ * (null = available). `discoverableAskOperationIds` is exactly the null entries; the Suggested Next Action eligibility
+ * evaluator reads the reasons so health, authorization and audience stay distinct, audited rules without a second copy
+ * of this filter drifting out of sync.
+ */
+export async function evaluateAskOperationAvailability(input: {
   propertyId?: string | null;
   propertyAccess?: PropertyAccess | null;
   controls: ReturnType<typeof readAskOperationalControls>;
-}): Promise<AskOperationId[]> {
+}): Promise<Map<AskOperationId, AskOperationUnavailableReason | null>> {
   const operatingMode = input.propertyId && input.propertyAccess && input.controls.audienceDiscoveryEnabled
     ? operatingModeForOwnershipState((await prisma.propertyOnboarding.findUnique({
       where: { propertyId: input.propertyId }, select: { ownershipState: true },
     }))?.ownershipState)
     : 'UNKNOWN';
   const rank = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 } as const;
-  return Object.values(ASK_OPERATION_DEFINITIONS)
-    .filter((definition) => !definition.safetyClass.endsWith('_BOUNDARY'))
-    .filter((definition) => input.controls.operationEnabled(definition.operationId))
-    .filter((definition) => {
-      const skill = getSkillForOperation(definition.operationId);
-      return !skill || (input.controls.skillEnabled(skill.id) && skillRuntimeUnavailableReason(definition.operationId, input.controls) == null);
-    })
-    .filter((definition) => !input.propertyAccess || !definition.propertyRoleFloor
-      || rank[input.propertyAccess.role] >= rank[definition.propertyRoleFloor])
-    .filter((definition) => {
-      if (!input.propertyId || !input.propertyAccess || !input.controls.audienceDiscoveryEnabled) return true;
-      return isAskOperationDiscoverableForAudience({
+  const availability = new Map<AskOperationId, AskOperationUnavailableReason | null>();
+  for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
+    let reason: AskOperationUnavailableReason | null = null;
+    const skill = getSkillForOperation(definition.operationId);
+    if (definition.safetyClass.endsWith('_BOUNDARY')) reason = 'BOUNDARY';
+    else if (!input.controls.operationEnabled(definition.operationId)) reason = 'HEALTH';
+    else if (skill && !(input.controls.skillEnabled(skill.id) && skillRuntimeUnavailableReason(definition.operationId, input.controls) == null)) reason = 'HEALTH';
+    else if (input.propertyAccess && definition.propertyRoleFloor && rank[input.propertyAccess.role] < rank[definition.propertyRoleFloor]) reason = 'AUTHORIZATION';
+    else if (input.propertyId && input.propertyAccess && input.controls.audienceDiscoveryEnabled
+      && !isAskOperationDiscoverableForAudience({
         operationId: definition.operationId, operationVersion: definition.version,
         accountRole: 'HOMEOWNER', householdRole: input.propertyAccess.role, operatingMode,
-      });
-    })
-    .map((definition) => definition.operationId);
+      })) reason = 'AUDIENCE';
+    availability.set(definition.operationId, reason);
+  }
+  return availability;
+}
+
+export async function discoverableAskOperationIds(input: {
+  propertyId?: string | null;
+  propertyAccess?: PropertyAccess | null;
+  controls: ReturnType<typeof readAskOperationalControls>;
+}): Promise<AskOperationId[]> {
+  const availability = await evaluateAskOperationAvailability(input);
+  return [...availability].filter(([, reason]) => reason === null).map(([operationId]) => operationId);
 }
 
 export function allowedResultBlocksForOperation(operationId: AskOperationId): AskPresentationBlock['type'][] {

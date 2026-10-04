@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 
-const { scan, diff, BASELINE } = require('../../scripts/ask-suggestion-sites.js');
+const { scan, diff, unclassified, BASELINE } = require('../../scripts/ask-suggestion-sites.js');
 
 // ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN §5.3 / Phase 1: the persistence-boundary inventory is a baseline, not a
 // guess. Every place that can persist an Ask result is a place compact follow-ups can escape the shared finalizer (Phase 2), so a
@@ -41,4 +41,33 @@ test('a verified selection cannot take its operation or entity from the client (
   const to = source.indexOf("suggestionResolution?.kind === 'REJECTED'");
   assert.ok(from > 0 && to > from);
   assert.doesNotMatch(source.slice(from, to), /launchContext/, 'resolution inputs must not include client launch context');
+});
+
+test('every file that persists an Ask result carries a reviewed finalizer classification', () => {
+  assert.deepEqual(unclassified(scan().persistence), [], 'classify the new persistence site in scripts/ask-suggestion-sites.js (WIRED, VIA_EXECUTE_OPERATION, PENDING_INTERACTION, RECOVERY_PHASE_4, LEDGER_PRESERVING)');
+  const files = JSON.parse(readFileSync(BASELINE, 'utf8')).files;
+  assert.deepEqual(Object.entries(files).filter(([, info]) => info.finalizer === 'UNCLASSIFIED' || !info.note).map(([file]) => file), []);
+});
+
+test('the shared finalizer is wired at every seam classified WIRED, and nothing else constructs final typed actions', () => {
+  const srcRoot = resolve(__dirname, '../../src');
+  const files = JSON.parse(readFileSync(BASELINE, 'utf8')).files;
+  for (const [file, info] of Object.entries(files)) {
+    if (info.finalizer !== 'WIRED') continue;
+    const source = readFileSync(resolve(__dirname, '../..', file), 'utf8');
+    assert.match(source, /finalizeSuggestedNextActions\(/, `${file} is classified WIRED but does not call the shared finalizer`);
+  }
+  // Only the finalizer (via materializeSuggestedNextAction) may mint a typed action; persistence sites merely carry the field.
+  const offenders = [];
+  const { readdirSync, statSync } = require('node:fs');
+  const walk = (dir) => readdirSync(dir).flatMap((name) => {
+    const path = resolve(dir, name);
+    if (name === 'graphify-out' || name === 'node_modules') return [];
+    return statSync(path).isDirectory() ? walk(path) : (name.endsWith('.ts') ? [path] : []);
+  });
+  for (const file of walk(resolve(srcRoot, 'services'))) {
+    const source = readFileSync(file, 'utf8');
+    if (/materializeSuggestedNextAction\(/.test(source) && !/suggestedActions\/(finalizeSuggestedNextActions|suggestedNextActionCandidate)\.ts$/.test(file.replace(/\\/g, '/'))) offenders.push(file);
+  }
+  assert.deepEqual(offenders, []);
 });

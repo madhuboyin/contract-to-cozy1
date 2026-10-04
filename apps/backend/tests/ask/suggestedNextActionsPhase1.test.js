@@ -19,7 +19,6 @@ const {
 const { resolveSuggestedActionSelection } = require('../../src/services/ask/suggestedActions/suggestedNextActionSelection.ts');
 const { fixedSuggestedNextActionClock } = require('../../src/services/ask/suggestedActions/suggestedNextActionClock.ts');
 const { mapExplicitSuggestionStrings } = require('../../src/services/ask/suggestedActions/suggestedNextActionCompatibility.ts');
-const { suppressRepeatedSuggestedNextActions } = require('../../src/services/ask/askSuggestionPolicy.ts');
 
 // ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN Phase 1: contract, deterministic ids, selection proof, starter signing.
 
@@ -303,18 +302,6 @@ test('a starter proof is verified without a database read, and never becomes a V
   // Wrong request id (the token binds the preallocated clientRequestId) and no configured secret both reject.
   assert.equal((await resolveSuggestedActionSelection({ ...input, clientRequestId: 'crid-other' })).reason, 'STARTER_REQUEST_ID_MISMATCH');
   assert.equal((await resolveSuggestedActionSelection({ ...input, env: {} })).reason, 'STARTER_NOT_CONFIGURED');
-});
-
-// ---- history suppression ---------------------------------------------------------------------------------------------
-
-test('typed history suppression matches registered semantic identity, never label or message', () => {
-  const kept = action({ id: deriveSuggestedNextActionId('exec-2', { ...identity, entityId: 'item-2' }), entityContext: { propertyId: 'prop-1', entityType: 'INVENTORY_ITEM', entityId: 'item-2', contextVersion: null } });
-  const completed = action({ id: deriveSuggestedNextActionId('exec-2', identity), label: 'A completely different label', message: 'Different words, same outcome' });
-  const result = { status: 'ANSWERED', blocks: [], suggestions: [], suggestedNextActions: [completed, kept] };
-  const hashes = new Set([suggestedNextActionSemanticKeyHash(identity)]);
-  assert.deepEqual(suppressRepeatedSuggestedNextActions(result, hashes).suggestedNextActions.map((a) => a.entityContext.entityId), ['item-2']);
-  assert.equal(suppressRepeatedSuggestedNextActions(result, new Set()), result, 'no history: result returned untouched');
-  assert.equal(suppressRepeatedSuggestedNextActions({ ...result, suggestedNextActions: undefined }, hashes).suggestedNextActions, undefined);
 });
 
 // ---- compatibility boundary ------------------------------------------------------------------------------------------

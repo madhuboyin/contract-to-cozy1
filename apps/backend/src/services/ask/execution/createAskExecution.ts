@@ -25,6 +25,7 @@ import { validateAskAnswerTrustPipeline } from '../askAnswerTrustValidator';
 import { resolveAskEntityState } from '../askEntityResolution';
 import { askOperationSemanticIndexVersion, normalizeAskMessage } from '../askSemanticRouter';
 import { reclaimOrphanedRunningExecution } from '../execution/askSessions';
+import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
 import { suggestedNextActionSemanticKeyHash } from '../suggestedActions/suggestedNextActionIdentity';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
 
@@ -505,9 +506,16 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: effectiveLaunchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
-    const presentedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
+    const synthesizedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled, skillTelemetryTrace)
       : rawResult;
+    // A routing clarification is built here rather than in executeOperation, so it needs the shared finalizer itself (plan §7.4).
+    const presentedResult = routingDecision.requiresClarification
+      ? await finalizeSuggestedNextActions({
+        result: synthesizedResult, executionId: execution.id, userId, sessionId: session.id, propertyId: executionPropertyId ?? null,
+        operationId: null, message: routingMessage,
+      })
+      : synthesizedResult;
     // The semantic layer guards against routing the wrong operation from free
     // text; a declared item action named its operation explicitly, so a
     // competing-operation score must not turn the clicked control into a

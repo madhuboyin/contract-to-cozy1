@@ -31,6 +31,32 @@ const rel = (file) => path.relative(BACKEND, file).split(path.sep).join('/');
 const RESULT_WRITE = /\bresultJson:\s*(?:asInputJson\(|\{|\(|[A-Za-z_]+\s*(?:,|\}|\)))/;
 const NOT_A_WRITE = /resultJson:\s*(?:true|false|unknown|Prisma\.JsonValue|string|null\b)/;
 
+// Reviewed finalizer classification per persisting file (plan §7.4 / Phase 2). A file that gains a persistence site, or a new file
+// that persists an Ask result, must be classified here -- an unclassified file fails the guard test.
+//   WIRED                        calls finalizeSuggestedNextActions itself before persisting
+//   VIA_EXECUTE_OPERATION        its handler results come from executeOperation, whose finalize() runs the finalizer
+//   PENDING_INTERACTION          writes while a confirmation/clarification is open; no compact actions (eligibility rule 9)
+//   RECOVERY_PHASE_4             failure/expiry/cancel/stale branches; string-only today, become the platform-recovery producer
+//   LEDGER_PRESERVING            copies or spreads an existing stored result without producing new actions
+const FINALIZER_CLASSIFICATION = {
+  'src/services/ask/execution/executeOperation.ts': { finalizer: 'WIRED', note: 'finalize() seam; refreshAskExecutionAfterConflict atomically replaces the stored ledger' },
+  'src/services/ask/execution/createAskExecution.ts': { finalizer: 'WIRED', note: 'routing clarification calls the finalizer; the main result comes from executeOperation; failure + stale-selection recovery branches are RECOVERY_PHASE_4' },
+  'src/services/ask/execution/askConfirm.ts': { finalizer: 'WIRED', note: 'confirmed result calls the finalizer; expiry/conflict/cancel/unavailable branches are RECOVERY_PHASE_4' },
+  'src/services/ask/execution/askClarification.ts': { finalizer: 'VIA_EXECUTE_OPERATION', note: 'resumption and property selection run executeOperation; failure branches are RECOVERY_PHASE_4' },
+  'src/services/ask/execution/askCapture.ts': { finalizer: 'VIA_EXECUTE_OPERATION', note: 'capture/replay results come from executeOperation; ledger preserved on refresh; unavailable branch is RECOVERY_PHASE_4' },
+  'src/services/ask/execution/askRetry.ts': { finalizer: 'LEDGER_PRESERVING', note: 'spreads the retried result and only adds continuesExecutionId' },
+  'src/services/ask/execution/askSessions.ts': { finalizer: 'RECOVERY_PHASE_4', note: 'skill-binding expiry and cancellation results' },
+  'src/services/ask/execution/askFeedback.ts': { finalizer: 'PENDING_INTERACTION', note: 'writes a clarification (no suggestions)' },
+  'src/services/ask/support/executionState.ts': { finalizer: 'RECOVERY_PHASE_4', note: 'unsupported-schema fallback result (no actions)' },
+  'src/services/ask/askNotificationContinuation.service.ts': { finalizer: 'RECOVERY_PHASE_4', note: 'proactive continuation execution; string suggestions only; Phase 4 decides its producer' },
+  'src/services/ask/conversationalUnderstanding/conversationalCapture.ts': { finalizer: 'PENDING_INTERACTION', note: 'child capture executions are created NEEDS_CONFIRMATION with suggestions: []' },
+  'src/services/ask/handlers/buyerConfirm.handler.ts': { finalizer: 'PENDING_INTERACTION', note: 'confirmation edit write' },
+  'src/services/ask/handlers/maintenanceConfirm.handler.ts': { finalizer: 'PENDING_INTERACTION', note: 'confirmation edit write' },
+  'src/services/ask/handlers/radarConfirm.handler.ts': { finalizer: 'PENDING_INTERACTION', note: 'confirmation edit write' },
+  'src/services/ask/handlers/recordConfirm.handler.ts': { finalizer: 'PENDING_INTERACTION', note: 'confirmation edit writes' },
+  'src/services/ask/handlers/workflowConfirm.handler.ts': { finalizer: 'PENDING_INTERACTION', note: 'confirmation edit writes' },
+};
+
 function classifyPersistence(file) {
   if (file.startsWith('src/services/ask/execution/')) return 'EXECUTION_LIFECYCLE';
   if (/^src\/services\/ask\/handlers\/.*[Cc]onfirm/.test(file)) return 'CONFIRM_HANDLER';
@@ -80,7 +106,11 @@ function summarize(map, key) {
 }
 
 function baselineShape(persistence) {
-  return Object.fromEntries(Object.keys(persistence).sort().map((file) => [file, persistence[file]]));
+  return Object.fromEntries(Object.keys(persistence).sort().map((file) => [file, { ...persistence[file], ...(FINALIZER_CLASSIFICATION[file] ?? { finalizer: 'UNCLASSIFIED', note: '' }) }]));
+}
+
+function unclassified(persistence) {
+  return Object.keys(persistence).filter((file) => !FINALIZER_CLASSIFICATION[file]);
 }
 
 function diff(current, baseline) {
@@ -93,7 +123,7 @@ function diff(current, baseline) {
   return problems;
 }
 
-module.exports = { scan, baselineShape, diff, BASELINE };
+module.exports = { scan, baselineShape, diff, unclassified, FINALIZER_CLASSIFICATION, BASELINE };
 
 if (require.main === module) {
   const { persistence, suggestions } = scan();
@@ -103,7 +133,7 @@ if (require.main === module) {
     console.log(`wrote ${path.relative(process.cwd(), BASELINE)}`);
   } else if (mode === '--check') {
     const baseline = JSON.parse(fs.readFileSync(BASELINE, 'utf8')).files;
-    const problems = diff(persistence, baseline);
+    const problems = [...diff(persistence, baseline), ...unclassified(persistence).map((file) => `${file}: persists an Ask result but has no finalizer classification`)];
     if (problems.length) { console.error(`Persistence-boundary baseline drifted:\n  ${problems.join('\n  ')}`); process.exit(1); }
     console.log('persistence-boundary baseline matches');
   } else {

@@ -126,6 +126,9 @@ const GroupedListItemActionSchema = z.object({
   style: z.enum(['PRIMARY', 'SECONDARY', 'QUIET']).default('SECONDARY'),
   interactionType: z.enum(ASK_ITEM_ACTION_INTERACTION_TYPES),
   operationId: z.string().trim().min(1).max(120),
+  // SUGGESTED_NEXT_ACTIONS plan §7.3: the registered outcome this rich action performs. Optional and additive: an action that
+  // declares it publishes its semantic identity to response finalization, which then suppresses an equivalent compact action.
+  outcomeKey: z.string().regex(/^[A-Z][A-Z0-9_]{2,79}$/).optional(),
 });
 
 const GroupedListItemSchema = z.object({
@@ -828,7 +831,7 @@ export const RecordAskCaptureEventSchema = z.object({
 // not Suggested Next Actions (plan §4); they keep their existing link/result-control contracts.
 export const SUGGESTED_NEXT_ACTION_INTERACTION_TYPES = ['CONVERSATION_CONTINUE', 'MUTATE_RECORD', 'START_WORKFLOW'] as const;
 export const SUGGESTED_NEXT_ACTION_SOURCES = [
-  'OPERATION_RESULT', 'ENTITY_ACTION', 'MISSING_DETAIL', 'SKILL_HANDOFF', 'CAPABILITY_RECOMMENDATION',
+  'OPERATION_RESULT', 'ENTITY_ACTION', 'MISSING_DETAIL', 'PENDING_WORK', 'SKILL_HANDOFF', 'CAPABILITY_RECOMMENDATION',
   'ACTIVE_GOAL', 'PLATFORM_STATE', 'LANDING_STARTER',
 ] as const;
 export const SUGGESTED_NEXT_ACTION_TIERS = ['CONTINUE', 'RECORD_ACTION', 'RELATED', 'DISCOVERY'] as const;
