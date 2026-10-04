@@ -1,9 +1,9 @@
 # Ask Cozy High-Precision Suggested Next Actions — Implementation Plan
 
 **Date:** October 4, 2026
-**Status:** Phases 1-2 implemented and inventory converted (October 4, 2026; not live-verified). Delivery was simplified on October 4, 2026: see Appendix C, which supersedes the staged-migration language in §9, §12 and §16 where they differ.
+**Status:** Phases 1-4 and the Phase 5 containment ratchet are implemented (October 4, 2026; not live-verified). The owner-approved exact-four engagement and opportunity-backfill scope in Appendix C.15 is specified but not implemented. Appendix C supersedes the staged-migration language in §9, §12 and §16 where they differ.
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.14; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.24; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -54,12 +54,13 @@ The result is locally correct behavior with global inconsistencies:
 - The frontend renders the returned order and does not invent operations, entities, priority, or eligibility.
 - The frontend may hide actions already consumed locally while a refreshed response is pending, but it does not permanently suppress a server-eligible action.
 
-### 3.3 Precision over inventory size
+### 3.3 Exact-four engagement without promotional filler
 
-- The calm surface renders at most four actions.
-- Two or three high-confidence actions are preferable.
-- A weak fourth action is omitted rather than used as filler.
-- Broad discovery ranks below active continuation, missing-detail completion, and exact-entity actions.
+- Every settled, normal, property-scoped answer renders exactly four distinct typed Suggested Next Actions. The fixed count may be reconsidered when Ask Cozy becomes the main product entry point; until then it is four, not a variable target.
+- The exact-four invariant does not apply while the homeowner must finish a clarification, inline capture, confirmation, property selection, safe recovery, or emergency/restricted flow. Those states show only the controls and safe recovery actions appropriate to that state.
+- Current-answer continuations and time-sensitive home work rank first. When the selected home's **actionable profile completeness** is below 90%, the remaining positions prioritize applicable missing profile details. Strongly relevant homeowner opportunities backfill any positions that remain.
+- Discovery must describe a homeowner outcome rather than advertise a tool. It ranks below active continuation, urgent work, missing-profile completion, and exact-entity actions, and no more than one unrelated exploration action may appear in a row.
+- A fourth action may come from a governed fallback inventory, but it may not be fabricated, ineligible, stale, duplicative, promotional, or semantically routed free text merely to satisfy the count.
 
 ### 3.4 Safety is unchanged
 
@@ -308,7 +309,7 @@ Do not use generated prose or an unreviewed model score to make an action execut
 - Keep the highest-priority eligible candidate.
 - Merge non-sensitive provenance reason codes from suppressed duplicates.
 - Reserve at most one broad discovery action when a stronger continuation or record action exists.
-- Return at most four actions.
+- For a settled, normal, property-scoped answer, return exactly four eligible actions by backfilling from the governed home-opportunity inventory after result-specific candidates are ranked. For exceptional interaction, recovery, and safety states, return only the eligible actions allowed by that state.
 
 Result-card and block actions publish the same semantic identity fields to response finalization even when they remain rendered in their richer surface. They do not need to become follow-up candidates, but their identities suppress equivalent compact candidates before the response is persisted.
 
@@ -324,7 +325,7 @@ Initial implementation budgets:
 - batch entity and authorization reads by property/domain;
 - no remote model call in eligibility, ranking, or executable-action construction;
 - record pipeline duration, query count, dropped-producer count, and candidate counts; and
-- if the budget or a nonessential producer fails, return the safe answer with fewer actions rather than delaying or failing the execution.
+- if the budget or a nonessential producer fails, fail closed rather than delaying or failing the answer; a settled normal answer with fewer than four actions is a measurable degraded-state exception, never a reason to fabricate padding.
 
 The exact latency and query thresholds must be set from the existing Ask service budget during Phase 2 and encoded in tests/telemetry before producer migration begins.
 
@@ -573,7 +574,7 @@ Optimize for operation/entity precision and successful completion, not raw click
 - Related capability outranks discovery.
 - Exact entity beats generic domain action.
 - Semantic duplicates across every source collapse to one winner.
-- No more than four actions render.
+- Exactly four actions render for settled, normal, property-scoped answers; exceptional interaction, recovery, safety and degraded-pipeline states render only what their policy permits.
 - Deterministic inputs produce deterministic order.
 - Exact score ties follow the documented registry tie-break sequence.
 - Rich result-card identities suppress equivalent compact actions.
@@ -656,7 +657,9 @@ The increment is complete when:
 - deterministic action ids remain stable across refresh and atomic ledger replacement invalidates removed ids;
 - outcome identity, capture routing, weights, tie-breaks, and domain freshness strategies are registered rather than inferred from prose;
 - stale, unauthorized, unavailable, and inapplicable actions fail safely;
-- the calm surface shows at most four concrete actions and avoids filler;
+- every settled, normal, property-scoped answer shows exactly four distinct typed actions, while active interaction, recovery, and safety states remain intentionally exempt;
+- below 90% actionable profile completeness, eligible missing-profile actions outrank general opportunity discovery;
+- opportunity backfill is outcome-led, governed, deduplicated, cooldown-aware, and never a promotional tool carousel;
 - consequential actions still require review and confirmation;
 - analytics measure precision, completion, clarification, suppression, and manual-input escape without collecting raw homeowner text;
 - documentation parity checks cover operations, Skills, adapter keys, governed adapters, handlers, handoffs, and typed action producers; and
@@ -926,3 +929,65 @@ Owner chose "CI guard only" from three options. This is **containment, not Phase
 **Mechanism.** `apps/backend/scripts/ask-raw-suggestion-producers.js` parses `src/services/ask/**` with the TypeScript AST and counts a `suggestions:` property in an object literal whose value contains a string or template literal. It does not count `suggestions: []`, pass-throughs (`result.suggestions`, `stored.suggestions ?? []`, shorthand), a block's own metadata (an object with a string-literal `type`), test files, typed candidates, or anything outside `src/services/ask`. The reviewed per-file counts are in `docs/architecture/ask-raw-suggestion-producers.json` (232 producers in 54 files at adoption; the largest are `buyerPlan.handler.ts` 36 and `hvacDecision.handler.ts` 21). `tests/ask/askRawSuggestionProducers.test.js` (part of `test:ask:chunked`) fails on a new producer file or on an increase above a file's baseline, and prints each file with its count delta. A decrease never fails, and a drop in one file buys no headroom in another. `node scripts/ask-raw-suggestion-producers.js --check` runs the same check; `--write` rewrites the baseline.
 
 **Approving an increase:** run `--write`, review the baseline diff, and record the approval here. **Known limitation:** an indirect producer (a list assigned to a variable and returned later) is not counted; the persistence-site baseline (C.1/C.13) still covers where results are written.
+
+### C.15 Exact-four engagement and governed opportunity backfill (owner-approved scope; NOT IMPLEMENTED)
+
+**Decision.** Ask Cozy is an active guide, not a result page that leaves the homeowner at a one-chip dead end. Every settled, normal, property-scoped answer must therefore show exactly four distinct typed Suggested Next Actions. This decision replaces the earlier “at most four / prefer an empty slot” rule. Four is the fixed count for this increment; a later decision may raise it when Ask Cozy becomes the main product entry point.
+
+**Exceptions.** “Exactly four” does not apply while the homeowner is already being asked to complete a property selection, clarification, inline capture, confirmation, safe recovery, or emergency/restricted interaction. Adding unrelated choices in those states would compete with the required step or weaken the safety boundary. Retryable failures retain their dedicated retry control. Non-property answers require a separately approved global-opportunity inventory and are not silently filled from a selected or guessed home.
+
+**Selection order.** The shared policy fills the four positions in this order, with authorization, applicability, freshness, history suppression and cross-surface deduplication applied before selection:
+
+1. Continue unfinished work or the exact workflow opened by the current answer.
+2. Act on urgent or time-sensitive home work.
+3. Complete or correct the exact record currently in view.
+4. While actionable profile completeness is below 90%, capture the highest-value applicable missing home-profile details.
+5. Act on another ranked, current home opportunity.
+6. Explore a governed capability whose homeowner outcome is timely for this home.
+7. Use a safe curated property-scoped starter only when the stronger inventories still contain fewer than four eligible actions.
+
+The finalizer must backfill after result-specific ranking rather than asking each handler to manufacture four candidates. All displayed items are ledger-backed `SuggestedNextAction` objects; legacy strings cannot satisfy an exact-four position. A visible row, card, deck or page action with the same semantic destination suppresses the compact candidate, including the maintenance result's current “Create a task” / legacy “Create a maintenance task” duplication.
+
+#### C.15.1 Actionable profile completeness
+
+The 90% threshold is **not** the existing broad `getContextCompleteness()` percentage without further classification. That percentage spans all scopes in the snapshot and includes derived facts and operational records. Requiring a homeowner to create a claim, project, report, scenario or tool output merely to improve a profile score would be false completion and promotional product use.
+
+Add a versioned actionable-profile definition over the canonical fact catalog. Its denominator contains only facts that are:
+
+- applicable to this property after the catalog's `notApplicableWhen` rules;
+- useful inputs to one or more live downstream insights, decisions, reminders or recommendations; and
+- answerable or correctable by this household through a registered inline capture or canonical edit flow.
+
+It may include property type/use/occupancy, core dimensions and age, structure, major systems, safety equipment, responsibility, relevant exterior context, rooms and major inventory coverage, plus financing details only when mortgage applicability is established. It excludes derived/read-only facts, product setup state, facts the household cannot correct, operational-record existence (claims, projects, permits, reports, scenarios and similar tool outputs), non-applicable facts, and reviewed optional skips. Conflicted or stale actionable facts remain incomplete. The definition and its materiality weights are registry data with a version, not handler prose.
+
+Below 90%, missing-profile candidates normally consume every unfilled position after current-answer, urgent and exact-record actions. The policy may reserve **at most one** position for a strongly relevant opportunity so Ask can expose useful capabilities without allowing discovery to displace profile completion. At or above 90%, ranked home opportunities may fill all positions not occupied by stronger current work.
+
+Each missing-detail chip must state the concrete value or bounded group being requested and launch its registered capture directly. Examples include “Add your current mortgage rate” only when an active mortgage applies and that exact value is missing, or “Add light details for the living room” when room-light context is missing and consumed by plant guidance. A chip must not collect a fact that no downstream feature consumes.
+
+#### C.15.2 Opportunity discovery without tool promotion
+
+Opportunity backfill is selected because it helps the homeowner now, not because a tool needs exposure. Labels lead with the outcome and do not use the internal product name unless the name is necessary for comprehension. Prefer “Compare selling, renting, and staying”, “Find plants that fit your rooms”, and “Prepare essential home information for someone you trust”; do not use “Try Sell / Hold / Rent”, “Open Plant Advisor”, or “Set up Digital Will”. The transcript may explain why the opportunity is relevant, and the destination may be the canonical tool.
+
+Every opportunity requires a registered operation/outcome, a direct Ask launch or bounded capture path, current capability health/readiness, a non-sensitive reason code, and a “why now” signal. Random rotation, paid placement, inventory balancing and repeated exposure solely to advertise a capability are prohibited. The row shows at most one opportunity unrelated to the current answer. Recently shown, dismissed, declined or completed opportunities use governed cooldown/suppression; a repeated opportunity must have a material state change or explicit repeatability rule.
+
+Example governance:
+
+- **Ownership outlook:** “Compare selling, renting, and staying” may appear when ownership outlook is unknown or a governed property/life-stage signal makes the decision timely. Asking whether the homeowner plans to sell is allowed only when the answer is stored in a canonical planning/goal record and changes downstream recommendations.
+- **Plant guidance:** “Find plants that fit <room>” requires an eligible room and its required light/context facts. When those facts are absent, a higher-priority actionable-profile chip captures them first. The chip launches `PLANT_CARE_OUTLOOK` or its registered prerequisite capture, never an unpinned free-text prompt.
+- **Home continuity:** homeowner copy uses “Home Continuity Plan”, not “Digital Will”, and never implies a legal will. This capability is highly sensitive and currently requires an explicit trigger; it is not generic backfill. It may appear only when a governed continuity/handoff signal satisfies that policy, unless the capability-governance owner separately approves changing the explicit-trigger rule.
+- **Mortgage details:** a rate/balance/term chip appears only when mortgage applicability is established, the fact is missing or stale, the household role may provide it, and the selected action opens the governed financing capture. A recorded `NO_MORTGAGE` state suppresses mortgage-detail actions; when applicability is unknown, confirming mortgage status outranks requesting a rate.
+
+#### C.15.3 Required implementation work
+
+This scope is not achieved by changing `maxShown` or padding the frontend. It requires:
+
+- a batched, nonessential cross-domain home-opportunity producer registered with the shared finalizer;
+- the actionable-profile registry, score and materiality ordering, with direct fact-to-capture mappings;
+- adapters for canonical urgent work, active goals/plans and capability recommendations rather than scraping labels from rendered blocks;
+- outcome registry entries and deterministic launch contracts for every backfill action;
+- exact-four selection after semantic and presentation deduplication, with the exceptional-state modes above;
+- impression/dismissal/completion cooldown semantics that do not store raw homeowner text;
+- removal or typed conversion of legacy strings that duplicate richer controls; and
+- documentation-parity, pure-policy, role/applicability, stale-selection, frontend and integrated-journey tests.
+
+**Acceptance examples.** A maintenance answer that already renders “Create a task” must not repeat that destination in the chip row. If the current answer has no other compact continuation and the selected home is below 90% actionable completeness, the row may instead contain four verified actions such as an applicable missing system fact, a missing safety fact, an applicable missing mortgage fact, and one strongly relevant home opportunity. At 90% or above, the remaining positions come from ranked urgent work, active plans and governed capabilities. Selecting any chip reaches its registered operation/capture without semantic reclassification or requiring the homeowner to restate the request.
