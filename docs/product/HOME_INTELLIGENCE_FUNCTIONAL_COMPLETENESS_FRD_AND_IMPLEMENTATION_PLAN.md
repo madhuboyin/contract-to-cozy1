@@ -2,7 +2,7 @@
 title: "Home Intelligence Functional Completeness"
 document_type: "Functional Requirements Document and Implementation Plan"
 status: "Approved for implementation planning"
-version: "1.32"
+version: "1.33"
 date: "August 24, 2026"
 accountable_product_area: "Homeowner Product / Home Intelligence"
 ---
@@ -14,7 +14,7 @@ accountable_product_area: "Homeowner Product / Home Intelligence"
 | Field | Value |
 | --- | --- |
 | Status | Approved for implementation planning |
-| Version | 1.32 |
+| Version | 1.33 |
 | Date | August 24, 2026 |
 | Product area | Homeowner Product / Home Intelligence |
 | Primary surfaces | Home, Fix/Home Operations, Cozy, notifications, Home Briefing |
@@ -1101,6 +1101,8 @@ The loader imports `hasGovernedPlanGuidance` (newly exported from `riskPremiumOp
 When ready, the ownership-cost-change action's primary CTA redirects to the Mortgage Refinance Radar tool, `whyItMatters` gains an estimated-savings/break-even sentence, priority is elevated to `SOON`, and a refinance-opportunity evidence entry is added — while `id`/`lineageId`/`sourceEntityId`/`decisionLineagePolicy` stay exactly as they were, so `ownershipCostDecisionService`'s existing COMPLETE/ALREADY_DONE command handling and decision-lineage resolution (`OWNERSHIP_COST_CHANGE` decision family) are completely unaffected. A non-mortgage category (`PROPERTY_TAX`, `HOA`, etc.) is never enriched, even when a refinance opportunity happens to be ready — the correlation only fires for the mortgage-cost side HI-CMP-002 actually names. Registered as `MORTGAGE_COST_CHANGE_REFINANCE_OPPORTUNITY` in `COMPOUND_RULE_REGISTRY`. Test coverage: `tests/unit/homeActionOwnershipCostRefinanceEnrichment.test.js` (6 tests: enrichment applied/withheld across radar-state/profile-completeness variations, non-mortgage exclusion, missing-table safety), plus the full pre-existing `ownershipCostSlice4Changes.test.js`/`ownershipCostSlice7DecisionLifecycle.test.js` suites confirmed unaffected (13/13), all passing alongside the complete Phase 5 test set (84/84).
 
 **Work item 2 rule 6 of 7 (2026-08-24): recurring failure + repair-versus-replace decision readiness.** Implemented as another enrichment (same HI-ATT-009 shape as rule 5), this time of `loadRepairReplaceDecisionActions`. New `countRecentRepairEventsByInventoryItem` batch-loads `HomeEvent` rows of type `REPAIR`/`MAINTENANCE` per `inventoryItemId` over a 30-month lookback — the identical convention and window `hvacRepairReplaceEngine.service.ts`'s own `repairEventCountLast30Months` input already uses internally, recomputed here (not read off a persisted analysis's `inputsSnapshot`) because only the HVAC-specific engine populates that field and this rule must apply to every inventory category the generic `replaceRepairAnalysis.service.ts` also serves. Two or more events counts as "recurring" — one past repair is not a pattern.
+
+**Amendment (v1.33, October 4, 2026): repair history is canonical `REPAIR` only.** The rule above, the generic `replaceRepairAnalysis.service.ts`, the HVAC repair/replace engine and the Do-Nothing simulator now share one definition (`services/repairHistory.ts`): current (`isCurrent`), non-deleted `HomeEventType.REPAIR` events only, for both the repair count and the repair spend. Inspection fees, routine maintenance and replacements are not failure evidence, and the event model cannot yet distinguish corrective from preventive maintenance, so `MAINTENANCE` is excluded rather than guessed at; event titles and subtypes are never used to classify an event. The generic analysis also lost its title-keyword "replace" signal that could force `REPLACE_NOW`, and its 24-month names were corrected to the 30-month window it always used (`repairEventCountLast30Months`, `repairSpendCentsLast30Months`). The Do-Nothing simulator stays property-wide. Separate maintenance or inspection spend metrics are deliberately not added until a structured maintenance-purpose field exists and an ownership-cost consumer needs them. Compound rule `RECURRING_FAILURE_REPAIR_REPLACE_READINESS` is version 1.1.
 
 When recurring, the action's `whyItMatters` gains a sentence naming the repair count, a new evidence entry is added, and priority elevates to `SOON` (matching the existing `REPLACE_NOW` verdict priority) — while `id`/`lineageId`/`sourceEntityId`/`decisionLineagePolicy` (the registered `HVAC_REPAIR_REPLACE` decision family) stay exactly as they were, so `resolveActionDecisionLineagePolicy`'s existing per-item HVAC eligibility gate is completely unaffected. Registered as `RECURRING_FAILURE_REPAIR_REPLACE_READINESS` in `COMPOUND_RULE_REGISTRY`. Test coverage: `tests/unit/homeActionRepairReplaceRecurringFailureEnrichment.test.js` (6 tests: 2+ events enrich, exactly 1 does not, zero events unchanged, `REPLACE_NOW` stays `SOON` without duplicate evidence, cross-item isolation, missing-table safety), plus the full pre-existing `homeActionRepairReplacePromotion.test.js` suite confirmed unaffected (5/5), all passing alongside the complete Phase 5 test set (95/95).
 

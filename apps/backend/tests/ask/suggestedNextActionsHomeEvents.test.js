@@ -37,9 +37,9 @@ test('a REPAIR with no item and no amount offers the link and the cost, link fir
   assert.deepEqual(await outcomes(event()), ['LINK_INVENTORY_ITEM', 'ADD_AMOUNT']);
 });
 
-test('MAINTENANCE and INSPECTION are offered the link only; the cost is never prompted for them', async () => {
-  assert.deepEqual(await outcomes(event({ type: 'MAINTENANCE' })), ['LINK_INVENTORY_ITEM']);
-  assert.deepEqual(await outcomes(event({ type: 'INSPECTION' })), ['LINK_INVENTORY_ITEM']);
+test('only REPAIR is offered anything: maintenance and inspection do not feed the repair-versus-replace analyses', async () => {
+  assert.deepEqual(await outcomes(event({ type: 'MAINTENANCE' })), []);
+  assert.deepEqual(await outcomes(event({ type: 'INSPECTION' })), []);
 });
 
 test('other event types offer nothing', async () => {
@@ -54,7 +54,7 @@ test('no link chip when the event is already linked or the home has no inventory
 });
 
 test('re-evaluated from the replacement record: a correction that changes the type, amount or item changes the chips', async () => {
-  assert.deepEqual(await outcomes(event({ type: 'NOTE' })), [], 'before');
+  assert.deepEqual(await outcomes(event({ type: 'MAINTENANCE' })), [], 'before');
   assert.deepEqual(await outcomes(event({ type: 'REPAIR' })), ['LINK_INVENTORY_ITEM', 'ADD_AMOUNT'], 'type corrected to REPAIR');
   assert.deepEqual(await outcomes(event({ amount: 90 })), ['LINK_INVENTORY_ITEM'], 'amount added');
   assert.deepEqual(await outcomes(event({ amount: 90, inventoryItemId: 'item-1' })), [], 'item linked');

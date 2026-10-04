@@ -15,6 +15,7 @@
 import { InventoryItemCondition } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ageYearsFromDate, conditionAdjustment } from '../replaceRepairAnalysis.service';
+import { REPAIR_HISTORY_LOOKBACK_MONTHS, repairHistoryEventWhere } from '../repairHistory';
 import { DECISION_CONTEXT_CONTRACTS } from './decisionContextContracts';
 import { withEnhancerTimeout } from './decisionContextEnhancer';
 
@@ -224,7 +225,6 @@ export function evaluateHvacRepairReplace(
   };
 }
 
-const REPAIR_HISTORY_LOOKBACK_MONTHS = 30;
 
 // FRD §12.2/Phase 8C: composition-level outcomes (an optional enhancer timed
 // out) are distinct from evaluation-level outcomes (a field was simply never
@@ -281,8 +281,8 @@ export async function composeHvacDecisionContext(
   const repairHistoryLookup = await withEnhancerTimeout(
     () => prisma.homeEvent.findMany({
       where: {
-        propertyId, inventoryItemId, isCurrent: true,
-        type: { in: ['REPAIR', 'MAINTENANCE'] },
+        propertyId, inventoryItemId,
+        ...repairHistoryEventWhere(),
         occurredAt: { gte: lookbackDate },
       },
       select: { amount: true },

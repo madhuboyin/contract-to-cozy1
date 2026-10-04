@@ -102,7 +102,10 @@ The most material current problems are:
    are deterministic but not evidence-governed.
 8. **Repair history is semantically noisy.** Inspection and maintenance events
    are counted as repair-like events; the query uses a 30-month lookback while
-   variables and copy describe 24 months.
+   variables and copy describe 24 months. **Resolved October 4, 2026:** repair
+   history is now canonical current `REPAIR` events only (`services/repairHistory.ts`),
+   shared by the generic analysis, the HVAC engine, Home Action recurring-failure
+   evidence and the Do-Nothing simulator; the 24-month names are now 30-month.
 9. **Repair vs. Replace’s break-even is not a complete project payback.** It
    divides incremental upfront cost by modeled annual repair-risk reduction
    without full lifecycle, successful-repair probability, downtime, efficiency,

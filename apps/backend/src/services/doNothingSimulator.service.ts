@@ -20,6 +20,7 @@ import { PreferencePostureDefaults, PreferenceProfileService } from './preferenc
 import { SharedSignalKey, signalService } from './signal.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
 import { getFinancialContextDecisions } from './financialContext/context';
+import { repairHistoryEventWhere } from './repairHistory';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type DeductibleStrategy = 'KEEP_HIGH' | 'RAISE' | 'LOWER' | 'UNCHANGED';
@@ -660,9 +661,12 @@ export class DoNothingSimulatorService {
           deductibleAmount: true,
         },
       }),
+      // Property-wide, but canonical current repairs only (repairHistory.ts): inspections, routine maintenance, replacements,
+      // superseded revisions and deleted events do not raise the risk, and titles are never used to classify an event.
       prisma.homeEvent.findMany({
         where: {
           propertyId,
+          ...repairHistoryEventWhere(),
           occurredAt: { gte: lookback },
         },
         select: {
@@ -814,15 +818,7 @@ export class DoNothingSimulatorService {
       }
     );
 
-    const repairEventCount = homeEvents.filter((event) => {
-      const descriptor = `${event.type} ${event.subtype ?? ''} ${event.title ?? ''}`.toUpperCase();
-      return (
-        descriptor.includes('REPAIR') ||
-        descriptor.includes('MAINTEN') ||
-        descriptor.includes('INSPECT') ||
-        descriptor.includes('REPLACE')
-      );
-    }).length;
+    const repairEventCount = homeEvents.length;
 
     const waterSystemSignals = inventoryWithAges.filter((item) => {
       const label = `${item.name}`.toLowerCase();
@@ -1352,7 +1348,7 @@ export class DoNothingSimulatorService {
       },
       {
         label: 'Home event maintenance history included',
-        detail: `${repairEventCount} repair/maintenance-related home event(s) used to tune cost sensitivity.`,
+        detail: `${repairEventCount} repair event(s) used to tune cost sensitivity.`,
         impact: repairEventCount > 0 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {

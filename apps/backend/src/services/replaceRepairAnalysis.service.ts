@@ -6,10 +6,10 @@ import {
   ReplaceRepairConfidence,
   ReplaceRepairImpactLevel,
   ReplaceRepairVerdict,
-  HomeEventType,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { analyticsEmitter } from './analytics';
+import { REPAIR_HISTORY_LOOKBACK_MONTHS, repairHistoryEventWhere } from './repairHistory';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type UsageIntensity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -382,51 +382,37 @@ export class ReplaceRepairService {
     );
 
     const lookback = new Date();
-    lookback.setMonth(lookback.getMonth() - 30);
+    lookback.setMonth(lookback.getMonth() - REPAIR_HISTORY_LOOKBACK_MONTHS);
 
-    const homeEvents = await prisma.homeEvent.findMany({
+    // Canonical repairs only (repairHistory.ts): not inspections, maintenance or replacements, never classified by title.
+    const repairEvents = await prisma.homeEvent.findMany({
       where: {
         propertyId,
         inventoryItemId: item.id,
+        ...repairHistoryEventWhere(),
         occurredAt: { gte: lookback },
       },
       select: {
         id: true,
-        type: true,
-        subtype: true,
-        title: true,
         amount: true,
         occurredAt: true,
       },
       orderBy: [{ occurredAt: 'desc' }],
     });
 
-    const repairLikeEvents = homeEvents.filter((event) => {
-      if (
-        event.type === HomeEventType.REPAIR ||
-        event.type === HomeEventType.MAINTENANCE ||
-        event.type === HomeEventType.INSPECTION
-      ) {
-        return true;
-      }
-
-      const descriptor = `${event.type} ${event.subtype ?? ''} ${event.title ?? ''}`.toUpperCase();
-      return descriptor.includes('REPLACE') || descriptor.includes('REPAIR') || descriptor.includes('MAINTEN');
-    });
-
-    const repairsLast24m = repairLikeEvents.length;
-    const repairSpendLast24mCents = repairLikeEvents.reduce((sum, event) => {
+    const repairEventCountLast30Months = repairEvents.length;
+    const repairSpendCentsLast30Months = repairEvents.reduce((sum, event) => {
       const amount = asNumber(event.amount);
       if (!amount || amount <= 0) return sum;
       return sum + Math.round(amount * 100);
     }, 0);
 
     const estimatedNextRepairCostBase = toInt(overrides?.estimatedNextRepairCostCents) ?? defaults.typicalRepairCostCents;
-    const avgHistoricalRepairCents = repairsLast24m > 0 ? Math.round(repairSpendLast24mCents / repairsLast24m) : 0;
+    const avgHistoricalRepairCents = repairEventCountLast30Months > 0 ? Math.round(repairSpendCentsLast30Months / repairEventCountLast30Months) : 0;
 
     let estimatedNextRepairCostCents = Math.max(estimatedNextRepairCostBase, avgHistoricalRepairCents || 0);
-    if (repairsLast24m >= 3) estimatedNextRepairCostCents = Math.round(estimatedNextRepairCostCents * 1.25);
-    else if (repairsLast24m >= 2) estimatedNextRepairCostCents = Math.round(estimatedNextRepairCostCents * 1.15);
+    if (repairEventCountLast30Months >= 3) estimatedNextRepairCostCents = Math.round(estimatedNextRepairCostCents * 1.25);
+    else if (repairEventCountLast30Months >= 2) estimatedNextRepairCostCents = Math.round(estimatedNextRepairCostCents * 1.15);
 
     if (item.condition === 'POOR') estimatedNextRepairCostCents = Math.round(estimatedNextRepairCostCents * 1.2);
     if (item.condition === 'FAIR') estimatedNextRepairCostCents = Math.round(estimatedNextRepairCostCents * 1.08);
@@ -446,12 +432,12 @@ export class ReplaceRepairService {
 
     failureProb += conditionAdjustment(item.condition);
 
-    if (repairsLast24m >= 3) failureProb += 0.2;
-    else if (repairsLast24m >= 2) failureProb += 0.12;
-    else if (repairsLast24m >= 1) failureProb += 0.05;
+    if (repairEventCountLast30Months >= 3) failureProb += 0.2;
+    else if (repairEventCountLast30Months >= 2) failureProb += 0.12;
+    else if (repairEventCountLast30Months >= 1) failureProb += 0.05;
 
     const repairSpendRatio =
-      estimatedReplacementCostCents > 0 ? repairSpendLast24mCents / estimatedReplacementCostCents : 0;
+      estimatedReplacementCostCents > 0 ? repairSpendCentsLast30Months / estimatedReplacementCostCents : 0;
     if (repairSpendRatio >= 0.3) failureProb += 0.15;
     else if (repairSpendRatio >= 0.2) failureProb += 0.08;
 
@@ -476,24 +462,18 @@ export class ReplaceRepairService {
     const repairToReplaceRatio =
       estimatedReplacementCostCents > 0 ? estimatedNextRepairCostCents / estimatedReplacementCostCents : 0;
 
-    const replaceSignalFromHistory = repairLikeEvents.some((event) => {
-      const descriptor = `${event.subtype ?? ''} ${event.title ?? ''}`.toUpperCase();
-      return descriptor.includes('REPLACE');
-    });
-
     let verdict: ReplaceRepairVerdict = ReplaceRepairVerdict.REPAIR_AND_MONITOR;
     if (
-      (remainingYears <= 2 && (repairsLast24m >= 2 || repairToReplaceRatio >= 0.35 || failureProb >= 0.65)) ||
-      (replaceSignalFromHistory && remainingYears <= 3)
+      remainingYears <= 2 && (repairEventCountLast30Months >= 2 || repairToReplaceRatio >= 0.35 || failureProb >= 0.65)
     ) {
       verdict = ReplaceRepairVerdict.REPLACE_NOW;
     } else if (
       remainingYears <= 4 ||
       failureProb >= 0.58 ||
-      (repairsLast24m >= 2 && repairToReplaceRatio >= 0.25)
+      (repairEventCountLast30Months >= 2 && repairToReplaceRatio >= 0.25)
     ) {
       verdict = ReplaceRepairVerdict.REPLACE_SOON;
-    } else if (failureProb >= 0.3 || repairsLast24m >= 1 || repairSpendRatio >= 0.18) {
+    } else if (failureProb >= 0.3 || repairEventCountLast30Months >= 1 || repairSpendRatio >= 0.18) {
       verdict = ReplaceRepairVerdict.REPAIR_AND_MONITOR;
     } else {
       verdict = ReplaceRepairVerdict.REPAIR_ONLY;
@@ -504,7 +484,7 @@ export class ReplaceRepairService {
       estimatedReplacementCostCents > 0,
       estimatedNextRepairCostCents > 0,
       item.condition !== 'UNKNOWN',
-      homeEvents.length > 0,
+      repairEvents.length > 0,
     ].filter(Boolean).length;
 
     const confidence: ReplaceRepairConfidence =
@@ -556,13 +536,13 @@ export class ReplaceRepairService {
       },
       {
         label: 'Repair history frequency',
-        detail: `${repairsLast24m} repair/maintenance-like event(s) in the lookback window.`,
-        impact: repairsLast24m >= 2 ? 'NEGATIVE' : repairsLast24m === 0 ? 'POSITIVE' : 'NEUTRAL',
-        recommendationEffect: repairsLast24m >= 2 ? 'FAVORS_REPLACEMENT' : repairsLast24m === 0 ? 'FAVORS_REPAIR' : 'NEUTRAL',
+        detail: `${repairEventCountLast30Months} repair event(s) in the last ${REPAIR_HISTORY_LOOKBACK_MONTHS} months.`,
+        impact: repairEventCountLast30Months >= 2 ? 'NEGATIVE' : repairEventCountLast30Months === 0 ? 'POSITIVE' : 'NEUTRAL',
+        recommendationEffect: repairEventCountLast30Months >= 2 ? 'FAVORS_REPLACEMENT' : repairEventCountLast30Months === 0 ? 'FAVORS_REPAIR' : 'NEUTRAL',
       },
       {
         label: 'Repair spend pressure',
-        detail: `Recent repair spend: ${formatUsdFromCents(repairSpendLast24mCents)} (${(repairSpendRatio * 100).toFixed(0)}% of replacement).`,
+        detail: `Recent repair spend: ${formatUsdFromCents(repairSpendCentsLast30Months)} (${(repairSpendRatio * 100).toFixed(0)}% of replacement).`,
         impact: repairSpendRatio >= 0.25 ? 'NEGATIVE' : repairSpendRatio <= 0.1 ? 'POSITIVE' : 'NEUTRAL',
         recommendationEffect: repairSpendRatio >= 0.25 ? 'FAVORS_REPLACEMENT' : repairSpendRatio <= 0.1 ? 'FAVORS_REPAIR' : 'NEUTRAL',
       },
@@ -704,8 +684,8 @@ export class ReplaceRepairService {
               riskTolerance,
               usageIntensity,
               defaults,
-              repairSpendLast24mCents,
-              repairsLast24m,
+              repairSpendCentsLast30Months,
+              repairEventCountLast30Months,
               failureProbability: Number(failureProb.toFixed(4)),
               annualRepairRiskAfterReplaceCents,
               annualRepairRiskDeltaCents,

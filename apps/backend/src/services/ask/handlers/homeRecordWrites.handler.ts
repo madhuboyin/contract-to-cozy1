@@ -912,10 +912,11 @@ export const homeEventsServiceForCapture = new HomeEventsService();
 
 // ---- Suggested Next Actions for a recorded or corrected timeline event --------------------------------------------------------
 
-// Replace-or-repair analysis and the do-nothing simulator read an item's REPAIR / MAINTENANCE / INSPECTION events by inventoryItemId,
-// so an unlinked one is invisible to them. Only REPAIR spend is counted toward "repair spend" as a cost worth prompting for: an
-// inspection fee must not be pushed into repair history, and MAINTENANCE spend is not asserted to be repair history.
-const HOME_EVENT_LINK_PROMPT_TYPES: ReadonlySet<string> = new Set(['REPAIR', 'MAINTENANCE', 'INSPECTION']);
+// Replace-or-repair analysis, the HVAC engine, Home Action recurring-failure evidence and the Do-Nothing simulator all count only
+// canonical REPAIR events (repairHistory.ts), and the analyses read an item's repairs by inventoryItemId, so an unlinked repair is
+// invisible to them. Inspections and maintenance are not failure evidence and do not feed those analyses, so linking them is not
+// offered here (the event detail still allows it). The cost is prompted for REPAIR only for the same reason.
+const HOME_EVENT_LINK_PROMPT_TYPES: ReadonlySet<string> = new Set(['REPAIR']);
 const HOME_EVENT_COST_PROMPT_TYPES: ReadonlySet<string> = new Set(['REPAIR']);
 
 /**

@@ -22,8 +22,12 @@ function stubSources({ analyses = [], repairEvents = [] } = {}) {
     orchestrationActionSnooze: { findMany: async () => [] },
     replaceRepairAnalysis: { findMany: async () => analyses },
     homeEvent: {
+      // Applies the query's own classification (type, isCurrent, deletedAt), so a test fails if the query stops asking for it.
       findMany: async ({ where }) => repairEvents.filter((event) =>
-        where.inventoryItemId.in.includes(event.inventoryItemId)),
+        where.inventoryItemId.in.includes(event.inventoryItemId)
+        && (where.type === undefined || event.type === where.type)
+        && (where.isCurrent === undefined || (event.isCurrent ?? true) === where.isCurrent)
+        && (where.deletedAt === undefined || (event.deletedAt ?? null) === where.deletedAt)),
     },
   };
 }
@@ -57,9 +61,9 @@ function repairEvent(overrides = {}) {
   };
 }
 
-test('two or more repair/maintenance events in the lookback window bumps priority to SOON and adds one evidence entry per contributing event', async () => {
+test('two or more repair events in the lookback window bumps priority to SOON and adds one evidence entry per contributing event', async () => {
   const eventA = repairEvent({ id: 'home-event-a', type: 'REPAIR', occurredAt: new Date('2026-06-01T00:00:00.000Z') });
-  const eventB = repairEvent({ id: 'home-event-b', type: 'MAINTENANCE', occurredAt: new Date('2026-03-01T00:00:00.000Z') });
+  const eventB = repairEvent({ id: 'home-event-b', type: 'REPAIR', occurredAt: new Date('2026-03-01T00:00:00.000Z') });
   const db = stubSources({
     analyses: [analysis()],
     repairEvents: [eventA, eventB],
@@ -69,7 +73,7 @@ test('two or more repair/maintenance events in the lookback window bumps priorit
   assert.equal(actions.length, 1);
   const [action] = actions;
   assert.equal(action.priority, 'SOON');
-  assert.ok(action.whyItMatters.includes('2 logged repair or maintenance events'));
+  assert.ok(action.whyItMatters.includes('2 logged repair events'));
   // HI-CMP-003: one evidence entry per contributing HomeEvent (its own id
   // and observedAt), not an aggregate summary — base analysis evidence
   // plus one entry per event.
@@ -79,10 +83,10 @@ test('two or more repair/maintenance events in the lookback window bumps priorit
   assert.equal(repairEvidence.type, 'HOME_EVENT');
   assert.equal(repairEvidence.label, 'Repair logged');
   assert.equal(repairEvidence.observedAt, '2026-06-01T00:00:00.000Z');
-  const maintenanceEvidence = action.evidence.find((entry) => entry.id === 'home-event-b');
-  assert.ok(maintenanceEvidence, 'the MAINTENANCE event\'s own id must appear as its own evidence entry');
-  assert.equal(maintenanceEvidence.label, 'Maintenance logged');
-  assert.equal(maintenanceEvidence.observedAt, '2026-03-01T00:00:00.000Z');
+  const secondEvidence = action.evidence.find((entry) => entry.id === 'home-event-b');
+  assert.ok(secondEvidence, 'the second REPAIR event\'s own id must appear as its own evidence entry');
+  assert.equal(secondEvidence.label, 'Repair logged');
+  assert.equal(secondEvidence.observedAt, '2026-03-01T00:00:00.000Z');
   // Identity/decision-lineage fields must be untouched by enrichment.
   // Phase 4A: a non-HVAC item routes to the appliance decision family via
   // its own lineageId prefix (category-aware, not enrichment-driven).
@@ -98,7 +102,7 @@ test('all contributing events remain in canonical evidence even for a long repai
   const db = stubSources({ analyses: [analysis()], repairEvents: events });
   const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
 
-  assert.ok(actions[0].whyItMatters.includes('15 logged repair or maintenance events'));
+  assert.ok(actions[0].whyItMatters.includes('15 logged repair events'));
   assert.equal(actions[0].evidence.length, 16, 'base analysis evidence plus every contributing event');
 });
 
@@ -158,4 +162,25 @@ test('a db stub without homeEvent does not throw and simply skips the enrichment
   const { actions } = await getPromotedHomeActions('property-1', db, { evaluatedAt: NOW, includePersonalization: false });
   assert.equal(actions.length, 1);
   assert.equal(actions[0].priority, 'PLAN');
+});
+
+test('only canonical, current, non-deleted REPAIR events count toward a recurring failure', async () => {
+  const days = (n) => new Date(2026, 5, n);
+  const ignored = [
+    repairEvent({ id: 'maint', type: 'MAINTENANCE', occurredAt: days(1) }),
+    repairEvent({ id: 'inspect', type: 'INSPECTION', occurredAt: days(2) }),
+    repairEvent({ id: 'replace-titled', type: 'IMPROVEMENT', title: 'Replace furnace', occurredAt: days(3) }),
+    repairEvent({ id: 'superseded', type: 'REPAIR', isCurrent: false, occurredAt: days(4) }),
+    repairEvent({ id: 'deleted', type: 'REPAIR', deletedAt: new Date('2026-07-01T00:00:00.000Z'), occurredAt: days(5) }),
+  ];
+  const run = async (repairEvents) => (await getPromotedHomeActions('property-1', stubSources({ analyses: [analysis()], repairEvents }), { evaluatedAt: NOW, includePersonalization: false })).actions[0];
+
+  const none = await run([...ignored, repairEvent({ id: 'real-1', type: 'REPAIR', occurredAt: days(6) })]);
+  assert.notEqual(none.priority, 'SOON', 'one real repair plus five non-repair rows is not a recurring pattern');
+  assert.ok(!none.whyItMatters.includes('logged repair events'));
+
+  const two = await run([...ignored, repairEvent({ id: 'real-1', occurredAt: days(6) }), repairEvent({ id: 'real-2', occurredAt: days(7) })]);
+  assert.equal(two.priority, 'SOON');
+  assert.ok(two.whyItMatters.includes('2 logged repair events'));
+  assert.deepEqual(two.evidence.map((entry) => entry.id).filter((id) => /^(maint|inspect|replace-titled|superseded|deleted)$/.test(id)), []);
 });

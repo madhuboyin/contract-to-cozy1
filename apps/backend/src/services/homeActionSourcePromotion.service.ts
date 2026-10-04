@@ -13,6 +13,7 @@ import {
 import { RecommendationGovernanceSchema } from '../productFramework/recommendationGovernance.contract';
 import { buildRecommendationResponseContract, resolveRecommendationResponseStatus } from '../productFramework/recommendationResponse.contract';
 import { getGuidanceJourneyDisplayTitle } from './guidanceEngine/guidanceTemplateRegistry';
+import { REPAIR_HISTORY_LOOKBACK_MONTHS, repairHistoryEventWhere } from './repairHistory';
 import { getHomeAssetDisplayLabel } from '../productFramework/homeAssetDisplay';
 import { findPersonalizationDefinition } from '../modules/personalization/catalog/personalizationDefinitions';
 import type { EnvironmentInsight } from './environment/environmentInsights.service';
@@ -2563,7 +2564,8 @@ function dedupeReplaceRepairAnalysesForPromotion<T extends {
 // Home Intelligence Functional Completeness FRD §15 Phase 5 work item 2,
 // rule 6 of 7 (HI-CMP-002) — "recurring failure + repair-versus-replace
 // decision readiness." Both halves already exist independently: HomeEvent
-// rows of type REPAIR/MAINTENANCE against an inventory item are the
+// rows of type REPAIR (only: inspections and maintenance are not failure
+// evidence; see repairHistory.ts) against an inventory item are the
 // canonical repair-history record (the same convention
 // hvacRepairReplaceEngine.service.ts's own repairEventCountLast30Months
 // input already reads, on the identical 30-month lookback — recomputed
@@ -2571,10 +2573,10 @@ function dedupeReplaceRepairAnalysesForPromotion<T extends {
 // since only the HVAC-specific engine populates that field and this rule
 // must apply to every inventory category the generic
 // replaceRepairAnalysis.service.ts also serves), and a READY
-// ReplaceRepairAnalysis is the decision-readiness half. Two or more repair/
-// maintenance events in the lookback window is "recurring" — one past
+// ReplaceRepairAnalysis is the decision-readiness half. Two or more repair
+// events in the lookback window is "recurring" — one past
 // repair is not a pattern.
-const RECURRING_FAILURE_LOOKBACK_MONTHS = 30;
+const RECURRING_FAILURE_LOOKBACK_MONTHS = REPAIR_HISTORY_LOOKBACK_MONTHS;
 const RECURRING_FAILURE_MIN_EVENT_COUNT = 2;
 
 type CurrentHvacPublishedVerdict = {
@@ -2664,8 +2666,7 @@ async function findRecentRepairEventsByInventoryItem(
   const events = await db.homeEvent.findMany({
     where: {
       inventoryItemId: { in: [...inventoryItemIds] },
-      isCurrent: true,
-      type: { in: ['REPAIR', 'MAINTENANCE'] },
+      ...repairHistoryEventWhere(),
       occurredAt: { gte: lookbackDate },
     },
     select: { id: true, inventoryItemId: true, type: true, occurredAt: true },
@@ -2817,7 +2818,7 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
     const recentRepairCount = contributingRepairEvents.length;
     const hasRecurringFailure = recentRepairCount >= RECURRING_FAILURE_MIN_EVENT_COUNT;
     const recurringFailureSentence = hasRecurringFailure
-      ? ` This item has ${recentRepairCount} logged repair or maintenance events in the last ${RECURRING_FAILURE_LOOKBACK_MONTHS} months — a recurring failure pattern worth weighing against a one-time replacement.`
+      ? ` This item has ${recentRepairCount} logged repair events in the last ${RECURRING_FAILURE_LOOKBACK_MONTHS} months — a recurring failure pattern worth weighing against a one-time replacement.`
       : '';
     const hvacWhyItMatters = publishedHvacVerdict
       ? `The current HVAC Decision Platform recommendation favors ${publishedHvacVerdict.verdict === 'REPLACE' ? 'replacement' : publishedHvacVerdict.verdict === 'REPAIR' ? 'repair' : 'continued monitoring'}.${recurringFailureSentence}`
@@ -2917,7 +2918,7 @@ async function loadRepairReplaceDecisionActions(propertyId: string, db: HomeActi
           ? contributingRepairEvents.map((event) => ({
               id: event.id,
               type: 'HOME_EVENT' as const,
-              label: event.type === 'REPAIR' ? 'Repair logged' : 'Maintenance logged',
+              label: 'Repair logged',
               source: 'Home Timeline',
               observedAt: event.occurredAt.toISOString(),
               freshness: 'CURRENT' as const,

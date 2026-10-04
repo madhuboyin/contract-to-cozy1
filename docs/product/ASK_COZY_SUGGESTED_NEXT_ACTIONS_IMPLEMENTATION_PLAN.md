@@ -821,7 +821,7 @@ Executed: backend `tsc --noEmit` clean; `suggestedNextActionsInventory.test.js` 
 
 | Action | Event types | Offered when |
 |---|---|---|
-| "Link <event> to an inventory item" (`LINK_INVENTORY_ITEM`) | REPAIR, MAINTENANCE, INSPECTION | no linked item and the home has at least one visible inventory item |
+| "Link <event> to an inventory item" (`LINK_INVENTORY_ITEM`) | REPAIR only (narrowed from REPAIR/MAINTENANCE/INSPECTION on October 4, 2026, see C.11) | no linked item and the home has at least one visible inventory item |
 | "Add the cost of <event>" (`ADD_AMOUNT`) | REPAIR only | no amount recorded (an amount of 0 counts as recorded) |
 
 Both are `RECORD_ACTION` on `HOME_EVENT_CORRECT`; the existing correction dropdown remains the way the value is actually chosen.
@@ -865,3 +865,17 @@ Both are `RECORD_ACTION` on `HOME_EVENT_CORRECT`; the existing correction dropdo
 6. *Stale:* offer a chip, change the record elsewhere (edit the warranty, correct the event), then select the old chip -> "That suggestion is no longer available".
 7. *Viewer:* as a viewer account, the write chips above should not appear, and the inspection findings answer should show no chips.
 8. *Inspection findings:* open the findings answer -> no "Accept ... finding <id>" chip; the deck's controls still work.
+
+### C.11 Repair-history semantic correction (owner decision, October 4, 2026)
+
+**Decision.** Inspection fees and routine maintenance do not count as repair spend or as failure evidence; replacements are not repairs; until corrective maintenance is structurally distinguishable from preventive maintenance, only canonical `HomeEventType.REPAIR` counts, for both repair count and repair spend. This answers the open question in C.8.
+
+**What changed (outside Ask).** One shared definition, `services/repairHistory.ts` (`repairHistoryEventWhere()`: `REPAIR`, `isCurrent: true`, `deletedAt: null`; 30-month lookback), now used by all four consumers: `replaceRepairAnalysis.service.ts` (generic items), `decisionPlatform/hvacRepairReplaceEngine.service.ts`, `homeActionSourcePromotion.service.ts` (recurring-failure enrichment; its evidence label and copy now say repairs only), and `doNothingSimulator.service.ts` (still property-wide, 36-month window; classification by type, not title). In the generic analysis the title-keyword "replace" signal that could force `REPLACE_NOW` was removed, the persisted assumption names changed from `repairsLast24m` / `repairSpendLast24mCents` to `repairEventCountLast30Months` / `repairSpendCentsLast30Months` (only that service reads them), and the "has history" confidence signal now means "has a repair event". Compound rule `RECURRING_FAILURE_REPAIR_REPLACE_READINESS` is version 1.1; the Home Intelligence FRD is v1.33 and the Capital audit item 8 is marked resolved.
+
+**Behaviour changes to expect.** Items whose only history is inspections, routine maintenance or a "replace" titled event will show lower failure probability and fewer replace verdicts than before; a repair titled "Replace ..." no longer forces `REPLACE_NOW` by itself; Home Actions stop citing maintenance as recurring-failure evidence. Existing stored analyses keep their old assumption names until recomputed (they are marked stale when events change).
+
+**Deliberately not added.** No separate maintenance or inspection spend metrics (they would need a reliable classification and no ownership-cost consumer needs them yet). Inspection findings can still inform the decision through condition and severity; the inspection fee itself is not evidence of failure.
+
+**Ask chips.** The event link chip is narrowed to REPAIR (C.8 table); the cost chip was already REPAIR-only.
+
+**Verification.** Executed: `tsc --noEmit` clean; `tests/unit/repairHistoryClassification.test.js` (8 tests: the generic analysis and the HVAC context composition executed with stubbed reads that apply the query's own filters, so inspection/maintenance/"Replace furnace"/superseded/deleted/out-of-window rows are proven to change nothing while a real repair still counts; source-shape guards for Do-Nothing, which is not executed because it needs scenario and preference state); the Home Action recurring-failure suite (updated to apply the query's filters, plus a new test with five non-repair rows); the Ask event tests. Fixture changes were limited to those two recurring-failure expectations (copy "repair events", no maintenance evidence label). Not run: any DB-backed suite or live request. Three `tests/decisionPlatform` tests (change-emitter governance x2, HVAC routing x1) fail on an untouched HEAD as well.
