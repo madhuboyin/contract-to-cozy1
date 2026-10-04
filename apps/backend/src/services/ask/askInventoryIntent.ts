@@ -4,6 +4,7 @@ const INVENTORY_SUBJECT = '(?:inventory|appliance|system|equipment)';
 const DETAIL_SUBJECT = '(?:details|information|records?)';
 
 const INCOMPLETE_INVENTORY_PATTERNS = [
+  /\badd\s+(?:or|\/)\s+update\s+missing\s+details\b/i,
   new RegExp(`\\bmissing(?:\\s+${INVENTORY_SUBJECT})?\\s+${DETAIL_SUBJECT}\\b`, 'i'),
   new RegExp(`\\b${INVENTORY_SUBJECT}\\s+${DETAIL_SUBJECT}\\s+(?:are\\s+)?(?:missing|incomplete)\\b`, 'i'),
   new RegExp(`\\b(?:incomplete|unfinished)(?:\\s+${INVENTORY_SUBJECT})?(?:\\s+${DETAIL_SUBJECT})?\\b`, 'i'),

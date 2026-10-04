@@ -25,11 +25,13 @@ test('first-party missing-inventory suggestion binds to incomplete inventory int
   assert.equal(isIncompleteInventoryRequest(QUESTION), true);
   assert.equal(isIncompleteInventoryRequest('Show incomplete inventory records'), true);
   assert.equal(isIncompleteInventoryRequest('Which inventory details are missing?'), true);
+  assert.equal(isIncompleteInventoryRequest('Add or update missing details'), true);
   assert.equal(isIncompleteInventoryRequest('List all appliances'), false);
 
   const routing = resolveAskRoutingCascade(QUESTION);
   assert.equal(routing.operation.operationId, 'INVENTORY_LOOKUP');
   assert.equal(routing.requiresClarification, false);
+  assert.equal(resolveAskRoutingCascade('Add or update missing details').operation.operationId, 'INVENTORY_LOOKUP');
 });
 
 test('first-party lifecycle suggestion binds to lifecycle inventory intent and routes directly', () => {

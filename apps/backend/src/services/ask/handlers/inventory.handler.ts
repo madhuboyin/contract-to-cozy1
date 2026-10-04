@@ -51,6 +51,8 @@ function inventoryMissingFacts(item: Awaited<ReturnType<InventoryService['listIt
   ].filter((value): value is string => Boolean(value));
 }
 
+export const INVENTORY_MISSING_DETAILS_SUGGESTION = 'Add or update missing details';
+
 function inventoryItemHref(propertyId: string, itemId: string): string {
   return `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&openItemId=${encodeURIComponent(itemId)}`;
 }
@@ -370,10 +372,9 @@ async function inventoryLookupResult(
     // matched by GroupedListBlock.tsx to render InventoryResultList instead
     // of the generic list, giving item titles inline detail (a direct
     // canonical GET, same pattern as Maintenance's inline task detail) in
-    // place of navigating to /inventory. No item `actions` are declared yet
-    // -- this is a read-only OPEN_INLINE_ENTITY slice; inline mutation would
-    // need real per-item operations registered first. 'inventory-entity-selection'
-    // above (the disambiguation list) is also routed through
+    // place of navigating to /inventory. Contributor item actions use the registered
+    // INVENTORY_ITEM_CORRECT operation; an incomplete-record continuation narrows them
+    // to fields that are actually missing. 'inventory-entity-selection' above is also routed through
     // InventoryResultList as of the same day -- selecting an ambiguous match
     // opens inline detail instead of implicitly ejecting to /inventory.
     // 'inventory-history' below is still unaffected and hands off via a bare
@@ -381,7 +382,11 @@ async function inventoryLookupResult(
     // with no inline detail component yet) -- a genuine remaining "broader
     // entry points" gap, matching Maintenance's own flagship-first shape.
     type: 'GROUPED_LIST', filters: viewState ? inventoryFilterChips(activeStatus, categoryFilter) : [], id: 'inventory-results', title: listTitle,
-    description: lifecycleFocus ? 'Only items with a recorded expected-expiry date within the next three years are included.' : null,
+    description: lifecycleFocus
+      ? 'Only items with a recorded expected-expiry date within the next three years are included.'
+      : incompleteFocus
+        ? 'Choose an item to add or correct its missing recorded fields. Documents can be attached from item detail; coverage links remain available in Home Inventory.'
+        : null,
     sections: [{
       id: 'items', title: 'Living Home Record', count: matches.length,
       items: shown.map((item) => {
@@ -389,7 +394,9 @@ async function inventoryLookupResult(
         const identity = [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ');
         const lifecycleDate = item.purchasedOn;
         return {
-          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', actions: inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
+          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', actions: incompleteFocus
+            ? inventoryMissingCorrectionActions(item, access.role !== HouseholdRole.VIEWER)
+            : inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
           description: incompleteFocus && missingFacts.length ? `Missing: ${missingFacts.join(', ')}` : item.notes,
           meta: [
             item.room?.name ?? item.category.toLowerCase().replace(/_/g, ' '),
@@ -456,9 +463,14 @@ async function inventoryLookupResult(
     parameters: viewState ? { viewState } : selectedItem ? { inventoryItemId: selectedItem.id } : undefined,
     captureRequests,
     blocks,
-    suggestions: selectedItem
-      ? ['Show incomplete inventory records', 'Which systems are nearing end of life?', 'List all appliances']
-      : ['Show incomplete inventory records', 'Which systems are nearing end of life?', 'List all appliances'],
+    suggestions: [
+      ...(access.role !== HouseholdRole.VIEWER && matches.some((item) => inventoryMissingFacts(item).length > 0)
+        ? [INVENTORY_MISSING_DETAILS_SUGGESTION]
+        : []),
+      ...(!incompleteFocus ? ['Show incomplete inventory records'] : []),
+      'Which systems are nearing end of life?',
+      'List all appliances',
+    ],
   };
 }
 
@@ -665,6 +677,29 @@ export function inventoryCorrectionItemActions(canManage: boolean) {
   if (!canManage) return undefined;
   return (Object.keys(INVENTORY_CORRECTION_FIELDS) as InventoryCorrectionField[]).map((field) => ({
     id: `correct-${field}`, label: INVENTORY_CORRECTION_FIELDS[field].action, message: INVENTORY_CORRECTION_FIELDS[field].message,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+  }));
+}
+
+/**
+ * The incomplete-record continuation is deliberately narrower than ordinary item detail: it offers only fields that
+ * are both missing and supported by the canonical correction command. Documents use the detail's evidence control;
+ * coverage evidence remains a disclosed traditional-inventory boundary.
+ */
+export function inventoryMissingCorrectionActions(
+  item: { brand?: string | null; manufacturer?: string | null; model?: string | null; modelNumber?: string | null; serialNo?: string | null; serialNumber?: string | null; purchasedOn?: Date | string | null },
+  canManage: boolean,
+) {
+  if (!canManage) return undefined;
+  const fields: InventoryCorrectionField[] = [
+    ...(!item.brand && !item.manufacturer ? ['brand' as const] : []),
+    ...(!item.model && !item.modelNumber ? ['model' as const] : []),
+    ...(!item.serialNo && !item.serialNumber ? ['serialNo' as const] : []),
+    ...(!item.purchasedOn ? ['purchasedOn' as const] : []),
+  ];
+  return fields.map((field) => ({
+    id: `correct-${field}`, label: `Add ${INVENTORY_CORRECTION_FIELDS[field].label}`,
+    message: INVENTORY_CORRECTION_FIELDS[field].message,
     style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
   }));
 }

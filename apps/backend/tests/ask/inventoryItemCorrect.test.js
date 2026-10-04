@@ -77,6 +77,7 @@ test('correction item actions are only declared for contributor-and-up on both i
   const helper = body('function inventoryCorrectionItemActions(', 'function inventoryCorrectionConfirmation(');
   assert.match(helper, /if \(!canManage\) return undefined;/);
   const uses = source.match(/actions: inventoryCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER\)/g) ?? [];
-  // Property Summary P-2: property-inventory no longer embeds a copy of this list, so this drops from 3 to 2.
-  assert.equal(uses.length, 2, 'inventory-entity-selection, inventory-results');
+  assert.equal(uses.length, 1, 'inventory-entity-selection keeps the complete correction set');
+  assert.match(source, /incompleteFocus\s*\? inventoryMissingCorrectionActions\(item, access\.role !== HouseholdRole\.VIEWER\)\s*:\s*inventoryCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER\)/,
+    'inventory-results narrows incomplete-record detail to missing fields, while ordinary detail keeps the complete set');
 });

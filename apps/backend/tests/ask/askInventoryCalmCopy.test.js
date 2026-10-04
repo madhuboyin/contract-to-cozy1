@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { inventoryCalmCopy } = require('../../src/services/ask/handlers/inventory.handler.ts');
+const { inventoryCalmCopy, inventoryMissingCorrectionActions } = require('../../src/services/ask/handlers/inventory.handler.ts');
 
 // ASK_COZY_INLINE_WORKSPACE_FRD IW-CALM-001, Inventory adoption (ACUI I-1, v1.121).
 const counts = (overrides = {}) => ({ matchCount: 0, shownCount: 0, missingCount: 0, lifecycleCount: 0, incompleteFocus: false, lifecycleFocus: false, ...overrides });
@@ -11,6 +11,19 @@ const counts = (overrides = {}) => ({ matchCount: 0, shownCount: 0, missingCount
 test('a plain list states how many items are recorded and how many are missing details', () => {
   assert.equal(inventoryCalmCopy(counts({ matchCount: 12, shownCount: 12, missingCount: 5 })).headline, '12 items recorded, 5 with missing details.');
   assert.equal(inventoryCalmCopy(counts({ matchCount: 1, shownCount: 1, missingCount: 1 })).headline, '1 item recorded, 1 with missing details.');
+});
+
+test('missing-detail continuation offers only missing inline-correctable fields', () => {
+  const actions = inventoryMissingCorrectionActions({
+    brand: null, manufacturer: null, model: 'XR-1', modelNumber: null,
+    serialNo: null, serialNumber: null, purchasedOn: null,
+  }, true);
+  assert.deepEqual(actions.map(({ id, label }) => ({ id, label })), [
+    { id: 'correct-brand', label: 'Add brand' },
+    { id: 'correct-serialNo', label: 'Add serial number' },
+    { id: 'correct-purchasedOn', label: 'Add purchase date' },
+  ]);
+  assert.equal(inventoryMissingCorrectionActions({}, false), undefined);
 });
 
 test('"none missing" is scoped to the details Ask checks, never a claim that the records are complete', () => {

@@ -132,7 +132,7 @@ function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disable
           <div><dt className="text-xs text-slate-500">Verification</dt><dd className="mt-0.5 font-medium text-slate-900">{item.isVerified ? 'Verified record' : 'Not verified'}</dd></div>
         </dl>
         {onAction && <CorrectionActions actions={fallbackItem.actions ?? []} subject={item.name} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />}
-        {onAction && (fallbackItem.actions?.length ?? 0) > 0 && (
+        {onAction && fallbackItem.actions !== undefined && (
           <AttachEvidenceControl
             event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: item.name }}
             propertyId={expectedPropertyId}
@@ -149,11 +149,8 @@ function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disable
 
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: modeled directly on
 // MaintenanceResultList.tsx (the proven reference pattern) but simpler --
-// no per-item mutation actions exist for inventory yet, so there is no
-// actionsForCanonicalStatus-equivalent staleness filtering to do, and
-// opening detail IS the selection mechanic (no separate "Select item"
-// toggle, since nothing else currently targets a selected-but-unopened
-// item). Renders both `inventory-results` (the primary result) and
+// opening detail is the canonical-item selection mechanic and its declared
+// correction actions start confirmation-gated writes. Renders both `inventory-results` (the primary result) and
 // `inventory-entity-selection` (the ambiguous-match disambiguation list,
 // same INVENTORY_ITEM item shape) -- see GroupedListBlock.tsx's own id set.
 export function InventoryResultList({ block, propertyId, disabled, onAction, onFilter, onPage, onAccessLost, link }: {
