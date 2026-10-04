@@ -4,6 +4,8 @@
 import { HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { maintenanceTaskVersion } from '../suggestedActions/domainVersions';
+import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
+import { resolveTypedActionTarget } from '../suggestedActions/typedTarget';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
@@ -628,7 +630,7 @@ export function maintenanceUpdateServiceCategory(message: string): ServiceCatego
   return categories.find((category) => normalized.includes(category));
 }
 
-export async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string, launchTaskId?: string | null, sourceExecutionId?: string | null, outcomeKey?: string | null): Promise<AskOperationResult> {
+export async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string, launchTaskId?: string | null, sourceExecutionId?: string | null, outcomeKey?: string | null, offeredContextVersion?: string | null): Promise<AskOperationResult> {
   const [tasks, members] = await Promise.all([
     PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true }),
     prisma.householdMember.findMany({ where: { propertyId }, include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } }),
@@ -639,7 +641,14 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
   // than making maintenanceCompletionMatch re-derive the same task from a
   // synthesized message subject, which can fail to match at all.
   const subject = maintenanceUpdateSubject(message);
-  const match = (launchTaskId ? tasks.find((task) => task.id === launchTaskId) ?? null : null) ?? maintenanceCompletionMatch(subject, tasks);
+  // A selected suggestion's task is authoritative: gone or changed since it was offered means stale, never a title match. A row
+  // button (launchTaskId without a registered outcome) keeps the existing resolution.
+  const typedTarget = resolveTypedActionTarget(tasks, launchTaskId ? { entityType: 'MAINTENANCE_TASK', entityId: launchTaskId, outcomeKey, contextVersion: offeredContextVersion } : null, {
+    entityType: 'MAINTENANCE_TASK', outcomeRegistered: Boolean(outcomeKey && MAINTENANCE_UPDATE_ACTION_BY_OUTCOME[outcomeKey]), versionOf: maintenanceTaskVersion,
+  });
+  if (typedTarget.kind === 'STALE') return staleSuggestedActionResult();
+  const match = typedTarget.kind === 'TARGET' ? typedTarget.row
+    : (launchTaskId ? tasks.find((task) => task.id === launchTaskId) ?? null : null) ?? maintenanceCompletionMatch(subject, tasks);
   const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
   if (!match) {
     return {

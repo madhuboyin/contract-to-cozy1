@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import React from 'react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { CalmLanding } from '../calm/CalmLanding';
 import { FollowUpRow } from '../calm/FollowUpRow';
 import type { FollowUpItem } from '@/features/ask/followUps';
@@ -114,21 +115,71 @@ describe('FollowUpRow', () => {
   it('renders a typed action by its label and hands the whole item back, so the transcript message is not the chip text', () => {
     const onPick = jest.fn();
     const item: FollowUpItem = { kind: 'ACTION', key: 'action:v1.abc', label: 'Add the microwave brand', action: { id: 'v1.abcdefghijklmnop', message: 'What brand is the microwave?' } as never };
-    render(<FollowUpRow items={[item]} disabled={false} onPick={onPick} />);
+    render(<FollowUpRow items={[item]} busy={false} onPick={onPick} />);
     fireEvent.click(screen.getByRole('button', { name: 'Add the microwave brand' }));
     expect(onPick).toHaveBeenCalledWith(item);
     expect(screen.queryByText('What brand is the microwave?')).toBeNull();
   });
 
-  it('asks the chosen follow-up, and is empty while an answer is pending', () => {
+  it('asks the chosen follow-up, and renders nothing when there are none', () => {
     const onPick = jest.fn();
-    const { rerender, container } = render(<FollowUpRow items={textItems('Only show overdue tasks', 'Compare the quotes')} disabled={false} onPick={onPick} />);
+    const { rerender, container } = render(<FollowUpRow items={textItems('Only show overdue tasks', 'Compare the quotes')} busy={false} onPick={onPick} />);
     fireEvent.click(screen.getByRole('button', { name: 'Compare the quotes' }));
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ kind: 'TEXT', text: 'Compare the quotes' }));
-    rerender(<FollowUpRow items={textItems('Only show overdue tasks')} disabled onPick={onPick} />);
+    rerender(<FollowUpRow items={[]} busy={false} onPick={onPick} />);
     expect(container.querySelector('[data-follow-up-row]')).toBeNull();
-    rerender(<FollowUpRow items={[]} disabled={false} onPick={onPick} />);
-    expect(container.querySelector('[data-follow-up-row]')).toBeNull();
+  });
+
+  // Mirrors AskWorkspace: picking a chip starts the request (setLoading(true)) in the same batch as the click, and the request is
+  // finished from outside. `startsRequest={false}` models a pick the workspace declines to run.
+  function Harness({ items, startsRequest = true, onPick }: { items: FollowUpItem[]; startsRequest?: boolean; onPick: jest.Mock }) {
+    const [busy, setBusy] = React.useState(false);
+    (Harness as unknown as { finish: () => void; start: () => void }).finish = () => setBusy(false);
+    (Harness as unknown as { finish: () => void; start: () => void }).start = () => setBusy(true);
+    return <FollowUpRow items={items} busy={busy} onPick={(item) => { onPick(item); if (startsRequest) setBusy(true); }} />;
+  }
+  const control = Harness as unknown as { finish: () => void; start: () => void };
+
+  it('stays visible while a request runs: only the chosen chip is disabled and pending, the others are inert but still shown', () => {
+    const onPick = jest.fn();
+    const items = textItems('Only show overdue tasks', 'Compare the quotes');
+    const { container } = render(<Harness items={items} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compare the quotes' }));
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-follow-up-row]')).not.toBeNull();
+    const picked = screen.getByRole('button', { name: 'Compare the quotes' });
+    expect(picked).toBeDisabled();
+    expect(picked).toHaveAttribute('aria-busy', 'true');
+    const other = screen.getByRole('button', { name: 'Only show overdue tasks' });
+    expect(other).not.toBeDisabled();
+    expect(other).toHaveAttribute('aria-disabled', 'true');
+    expect(other).not.toHaveAttribute('aria-busy');
+    fireEvent.click(other);
+    fireEvent.click(picked);
+    expect(onPick).toHaveBeenCalledTimes(1);
+    // When the request finishes the chips are live again and nothing stays pending.
+    act(() => control.finish());
+    expect(screen.getByRole('button', { name: 'Compare the quotes' })).not.toHaveAttribute('aria-busy');
+    fireEvent.click(screen.getByRole('button', { name: 'Only show overdue tasks' }));
+    expect(onPick).toHaveBeenCalledTimes(2);
+  });
+
+  it('a request started some other way leaves every chip inert and none pending, and a pick that never started a request cannot mark a later one', () => {
+    const onPick = jest.fn();
+    const items = textItems('Only show overdue tasks', 'Compare the quotes');
+    render(<Harness items={items} startsRequest={false} onPick={onPick} />);
+    // A typed question starts a request: no chip was picked.
+    act(() => control.start());
+    for (const name of ['Only show overdue tasks', 'Compare the quotes']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-disabled', 'true');
+      expect(screen.getByRole('button', { name })).not.toHaveAttribute('aria-busy');
+    }
+    act(() => control.finish());
+    // A chip is picked but the workspace declines to start a request, then an unrelated request runs.
+    fireEvent.click(screen.getByRole('button', { name: 'Compare the quotes' }));
+    expect(onPick).toHaveBeenCalledTimes(1);
+    act(() => control.start());
+    expect(screen.getByRole('button', { name: 'Compare the quotes' })).not.toHaveAttribute('aria-busy');
   });
 });
 

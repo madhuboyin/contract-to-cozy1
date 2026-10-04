@@ -21,6 +21,8 @@ import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
 import { inventoryItemContextVersion, roomContextVersion } from '../suggestedActions/domainVersions';
 import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActionRegistry';
+import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
+import { resolveTypedActionTarget } from '../suggestedActions/typedTarget';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 
 export const inventoryService = new InventoryService();
@@ -797,7 +799,12 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
   await ensurePropertyAccess(userId, propertyId);
   const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
   const items = await inventoryService.listItems(propertyId, {});
-  const selected = exactEntityMatch(items.map((item) => ({ ...item, title: item.name })), message, launchContext);
+  // A selected suggestion's item is authoritative: gone or changed since it was offered means stale, never a title match.
+  const typedTarget = resolveTypedActionTarget(items, launchContext, {
+    entityType: 'INVENTORY_ITEM', outcomeRegistered: Boolean(correctionFieldForOutcome('INVENTORY_ITEM_CORRECT', launchContext?.outcomeKey)), versionOf: inventoryItemContextVersion,
+  });
+  if (typedTarget.kind === 'STALE') return staleSuggestedActionResult();
+  const selected = typedTarget.kind === 'TARGET' ? typedTarget.row : exactEntityMatch(items.map((item) => ({ ...item, title: item.name })), message, launchContext);
   if (!selected) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'INVENTORY_ITEM_TARGET_REQUIRED',
@@ -1025,13 +1032,23 @@ registerCapabilityHandler('inventory.create', async (envelope) => {
   const declaredAddAction = envelope.launchContext?.operationId === 'INVENTORY_ITEM_CREATE'
     && envelope.launchContext.surface !== 'ASK_REFRESH'
     && envelope.message === INVENTORY_ADD_MESSAGE;
-  if (declaredAddAction) return inventoryItemCreateResult(
-    envelope.userId,
-    envelope.propertyId!,
-    undefined,
-    envelope.launchContext?.sourceExecutionId ?? null,
-    envelope.launchContext?.entityType === 'INVENTORY_ROOM' ? envelope.launchContext.entityId ?? null : null,
-  );
+  if (declaredAddAction) {
+    // "Add an item to <room>" names its room: if that room is gone or was changed since the suggestion was offered, it is stale and
+    // must not quietly open the form with no room chosen.
+    const launch = envelope.launchContext;
+    if (launch?.outcomeKey === 'ADD_ITEM_TO_ROOM' && launch.entityType === 'INVENTORY_ROOM' && launch.entityId) {
+      const rooms = await prisma.inventoryRoom.findMany({ where: { id: launch.entityId, propertyId: envelope.propertyId! }, select: { id: true, updatedAt: true } });
+      const typedRoom = resolveTypedActionTarget(rooms, launch, { entityType: 'INVENTORY_ROOM', outcomeRegistered: true, versionOf: roomContextVersion });
+      if (typedRoom.kind === 'STALE') return staleSuggestedActionResult();
+    }
+    return inventoryItemCreateResult(
+      envelope.userId,
+      envelope.propertyId!,
+      undefined,
+      envelope.launchContext?.sourceExecutionId ?? null,
+      envelope.launchContext?.entityType === 'INVENTORY_ROOM' ? envelope.launchContext.entityId ?? null : null,
+    );
+  }
   if (envelope.launchContext?.surface !== 'ASK_REFRESH') {
     const rooms = await inventoryCreateRooms(envelope.propertyId!);
     const seed = inventoryCreateSeedFromMessage(envelope.message, rooms);

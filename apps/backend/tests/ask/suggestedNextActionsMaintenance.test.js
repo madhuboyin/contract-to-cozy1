@@ -133,7 +133,7 @@ test('the update receipt nominates undo candidates, no longer emits the ambiguou
   assert.match(confirm, /undo: 'UNSNOOZE'/);
   assert.doesNotMatch(confirm, /\[`Reopen \$\{updated\.title\}`\]/);
   const misc = readFileSync(resolve(__dirname, '../../src/services/ask/handlers/miscHandlers.handler.ts'), 'utf8');
-  assert.match(misc, /maintenanceTaskUpdateResult\(.*launchContext\?\.outcomeKey \?\? null\)\)/);
+  assert.match(misc, /maintenanceTaskUpdateResult\(.*launchContext\?\.outcomeKey \?\? null, envelope\.launchContext\?\.contextVersion \?\? null\)\)/);
 });
 
 test('the create and complete receipts deliberately stay plain', () => {
