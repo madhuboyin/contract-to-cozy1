@@ -3,7 +3,7 @@
 **Date:** October 4, 2026
 **Status:** Proposed implementation plan
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.9; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.10; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -157,7 +157,9 @@ interface SuggestedNextActionSelection {
 
 For answer follow-ups, the source execution's persisted result JSON is the offered-action ledger. The server loads that execution by user and session, verifies its property scope, finds the exact unexpired action id, and copies the registered message, operation, entity context, outcome key, and provenance from the stored action. The submitted `message` exists for compatibility with the execution request and must exactly match the stored message; the server uses the stored value and rejects/audits a mismatch. Client-supplied operation or entity fields are not authoritative. The action expiry may never exceed the fixed source-execution expiry. A missing or purged source maps to the same typed stale/invalid-action recovery result and never silently falls back to semantic routing.
 
-Landing starters have no source execution. They use a short-lived server-signed starter token bound to the current user, session, property, starter/action id, operation and outcome registry versions, and expiry. The backend verifies the signature and scope, resolves the server-declared starter, and repeats eligibility checks before dispatch. A starter without valid proof may still be submitted as ordinary homeowner text, but it does not receive app-authored deterministic-dispatch attribution.
+Landing starters have no source execution. They use a 15-minute server-signed starter token bound to the current user, session, property, starter/action id, operation and outcome registry versions, a preallocated `clientRequestId`, issued-at time, and expiry. The request must use that exact `clientRequestId`: the first submission creates the execution, an identical replay returns it, and a changed request id invalidates the token. The backend verifies the signature and scope, resolves the server-declared starter, and repeats eligibility checks before dispatch. A starter without valid proof may still be submitted as ordinary homeowner text, but it does not receive app-authored deterministic-dispatch attribution.
+
+Starter tokens use HMAC-SHA-256 with constant-time signature verification and a dedicated `ASK_SUGGESTED_ACTION_SIGNING_SECRET`; do not reuse `JWT_SECRET`. A versioned token header/claim identifies the active signing-key version. Deliberate rotation may accept the immediately previous key version for no longer than the 15-minute token lifetime. Implementation must add the new secret to `apps/backend/.env.example` and the deployed backend secret configuration. The secret is configuration, not a feature flag.
 
 Selection uses the ordinary `clientRequestId` as its idempotency key. Replaying the same request returns the same resulting execution. After successful completion, equivalent actions are suppressed by semantic identity unless the operation registry explicitly declares the outcome repeatable and current eligibility still allows it. Failed and cancelled results must persist their safe recovery actions in result JSON before those actions can be displayed.
 
@@ -213,6 +215,20 @@ operationId
 ```
 
 Do not infer an outcome from label or message. Each target operation declares its bounded outcome keys and tests their uniqueness. Different wording can represent the same action, and the same wording can target different entities.
+
+Action ids are deterministic hashes of a canonical serialization of:
+
+```text
+action schema version
++ sourceExecutionId
++ operationId
++ interactionType
++ propertyId
++ entityType/entityId
++ outcomeKey
+```
+
+Prefix the encoded hash with the action schema version. Do not include label, message, score, producer, timestamps, or array position. This keeps an action id stable when the same execution is refreshed or producer precedence changes, while any material target/outcome change receives a new id.
 
 ### 5.3 Producer inventory and failure isolation
 
@@ -302,7 +318,9 @@ Result-card and block actions publish the same semantic identity fields to respo
 
 ### 7.4 Pipeline placement and performance budget
 
-Run the shared pipeline from `executeOperation.ts`'s `finalize()` seam after the operation result, Skill handoff, and platform boundary state exist, replacing the current standalone `suppressRepeatedAskSuggestions` call before answer-trust validation. The finalized action set then flows through answer-trust validation and is persisted in `AskExecution.resultJson` before the response is returned. The execution id is already allocated before operation execution and is available for provenance. The orchestrator assembles one bounded evaluation context with batched property access, entity, health, pending-work, and recent-history data; producers must not perform unbounded per-candidate queries.
+Create one shared `finalizeSuggestedNextActions` service. The normal read path invokes it from `executeOperation.ts`'s `finalize()` seam after the operation result, Skill handoff, and platform boundary state exist, replacing the current standalone `suppressRepeatedAskSuggestions` call before answer-trust validation. The confirmation path invokes the same service in `askConfirm.ts` after the confirmed result and Skill handoff exist but before confirmed-completion validation and persistence. Confirmation expiry, confirmation conflict, retryable failure, terminal failure, cancellation, and other branches that display recovery actions also pass through the service before persisting those actions. No result may persist a newly produced compact action by bypassing this shared finalizer.
+
+The finalized action set flows through the applicable answer-trust validator and is persisted in `AskExecution.resultJson` before return. The execution id is already allocated before operation execution and is available for provenance. A refresh regenerates the set with deterministic ids and atomically replaces the stored offered-action ledger for that execution. An id removed by refresh becomes stale immediately and returns typed recovery if selected. The orchestrator assembles one bounded evaluation context with batched property access, entity, health, pending-work, and recent-history data; producers must not perform unbounded per-candidate queries.
 
 Initial implementation budgets:
 
@@ -383,6 +401,8 @@ Add focused modules under `apps/backend/src/services/ask/suggestedActions/`:
 - `suggestedNextActionPolicy.ts`
 - `suggestedNextActionRegistry.ts` for outcome keys, producer declarations, capture mappings, weights, and ranking policy version
 - `suggestedNextActionClock.ts` or an injected clock interface for deterministic creation/expiry and tests
+- `suggestedNextActionSigner.ts` for purpose-bound starter signing, verification, and key-version rotation
+- `finalizeSuggestedNextActions.ts` as the only persistence-boundary producer of compact actions
 
 Reuse rather than duplicate:
 
@@ -462,6 +482,7 @@ Exit:
 
 - Every newly produced compact follow-up is typed and auditable.
 - Arbitrary homeowner input remains unchanged.
+- Static validation and environment-independent tests—not production telemetry—show that every categorized compact producer and persistence seam is migrated.
 
 ## 10. Frontend implementation
 
@@ -477,7 +498,7 @@ Primary files:
 Requirements:
 
 - Render `label`, not the transcript message, on the chip/button.
-- On selection, submit `message`, `suggestedActionId`, and `suggestedActionFromExecutionId`; do not treat client-echoed operation/entity context as proof of authorship.
+- On follow-up selection, submit `message`, `suggestedActionId`, and `suggestedActionFromExecutionId`; on starter selection, submit the signed token and its bound preallocated `clientRequestId`. Do not treat client-echoed operation/entity context as proof of authorship.
 - Preserve the unrestricted composer beside or below the suggestions.
 - Do not auto-send merely because only one action exists.
 - Disable an action only while its own request is pending; do not globally disable unrelated text input longer than necessary.
@@ -486,6 +507,7 @@ Requirements:
 - Avoid rendering the same semantic action in both a result card and the follow-up row.
 - Hide or disable actions whose `expiresAt` has passed and refresh/recover through the server; never silently send expired actions as ordinary text.
 - Use server-returned presentation identities to suppress overlap with rich result-card and block actions.
+- A rich entity button retains the lifetime and revalidation rules of its existing card contract; expiry of a compact promoted copy does not disable the rich button.
 
 ## 11. Analytics and evaluation
 
@@ -571,6 +593,9 @@ Optimize for operation/entity precision and successful completion, not raw click
 - Historical string-only execution compatibility while retained.
 - Action expiry, forged selection, and cross-session/source-execution rejection.
 - Signed landing-starter verification, message-mismatch rejection, purged-source recovery, idempotent replay, and completed-equivalent suppression.
+- Deterministic action-id stability and atomic ledger replacement across refresh.
+- Rich entity buttons remain usable under their existing card contract independently of expiry of a compact promoted copy.
+- Retryable failure, terminal failure, confirmation expiry, confirmation conflict, and cancellation persist only shared-finalizer recovery actions.
 
 ### 12.5 Focused integrated journeys
 
@@ -631,7 +656,10 @@ The increment is complete when:
 - all newly produced compact next actions use the typed contract;
 - migrated actions reach the declared operation/entity without semantic reclassification;
 - every selected action is verified against the unexpired offered set stored on its source execution;
+- landing starters use dedicated-secret signed proof with a token-bound request id;
 - one server policy owns eligibility, ranking, and cross-surface deduplication;
+- normal, confirmation, failure, expiry/conflict, and cancellation persistence seams use the shared finalizer;
+- deterministic action ids remain stable across refresh and atomic ledger replacement invalidates removed ids;
 - outcome identity, capture routing, weights, tie-breaks, and domain freshness strategies are registered rather than inferred from prose;
 - stale, unauthorized, unavailable, and inapplicable actions fail safely;
 - the calm surface shows at most four concrete actions and avoids filler;
@@ -644,6 +672,6 @@ The increment is complete when:
 
 There are no real customers or production customer data. Do not add a feature flag, cohort rollout, canary, pilot, or runtime kill switch for this increment. Use the additive typed/string compatibility boundary to migrate producers incrementally while preserving historical reads.
 
-Rollback before Phase 5 is explicitly a code revert plus rebuild and redeploy: restore the affected producer's explicit string compatibility mapping while historical typed results remain readable. It is not an instant runtime switch. Phase 5 occurs only after all categorized compact producers are migrated and validation shows no unresolved selection-authorship, stale-action, or operation/entity precision defects.
+Rollback before Phase 5 is explicitly a code revert plus rebuild and redeploy: restore the affected producer's explicit string compatibility mapping while historical typed results remain readable. It is not an instant runtime switch. Phase 5 occurs only after all categorized compact producers and persistence seams are migrated and static validation, pure policy tests, frontend component tests, and environment-independent integrated journeys show no unresolved selection-authorship, stale-action, recovery, or operation/entity precision defects. This is repository validation evidence, not production-user telemetry.
 
 Verification follows repository policy: requirements review, Graphify/code-path tracing, contract inspection, static registry validation, pure policy tests, frontend component tests, and environment-independent integrated journeys. A later live-environment checklist may verify representative selection, stale recovery, confirmation, and analytics correlation when such an environment exists; unavailable local databases or browser infrastructure do not block implementation completion and must not be claimed as executed.

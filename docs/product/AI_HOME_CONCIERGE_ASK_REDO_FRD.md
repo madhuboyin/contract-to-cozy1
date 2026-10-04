@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.9"
+version: "1.10"
 date: "October 4, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.9 |
+| Version | 1.10 |
 | Date | October 4, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -1591,7 +1591,7 @@ The calm follow-up surface shows no more than four actions and should normally s
 
 Selecting a Suggested Next Action sends the natural-language message, action id, and source execution id. The backend verifies that the current user/session/property was offered that exact unexpired action in the persisted source execution, requires the submitted message to match, and uses the server-stored message, operation, entity context, outcome key, and provenance. The ordinary client request id makes selection idempotent. Client-supplied operation/entity values do not prove app authorship. Missing or purged sources and invalid, forged, expired, mismatched, or cross-scope selections return typed recovery and are not silently semantically rerouted. The backend repeats operation registration, property access, role, applicability, entity, freshness, safety, and confirmation checks before returning or changing anything.
 
-Landing starters use a short-lived server-signed proof bound to user, session, property, starter id, registry versions, and expiry because no source execution exists yet. Existing rich entity item actions retain their current operation/entity launch contract; a compact promoted equivalent uses the verified ledger path. Navigation links and result-local filters retain their own contracts and publish semantic identity only for deduplication.
+Landing starters use a 15-minute HMAC-SHA-256 proof bound to user, session, property, starter id, registry versions, a preallocated client request id, issued-at time, and expiry because no source execution exists yet. The dedicated `ASK_SUGGESTED_ACTION_SIGNING_SECRET` is separate from JWT signing; the token-bound request id makes identical replay return the same execution and rejects a changed id. Existing rich entity item actions retain their current operation/entity launch contract and card lifetime; expiry of a compact promoted equivalent does not disable the rich action. Navigation links and result-local filters retain their own contracts and publish semantic identity only for deduplication.
 
 The unrestricted composer remains visible and usable whenever the execution state safely permits input. A homeowner-entered message is not required to match, reference, or derive from a displayed action.
 
@@ -1599,11 +1599,15 @@ The unrestricted composer remains visible and usable whenever the execution stat
 
 One server-owned policy must deduplicate semantic destinations across operation suggestions, entity actions, block actions, Skill handoffs, capability cards, receipt continuations, recovery actions, and landing starters. Identity is built from registered operation, interaction type, property/entity, and outcome key, never from label/message similarity. Rich-card actions publish that identity even when they stay in their richer renderer. When candidates converge, the highest-priority eligible candidate wins and retains the combined provenance needed for audit.
 
-The pipeline runs from `executeOperation.ts`'s `finalize()` seam before answer-trust validation, persistence, and return, replacing standalone string suppression. It uses bounded batch-loaded evaluation context and degrades by dropping/reporting a failed nonessential producer rather than failing the answer or application startup. An injected clock governs action creation and expiry. Phase 3 cannot begin until weights/thresholds, latency/query limits, the domain freshness matrix, missing-fact capture mappings, TTL rules, and stable producer precedence are approved and tested. A distinct selection id links the verified offered action to the resulting execution for outcome measurement; existing source-refresh and Skill-handoff identifiers keep their current meanings.
+Action ids are version-prefixed deterministic hashes of source execution, operation, interaction type, property/entity, and outcome key. They exclude copy, score, producer, timestamps, and array position. Refresh atomically replaces the execution's offered-action ledger with regenerated stable ids; removed ids become stale immediately.
+
+One shared `finalizeSuggestedNextActions` service runs from `executeOperation.ts`'s `finalize()` seam before answer-trust validation and from `askConfirm.ts` before confirmed-completion validation. Confirmation expiry/conflict, retryable/terminal failure, cancellation, and every other persistence branch that emits recovery actions must also use it; no seam may produce compact actions independently. It uses bounded batch-loaded evaluation context and degrades by dropping/reporting a failed nonessential producer rather than failing the answer or application startup. An injected clock governs action creation and expiry. Phase 3 cannot begin until weights/thresholds, latency/query limits, the domain freshness matrix, missing-fact capture mappings, TTL rules, and stable producer precedence are approved and tested. A distinct selection id links the verified offered action to the resulting execution for outcome measurement; existing source-refresh and Skill-handoff identifiers keep their current meanings.
 
 Selection, source-execution, and resulting-execution ids are restricted operational telemetry. They follow Ask retention/deletion, are excluded from general analytics exports, and are not joined with raw messages or entity ids in general analytics.
 
 There are no real customers or production customer data. This Suggested Next Action increment therefore adds no feature flag, cohort, canary, pilot, or runtime kill switch. Migration uses additive typed/string compatibility; rollback before legacy string production is removed is a code revert plus rebuild and redeploy.
+
+Removal of legacy string production is gated by static validation, pure policy tests, frontend component tests, and environment-independent integrated journeys across every producer and persistence seam. This is repository validation evidence, not production-user telemetry.
 
 ### 27.8 Loading and streaming
 
@@ -2143,6 +2147,9 @@ Include cross-property access, hidden prompt extraction, document injection, mod
 - Every selected Suggested Next Action is verified against the unexpired offered set persisted on its source execution; a client cannot establish app authorship by supplying an operation id.
 - Selecting a Suggested Next Action reaches its intended operation and entity without depending on semantic reclassification, while all normal authorization and confirmation checks still run.
 - Outcome identity, missing-context capture routing, deterministic ranking weights/tie-breaks, and domain freshness strategies are registered and testable.
+- Normal answers, confirmed receipts, expiry/conflict, retryable/terminal failure, and cancellation all use the same Suggested Next Action finalizer before persisting compact actions.
+- Deterministic action ids remain stable across refresh while the refreshed ledger atomically invalidates removed actions.
+- Signed landing starters use a dedicated signing secret, 15-minute expiry, and token-bound client request id.
 - Duplicate semantic destinations are not shown simultaneously across follow-up chips, entity actions, Skill handoffs, capability recommendations, and landing starters.
 - Out-of-scope coding prompts do not reach a code-execution or general coding response.
 
