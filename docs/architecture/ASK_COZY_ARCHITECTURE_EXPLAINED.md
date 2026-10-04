@@ -1,6 +1,6 @@
 # How Ask Cozy Works: Orchestrator, Adapters, Skills and Friends
 
-An easy-to-read guide to the main moving parts behind Ask Cozy. It was written from reading the code under `apps/backend/src/services/ask/`, `apps/backend/src/services/skills/` and related folders (2026-10-02). It describes how the code is structured, not how it behaves in production.
+An easy-to-read guide to the main moving parts behind Ask Cozy. It was updated from the code under `apps/backend/src/services/ask/`, `apps/backend/src/services/skills/`, `apps/frontend/src/components/ask/` and related folders on 2026-10-03. It describes code-traced behavior and focused static-test evidence, not observed production behavior.
 
 ## The big picture
 
@@ -220,14 +220,14 @@ How to read the tables:
 | Operation | Adapter | Kind | Min role | What it does |
 | --- | --- | --- | --- | --- |
 | `PROPERTY_SUMMARY` | `property.summary` | READ | Viewer | Review the home record, including missing or incomplete details |
-| `INVENTORY_LOOKUP` | `inventory.lookup` | READ | Viewer | Look up appliance, system, or equipment details |
+| `INVENTORY_LOOKUP` | `inventory.lookup` | READ | Viewer | Look up inventory details and select an incomplete canonical record before adding or correcting supported fields |
 | `HOME_CHANGE_SUMMARY` | `home-change.summary` | READ | Viewer | Review what changed in the home record |
-| `INVENTORY_ITEM_CORRECT` | `inventory.item-correct` | WRITE | Contributor | Fix a wrong date recorded on an inventory item |
+| `INVENTORY_ITEM_CORRECT` | `inventory.item-correct` | WRITE | Contributor | Correct one confirmed inventory field: name, lifecycle dates, condition, brand, model, serial number, costs, notes, category, or room |
 | `HOME_EVENT_CORRECT` | `home-event.correct` | WRITE | Contributor | Correct the title or date of a recorded home timeline event |
 | `HOME_EVENT_VISIBILITY` | `home-event.visibility` | WRITE | Contributor | Change who can see a recorded home timeline event |
 | `WARRANTY_CORRECT` | `warranty.correct` | WRITE | Contributor | Fix a wrong provider or date recorded on a warranty you added |
-| `ROOM_RENAME` | `room.rename` | WRITE | Contributor | Rename a recorded room |
-| `ROOM_CREATE` | `room.create` | WRITE | Contributor | Add a new room to the home record |
+| `ROOM_RENAME` | `room.rename` | WRITE | Contributor | Correct one confirmed room field: name, room type, or floor level |
+| `ROOM_CREATE` | `room.create` | WRITE | Contributor | Add a room with a confirmed name, type, and optional floor level, without leaving Ask |
 | `INVENTORY_ITEM_CREATE` | `inventory.create` | WRITE | Contributor | Add a new item to the home inventory |
 | `PROPERTY_CONTEXT_AREA_CAPTURE` | `property-context.area-capture` | WRITE | Contributor | Fill in a missing home record detail for one area of the property summary |
 
@@ -535,11 +535,11 @@ These are platform-level operations: safety boundaries, discovery, the general-g
 
 After an answer, Ask can show clickable follow-up prompts. There are three separate sources, and only the first is listed per operation below:
 
-1. **Suggestion chips from the operation itself.** Each handler returns a `suggestions` list of short prompts. Clicking one sends it as a new question that goes through normal routing. Repeats of the current or a recently completed question are removed by `askSuggestionPolicy.ts`.
+1. **Suggestion chips from the operation itself.** Each handler returns a `suggestions` list of short prompts. Clicking one sends it as a new question that goes through normal routing. The calm frontend docks at most four suggestions from the latest answer above the composer and removes questions already asked. Backend repeat suppression separately removes the current or recently completed question through `askSuggestionPolicy.ts`.
 2. **Skill handoffs.** A small allowlist of "after X, offer Y" transitions (9 today, listed at the end of this section). They are drawn as a draftable next question and never run anything by themselves.
 3. **Dynamic next actions.** `askNextActions.ts` adds governed capability recommendations and missing-fact capture cards, ranked per user and home. These cannot be listed per operation because they depend on the home record.
 
-**How this list was built.** It was extracted from the source by parsing each handler and following the functions it calls (static analysis, 2026-10-02). Nothing was executed against real data, so treat it as the set of prompts an operation *can* offer, not what a given user sees:
+**How this list was built.** It was extracted from the source by parsing each handler and following the functions it calls (static analysis, updated 2026-10-03). Nothing was executed against real data, so treat it as the set of prompts an operation *can* offer, not what a given user sees:
 
 - Each operation lists prompts from every branch of its handler, including empty states, errors and permission messages.
 - A prompt shown as ‹…› contains a value filled in at runtime, such as a task or appliance name.
@@ -548,6 +548,33 @@ After an answer, Ask can show clickable follow-up prompts. There are three separ
 - Generic messages shared by every operation (feature switched off, property needed, permission denied) are left out.
 - "After confirming" lists prompts from the confirm step of a write operation.
 - Boundary operations list safety instructions in this field instead of questions.
+
+### Inventory missing-details continuation
+
+The inventory follow-up is a useful example of why a suggestion is not automatically a write:
+
+1. `inventory.handler.ts` emits **Add or update missing details** only when the current result contains an incomplete matching record and the household role is Contributor or Owner. Viewers can still read the result but receive no write-oriented suggestion.
+2. The exact first-party phrase has a dedicated deterministic routing rule ahead of inventory creation. It resolves to the read operation `INVENTORY_LOOKUP` with high confidence; the word “Add” therefore cannot accidentally start `INVENTORY_ITEM_CREATE`.
+3. `isIncompleteInventoryRequest` treats the continuation as the incomplete-record view. The handler returns canonical `INVENTORY_ITEM` ids, and the homeowner selects an item before any field-level operation is offered.
+4. For this continuation, item actions are narrowed to fields that are both absent and supported by `INVENTORY_ITEM_CORRECT`: brand, model, serial number and purchase date. Ordinary inventory detail may still offer the operation's wider correction set.
+5. Opening item detail re-reads the canonical inventory record. Selecting a correction starts the existing review-and-confirm path; `INVENTORY_ITEM_CORRECT` performs the write only after role and record version are checked again.
+6. Documents and coverage use different owners. A missing document uses the existing evidence attachment control and `CAPTURE_EVIDENCE_CONFIRM`. Coverage evidence cannot be edited through `INVENTORY_ITEM_CORRECT`, so the answer discloses the Home Inventory boundary instead of pretending the generic follow-up can complete it.
+
+This is a bounded read → identity selection → declared write sequence. The suggestion text supplies intent, while typed entity identity, authorization and confirmation still govern the consequential action.
+
+### Room workflows stay inside Ask
+
+Rooms use `PROPERTY_SUMMARY` for the read surface and two confirmation-gated Property Record operations for writes:
+
+1. **Focused room read.** “Show my rooms” deterministically routes to `PROPERTY_SUMMARY` and returns the focused room map, not a semantic clarification or an automatic trip to the Rooms page. The map groups canonical `INVENTORY_ROOM` records by stored floor, shows item and open-task counts, and can switch to a list without issuing another request.
+2. **Live room detail.** Opening a room re-reads its canonical room insights inline. Contributor-and-up users receive three declared actions—**Rename room**, **Change room type**, and **Change floor level**—plus **Add an item** pinned to that room. Viewers receive the read result without these write controls.
+3. **Correcting a room.** All three field actions use the existing `ROOM_RENAME` operation. The operation name is historical; its proposal now records a `field` of `name`, `type`, or `floorLevel`. A missing or ambiguous room produces a bounded canonical-room selection before Ask prepares a change.
+4. **Field rules.** A name is trimmed, limited to 80 characters, and unique within the property. Type is selected from the ten canonical room types. Floor level is a whole number from −5 through 50; `0` is ground level and negative values are below ground. Floor level cannot currently be cleared inline.
+5. **Confirmed canonical write.** The proposal writes nothing. Confirmation rechecks the Contributor role, the room's `id:updatedAt` freshness version and the field value, then sends a patch containing only that field through `inventoryService.updateRoom`. A replay whose value is already present is reported as already corrected rather than written again.
+6. **Adding a room.** `ROOM_CREATE` collects the name, canonical type and optional floor level, then shows a review card and requires confirmation. Its form, duplicate-name response, review and receipt do not use an “Open Rooms” escape hatch. The completion and viewer boundary instead suggest **Show my rooms**, returning to the focused inline room map.
+7. **Reconciliation and boundaries.** Room creation and correction reconcile both `PROPERTY_SUMMARY` and `INVENTORY_LOOKUP`, because inventory rows can display room names. The traditional room record remains available as a secondary detail link. Deleting a room, changing sort order, editing its profile or hero image, and clearing floor level are outside these Ask operations.
+
+This follows the same read → exact entity → declared operation → review → confirm pattern as inventory corrections, while keeping the normal room journey inside the conversation.
 
 ### Suggestions by operation
 
@@ -590,14 +617,14 @@ After an answer, Ask can show clickable follow-up prompts. There are three separ
 | Operation | Suggested follow-ups |
 | --- | --- |
 | `PROPERTY_SUMMARY` | “Summarize my home record”<br>“Show incomplete inventory records”<br>“List pending maintenance tasks”<br>“What details are missing?”<br>“Show me my home by room.”<br>“What changed recently?” |
-| `INVENTORY_LOOKUP` | “Open home inventory”<br>“List all inventory items”<br>“Show incomplete inventory records”<br>“Which systems are nearing end of life?”<br>“List all appliances” |
+| `INVENTORY_LOOKUP` | “Add or update missing details” (Contributor or Owner only, and only when a matching record is incomplete)<br>“Open home inventory”<br>“List all inventory items”<br>“Show incomplete inventory records”<br>“Which systems are nearing end of life?”<br>“List all appliances” |
 | `HOME_CHANGE_SUMMARY` | “Summarize my home record”<br>“What should I do next?” |
-| `INVENTORY_ITEM_CORRECT` | “Correct the install date of ‹…› (one per item)”<br>“Correct the install date of ‹…›”<br>“Correct the purchase date of ‹…›”<br>**After confirming:** “Show my home inventory” |
+| `INVENTORY_ITEM_CORRECT` | Ordinary item detail can declare corrections for name, install/purchase/service dates, condition, brand, model, serial number, purchase/replacement costs, notes, category and room. The missing-details continuation narrows these to “Add brand”, “Add model”, “Add serial number” and “Add purchase date” only when each field is absent.<br>**After confirming:** “Show my home inventory” |
 | `HOME_EVENT_CORRECT` | “Correct the title of the timeline event ‹…› (one per item)”<br>“Correct the title of the timeline event ‹…›”<br>“Correct the date of the timeline event ‹…›” |
 | `HOME_EVENT_VISIBILITY` | “Change the visibility of the timeline event ‹…› (one per item)”<br>**After confirming:** “Show my home timeline” |
 | `WARRANTY_CORRECT` | “Correct the expiry date of the ‹…› warranty (one per item)”<br>“Correct the provider of the ‹…› warranty”<br>“Correct the expiry date of the ‹…› warranty”<br>**After confirming:** “Show my warranties” |
-| `ROOM_RENAME` | “Rename ‹…›”<br>“Change the ‹…› of ‹…›”<br>**After confirming:** “Show my rooms” |
-| `ROOM_CREATE` | “Show my rooms” |
+| `ROOM_RENAME` | Declared room actions: “Rename this room.”, “Change the type of this room.”, and “Change the floor level of this room.” If no exact room is resolved, Ask suggests up to three canonical-room prompts such as “Rename Kitchen” or “Change the floor level of Guest room”.<br>**After confirming:** “Show my rooms” |
+| `ROOM_CREATE` | Viewer permission boundary and completion receipt: “Show my rooms”. The form and review steps keep the workflow inline and declare no traditional-page suggestion. |
 | `INVENTORY_ITEM_CREATE` | “Show my inventory”<br>**After confirming:** “Show my home inventory” |
 | `PROPERTY_CONTEXT_AREA_CAPTURE` | “How complete is my home record?” |
 
@@ -938,6 +965,8 @@ The web app renders the typed answer blocks the backend returns. It does not dec
 
 - `components/ask/AskWorkspace.tsx` is the chat workspace, with `components/ask/calm/` for the calmer landing shell.
 - `components/ask/blocks/` and `patterns/` render summaries, grouped lists, evidence panels, confirmation cards and clarification choices.
+- `components/ask/InventoryResultList.tsx` opens canonical item detail inline. In an incomplete-record continuation it receives only missing supported correction actions, still exposes document attachment for authorized users even when no scalar field is missing, and leaves coverage-link editing to Home Inventory.
+- `components/ask/RoomResultList.tsx` renders the focused room map or list, re-fetches canonical room detail inline, dispatches the three server-declared room corrections with exact room identity, and starts item creation already scoped to the selected room.
 - `features/ask/` holds client logic: result view state, follow-ups, skill handoff chips and conversational capture.
 
 ## Worked example and glossary
@@ -950,6 +979,24 @@ The web app renders the typed answer blocks the backend returns. It does not dec
 4. `capabilityInvoke` checks the kill-switches and that you are at least a Contributor, then runs the `maintenance.complete` adapter.
 5. The adapter prepares the change and returns `NEEDS_CONFIRMATION`. Nothing is written yet.
 6. You tap Confirm. The confirm handler re-checks role and task version, completes the task through the maintenance service, and the card refreshes.
+
+**Example: “Add or update missing details.”**
+
+1. The previous inventory answer must contain at least one incomplete matching record, and only a Contributor or Owner receives this suggested question.
+2. Deterministic routing chooses `INVENTORY_LOOKUP`, not item creation or a blind correction.
+3. The inventory handler returns the incomplete collection with canonical item ids. The homeowner opens the intended record inline.
+4. Ask offers only that record's missing supported fields. Choosing “Add brand”, for example, declares `INVENTORY_ITEM_CORRECT` with the exact item id.
+5. The correction card re-reads the item, shows the current and proposed value, and writes nothing until confirmation.
+6. Missing documents use evidence attachment. Missing coverage evidence is disclosed as a Home Inventory task because it is outside the correction operation's contract.
+
+**Example: “Change the floor level of the guest room.”**
+
+1. Deterministic routing chooses `ROOM_RENAME`; a read-only question such as “What floor is the guest room on?” does not.
+2. Ask resolves the canonical room by id from the declared room action or by exact room name. If it cannot, it returns a room-selection question and changes nothing.
+3. The proposal starts with the recorded floor value and accepts a whole number from −5 through 50. It normalizes equivalent input such as `01` to `1`.
+4. The review card names the room, current value and proposed value. Nothing is saved before confirmation.
+5. Confirmation rechecks room existence, freshness and validation, writes only `{ floorLevel }`, and marks dependent analyses for refresh.
+6. Property Summary and Inventory results reconcile, and the receipt offers “Show my rooms” to return to the inline room map.
 
 **Glossary**
 
