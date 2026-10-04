@@ -2,7 +2,10 @@
 // [] unless it can name a precise, executable target; the finalizer then runs them in SAFE_RECOVERY_ONLY (the result status is a
 // recovery status), so authorization, health, applicability, existence and freshness are all re-checked. Retryable failures are
 // deliberately absent: the existing "Try again with current records" button (retryAskExecution) already covers them.
+import { logger } from '../../../lib/logger';
+import { askSuggestedActionsProducerFailuresTotal } from '../../../lib/metrics';
 import { prisma } from '../../../lib/prisma';
+import { visibleInventoryItemWhere } from '../../riskAssetApplicability';
 import type { AskOperationResult } from '../askOperationRegistry';
 import { DEFAULT_CANDIDATE_SIGNALS, type SuggestedNextActionCandidate } from './suggestedNextActionCandidate';
 import { inventoryItemContextVersion } from './domainVersions';
@@ -65,7 +68,7 @@ export async function reviewCurrentInventoryItemCandidates(input: {
 }): Promise<SuggestedNextActionCandidate[]> {
   if (!input.propertyId || !input.itemId) return [];
   const item = await prisma.inventoryItem.findFirst({
-    where: { id: input.itemId, propertyId: input.propertyId }, select: { id: true, name: true, updatedAt: true },
+    where: { id: input.itemId, propertyId: input.propertyId, ...visibleInventoryItemWhere() }, select: { id: true, name: true, updatedAt: true },
   });
   return item ? reviewCurrentInventoryItemCandidate(item, { propertyId: input.propertyId, sourceOperationId: input.sourceOperationId }) : [];
 }
@@ -73,7 +76,7 @@ export async function reviewCurrentInventoryItemCandidates(input: {
 /**
  * Runs recovery candidates through the shared finalizer and returns the persisted ledger. `message` is passed empty on purpose:
  * a restart action intentionally repeats the stored message, which the "already asked" history rule would otherwise suppress.
- * Never throws: the finalizer drops failures, and a failed candidate load simply means no chip.
+ * Never throws: a failure means no chip, but it is logged and counted so it is distinguishable from an intentional no-chip decision.
  */
 export async function finalizeRecoveryActions(input: {
   status: string; executionId: string; userId: string; sessionId: string; propertyId: string | null;
@@ -88,7 +91,9 @@ export async function finalizeRecoveryActions(input: {
       operationId: input.operationId, message: '', completedSemanticKeyHashes: new Set(),
     });
     return result.suggestedNextActions ?? [];
-  } catch {
+  } catch (error) {
+    askSuggestedActionsProducerFailuresTotal.inc({ producer: 'platform.recovery', reason: 'ERROR' });
+    logger.warn({ err: error, executionId: input.executionId, operationId: input.operationId }, '[ask-suggested-actions] recovery actions dropped');
     return [];
   }
 }
