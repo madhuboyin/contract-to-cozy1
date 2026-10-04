@@ -35,15 +35,6 @@ export function deriveSuggestedNextActionId(sourceExecutionId: string, fields: S
 }
 
 /**
- * Landing-starter id (plan §5.2): there is no source execution, so the registered starter identity replaces it. User and
- * session are security claims in the signed token, deliberately not id inputs. The id is not a ledger key.
- */
-export function deriveLandingStarterActionId(starterRegistryId: string, fields: Pick<SuggestedNextActionIdentityFields, 'operationId' | 'interactionType' | 'propertyId' | 'outcomeKey'>): string {
-  const serialized = canonical([SUGGESTED_NEXT_ACTION_SCHEMA_VERSION, starterRegistryId, fields.operationId, fields.interactionType, fields.propertyId, fields.outcomeKey]);
-  return `${SUGGESTED_NEXT_ACTION_SCHEMA_VERSION}.${encode(serialized)}`;
-}
-
-/**
  * Non-reversible form of the semantic key for telemetry/history: lets "this outcome was already completed" be recognised
  * across executions without persisting an entity id outside the ledger itself.
  */

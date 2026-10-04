@@ -11,16 +11,13 @@ const {
   readStoredSuggestedNextActions, effectiveSuggestedActionExpiryMs, SUGGESTED_NEXT_ACTION_DEFAULT_TTL_MS,
 } = require('../../src/services/ask/suggestedActions/suggestedNextAction.contract.ts');
 const {
-  deriveSuggestedNextActionId, deriveLandingStarterActionId, suggestedNextActionSemanticKey, suggestedNextActionSemanticKeyHash,
+  deriveSuggestedNextActionId, suggestedNextActionSemanticKey, suggestedNextActionSemanticKeyHash,
 } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
-const {
-  signStarterToken, verifyStarterToken, readSigningKeyring, isStarterSigningConfigured, resetSigningDiagnosticsForTests, STARTER_TOKEN_TTL_MS,
-} = require('../../src/services/ask/suggestedActions/suggestedNextActionSigner.ts');
 const { resolveSuggestedActionSelection } = require('../../src/services/ask/suggestedActions/suggestedNextActionSelection.ts');
 const { fixedSuggestedNextActionClock } = require('../../src/services/ask/suggestedActions/suggestedNextActionClock.ts');
 const { mapExplicitSuggestionStrings } = require('../../src/services/ask/suggestedActions/suggestedNextActionCompatibility.ts');
 
-// ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN Phase 1: contract, deterministic ids, selection proof, starter signing.
+// ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN Phase 1: contract, deterministic ids, selection proof.
 
 const NOW = new Date('2026-10-04T12:00:00.000Z');
 const clock = fixedSuggestedNextActionClock(NOW);
@@ -52,9 +49,6 @@ const withFindFirst = async (impl, fn) => {
   try { return await fn(); } finally { prisma.askExecution.findFirst = original; }
 };
 
-const SECRET = 'a'.repeat(40);
-const env = { ASK_SUGGESTED_ACTION_SIGNING_SECRET: SECRET, ASK_SUGGESTED_ACTION_SIGNING_KEY_VERSION: '1' };
-
 // ---- contract --------------------------------------------------------------------------------------------------------
 
 test('a well-formed action parses; NAVIGATE/FILTER_RESULT, UNAVAILABLE and malformed ids do not', () => {
@@ -82,16 +76,14 @@ test('default lifetimes follow the plan: 30 minutes to write or start, 24 hours 
   assert.equal(SUGGESTED_NEXT_ACTION_DEFAULT_TTL_MS.CONVERSATION_CONTINUE, 24 * 60 * 60_000);
 });
 
-test('the selection carries exactly one proof, and the request schema accepts it without any client operation/entity', () => {
+test('the selection names the offered action and its source execution; the request schema accepts it without any client operation/entity', () => {
   const id = action().id;
   assert.ok(SuggestedNextActionSelectionSchema.safeParse({ suggestedActionId: id, suggestedActionFromExecutionId: 'exec-1', message: 'm' }).success);
-  assert.ok(SuggestedNextActionSelectionSchema.safeParse({ suggestedActionId: id, signedStarterToken: 'tok', message: 'm' }).success);
-  assert.ok(!SuggestedNextActionSelectionSchema.safeParse({ suggestedActionId: id, message: 'm' }).success, 'no proof');
-  assert.ok(!SuggestedNextActionSelectionSchema.safeParse({ suggestedActionId: id, suggestedActionFromExecutionId: 'e', signedStarterToken: 't', message: 'm' }).success, 'two proofs');
+  assert.ok(!SuggestedNextActionSelectionSchema.safeParse({ suggestedActionId: id, message: 'm' }).success, 'no source execution');
   assert.ok(!SuggestedNextActionSelectionSchema.safeParse({ suggestedActionId: id, suggestedActionFromExecutionId: 'e', message: 'm', operationId: 'X' }).success, 'client operation is rejected, not ignored');
+  assert.ok(!SuggestedNextActionSelectionSchema.safeParse({ suggestedActionId: id, suggestedActionFromExecutionId: 'e', signedStarterToken: 't', message: 'm' }).success, 'no starter tokens exist');
   const request = CreateAskExecutionRequestSchema.safeParse({ clientRequestId: 'c', sessionId: 's', message: 'm', suggestedActionSelection: { suggestedActionId: id, suggestedActionFromExecutionId: 'e', message: 'm' } });
   assert.ok(request.success);
-  assert.equal(request.data.suggestedActionSelection.signedStarterToken, null);
 });
 
 test('historical results without typed actions read as empty, and a corrupt ledger entry is dropped rather than trusted', () => {
@@ -132,109 +124,13 @@ test('canonical serialization cannot collide two different tuples through a deli
   assert.notEqual(suggestedNextActionSemanticKeyHash({ ...identity, entityType: 'A|B', entityId: 'C' }), suggestedNextActionSemanticKeyHash({ ...identity, entityType: 'A', entityId: 'B|C' }));
 });
 
-test('a landing-starter id comes from the registered starter identity, not from user or session', () => {
-  const fields = { operationId: 'HOME_ACTIONS', interactionType: 'CONVERSATION_CONTINUE', propertyId: 'prop-1', outcomeKey: 'REVIEW_PRIORITIES' };
-  const id = deriveLandingStarterActionId('starter.priorities', fields);
-  assert.equal(id, deriveLandingStarterActionId('starter.priorities', { ...fields }));
-  assert.notEqual(id, deriveLandingStarterActionId('starter.other', fields));
-  assert.notEqual(id, deriveSuggestedNextActionId('starter.priorities', { ...fields, entityType: null, entityId: null }), 'a starter id is not interchangeable with an execution-ledger id');
-  assert.ok(SuggestedNextActionSchema.safeParse(action({ id })).success);
-});
-
-// ---- signer ----------------------------------------------------------------------------------------------------------
-
-const expectation = (overrides = {}) => ({ userId: 'u1', sessionId: 's1', propertyId: 'prop-1', clientRequestId: 'crid-1', actionId: 'v1.' + 'a'.repeat(32), now: NOW, ...overrides });
-const mint = (overrides = {}, e = env) => signStarterToken({ userId: 'u1', sessionId: 's1', propertyId: 'prop-1', starterRegistryId: 'starter.priorities', actionId: 'v1.' + 'a'.repeat(32), clientRequestId: 'crid-1', now: NOW, ...overrides }, e);
-
-test('a starter token round-trips and carries its starter identity', () => {
-  const token = mint();
-  const verified = verifyStarterToken(token, expectation(), env);
-  assert.equal(verified.ok, true);
-  assert.equal(verified.claims.stid, 'starter.priorities');
-  assert.equal(verified.claims.exp - verified.claims.iat, STARTER_TOKEN_TTL_MS);
-  assert.equal(STARTER_TOKEN_TTL_MS, 15 * 60_000);
-});
-
-test('every scope binding is enforced: user, session, property, request id, action, and expiry', () => {
-  const token = mint();
-  const reason = (overrides) => verifyStarterToken(token, expectation(overrides), env).reason;
-  assert.equal(reason({ userId: 'u2' }), 'USER_MISMATCH');
-  assert.equal(reason({ sessionId: 's2' }), 'SESSION_MISMATCH');
-  assert.equal(reason({ propertyId: 'prop-2' }), 'PROPERTY_MISMATCH');
-  assert.equal(reason({ propertyId: null }), 'PROPERTY_MISMATCH');
-  assert.equal(reason({ clientRequestId: 'crid-2' }), 'REQUEST_ID_MISMATCH', 'a changed request id invalidates the token');
-  assert.equal(reason({ actionId: 'v1.' + 'b'.repeat(32) }), 'ACTION_MISMATCH');
-  assert.equal(reason({ now: new Date(NOW.getTime() + STARTER_TOKEN_TTL_MS) }), 'EXPIRED');
-  assert.equal(reason({ now: new Date(NOW.getTime() + STARTER_TOKEN_TTL_MS - 1) }), undefined);
-  assert.equal(verifyStarterToken(mint({ propertyId: null }), expectation({ propertyId: null }), env).ok, true, 'a property-less starter binds null');
-});
-
-test('tampering, truncation, a different secret and garbage are all rejected', () => {
-  const token = mint();
-  const [payload, signature] = token.split('.');
-  const forgedClaims = JSON.parse(Buffer.from(payload, 'base64url').toString());
-  forgedClaims.uid = 'u2';
-  const forged = `${Buffer.from(JSON.stringify(forgedClaims)).toString('base64url')}.${signature}`;
-  assert.equal(verifyStarterToken(forged, expectation({ userId: 'u2' }), env).reason, 'BAD_SIGNATURE');
-  assert.equal(verifyStarterToken(`${payload}.${signature.slice(0, -2)}`, expectation(), env).reason, 'BAD_SIGNATURE');
-  assert.equal(verifyStarterToken(token, expectation(), { ...env, ASK_SUGGESTED_ACTION_SIGNING_SECRET: 'b'.repeat(40) }).reason, 'BAD_SIGNATURE');
-  for (const garbage of ['', 'x', 'a.b.c', '.', 'a.', '.b', '%%%.%%%']) assert.ok(['MALFORMED', 'BAD_SIGNATURE'].includes(verifyStarterToken(garbage, expectation(), env).reason), garbage);
-});
-
-test('a token minted for a different purpose cannot verify even when correctly signed with the same secret', () => {
-  const { createHmac } = require('node:crypto');
-  const claims = { p: 'something-else', kv: '1', rv: '1', uid: 'u1', sid: 's1', pid: 'prop-1', stid: 'x', aid: 'v1.' + 'a'.repeat(32), crid: 'crid-1', iat: NOW.getTime(), exp: NOW.getTime() + 1000 };
-  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
-  const token = `${payload}.${createHmac('sha256', SECRET).update(payload).digest('base64url')}`;
-  assert.equal(verifyStarterToken(token, expectation(), env).reason, 'WRONG_PURPOSE');
-});
-
-test('a token cannot claim a lifetime longer than one token lifetime, even correctly signed', () => {
-  const { createHmac } = require('node:crypto');
-  const claims = { p: 'ask-suggested-action-starter', kv: '1', rv: '1', uid: 'u1', sid: 's1', pid: 'prop-1', stid: 'x', aid: 'v1.' + 'a'.repeat(32), crid: 'crid-1', iat: NOW.getTime(), exp: NOW.getTime() + 24 * 60 * 60_000 };
-  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
-  const token = `${payload}.${createHmac('sha256', SECRET).update(payload).digest('base64url')}`;
-  assert.equal(verifyStarterToken(token, expectation(), env).reason, 'EXPIRED');
-});
-
-test('rotation: the previous key verifies old tokens, the active key signs new ones, an unknown version is rejected', () => {
-  const oldEnv = { ASK_SUGGESTED_ACTION_SIGNING_SECRET: 'o'.repeat(40), ASK_SUGGESTED_ACTION_SIGNING_KEY_VERSION: '1' };
-  const rotated = {
-    ASK_SUGGESTED_ACTION_SIGNING_SECRET: 'n'.repeat(40), ASK_SUGGESTED_ACTION_SIGNING_KEY_VERSION: '2',
-    ASK_SUGGESTED_ACTION_SIGNING_SECRET_PREVIOUS: 'o'.repeat(40), ASK_SUGGESTED_ACTION_SIGNING_KEY_VERSION_PREVIOUS: '1',
-  };
-  const oldToken = mint({}, oldEnv);
-  assert.equal(verifyStarterToken(oldToken, expectation(), rotated).ok, true, 'previous key still honored');
-  const newToken = mint({}, rotated);
-  assert.equal(JSON.parse(Buffer.from(newToken.split('.')[0], 'base64url').toString()).kv, '2');
-  assert.equal(verifyStarterToken(newToken, expectation(), rotated).ok, true);
-  assert.equal(verifyStarterToken(oldToken, expectation(), { ...rotated, ASK_SUGGESTED_ACTION_SIGNING_SECRET_PREVIOUS: undefined }).reason, 'UNKNOWN_KEY_VERSION', 'previous key dropped');
-  // The 15-minute claim lifetime still caps an old-key token during the overlap.
-  assert.equal(verifyStarterToken(oldToken, expectation({ now: new Date(NOW.getTime() + STARTER_TOKEN_TTL_MS + 1) }), rotated).reason, 'EXPIRED');
-});
-
-test('missing, short, or template-placeholder secrets degrade instead of throwing: signing returns null, verification rejects', () => {
-  for (const bad of [{}, { ASK_SUGGESTED_ACTION_SIGNING_SECRET: '' }, { ASK_SUGGESTED_ACTION_SIGNING_SECRET: 'short' }, { ASK_SUGGESTED_ACTION_SIGNING_SECRET: 'replace-with-openssl-rand-hex-32' }, { ASK_SUGGESTED_ACTION_SIGNING_SECRET: 'changeme-use-openssl-rand-hex-32' }, { ASK_SUGGESTED_ACTION_SIGNING_SECRET: SECRET, ASK_SUGGESTED_ACTION_SIGNING_KEY_VERSION: 'bad version!' }]) {
-    resetSigningDiagnosticsForTests();
-    assert.equal(isStarterSigningConfigured(bad), false);
-    assert.equal(readSigningKeyring(bad).active, null);
-    assert.equal(mint({}, bad), null);
-    assert.equal(verifyStarterToken(mint(), expectation(), bad).reason, 'NOT_CONFIGURED');
-  }
-  assert.equal(isStarterSigningConfigured(env), true);
-});
-
-test('the secret is dedicated: JWT_SECRET alone never enables starter signing', () => {
-  assert.equal(isStarterSigningConfigured({ JWT_SECRET: 'j'.repeat(64) }), false);
-});
-
 // ---- selection resolver ----------------------------------------------------------------------------------------------
 
 const baseInput = (over = {}) => {
   const a = action();
   return {
-    userId: 'u1', sessionId: 's1', propertyId: 'prop-1', clientRequestId: 'crid-9', clock, env,
-    selection: { suggestedActionId: a.id, suggestedActionFromExecutionId: 'exec-1', signedStarterToken: null, message: a.message },
+    userId: 'u1', sessionId: 's1', propertyId: 'prop-1', clock,
+    selection: { suggestedActionId: a.id, suggestedActionFromExecutionId: 'exec-1', message: a.message },
     ...over,
   };
 };
@@ -256,7 +152,7 @@ test('a missing, foreign-user, foreign-session or purged source is one indisting
 });
 
 test('a forged action id, or one the source never offered, is rejected', async () => {
-  const forged = baseInput({ selection: { suggestedActionId: deriveSuggestedNextActionId('exec-1', { ...identity, entityId: 'someone-elses-item' }), suggestedActionFromExecutionId: 'exec-1', signedStarterToken: null, message: action().message } });
+  const forged = baseInput({ selection: { suggestedActionId: deriveSuggestedNextActionId('exec-1', { ...identity, entityId: 'someone-elses-item' }), suggestedActionFromExecutionId: 'exec-1', message: action().message } });
   assert.deepEqual(await withFindFirst(async () => sourceRow(), () => resolveSuggestedActionSelection(forged)), { kind: 'REJECTED', reason: 'ACTION_NOT_OFFERED' });
   assert.deepEqual(await withFindFirst(async () => sourceRow({ resultJson: { suggestions: ['A string'] } }), () => resolveSuggestedActionSelection(baseInput())), { kind: 'REJECTED', reason: 'ACTION_NOT_OFFERED' }, 'a historical string-only execution offers nothing selectable');
 });
@@ -286,22 +182,9 @@ test('the submitted message must equal the stored message exactly', async () => 
 
 test('a stored action whose operation is no longer registered is rejected, not routed', async () => {
   const stale = action({ operationId: 'RETIRED_OPERATION', id: deriveSuggestedNextActionId('exec-1', { ...identity, operationId: 'RETIRED_OPERATION' }) });
-  const input = baseInput({ selection: { suggestedActionId: stale.id, suggestedActionFromExecutionId: 'exec-1', signedStarterToken: null, message: stale.message } });
+  const input = baseInput({ selection: { suggestedActionId: stale.id, suggestedActionFromExecutionId: 'exec-1', message: stale.message } });
   // readStoredSuggestedNextActions drops it, so it is simply not offered.
   assert.equal((await withFindFirst(async () => sourceRow({ resultJson: { suggestedNextActions: [stale] } }), () => resolveSuggestedActionSelection(input))).reason, 'ACTION_NOT_OFFERED');
-});
-
-test('a starter proof is verified without a database read, and never becomes a VERIFIED execution action', async () => {
-  const actionId = 'v1.' + 'a'.repeat(32);
-  const token = mint({ clientRequestId: 'crid-9' });
-  const input = baseInput({ selection: { suggestedActionId: actionId, suggestedActionFromExecutionId: null, signedStarterToken: token, message: 'm' } });
-  let reads = 0;
-  const resolution = await withFindFirst(async () => { reads += 1; return null; }, () => resolveSuggestedActionSelection(input));
-  assert.equal(reads, 0);
-  assert.deepEqual(resolution, { kind: 'STARTER_PROOF_VERIFIED', starterActionId: actionId, starterRegistryId: 'starter.priorities' });
-  // Wrong request id (the token binds the preallocated clientRequestId) and no configured secret both reject.
-  assert.equal((await resolveSuggestedActionSelection({ ...input, clientRequestId: 'crid-other' })).reason, 'STARTER_REQUEST_ID_MISMATCH');
-  assert.equal((await resolveSuggestedActionSelection({ ...input, env: {} })).reason, 'STARTER_NOT_CONFIGURED');
 });
 
 // ---- compatibility boundary ------------------------------------------------------------------------------------------

@@ -832,7 +832,7 @@ export const RecordAskCaptureEventSchema = z.object({
 export const SUGGESTED_NEXT_ACTION_INTERACTION_TYPES = ['CONVERSATION_CONTINUE', 'MUTATE_RECORD', 'START_WORKFLOW'] as const;
 export const SUGGESTED_NEXT_ACTION_SOURCES = [
   'OPERATION_RESULT', 'ENTITY_ACTION', 'MISSING_DETAIL', 'PENDING_WORK', 'SKILL_HANDOFF', 'CAPABILITY_RECOMMENDATION',
-  'ACTIVE_GOAL', 'PLATFORM_STATE', 'LANDING_STARTER',
+  'ACTIVE_GOAL', 'PLATFORM_STATE',
 ] as const;
 export const SUGGESTED_NEXT_ACTION_TIERS = ['CONTINUE', 'RECORD_ACTION', 'RELATED', 'DISCOVERY'] as const;
 export const SUGGESTED_NEXT_ACTIONS_MAX = 4;
@@ -883,18 +883,13 @@ export const SuggestedNextActionSchema = z.object({
 });
 export type SuggestedNextAction = z.infer<typeof SuggestedNextActionSchema>;
 
-// Plan §4.1: the client proves an app-authored selection by naming the offered action and the execution that offered it
-// (answer follow-ups) or by presenting a signed landing-starter token. It never supplies the operation or entity.
+// Plan §4.1: the client proves an app-authored selection by naming the offered action and the execution that offered it. It never
+// supplies the operation or entity; the server resolves those from the stored offer.
 export const SuggestedNextActionSelectionSchema = z.object({
   suggestedActionId: z.string().regex(SUGGESTED_NEXT_ACTION_ID_PATTERN),
-  suggestedActionFromExecutionId: z.string().trim().min(1).max(160).nullable().default(null),
-  signedStarterToken: z.string().trim().min(1).max(2000).nullable().default(null),
+  suggestedActionFromExecutionId: z.string().trim().min(1).max(160),
   message: z.string().trim().min(1).max(4000),
-}).strict().superRefine((selection, ctx) => {
-  if (Boolean(selection.suggestedActionFromExecutionId) === Boolean(selection.signedStarterToken)) {
-    ctx.addIssue({ code: 'custom', path: ['suggestedActionFromExecutionId'], message: 'Provide exactly one of suggestedActionFromExecutionId or signedStarterToken' });
-  }
-});
+}).strict();
 export type SuggestedNextActionSelection = z.infer<typeof SuggestedNextActionSelectionSchema>;
 
 export const CreateAskExecutionRequestSchema = z.object({

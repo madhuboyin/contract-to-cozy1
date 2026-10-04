@@ -989,7 +989,7 @@ interface SuggestedNextAction {
     missingFactKeys?: string[];
   };
   provenance: {
-    source: 'OPERATION_RESULT' | 'ENTITY_ACTION' | 'MISSING_DETAIL' | 'SKILL_HANDOFF' | 'CAPABILITY_RECOMMENDATION' | 'ACTIVE_GOAL' | 'PLATFORM_STATE' | 'LANDING_STARTER';
+    source: 'OPERATION_RESULT' | 'ENTITY_ACTION' | 'MISSING_DETAIL' | 'SKILL_HANDOFF' | 'CAPABILITY_RECOMMENDATION' | 'ACTIVE_GOAL' | 'PLATFORM_STATE';
     sourceOperationId?: AskOperationId;
     sourceExecutionId?: string;
     reasonCodes: string[];
@@ -1009,7 +1009,7 @@ Rank immediate continuation first, then exact record action, related analysis, a
 
 Clicking a typed action sends its natural-language `message`, action id, and source execution id. The persisted source execution is the offered-action ledger: the backend loads it under the current user/session/property, verifies the exact action is unexpired, requires the submitted message to match, and copies the authoritative message, operation, entity context, outcome key, and provenance from server-stored data. Expiry is capped by the fixed source-execution expiry; mutation/workflow actions default to 30 minutes and conversational reads to 24 hours. Purged sources and invalid, stale, or mismatched selections return typed recovery rather than silently falling back to semantic routing. The ordinary client request id provides idempotency.
 
-Landing starters have no source execution and therefore use a 15-minute HMAC-SHA-256 token bound to user, session, property, starter id, registry versions, a preallocated `clientRequestId`, issued-at time, and expiry. The dedicated `ASK_SUGGESTED_ACTION_SIGNING_SECRET` is separate from JWT signing; the request must use the token-bound request id, so an identical replay returns the same execution and a changed id fails verification. The variable is documented in `apps/backend/.env.example` and root `.env.local.example`; Kubernetes/Pi secret provisioning and rotation are user-managed. Missing or invalid signing configuration does not crash startup: starters degrade to ordinary text with bounded diagnostics and no app-authored attribution. Rich entity item actions keep their existing operation/entity launch contract and card lifetime; only a compact promoted equivalent becomes ledger-backed, and expiry of that compact copy does not disable the rich button. Navigation links and result-local filters stay in their own allowlisted/link or result-control contracts and participate only by publishing semantic identity for deduplication. Arbitrary homeowner text continues through the normal routing and clarification cascade.
+Landing starters have no source execution and are deliberately kept simple: they are ordinary suggested prompts that go through normal routing, with no signed proof, no dedicated secret and no deterministic-dispatch attribution. There are no real customers yet, so the added machinery was removed; if starters ever need app-authored dispatch, add a server-side starter registry then.
 
 Deduplication must operate across suggestion chips, entity actions, block actions, Skill handoffs, capability recommendations, and landing starters rather than inside each source independently. Identity uses registered operation, interaction type, property/entity, and `outcomeKey`; it is never inferred from display copy. Rich result-card actions publish the same identity so response finalization can suppress an equivalent compact chip. The winning action should retain provenance explaining why it was shown.
 

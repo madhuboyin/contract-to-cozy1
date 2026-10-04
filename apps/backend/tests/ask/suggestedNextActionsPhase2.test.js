@@ -67,7 +67,7 @@ test('the registry validates: tiers cannot overlap after bounded adjustments, ou
 
 test('ranking policy constants are snapshot-pinned (change them deliberately, with the policy version)', () => {
   const snapshot = JSON.stringify({ v: registry.SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION, tiers: registry.TIER_BASE_SCORE, w: registry.SCORE_WEIGHTS, min: registry.MIN_DISPLAY_SCORE, limits: registry.SUGGESTED_NEXT_ACTION_LIMITS, precedence: registry.SOURCE_PRECEDENCE, budget: registry.SUGGESTED_NEXT_ACTION_BUDGET });
-  assert.equal(createHash('sha256').update(snapshot).digest('hex').slice(0, 16), '641982eb46ca4469', `weights changed; bump SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION and update this hash (got ${createHash('sha256').update(snapshot).digest('hex').slice(0, 16)})`);
+  assert.equal(createHash('sha256').update(snapshot).digest('hex').slice(0, 16), 'f5213cd9b296973e', `weights changed; bump SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION and update this hash (got ${createHash('sha256').update(snapshot).digest('hex').slice(0, 16)})`);
 });
 
 test('every inventory missing-fact mapping resolves to a real correction field and the full correction field set is covered', () => {

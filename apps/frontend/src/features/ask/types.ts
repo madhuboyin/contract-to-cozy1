@@ -129,8 +129,7 @@ export interface SuggestedNextAction {
 
 export interface SuggestedNextActionSelection {
   suggestedActionId: string;
-  suggestedActionFromExecutionId: string | null;
-  signedStarterToken: string | null;
+  suggestedActionFromExecutionId: string;
   message: string;
 }
 

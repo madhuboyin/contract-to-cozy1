@@ -9,19 +9,13 @@ import {
   readStoredSuggestedNextActions,
 } from './suggestedNextAction.contract';
 import { systemSuggestedNextActionClock, type SuggestedNextActionClock } from './suggestedNextActionClock';
-import { verifyStarterToken, type StarterTokenRejection } from './suggestedNextActionSigner';
 
 export type SuggestedActionRejectionReason =
   | 'SOURCE_NOT_FOUND' | 'SOURCE_EXPIRED' | 'PROPERTY_MISMATCH' | 'ACTION_NOT_OFFERED' | 'ACTION_EXPIRED'
-  | 'OPERATION_UNREGISTERED' | 'MESSAGE_MISMATCH' | `STARTER_${StarterTokenRejection}`;
+  | 'OPERATION_UNREGISTERED' | 'MESSAGE_MISMATCH';
 
 export type SuggestedActionResolution =
   | { kind: 'VERIFIED'; source: 'EXECUTION'; action: SuggestedNextAction; sourceExecutionId: string }
-  /**
-   * The starter token verified, but no landing-starter registry exists yet (Phase 4), so there is no server-declared starter to
-   * dispatch. The caller treats the turn as ordinary homeowner text: no app-authored deterministic-dispatch attribution.
-   */
-  | { kind: 'STARTER_PROOF_VERIFIED'; starterActionId: string; starterRegistryId: string }
   | { kind: 'REJECTED'; reason: SuggestedActionRejectionReason };
 
 export interface ResolveSuggestedActionInput {
@@ -29,27 +23,15 @@ export interface ResolveSuggestedActionInput {
   sessionId: string;
   /** The request's effective property scope (null for a property-less turn). */
   propertyId: string | null;
-  clientRequestId: string;
   selection: SuggestedNextActionSelection;
   clock?: SuggestedNextActionClock;
-  env?: Readonly<Record<string, string | undefined>>;
 }
 
 export async function resolveSuggestedActionSelection(input: ResolveSuggestedActionInput): Promise<SuggestedActionResolution> {
   const now = (input.clock ?? systemSuggestedNextActionClock).now();
   const { selection } = input;
 
-  if (selection.signedStarterToken) {
-    const verified = verifyStarterToken(selection.signedStarterToken, {
-      userId: input.userId, sessionId: input.sessionId, propertyId: input.propertyId,
-      clientRequestId: input.clientRequestId, actionId: selection.suggestedActionId, now,
-    }, input.env);
-    if (!verified.ok) return { kind: 'REJECTED', reason: `STARTER_${verified.reason}` };
-    return { kind: 'STARTER_PROOF_VERIFIED', starterActionId: verified.claims.aid, starterRegistryId: verified.claims.stid };
-  }
-
   const sourceExecutionId = selection.suggestedActionFromExecutionId;
-  if (!sourceExecutionId) return { kind: 'REJECTED', reason: 'SOURCE_NOT_FOUND' };
   // By user AND session: another user's or another session's execution is indistinguishable from a purged one.
   const source = await prisma.askExecution.findFirst({
     where: { id: sourceExecutionId, userId: input.userId, sessionId: input.sessionId },

@@ -89,8 +89,7 @@ type SuggestedNextActionSource =
   | 'SKILL_HANDOFF'
   | 'CAPABILITY_RECOMMENDATION'
   | 'ACTIVE_GOAL'
-  | 'PLATFORM_STATE'
-  | 'LANDING_STARTER';
+  | 'PLATFORM_STATE';
 
 interface SuggestedNextAction {
   id: string;
@@ -149,19 +148,14 @@ The client must not prove app authorship merely by echoing an `operationId`. A s
 ```ts
 interface SuggestedNextActionSelection {
   suggestedActionId: string;
-  suggestedActionFromExecutionId: string | null;
-  signedStarterToken: string | null;
+  suggestedActionFromExecutionId: string;
   message: string;
 }
 ```
 
 For answer follow-ups, the source execution's persisted result JSON is the offered-action ledger. The server loads that execution by user and session, verifies its property scope, finds the exact unexpired action id, and copies the registered message, operation, entity context, outcome key, and provenance from the stored action. The submitted `message` exists for compatibility with the execution request and must exactly match the stored message; the server uses the stored value and rejects/audits a mismatch. Client-supplied operation or entity fields are not authoritative. The action expiry may never exceed the fixed source-execution expiry. A missing or purged source maps to the same typed stale/invalid-action recovery result and never silently falls back to semantic routing.
 
-Landing starters have no source execution. They use a 15-minute server-signed starter token bound to the current user, session, property, starter/action id, operation and outcome registry versions, a preallocated `clientRequestId`, issued-at time, and expiry. The request must use that exact `clientRequestId`: the first submission creates the execution, an identical replay returns it, and a changed request id invalidates the token. The backend verifies the signature and scope, resolves the server-declared starter, and repeats eligibility checks before dispatch. A starter without valid proof may still be submitted as ordinary homeowner text, but it does not receive app-authored deterministic-dispatch attribution.
-
-Starter tokens use HMAC-SHA-256 with constant-time signature verification and a dedicated `ASK_SUGGESTED_ACTION_SIGNING_SECRET`; do not reuse `JWT_SECRET`. A versioned token header/claim identifies the active signing-key version. Deliberate rotation may accept the immediately previous key version for no longer than the 15-minute token lifetime. Implementation adds the variable name and setup guidance to both `apps/backend/.env.example` and the repository-root `.env.local.example`. Kubernetes/Pi secret values, provisioning, deployment, and rotation are user-managed and must not be created or changed by this implementation. The secret is configuration, not a feature flag.
-
-If the signing secret is absent or invalid, application startup and ordinary Ask execution continue. The landing-starter producer drops signed launch metadata, presents the starter only as ordinary text, emits a bounded configuration log/metric without secret material, and assigns no app-authored deterministic-dispatch attribution. Static configuration checks should surface the missing secret, but runtime degradation must not create a startup crash loop.
+Landing starters have no source execution and are deliberately kept simple: they are ordinary suggested prompts that go through normal routing, with no signed proof, no dedicated secret and no deterministic-dispatch attribution. There are no real customers yet, so the added machinery was removed; if starters ever need app-authored dispatch, add a server-side starter registry then.
 
 Selection uses the ordinary `clientRequestId` as its idempotency key. Replaying the same request returns the same resulting execution. After successful completion, equivalent actions are suppressed by semantic identity unless the operation registry explicitly declares the outcome repeatable and current eligibility still allows it. Failed and cancelled results must persist their safe recovery actions in result JSON before those actions can be displayed.
 
@@ -202,7 +196,7 @@ Introduce an internal `SuggestedNextActionCandidate` that contains the target co
    - Handles property-required, permission, unavailable, lifecycle-mismatch, expired, cancelled, and retry states.
 
 9. Landing-starter producer
-   - Converts property-aware launch prompts when they target a registered operation.
+   - Out of scope for typed actions: landing starters stay ordinary prompts (see §4.1).
 
 ### 5.2 Candidate identity
 
@@ -231,8 +225,6 @@ action schema version
 ```
 
 Prefix the encoded hash with the action schema version. Do not include label, message, score, producer, timestamps, or array position. This keeps an action id stable when the same execution is refreshed or producer precedence changes, while any material target/outcome change receives a new id.
-
-Landing starters have no source execution. Their deterministic action id uses `action schema version + starterRegistryId + operationId + interactionType + propertyId + outcomeKey`. User and session are security claims in the signed token, not action-id inputs, so the registered starter identity remains stable without weakening per-user/session verification.
 
 ### 5.3 Producer inventory and failure isolation
 
@@ -386,7 +378,6 @@ Work:
 - Update `followUps.ts` and response parsing to prefer typed actions when present and fall back to historical strings only when typed actions are absent.
 - Keep `suppressRepeatedAskSuggestions` during migration, but generalize its history input to registered semantic identities; remove the independent string-only branch when Phase 5 completes.
 - Inventory persistence-boundary producers in `executeOperation.ts`, `askConfirm.ts`, `askClarification.ts`, refresh, failure, expiry, conflict, and cancellation paths before migrating domain producers.
-- Document `ASK_SUGGESTED_ACTION_SIGNING_SECRET` in both local environment templates; implement graceful unsigned-starter degradation. The user provisions and rotates deployed Kubernetes/Pi secret values.
 
 Exit:
 
@@ -394,7 +385,6 @@ Exit:
 - New typed results validate on backend and frontend.
 - The composer behavior is unchanged.
 - A forged, expired, cross-session, cross-user, or cross-property action selection is rejected as a typed recovery result.
-- Missing starter signing configuration leaves Ask available, exposes starters as plain-text prompts only, and emits bounded configuration diagnostics.
 
 ### Phase 2 — Candidate, eligibility, ranking, and deduplication services
 
@@ -408,7 +398,6 @@ Add focused modules under `apps/backend/src/services/ask/suggestedActions/`:
 - `suggestedNextActionPolicy.ts`
 - `suggestedNextActionRegistry.ts` for outcome keys, producer declarations, capture mappings, weights, and ranking policy version
 - `suggestedNextActionClock.ts` or an injected clock interface for deterministic creation/expiry and tests
-- `suggestedNextActionSigner.ts` for purpose-bound starter signing, verification, and key-version rotation
 - `finalizeSuggestedNextActions.ts` as the only persistence-boundary producer of compact actions
 
 Reuse rather than duplicate:
@@ -465,9 +454,8 @@ Migrate:
 - active-goal recommendations;
 - platform recovery suggestions;
 - confirmation receipts not covered in Phase 3; and
-- landing starters.
 
-Landing starters share the action vocabulary and renderer but remain a separate ranking surface because they do not follow a source execution. Platform recovery candidates use `SAFE_RECOVERY_ONLY` policy rather than competing with normal discovery actions.
+Landing starters stay ordinary prompts and are not part of the typed-action pipeline (see §4.1). Platform recovery candidates use `SAFE_RECOVERY_ONLY` policy rather than competing with normal discovery actions.
 
 Refactor `askNextActions.ts` to nominate capability candidates into the shared policy rather than append an independently rendered list when the destination can be represented as a Suggested Next Action. Retain rich `CAPABILITY_LIST` blocks for genuine multi-capability comparison/discovery results; do not flatten those results into four chips.
 
@@ -505,7 +493,7 @@ Primary files:
 Requirements:
 
 - Render `label`, not the transcript message, on the chip/button.
-- On follow-up selection, submit `message`, `suggestedActionId`, and `suggestedActionFromExecutionId`; on starter selection, submit the signed token and its bound preallocated `clientRequestId`. Do not treat client-echoed operation/entity context as proof of authorship.
+- On selection, submit `message`, `suggestedActionId`, and `suggestedActionFromExecutionId`. Do not treat client-echoed operation/entity context as proof of authorship.
 - Preserve the unrestricted composer beside or below the suggestions.
 - Do not auto-send merely because only one action exists.
 - Disable an action only while its own request is pending; do not globally disable unrelated text input longer than necessary.
@@ -568,7 +556,6 @@ Optimize for operation/entity precision and successful completion, not raw click
 - Runtime candidate validation degrades by dropping and reporting an invalid producer; registry drift must not create an application startup crash loop.
 - A typed action cannot be sourced from generated model prose.
 - A client cannot forge app authorship by supplying an operation id or entity id; selection is resolved from the stored source execution.
-- Missing starter signing configuration degrades to ordinary-text starters with bounded diagnostics and never exposes or fabricates signing material.
 
 ### 12.2 Eligibility and security
 
@@ -600,7 +587,7 @@ Optimize for operation/entity precision and successful completion, not raw click
 - Pending, stale, access-lost, and failed states.
 - Historical string-only execution compatibility while retained.
 - Action expiry, forged selection, and cross-session/source-execution rejection.
-- Signed landing-starter verification, message-mismatch rejection, purged-source recovery, idempotent replay, and completed-equivalent suppression.
+- Message-mismatch rejection, purged-source recovery, idempotent replay, and completed-equivalent suppression.
 - Deterministic action-id stability and atomic ledger replacement across refresh.
 - Rich entity buttons remain usable under their existing card contract independently of expiry of a compact promoted copy.
 - Clarification retry/resumption, retryable failure, terminal failure, confirmation expiry, confirmation conflict, refresh, and cancellation persist only shared-finalizer recovery actions.
@@ -664,7 +651,6 @@ The increment is complete when:
 - all newly produced compact next actions use the typed contract;
 - migrated actions reach the declared operation/entity without semantic reclassification;
 - every selected action is verified against the unexpired offered set stored on its source execution;
-- landing starters use dedicated-secret signed proof with a token-bound request id;
 - one server policy owns eligibility, ranking, and cross-surface deduplication;
 - normal, confirmation, failure, expiry/conflict, and cancellation persistence seams use the shared finalizer;
 - deterministic action ids remain stable across refresh and atomic ledger replacement invalidates removed ids;
@@ -686,16 +672,15 @@ Verification follows repository policy: requirements review, Graphify/code-path 
 
 ## Appendix A — Phase 1 implementation record
 
-**What shipped (backend).** `SuggestedNextActionSchema`, `SuggestedNextActionSelectionSchema`, and the `suggestedNextActions` response field live in `ask.contract.ts`; the selection is accepted only as a top-level `suggestedActionSelection` (strict: a client `operationId` or entity field is rejected, not ignored). Service modules under `apps/backend/src/services/ask/suggestedActions/`: `suggestedNextAction.contract.ts` (registry membership, ledger read, TTL defaults, expiry cap), `suggestedNextActionIdentity.ts` (deterministic versioned ids, semantic key and hash), `suggestedNextActionClock.ts`, `suggestedNextActionSigner.ts` (HMAC-SHA-256, dedicated secret, key-version rotation, graceful degradation), `suggestedNextActionSelection.ts` (ledger resolver), and `suggestedNextActionCompatibility.ts` (explicit-mapping-only; the shipped table is empty). `createAskExecution.ts` verifies a selection before it can influence routing, rebinds `input` from the stored action (stored message, operation, entity and context version win), emits the `SUGGESTED_ACTION_SELECTED` correlation event, and on any verification failure persists a typed `UNAVAILABLE` execution (`ASK_SUGGESTED_ACTION_STALE` or `ASK_SUGGESTED_ACTION_INVALID`) with a recovery summary and a bounded `SUGGESTED_ACTION_REJECTED` event. Typed history suppression (`suppressRepeatedSuggestedNextActions`) runs in `finalize()` next to the string path, keyed by semantic-key hashes from this session's `SUGGESTED_ACTION_SELECTED` events.
+**What shipped (backend).** `SuggestedNextActionSchema`, `SuggestedNextActionSelectionSchema`, and the `suggestedNextActions` response field live in `ask.contract.ts`; the selection is accepted only as a top-level `suggestedActionSelection` (strict: a client `operationId` or entity field is rejected, not ignored). Service modules under `apps/backend/src/services/ask/suggestedActions/`: `suggestedNextAction.contract.ts` (registry membership, ledger read, TTL defaults, expiry cap), `suggestedNextActionIdentity.ts` (deterministic versioned ids, semantic key and hash), `suggestedNextActionClock.ts`, `suggestedNextActionSelection.ts` (ledger resolver), and `suggestedNextActionCompatibility.ts` (explicit-mapping-only; the shipped table is empty). `createAskExecution.ts` verifies a selection before it can influence routing, rebinds `input` from the stored action (stored message, operation, entity and context version win), emits the `SUGGESTED_ACTION_SELECTED` correlation event, and on any verification failure persists a typed `UNAVAILABLE` execution (`ASK_SUGGESTED_ACTION_STALE` or `ASK_SUGGESTED_ACTION_INVALID`) with a recovery summary and a bounded `SUGGESTED_ACTION_REJECTED` event. Typed history suppression (`suppressRepeatedSuggestedNextActions`) runs in `finalize()` next to the string path, keyed by semantic-key hashes from this session's `SUGGESTED_ACTION_SELECTED` events.
 
 **What shipped (frontend).** `SuggestedNextAction` and `SuggestedNextActionSelection` types; `followUpItems` prefers typed actions (hiding expired ones, never filtering them by asked text, capped at four) and falls back to strings only when the answer has no typed actions; `FollowUpRow` renders `label` and hands the whole item back; `AskWorkspace` submits a typed action with only its id and the offering execution id, and keeps the turn in the offering execution's property.
 
 **Deviations and decisions made while implementing (review these).**
 
-1. A starter token that verifies is *not* dispatched in Phase 1: no landing-starter registry exists until Phase 4, so the turn is honored as ordinary homeowner text, a `SUGGESTED_ACTION_STARTER_DEGRADED` event records it, and no app-authored attribution is given. The signer, token binding and tests are complete; dispatch is Phase 4.
+1. **Simplification (October 4, 2026, at the owner's direction).** An earlier Phase 1 added a signed landing-starter token (HMAC-SHA-256, a dedicated `ASK_SUGGESTED_ACTION_SIGNING_SECRET` and key-rotation variables). It was removed because there are no real customers yet and starters carry no consequential action: landing starters are ordinary prompts through normal routing, and the selection contract is only `suggestedActionId` + `suggestedActionFromExecutionId` + `message`. The signer module, its env variables, the starter id derivation and the `LANDING_STARTER` source value are gone.
 2. A rejected selection creates its own `UNAVAILABLE` execution row (rather than a transport error) so the transcript keeps a typed, retained recovery result; it stores the submitted message as the question and no launch context.
 3. Property scope is strict: the offered action, its source execution, and the request must agree, including `null`. A property-less request cannot select a property-scoped action.
-4. Template placeholders (`replace-with…`, `changeme…`) are rejected as signing secrets even when long enough; both env templates ship the variable empty.
 5. The repeatable-outcome exception to completed-equivalent suppression (§4.1) is deferred to Phase 2 because it needs the per-operation outcome registry.
 6. Not done in Phase 1, by design: the shared `finalizeSuggestedNextActions` service, eligibility, ranking, deduplication, producers, the fact-to-capture mapping, freshness matrix, weights and thresholds (all Phase 2 entry gates), analytics impression/outcome events, and the docs-parity script.
 
@@ -712,7 +697,7 @@ The five confirm handlers and conversational capture were not named in the plan'
 
 **Raw `suggestions:` declarations (same script, source only, tests excluded).** 81 files and 524 declarations: operation handlers 46 files / 439; Ask services 16 / 42; execution lifecycle 7 / 27; other domains 8 / 10; contracts 3 / 5; suggested-actions module 1 / 1. This is a discovery count, not a count of compact follow-up producers; Phase 3 classifies each.
 
-**Verification (executed locally; no live backend, browser, or database).** `tsc --noEmit` clean on the backend. New tests: `tests/ask/suggestedNextActionsPhase1.test.js` (27: contract invariants, deterministic ids, signer scope/rotation/degradation, ledger resolver rejections, typed history suppression, compatibility boundary) and `tests/ask/askSuggestionPersistenceSites.test.js` (4); frontend `followUps` and `calmShellChrome` suites extended. Full `npm run test:ask:chunked` run: 2 tests this work broke were found and fixed (a source-window assertion in `askGovernance` and the single-`askExecution.findMany` guard in `askNextActions`); the remaining 6 failures (`askGovernance` golden routing, `askImportGraphGuardrails` support re-exports, `askRoutingCalibration` reserve prompts, `correctionHandlersRuntime` inventory item actions, `healthGapCapture` derived capture, `skillEvaluationRegistry` routing fixtures) fail identically on an unmodified HEAD checkout and are not caused by this work. Frontend `src/components/ask` + `src/features/ask`: 4 pre-existing failures in `maintenanceShelves` and `displayPatterns` (extra `WORKSPACE` argument on item-action callbacks, in files this work does not touch). Not run: `next build`, the DB-backed integration suite, any browser verification. The `createAskExecution` rejection/rebind path is covered by resolver unit tests and source-shape guards, not by an executed end-to-end request; that and the live-environment checklist remain open.
+**Verification (executed locally; no live backend, browser, or database).** `tsc --noEmit` clean on the backend. New tests: `tests/ask/suggestedNextActionsPhase1.test.js` (contract invariants, deterministic ids, ledger resolver rejections, compatibility boundary; the signer tests were removed with the signer) and `tests/ask/askSuggestionPersistenceSites.test.js` (4); frontend `followUps` and `calmShellChrome` suites extended. Full `npm run test:ask:chunked` run: 2 tests this work broke were found and fixed (a source-window assertion in `askGovernance` and the single-`askExecution.findMany` guard in `askNextActions`); the remaining 6 failures (`askGovernance` golden routing, `askImportGraphGuardrails` support re-exports, `askRoutingCalibration` reserve prompts, `correctionHandlersRuntime` inventory item actions, `healthGapCapture` derived capture, `skillEvaluationRegistry` routing fixtures) fail identically on an unmodified HEAD checkout and are not caused by this work. Frontend `src/components/ask` + `src/features/ask`: 4 pre-existing failures in `maintenanceShelves` and `displayPatterns` (extra `WORKSPACE` argument on item-action callbacks, in files this work does not touch). Not run: `next build`, the DB-backed integration suite, any browser verification. The `createAskExecution` rejection/rebind path is covered by resolver unit tests and source-shape guards, not by an executed end-to-end request; that and the live-environment checklist remain open.
 
 ## Appendix B — Phase 2 implementation record and Phase 3 entry-gate packet
 
@@ -747,7 +732,7 @@ New modules under `apps/backend/src/services/ask/suggestedActions/`: `suggestedN
 | Minimum score | `MIN_DISPLAY_SCORE` | 1060 (see B.2.2). |
 | Limits | `SUGGESTED_NEXT_ACTION_LIMITS` | 4 shown, 12 per producer, 60 total, 1 discovery action beside a stronger one. |
 | Latency / query thresholds | `SUGGESTED_NEXT_ACTION_BUDGET` | 250 ms pipeline budget (nonessential producers dropped first), at most 6 batched context queries. Initial values chosen for the Raspberry Pi; measured p50/p95 from `ask_suggested_actions_pipeline_duration_seconds` should replace them once typed producers exist. The 6-query ceiling is declared and documented, not yet enforced by a runtime counter. |
-| Source precedence | `SOURCE_PRECEDENCE` | PENDING_WORK, PLATFORM_STATE, ENTITY_ACTION, MISSING_DETAIL, OPERATION_RESULT, SKILL_HANDOFF, ACTIVE_GOAL, CAPABILITY_RECOMMENDATION, LANDING_STARTER. |
+| Source precedence | `SOURCE_PRECEDENCE` | PENDING_WORK, PLATFORM_STATE, ENTITY_ACTION, MISSING_DETAIL, OPERATION_RESULT, SKILL_HANDOFF, ACTIVE_GOAL, CAPABILITY_RECOMMENDATION. |
 | TTL rules | `SUGGESTED_NEXT_ACTION_DEFAULT_TTL_MS`, `OUTCOME_TTL_OVERRIDES_MS` | 30 min write/workflow, 24 h continue, per-outcome overrides (none yet), always capped at the source execution expiry. |
 | Domain freshness matrix | `DOMAIN_FRESHNESS_MATRIX` | Version helpers exist for inventory item, room, maintenance task, warranty, home event, radar match and inspection finding (a test confirms the exported ones still exist). **Claims has no exported helper**: it derives its version inline in `claims.handler.ts`, so its strategy is an explicit requery rule until the Claims migration step extracts one. |
 | Fact -> capture -> operation mapping | `MISSING_FACT_CAPTURES` | Complete for the 13 inventory correction fields (a test asserts it equals `INVENTORY_CORRECTION_FIELDS`). **Rooms, warranties, home events, maintenance and claims have no missing-detail mapping yet**; each domain adds its own with its migration, because the plan's missing-detail examples are inventory-only. |

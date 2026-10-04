@@ -85,7 +85,7 @@ function routingClarificationResult(
 const INVALID_SUGGESTED_ACTION_REASONS: ReadonlySet<SuggestedActionRejectionReason> = new Set(['MESSAGE_MISMATCH', 'PROPERTY_MISMATCH', 'OPERATION_UNREGISTERED']);
 
 function suggestedActionRecoveryResultJson(reason: SuggestedActionRejectionReason) {
-  const invalid = INVALID_SUGGESTED_ACTION_REASONS.has(reason) || reason.startsWith('STARTER_');
+  const invalid = INVALID_SUGGESTED_ACTION_REASONS.has(reason);
   return {
     reasonCode: invalid ? 'ASK_SUGGESTED_ACTION_INVALID' : 'ASK_SUGGESTED_ACTION_STALE',
     resultJson: {
@@ -152,7 +152,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
   let suggestionResolution: SuggestedActionResolution | null = null;
   if (input.suggestedActionSelection) {
     suggestionResolution = await resolveSuggestedActionSelection({
-      userId, sessionId: session.id, propertyId: executionPropertyId ?? null, clientRequestId: input.clientRequestId,
+      userId, sessionId: session.id, propertyId: executionPropertyId ?? null,
       selection: input.suggestedActionSelection,
     });
   }
@@ -166,7 +166,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       },
     });
     // Bounded reason code only: no message text, no entity ids.
-    await prisma.askExecutionEvent.create({ data: { executionId: rejected.id, eventType: 'SUGGESTED_ACTION_REJECTED', metadataJson: asInputJson({ reason: suggestionResolution.reason, source: input.suggestedActionSelection?.signedStarterToken ? 'LANDING_STARTER' : 'EXECUTION' }) } });
+    await prisma.askExecutionEvent.create({ data: { executionId: rejected.id, eventType: 'SUGGESTED_ACTION_REJECTED', metadataJson: asInputJson({ reason: suggestionResolution.reason }) } });
     return mapPersistedExecution(rejected, await propertySummary(executionPropertyId));
   }
   if (suggestionResolution?.kind === 'VERIFIED') {
@@ -229,9 +229,6 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     } catch {
       // Telemetry must never fail the answer the user asked for.
     }
-  } else if (suggestionResolution?.kind === 'STARTER_PROOF_VERIFIED') {
-    // No landing-starter registry exists until Phase 4: honor the text as an ordinary turn without app-authored attribution.
-    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'SUGGESTED_ACTION_STARTER_DEGRADED', metadataJson: asInputJson({ reason: 'STARTER_REGISTRY_UNAVAILABLE', starterActionId: suggestionResolution.starterActionId }) } }).catch(() => undefined);
   }
   // Handoff acceptance telemetry (FRD v1.168). Reached only for a genuinely new execution -- the duplicate
   // clientRequestId return above never gets here, so a replayed request cannot double-count OPENED.

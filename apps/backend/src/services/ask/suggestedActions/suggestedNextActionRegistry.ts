@@ -83,11 +83,11 @@ export function maxNegativeAdjustment(): number {
 
 /**
  * Lower index wins an exact score tie (plan §7.2 tie-break: score, producer precedence, operationId, outcomeKey, entity type,
- * entity id, action id). Pending work first (it is the thing the homeowner is mid-way through), landing starters last.
+ * entity id, action id). Pending work first (it is the thing the homeowner is mid-way through).
  */
 export const SOURCE_PRECEDENCE: readonly SuggestedNextActionSource[] = [
   'PENDING_WORK', 'PLATFORM_STATE', 'ENTITY_ACTION', 'MISSING_DETAIL', 'OPERATION_RESULT',
-  'SKILL_HANDOFF', 'ACTIVE_GOAL', 'CAPABILITY_RECOMMENDATION', 'LANDING_STARTER',
+  'SKILL_HANDOFF', 'ACTIVE_GOAL', 'CAPABILITY_RECOMMENDATION',
 ];
 
 // ---- outcome vocabularies (plan §5.2) --------------------------------------------------------------------------------------

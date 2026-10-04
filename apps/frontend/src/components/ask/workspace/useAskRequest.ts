@@ -68,7 +68,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       const suggestedActionSource = suggestedAction ? executions.find((item) => item.executionId === suggestedAction.fromExecutionId) : undefined;
       const response = await api.createAskExecution({
         clientRequestId: newId(), sessionId, message, propertyId: suggestedAction ? (suggestedActionSource?.property?.id ?? selectedPropertyId ?? null) : (promptContext?.propertyId ?? selectedPropertyId ?? null),
-        ...(suggestedAction ? { suggestedActionSelection: { suggestedActionId: suggestedAction.actionId, suggestedActionFromExecutionId: suggestedAction.fromExecutionId, signedStarterToken: null, message } } : {}),
+        ...(suggestedAction ? { suggestedActionSelection: { suggestedActionId: suggestedAction.actionId, suggestedActionFromExecutionId: suggestedAction.fromExecutionId, message } } : {}),
         launchContext: {
           surface: (isFirstMessage && launchSurface) || (mode === 'page' ? 'ASK_PAGE' : 'GLOBAL_LAUNCHER'),
           capabilityId: promptContext?.capabilityId ?? (isFirstMessage && launchCapabilityId ? launchCapabilityId : undefined),
