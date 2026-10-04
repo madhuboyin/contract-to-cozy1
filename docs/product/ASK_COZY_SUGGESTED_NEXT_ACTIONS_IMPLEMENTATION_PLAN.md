@@ -3,7 +3,7 @@
 **Date:** October 4, 2026
 **Status:** Phases 1-4 and the Phase 5 containment ratchet are implemented (October 4, 2026; not live-verified). The owner-approved exact-four engagement and opportunity-backfill scope in Appendix C.15 is specified but not implemented. Appendix C supersedes the staged-migration language in §9, §12 and §16 where they differ.
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.24; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.25; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -991,3 +991,14 @@ This scope is not achieved by changing `maxShown` or padding the frontend. It re
 - documentation-parity, pure-policy, role/applicability, stale-selection, frontend and integrated-journey tests.
 
 **Acceptance examples.** A maintenance answer that already renders “Create a task” must not repeat that destination in the chip row. If the current answer has no other compact continuation and the selected home is below 90% actionable completeness, the row may instead contain four verified actions such as an applicable missing system fact, a missing safety fact, an applicable missing mortgage fact, and one strongly relevant home opportunity. At 90% or above, the remaining positions come from ranked urgent work, active plans and governed capabilities. Selecting any chip reaches its registered operation/capture without semantic reclassification or requiring the homeowner to restate the request.
+
+#### C.15.4 Clarification decisions and delivery order (owner-approved; NOT IMPLEMENTED)
+
+- **Shortage:** exactly four remains the product invariant. After every governed source and safe starter is exhausted, fewer than four is allowed only as a bounded, measured degraded exception; never pad with an ineligible, stale, duplicate, fabricated or string-routed action.
+- **TTL:** keep the existing defaults—24 hours for `CONVERSATION_CONTINUE`, 30 minutes for `MUTATE_RECORD` and `START_WORKFLOW`, all capped by source-execution expiry. Longer outcome-specific lifetimes require registry review.
+- **Cooldown persistence:** add the dedicated bounded lifecycle record specified in Ask Redo FRD v1.25 §27.7a, scoped by user/property/operation/outcome with optional bounded reason and entity scope. Initial registry defaults are 7 days after an unrelated opportunity impression, 24 hours after a missing-profile impression, 30 days for “Not now”, indefinite-until-material-change for “Not relevant”, and semantic suppression after completion. Current-answer/urgent/exact-record actions receive no generic impression cooldown.
+- **Dismissal:** only explicit “Not now” or “Not relevant” is dismissal. Ignoring a chip, typing another message, selecting another chip or leaving is not. Missing-profile “Doesn’t apply” routes through applicability correction rather than suppression.
+- **Registry packet:** before wiring, review included/excluded facts, applicability, downstream consumers, materiality, capture/outcome mappings, roles, grouping, skips, stale/conflicted treatment, mortgage ordering, representative scores, cooldown schema and defaults.
+- **Legacy strings:** keep the C.14 ratchet. Review every remaining producer and convert valuable result-specific outcomes, delete duplicates/no-value items, or retain only for historical/exempt use. Exact-four does not require mechanical conversion of every handler, but settled normal rows are typed-only.
+- **Home Continuity:** exclude it from generic backfill until a separately approved continuity/handoff signal defines source, timeliness, consent/visibility, suppression and resurfacing. Do not weaken its explicit-trigger/highly-sensitive governance.
+- **Sequence:** (1) pure policy/finalizer and degraded diagnostics; (2) actionable-profile registry, mappings, score fixtures, cooldown schema/defaults; (3) owner review; (4) persistence lifecycle and opportunity producer; (5) frontend dismissal, typed-only rendering, deduplication and string disposition; (6) acceptance tests and documentation reconciliation. No partial phase activates exact-four; activation is atomic after the scope can meet the invariant without routine shortages.

@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.24"
+version: "1.25"
 date: "October 4, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.24 |
+| Version | 1.25 |
 | Date | October 4, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -1593,6 +1593,77 @@ Opportunity backfill must be outcome-led rather than tool-led. Labels describe h
 
 The finalizer backfills the row from a governed cross-domain opportunity inventory after eligibility and semantic/presentation deduplication; handlers and the frontend must not invent padding. All four positions are ledger-backed `SuggestedNextAction` objects. A rich result action suppresses an equivalent compact action, and legacy string suggestions cannot satisfy the exact-four requirement. Labels must name the entity and outcome whenever possible—for example “Add the microwave brand” rather than “Add details”. When the next step requires a bounded value, selecting the action opens the registered selector or capture control instead of requiring the homeowner to retype the instruction. Ranking weights, tier ranges, actionable-profile materiality, producer precedence, cooldowns, and final tie-break order are versioned registry data rather than model judgment or prose-derived behavior.
 
+##### Four-action availability and degraded state
+
+The product invariant remains exactly four; it is not weakened to “up to four” or treated as satisfied merely because every currently nominated candidate was displayed. The governed candidate inventory must be designed to yield four eligible actions after current-answer candidates, actionable profile gaps, current home opportunities, governed capabilities and safe curated property-scoped starters are exhausted.
+
+Safety wins over the count. If fewer than four candidates survive every eligibility, freshness, authorization, cooldown and deduplication rule—or a producer/evaluation dependency fails—the client displays only those that survived. It must never pad with an ineligible, stale, duplicate, semantically routed string or fabricated action. The backend records a bounded exact-four degraded-state diagnostic with the shortage count and reason codes; this is an exception to investigate, not a normal successful outcome. No raw homeowner text, labels or entity identifiers are included in that diagnostic.
+
+##### Action lifetime
+
+Interaction-based defaults remain authoritative and are always capped by the fixed source-execution expiry:
+
+- `CONVERSATION_CONTINUE`: 24 hours;
+- `MUTATE_RECORD`: 30 minutes; and
+- `START_WORKFLOW`: 30 minutes.
+
+Profile capture and opportunity workflows do not receive a longer lifetime merely because they were used as backfill. Read-only exploration may use `CONVERSATION_CONTINUE` and its 24-hour lifetime. Any outcome-specific override must be registered and reviewed; the client must not revive an expired ledger action as ordinary text.
+
+##### Durable exposure and cooldown state
+
+Suggested Next Actions require a dedicated durable lifecycle record rather than inferring cooldowns from retained conversation text or overloading property-wide recommendation suppression. The persistence identity is scoped by `userId`, `propertyId`, `operationId` and `outcomeKey`, with an optional bounded reason code and optional entity type/id only when suppression is entity-specific. It records `firstShownAt`, `lastShownAt`, `shownCount`, `dismissedAt`, bounded dismissal reason, `selectedAt`, `completedAt`, `suppressedUntil`, and a context version or material-state fingerprint when needed. It stores no label, message or raw homeowner text. Schema changes update Prisma and all contracts; migration creation and application remain owner-run repository operations.
+
+Cooldowns are versioned registry policy. Initial defaults are:
+
+- unrelated opportunity impression: 7 days;
+- missing actionable-profile detail impression: 24 hours;
+- explicit “Not now”: 30 days;
+- explicit “Not relevant”: indefinite until a registered material applicability change;
+- completed outcome: suppressed until its semantic outcome becomes applicable again; and
+- current-answer, urgent and exact-record actions: no generic impression cooldown; their live state and history rules govern them.
+
+An impression is counted once per offered action/source execution. Typing another message, selecting a different action or leaving the page is not a dismissal. An impression may activate only its configured soft exposure cooldown; implicit non-engagement must not create an explicit-negative preference.
+
+##### Dismissal interaction
+
+Unrelated opportunity chips expose an accessible explicit control with at least “Not now” and “Not relevant”. Current-answer, urgent and exact-record actions do not gain a generic dismissal control. A missing-profile chip may offer “Not now”; “Doesn’t apply” must enter a governed applicability or correction flow rather than silently hiding an applicable fact. Dismissal remains usable with keyboard and screen reader navigation, does not cause the chip row to jump unexpectedly, and records only bounded reason codes. The current `FollowUpRow` has no such affordance, so this is required frontend and API work rather than an inferred behavior.
+
+##### Actionable-profile registry review packet
+
+Before actionable completeness affects homeowner-visible ranking, the owner reviews one versioned registry packet containing:
+
+- every included and excluded fact key;
+- applicability conditions and reviewed optional-skip behavior;
+- the live downstream consumer for every included fact;
+- materiality weight and deterministic tie-break data;
+- the direct capture/edit operation and registered outcome key;
+- household-role requirements;
+- grouping rules for bounded multi-field capture;
+- stale and conflicted treatment;
+- mortgage-applicability ordering; and
+- representative score fixtures for sparse, typical, nearly complete and fully complete properties.
+
+This is a design/requirements approval, not a runtime release gate, cohort, feature flag or manual production certification. Until the packet is approved, the broad Property Context completeness percentage must not drive the 90% policy.
+
+##### Legacy suggestion disposition
+
+The raw-producer ratchet remains in force. Exact-four requires reviewing every remaining string producer, but it does not require mechanically converting every handler. Each existing producer is classified as: convert because its result-specific outcome should compete in typed ranking; delete because it duplicates a richer control or has no downstream value; or temporarily retain only for historical compatibility or an explicitly exempt surface. Every settled, normal, property-scoped follow-up row is typed-only. Valuable legacy result-specific suggestions that are not converted cannot silently disappear behind four backfill actions.
+
+Home Continuity Plan remains excluded from generic backfill until a separate governed continuity/handoff signal definition identifies its canonical source, timeliness rationale, consent and visibility requirements, suppression behavior, and the material state change that permits resurfacing. Its explicit-trigger and highly-sensitive governance must not be weakened to fill a slot.
+
+##### Implementation sequence and activation
+
+Implement the scope in this order:
+
+1. Build and test pure exact-four policy/finalizer behavior using injected candidate inventories, including shortage diagnostics and exceptional modes.
+2. Draft the actionable-profile registry, materiality, capture mappings, representative score fixtures, cooldown schema and initial durations.
+3. Complete owner review of that packet before wiring profile completeness into live candidate generation.
+4. Add owner-run-schema-ready persistence contracts, cooldown lifecycle handling and the batched cross-domain opportunity producer.
+5. Add frontend dismissal, typed-only rendering for in-scope results, semantic/presentation deduplication and the reviewed legacy-string conversions/deletions.
+6. Complete role, applicability, TTL, cooldown, stale-selection, accessibility, degraded-shortage and representative integrated-journey tests; then reconcile the FRD, plan and architecture documentation.
+
+No partial phase activates the exact-four homeowner behavior. It becomes effective only when the typed inventory, persistence, frontend and acceptance coverage can meet the invariant without routine shortages. This is an atomic behavior change, not a staged rollout or feature-flag program.
+
 #### Selection semantics and safety
 
 Selecting a Suggested Next Action sends the natural-language message, action id, and source execution id. The backend verifies that the current user/session/property was offered that exact unexpired action in the persisted source execution, requires the submitted message to match, and uses the server-stored message, operation, entity context, outcome key, and provenance. The ordinary client request id makes selection idempotent. Client-supplied operation/entity values do not prove app authorship. Missing or purged sources and invalid, forged, expired, mismatched, or cross-scope selections return typed recovery and are not silently semantically rerouted. The backend repeats operation registration, property access, role, applicability, entity, freshness, safety, and confirmation checks before returning or changing anything.
@@ -1622,6 +1693,8 @@ Removal of legacy string production is gated by static validation, pure policy t
 **Simplified delivery and inventory conversion (October 4, 2026, implemented; not live-verified).** With no real customers, Suggested Next Actions are delivered by converting handlers directly rather than by a staged migration: the string-compatibility layer was removed, unconverted handlers keep plain-text chips, ranking ships tier-only, and landing starters stay ordinary prompts. Inventory is converted: after an item is created or corrected, Ask offers the details that same item is still missing as typed actions that name the exact item, and a selected action chooses its correction field from its registered outcome instead of re-reading its message. Rooms are converted (v1.15): the room-added and room-renamed/corrected receipts offer one typed action, "Add an item to <room>", which names the exact room and opens the add-item form with that room preselected; floor level is deliberately not prompted for because nothing consumes it. Maintenance is converted (v1.16): when a maintenance task is cancelled or its reminders are snoozed, the receipt offers "Reopen <task>" or "Resume reminders for <task>" as a typed action on that exact task, and the update operation chooses its action from the registered outcome rather than from keywords in the message (so a task named "Remove old paint" can no longer turn a reopen into a delete). The created and completed receipts keep plain chips because nothing useful is missing. Warranties are converted (v1.17): after a warranty is recorded, or after its expiry date is corrected, while the expiry is still ahead and no active reminder already exists, the receipt offers "Remind me before the <provider> warranty expires" as a typed action on that exact warranty. Selecting it reviews a reminder for that warranty only; if the warranty was deleted, changed, expired or belongs to another home since it was offered, Ask shows the standard "suggestion no longer available" recovery and never reminds about a different warranty. Typing "remind me about my warranty" keeps the earlier behaviour of choosing the soonest-expiring warranty. Home events are converted (v1.18): after a timeline event is recorded or corrected, a repair event that is not linked to an inventory item (when the home has items) is offered "Link <event> to an inventory item", and a repair with no cost is offered "Add the cost of <event>" (only repairs feed the repair-versus-replace analyses, so maintenance and inspection events get no chip). Each acts on that exact event, chooses its field from the registered outcome rather than from words in the title, and shows the standard "suggestion no longer available" result, never a similarly named event, if the event was corrected, removed or hidden since it was offered. Costs are not prompted for maintenance or inspection events. Home Event Radar receipts stay plain: the radar detail card already offers every meaningful action. Claims and inspection are closed by decision (v1.19): their receipts are terminal and every valid next step is already a control on the claim row or the inspection card deck, so no typed action is added; the inspection findings answer no longer shows chips that exposed a raw finding id and reached viewers. The six priority domains are therefore complete; nothing has been verified against a live backend. Review follow-up (v1.21): a selected inventory, maintenance or add-an-item-to-a-room action now shows the standard "suggestion no longer available" result when its record was deleted or changed since it was offered, instead of matching a similarly named record by title; and the suggestion strip stays visible while a request runs, with only the chosen suggestion disabled and shown as pending (the others are inert, since Ask runs one request at a time). Platform recovery (v1.22): when a pending request, confirmation or clarification expires, Ask offers "Start the <task> again" for the few operations whose original message fully recreates the request (a maintenance task, a refinance rate monitor, a quote comparison); selecting it starts a fresh request that asks for confirmation again. When a confirmation conflicts or an offered inventory suggestion has gone stale, Ask offers "Review current <item>" for that exact item if it still exists; other record types get no such chip. Retryable failures keep only the existing "Try again with current records" button, and cancelled or unavailable results no longer show generic suggestion chips. Details are in the plan's Appendix C.13. Phase 5 containment (v1.23): a repository check now fails if a new raw string-suggestion producer file or an additional raw producer site is added to production Ask code, with the existing legacy producers bounded at a reviewed per-file baseline; existing string chips, the typed-first frontend fallback and the repeat-suggestion suppression are unchanged, so not every follow-up is typed yet (plan C.14).
 
 **Exact-four engagement and opportunity backfill (v1.24, owner-approved; not implemented).** Every settled, normal, property-scoped answer must show exactly four distinct typed actions. Current-answer continuation, urgent work and exact-record actions rank first; below 90% actionable profile completeness, applicable missing details fill remaining positions before general discovery, with at most one strongly relevant exploration opportunity allowed. At or above 90%, current home opportunities and governed capabilities backfill the row. The threshold uses a new actionable, homeowner-correctable, downstream-consumed fact subset—not the broad Property Context percentage. Discovery copy leads with homeowner outcomes rather than tool names, requires a registered “why now” signal and cooldown, and may not rotate or repeat merely to promote tools. Property selection, clarification, capture, confirmation, safe-recovery and emergency/restricted states are exempt from exact-four. Full requirements and implementation work are recorded in the Suggested Next Actions plan Appendix C.15.
+
+**Exact-four clarification decisions (v1.25, owner-approved; not implemented).** A safe shortage remains possible only as a recorded degraded exception after every governed source is exhausted; Ask never pads with an unsafe action. Existing interaction TTLs remain 24 hours for conversational reads and 30 minutes for mutations/workflows. A dedicated user/property/operation/outcome lifecycle record owns exposure, selection, completion, explicit dismissal and cooldown state without raw text. Unrelated opportunities gain explicit “Not now”/“Not relevant” controls; ignored chips are not inferred dismissals. The actionable-profile registry, mappings, representative scores, cooldown schema and durations require owner review before wiring. The raw-producer ratchet remains, with each legacy producer converted, deleted or retained only for historical/exempt use rather than mechanically converting every handler. Home Continuity remains out of generic backfill pending a separately governed signal. Exact-four activates atomically only after the six implementation steps and acceptance coverage in §27.7a are complete.
 
 ### 27.8 Loading and streaming
 
