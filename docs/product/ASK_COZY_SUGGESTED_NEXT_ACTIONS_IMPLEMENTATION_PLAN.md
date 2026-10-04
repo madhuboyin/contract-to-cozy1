@@ -3,7 +3,7 @@
 **Date:** October 4, 2026
 **Status:** Proposed implementation plan
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.10; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.11; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -159,7 +159,9 @@ For answer follow-ups, the source execution's persisted result JSON is the offer
 
 Landing starters have no source execution. They use a 15-minute server-signed starter token bound to the current user, session, property, starter/action id, operation and outcome registry versions, a preallocated `clientRequestId`, issued-at time, and expiry. The request must use that exact `clientRequestId`: the first submission creates the execution, an identical replay returns it, and a changed request id invalidates the token. The backend verifies the signature and scope, resolves the server-declared starter, and repeats eligibility checks before dispatch. A starter without valid proof may still be submitted as ordinary homeowner text, but it does not receive app-authored deterministic-dispatch attribution.
 
-Starter tokens use HMAC-SHA-256 with constant-time signature verification and a dedicated `ASK_SUGGESTED_ACTION_SIGNING_SECRET`; do not reuse `JWT_SECRET`. A versioned token header/claim identifies the active signing-key version. Deliberate rotation may accept the immediately previous key version for no longer than the 15-minute token lifetime. Implementation must add the new secret to `apps/backend/.env.example` and the deployed backend secret configuration. The secret is configuration, not a feature flag.
+Starter tokens use HMAC-SHA-256 with constant-time signature verification and a dedicated `ASK_SUGGESTED_ACTION_SIGNING_SECRET`; do not reuse `JWT_SECRET`. A versioned token header/claim identifies the active signing-key version. Deliberate rotation may accept the immediately previous key version for no longer than the 15-minute token lifetime. Implementation adds the variable name and setup guidance to both `apps/backend/.env.example` and the repository-root `.env.local.example`. Kubernetes/Pi secret values, provisioning, deployment, and rotation are user-managed and must not be created or changed by this implementation. The secret is configuration, not a feature flag.
+
+If the signing secret is absent or invalid, application startup and ordinary Ask execution continue. The landing-starter producer drops signed launch metadata, presents the starter only as ordinary text, emits a bounded configuration log/metric without secret material, and assigns no app-authored deterministic-dispatch attribution. Static configuration checks should surface the missing secret, but runtime degradation must not create a startup crash loop.
 
 Selection uses the ordinary `clientRequestId` as its idempotency key. Replaying the same request returns the same resulting execution. After successful completion, equivalent actions are suppressed by semantic identity unless the operation registry explicitly declares the outcome repeatable and current eligibility still allows it. Failed and cancelled results must persist their safe recovery actions in result JSON before those actions can be displayed.
 
@@ -230,9 +232,11 @@ action schema version
 
 Prefix the encoded hash with the action schema version. Do not include label, message, score, producer, timestamps, or array position. This keeps an action id stable when the same execution is refreshed or producer precedence changes, while any material target/outcome change receives a new id.
 
+Landing starters have no source execution. Their deterministic action id uses `action schema version + starterRegistryId + operationId + interactionType + propertyId + outcomeKey`. User and session are security claims in the signed token, not action-id inputs, so the registered starter identity remains stable without weakening per-user/session verification.
+
 ### 5.3 Producer inventory and failure isolation
 
-Before migration, generate a categorized inventory of every `suggestions:` declaration and compact action producer. The October 4, 2026 repository scan found 104 source files containing the broad `suggestions:` token; this is a discovery count, not a claim that all 104 are Ask follow-up producers. Classify each occurrence as an Ask compact follow-up, boundary action, domain-local recommendation, capability result, test fixture, or unrelated type.
+Before migration, generate a categorized inventory of every `suggestions:` declaration and compact action producer. The October 4, 2026 repository scan found 104 source files containing the broad `suggestions:` token; this is a discovery count, not a claim that all 104 are Ask follow-up producers. Classify each occurrence as an Ask compact follow-up, persistence-boundary producer, boundary action, domain-local recommendation, capability result, test fixture, or unrelated type. Persistence-boundary inventory explicitly includes every raw suggestion site in `askConfirm.ts`, `askClarification.ts`, execution failure/expiry/cancellation branches, and refresh persistence—not only operation handlers and domain producers.
 
 Each producer has a bounded candidate limit and may nominate only statically registered operation/outcome combinations. Static registry errors fail validation and CI. At runtime, an invalid or failed producer is reported and its candidates are dropped; it must not crash application startup or invalidate an otherwise safe answer.
 
@@ -318,7 +322,7 @@ Result-card and block actions publish the same semantic identity fields to respo
 
 ### 7.4 Pipeline placement and performance budget
 
-Create one shared `finalizeSuggestedNextActions` service. The normal read path invokes it from `executeOperation.ts`'s `finalize()` seam after the operation result, Skill handoff, and platform boundary state exist, replacing the current standalone `suppressRepeatedAskSuggestions` call before answer-trust validation. The confirmation path invokes the same service in `askConfirm.ts` after the confirmed result and Skill handoff exist but before confirmed-completion validation and persistence. Confirmation expiry, confirmation conflict, retryable failure, terminal failure, cancellation, and other branches that display recovery actions also pass through the service before persisting those actions. No result may persist a newly produced compact action by bypassing this shared finalizer.
+Create one shared `finalizeSuggestedNextActions` service. The normal read path invokes it from `executeOperation.ts`'s `finalize()` seam after the operation result, Skill handoff, and platform boundary state exist, replacing the current standalone `suppressRepeatedAskSuggestions` call before answer-trust validation. The confirmation path invokes it from `askConfirm.ts` after the confirmed result and Skill handoff exist but before confirmed-completion validation and persistence. Clarification creation, resumption, expiry, invalid selection, and retryable-failure branches in `askClarification.ts` invoke it before persisting their result JSON. Confirmation expiry/conflict, retryable/terminal execution failure, cancellation, and every other branch that displays recovery actions also pass through the service. No result may persist a newly produced compact action by bypassing this shared finalizer.
 
 The finalized action set flows through the applicable answer-trust validator and is persisted in `AskExecution.resultJson` before return. The execution id is already allocated before operation execution and is available for provenance. A refresh regenerates the set with deterministic ids and atomically replaces the stored offered-action ledger for that execution. An id removed by refresh becomes stale immediately and returns typed recovery if selected. The orchestrator assembles one bounded evaluation context with batched property access, entity, health, pending-work, and recent-history data; producers must not perform unbounded per-candidate queries.
 
@@ -381,6 +385,8 @@ Work:
 - Preserve persisted historical executions whose result JSON contains only strings.
 - Update `followUps.ts` and response parsing to prefer typed actions when present and fall back to historical strings only when typed actions are absent.
 - Keep `suppressRepeatedAskSuggestions` during migration, but generalize its history input to registered semantic identities; remove the independent string-only branch when Phase 5 completes.
+- Inventory persistence-boundary producers in `executeOperation.ts`, `askConfirm.ts`, `askClarification.ts`, refresh, failure, expiry, conflict, and cancellation paths before migrating domain producers.
+- Document `ASK_SUGGESTED_ACTION_SIGNING_SECRET` in both local environment templates; implement graceful unsigned-starter degradation. The user provisions and rotates deployed Kubernetes/Pi secret values.
 
 Exit:
 
@@ -388,6 +394,7 @@ Exit:
 - New typed results validate on backend and frontend.
 - The composer behavior is unchanged.
 - A forged, expired, cross-session, cross-user, or cross-property action selection is rejected as a typed recovery result.
+- Missing starter signing configuration leaves Ask available, exposes starters as plain-text prompts only, and emits bounded configuration diagnostics.
 
 ### Phase 2 — Candidate, eligibility, ranking, and deduplication services
 
@@ -561,6 +568,7 @@ Optimize for operation/entity precision and successful completion, not raw click
 - Runtime candidate validation degrades by dropping and reporting an invalid producer; registry drift must not create an application startup crash loop.
 - A typed action cannot be sourced from generated model prose.
 - A client cannot forge app authorship by supplying an operation id or entity id; selection is resolved from the stored source execution.
+- Missing starter signing configuration degrades to ordinary-text starters with bounded diagnostics and never exposes or fabricates signing material.
 
 ### 12.2 Eligibility and security
 
@@ -595,7 +603,7 @@ Optimize for operation/entity precision and successful completion, not raw click
 - Signed landing-starter verification, message-mismatch rejection, purged-source recovery, idempotent replay, and completed-equivalent suppression.
 - Deterministic action-id stability and atomic ledger replacement across refresh.
 - Rich entity buttons remain usable under their existing card contract independently of expiry of a compact promoted copy.
-- Retryable failure, terminal failure, confirmation expiry, confirmation conflict, and cancellation persist only shared-finalizer recovery actions.
+- Clarification retry/resumption, retryable failure, terminal failure, confirmation expiry, confirmation conflict, refresh, and cancellation persist only shared-finalizer recovery actions.
 
 ### 12.5 Focused integrated journeys
 

@@ -1,7 +1,7 @@
 # Ask Cozy Conversational UI — Prototype-to-Implementation Gap Audit
 
 **Date:** September 26, 2026  
-**Updated:** October 4, 2026; shared-finalizer Suggested Next Actions synchronized with Ask Redo FRD v1.10
+**Updated:** October 4, 2026; clarification-safe Suggested Next Actions synchronized with Ask Redo FRD v1.11
 **Status:** Living implementation audit; original findings are retained where useful and superseded behavior is identified explicitly
 **Scope:** Ask Cozy conversational UI only; this is not a review of ContractToCozy's broader feature set  
 **Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
@@ -155,11 +155,11 @@ Use specific labels such as “Add the microwave brand”, “Change the guest r
 
 Selection carries the readable message, action id, and source execution id. The backend proves app authorship by loading the persisted offered action under the current user/session/property, requires the submitted message to match, and uses the server-stored message and operation/entity context. Action expiry is capped by source-execution retention; purged sources and invalid, forged, expired, mismatched, or cross-scope selections recover safely instead of silently falling back to semantic routing. Ordinary client-request idempotency applies. This verification does not grant permission or bypass confirmation; every relevant policy and freshness condition is rechecked.
 
-Landing starters use a 15-minute HMAC-SHA-256 proof, a dedicated signing secret, and a token-bound preallocated client request id because they have no source execution. Existing rich entity item actions retain their current launch contract and card lifetime, while a compact promoted equivalent becomes ledger-backed. Navigation and result-local filtering remain separate controls and contribute semantic identity only for deduplication.
+Landing starters use a 15-minute HMAC-SHA-256 proof, a dedicated signing secret, and a token-bound preallocated client request id because they have no source execution. The variable is documented in both local environment templates, while deployed Kubernetes/Pi secret provisioning and rotation remain user-managed. Missing/invalid configuration degrades starters to ordinary text with bounded diagnostics rather than crashing startup. Existing rich entity item actions retain their current launch contract and card lifetime, while a compact promoted equivalent becomes ledger-backed. Navigation and result-local filtering remain separate controls and contribute semantic identity only for deduplication.
 
 Deduplicate across launch entries, result actions, follow-up chips, Skill handoffs, capability lists, and receipts using a registered operation/entity/outcome identity rather than copy similarity. Rich-card actions publish the same identity so an equivalent compact chip can be suppressed. The highest-priority eligible action wins, while its provenance remains available for audit and measurement.
 
-Use deterministic version-prefixed action ids based on source execution, operation, interaction, property/entity, and outcome. Refresh atomically replaces the stored ledger and invalidates removed ids. One shared finalizer covers normal answers, confirmation receipts, expiry/conflict, retryable/terminal failure, cancellation, and other recovery branches before persistence.
+Use deterministic version-prefixed action ids based on source execution, operation, interaction, property/entity, and outcome; starters substitute their registered starter id for source execution. Refresh atomically replaces the stored ledger and invalidates removed ids. One shared finalizer covers normal answers, clarification creation/resumption/recovery, confirmation receipts, expiry/conflict, retryable/terminal failure, cancellation, refresh, and other recovery branches before persistence. Phase 1 inventories raw suggestion sites at every persistence boundary, including `askConfirm.ts` and `askClarification.ts`.
 
 ## 6. What should be removed or demoted
 
@@ -316,18 +316,19 @@ Use deterministic version-prefixed action ids based on source execution, operati
 - Mutation/workflow actions default to a 30-minute TTL and conversational reads to 24 hours, capped by source execution expiry; landing starters use scoped signed proof.
 - Submitted message mismatch, purged source, duplicate request, and completed-equivalent reselection have explicit deterministic behavior.
 - Starter proof uses `ASK_SUGGESTED_ACTION_SIGNING_SECRET`, 15-minute expiry, constant-time verification, and a token-bound client request id.
+- Both local environment templates document the variable; deployed secret management is user-owned, and missing configuration degrades safely to plain-text starters.
 - `NEEDS_CONTEXT` actions resolve every missing fact through a registered capture key and operation; emergency/restricted responses show safe recovery actions only.
 - A candidate that becomes stale between render and selection fails safely and returns a current recovery action.
 - Semantic duplicates are suppressed across the follow-up row, result actions, capability list, Skill handoff, receipt, and landing state.
 - Ranking weights, tier ranges, minimum score, and tie-break order are deterministic, versioned, and covered by exact-order tests.
 - Action ids remain stable across refresh; ledger replacement makes removed ids stale.
-- Normal, confirmed, failed, expired, conflicted, and cancelled results persist compact actions only through the shared finalizer.
+- Normal, clarified/resumed, confirmed, refreshed, failed, expired, conflicted, and cancelled results persist compact actions only through the shared finalizer.
 - Phase 3 cannot start until ranking/latency thresholds, freshness and capture mappings, TTL rules, producer precedence, and injected-clock tests are complete.
 - Labels name the entity and outcome when available and avoid generic filler.
 - Keyboard, screen-reader, narrow-width, and horizontal-overflow behavior remain correct.
 - Telemetry distinguishes impressions, selection, suppression, intended-operation match, clarification, completion, stale rejection, abandonment, and manual-input escape.
 - Contract, producer, ranking, deduplication, authorization, freshness, frontend, and integrated-journey tests pass without relying on a live environment.
-- Retryable failure, terminal failure, confirmation expiry/conflict, and cancellation tests verify persisted recovery actions.
+- Clarification retry/recovery, retryable failure, terminal failure, confirmation expiry/conflict, refresh, and cancellation tests verify persisted recovery actions.
 
 ## 7a. Status at HEAD (September 26, 2026)
 
