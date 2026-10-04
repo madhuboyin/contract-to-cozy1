@@ -45,7 +45,9 @@ describe('AskWorkspace split guardrails', () => {
 
   it('pins footer follow-ups to the answer that declared them', () => {
     const source = read(path.join(askDir, 'AskWorkspace.tsx'));
-    expect(source).toContain('latestExecution ? { sourceExecutionId: latestExecution.executionId } : undefined');
+    // Plain-text (historical) follow-ups and typed Suggested Next Actions are both pinned to the latest answer that offered them.
+    expect(source).toContain("void ask(item.text, undefined, { sourceExecutionId: latestExecution.executionId })");
+    expect(source).toContain("suggestedAction: { actionId: item.action.id, fromExecutionId: latestExecution.executionId }");
   });
 
   it('keeps the add-inventory workflow compact and balanced', () => {

@@ -31,7 +31,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
   setJustUpdatedExecutionId: (value: string | null) => void;
   setRecentSessionsEpoch: Dispatch<SetStateAction<number>>;
 }) {
-  const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean }) => {
+  const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean; suggestedAction?: { actionId: string; fromExecutionId: string } }) => {
     const message = question.trim();
     if (!message || !sessionId || loading) return;
     // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-003/CTX-002: capture which
@@ -61,8 +61,14 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       // the warranties page), so they only apply to the conversation's
       // first message — a later follow-up isn't an entry-point event.
       const isFirstMessage = executions.length === 0;
+      // SUGGESTED_NEXT_ACTIONS plan §4.1: a selected app-offered action carries only its id and the execution that offered it. The
+      // server resolves operation/entity/message from its stored ledger, so none of that is sent as proof of authorship, and the
+      // turn stays in the property the offering execution belongs to.
+      const suggestedAction = options?.suggestedAction;
+      const suggestedActionSource = suggestedAction ? executions.find((item) => item.executionId === suggestedAction.fromExecutionId) : undefined;
       const response = await api.createAskExecution({
-        clientRequestId: newId(), sessionId, message, propertyId: promptContext?.propertyId ?? selectedPropertyId ?? null,
+        clientRequestId: newId(), sessionId, message, propertyId: suggestedAction ? (suggestedActionSource?.property?.id ?? selectedPropertyId ?? null) : (promptContext?.propertyId ?? selectedPropertyId ?? null),
+        ...(suggestedAction ? { suggestedActionSelection: { suggestedActionId: suggestedAction.actionId, suggestedActionFromExecutionId: suggestedAction.fromExecutionId, signedStarterToken: null, message } } : {}),
         launchContext: {
           surface: (isFirstMessage && launchSurface) || (mode === 'page' ? 'ASK_PAGE' : 'GLOBAL_LAUNCHER'),
           capabilityId: promptContext?.capabilityId ?? (isFirstMessage && launchCapabilityId ? launchCapabilityId : undefined),

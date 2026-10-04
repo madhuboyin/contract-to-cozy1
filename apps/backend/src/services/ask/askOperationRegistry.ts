@@ -1,4 +1,4 @@
-import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock } from '../../productFramework/ask/ask.contract';
+import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction } from '../../productFramework/ask/ask.contract';
 import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/skillHandoff';
 import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
 import { validateAskOperationSemanticPackages } from './askOperationSemanticPackages';
@@ -320,6 +320,11 @@ export interface AskOperationResult {
   clarification?: AskClarification | null;
   confirmation?: AskConfirmation | null;
   suggestions: string[];
+  /**
+   * Typed, server-authored compact follow-ups (SUGGESTED_NEXT_ACTIONS plan §4). Set only by the shared finalizer once it exists
+   * (Phase 2); handlers keep nominating through `suggestions` until their domain migrates. Persisted as the offered-action ledger.
+   */
+  suggestedNextActions?: SuggestedNextAction[];
   skillHandoff?: SkillHandoffSuggestion | null;
   /** The requested answer is complete and should not be followed by a generic cross-skill suggestion. */
   suppressSkillHandoff?: boolean;

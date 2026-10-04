@@ -1,5 +1,6 @@
 import type { AskOperationResult } from './askOperationRegistry';
 import { normalizeAskMessage } from './askSemanticRouter';
+import { suggestedNextActionSemanticKeyHash } from './suggestedActions/suggestedNextActionIdentity';
 
 function suggestionKey(value: string): string {
   return normalizeAskMessage(value).normalized
@@ -34,4 +35,22 @@ export function suppressRepeatedAskSuggestions(
     return true;
   });
   return suggestions.length === result.suggestions.length ? result : { ...result, suggestions };
+}
+
+/**
+ * Typed counterpart of `suppressRepeatedAskSuggestions` (SUGGESTED_NEXT_ACTIONS plan §9 Phase 1): history is matched on the
+ * registered semantic identity (operation + interaction + property + entity + outcome), never on label or message text.
+ * The repeatable-outcome exception in plan §4.1 needs the per-operation outcome registry and lands with Phase 2.
+ */
+export function suppressRepeatedSuggestedNextActions(
+  result: AskOperationResult,
+  completedSemanticKeyHashes: ReadonlySet<string>,
+): AskOperationResult {
+  const actions = result.suggestedNextActions;
+  if (!actions?.length || completedSemanticKeyHashes.size === 0) return result;
+  const remaining = actions.filter((action) => !completedSemanticKeyHashes.has(suggestedNextActionSemanticKeyHash({
+    operationId: action.operationId, interactionType: action.interactionType, propertyId: action.entityContext.propertyId,
+    entityType: action.entityContext.entityType, entityId: action.entityContext.entityId, outcomeKey: action.outcomeKey,
+  })));
+  return remaining.length === actions.length ? result : { ...result, suggestedNextActions: remaining };
 }

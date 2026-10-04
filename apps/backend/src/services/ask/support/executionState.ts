@@ -9,6 +9,7 @@ import { getSkillLineageMetadata } from '../../skills/skillLineageRegistry';
 import { requiredAskTargetEntity } from '../askEntityResolution';
 import { captureFallbackHref } from './capture';
 import { propertySummary } from './propertyContext';
+import { readStoredSuggestedNextActions } from '../suggestedActions/suggestedNextAction.contract';
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005/FRESH-001: an explicit
 // representation of "what the homeowner is currently looking at," separate
@@ -175,6 +176,8 @@ export function mapPersistedExecution(execution: {
     clarification: stored.clarification ?? null,
     correctionCapabilities,
     suggestions: stored.suggestions ?? [],
+    // Dropped entry-by-entry when invalid, so a corrupt ledger can never blank an otherwise valid saved answer.
+    suggestedNextActions: readStoredSuggestedNextActions(execution.resultJson),
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
     // Ask Cozy Stage 3, Phase 3 (implementation plan §19; FRD §16/§28).

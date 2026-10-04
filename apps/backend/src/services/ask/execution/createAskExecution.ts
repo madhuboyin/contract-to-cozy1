@@ -25,6 +25,8 @@ import { validateAskAnswerTrustPipeline } from '../askAnswerTrustValidator';
 import { resolveAskEntityState } from '../askEntityResolution';
 import { askOperationSemanticIndexVersion, normalizeAskMessage } from '../askSemanticRouter';
 import { reclaimOrphanedRunningExecution } from '../execution/askSessions';
+import { suggestedNextActionSemanticKeyHash } from '../suggestedActions/suggestedNextActionIdentity';
+import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
 
 function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
   if (outcome === 'UNSUPPORTED') return 'ASK_SKILL_UNSUPPORTED';
@@ -77,7 +79,30 @@ function routingClarificationResult(
   };
 }
 
-export async function createAskExecution(userId: string, input: CreateAskExecutionRequest, accountRole?: AskAccountRole): Promise<AskExecutionResponse> {
+// Plan §4.1: typed recovery for a selection that could not be verified against the offered-action ledger. Mismatch-class
+// rejections are INVALID (client sent something the server never offered); lifetime-class rejections are STALE.
+const INVALID_SUGGESTED_ACTION_REASONS: ReadonlySet<SuggestedActionRejectionReason> = new Set(['MESSAGE_MISMATCH', 'PROPERTY_MISMATCH', 'OPERATION_UNREGISTERED']);
+
+function suggestedActionRecoveryResultJson(reason: SuggestedActionRejectionReason) {
+  const invalid = INVALID_SUGGESTED_ACTION_REASONS.has(reason) || reason.startsWith('STARTER_');
+  return {
+    reasonCode: invalid ? 'ASK_SUGGESTED_ACTION_INVALID' : 'ASK_SUGGESTED_ACTION_STALE',
+    resultJson: {
+      schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
+      blocks: [{
+        type: 'SUMMARY', id: 'suggested-action-unavailable',
+        title: 'That suggestion is no longer available',
+        body: 'It was based on information that has since changed, so nothing was done. Your earlier answer is unchanged — ask again in your own words or pick a current suggestion.',
+        tone: 'CAUTION', actions: [],
+      }],
+      captureRequests: [], confirmation: null, clarification: null, suggestions: [] as string[], suggestedNextActions: [] as unknown[],
+    },
+  };
+}
+
+// `input` is rebound once a selected Suggested Next Action is verified; everything before that point is selection-independent.
+export async function createAskExecution(userId: string, requestInput: CreateAskExecutionRequest, accountRole?: AskAccountRole): Promise<AskExecutionResponse> {
+  let input = requestInput;
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const controls = readAskOperationalControls();
   const safetyFirstDecision = resolveAskRoutingCascade(input.message, {
@@ -121,6 +146,43 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     : await prisma.askSession.create({
       data: { id: input.sessionId, userId, propertyId: executionPropertyId ?? null, title: input.message.slice(0, 120), expiresAt },
     });
+  // Plan §4.1: verify an app-authored selection against the stored offered-action ledger before it can influence routing.
+  // Client-supplied operation/entity launch fields are never authoritative on this path; the stored action's are.
+  let suggestionResolution: SuggestedActionResolution | null = null;
+  if (input.suggestedActionSelection) {
+    suggestionResolution = await resolveSuggestedActionSelection({
+      userId, sessionId: session.id, propertyId: executionPropertyId ?? null, clientRequestId: input.clientRequestId,
+      selection: input.suggestedActionSelection,
+    });
+  }
+  if (suggestionResolution?.kind === 'REJECTED') {
+    const recovery = suggestedActionRecoveryResultJson(suggestionResolution.reason);
+    const rejected = await prisma.askExecution.create({
+      data: {
+        sessionId: session.id, userId, propertyId: executionPropertyId ?? null, clientRequestId: input.clientRequestId,
+        message: input.message, status: 'UNAVAILABLE', reasonCode: recovery.reasonCode, resultJson: asInputJson(recovery.resultJson),
+        completedAt: new Date(), expiresAt,
+      },
+    });
+    // Bounded reason code only: no message text, no entity ids.
+    await prisma.askExecutionEvent.create({ data: { executionId: rejected.id, eventType: 'SUGGESTED_ACTION_REJECTED', metadataJson: asInputJson({ reason: suggestionResolution.reason, source: input.suggestedActionSelection?.signedStarterToken ? 'LANDING_STARTER' : 'EXECUTION' }) } });
+    return mapPersistedExecution(rejected, await propertySummary(executionPropertyId));
+  }
+  if (suggestionResolution?.kind === 'VERIFIED') {
+    const { action } = suggestionResolution;
+    input = {
+      ...input,
+      message: action.message,
+      launchContext: {
+        ...(input.launchContext ?? { surface: 'ASK_SUGGESTED_ACTION' }),
+        // The stored action owns the operation and entity; null is explicit so a forged client entity cannot survive.
+        operationId: action.operationId,
+        entityType: action.entityContext.entityType,
+        entityId: action.entityContext.entityId,
+        contextVersion: action.entityContext.contextVersion,
+      },
+    };
+  }
   const execution = await prisma.askExecution.create({
     data: {
       sessionId: session.id,
@@ -142,6 +204,34 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
     },
   });
   await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'RECEIVED', metadataJson: asInputJson({ surface: input.launchContext?.surface ?? 'unknown' }) } });
+  // Plan §11.1: the selection correlation record linking the verified offered action to this resulting execution. Restricted
+  // operational identifiers only (no label/message text, no entity ids); deliberately not handoffFromExecutionId.
+  if (suggestionResolution?.kind === 'VERIFIED') {
+    try {
+      await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'SUGGESTED_ACTION_SELECTED', metadataJson: asInputJson({
+        suggestedActionId: suggestionResolution.action.id,
+        sourceExecutionId: suggestionResolution.sourceExecutionId,
+        source: suggestionResolution.action.provenance.source,
+        sourceOperationId: suggestionResolution.action.provenance.sourceOperationId,
+        targetOperationId: suggestionResolution.action.operationId,
+        priorityTier: suggestionResolution.action.priority.tier,
+        interactionType: suggestionResolution.action.interactionType,
+        entityType: suggestionResolution.action.entityContext.entityType,
+        outcomeKey: suggestionResolution.action.outcomeKey,
+        // Lets later turns suppress an equivalent, already-completed outcome without storing the entity id here.
+        semanticKeyHash: suggestedNextActionSemanticKeyHash({
+          operationId: suggestionResolution.action.operationId, interactionType: suggestionResolution.action.interactionType,
+          propertyId: suggestionResolution.action.entityContext.propertyId, entityType: suggestionResolution.action.entityContext.entityType,
+          entityId: suggestionResolution.action.entityContext.entityId, outcomeKey: suggestionResolution.action.outcomeKey,
+        }),
+      }) } });
+    } catch {
+      // Telemetry must never fail the answer the user asked for.
+    }
+  } else if (suggestionResolution?.kind === 'STARTER_PROOF_VERIFIED') {
+    // No landing-starter registry exists until Phase 4: honor the text as an ordinary turn without app-authored attribution.
+    await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'SUGGESTED_ACTION_STARTER_DEGRADED', metadataJson: asInputJson({ reason: 'STARTER_REGISTRY_UNAVAILABLE', starterActionId: suggestionResolution.starterActionId }) } }).catch(() => undefined);
+  }
   // Handoff acceptance telemetry (FRD v1.168). Reached only for a genuinely new execution -- the duplicate
   // clientRequestId return above never gets here, so a replayed request cannot double-count OPENED.
   let handoffAttribution: AskHandoffAttribution | null = null;
@@ -445,7 +535,7 @@ export async function createAskExecution(userId: string, input: CreateAskExecuti
         // at this point), so continuesExecutionId is a fresh assignment
         // from this turn's own follow-up resolution, not a preserved value
         // -- only originalResponse comes from the shared history policy.
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedExecutionHistory(execution.resultJson, result.blocks).originalResponse }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedExecutionHistory(execution.resultJson, result.blocks).originalResponse }),
         completedAt,
       },
     });

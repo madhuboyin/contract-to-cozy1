@@ -30,7 +30,7 @@ import { PinnedResultsStrip } from './PinnedResultsStrip';
 import { clearResultViews, createResultRequestTracker, mergeResultExecutions, readResultView, resultRequestKey, resultViewKey } from '@/features/ask/resultViewState';
 import { IntelligenceRefreshStatus } from '@/components/intelligence/IntelligenceRefreshStatus';
 import { useCalmAnswers } from '@/features/ask/calmAnswers';
-import { followUpSuggestions } from '@/features/ask/followUps';
+import { followUpItems, type FollowUpItem } from '@/features/ask/followUps';
 import { CalmLanding } from './calm/CalmLanding';
 import { PendingTurn } from './calm/PendingTurn';
 import { FollowUpRow } from './calm/FollowUpRow';
@@ -251,7 +251,14 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const usingFallbackPrompts = personalizedFeaturedPrompts.length === 0;
   const featuredPrompts = usingFallbackPrompts ? fallbackPrompts : personalizedFeaturedPrompts;
   const latestExecutionId = latestExecution?.executionId ?? '';
-  const followUps = calm ? followUpSuggestions(latestExecution, askedQuestionKeys, askSuggestionKey) : [];
+  const followUps = calm ? followUpItems(latestExecution, askedQuestionKeys, askSuggestionKey) : [];
+  // A typed action submits its transcript message with verified-selection proof; a historical string is asked as plain text,
+  // exactly as before (SUGGESTED_NEXT_ACTIONS plan §9 Phase 1 compatibility boundary).
+  const pickFollowUp = (item: FollowUpItem) => {
+    if (!latestExecution) return;
+    if (item.kind === 'ACTION') void ask(item.action.message, undefined, { sourceExecutionId: latestExecution.executionId }, { suggestedAction: { actionId: item.action.id, fromExecutionId: latestExecution.executionId } });
+    else void ask(item.text, undefined, { sourceExecutionId: latestExecution.executionId });
+  };
   const fullWorkspaceHref = buildAskWorkspaceHref({
     propertyId: selectedPropertyId,
     sessionId,
@@ -431,7 +438,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow suggestions={followUps} disabled={loading} onPick={(question) => void ask(question, undefined, latestExecution ? { sourceExecutionId: latestExecution.executionId } : undefined)} />}{renderComposer('footer')}</footer>}
+      {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow items={followUps} disabled={loading} onPick={pickFollowUp} />}{renderComposer('footer')}</footer>}
         </div>
         {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
           <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />

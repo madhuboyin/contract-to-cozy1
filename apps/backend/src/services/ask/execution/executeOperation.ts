@@ -18,7 +18,7 @@ import type { CapabilityInvocationEnvelope } from '../capabilityInvocation.contr
 import { buildAskNextActionsBlock } from '../askNextActions';
 import { asInputJson, audienceApplicabilityResult, audienceTelemetryFor, ensurePropertyAccess, expireIfSkillBindingChanged, journeyContextFrom, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus } from '../askHandlerSupport';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
-import { suppressRepeatedAskSuggestions } from '../askSuggestionPolicy';
+import { suppressRepeatedAskSuggestions, suppressRepeatedSuggestedNextActions } from '../askSuggestionPolicy';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
 import { ASK_OPERATION_CAPABILITY } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
 import { getSkillAdapter } from '../../skills/adapters/skillAdapterRegistry';
@@ -407,6 +407,7 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   let recentCompletedMessages: string[] = [];
   let recentCompletedCapabilityIds: ReadonlySet<string> = new Set();
   let recentCompletedOperationIds: ReadonlySet<string> = new Set();
+  let completedSuggestedActionKeyHashes: ReadonlySet<string> = new Set();
   try {
     const recent = await prisma.askExecution.findMany({
       where: {
@@ -426,17 +427,38 @@ export async function executeOperation(input: { userId: string; sessionId: strin
         .map((execution) => (execution.operationId ? ASK_OPERATION_CAPABILITY[execution.operationId as AskOperationId] : undefined))
         .filter((capabilityId): capabilityId is string => Boolean(capabilityId)),
     );
+    try {
+      // Typed history: semantic-key hashes of suggested actions this session already selected (this turn's own selection included).
+      const selectedEvents = await prisma.askExecutionEvent.findMany({
+        where: {
+          eventType: 'SUGGESTED_ACTION_SELECTED',
+          OR: [
+            { executionId: input.executionId },
+            { execution: { sessionId: input.sessionId, userId: input.userId, status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] } } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: { metadataJson: true },
+      });
+      completedSuggestedActionKeyHashes = new Set(selectedEvents.flatMap((event) => {
+        const hash = (event.metadataJson as { semanticKeyHash?: unknown } | null)?.semanticKeyHash;
+        return typeof hash === 'string' ? [hash] : [];
+      }));
+    } catch {
+      // Typed-action history is optional too, and kept separate so it can never discard the string history above.
+    }
   } catch {
     // Suggestion continuity is optional and must not block the answer.
   }
   const finalize = async (): Promise<AskOperationResult> => {
     const controls = readAskOperationalControls();
     const skillHandoff = resolveAskSkillHandoff({ operationId: input.operation.operationId, result, propertyId: input.propertyId, launchContext: input.launchContext, recentCompletedOperationIds });
-    const suggestionAwareResult = suppressRepeatedAskSuggestions(
+    const suggestionAwareResult = suppressRepeatedSuggestedNextActions(suppressRepeatedAskSuggestions(
       { ...result, skillHandoff },
       input.message,
       recentCompletedMessages,
-    );
+    ), completedSuggestedActionKeyHashes);
     const validation = validateAskAnswerTrustPipeline({
       question: input.message,
       operationId: input.operation.operationId,
@@ -546,7 +568,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
       reasonCode: result.reasonCode,
       contextVersion: result.contextVersion,
       parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, continuesExecutionId: history.continuesExecutionId, originalResponse: history.originalResponse }),
+      resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, continuesExecutionId: history.continuesExecutionId, originalResponse: history.originalResponse }),
       completedAt: terminalStatus(result.status) ? new Date() : null,
     },
   });

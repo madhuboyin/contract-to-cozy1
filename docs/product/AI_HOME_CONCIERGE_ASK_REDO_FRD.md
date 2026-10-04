@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.11"
+version: "1.12"
 date: "October 4, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.11 |
+| Version | 1.12 |
 | Date | October 4, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -1608,6 +1608,8 @@ Selection, source-execution, and resulting-execution ids are restricted operatio
 There are no real customers or production customer data. This Suggested Next Action increment therefore adds no feature flag, cohort, canary, pilot, or runtime kill switch. Migration uses additive typed/string compatibility; rollback before legacy string production is removed is a code revert plus rebuild and redeploy.
 
 Removal of legacy string production is gated by static validation, pure policy tests, frontend component tests, and environment-independent integrated journeys across every producer and persistence seam. This is repository validation evidence, not production-user telemetry.
+
+**Phase 1 status (October 4, 2026, implemented; not live-verified).** The typed `SuggestedNextAction` contract, the `suggestedNextActions` response/ledger field, verified selection (`suggestedActionSelection` carrying only the action id and source execution id, resolved against the stored ledger by user and session, with the stored message, operation and entity authoritative and typed stale/invalid recovery on any failure), deterministic versioned action ids, the registered semantic key, the dedicated-secret HMAC starter signer (degrades to ordinary text when unconfigured), an injected clock, the explicit-mapping-only string compatibility boundary, typed history suppression, the `SUGGESTED_ACTION_SELECTED` correlation event, and the frontend typed-first follow-up rendering are in place. No producer emits typed actions yet, so no homeowner-visible behavior changes until Phase 3. The persistence-boundary baseline (`docs/architecture/ask-suggested-actions-persistence-sites.json`, guarded by `tests/ask/askSuggestionPersistenceSites.test.js`) records every file that persists an Ask result; the shared finalizer, ranking, eligibility and producers remain Phase 2+.
 
 ### 27.8 Loading and streaming
 

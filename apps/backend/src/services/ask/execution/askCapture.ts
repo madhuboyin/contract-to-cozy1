@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { readStoredSuggestedNextActions } from '../suggestedActions/suggestedNextAction.contract';
 import { getCaptureDefinitionForFact } from '../../../modules/propertyContext/catalog/captureRegistry';
 import { PROPERTY_AREA_CAPTURE_SCOPES, type PropertyAreaCaptureScope } from '../../../modules/propertyContext/catalog/featureRequirementRegistry';
 import { HouseholdRole, MaintenanceTaskStatus, Prisma } from '@prisma/client';
@@ -189,6 +190,7 @@ async function submitNextActionMissingFactCapture(
         confirmation: stored.confirmation ?? null,
         clarification: stored.clarification ?? null,
         suggestions: stored.suggestions ?? [],
+        suggestedNextActions: readStoredSuggestedNextActions(execution.resultJson),
         skillHandoff: stored.skillHandoff ?? null,
         ...preservedExecutionHistory(execution.resultJson, refreshedBlocks as AskPresentationBlock[]),
       }),
@@ -298,7 +300,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: replayed.reasonCode,
         contextVersion: replayed.contextVersion ?? previousCapture.contextVersion,
         parametersJson: replayed.parameters ? asInputJson(replayed.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions, skillHandoff: replayed.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, replayed.blocks) }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions, suggestedNextActions: replayed.suggestedNextActions ?? [], skillHandoff: replayed.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, replayed.blocks) }),
         completedAt: terminalStatus(replayed.status) ? new Date() : null,
       },
     });
@@ -997,7 +999,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion ?? capturedContextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });

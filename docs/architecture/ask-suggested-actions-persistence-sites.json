@@ -1,0 +1,69 @@
+{
+  "comment": "Ask persisted-result write sites (plan §5.3). Regenerate with `node scripts/ask-suggestion-sites.js --write` and update the plan inventory.",
+  "files": {
+    "src/services/ask/askNotificationContinuation.service.ts": {
+      "category": "ASK_SERVICE",
+      "sites": 1
+    },
+    "src/services/ask/conversationalUnderstanding/conversationalCapture.ts": {
+      "category": "CONVERSATIONAL_CAPTURE",
+      "sites": 2
+    },
+    "src/services/ask/execution/askCapture.ts": {
+      "category": "EXECUTION_LIFECYCLE",
+      "sites": 4
+    },
+    "src/services/ask/execution/askClarification.ts": {
+      "category": "EXECUTION_LIFECYCLE",
+      "sites": 5
+    },
+    "src/services/ask/execution/askConfirm.ts": {
+      "category": "EXECUTION_LIFECYCLE",
+      "sites": 7
+    },
+    "src/services/ask/execution/askFeedback.ts": {
+      "category": "EXECUTION_LIFECYCLE",
+      "sites": 1
+    },
+    "src/services/ask/execution/askRetry.ts": {
+      "category": "EXECUTION_LIFECYCLE",
+      "sites": 1
+    },
+    "src/services/ask/execution/askSessions.ts": {
+      "category": "EXECUTION_LIFECYCLE",
+      "sites": 2
+    },
+    "src/services/ask/execution/createAskExecution.ts": {
+      "category": "EXECUTION_LIFECYCLE",
+      "sites": 4
+    },
+    "src/services/ask/execution/executeOperation.ts": {
+      "category": "EXECUTION_LIFECYCLE",
+      "sites": 1
+    },
+    "src/services/ask/handlers/buyerConfirm.handler.ts": {
+      "category": "CONFIRM_HANDLER",
+      "sites": 1
+    },
+    "src/services/ask/handlers/maintenanceConfirm.handler.ts": {
+      "category": "CONFIRM_HANDLER",
+      "sites": 1
+    },
+    "src/services/ask/handlers/radarConfirm.handler.ts": {
+      "category": "CONFIRM_HANDLER",
+      "sites": 1
+    },
+    "src/services/ask/handlers/recordConfirm.handler.ts": {
+      "category": "CONFIRM_HANDLER",
+      "sites": 5
+    },
+    "src/services/ask/handlers/workflowConfirm.handler.ts": {
+      "category": "CONFIRM_HANDLER",
+      "sites": 2
+    },
+    "src/services/ask/support/executionState.ts": {
+      "category": "ASK_SERVICE",
+      "sites": 1
+    }
+  }
+}

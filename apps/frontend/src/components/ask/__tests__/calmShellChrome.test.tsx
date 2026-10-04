@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { CalmLanding } from '../calm/CalmLanding';
 import { FollowUpRow } from '../calm/FollowUpRow';
+import type { FollowUpItem } from '@/features/ask/followUps';
 import { ConversationHistoryNav } from '../workspace/ConversationHistoryNav';
 import { IntelligenceRefreshStatus } from '../../intelligence/IntelligenceRefreshStatus';
 import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
@@ -107,15 +108,26 @@ describe('CalmLanding', () => {
   });
 });
 
+const textItems = (...texts: string[]): FollowUpItem[] => texts.map((text) => ({ kind: 'TEXT', key: `text:${text}`, label: text, text }));
+
 describe('FollowUpRow', () => {
+  it('renders a typed action by its label and hands the whole item back, so the transcript message is not the chip text', () => {
+    const onPick = jest.fn();
+    const item: FollowUpItem = { kind: 'ACTION', key: 'action:v1.abc', label: 'Add the microwave brand', action: { id: 'v1.abcdefghijklmnop', message: 'What brand is the microwave?' } as never };
+    render(<FollowUpRow items={[item]} disabled={false} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add the microwave brand' }));
+    expect(onPick).toHaveBeenCalledWith(item);
+    expect(screen.queryByText('What brand is the microwave?')).toBeNull();
+  });
+
   it('asks the chosen follow-up, and is empty while an answer is pending', () => {
     const onPick = jest.fn();
-    const { rerender, container } = render(<FollowUpRow suggestions={['Only show overdue tasks', 'Compare the quotes']} disabled={false} onPick={onPick} />);
+    const { rerender, container } = render(<FollowUpRow items={textItems('Only show overdue tasks', 'Compare the quotes')} disabled={false} onPick={onPick} />);
     fireEvent.click(screen.getByRole('button', { name: 'Compare the quotes' }));
-    expect(onPick).toHaveBeenCalledWith('Compare the quotes');
-    rerender(<FollowUpRow suggestions={['Only show overdue tasks']} disabled onPick={onPick} />);
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ kind: 'TEXT', text: 'Compare the quotes' }));
+    rerender(<FollowUpRow items={textItems('Only show overdue tasks')} disabled onPick={onPick} />);
     expect(container.querySelector('[data-follow-up-row]')).toBeNull();
-    rerender(<FollowUpRow suggestions={[]} disabled={false} onPick={onPick} />);
+    rerender(<FollowUpRow items={[]} disabled={false} onPick={onPick} />);
     expect(container.querySelector('[data-follow-up-row]')).toBeNull();
   });
 });

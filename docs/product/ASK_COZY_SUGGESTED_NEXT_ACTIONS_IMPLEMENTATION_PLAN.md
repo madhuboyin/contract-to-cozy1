@@ -1,9 +1,9 @@
 # Ask Cozy High-Precision Suggested Next Actions — Implementation Plan
 
 **Date:** October 4, 2026
-**Status:** Proposed implementation plan
+**Status:** Phase 1 implemented (October 4, 2026; not live-verified); Phases 2-5 proposed
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.11; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.12; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -683,3 +683,33 @@ There are no real customers or production customer data. Do not add a feature fl
 Rollback before Phase 5 is explicitly a code revert plus rebuild and redeploy: restore the affected producer's explicit string compatibility mapping while historical typed results remain readable. It is not an instant runtime switch. Phase 5 occurs only after all categorized compact producers and persistence seams are migrated and static validation, pure policy tests, frontend component tests, and environment-independent integrated journeys show no unresolved selection-authorship, stale-action, recovery, or operation/entity precision defects. This is repository validation evidence, not production-user telemetry.
 
 Verification follows repository policy: requirements review, Graphify/code-path tracing, contract inspection, static registry validation, pure policy tests, frontend component tests, and environment-independent integrated journeys. A later live-environment checklist may verify representative selection, stale recovery, confirmation, and analytics correlation when such an environment exists; unavailable local databases or browser infrastructure do not block implementation completion and must not be claimed as executed.
+
+## Appendix A — Phase 1 implementation record
+
+**What shipped (backend).** `SuggestedNextActionSchema`, `SuggestedNextActionSelectionSchema`, and the `suggestedNextActions` response field live in `ask.contract.ts`; the selection is accepted only as a top-level `suggestedActionSelection` (strict: a client `operationId` or entity field is rejected, not ignored). Service modules under `apps/backend/src/services/ask/suggestedActions/`: `suggestedNextAction.contract.ts` (registry membership, ledger read, TTL defaults, expiry cap), `suggestedNextActionIdentity.ts` (deterministic versioned ids, semantic key and hash), `suggestedNextActionClock.ts`, `suggestedNextActionSigner.ts` (HMAC-SHA-256, dedicated secret, key-version rotation, graceful degradation), `suggestedNextActionSelection.ts` (ledger resolver), and `suggestedNextActionCompatibility.ts` (explicit-mapping-only; the shipped table is empty). `createAskExecution.ts` verifies a selection before it can influence routing, rebinds `input` from the stored action (stored message, operation, entity and context version win), emits the `SUGGESTED_ACTION_SELECTED` correlation event, and on any verification failure persists a typed `UNAVAILABLE` execution (`ASK_SUGGESTED_ACTION_STALE` or `ASK_SUGGESTED_ACTION_INVALID`) with a recovery summary and a bounded `SUGGESTED_ACTION_REJECTED` event. Typed history suppression (`suppressRepeatedSuggestedNextActions`) runs in `finalize()` next to the string path, keyed by semantic-key hashes from this session's `SUGGESTED_ACTION_SELECTED` events.
+
+**What shipped (frontend).** `SuggestedNextAction` and `SuggestedNextActionSelection` types; `followUpItems` prefers typed actions (hiding expired ones, never filtering them by asked text, capped at four) and falls back to strings only when the answer has no typed actions; `FollowUpRow` renders `label` and hands the whole item back; `AskWorkspace` submits a typed action with only its id and the offering execution id, and keeps the turn in the offering execution's property.
+
+**Deviations and decisions made while implementing (review these).**
+
+1. A starter token that verifies is *not* dispatched in Phase 1: no landing-starter registry exists until Phase 4, so the turn is honored as ordinary homeowner text, a `SUGGESTED_ACTION_STARTER_DEGRADED` event records it, and no app-authored attribution is given. The signer, token binding and tests are complete; dispatch is Phase 4.
+2. A rejected selection creates its own `UNAVAILABLE` execution row (rather than a transport error) so the transcript keeps a typed, retained recovery result; it stores the submitted message as the question and no launch context.
+3. Property scope is strict: the offered action, its source execution, and the request must agree, including `null`. A property-less request cannot select a property-scoped action.
+4. Template placeholders (`replace-with…`, `changeme…`) are rejected as signing secrets even when long enough; both env templates ship the variable empty.
+5. The repeatable-outcome exception to completed-equivalent suppression (§4.1) is deferred to Phase 2 because it needs the per-operation outcome registry.
+6. Not done in Phase 1, by design: the shared `finalizeSuggestedNextActions` service, eligibility, ranking, deduplication, producers, the fact-to-capture mapping, freshness matrix, weights and thresholds (all Phase 2 entry gates), analytics impression/outcome events, and the docs-parity script.
+
+**Persistence-boundary inventory (baseline, 2026-10-04).** 16 files and 39 result-write sites; checked in at `docs/architecture/ask-suggested-actions-persistence-sites.json` and enforced by `tests/ask/askSuggestionPersistenceSites.test.js` (regenerate with `node scripts/ask-suggestion-sites.js --write`).
+
+| Category | Files | Sites |
+| --- | --- | --- |
+| Execution lifecycle (`execution/`: create, execute/refresh, confirm, clarification, capture, retry, feedback, sessions) | 8 | 25 |
+| Confirm handlers (`handlers/*Confirm.handler.ts`) | 5 | 10 |
+| Conversational capture | 1 | 2 |
+| Other Ask services (`askNotificationContinuation.service.ts`, `support/executionState.ts` schema-fallback) | 2 | 2 |
+
+The five confirm handlers and conversational capture were not named in the plan's seam list; they persist results too and must route through the shared finalizer or be explicitly classified as producing no compact actions.
+
+**Raw `suggestions:` declarations (same script, source only, tests excluded).** 81 files and 524 declarations: operation handlers 46 files / 439; Ask services 16 / 42; execution lifecycle 7 / 27; other domains 8 / 10; contracts 3 / 5; suggested-actions module 1 / 1. This is a discovery count, not a count of compact follow-up producers; Phase 3 classifies each.
+
+**Verification (executed locally; no live backend, browser, or database).** `tsc --noEmit` clean on the backend. New tests: `tests/ask/suggestedNextActionsPhase1.test.js` (27: contract invariants, deterministic ids, signer scope/rotation/degradation, ledger resolver rejections, typed history suppression, compatibility boundary) and `tests/ask/askSuggestionPersistenceSites.test.js` (4); frontend `followUps` and `calmShellChrome` suites extended. Full `npm run test:ask:chunked` run: 2 tests this work broke were found and fixed (a source-window assertion in `askGovernance` and the single-`askExecution.findMany` guard in `askNextActions`); the remaining 6 failures (`askGovernance` golden routing, `askImportGraphGuardrails` support re-exports, `askRoutingCalibration` reserve prompts, `correctionHandlersRuntime` inventory item actions, `healthGapCapture` derived capture, `skillEvaluationRegistry` routing fixtures) fail identically on an unmodified HEAD checkout and are not caused by this work. Frontend `src/components/ask` + `src/features/ask`: 4 pre-existing failures in `maintenanceShelves` and `displayPatterns` (extra `WORKSPACE` argument on item-action callbacks, in files this work does not touch). Not run: `next build`, the DB-backed integration suite, any browser verification. The `createAskExecution` rejection/rebind path is covered by resolver unit tests and source-shape guards, not by an executed end-to-end request; that and the live-environment checklist remain open.

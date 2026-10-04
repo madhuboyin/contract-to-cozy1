@@ -821,11 +821,85 @@ export const RecordAskCaptureEventSchema = z.object({
   event: z.enum(['DISMISSED', 'FULL_FORM_OPENED']),
 }).strict();
 
+// ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN §4 (Phase 1). The compact, server-authored follow-up contract.
+// `operationId` and `outcomeKey` are validated structurally here; membership in ASK_OPERATION_DEFINITIONS and the
+// operation's own outcome-key registry is enforced by services/ask/suggestedActions (this module deliberately does not
+// import from the services layer, same as GroupedListItemActionSchema above). NAVIGATE and FILTER_RESULT controls are
+// not Suggested Next Actions (plan §4); they keep their existing link/result-control contracts.
+export const SUGGESTED_NEXT_ACTION_INTERACTION_TYPES = ['CONVERSATION_CONTINUE', 'MUTATE_RECORD', 'START_WORKFLOW'] as const;
+export const SUGGESTED_NEXT_ACTION_SOURCES = [
+  'OPERATION_RESULT', 'ENTITY_ACTION', 'MISSING_DETAIL', 'SKILL_HANDOFF', 'CAPABILITY_RECOMMENDATION',
+  'ACTIVE_GOAL', 'PLATFORM_STATE', 'LANDING_STARTER',
+] as const;
+export const SUGGESTED_NEXT_ACTION_TIERS = ['CONTINUE', 'RECORD_ACTION', 'RELATED', 'DISCOVERY'] as const;
+export const SUGGESTED_NEXT_ACTIONS_MAX = 4;
+export const SUGGESTED_NEXT_ACTION_ID_PATTERN = /^v[0-9]{1,3}\.[A-Za-z0-9_-]{16,64}$/;
+const SUGGESTED_NEXT_ACTION_TOKEN_PATTERN = /^[A-Z][A-Z0-9_]{2,79}$/;
+
+export const SuggestedNextActionSchema = z.object({
+  id: z.string().regex(SUGGESTED_NEXT_ACTION_ID_PATTERN),
+  outcomeKey: z.string().regex(SUGGESTED_NEXT_ACTION_TOKEN_PATTERN),
+  label: z.string().trim().min(1).max(80),
+  message: z.string().trim().min(1).max(300),
+  operationId: z.string().trim().min(1).max(120),
+  interactionType: z.enum(SUGGESTED_NEXT_ACTION_INTERACTION_TYPES),
+  entityContext: z.object({
+    propertyId: z.string().trim().min(1).max(160).nullable(),
+    entityType: z.string().trim().min(1).max(120).nullable(),
+    entityId: z.string().trim().min(1).max(160).nullable(),
+    contextVersion: z.string().trim().min(1).max(160).nullable(),
+  }),
+  eligibility: z.object({
+    // UNAVAILABLE candidates are never an ordinary follow-up chip (plan §4), so they cannot appear in a response.
+    state: z.enum(['ELIGIBLE', 'NEEDS_CONTEXT']),
+    reasonCodes: z.array(z.string().regex(SUGGESTED_NEXT_ACTION_TOKEN_PATTERN)).max(8),
+    missingFactKeys: z.array(z.string().regex(SUGGESTED_NEXT_ACTION_TOKEN_PATTERN)).max(8),
+  }),
+  provenance: z.object({
+    source: z.enum(SUGGESTED_NEXT_ACTION_SOURCES),
+    sourceOperationId: z.string().trim().min(1).max(120).nullable(),
+    sourceExecutionId: z.string().trim().min(1).max(160).nullable(),
+    reasonCodes: z.array(z.string().regex(SUGGESTED_NEXT_ACTION_TOKEN_PATTERN)).max(8),
+  }),
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  priority: z.object({
+    tier: z.enum(SUGGESTED_NEXT_ACTION_TIERS),
+    score: z.number().int().min(0).max(100000),
+  }),
+}).superRefine((action, ctx) => {
+  if (Date.parse(action.expiresAt) < Date.parse(action.createdAt)) {
+    ctx.addIssue({ code: 'custom', path: ['expiresAt'], message: 'expiresAt must not precede createdAt' });
+  }
+  if (action.eligibility.state === 'NEEDS_CONTEXT' && action.eligibility.missingFactKeys.length === 0) {
+    ctx.addIssue({ code: 'custom', path: ['eligibility', 'missingFactKeys'], message: 'NEEDS_CONTEXT requires at least one missing fact key' });
+  }
+  if (action.eligibility.state === 'ELIGIBLE' && action.eligibility.missingFactKeys.length > 0) {
+    ctx.addIssue({ code: 'custom', path: ['eligibility', 'missingFactKeys'], message: 'ELIGIBLE actions cannot advertise missing facts' });
+  }
+});
+export type SuggestedNextAction = z.infer<typeof SuggestedNextActionSchema>;
+
+// Plan §4.1: the client proves an app-authored selection by naming the offered action and the execution that offered it
+// (answer follow-ups) or by presenting a signed landing-starter token. It never supplies the operation or entity.
+export const SuggestedNextActionSelectionSchema = z.object({
+  suggestedActionId: z.string().regex(SUGGESTED_NEXT_ACTION_ID_PATTERN),
+  suggestedActionFromExecutionId: z.string().trim().min(1).max(160).nullable().default(null),
+  signedStarterToken: z.string().trim().min(1).max(2000).nullable().default(null),
+  message: z.string().trim().min(1).max(4000),
+}).strict().superRefine((selection, ctx) => {
+  if (Boolean(selection.suggestedActionFromExecutionId) === Boolean(selection.signedStarterToken)) {
+    ctx.addIssue({ code: 'custom', path: ['suggestedActionFromExecutionId'], message: 'Provide exactly one of suggestedActionFromExecutionId or signedStarterToken' });
+  }
+});
+export type SuggestedNextActionSelection = z.infer<typeof SuggestedNextActionSelectionSchema>;
+
 export const CreateAskExecutionRequestSchema = z.object({
   clientRequestId: z.string().trim().min(1).max(160),
   sessionId: z.string().trim().min(1).max(160),
   message: z.string().trim().min(1).max(4000),
   propertyId: z.string().trim().min(1).max(160).nullable().optional(),
+  suggestedActionSelection: SuggestedNextActionSelectionSchema.optional(),
   launchContext: z.object({
     surface: z.string().trim().min(1).max(80),
     capabilityId: z.string().trim().max(120).nullable().optional(),
@@ -953,6 +1027,8 @@ const AskExecutionResponseBaseSchema = z.object({
     retryResponse: z.boolean(),
   }).default({ intent: false, entity: false, homeRecord: false, retryResponse: false }),
   suggestions: z.array(z.string()).max(5),
+  // Plan §4 (Phase 1): absent on executions persisted before the typed contract, which keep rendering from `suggestions`.
+  suggestedNextActions: z.array(SuggestedNextActionSchema).max(SUGGESTED_NEXT_ACTIONS_MAX).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

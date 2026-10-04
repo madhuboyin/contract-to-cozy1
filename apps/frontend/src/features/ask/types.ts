@@ -109,6 +109,31 @@ export type AskPresentationBlock =
   | { type: 'LIFESPAN'; id: string; title: string; description?: string | null; basis: string; items: Array<{ id: string; label: string; ageYears: number; typicalLifeYears: { min: number; max: number }; status: 'WITHIN_RANGE' | 'PLAN_AHEAD' | 'PAST_RANGE'; statusLabel: string; entityType?: string | null; actions?: AskGroupedListItemAction[]; meta?: string[] }>; missingAge: Array<{ id: string; label: string; entityType?: string | null; actions?: AskGroupedListItemAction[] }>; missingAgeTitle?: string | null }
   | { type: 'PROGRESS'; id: string; title: string; description?: string | null; percent: number; basis: string; metrics: Array<{ label: string; value: string; tone: AskDisplayTone }>; nextSteps: AskGroupedListItem[]; actions: AskAction[] };
 
+// ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN §4: the server-authored compact follow-up. Mirrors the backend
+// SuggestedNextActionSchema; the client renders `label`, submits only the id + source execution on selection, and never
+// supplies the operation or entity (the server resolves them from its stored ledger).
+export interface SuggestedNextAction {
+  id: string;
+  outcomeKey: string;
+  label: string;
+  message: string;
+  operationId: string;
+  interactionType: 'CONVERSATION_CONTINUE' | 'MUTATE_RECORD' | 'START_WORKFLOW';
+  entityContext: { propertyId: string | null; entityType: string | null; entityId: string | null; contextVersion: string | null };
+  eligibility: { state: 'ELIGIBLE' | 'NEEDS_CONTEXT'; reasonCodes: string[]; missingFactKeys: string[] };
+  provenance: { source: string; sourceOperationId: string | null; sourceExecutionId: string | null; reasonCodes: string[] };
+  createdAt: string;
+  expiresAt: string;
+  priority: { tier: 'CONTINUE' | 'RECORD_ACTION' | 'RELATED' | 'DISCOVERY'; score: number };
+}
+
+export interface SuggestedNextActionSelection {
+  suggestedActionId: string;
+  suggestedActionFromExecutionId: string | null;
+  signedStarterToken: string | null;
+  message: string;
+}
+
 export interface AskExecutionResponse {
   schemaVersion: '1.0';
   executionId: string;
@@ -159,6 +184,8 @@ export interface AskExecutionResponse {
     retryResponse: boolean;
   };
   suggestions: string[];
+  /** Absent on executions persisted before the typed contract; those keep rendering from `suggestions`. */
+  suggestedNextActions?: SuggestedNextAction[];
   createdAt: string;
   updatedAt: string;
   // Ask Cozy Stage 3, Phase 3 (implementation plan §9/§19; FRD §16/§28). A
@@ -283,6 +310,8 @@ export interface CreateAskExecutionPayload {
   sessionId: string;
   message: string;
   propertyId?: string | null;
+  /** Proof that this turn selects an app-offered action (plan §4.1). The server, not this payload, decides operation/entity. */
+  suggestedActionSelection?: SuggestedNextActionSelection;
   launchContext?: {
     surface: string;
     capabilityId?: string | null;
