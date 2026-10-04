@@ -12,8 +12,7 @@ const { scoreSuggestedNextActionCandidate, compareRanked } = require('../../src/
 const { deduplicateSuggestedNextActions } = require('../../src/services/ask/suggestedActions/suggestedNextActionDeduplication.ts');
 const { selectSuggestedNextActions } = require('../../src/services/ask/suggestedActions/suggestedNextActionPolicy.ts');
 const { finalizeSuggestedNextActionsWithReport, resolveSuggestedNextActionMode } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
-const { stringCompatibilityProducer, resultCandidatesProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
-const { EXPLICIT_SUGGESTION_MAPPINGS } = require('../../src/services/ask/suggestedActions/suggestedNextActionCompatibility.ts');
+const { resultCandidatesProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
 const { collectPresentationIdentities } = require('../../src/services/ask/suggestedActions/suggestedNextActionPresentationIdentities.ts');
 const { suggestedNextActionSemanticKey, suggestedNextActionSemanticKeyHash, deriveSuggestedNextActionId } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
 const { fixedSuggestedNextActionClock } = require('../../src/services/ask/suggestedActions/suggestedNextActionClock.ts');
@@ -458,21 +457,18 @@ test('mode: emergency/restricted boundaries and recovery statuses are SAFE_RECOV
 
 // ---- producers -------------------------------------------------------------------------------------------------------
 
-test('the string-compatibility producer is all-or-nothing and the shipped table nominates nothing', () => {
-  const ctxFor = (suggestions) => ({ result: baseResult({ suggestions }), executionId: 'e', sourceOperationId: 'INVENTORY_LOOKUP', propertyId: 'prop-1', message: 'm' });
-  assert.deepEqual(stringCompatibilityProducer.nominate(ctxFor(['Add the microwave brand'])), [], 'empty table');
-  EXPLICIT_SUGGESTION_MAPPINGS.push({ text: 'Add the microwave brand', operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: 'ADD_BRAND', interactionType: 'MUTATE_RECORD' });
-  try {
-    assert.equal(stringCompatibilityProducer.nominate(ctxFor(['Add the microwave brand'])).length, 1);
-    assert.deepEqual(stringCompatibilityProducer.nominate(ctxFor(['Add the microwave brand', 'Something unmapped'])), [], 'a partially mapped result keeps all of its strings');
-    assert.deepEqual(stringCompatibilityProducer.nominate({ ...ctxFor(['Add the microwave brand']), result: baseResult({ suggestions: ['Add the microwave brand'], suggestedNextActionCandidates: [candidate()] }) }), [], 'a result that already has typed candidates is not also string-mapped');
-  } finally { EXPLICIT_SUGGESTION_MAPPINGS.pop(); }
+test('the only producer passes handler-attached candidates through, and nothing else nominates', () => {
   assert.deepEqual(resultCandidatesProducer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }), []);
+  assert.deepEqual(resultCandidatesProducer.nominate({ result: baseResult({ suggestedNextActionCandidates: [candidate()] }), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }).length, 1);
+  assert.equal(require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts').SUGGESTED_NEXT_ACTION_PRODUCERS.length, 1);
 });
 
-test('the entity-validator registry is empty by default, so every typed entity action fails closed until its domain migrates', () => {
-  resetSuggestedNextActionEntityValidatorsForTests();
+test('entity types without a registered validator fail closed; only migrated domains have one', () => {
   const { getSuggestedNextActionEntityValidator } = require('../../src/services/ask/suggestedActions/suggestedNextActionEntityValidators.ts');
+  require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
+  assert.equal(typeof getSuggestedNextActionEntityValidator('INVENTORY_ITEM'), 'function', 'inventory is converted');
+  for (const unconverted of ['ROOM', 'MAINTENANCE_TASK', 'WARRANTY', 'HOME_EVENT', 'CLAIM']) assert.equal(getSuggestedNextActionEntityValidator(unconverted), undefined, unconverted);
+  resetSuggestedNextActionEntityValidatorsForTests();
   assert.equal(getSuggestedNextActionEntityValidator('INVENTORY_ITEM'), undefined);
   registerSuggestedNextActionEntityValidator('INVENTORY_ITEM', async () => new Map());
   assert.equal(typeof getSuggestedNextActionEntityValidator('INVENTORY_ITEM'), 'function');

@@ -27,6 +27,7 @@ import { selectSuggestedNextActions, type PolicyDiagnostics } from './suggestedN
 import { SUGGESTED_NEXT_ACTION_BUDGET } from './suggestedNextActionRegistry';
 import { SUGGESTED_NEXT_ACTION_PRODUCERS, type SuggestedNextActionProducer } from './suggestedNextActionProducers';
 import { getSuggestedNextActionEntityValidator } from './suggestedNextActionEntityValidators';
+import './entityValidators/registerAll';
 import { collectPresentationIdentities } from './suggestedNextActionPresentationIdentities';
 import { systemSuggestedNextActionClock, type SuggestedNextActionClock } from './suggestedNextActionClock';
 

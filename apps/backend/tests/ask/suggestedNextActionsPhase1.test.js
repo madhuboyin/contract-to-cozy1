@@ -15,7 +15,6 @@ const {
 } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
 const { resolveSuggestedActionSelection } = require('../../src/services/ask/suggestedActions/suggestedNextActionSelection.ts');
 const { fixedSuggestedNextActionClock } = require('../../src/services/ask/suggestedActions/suggestedNextActionClock.ts');
-const { mapExplicitSuggestionStrings } = require('../../src/services/ask/suggestedActions/suggestedNextActionCompatibility.ts');
 
 // ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN Phase 1: contract, deterministic ids, selection proof.
 
@@ -185,14 +184,4 @@ test('a stored action whose operation is no longer registered is rejected, not r
   const input = baseInput({ selection: { suggestedActionId: stale.id, suggestedActionFromExecutionId: 'exec-1', message: stale.message } });
   // readStoredSuggestedNextActions drops it, so it is simply not offered.
   assert.equal((await withFindFirst(async () => sourceRow({ resultJson: { suggestedNextActions: [stale] } }), () => resolveSuggestedActionSelection(input))).reason, 'ACTION_NOT_OFFERED');
-});
-
-// ---- compatibility boundary ------------------------------------------------------------------------------------------
-
-test('a legacy string becomes typed only through an explicit mapping entry; operation ids are never inferred from text', () => {
-  assert.deepEqual(mapExplicitSuggestionStrings(['Add the microwave brand', 'Show overdue tasks']), { mapped: [], unmapped: ['Add the microwave brand', 'Show overdue tasks'] }, 'the shipped table starts empty');
-  const mappings = [{ text: 'Add the microwave brand', operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: 'ADD_BRAND', interactionType: 'MUTATE_RECORD' }];
-  const result = mapExplicitSuggestionStrings(['  Add the microwave brand ', 'add the microwave brand', 'Show overdue tasks'], mappings);
-  assert.equal(result.mapped.length, 1);
-  assert.deepEqual(result.unmapped, ['add the microwave brand', 'Show overdue tasks'], 'matching is exact, not fuzzy');
 });

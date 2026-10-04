@@ -19,6 +19,9 @@ import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../as
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
+import { inventoryItemContextVersion } from '../suggestedActions/domainVersions';
+import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActionRegistry';
+import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 
 export const inventoryService = new InventoryService();
 
@@ -531,6 +534,17 @@ const MAX_INVENTORY_MONEY_DOLLARS = 10_000_000;
 export const INVENTORY_ROOM_LINK_FIELD: InventoryCorrectionField = 'roomId';
 
 // Cost fields are checked before the date fields: "purchase cost" and "purchase date" share a word.
+/**
+ * Which field a correction targets. A selected Suggested Next Action names its field through the registered outcome, so the message is
+ * not re-read at all (an item whose own name contains "room" or "brand" can no longer redirect the correction); free text is only
+ * parsed when there is no outcome.
+ */
+export function inventoryCorrectionFieldFor(message: string, outcomeKey?: string | null): InventoryCorrectionField | null {
+  const outcomeField = correctionFieldForOutcome('INVENTORY_ITEM_CORRECT', outcomeKey);
+  if (outcomeField && outcomeField in INVENTORY_CORRECTION_FIELDS) return outcomeField as InventoryCorrectionField;
+  return inventoryCorrectionField(message);
+}
+
 function inventoryCorrectionField(message: string): InventoryCorrectionField | null {
   // "rename" is unambiguous. The bare noun "name" is checked last because an item's own title can contain it.
   if (/\brename\b/i.test(message)) return 'name';
@@ -667,9 +681,8 @@ function inventoryDateValue(value: Date | string | null | undefined): string | n
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
 }
 
-export function inventoryItemContextVersion(item: { id: string; updatedAt: Date }): string {
-  return createHash('sha256').update(`${item.id}:${item.updatedAt.toISOString()}`).digest('hex');
-}
+// Defined in a leaf module so the Suggested Next Action entity validator can compute the same version without importing this handler.
+export { inventoryItemContextVersion };
 
 // Item actions offered from the inline inventory detail. Contributor-and-up
 // only -- a VIEWER never receives a control implying the write will be accepted.
@@ -701,6 +714,40 @@ export function inventoryMissingCorrectionActions(
     id: `correct-${field}`, label: `Add ${INVENTORY_CORRECTION_FIELDS[field].label}`,
     message: INVENTORY_CORRECTION_FIELDS[field].message,
     style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+  }));
+}
+
+/**
+ * Typed next-action candidates for the details an inventory item is still missing (plan §5.1.3). Only fields that are both missing and
+ * supported by the canonical correction command are offered, in a fixed order, capped at `limit`. Each carries the exact item and the
+ * registered ADD_* outcome, so selecting it reaches the correction for that item and field without re-reading the label.
+ */
+export function inventoryMissingDetailCandidates(
+  item: { id: string; name: string; updatedAt?: Date; brand?: string | null; manufacturer?: string | null; model?: string | null; modelNumber?: string | null; serialNo?: string | null; serialNumber?: string | null; purchasedOn?: Date | string | null },
+  context: { propertyId: string; sourceOperationId: string | null; limit?: number },
+): SuggestedNextActionCandidate[] {
+  const missing: Array<{ field: InventoryCorrectionField; outcomeKey: string }> = [
+    ...(!item.purchasedOn ? [{ field: 'purchasedOn' as const, outcomeKey: 'ADD_PURCHASE_DATE' }] : []),
+    ...(!item.brand && !item.manufacturer ? [{ field: 'brand' as const, outcomeKey: 'ADD_BRAND' }] : []),
+    ...(!item.model && !item.modelNumber ? [{ field: 'model' as const, outcomeKey: 'ADD_MODEL' }] : []),
+    ...(!item.serialNo && !item.serialNumber ? [{ field: 'serialNo' as const, outcomeKey: 'ADD_SERIAL_NUMBER' }] : []),
+  ];
+  const shortName = item.name.length > 40 ? `${item.name.slice(0, 39)}…` : item.name;
+  return missing.slice(0, context.limit ?? 3).map(({ field, outcomeKey }) => ({
+    producerId: 'inventory.missing-details',
+    source: 'MISSING_DETAIL' as const,
+    sourceOperationId: context.sourceOperationId,
+    label: `Add the ${INVENTORY_CORRECTION_FIELDS[field].label} of ${shortName}`,
+    message: `Correct the ${INVENTORY_CORRECTION_FIELDS[field].label} of inventory item "${item.name}".`,
+    operationId: 'INVENTORY_ITEM_CORRECT',
+    interactionType: 'MUTATE_RECORD' as const,
+    outcomeKey,
+    entityContext: { propertyId: context.propertyId, entityType: 'INVENTORY_ITEM', entityId: item.id, contextVersion: item.updatedAt ? inventoryItemContextVersion({ id: item.id, updatedAt: item.updatedAt }) : null },
+    tier: 'RECORD_ACTION' as const,
+    requiredFacts: [],
+    reasonCodes: ['FIELD_INCOMPLETE'],
+    signals: { ...DEFAULT_CANDIDATE_SIGNALS, exactEntityMatch: true, currentResultOwnership: true },
+    traits: { ...DEFAULT_CANDIDATE_TRAITS },
   }));
 }
 
@@ -739,7 +786,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
       suggestions: items.slice(0, 3).map((item) => `Correct the install date of inventory item "${item.name}"`),
     };
   }
-  const field = inventoryCorrectionField(message);
+  const field = inventoryCorrectionFieldFor(message, launchContext?.outcomeKey);
   if (!field) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'INVENTORY_CORRECTION_FIELD_REQUIRED',

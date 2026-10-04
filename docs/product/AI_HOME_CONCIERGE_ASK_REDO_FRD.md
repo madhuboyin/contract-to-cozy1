@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.13"
+version: "1.14"
 date: "October 4, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.13 |
+| Version | 1.14 |
 | Date | October 4, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -1612,6 +1612,8 @@ Removal of legacy string production is gated by static validation, pure policy t
 **Phase 1 status (October 4, 2026, implemented; not live-verified).** The typed `SuggestedNextAction` contract, the `suggestedNextActions` response/ledger field, verified selection (`suggestedActionSelection` carrying only the action id and source execution id, resolved against the stored ledger by user and session, with the stored message, operation and entity authoritative and typed stale/invalid recovery on any failure), deterministic versioned action ids, the registered semantic key, an injected clock, the explicit-mapping-only string compatibility boundary, typed history suppression, the `SUGGESTED_ACTION_SELECTED` correlation event, and the frontend typed-first follow-up rendering are in place. No producer emits typed actions yet, so no homeowner-visible behavior changes until Phase 3. The persistence-boundary baseline (`docs/architecture/ask-suggested-actions-persistence-sites.json`, guarded by `tests/ask/askSuggestionPersistenceSites.test.js`) records every file that persists an Ask result; the shared finalizer, ranking, eligibility and producers remain Phase 2+.
 
 **Phase 2 status (October 4, 2026, implemented; not live-verified).** The shared `finalizeSuggestedNextActions` service, the eleven-rule pure eligibility evaluator, deterministic tier-only ranking with a fixed tie-break sequence (the weighted scoring and minimum score are built and tested but switched off until real chips show a need), semantic-identity deduplication with rich-card presentation suppression, the diversity and discovery-reserve policy, the static producer registry, batched fail-closed entity validators, and the fact-to-capture and freshness registries are in place and wired at the read, confirmation and routing-clarification seams. The persistence-boundary baseline now classifies every persisting file against the finalizer. No domain producer exists yet, so no typed action reaches a homeowner until Phase 3; the Phase 3 entry-gate values are recorded in the plan's Appendix B for approval.
+
+**Simplified delivery and inventory conversion (October 4, 2026, implemented; not live-verified).** With no real customers, Suggested Next Actions are delivered by converting handlers directly rather than by a staged migration: the string-compatibility layer was removed, unconverted handlers keep plain-text chips, ranking ships tier-only, and landing starters stay ordinary prompts. Inventory is converted: after an item is created or corrected, Ask offers the details that same item is still missing as typed actions that name the exact item, and a selected action chooses its correction field from its registered outcome instead of re-reading its message. Rooms, maintenance, warranties, home events and radar, and claims and inspection remain to convert. Details are in the plan's Appendix C.
 
 ### 27.8 Loading and streaming
 

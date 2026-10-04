@@ -171,6 +171,13 @@ export function missingFactCaptureFor(missingFactKey: string): MissingFactCaptur
   return MISSING_FACT_CAPTURES.find((mapping) => mapping.missingFactKey === missingFactKey);
 }
 
+/** The correction field an outcome maps to on its operation (e.g. INVENTORY_ITEM_CORRECT + ADD_BRAND -> 'brand'), or null. */
+export function correctionFieldForOutcome(operationId: string, outcomeKey: string | null | undefined): string | null {
+  if (!outcomeKey) return null;
+  const mapping = MISSING_FACT_CAPTURES.find((m) => m.operationId === operationId && m.outcomeKey === outcomeKey);
+  return mapping?.capture.kind === 'CORRECTION_FIELD' ? mapping.capture.field : null;
+}
+
 // ---- domain freshness matrix (plan §6 rule 7) --------------------------------------------------------------------------------
 
 export type FreshnessStrategy =

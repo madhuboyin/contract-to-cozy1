@@ -181,6 +181,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         entityType: action.entityContext.entityType,
         entityId: action.entityContext.entityId,
         contextVersion: action.entityContext.contextVersion,
+        outcomeKey: action.outcomeKey,
       },
     };
   }

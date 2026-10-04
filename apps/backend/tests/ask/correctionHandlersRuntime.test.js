@@ -1356,7 +1356,11 @@ test('INVENTORY_ITEM_CREATE confirm creates the item through createItem with a n
   assert.equal(result.reasonCode, 'INVENTORY_ITEM_CREATED');
   assert.equal(result.blocks[0].title, 'Item added');
   assert.equal(result.blocks[0].details.find((detail) => detail.label === 'Room').value, 'Kitchen');
-  assert.deepEqual(result.suggestions, ['Set the purchase date for this inventory item', 'Update the condition of this inventory item', 'Update the model of this inventory item']);
+  // The old strings named no item ("... for this inventory item"). The receipt now nominates typed candidates for the exact new item.
+  assert.deepEqual(result.suggestions, ['Show my home inventory']);
+  assert.deepEqual(result.suggestedNextActionCandidates.map((c) => [c.outcomeKey, c.entityContext.entityId, c.operationId]), [
+    ['ADD_PURCHASE_DATE', 'item-new', 'INVENTORY_ITEM_CORRECT'], ['ADD_MODEL', 'item-new', 'INVENTORY_ITEM_CORRECT'], ['ADD_SERIAL_NUMBER', 'item-new', 'INVENTORY_ITEM_CORRECT'],
+  ], 'brand was entered, so it is not offered');
   assert.deepEqual([artifactType, artifactId], ['INVENTORY_ITEM', 'item-new']);
   calls.createItem.length = 0;
   await invoke('INVENTORY_ITEM_CREATE', itemCreateParams(itemInput({ name: 'Furnace', category: 'HVAC', roomId: 'NONE', brand: null })));

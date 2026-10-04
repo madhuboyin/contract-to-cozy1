@@ -22,7 +22,7 @@ import { humanDate } from '../askFormatting';
 import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom } from '../handlers/propertySummary.handler';
 import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, WARRANTY_CORRECTION_FIELDS, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from '../handlers/homeRecordWrites.handler';
-import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryRoomLinkOptions, inventoryService } from '../handlers/inventory.handler';
+import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryMissingDetailCandidates, inventoryRoomLinkOptions, inventoryService } from '../handlers/inventory.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { recordDocumentPromotionOutcome, recordOperationalWorkOutcome } from '../../decisionPlatform/outcomeObservationService';
 import { applyWriteBacks } from '../../inspectionWriteBack.service';
@@ -271,6 +271,8 @@ async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promi
       actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/inventory?tab=items`, style: 'PRIMARY' }],
     }],
     suggestions: ['Show my home inventory'],
+    // After a correction, offer the details this same item is still missing (the field just corrected is no longer missing).
+    suggestedNextActionCandidates: inventoryMissingDetailCandidates(updated, { propertyId: execution.propertyId!, sourceOperationId: 'INVENTORY_ITEM_CORRECT' }),
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
@@ -594,11 +596,12 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
       details: [{ label: 'Item name', value: input.name }, { label: 'Category', value: inventoryCategoryLabel(input.category) }, { label: 'Room', value: input.roomId === INVENTORY_NO_ROOM_VALUE ? 'No room (whole-home)' : rooms.find((room) => room.id === input.roomId)?.name ?? 'Recorded room' }, ...(input.brand ? [{ label: 'Brand', value: input.brand }] : []), ...(input.model ? [{ label: 'Model', value: input.model }] : [])],
       actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`, style: 'PRIMARY' }],
     }],
-    suggestions: [
-      'Set the purchase date for this inventory item',
-      'Update the condition of this inventory item',
-      input.brand ? 'Update the model of this inventory item' : 'Update the brand of this inventory item',
-    ],
+    // The item the homeowner just created is the exact target of the next details to add; typed candidates name it, so a chip can never
+    // be re-read as a different item. The plain suggestion is only the fallback when the record is already complete.
+    suggestions: ['Show my home inventory'],
+    // A just-created item has no purchase date or serial number; brand and model are whatever the homeowner entered. No version is
+    // stamped (no extra read): the entity validator still confirms the item exists in this property before anything is offered.
+    suggestedNextActionCandidates: inventoryMissingDetailCandidates({ id: itemId, name: input.name, brand: input.brand, model: input.model }, { propertyId, sourceOperationId: 'INVENTORY_ITEM_CREATE' }),
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {

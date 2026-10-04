@@ -1,9 +1,9 @@
 # Ask Cozy High-Precision Suggested Next Actions — Implementation Plan
 
 **Date:** October 4, 2026
-**Status:** Phases 1-2 implemented (October 4, 2026; not live-verified); Phase 3 awaits approval of the Appendix B entry-gate packet; Phases 4-5 proposed
+**Status:** Phases 1-2 implemented and inventory converted (October 4, 2026; not live-verified). Delivery was simplified on October 4, 2026: see Appendix C, which supersedes the staged-migration language in §9, §12 and §16 where they differ.
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.13; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.14; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -744,3 +744,37 @@ New modules under `apps/backend/src/services/ask/suggestedActions/`: `suggestedN
 ### B.4 Verification
 
 Executed locally: backend `tsc --noEmit` clean; `tests/ask/suggestedNextActionsPhase2.test.js` (40 tests), `suggestedNextActionsPhase1.test.js`, `askSuggestionPersistenceSites.test.js`, `askNextActions`, `askGovernance`, `askImportGraphGuardrails` and `askCapabilityDiscovery` run; the full chunked Ask run result is recorded in the commit message of the implementing change. The two failures in those files, `askGovernance` golden routing and `askImportGraphGuardrails` support re-exports, also fail on an unmodified checkout. Not run: any DB-backed suite, any live request. The finalizer's default loaders (`ensurePropertyAccess`, `evaluateAskOperationAvailability`, the execution-expiry read) and the three seam call sites are exercised only through injected dependencies and source-shape guards, never against a real database, and no typed producer exists yet, so the finalizer returns an empty ledger in production until Phase 3.
+
+## Appendix C — Simplified delivery (owner decision, October 4, 2026) and inventory conversion
+
+### C.1 What changed in the plan
+
+There are no real customers, so the plan is no longer a staged migration with a compatibility boundary. The decisions are:
+
+1. **Convert handlers directly to typed candidates; no migration phases.** "Migrating" only ever meant rewriting a handler to return typed candidates instead of plain strings. There are no per-domain exit gates, rollback story or "domain A must not depend on domain B" rules.
+2. **No string-compatibility layer.** The explicit string-mapping table, the all-or-nothing string producer and their tests were deleted. An unconverted handler keeps returning plain strings, which render as ordinary text chips through the typed-first fallback in `followUps.ts` and the existing string history suppression. That fallback is the only compatibility behaviour left.
+3. **Convert the six priority domains only**: inventory, rooms, maintenance, warranties, home events (and radar), claims and inspection. The other ~40 handlers (about 440 string declarations, mostly generic prompts) stay as plain-text chips unless a later need appears.
+4. **Ranking is tier-only** (`RANKING_MODE = TIER_ONLY`); the weights and minimum score are built but switched off until real chips show a need.
+5. **Landing starters are ordinary prompts**, with no signing, secret, token or special ranking.
+6. **Per-domain mappings, outcomes, entity validators and freshness entries are added in the same change as the domain's conversion**, not up front.
+7. **Not required before conversion:** the 250 ms budget stays as a safety net; the 6-query ceiling stays declared and unenforced.
+
+### C.2 Conversion recipe (what each domain does)
+
+1. The handler builds candidates (`SuggestedNextActionCandidate`: operation, interaction type, registered outcome key, exact entity and context version) and returns them as `suggestedNextActionCandidates`; the shared finalizer does the rest.
+2. Declare the domain's outcome keys in `SUGGESTED_ACTION_OUTCOMES`, and any missing-fact mapping in `MISSING_FACT_CAPTURES`.
+3. Register a batched entity validator under `suggestedActions/entityValidators/` and add it to `registerAll.ts`; put the version helper in `domainVersions.ts` if the handler's own module would create an import cycle.
+4. If the target operation re-reads its message to choose what to do (as the inventory correction did), have it read the registered outcome from `launchContext.outcomeKey` instead.
+5. Replace the handler's ambiguous strings for that result with a plain fallback string; add tests for ordering, eligibility, stale/deleted/other-property entities, viewer authorization, and the wiring.
+
+### C.3 Inventory (converted)
+
+**Where typed actions appear.** On the two inventory receipts in `recordConfirm.handler.ts`: after an item is created and after a field is corrected, Ask now offers the details that same item is still missing (purchase date, brand, model, serial number, in that order, at most three), each naming the exact item. The create receipt previously suggested "Set the purchase date for this inventory item", an item-ambiguous string; that is gone. The plain fallback is `Show my home inventory` and only displays when the item has nothing left to add.
+
+**What shipped.** `inventoryMissingDetailCandidates` in `inventory.handler.ts`; `domainVersions.ts` (the shared leaf `inventoryItemContextVersion`, re-exported by the handler); the batched `INVENTORY_ITEM` validator (`entityValidators/inventoryItem.ts`, one query for all candidates, registered through `registerAll.ts` and loaded by the finalizer); `correctionFieldForOutcome` in the registry; `launchContext.outcomeKey` set by the server from the stored offer; and `inventoryCorrectionFieldFor`, which makes a selected action pick its correction field from the outcome instead of re-reading the message. That last change fixes a latent routing bug: free-text parsing looked for words like "room" or "brand" anywhere in the message, so an item named "Room AC" redirected a brand correction to the room link.
+
+**Deliberately not changed.** The inventory lookup answer's own generic prompts ("Show incomplete inventory records", and so on) remain plain strings, and its item rows already carry rich action buttons that perform the same corrections, so adding compact chips there would only duplicate them. The non-calm shell still shows the plain fallback string instead of typed chips; calm is the default and the shell most users see.
+
+### C.4 Verification
+
+Executed: backend `tsc --noEmit` clean; `suggestedNextActionsInventory.test.js` (12 tests: candidate order and completeness, schema validity, label bound, shared version function, outcome-over-message field selection including the "Room AC" case, finalizer with the real validator including one batched query, deleted/other-property/stale item rejection, viewer authorization, completed-outcome suppression, wiring guards), plus the Phase 1 and Phase 2 suites and the persistence-site guard. Not run: any DB-backed suite or live request; the two receipt handlers and `createAskExecution`'s rebind path are covered by pure-function tests, stubbed-Prisma tests and source-shape guards, not by an executed end-to-end confirmation.

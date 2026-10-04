@@ -929,6 +929,9 @@ export const CreateAskExecutionRequestSchema = z.object({
     // role/target/confirmation check still runs exactly as it does for any
     // other route to that same operation (ACT-002).
     operationId: z.string().trim().max(120).nullable().optional(),
+    // SUGGESTED_NEXT_ACTIONS: the registered outcome of a selected Suggested Next Action. Set by the server from the stored offer, so an
+    // operation that needs more than free text to pick a field (inventory correction) never re-parses its own message.
+    outcomeKey: z.string().trim().max(80).nullable().optional(),
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design
     // (approved 2026-09-22): the id of a Document already uploaded via
     // POST /api/documents/property/:propertyId/evidence-upload, carried
