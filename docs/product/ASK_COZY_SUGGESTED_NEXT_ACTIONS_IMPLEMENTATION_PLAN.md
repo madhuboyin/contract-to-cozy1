@@ -814,3 +814,54 @@ Executed: backend `tsc --noEmit` clean; `suggestedNextActionsInventory.test.js` 
 **What shipped.** `warrantyExpiryReminderCandidates` and `warrantyReminderActionKey` in `warranties.handler.ts`; outcome `MONITOR_WARRANTY_EXPIRY` on `HOME_DEADLINE_MONITOR`; `warrantyContextVersion` moved to the leaf `domainVersions.ts` (re-exported by `homeRecordWrites.handler.ts`) and reused by the existing `WARRANTY` freshness entry; the batched `WARRANTY` validator (`entityValidators/warranty.ts`); the capability wiring and exact-target branch in `miscHandlers.handler.ts`.
 
 **Verification.** Executed: backend `tsc --noEmit` clean; `suggestedNextActionsWarranties.test.js` (12 tests, including the monitor operation executed with stubbed reads: two future warranties pick the exact one, free text keeps the earliest, a forged other-property id, a deleted, changed and expired target each give the stale recovery with no earliest-warranty search, the existing-reminder suppression, and the finalizer with the real validator). Not run: any DB-backed suite or live request; the two receipts and the reminder confirmation are covered by source-shape guards, not an executed confirmation.
+
+### C.8 Home events (converted); Home Event Radar (intentionally plain)
+
+**Where typed actions appear.** On the event-recorded receipt (`captureEventConfirmResult`, which also serves "Add an event") and the event-corrected receipts (`confirmHomeEventCorrect`'s `finish`, and the capture-correction path). Both build their suggestions from the **complete replacement record** (type, amount, inventory item, revision), so they are re-evaluated after every correction: correcting the type, amount or item changes what is still missing.
+
+| Action | Event types | Offered when |
+|---|---|---|
+| "Link <event> to an inventory item" (`LINK_INVENTORY_ITEM`) | REPAIR, MAINTENANCE, INSPECTION | no linked item and the home has at least one visible inventory item |
+| "Add the cost of <event>" (`ADD_AMOUNT`) | REPAIR only | no amount recorded (an amount of 0 counts as recorded) |
+
+Both are `RECORD_ACTION` on `HOME_EVENT_CORRECT`; the existing correction dropdown remains the way the value is actually chosen.
+
+**Why these.** Replace-or-repair analysis and the do-nothing simulator read an item's events by `inventoryItemId`, so an unlinked repair-like event is invisible to them. A missing amount does not remove an event from the analysis (it still counts, with zero spend), so the cost action is lower value and is limited to REPAIR. The analysis currently adds INSPECTION and MAINTENANCE amounts to "repair spend"; prompting for an inspection fee would push it into repair history and could bias the result toward replacement, so no cost action is offered for them until those semantics are decided. Room links, importance and visibility are not promoted (timeline filtering only; visibility is a sharing decision).
+
+**Open question for the owner.** Should inspection fees (and maintenance spend) count as repair spend in `replaceRepairAnalysis.service.ts`? Until that is decided, the cost action stays REPAIR-only.
+
+**Exact targeting and recovery.** `launchContext.outcomeKey` now decides the correction field (`LINK_INVENTORY_ITEM` -> `inventoryItemId`, `ADD_AMOUNT` -> `amount`, through `MISSING_FACT_CAPTURES`), replacing keyword matching for a selected action; free text keeps the keyword path. This fixes a latent collision: "Correct the amount of … 'Room Addition permit'" was read as the room field. A selected action's event is authoritative: if it is not among the current, visible events, or its version (`id + revision`) moved on, `homeEventCorrectResult` returns the shared stale-suggestion result (`suggestedActions/staleSuggestedActionResult.ts`, now also used by the warranty reminder) and does not fall back to a title match. A correction creates a new revision with a new id, so a stale chip for the superseded event is rejected rather than silently retargeted.
+
+**Validator.** `entityValidators/homeEvent.ts` (batched, one query) counts an event only while it is the current revision, not deleted, in the same property, and visible to the requester (a PRIVATE event only to its creator), with `homeEventContextVersion` (moved to the leaf `domainVersions.ts`).
+
+**Analysis invalidation (verified by reading, not executed).** The persisted replace-or-repair and do-nothing analyses are marked stale inside `HomeEventsService` (`createHomeEvent` and `updateHomeEvent`, three call sites), which Ask's capture and correction both call, so Ask writes invalidate them exactly as the timeline page does. This is distinct from Ask's own result reconciliation.
+
+**Radar is intentionally plain.** The radar receipts (mark done, feedback, planned task, notification settings) are terminal. The radar detail card already exposes Plan this action, Mark done, Feedback and Notification settings, and repeating them after completion would only dilute the suggestion strip. The visibility receipt also stays plain. Tests assert that neither radar file nominates candidates.
+
+**Verification.** Executed: backend `tsc --noEmit` clean; `suggestedNextActionsHomeEvents.test.js` (16 tests, including the correction operation executed with stubbed reads for the "Room Addition" collision, a superseded or changed target, and an unchanged free-text path, and the finalizer with the real validator for superseded, deleted, other-property, private-to-someone-else and wrong-version events); Phase 2 suite. Not run: any DB-backed suite or live request; the two receipts are covered by source-shape guards, not an executed confirmation.
+
+### C.9 Claims and inspection findings (closed as terminal, by decision)
+
+**Decision (October 4, 2026).** No typed action is added for claims or inspection findings. A chip is worth offering only if a downstream feature consumes the missing fact and the action is not already a control on the result; neither holds here.
+
+**Claims.** The draft-created receipt and the status-updated receipt are terminal. Every valid next status is already a button on the claim row (`claimItemActions`, from the canonical lifecycle). The one real next step after a draft is finishing its checklist (documents), which Ask cannot do, and "Submit" would be blocked by that checklist (`CLAIM_SUBMIT_BLOCKED`). The claims answer's generic prompts ("What do I need for an insurance claim?") are unchanged. The version helper was **not** extracted from `claims.handler.ts` / `workflowConfirm.handler.ts` because no validator needs it; `DOMAIN_FRESHNESS_MATRIX.CLAIM` keeps its requery rule. Extract one only when a claim action is added.
+
+**Inspection findings.** Accept as work, Dismiss and Mark resolved are controls on the card deck, and the batch and single receipts end with the plain `Show remaining inspection findings`. The one change: the findings answer used to suggest `Accept <system> finding <raw finding id> as work` for its first two findings. That string showed a raw database id to the homeowner and was returned regardless of role, so a viewer was offered a write. It is removed (`suggestions: []`); the deck's controls are the actions. A test lists the findings as both a contributor and a viewer and asserts no chips.
+
+### C.10 Phase 3 closeout
+
+**Complete:** inventory (C.3), rooms (C.5), maintenance (C.6), warranties (C.7), home events (C.8; radar intentionally plain), claims and inspection (C.9; terminal by decision). The other ~40 handlers keep plain-text chips. Original Phases 4 and 5 are replaced by Appendix C and are not scheduled.
+
+**Open owner question.** Should inspection fees and maintenance spend count as repair spend in `replaceRepairAnalysis.service.ts` (about line 396)? Until decided, the event cost action is REPAIR-only.
+
+**Not verified.** No domain was exercised against a real database, a live request, `next build` or a browser; tests use stubbed reads and source-shape guards. The chunked Ask run has the same 6 failures as an untouched HEAD. The non-calm shell still shows only the plain fallback strings, not typed chips (accepted).
+
+**Manual checklist for a real backend (calm Ask shell).** Use sarah@example.com (owner) and check one chip per domain; each should name the exact record and, when selected, open a review or form for that record only.
+1. *Inventory:* add an item with no brand or model -> receipt offers up to three "Add the ..." chips for that item; select one -> the correction card is for that field and item.
+2. *Rooms:* add a room -> receipt offers "Add an item to <room>"; select it -> the add-item form opens with that room preselected.
+3. *Maintenance:* cancel a task through Ask -> receipt offers "Reopen <task>"; snooze one -> "Resume reminders for <task>". Select each -> review card for that task. Try a task titled "Remove old paint" to confirm it reopens rather than deletes.
+4. *Warranties:* add a warranty that expires in the future -> receipt offers "Remind me before the <provider> warranty expires"; with two warranties, select it for the later one -> the reminder review names that provider, not the earliest. Correct a start date -> no chip; correct the expiry date -> chip. Confirm the reminder, correct the expiry again -> chip reappears for the new date.
+5. *Home events:* record a repair event with no item and no cost -> receipt offers the link and the cost chips; a maintenance or inspection event -> link only; a note -> none. Select the link chip -> the card's dropdown lists the home's items.
+6. *Stale:* offer a chip, change the record elsewhere (edit the warranty, correct the event), then select the old chip -> "That suggestion is no longer available".
+7. *Viewer:* as a viewer account, the write chips above should not appear, and the inspection findings answer should show no chips.
+8. *Inspection findings:* open the findings answer -> no "Accept ... finding <id>" chip; the deck's controls still work.

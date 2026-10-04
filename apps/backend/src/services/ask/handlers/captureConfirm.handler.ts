@@ -12,7 +12,7 @@ import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler
 import { PropertyContextAccessDeniedError } from '../../../modules/propertyContext/application/getPropertyContext';
 import { USER_ADD_ORIGIN } from '../conversationalUnderstanding/conversationalCapture';
 import { APIError } from '../../../middleware/error.middleware';
-import { homeEventsServiceForCapture } from '../handlers/homeRecordWrites.handler';
+import { homeEventFollowUpCandidates, homeEventsServiceForCapture } from '../handlers/homeRecordWrites.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { captureEventResult } from '../askHandlerSupport';
 
@@ -106,11 +106,12 @@ async function captureEventConfirmResult(
   execution: ConfirmCapabilityContext['execution'],
   userId: string,
   parameters: Record<string, unknown>,
-  event: { id: string; title: string },
+  event: { id: string; title: string; type?: string | null; revision?: number | null; amount?: unknown; inventoryItemId?: string | null },
   corrected: boolean,
   artifactType: string,
 ): Promise<ConfirmCapabilityResult> {
   const result = captureEventResult(execution.propertyId, event, corrected);
+  result.suggestedNextActionCandidates = await homeEventFollowUpCandidates(event, { propertyId: execution.propertyId, sourceOperationId: 'CAPTURE_EVENT_CONFIRM' });
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
     result.blocks.push({

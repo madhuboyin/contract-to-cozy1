@@ -212,3 +212,12 @@ test('malformed or resolve-carrying batches are refused before anything is writt
   assert.equal(await codeOf(confirm({ inspectionFindingBatch: [{ findingId: 'breaker', reportId: 'report-1', action: 'RESOLVE', contextVersion: version(findings[0]) }] })), 'ASK_CONFIRMATION_NOT_ACTIVE');
   assert.deepEqual(calls, { accept: [], dismiss: [] });
 });
+
+test('the findings answer carries no chips: the deck controls are the actions, and no raw finding id is shown or offered to a viewer', async () => {
+  for (const role of ['CONTRIBUTOR', 'VIEWER']) {
+    accessRole = role;
+    const result = await listFindings();
+    assert.equal(result.reasonCode, 'INSPECTION_FINDINGS_FOUND', role);
+    assert.deepEqual(result.suggestions, [], role);
+  }
+});

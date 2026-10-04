@@ -23,6 +23,7 @@ import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom } from 
 import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, WARRANTY_CORRECTION_FIELDS, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from '../handlers/homeRecordWrites.handler';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
+import { homeEventFollowUpCandidates } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryMissingDetailCandidates, inventoryRoomLinkOptions, inventoryService, roomAddItemCandidates } from '../handlers/inventory.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { recordDocumentPromotionOutcome, recordOperationalWorkOutcome } from '../../decisionPlatform/outcomeObservationService';
@@ -298,8 +299,10 @@ async function confirmHomeEventCorrect(ctx: ConfirmCapabilityContext): Promise<C
   // updateHomeEvent has no idempotency of its own and supersedes every time:
   // a lease-reclaim retry must find this execution's own replacement first.
   const correctionKey = `ask-correction:${execution.id}`;
-  const finish = async (replacement: { id: string; title: string }): Promise<ConfirmCapabilityResult> => {
+  const finish = async (replacement: { id: string; title: string; type?: string | null; revision?: number | null; amount?: unknown; inventoryItemId?: string | null }): Promise<ConfirmCapabilityResult> => {
     const result = captureEventResult(execution.propertyId!, replacement, true);
+    // Re-evaluated from the complete replacement record: a corrected type, amount or item changes what is still missing.
+    result.suggestedNextActionCandidates = await homeEventFollowUpCandidates(replacement, { propertyId: execution.propertyId!, sourceOperationId: 'HOME_EVENT_CORRECT' });
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
     if (refresh.attemptedAndFailed) {
       result.blocks.push({

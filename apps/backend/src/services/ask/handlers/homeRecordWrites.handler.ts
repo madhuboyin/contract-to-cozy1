@@ -14,7 +14,10 @@ import { visibleInventoryItemWhere } from '../../riskAssetApplicability';
 import { HouseholdService } from '../../household.service';
 import { correctionDateString, correctionDisplay, correctionMoneyFromDollars, correctionValueError, type CorrectionFieldSpec, type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
-import { roomContextVersion, warrantyContextVersion } from '../suggestedActions/domainVersions';
+import { homeEventContextVersion, roomContextVersion, warrantyContextVersion } from '../suggestedActions/domainVersions';
+import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
+import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActionRegistry';
+import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionField, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, invitationRoleCopy, isValidDateEditInput, propertySummary, readablePropertyValue, ROOM_TYPE_VALUES, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
 
 export const householdService = new HouseholdService();
@@ -145,7 +148,9 @@ const HOME_EVENT_LINK_NONE_VALUE = 'NONE';
 
 // "amount"/"cost"/"price" are checked before "type" and "date" only to keep the parse order explicit; the
 // fields do not overlap in practice.
-function homeEventCorrectionField(message: string): HomeEventCorrectionField | null {
+function homeEventCorrectionField(message: string, outcomeKey?: string | null): HomeEventCorrectionField | null {
+  const fromOutcome = correctionFieldForOutcome('HOME_EVENT_CORRECT', outcomeKey);
+  if (fromOutcome && fromOutcome in HOME_EVENT_CORRECTION_FIELDS) return fromOutcome as HomeEventCorrectionField;
   if (/\binventory\s+item\b/i.test(message)) return 'inventoryItemId';
   if (/\broom\b/i.test(message)) return 'roomId';
   if (/\b(?:amount|cost|price)\b/i.test(message)) return 'amount';
@@ -205,9 +210,7 @@ export function homeEventCorrectionBlocker(event: { datePrecision: string; type?
   return null;
 }
 
-export function homeEventContextVersion(event: { id: string; revision: number }): string {
-  return createHash('sha256').update(`${event.id}:${event.revision}`).digest('hex');
-}
+export { homeEventContextVersion };
 
 export function homeEventCorrectionConfirmation(event: { id: string; title: string }, field: HomeEventCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date, dynamicOptions?: readonly CorrectionOption[]) {
   // A link field's options come from the property's live rooms/items, not a static list; substituting them into
@@ -234,6 +237,15 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
     select: { id: true, title: true, revision: true, occurredAt: true, datePrecision: true, summary: true, amount: true, type: true, importance: true, roomId: true, inventoryItemId: true },
   });
+  // A selected suggestion names its event and outcome. That target is authoritative: if the event was corrected (a new revision
+  // has a new id), removed or hidden since it was offered, or changed, the suggestion is stale. Matching by title instead could
+  // land on a different event with a similar name.
+  const typedOutcome = launchContext?.entityType === 'HOME_EVENT' && launchContext.entityId && correctionFieldForOutcome('HOME_EVENT_CORRECT', launchContext.outcomeKey)
+    ? launchContext.outcomeKey : null;
+  if (typedOutcome) {
+    const target = events.find((event) => event.id === launchContext!.entityId);
+    if (!target || (launchContext!.contextVersion && launchContext!.contextVersion !== homeEventContextVersion(target))) return staleSuggestedActionResult();
+  }
   const selected = exactEntityMatch(events, message, launchContext);
   if (!selected) {
     return {
@@ -250,7 +262,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
       suggestions: events.slice(0, 3).map((event) => `Correct the title of the timeline event ${event.title}`),
     };
   }
-  const field = homeEventCorrectionField(message);
+  const field = homeEventCorrectionField(message, typedOutcome);
   if (!field) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'HOME_EVENT_CORRECTION_FIELD_REQUIRED',
@@ -897,3 +909,55 @@ registerCapabilityHandler('room.create', async (envelope) => {
 // this execution's own id -- captureExecutionId / idempotencyKey
 // respectively -- rather than reimplementing idempotency here.
 export const homeEventsServiceForCapture = new HomeEventsService();
+
+// ---- Suggested Next Actions for a recorded or corrected timeline event --------------------------------------------------------
+
+// Replace-or-repair analysis and the do-nothing simulator read an item's REPAIR / MAINTENANCE / INSPECTION events by inventoryItemId,
+// so an unlinked one is invisible to them. Only REPAIR spend is counted toward "repair spend" as a cost worth prompting for: an
+// inspection fee must not be pushed into repair history, and MAINTENANCE spend is not asserted to be repair history.
+const HOME_EVENT_LINK_PROMPT_TYPES: ReadonlySet<string> = new Set(['REPAIR', 'MAINTENANCE', 'INSPECTION']);
+const HOME_EVENT_COST_PROMPT_TYPES: ReadonlySet<string> = new Set(['REPAIR']);
+
+/**
+ * Typed next-action candidates for the replacement/new event a receipt just produced, re-evaluated from its full record after every
+ * correction (a corrected type, amount or item changes what is still missing). A failed lookup costs only the suggestions.
+ */
+export async function homeEventFollowUpCandidates(
+  event: { id: string; title: string; type?: string | null; revision?: number | null; amount?: unknown; inventoryItemId?: string | null },
+  context: { propertyId: string; sourceOperationId: string | null },
+): Promise<SuggestedNextActionCandidate[]> {
+  try {
+    const type = event.type ?? '';
+    const wantsLink = HOME_EVENT_LINK_PROMPT_TYPES.has(type) && !event.inventoryItemId;
+    const wantsCost = HOME_EVENT_COST_PROMPT_TYPES.has(type) && (event.amount === null || event.amount === undefined);
+    if (!wantsLink && !wantsCost) return [];
+    const canLink = wantsLink && (await prisma.inventoryItem.count({ where: { propertyId: context.propertyId, ...visibleInventoryItemWhere() } })) > 0;
+    const title = event.title.length > 40 ? `${event.title.slice(0, 39)}…` : event.title;
+    const entityContext = {
+      propertyId: context.propertyId, entityType: 'HOME_EVENT', entityId: event.id,
+      contextVersion: typeof event.revision === 'number' ? homeEventContextVersion({ id: event.id, revision: event.revision }) : null,
+    };
+    const candidate = (outcomeKey: string, label: string, field: string, reason: string): SuggestedNextActionCandidate => ({
+      producerId: 'home-events.follow-up',
+      source: 'MISSING_DETAIL' as const,
+      sourceOperationId: context.sourceOperationId,
+      label,
+      message: `Correct the ${field} of the timeline event "${event.title}".`,
+      operationId: 'HOME_EVENT_CORRECT',
+      interactionType: 'MUTATE_RECORD' as const,
+      outcomeKey,
+      entityContext,
+      tier: 'RECORD_ACTION' as const,
+      requiredFacts: [],
+      reasonCodes: [reason],
+      signals: { ...DEFAULT_CANDIDATE_SIGNALS, exactEntityMatch: true, currentResultOwnership: true },
+      traits: { ...DEFAULT_CANDIDATE_TRAITS },
+    });
+    return [
+      ...(canLink ? [candidate('LINK_INVENTORY_ITEM', `Link ${title} to an inventory item`, 'inventory item', 'EVENT_NOT_LINKED_TO_ITEM')] : []),
+      ...(wantsCost ? [candidate('ADD_AMOUNT', `Add the cost of ${title}`, 'amount', 'REPAIR_COST_MISSING')] : []),
+    ];
+  } catch {
+    return [];
+  }
+}

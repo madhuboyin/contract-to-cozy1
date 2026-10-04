@@ -114,6 +114,7 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
     'ADD_SERIAL_NUMBER', 'ADD_PURCHASE_COST', 'ADD_REPLACEMENT_COST', 'ADD_NOTES', 'ADD_CATEGORY', 'ADD_ROOM',
   ],
   HOME_DEADLINE_MONITOR: ['MONITOR_WARRANTY_EXPIRY'],
+  HOME_EVENT_CORRECT: ['LINK_INVENTORY_ITEM', 'ADD_AMOUNT'],
   INVENTORY_ITEM_CREATE: ['ADD_ITEM_TO_ROOM'],
   MAINTENANCE_TASK_UPDATE: ['REOPEN_TASK', 'RESUME_REMINDERS'],
   CAPTURE_FACT_CONFIRM: ['CAPTURE_PROPERTY_FACT'],
@@ -154,7 +155,13 @@ const inventoryField = (missingFactKey: string, field: string, outcomeKey: strin
   { missingFactKey, capture: { kind: 'CORRECTION_FIELD', field }, operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey }
 );
 
+const homeEventField = (missingFactKey: string, field: string, outcomeKey: string): MissingFactCaptureMapping => (
+  { missingFactKey, capture: { kind: 'CORRECTION_FIELD', field }, operationId: 'HOME_EVENT_CORRECT', outcomeKey }
+);
+
 export const MISSING_FACT_CAPTURES: readonly MissingFactCaptureMapping[] = [
+  homeEventField('HOME_EVENT_INVENTORY_ITEM', 'inventoryItemId', 'LINK_INVENTORY_ITEM'),
+  homeEventField('HOME_EVENT_AMOUNT', 'amount', 'ADD_AMOUNT'),
   inventoryField('INVENTORY_ITEM_NAME', 'name', 'ADD_NAME'),
   inventoryField('INVENTORY_ITEM_INSTALL_DATE', 'installedOn', 'ADD_INSTALL_DATE'),
   inventoryField('INVENTORY_ITEM_PURCHASE_DATE', 'purchasedOn', 'ADD_PURCHASE_DATE'),

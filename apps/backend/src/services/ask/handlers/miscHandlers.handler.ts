@@ -22,6 +22,7 @@ import { getAskPropertyTimezone } from '../askExecutionContext';
 import { buildMaintenanceImportanceResult } from '../support/maintenanceImportance';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HOME_CHANGE_SUMMARY_WINDOW_DAYS, HOME_DEADLINE_DEFAULT_LEAD_DAYS, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, MaintenanceCompletionWorkflowInput, RadarEnvelopeQuerySuppliedInput } from '../askHandlerSupport';
 import { warrantyContextVersion } from '../suggestedActions/domainVersions';
+import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
 import { EVENT_ADD_MESSAGE, EVIDENCE_ATTACH_TARGET_TYPES, type EvidenceAttachTargetType, eventAddResult, evidenceAttachResult, WARRANTY_ADD_MESSAGE, warrantyAddResult } from '../handlers/homeRecordWrites.handler';
 import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
@@ -59,19 +60,6 @@ async function guidanceJourneyCreateResult(userId: string, propertyId: string, m
     status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_JOURNEY_CONFIRMATION_REQUIRED', contextVersion, parameters: { guidanceJourney: input, guidanceJourneyContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'journey-review', title: 'Review this guided plan', body: 'No journey has been started yet.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: `guidance-journey-${propertyId}-1`, version: 1, title: `Start a guided plan for ${input.label}?`, description: 'This creates a canonical, resumable guidance journey for the selected home.', fields: [{ label: 'Scope', value: input.label }, { label: 'Plan type', value: input.issueType.replace(/_/g, ' ') }], editableFields: [], confirmLabel: 'Start guided plan', consentText: 'I authorize creating this guided plan in the shared home record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
-  };
-}
-
-/** Same copy as the typed recovery for a suggestion that could not be verified (createAskExecution), for a target that changed since it was offered. */
-function staleSuggestedActionResult(): AskOperationResult {
-  return {
-    status: 'NOT_APPLICABLE', reasonCode: 'ASK_SUGGESTED_ACTION_STALE',
-    blocks: [{
-      type: 'SUMMARY', id: 'suggested-action-unavailable', title: 'That suggestion is no longer available',
-      body: 'It was based on information that has since changed, so nothing was done. Your earlier answer is unchanged — ask again in your own words or pick a current suggestion.',
-      tone: 'CAUTION', actions: [],
-    }],
-    suggestions: [],
   };
 }
 

@@ -470,7 +470,8 @@ test('entity types without a registered validator fail closed; only migrated dom
   assert.equal(typeof getSuggestedNextActionEntityValidator('INVENTORY_ROOM'), 'function', 'rooms are converted');
   assert.equal(typeof getSuggestedNextActionEntityValidator('MAINTENANCE_TASK'), 'function', 'maintenance is converted');
   assert.equal(typeof getSuggestedNextActionEntityValidator('WARRANTY'), 'function', 'warranties are converted');
-  for (const unconverted of ['HOME_EVENT', 'CLAIM']) assert.equal(getSuggestedNextActionEntityValidator(unconverted), undefined, unconverted);
+  assert.equal(typeof getSuggestedNextActionEntityValidator('HOME_EVENT'), 'function', 'home events are converted');
+  for (const unconverted of ['CLAIM']) assert.equal(getSuggestedNextActionEntityValidator(unconverted), undefined, unconverted);
   resetSuggestedNextActionEntityValidatorsForTests();
   assert.equal(getSuggestedNextActionEntityValidator('INVENTORY_ITEM'), undefined);
   registerSuggestedNextActionEntityValidator('INVENTORY_ITEM', async () => new Map());

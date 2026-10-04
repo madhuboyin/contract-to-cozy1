@@ -18,3 +18,7 @@ export function maintenanceTaskVersion(task: { id: string; status: string; updat
 export function warrantyContextVersion(warranty: { id: string; updatedAt: Date }): string {
   return createHash('sha256').update(`${warranty.id}:${warranty.updatedAt.toISOString()}`).digest('hex');
 }
+
+export function homeEventContextVersion(event: { id: string; revision: number }): string {
+  return createHash('sha256').update(`${event.id}:${event.revision}`).digest('hex');
+}

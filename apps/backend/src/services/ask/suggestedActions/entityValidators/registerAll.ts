@@ -3,3 +3,4 @@ import './inventoryItem';
 import './inventoryRoom';
 import './maintenanceTask';
 import './warranty';
+import './homeEvent';
