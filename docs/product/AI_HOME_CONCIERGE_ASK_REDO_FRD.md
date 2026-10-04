@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.8"
+version: "1.9"
 date: "October 4, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.8 |
+| Version | 1.9 |
 | Date | October 4, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -1539,12 +1539,12 @@ Every app-authored conversational recommendation must converge on a versioned `S
 - concise homeowner-facing `label`;
 - natural-language `message` retained in the transcript;
 - registered `operationId`;
-- interaction type;
+- server-executed interaction type (`CONVERSATION_CONTINUE`, `MUTATE_RECORD`, or `START_WORKFLOW`);
 - property and exact entity identity when known, plus a context/freshness version when meaningful;
 - evaluated eligibility state, reason codes, and supported missing-fact keys;
 - provenance source, source operation, and reason codes;
 - priority tier and deterministic score; and
-- creation and expiry timestamps.
+- creation and expiry timestamps. Mutation/workflow actions default to 30 minutes and conversational reads to 24 hours, always capped by the fixed source-execution expiry.
 
 Raw free-text suggestions may remain temporarily during migration but must not be the target representation. Generated model prose may not create an executable suggested action.
 
@@ -1589,7 +1589,9 @@ The calm follow-up surface shows no more than four actions and should normally s
 
 #### Selection semantics and safety
 
-Selecting a Suggested Next Action sends the natural-language message, action id, and source execution id. The backend verifies that the current user/session/property was offered that exact unexpired action in the persisted source execution, then uses the server-stored operation, entity context, outcome key, and provenance. Client-supplied operation/entity values do not prove app authorship. Invalid, forged, expired, or cross-scope selections return a typed recovery result and are not silently semantically rerouted. The backend repeats operation registration, property access, role, applicability, entity, freshness, safety, and confirmation checks before returning or changing anything.
+Selecting a Suggested Next Action sends the natural-language message, action id, and source execution id. The backend verifies that the current user/session/property was offered that exact unexpired action in the persisted source execution, requires the submitted message to match, and uses the server-stored message, operation, entity context, outcome key, and provenance. The ordinary client request id makes selection idempotent. Client-supplied operation/entity values do not prove app authorship. Missing or purged sources and invalid, forged, expired, mismatched, or cross-scope selections return typed recovery and are not silently semantically rerouted. The backend repeats operation registration, property access, role, applicability, entity, freshness, safety, and confirmation checks before returning or changing anything.
+
+Landing starters use a short-lived server-signed proof bound to user, session, property, starter id, registry versions, and expiry because no source execution exists yet. Existing rich entity item actions retain their current operation/entity launch contract; a compact promoted equivalent uses the verified ledger path. Navigation links and result-local filters retain their own contracts and publish semantic identity only for deduplication.
 
 The unrestricted composer remains visible and usable whenever the execution state safely permits input. A homeowner-entered message is not required to match, reference, or derive from a displayed action.
 
@@ -1597,7 +1599,11 @@ The unrestricted composer remains visible and usable whenever the execution stat
 
 One server-owned policy must deduplicate semantic destinations across operation suggestions, entity actions, block actions, Skill handoffs, capability cards, receipt continuations, recovery actions, and landing starters. Identity is built from registered operation, interaction type, property/entity, and outcome key, never from label/message similarity. Rich-card actions publish that identity even when they stay in their richer renderer. When candidates converge, the highest-priority eligible candidate wins and retains the combined provenance needed for audit.
 
-The pipeline runs during backend response finalization before persistence and return, uses bounded batch-loaded evaluation context, and degrades by dropping/reporting a failed nonessential producer rather than failing the answer or application startup. A distinct selection id links the verified offered action to the resulting execution for outcome measurement; existing source-refresh and Skill-handoff identifiers keep their current meanings.
+The pipeline runs from `executeOperation.ts`'s `finalize()` seam before answer-trust validation, persistence, and return, replacing standalone string suppression. It uses bounded batch-loaded evaluation context and degrades by dropping/reporting a failed nonessential producer rather than failing the answer or application startup. An injected clock governs action creation and expiry. Phase 3 cannot begin until weights/thresholds, latency/query limits, the domain freshness matrix, missing-fact capture mappings, TTL rules, and stable producer precedence are approved and tested. A distinct selection id links the verified offered action to the resulting execution for outcome measurement; existing source-refresh and Skill-handoff identifiers keep their current meanings.
+
+Selection, source-execution, and resulting-execution ids are restricted operational telemetry. They follow Ask retention/deletion, are excluded from general analytics exports, and are not joined with raw messages or entity ids in general analytics.
+
+There are no real customers or production customer data. This Suggested Next Action increment therefore adds no feature flag, cohort, canary, pilot, or runtime kill switch. Migration uses additive typed/string compatibility; rollback before legacy string production is removed is a code revert plus rebuild and redeploy.
 
 ### 27.8 Loading and streaming
 

@@ -1,7 +1,7 @@
 # Ask Cozy Conversational UI — Prototype-to-Implementation Gap Audit
 
 **Date:** September 26, 2026  
-**Updated:** October 4, 2026; verified-selection Suggested Next Actions synchronized with Ask Redo FRD v1.8
+**Updated:** October 4, 2026; verified-selection Suggested Next Actions synchronized with Ask Redo FRD v1.9
 **Status:** Living implementation audit; original findings are retained where useful and superseded behavior is identified explicitly
 **Scope:** Ask Cozy conversational UI only; this is not a review of ContractToCozy's broader feature set  
 **Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
@@ -153,7 +153,9 @@ Run this policy during backend response finalization with bounded, batch-loaded 
 
 Use specific labels such as “Add the microwave brand”, “Change the guest room floor”, or “Show the 3 overdue tasks”. When a bounded value is needed, selection should open the existing typed capture or selector rather than asking the homeowner to restate the request.
 
-Selection carries the readable message, action id, and source execution id. The backend proves app authorship by loading the persisted offered action under the current user/session/property and uses its server-stored operation/entity context. Invalid, forged, expired, or cross-scope selections recover safely instead of silently falling back to semantic routing. This verification does not grant permission or bypass confirmation; every relevant policy and freshness condition is rechecked.
+Selection carries the readable message, action id, and source execution id. The backend proves app authorship by loading the persisted offered action under the current user/session/property, requires the submitted message to match, and uses the server-stored message and operation/entity context. Action expiry is capped by source-execution retention; purged sources and invalid, forged, expired, mismatched, or cross-scope selections recover safely instead of silently falling back to semantic routing. Ordinary client-request idempotency applies. This verification does not grant permission or bypass confirmation; every relevant policy and freshness condition is rechecked.
+
+Landing starters use a short-lived signed proof because they have no source execution. Existing rich entity item actions retain their current launch contract, while a compact promoted equivalent becomes ledger-backed. Navigation and result-local filtering remain separate controls and contribute semantic identity only for deduplication.
 
 Deduplicate across launch entries, result actions, follow-up chips, Skill handoffs, capability lists, and receipts using a registered operation/entity/outcome identity rather than copy similarity. Rich-card actions publish the same identity so an equivalent compact chip can be suppressed. The highest-priority eligible action wins, while its provenance remains available for audit and measurement.
 
@@ -309,10 +311,13 @@ Deduplicate across launch entries, result actions, follow-up chips, Skill handof
 - Ineligible, stale, unavailable, unauthorized, recently completed, or duplicate candidates are not shown as selectable actions.
 - At most four actions render; two or three are preferred when they cover the likely continuations.
 - Selecting an action is verified against the unexpired offered set in its persisted source execution; the server supplies the registered operation and exact entity context without trusting client authorship claims or bypassing authorization, freshness, capture, or confirmation.
+- Mutation/workflow actions default to a 30-minute TTL and conversational reads to 24 hours, capped by source execution expiry; landing starters use scoped signed proof.
+- Submitted message mismatch, purged source, duplicate request, and completed-equivalent reselection have explicit deterministic behavior.
 - `NEEDS_CONTEXT` actions resolve every missing fact through a registered capture key and operation; emergency/restricted responses show safe recovery actions only.
 - A candidate that becomes stale between render and selection fails safely and returns a current recovery action.
 - Semantic duplicates are suppressed across the follow-up row, result actions, capability list, Skill handoff, receipt, and landing state.
 - Ranking weights, tier ranges, minimum score, and tie-break order are deterministic, versioned, and covered by exact-order tests.
+- Phase 3 cannot start until ranking/latency thresholds, freshness and capture mappings, TTL rules, producer precedence, and injected-clock tests are complete.
 - Labels name the entity and outcome when available and avoid generic filler.
 - Keyboard, screen-reader, narrow-width, and horizontal-overflow behavior remain correct.
 - Telemetry distinguishes impressions, selection, suppression, intended-operation match, clarification, completion, stale rejection, abandonment, and manual-input escape.
@@ -331,6 +336,8 @@ Deduplicate across launch entries, result actions, follow-up chips, Skill handof
 | ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Browser-covered by ACUI-008 (fixture-backed). |
 | ACUI-008 | **Implemented (FRD v1.120):** `e2e/ask/maintenanceJourney.spec.ts`, 9 scenarios at desktop and 390px. Fixture-backed; not a live-backend run. |
 | ACUI-009 | **Planned October 4, 2026; not implemented.** Contract, verified selection, candidate pipeline, capture mapping, eligibility, deterministic ranking, cross-surface deduplication, telemetry correlation, and migration are specified in `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`. |
+
+ACUI-009 adds no feature flag, cohort, canary, pilot, or runtime kill switch because there are no real customers or production customer data. Its additive compatibility boundary supports migration; rollback is a code revert plus rebuild and redeploy.
 
 ## 7b. Ask Home synchronization status (September 28, 2026, commit `f4967e00`)
 

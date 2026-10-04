@@ -3,7 +3,7 @@
 **Date:** October 4, 2026
 **Status:** Proposed implementation plan
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.8; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.9; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -79,10 +79,8 @@ Add the contract to the backend Ask schema and mirror its inferred/generated typ
 ```ts
 type SuggestedNextActionInteractionType =
   | 'CONVERSATION_CONTINUE'
-  | 'FILTER_RESULT'
   | 'MUTATE_RECORD'
-  | 'START_WORKFLOW'
-  | 'NAVIGATE';
+  | 'START_WORKFLOW';
 
 type SuggestedNextActionSource =
   | 'OPERATION_RESULT'
@@ -141,6 +139,8 @@ Contract rules:
 - Reason codes are bounded registered tokens, not homeowner data.
 - Scores are deterministic and need not be exposed in the calm UI.
 - `createdAt` and `expiresAt` define the offered action's presentation lifetime. Selection always revalidates current state even before expiry.
+- Navigation links and result-local filter/refinement controls are not Suggested Next Actions. They retain their existing allowlisted-link or result-control contracts and publish semantic presentation identity only for cross-surface deduplication.
+- Default TTL is 30 minutes for `MUTATE_RECORD` and `START_WORKFLOW`, and 24 hours for `CONVERSATION_CONTINUE`. Every expiry is capped at the source execution's fixed `expiresAt`; a registry may choose a shorter TTL for a more volatile operation.
 
 ### 4.1 Selection proof and launch contract
 
@@ -149,14 +149,19 @@ The client must not prove app authorship merely by echoing an `operationId`. A s
 ```ts
 interface SuggestedNextActionSelection {
   suggestedActionId: string;
-  suggestedActionFromExecutionId: string;
+  suggestedActionFromExecutionId: string | null;
+  signedStarterToken: string | null;
   message: string;
 }
 ```
 
-The source execution's persisted result JSON is the offered-action ledger for the initial implementation. The server loads that execution by user and session, verifies its property scope, finds the exact unexpired action id, and copies the registered operation, entity context, outcome key, and provenance from the stored action. Client-supplied operation or entity fields are not authoritative for this path. This proves that the selection was app-authored without adding a database table. If the source execution or action cannot be verified, the request returns a typed stale/invalid-action recovery result; it must not silently fall back to semantic routing under the claimed action identity.
+For answer follow-ups, the source execution's persisted result JSON is the offered-action ledger. The server loads that execution by user and session, verifies its property scope, finds the exact unexpired action id, and copies the registered message, operation, entity context, outcome key, and provenance from the stored action. The submitted `message` exists for compatibility with the execution request and must exactly match the stored message; the server uses the stored value and rejects/audits a mismatch. Client-supplied operation or entity fields are not authoritative. The action expiry may never exceed the fixed source-execution expiry. A missing or purged source maps to the same typed stale/invalid-action recovery result and never silently falls back to semantic routing.
 
-Ordinary homeowner text and existing non-suggestion typed actions continue to use their current launch contracts. `sourceExecutionId` retains its refresh/reconciliation meaning, and `handoffFromExecutionId` retains its Skill-handoff telemetry meaning; neither is overloaded as the Suggested Next Action selection id.
+Landing starters have no source execution. They use a short-lived server-signed starter token bound to the current user, session, property, starter/action id, operation and outcome registry versions, and expiry. The backend verifies the signature and scope, resolves the server-declared starter, and repeats eligibility checks before dispatch. A starter without valid proof may still be submitted as ordinary homeowner text, but it does not receive app-authored deterministic-dispatch attribution.
+
+Selection uses the ordinary `clientRequestId` as its idempotency key. Replaying the same request returns the same resulting execution. After successful completion, equivalent actions are suppressed by semantic identity unless the operation registry explicitly declares the outcome repeatable and current eligibility still allows it. Failed and cancelled results must persist their safe recovery actions in result JSON before those actions can be displayed.
+
+Ordinary homeowner text and existing non-suggestion typed actions continue to use their current launch contracts. Rich entity item actions keep their present operation/entity launch contract and publish semantic identity for deduplication. If one is promoted into the compact Suggested Next Action row, it becomes a ledger-backed Suggested Next Action. `sourceExecutionId` retains its refresh/reconciliation meaning, and `handoffFromExecutionId` retains its Skill-handoff telemetry meaning; neither is overloaded as the Suggested Next Action selection id.
 
 ## 5. Candidate model
 
@@ -169,7 +174,7 @@ Introduce an internal `SuggestedNextActionCandidate` that contains the target co
    - Requires an explicit operation target for every migrated recommendation.
 
 2. Entity-action producer
-   - Converts existing typed item actions.
+   - Nominates compact equivalents of eligible existing typed item actions without replacing the rich action's current launch contract.
    - Preserves exact entity id and interaction type.
 
 3. Missing-detail producer
@@ -297,7 +302,7 @@ Result-card and block actions publish the same semantic identity fields to respo
 
 ### 7.4 Pipeline placement and performance budget
 
-Run the shared pipeline in backend response finalization after the operation result and platform boundary state exist, but before the execution result is validated, persisted, and returned. The orchestrator assembles one bounded evaluation context with batched property access, entity, health, pending-work, and recent-history data; producers must not perform unbounded per-candidate queries.
+Run the shared pipeline from `executeOperation.ts`'s `finalize()` seam after the operation result, Skill handoff, and platform boundary state exist, replacing the current standalone `suppressRepeatedAskSuggestions` call before answer-trust validation. The finalized action set then flows through answer-trust validation and is persisted in `AskExecution.resultJson` before the response is returned. The execution id is already allocated before operation execution and is available for provenance. The orchestrator assembles one bounded evaluation context with batched property access, entity, health, pending-work, and recent-history data; producers must not perform unbounded per-candidate queries.
 
 Initial implementation budgets:
 
@@ -377,6 +382,7 @@ Add focused modules under `apps/backend/src/services/ask/suggestedActions/`:
 - `suggestedNextActionDeduplication.ts`
 - `suggestedNextActionPolicy.ts`
 - `suggestedNextActionRegistry.ts` for outcome keys, producer declarations, capture mappings, weights, and ranking policy version
+- `suggestedNextActionClock.ts` or an injected clock interface for deterministic creation/expiry and tests
 
 Reuse rather than duplicate:
 
@@ -394,6 +400,7 @@ Run the pipeline at the response-finalization boundary described in §7.4. Build
 Exit:
 
 - Pure tests cover all eligibility reasons, safe-recovery-only mode, tier ordering, exact weight/tie-break behavior, semantic identity, source precedence, diversity, limits, selection proof, expiry, producer failure isolation, and deterministic repeatability.
+- Phase 3 may not begin until versioned weights and minimum score, latency/query thresholds, the domain freshness matrix, the complete missing-fact capture mapping, TTL rules, producer precedence, and injected-clock tests are approved and executable.
 
 ### Phase 3 — High-value producer migration
 
@@ -508,7 +515,7 @@ Safe properties:
 
 Do not log label/message text, entity ids, addresses, financial values, document content, or other homeowner data in general analytics.
 
-The selection event creates one correlation record in the existing execution-event/analytics path linking the verified offered action to the resulting execution. Do not reuse `handoffFromExecutionId` for this purpose. Outcome attribution follows that join through completion, governed pending state, intentional deferral, stale rejection, or abandonment.
+The selection event creates one correlation record in the existing execution-event/analytics path linking the verified offered action to the resulting execution. Do not reuse `handoffFromExecutionId` for this purpose. Selection id, source execution id, and resulting execution id are restricted operational identifiers: they are permitted in access-controlled execution telemetry, excluded from general product-analytics exports, follow Ask execution retention/deletion, and are not joined with raw message text or entity ids in general analytics. Outcome attribution follows that join through completion, governed pending state, intentional deferral, stale rejection, or abandonment.
 
 ### 11.2 Quality measures
 
@@ -557,12 +564,13 @@ Optimize for operation/entity precision and successful completion, not raw click
 ### 12.4 Frontend
 
 - Label rendering and transcript message preservation.
-- Operation/entity launch context dispatch.
+- Verified action/source selection dispatch using server-stored message, operation, and entity context.
 - Composer accepts arbitrary text before and after actions render.
 - Keyboard, focus, screen reader, 390-pixel width, horizontal overflow, and reduced motion.
 - Pending, stale, access-lost, and failed states.
 - Historical string-only execution compatibility while retained.
 - Action expiry, forged selection, and cross-session/source-execution rejection.
+- Signed landing-starter verification, message-mismatch rejection, purged-source recovery, idempotent replay, and completed-equivalent suppression.
 
 ### 12.5 Focused integrated journeys
 
@@ -634,8 +642,8 @@ The increment is complete when:
 
 ## 16. Delivery, rollback, and verification
 
-Use the additive typed/string compatibility boundary for incremental migration and rollback. Do not add a production feature flag solely for this work: the repository has no real-user rollout requirement, and the old read path remains available until Phase 5. If a future deployment requirement explicitly needs simultaneous selectable implementations, document that requirement before introducing a flag.
+There are no real customers or production customer data. Do not add a feature flag, cohort rollout, canary, pilot, or runtime kill switch for this increment. Use the additive typed/string compatibility boundary to migrate producers incrementally while preserving historical reads.
 
-Rollback before Phase 5 means stopping typed production for the affected migrated producer and restoring its explicit compatibility mapping; historical typed results remain readable. Phase 5 occurs only after all categorized compact producers are migrated and telemetry shows no unresolved selection-authorship, stale-action, or operation/entity precision defects.
+Rollback before Phase 5 is explicitly a code revert plus rebuild and redeploy: restore the affected producer's explicit string compatibility mapping while historical typed results remain readable. It is not an instant runtime switch. Phase 5 occurs only after all categorized compact producers are migrated and validation shows no unresolved selection-authorship, stale-action, or operation/entity precision defects.
 
 Verification follows repository policy: requirements review, Graphify/code-path tracing, contract inspection, static registry validation, pure policy tests, frontend component tests, and environment-independent integrated journeys. A later live-environment checklist may verify representative selection, stale recovery, confirmation, and analytics correlation when such an environment exists; unavailable local databases or browser infrastructure do not block implementation completion and must not be claimed as executed.
