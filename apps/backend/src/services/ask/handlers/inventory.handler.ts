@@ -19,7 +19,7 @@ import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../as
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
-import { inventoryItemContextVersion } from '../suggestedActions/domainVersions';
+import { inventoryItemContextVersion, roomContextVersion } from '../suggestedActions/domainVersions';
 import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActionRegistry';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 
@@ -749,6 +749,34 @@ export function inventoryMissingDetailCandidates(
     signals: { ...DEFAULT_CANDIDATE_SIGNALS, exactEntityMatch: true, currentResultOwnership: true },
     traits: { ...DEFAULT_CANDIDATE_TRAITS },
   }));
+}
+
+/**
+ * Typed next-action candidate for a room that was just added or corrected: add an item to that exact room. Selecting it reaches
+ * `inventory.create` with the room as the launch entity, which preselects it in the add form. Rooms have no other fact worth
+ * prompting for (floor level is cosmetic), so this is the only chip a room receipt offers.
+ */
+export function roomAddItemCandidates(
+  room: { id: string; name: string; updatedAt?: Date },
+  context: { propertyId: string; sourceOperationId: string | null },
+): SuggestedNextActionCandidate[] {
+  const shortName = room.name.length > 40 ? `${room.name.slice(0, 39)}…` : room.name;
+  return [{
+    producerId: 'rooms.add-item',
+    source: 'OPERATION_RESULT' as const,
+    sourceOperationId: context.sourceOperationId,
+    label: `Add an item to ${shortName}`,
+    message: INVENTORY_ADD_MESSAGE,
+    operationId: 'INVENTORY_ITEM_CREATE',
+    interactionType: 'START_WORKFLOW' as const,
+    outcomeKey: 'ADD_ITEM_TO_ROOM',
+    entityContext: { propertyId: context.propertyId, entityType: 'INVENTORY_ROOM', entityId: room.id, contextVersion: room.updatedAt ? roomContextVersion({ id: room.id, updatedAt: room.updatedAt }) : null },
+    tier: 'DISCOVERY' as const,
+    requiredFacts: [],
+    reasonCodes: ['ROOM_FOLLOW_UP'],
+    signals: { ...DEFAULT_CANDIDATE_SIGNALS, exactEntityMatch: true, currentResultOwnership: true },
+    traits: { ...DEFAULT_CANDIDATE_TRAITS },
+  }];
 }
 
 export function inventoryCorrectionConfirmation(item: { id: string; name: string }, field: InventoryCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date, dynamicOptions?: readonly CorrectionOption[]) {

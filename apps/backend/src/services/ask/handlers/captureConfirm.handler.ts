@@ -8,6 +8,7 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { capturePropertyFact } from '../../../modules/propertyContext/application/capturePropertyFact';
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { captureWarranty } from '../../../modules/propertyContext/application/captureWarranty';
+import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
 import { PropertyContextAccessDeniedError } from '../../../modules/propertyContext/application/getPropertyContext';
 import { USER_ADD_ORIGIN } from '../conversationalUnderstanding/conversationalCapture';
 import { APIError } from '../../../middleware/error.middleware';
@@ -284,6 +285,8 @@ async function confirmCaptureWarranty(ctx: ConfirmCapabilityContext): Promise<Co
       actions: [{ id: 'open-property-record', label: 'Open property record', href: propertyRecordHref, style: 'PRIMARY' }],
     }],
     confirmation: null, suggestions: [],
+    // A brand-new warranty has no reminder yet, so no existing-reminder lookup is needed.
+    suggestedNextActionCandidates: await warrantyExpiryReminderCandidates(warranty, { propertyId: execution.propertyId, sourceOperationId: 'CAPTURE_WARRANTY_CONFIRM', checkExistingReminder: false }),
   };
   // IW-FRESH-003 fix: previously called no reconciliation mechanism at all
   // -- see ASK_MUTATION_IMPACT_MAP's CAPTURE_WARRANTY_CONFIRM entry.

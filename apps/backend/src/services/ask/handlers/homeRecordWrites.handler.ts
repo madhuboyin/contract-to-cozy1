@@ -14,6 +14,7 @@ import { visibleInventoryItemWhere } from '../../riskAssetApplicability';
 import { HouseholdService } from '../../household.service';
 import { correctionDateString, correctionDisplay, correctionMoneyFromDollars, correctionValueError, type CorrectionFieldSpec, type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
+import { roomContextVersion, warrantyContextVersion } from '../suggestedActions/domainVersions';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionField, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, invitationRoleCopy, isValidDateEditInput, propertySummary, readablePropertyValue, ROOM_TYPE_VALUES, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
 
 export const householdService = new HouseholdService();
@@ -421,9 +422,7 @@ export function warrantyFieldPatch(field: WarrantyCorrectionField, normalized: s
   return { [field]: normalized };
 }
 
-export function warrantyContextVersion(warranty: { id: string; updatedAt: Date }): string {
-  return createHash('sha256').update(`${warranty.id}:${warranty.updatedAt.toISOString()}`).digest('hex');
-}
+export { warrantyContextVersion };
 
 // `owned` is decided by the caller from the requester's own homeownerProfile
 // -- never from role alone.
@@ -689,9 +688,7 @@ export function roomFieldDisplay(field: RoomCorrectionField, value: string | nul
   return value;
 }
 
-export function roomContextVersion(room: { id: string; updatedAt: Date }): string {
-  return createHash('sha256').update(`${room.id}:${room.updatedAt.toISOString()}`).digest('hex');
-}
+export { roomContextVersion };
 
 // Returns a homeowner-facing reason the proposed name is unusable, else null.
 async function roomRenameNameError(propertyId: string, roomId: string, value: unknown): Promise<string | null> {

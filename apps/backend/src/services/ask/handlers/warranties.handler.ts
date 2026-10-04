@@ -5,7 +5,9 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateCoverageRecord } from '../../coverage/contextPolicy';
 import { humanDate } from '../askFormatting';
-import { ensurePropertyAccess, readablePropertyValue } from '../askHandlerSupport';
+import { ensurePropertyAccess, HOME_DEADLINE_DEFAULT_LEAD_DAYS, readablePropertyValue } from '../askHandlerSupport';
+import { warrantyContextVersion } from '../suggestedActions/domainVersions';
+import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 import { WARRANTY_ADD_MESSAGE, warrantyCorrectionItemActions } from '../handlers/homeRecordWrites.handler';
 import { MAX_RESULT_ITEMS, type AskViewState } from '../support/executionState';
 import { randomUUID } from 'node:crypto';
@@ -348,3 +350,50 @@ registerCapabilityHandler('warranty.lookup', async (envelope) => warrantiesResul
   envelope.userId, envelope.propertyId!, envelope.message,
   await loadWarrantyViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
 ));
+
+/** The reminder task id the deadline monitor keys on, shared with `confirmHomeDeadlineMonitor` so "already set up" means the same thing. */
+export const warrantyReminderActionKey = (warrantyId: string): string => `ask-deadline:WARRANTY:${warrantyId}`;
+
+/**
+ * Typed next-action candidate for "remind me before this warranty expires". Offered only while the expiry is still ahead, and not
+ * when an active reminder already exists for this warranty at the date the monitor would set. The reminder deadline is driven by
+ * the expiry date alone, so the corrected-receipt caller passes this only after an expiry-date change. The candidate carries the exact
+ * warranty and its version; the monitor operation targets that warranty and never falls back to another.
+ */
+export async function warrantyExpiryReminderCandidates(
+  warranty: { id: string; providerName: string; expiryDate: Date; updatedAt: Date },
+  context: { propertyId: string; sourceOperationId: string | null; checkExistingReminder: boolean; now?: Date },
+): Promise<SuggestedNextActionCandidate[]> {
+  // The warranty is already saved when a receipt calls this, so a failed lookup must cost only the suggestion, never the receipt.
+  try {
+    const now = context.now ?? new Date();
+    if (!(warranty.expiryDate instanceof Date) || warranty.expiryDate.getTime() <= now.getTime()) return [];
+    if (context.checkExistingReminder) {
+      const existing = await prisma.propertyMaintenanceTask.findUnique({
+        where: { propertyId_actionKey: { propertyId: context.propertyId, actionKey: warrantyReminderActionKey(warranty.id) } },
+        select: { status: true, nextDueDate: true },
+      });
+      const due = new Date(warranty.expiryDate.getTime() - HOME_DEADLINE_DEFAULT_LEAD_DAYS * 86_400_000).toISOString().slice(0, 10);
+      if (existing && existing.status !== 'CANCELLED' && existing.status !== 'COMPLETED' && existing.nextDueDate?.toISOString().slice(0, 10) === due) return [];
+    }
+    const provider = warranty.providerName.length > 40 ? `${warranty.providerName.slice(0, 39)}…` : warranty.providerName;
+    return [{
+      producerId: 'warranties.expiry-reminder',
+      source: 'OPERATION_RESULT' as const,
+      sourceOperationId: context.sourceOperationId,
+      label: `Remind me before the ${provider} warranty expires`,
+      message: `Remind me before the ${warranty.providerName} warranty expires.`,
+      operationId: 'HOME_DEADLINE_MONITOR',
+      interactionType: 'MUTATE_RECORD' as const,
+      outcomeKey: 'MONITOR_WARRANTY_EXPIRY',
+      entityContext: { propertyId: context.propertyId, entityType: 'WARRANTY', entityId: warranty.id, contextVersion: warrantyContextVersion(warranty) },
+      tier: 'RELATED' as const,
+      requiredFacts: [],
+      reasonCodes: ['WARRANTY_EXPIRY_AHEAD'],
+      signals: { ...DEFAULT_CANDIDATE_SIGNALS, exactEntityMatch: true, currentResultOwnership: true },
+      traits: { ...DEFAULT_CANDIDATE_TRAITS },
+    }];
+  } catch {
+    return [];
+  }
+}

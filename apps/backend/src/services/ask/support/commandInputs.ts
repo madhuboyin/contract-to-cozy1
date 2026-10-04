@@ -181,6 +181,9 @@ export const GuidanceJourneyCommandInputSchema = z.object({
   label: z.string().trim().min(1).max(240),
 }).strict();
 
+/** How many days before an expiration the reminder is due when the request does not say. */
+export const HOME_DEADLINE_DEFAULT_LEAD_DAYS = 30;
+
 export const HomeDeadlineMonitorInputSchema = z.object({
   sourceType: z.enum(['WARRANTY', 'INSURANCE_POLICY', 'MAINTENANCE']),
   sourceId: z.string().trim().min(1).max(160),

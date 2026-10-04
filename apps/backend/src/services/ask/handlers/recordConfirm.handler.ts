@@ -22,7 +22,8 @@ import { humanDate } from '../askFormatting';
 import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom } from '../handlers/propertySummary.handler';
 import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, WARRANTY_CORRECTION_FIELDS, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from '../handlers/homeRecordWrites.handler';
-import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryMissingDetailCandidates, inventoryRoomLinkOptions, inventoryService } from '../handlers/inventory.handler';
+import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
+import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryMissingDetailCandidates, inventoryRoomLinkOptions, inventoryService, roomAddItemCandidates } from '../handlers/inventory.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { recordDocumentPromotionOutcome, recordOperationalWorkOutcome } from '../../decisionPlatform/outcomeObservationService';
 import { applyWriteBacks } from '../../inspectionWriteBack.service';
@@ -427,6 +428,10 @@ async function confirmWarrantyCorrect(ctx: ConfirmCapabilityContext): Promise<Co
       actions: [{ id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'PRIMARY' }],
     }],
     suggestions: ['Show my warranties'],
+    // The reminder deadline follows the expiry date, so only an expiry-date correction can make a reminder worth offering.
+    suggestedNextActionCandidates: field === 'expiryDate'
+      ? await warrantyExpiryReminderCandidates(updated, { propertyId: execution.propertyId!, sourceOperationId: 'WARRANTY_CORRECT', checkExistingReminder: true })
+      : [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
@@ -484,6 +489,7 @@ async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<Confirm
       actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/rooms`, style: 'PRIMARY' }],
     }],
     suggestions: ['Show my rooms'],
+    suggestedNextActionCandidates: roomAddItemCandidates({ id: room.id, name: renamed ? proposed : room.name }, { propertyId: execution.propertyId!, sourceOperationId: 'ROOM_RENAME' }),
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
@@ -536,6 +542,7 @@ async function confirmRoomCreate(ctx: ConfirmCapabilityContext): Promise<Confirm
       actions: [],
     }],
     suggestions: ['Show my rooms'],
+    suggestedNextActionCandidates: roomAddItemCandidates({ id: roomId, name }, { propertyId, sourceOperationId: 'ROOM_CREATE' }),
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {

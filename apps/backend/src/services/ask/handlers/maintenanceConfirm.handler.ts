@@ -11,7 +11,7 @@ import { humanDate } from '../askFormatting';
 import { asInputJson, isValidDateEditInput, MaintenanceTaskUpdateInputSchema, MaintenanceTaskWorkflowInputSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary } from '../askHandlerSupport';
 import { householdService } from '../handlers/homeRecordWrites.handler';
 import { reconcileAskExecutionSideEffects, refreshAskSourceExecution } from '../execution/executeOperation';
-import { maintenanceConflictDescription, maintenanceMoney, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
+import { maintenanceConflictDescription, maintenanceMoney, maintenanceTaskVersion, maintenanceUndoCandidates, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 
 async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -310,7 +310,10 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
         ...(candidate.data.serviceCategory !== undefined ? [{ label: 'Service category', value: updated.serviceCategory?.toLowerCase().replace(/_/g, ' ') ?? 'Not set' }] : []),
         ...(candidate.data.action === 'SNOOZE' || candidate.data.action === 'UNSNOOZE' ? [{ label: 'Reminders', value: updated.snoozedUntil ? `Snoozed until ${humanDate(updated.snoozedUntil)}` : 'Active' }] : []),
         { label: 'Assignee', value: updated.assignedTo?.email ?? 'Unassigned' }], actions: [] }],
-      confirmation: null, suggestions: candidate.data.action === 'ARCHIVE' ? [`Reopen ${updated.title}`] : ['What maintenance is pending?'],
+      confirmation: null, suggestions: ['What maintenance is pending?'],
+      // Undo of what this receipt just did, as a typed action on the exact task (the plain fallback above shows when there is none).
+      suggestedNextActionCandidates: candidate.data.action === 'ARCHIVE' ? maintenanceUndoCandidates(updated, { propertyId: execution.propertyId, undo: 'REOPEN' })
+        : candidate.data.action === 'SNOOZE' ? maintenanceUndoCandidates(updated, { propertyId: execution.propertyId, undo: 'UNSNOOZE' }) : [],
     };
     artifactType = command.artifactType;
     artifactId = updated.id;

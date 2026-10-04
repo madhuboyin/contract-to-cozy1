@@ -61,7 +61,7 @@ test('confirm writes a NARROWED patch through updateWarranty with freshness, rep
   const confirm = body('async function confirmWarrantyCorrect(', "registerConfirmCapabilityHandler('warranty.correct'");
   // Only the one confirmed field is written, built by warrantyFieldPatch, and scoped to the owning profile.
   assert.match(confirm, /updateWarranty\(warranty\.id, warranty\.homeownerProfile\.id, warrantyFieldPatch\(field, next\)\)/);
-  assert.doesNotMatch(body('function warrantyFieldPatch(', 'function warrantyContextVersion('), /\.\.\.parameters|req\.body|\.\.\.value/);
+  assert.doesNotMatch(body('function warrantyFieldPatch(', 'export { warrantyContextVersion }'), /\.\.\.parameters|req\.body|\.\.\.value/);
   assert.doesNotMatch(confirm, /\.\.\.parameters|req\.body/);
   assert.match(confirm, /warrantyContextVersion\(warranty\)/);
   assert.match(confirm, /alreadyApplied/);

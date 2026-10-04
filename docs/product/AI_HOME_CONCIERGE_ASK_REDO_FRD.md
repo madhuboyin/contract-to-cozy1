@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.14"
+version: "1.17"
 date: "October 4, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.14 |
+| Version | 1.17 |
 | Date | October 4, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -1613,7 +1613,7 @@ Removal of legacy string production is gated by static validation, pure policy t
 
 **Phase 2 status (October 4, 2026, implemented; not live-verified).** The shared `finalizeSuggestedNextActions` service, the eleven-rule pure eligibility evaluator, deterministic tier-only ranking with a fixed tie-break sequence (the weighted scoring and minimum score are built and tested but switched off until real chips show a need), semantic-identity deduplication with rich-card presentation suppression, the diversity and discovery-reserve policy, the static producer registry, batched fail-closed entity validators, and the fact-to-capture and freshness registries are in place and wired at the read, confirmation and routing-clarification seams. The persistence-boundary baseline now classifies every persisting file against the finalizer. No domain producer exists yet, so no typed action reaches a homeowner until Phase 3; the Phase 3 entry-gate values are recorded in the plan's Appendix B for approval.
 
-**Simplified delivery and inventory conversion (October 4, 2026, implemented; not live-verified).** With no real customers, Suggested Next Actions are delivered by converting handlers directly rather than by a staged migration: the string-compatibility layer was removed, unconverted handlers keep plain-text chips, ranking ships tier-only, and landing starters stay ordinary prompts. Inventory is converted: after an item is created or corrected, Ask offers the details that same item is still missing as typed actions that name the exact item, and a selected action chooses its correction field from its registered outcome instead of re-reading its message. Rooms, maintenance, warranties, home events and radar, and claims and inspection remain to convert. Details are in the plan's Appendix C.
+**Simplified delivery and inventory conversion (October 4, 2026, implemented; not live-verified).** With no real customers, Suggested Next Actions are delivered by converting handlers directly rather than by a staged migration: the string-compatibility layer was removed, unconverted handlers keep plain-text chips, ranking ships tier-only, and landing starters stay ordinary prompts. Inventory is converted: after an item is created or corrected, Ask offers the details that same item is still missing as typed actions that name the exact item, and a selected action chooses its correction field from its registered outcome instead of re-reading its message. Rooms are converted (v1.15): the room-added and room-renamed/corrected receipts offer one typed action, "Add an item to <room>", which names the exact room and opens the add-item form with that room preselected; floor level is deliberately not prompted for because nothing consumes it. Maintenance is converted (v1.16): when a maintenance task is cancelled or its reminders are snoozed, the receipt offers "Reopen <task>" or "Resume reminders for <task>" as a typed action on that exact task, and the update operation chooses its action from the registered outcome rather than from keywords in the message (so a task named "Remove old paint" can no longer turn a reopen into a delete). The created and completed receipts keep plain chips because nothing useful is missing. Warranties are converted (v1.17): after a warranty is recorded, or after its expiry date is corrected, while the expiry is still ahead and no active reminder already exists, the receipt offers "Remind me before the <provider> warranty expires" as a typed action on that exact warranty. Selecting it reviews a reminder for that warranty only; if the warranty was deleted, changed, expired or belongs to another home since it was offered, Ask shows the standard "suggestion no longer available" recovery and never reminds about a different warranty. Typing "remind me about my warranty" keeps the earlier behaviour of choosing the soonest-expiring warranty. Home events and radar, and claims and inspection remain to convert. Details are in the plan's Appendix C.
 
 ### 27.8 Loading and streaming
 

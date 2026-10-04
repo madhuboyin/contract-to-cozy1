@@ -20,7 +20,8 @@ import { ReplaceRepairService } from '../../replaceRepairAnalysis.service';
 import { humanDate, money } from '../askFormatting';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { buildMaintenanceImportanceResult } from '../support/maintenanceImportance';
-import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HOME_CHANGE_SUMMARY_WINDOW_DAYS, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, MaintenanceCompletionWorkflowInput, RadarEnvelopeQuerySuppliedInput } from '../askHandlerSupport';
+import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HOME_CHANGE_SUMMARY_WINDOW_DAYS, HOME_DEADLINE_DEFAULT_LEAD_DAYS, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, MaintenanceCompletionWorkflowInput, RadarEnvelopeQuerySuppliedInput } from '../askHandlerSupport';
+import { warrantyContextVersion } from '../suggestedActions/domainVersions';
 import { EVENT_ADD_MESSAGE, EVIDENCE_ATTACH_TARGET_TYPES, type EvidenceAttachTargetType, eventAddResult, evidenceAttachResult, WARRANTY_ADD_MESSAGE, warrantyAddResult } from '../handlers/homeRecordWrites.handler';
 import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
@@ -61,11 +62,34 @@ async function guidanceJourneyCreateResult(userId: string, propertyId: string, m
   };
 }
 
-export async function homeDeadlineMonitorResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const leadDays = Math.min(90, Math.max(1, Number(message.match(/(\d{1,2})\s*days?\s*(?:before|ahead)/i)?.[1] ?? 30)));
-  const warrantyFocus = /warrant/i.test(message);
-  const insuranceFocus = /insurance|policy|coverage/i.test(message);
-  const maintenanceFocus = /maintenance|task/i.test(message) && !warrantyFocus && !insuranceFocus;
+/** Same copy as the typed recovery for a suggestion that could not be verified (createAskExecution), for a target that changed since it was offered. */
+function staleSuggestedActionResult(): AskOperationResult {
+  return {
+    status: 'NOT_APPLICABLE', reasonCode: 'ASK_SUGGESTED_ACTION_STALE',
+    blocks: [{
+      type: 'SUMMARY', id: 'suggested-action-unavailable', title: 'That suggestion is no longer available',
+      body: 'It was based on information that has since changed, so nothing was done. Your earlier answer is unchanged — ask again in your own words or pick a current suggestion.',
+      tone: 'CAUTION', actions: [],
+    }],
+    suggestions: [],
+  };
+}
+
+/**
+ * `exactWarranty` is the verified typed target of a selected suggestion. When present the operation reminds about that warranty or
+ * nothing: a deleted, other-property, expired or changed warranty yields the stale recovery, never a different warranty. Without it
+ * (ordinary free text) the earliest future warranty is chosen as before.
+ */
+export async function homeDeadlineMonitorResult(userId: string, propertyId: string, message: string, exactWarranty?: { warrantyId: string; contextVersion: string | null }): Promise<AskOperationResult> {
+  let exact: Awaited<ReturnType<typeof prisma.warranty.findFirst>> = null;
+  if (exactWarranty) {
+    exact = await prisma.warranty.findFirst({ where: { id: exactWarranty.warrantyId, propertyId } });
+    if (!exact || exact.expiryDate.getTime() <= Date.now() || (exactWarranty.contextVersion && exactWarranty.contextVersion !== warrantyContextVersion(exact))) return staleSuggestedActionResult();
+  }
+  const leadDays = exact ? HOME_DEADLINE_DEFAULT_LEAD_DAYS : Math.min(90, Math.max(1, Number(message.match(/(\d{1,2})\s*days?\s*(?:before|ahead)/i)?.[1] ?? HOME_DEADLINE_DEFAULT_LEAD_DAYS)));
+  const warrantyFocus = Boolean(exact) || /warrant/i.test(message);
+  const insuranceFocus = !exact && /insurance|policy|coverage/i.test(message);
+  const maintenanceFocus = !exact && /maintenance|task/i.test(message) && !warrantyFocus && !insuranceFocus;
   if (maintenanceFocus) {
     const openTasks = (await PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: false }))
       .filter((task) => task.status !== MaintenanceTaskStatus.CANCELLED);
@@ -99,7 +123,7 @@ export async function homeDeadlineMonitorResult(userId: string, propertyId: stri
     };
   }
   const [warranty, policy, policiesMissingExpiry] = await Promise.all([
-    warrantyFocus ? prisma.warranty.findFirst({ where: { propertyId, expiryDate: { gt: new Date() } }, orderBy: { expiryDate: 'asc' } }) : null,
+    exact ?? (warrantyFocus ? prisma.warranty.findFirst({ where: { propertyId, expiryDate: { gt: new Date() } }, orderBy: { expiryDate: 'asc' } }) : null),
     insuranceFocus ? prisma.insurancePolicy.findFirst({ where: { propertyId, expiryDate: { gt: new Date() } }, orderBy: { expiryDate: 'asc' } }) : null,
     insuranceFocus ? prisma.insurancePolicy.findMany({ where: { propertyId, expiryDate: null }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], select: { id: true, carrierName: true, coverageType: true, updatedAt: true } }) : [],
   ]);
@@ -754,7 +778,7 @@ const launchMaintenanceTaskId = (envelope: CapabilityInvocationEnvelope): string
 
 registerCapabilityHandler('maintenance.complete', async (envelope) => maintenanceTaskCompleteResult(envelope.userId, envelope.propertyId!, envelope.message, (envelope.suppliedInput as MaintenanceCompletionWorkflowInput | undefined) ?? (launchMaintenanceTaskId(envelope) ? { taskId: launchMaintenanceTaskId(envelope)! } : undefined), envelope.launchContext?.sourceExecutionId ?? null));
 
-registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, launchMaintenanceTaskId(envelope), envelope.launchContext?.sourceExecutionId ?? null));
+registerCapabilityHandler('maintenance.update', async (envelope) => maintenanceTaskUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, launchMaintenanceTaskId(envelope), envelope.launchContext?.sourceExecutionId ?? null, envelope.launchContext?.outcomeKey ?? null));
 
 registerCapabilityHandler('intelligence-envelope.query', async (envelope) => intelligenceEnvelopeQueryResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.continuationCursor, envelope.suppliedInput as RadarEnvelopeQuerySuppliedInput | undefined));
 
@@ -770,7 +794,13 @@ registerCapabilityHandler('inventory.replacement', async (envelope) => replaceme
 
 registerCapabilityHandler('guidance.journey.create', async (envelope) => guidanceJourneyCreateResult(envelope.userId, envelope.propertyId!, envelope.message));
 
-registerCapabilityHandler('home-deadline.monitor', async (envelope) => homeDeadlineMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('home-deadline.monitor', async (envelope) => {
+  const launch = envelope.launchContext;
+  const exactWarranty = launch?.outcomeKey === 'MONITOR_WARRANTY_EXPIRY' && launch.entityType === 'WARRANTY' && launch.entityId
+    ? { warrantyId: launch.entityId, contextVersion: launch.contextVersion ?? null }
+    : undefined;
+  return homeDeadlineMonitorResult(envelope.userId, envelope.propertyId!, envelope.message, exactWarranty);
+});
 
 // Passthrough category (FRD §16): receives the whole envelope, plus the
 // trace object groundedGuidanceResult needs but which the envelope itself

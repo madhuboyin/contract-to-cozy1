@@ -3,6 +3,8 @@
 // re-exports the names below so existing imports keep working.
 import { HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
+import { maintenanceTaskVersion } from '../suggestedActions/domainVersions';
+import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
@@ -337,8 +339,38 @@ export async function maintenanceTaskCreateResult(
   };
 }
 
-export function maintenanceTaskVersion(task: { id: string; status: MaintenanceTaskStatus; updatedAt: Date; snoozedUntil?: Date | null }): string {
-  return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, updatedAt: task.updatedAt, snoozedUntil: task.snoozedUntil ?? null })).digest('hex');
+export { maintenanceTaskVersion };
+
+/** The update action each registered MAINTENANCE_TASK_UPDATE outcome stands for; a selected suggestion uses this, never its message. */
+const MAINTENANCE_UPDATE_ACTION_BY_OUTCOME: Readonly<Record<string, 'REOPEN' | 'UNSNOOZE'>> = { REOPEN_TASK: 'REOPEN', RESUME_REMINDERS: 'UNSNOOZE' };
+
+/**
+ * Typed next-action candidate that undoes what the update receipt just did: reopen a cancelled task, or resume snoozed reminders.
+ * Each names the exact task and carries the version the receipt just read, so a later change to the task hides the chip.
+ */
+export function maintenanceUndoCandidates(
+  task: { id: string; title: string; status: string; updatedAt: Date; snoozedUntil?: Date | null },
+  context: { propertyId: string; undo: 'REOPEN' | 'UNSNOOZE' },
+): SuggestedNextActionCandidate[] {
+  const title = formatAskMaintenanceTitle(task.title);
+  const shortTitle = title.length > 40 ? `${title.slice(0, 39)}…` : title;
+  const reopen = context.undo === 'REOPEN';
+  return [{
+    producerId: 'maintenance.undo-update',
+    source: 'OPERATION_RESULT' as const,
+    sourceOperationId: 'MAINTENANCE_TASK_UPDATE',
+    label: reopen ? `Reopen ${shortTitle}` : `Resume reminders for ${shortTitle}`,
+    message: reopen ? `Reopen the maintenance task "${task.title}".` : `Resume reminders for the maintenance task "${task.title}".`,
+    operationId: 'MAINTENANCE_TASK_UPDATE',
+    interactionType: 'MUTATE_RECORD' as const,
+    outcomeKey: reopen ? 'REOPEN_TASK' : 'RESUME_REMINDERS',
+    entityContext: { propertyId: context.propertyId, entityType: 'MAINTENANCE_TASK', entityId: task.id, contextVersion: maintenanceTaskVersion(task) },
+    tier: 'RECORD_ACTION' as const,
+    requiredFacts: [],
+    reasonCodes: [reopen ? 'TASK_CANCELLED_THIS_TURN' : 'REMINDERS_SNOOZED_THIS_TURN'],
+    signals: { ...DEFAULT_CANDIDATE_SIGNALS, exactEntityMatch: true, currentResultOwnership: true },
+    traits: { ...DEFAULT_CANDIDATE_TRAITS },
+  }];
 }
 
 // External review [P1] FRESH-002/A10: a detected maintenance-task
@@ -537,7 +569,9 @@ export async function maintenanceTaskCompleteResult(
   };
 }
 
-export function maintenanceUpdateAction(message: string): z.infer<typeof MaintenanceTaskUpdateInputSchema>['action'] {
+export function maintenanceUpdateAction(message: string, outcomeKey?: string | null): z.infer<typeof MaintenanceTaskUpdateInputSchema>['action'] {
+  const fromOutcome = outcomeKey ? MAINTENANCE_UPDATE_ACTION_BY_OUTCOME[outcomeKey] : undefined;
+  if (fromOutcome) return fromOutcome;
   if (/\b(?:resume|restore|unsnooze)\b.{0,24}\breminders?\b|\bunsnooze\b/i.test(message)) return 'UNSNOOZE';
   if (/\bsnooze\b/i.test(message)) return 'SNOOZE';
   if (/\bunassign\b/i.test(message)) return 'UNASSIGN';
@@ -594,7 +628,7 @@ export function maintenanceUpdateServiceCategory(message: string): ServiceCatego
   return categories.find((category) => normalized.includes(category));
 }
 
-export async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string, launchTaskId?: string | null, sourceExecutionId?: string | null): Promise<AskOperationResult> {
+export async function maintenanceTaskUpdateResult(userId: string, propertyId: string, message: string, launchTaskId?: string | null, sourceExecutionId?: string | null, outcomeKey?: string | null): Promise<AskOperationResult> {
   const [tasks, members] = await Promise.all([
     PropertyMaintenanceTaskService.getTasksForProperty(userId, propertyId, { includeCompleted: true }),
     prisma.householdMember.findMany({ where: { propertyId }, include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } }),
@@ -623,16 +657,19 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
   }
   // Desktop's Remove is a permanent delete, which the service refuses for Action
   // Center tasks (they can only be cancelled), so those get a cancel proposal instead.
-  const requestedAction = maintenanceUpdateAction(message);
+  const requestedAction = maintenanceUpdateAction(message, outcomeKey);
+  // A selected suggestion is fully described by its registered outcome; nothing else is parsed out of its message, so a task titled
+  // "Urgent roof patch" or "Remove old paint" cannot add a priority or change the action.
+  const outcomeDriven = Boolean(outcomeKey && MAINTENANCE_UPDATE_ACTION_BY_OUTCOME[outcomeKey]);
   const action = requestedAction === 'DELETE' && match.source === 'ACTION_CENTER' ? 'ARCHIVE' : requestedAction;
-  const dueDate = extractMaintenanceDueDate(message, new Date(), 'UTC');
-  const priority = /\burgent\b/i.test(message) ? MaintenanceTaskPriority.URGENT
+  const dueDate = outcomeDriven ? undefined : extractMaintenanceDueDate(message, new Date(), 'UTC');
+  const priority = outcomeDriven ? undefined : /\burgent\b/i.test(message) ? MaintenanceTaskPriority.URGENT
     : /\bhigh(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.HIGH
       : /\blow(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.LOW
         : /\bmedium(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.MEDIUM : undefined;
-  const recurrence = maintenanceUpdateRecurrence(message);
-  const serviceCategory = maintenanceUpdateServiceCategory(message);
-  const snoozedUntil = maintenanceSnoozedUntil(message);
+  const recurrence = outcomeDriven ? null : maintenanceUpdateRecurrence(message);
+  const serviceCategory = outcomeDriven ? undefined : maintenanceUpdateServiceCategory(message);
+  const snoozedUntil = outcomeDriven ? undefined : maintenanceSnoozedUntil(message);
   const assigneeText = message.match(/\bassign\b.{0,20}\bto\s+([^,.;]+)/i)?.[1]?.trim().toLowerCase();
   const assignee = action === 'ASSIGN' && assigneeText
     ? members.find((member) => [member.user.email, member.user.firstName, `${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim()]

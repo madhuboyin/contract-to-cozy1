@@ -6,3 +6,15 @@ import { createHash } from 'node:crypto';
 export function inventoryItemContextVersion(item: { id: string; updatedAt: Date }): string {
   return createHash('sha256').update(`${item.id}:${item.updatedAt.toISOString()}`).digest('hex');
 }
+
+export function roomContextVersion(room: { id: string; updatedAt: Date }): string {
+  return createHash('sha256').update(`${room.id}:${room.updatedAt.toISOString()}`).digest('hex');
+}
+
+export function maintenanceTaskVersion(task: { id: string; status: string; updatedAt: Date; snoozedUntil?: Date | null }): string {
+  return createHash('sha256').update(JSON.stringify({ id: task.id, status: task.status, updatedAt: task.updatedAt, snoozedUntil: task.snoozedUntil ?? null })).digest('hex');
+}
+
+export function warrantyContextVersion(warranty: { id: string; updatedAt: Date }): string {
+  return createHash('sha256').update(`${warranty.id}:${warranty.updatedAt.toISOString()}`).digest('hex');
+}

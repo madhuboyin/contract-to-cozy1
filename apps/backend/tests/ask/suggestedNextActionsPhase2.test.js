@@ -467,7 +467,10 @@ test('entity types without a registered validator fail closed; only migrated dom
   const { getSuggestedNextActionEntityValidator } = require('../../src/services/ask/suggestedActions/suggestedNextActionEntityValidators.ts');
   require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
   assert.equal(typeof getSuggestedNextActionEntityValidator('INVENTORY_ITEM'), 'function', 'inventory is converted');
-  for (const unconverted of ['ROOM', 'MAINTENANCE_TASK', 'WARRANTY', 'HOME_EVENT', 'CLAIM']) assert.equal(getSuggestedNextActionEntityValidator(unconverted), undefined, unconverted);
+  assert.equal(typeof getSuggestedNextActionEntityValidator('INVENTORY_ROOM'), 'function', 'rooms are converted');
+  assert.equal(typeof getSuggestedNextActionEntityValidator('MAINTENANCE_TASK'), 'function', 'maintenance is converted');
+  assert.equal(typeof getSuggestedNextActionEntityValidator('WARRANTY'), 'function', 'warranties are converted');
+  for (const unconverted of ['HOME_EVENT', 'CLAIM']) assert.equal(getSuggestedNextActionEntityValidator(unconverted), undefined, unconverted);
   resetSuggestedNextActionEntityValidatorsForTests();
   assert.equal(getSuggestedNextActionEntityValidator('INVENTORY_ITEM'), undefined);
   registerSuggestedNextActionEntityValidator('INVENTORY_ITEM', async () => new Map());

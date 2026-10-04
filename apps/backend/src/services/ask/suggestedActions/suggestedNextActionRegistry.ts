@@ -113,6 +113,9 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
     'ADD_NAME', 'ADD_INSTALL_DATE', 'ADD_PURCHASE_DATE', 'ADD_LAST_SERVICED_DATE', 'ADD_CONDITION', 'ADD_BRAND', 'ADD_MODEL',
     'ADD_SERIAL_NUMBER', 'ADD_PURCHASE_COST', 'ADD_REPLACEMENT_COST', 'ADD_NOTES', 'ADD_CATEGORY', 'ADD_ROOM',
   ],
+  HOME_DEADLINE_MONITOR: ['MONITOR_WARRANTY_EXPIRY'],
+  INVENTORY_ITEM_CREATE: ['ADD_ITEM_TO_ROOM'],
+  MAINTENANCE_TASK_UPDATE: ['REOPEN_TASK', 'RESUME_REMINDERS'],
   CAPTURE_FACT_CONFIRM: ['CAPTURE_PROPERTY_FACT'],
 };
 
@@ -192,7 +195,7 @@ export type FreshnessStrategy =
  */
 export const DOMAIN_FRESHNESS_MATRIX: Readonly<Record<string, FreshnessStrategy>> = {
   INVENTORY_ITEM: { kind: 'CONTEXT_VERSION', versionFunction: 'inventoryItemContextVersion', derivedFrom: 'id + updatedAt' },
-  ROOM: { kind: 'CONTEXT_VERSION', versionFunction: 'roomContextVersion', derivedFrom: 'id + updatedAt' },
+  INVENTORY_ROOM: { kind: 'CONTEXT_VERSION', versionFunction: 'roomContextVersion', derivedFrom: 'id + updatedAt' },
   MAINTENANCE_TASK: { kind: 'CONTEXT_VERSION', versionFunction: 'maintenanceTaskVersion', derivedFrom: 'id + status + updatedAt + snoozedUntil' },
   WARRANTY: { kind: 'CONTEXT_VERSION', versionFunction: 'warrantyContextVersion', derivedFrom: 'id + updatedAt' },
   HOME_EVENT: { kind: 'CONTEXT_VERSION', versionFunction: 'homeEventContextVersion', derivedFrom: 'id + revision' },
