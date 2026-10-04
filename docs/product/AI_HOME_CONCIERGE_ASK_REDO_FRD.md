@@ -3,7 +3,7 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.7"
+version: "1.8"
 date: "October 4, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
@@ -19,7 +19,7 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.7 |
+| Version | 1.8 |
 | Date | October 4, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
@@ -38,7 +38,7 @@ This FRD is the living product and implementation contract for Ask. The reposito
 
 Ask must preserve unrestricted homeowner input. The composer is not an operation allowlist: a homeowner may always type any question, correction, or request, which continues through the normal safety, routing, clarification, authorization, and confirmation pipeline.
 
-The next recommendation-platform increment is **high-precision Suggested Next Actions**. Its purpose is to anticipate the most useful next request so accurately that the homeowner often does not need to formulate it, while retaining free-form input as a permanent escape hatch. App-authored recommendations must move from free-text-only strings toward typed, server-governed actions carrying a homeowner-facing label, transcript message, registered operation, exact entity context when known, evaluated eligibility, provenance, and priority. Clicking one supplies deterministic routing context but never bypasses current authorization, applicability, freshness, capture, or confirmation checks.
+The next recommendation-platform increment is **high-precision Suggested Next Actions**. Its purpose is to anticipate the most useful next request so accurately that the homeowner often does not need to formulate it, while retaining free-form input as a permanent escape hatch. App-authored recommendations must move from free-text-only strings toward typed, server-governed actions carrying a homeowner-facing label, transcript message, registered operation and outcome, exact entity context when known, evaluated eligibility, provenance, priority, and expiry. Clicking one identifies the action and source execution; the server proves it was actually offered before deterministic dispatch and repeats current authorization, applicability, freshness, capture, and confirmation checks.
 
 This increment also unifies currently separate recommendation surfaces—operation suggestions, entity actions, result/block actions, confirmation receipts, Skill handoffs, dynamic capability recommendations, platform recovery suggestions, and landing starters—under one eligibility, ranking, deduplication, telemetry, and accessibility policy. Migration is additive until all producers and clients support the typed contract.
 
@@ -1535,14 +1535,16 @@ The backend response schema determines which blocks and actions are rendered. Th
 Every app-authored conversational recommendation must converge on a versioned `SuggestedNextAction` contract containing:
 
 - stable action id;
+- registered outcome key used for semantic identity and deduplication;
 - concise homeowner-facing `label`;
 - natural-language `message` retained in the transcript;
 - registered `operationId`;
 - interaction type;
 - property and exact entity identity when known, plus a context/freshness version when meaningful;
 - evaluated eligibility state, reason codes, and supported missing-fact keys;
-- provenance source, source operation, and reason codes; and
-- priority tier and deterministic score.
+- provenance source, source operation, and reason codes;
+- priority tier and deterministic score; and
+- creation and expiry timestamps.
 
 Raw free-text suggestions may remain temporarily during migration but must not be the target representation. Generated model prose may not create an executable suggested action.
 
@@ -1572,7 +1574,7 @@ Before ranking, the server must filter or downgrade candidates using current:
 - recently completed operations and previously asked questions; and
 - cross-surface duplication.
 
-Only eligible actions are shown as immediately selectable. `NEEDS_CONTEXT` may be shown only when the missing context can be collected through a registered typed capture. Eligibility is re-evaluated when the action is selected.
+Only eligible actions are shown as immediately selectable. `NEEDS_CONTEXT` may be shown only when every missing fact resolves through a registered fact-to-capture-to-operation mapping. Eligibility is re-evaluated when the action is selected. Emergency, restricted, unavailable, expired, and cancellation results admit only safe recovery candidates.
 
 #### Ranking and presentation
 
@@ -1583,17 +1585,19 @@ The default priority is:
 3. inspect or act on a directly related result;
 4. discover a broader capability.
 
-The calm follow-up surface shows no more than four actions and should normally show two or three. The system must prefer an empty slot over a low-confidence filler. Labels must name the entity and outcome whenever possible—for example “Add the microwave brand” rather than “Add details”. When the next step requires a bounded value, selecting the action should open the registered selector or capture control instead of requiring the homeowner to retype the instruction.
+The calm follow-up surface shows no more than four actions and should normally show two or three. The system must prefer an empty slot over a low-confidence filler. Labels must name the entity and outcome whenever possible—for example “Add the microwave brand” rather than “Add details”. When the next step requires a bounded value, selecting the action should open the registered selector or capture control instead of requiring the homeowner to retype the instruction. Ranking weights, tier ranges, minimum score, producer precedence, and final tie-break order are versioned registry data rather than model judgment or prose-derived behavior.
 
 #### Selection semantics and safety
 
-Selecting a Suggested Next Action sends both the natural-language message and typed launch context. The operation hint and entity identity prevent an app-authored action from being routed ambiguously; they do not authorize the operation. The backend repeats operation registration, property access, role, applicability, entity, freshness, safety, and confirmation checks before returning or changing anything.
+Selecting a Suggested Next Action sends the natural-language message, action id, and source execution id. The backend verifies that the current user/session/property was offered that exact unexpired action in the persisted source execution, then uses the server-stored operation, entity context, outcome key, and provenance. Client-supplied operation/entity values do not prove app authorship. Invalid, forged, expired, or cross-scope selections return a typed recovery result and are not silently semantically rerouted. The backend repeats operation registration, property access, role, applicability, entity, freshness, safety, and confirmation checks before returning or changing anything.
 
 The unrestricted composer remains visible and usable whenever the execution state safely permits input. A homeowner-entered message is not required to match, reference, or derive from a displayed action.
 
 #### Cross-surface deduplication
 
-One server-owned policy must deduplicate semantic destinations across operation suggestions, entity actions, block actions, Skill handoffs, capability cards, receipt continuations, recovery actions, and landing starters. When candidates converge on the same operation/entity/outcome, the highest-priority eligible candidate wins and retains the combined provenance needed for audit.
+One server-owned policy must deduplicate semantic destinations across operation suggestions, entity actions, block actions, Skill handoffs, capability cards, receipt continuations, recovery actions, and landing starters. Identity is built from registered operation, interaction type, property/entity, and outcome key, never from label/message similarity. Rich-card actions publish that identity even when they stay in their richer renderer. When candidates converge, the highest-priority eligible candidate wins and retains the combined provenance needed for audit.
+
+The pipeline runs during backend response finalization before persistence and return, uses bounded batch-loaded evaluation context, and degrades by dropping/reporting a failed nonessential producer rather than failing the answer or application startup. A distinct selection id links the verified offered action to the resulting execution for outcome measurement; existing source-refresh and Skill-handoff identifiers keep their current meanings.
 
 ### 27.8 Loading and streaming
 
@@ -2130,7 +2134,9 @@ Include cross-property access, hidden prompt extraction, document injection, mod
 - No internal fact key is required from or shown to a homeowner.
 - Homeowners can always submit unrestricted text when the composer is safely available; displayed Suggested Next Actions never form an input allowlist.
 - Every selectable app-authored Suggested Next Action names a registered operation, carries auditable provenance, and is eligible at render time.
+- Every selected Suggested Next Action is verified against the unexpired offered set persisted on its source execution; a client cannot establish app authorship by supplying an operation id.
 - Selecting a Suggested Next Action reaches its intended operation and entity without depending on semantic reclassification, while all normal authorization and confirmation checks still run.
+- Outcome identity, missing-context capture routing, deterministic ranking weights/tie-breaks, and domain freshness strategies are registered and testable.
 - Duplicate semantic destinations are not shown simultaneously across follow-up chips, entity actions, Skill handoffs, capability recommendations, and landing starters.
 - Out-of-scope coding prompts do not reach a code-execution or general coding response.
 

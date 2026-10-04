@@ -1,7 +1,7 @@
 # Ask Cozy Conversational UI — Prototype-to-Implementation Gap Audit
 
 **Date:** September 26, 2026  
-**Updated:** October 4, 2026; high-precision Suggested Next Actions synchronized with Ask Redo FRD v1.7
+**Updated:** October 4, 2026; verified-selection Suggested Next Actions synchronized with Ask Redo FRD v1.8
 **Status:** Living implementation audit; original findings are retained where useful and superseded behavior is identified explicitly
 **Scope:** Ask Cozy conversational UI only; this is not a review of ContractToCozy's broader feature set  
 **Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
@@ -140,6 +140,7 @@ The goal is to reduce how often a homeowner must decide what to type next, not t
 Add a common typed action contract with:
 
 - stable id, concise label, and natural-language transcript message;
+- registered outcome key plus creation and expiry timestamps;
 - registered operation and interaction type;
 - selected property, exact entity identity, and freshness version when available;
 - eligibility state, reason codes, and supported missing-context keys;
@@ -148,11 +149,13 @@ Add a common typed action contract with:
 
 Collect candidates from all existing recommendation surfaces, then apply one server-side policy. Hard filters cover authorization, lifecycle applicability, operation and Skill health, entity existence and freshness, supported capture, pending-interaction conflicts, recent completion, and duplication. Rank active-work continuation first, then an exact record action, a directly related capability, and finally broad discovery. Show no more than four, normally two or three, and leave a slot empty instead of offering a weak generic prompt.
 
+Run this policy during backend response finalization with bounded, batch-loaded context. Registry defects fail static validation, while an invalid nonessential runtime producer is dropped and reported rather than crashing startup or the answer. Ranking uses versioned weights and a stable tie-break; domain freshness uses an explicit version function or current-record requery rule.
+
 Use specific labels such as “Add the microwave brand”, “Change the guest room floor”, or “Show the 3 overdue tasks”. When a bounded value is needed, selection should open the existing typed capture or selector rather than asking the homeowner to restate the request.
 
-Selection carries both the readable message and typed operation/entity context. The typed context prevents an app-authored action from being semantically misrouted; it does not grant permission or bypass confirmation. The backend rechecks every relevant policy and freshness condition on selection.
+Selection carries the readable message, action id, and source execution id. The backend proves app authorship by loading the persisted offered action under the current user/session/property and uses its server-stored operation/entity context. Invalid, forged, expired, or cross-scope selections recover safely instead of silently falling back to semantic routing. This verification does not grant permission or bypass confirmation; every relevant policy and freshness condition is rechecked.
 
-Deduplicate across launch entries, result actions, follow-up chips, Skill handoffs, capability lists, and receipts. The highest-priority eligible action wins, while its provenance remains available for audit and measurement.
+Deduplicate across launch entries, result actions, follow-up chips, Skill handoffs, capability lists, and receipts using a registered operation/entity/outcome identity rather than copy similarity. Rich-card actions publish the same identity so an equivalent compact chip can be suppressed. The highest-priority eligible action wins, while its provenance remains available for audit and measurement.
 
 ## 6. What should be removed or demoted
 
@@ -300,13 +303,16 @@ Deduplicate across launch entries, result actions, follow-up chips, Skill handof
 **Acceptance criteria:**
 
 - The response schema exposes versioned typed Suggested Next Actions with label, message, operation, interaction type, entity context, eligibility, provenance, and priority.
+- Actions include a registered outcome key and explicit creation/expiry timestamps.
 - User-entered composer text remains unrestricted and continues through ordinary routing.
 - Operation suggestions, entity actions, eligible receipt continuations, Skill handoffs, dynamic capability recommendations, and platform recovery suggestions can enter one candidate pipeline.
 - Ineligible, stale, unavailable, unauthorized, recently completed, or duplicate candidates are not shown as selectable actions.
 - At most four actions render; two or three are preferred when they cover the likely continuations.
-- Selecting an action supplies its registered operation and exact entity context without bypassing authorization, freshness, capture, or confirmation.
+- Selecting an action is verified against the unexpired offered set in its persisted source execution; the server supplies the registered operation and exact entity context without trusting client authorship claims or bypassing authorization, freshness, capture, or confirmation.
+- `NEEDS_CONTEXT` actions resolve every missing fact through a registered capture key and operation; emergency/restricted responses show safe recovery actions only.
 - A candidate that becomes stale between render and selection fails safely and returns a current recovery action.
 - Semantic duplicates are suppressed across the follow-up row, result actions, capability list, Skill handoff, receipt, and landing state.
+- Ranking weights, tier ranges, minimum score, and tie-break order are deterministic, versioned, and covered by exact-order tests.
 - Labels name the entity and outcome when available and avoid generic filler.
 - Keyboard, screen-reader, narrow-width, and horizontal-overflow behavior remain correct.
 - Telemetry distinguishes impressions, selection, suppression, intended-operation match, clarification, completion, stale rejection, abandonment, and manual-input escape.
@@ -324,7 +330,7 @@ Deduplicate across launch entries, result actions, follow-up chips, Skill handof
 | ACUI-003 | **Implemented in code (FRD v1.118):** readable trust line under the answer; the workflow action is the dominant step. Browser-covered by ACUI-008 (fixture-backed). No client-side ordering guard (handler order already correct). |
 | ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Browser-covered by ACUI-008 (fixture-backed). |
 | ACUI-008 | **Implemented (FRD v1.120):** `e2e/ask/maintenanceJourney.spec.ts`, 9 scenarios at desktop and 390px. Fixture-backed; not a live-backend run. |
-| ACUI-009 | **Planned October 4, 2026; not implemented.** Contract, candidate pipeline, eligibility, ranking, cross-surface deduplication, direct dispatch, telemetry, and migration are specified in `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`. |
+| ACUI-009 | **Planned October 4, 2026; not implemented.** Contract, verified selection, candidate pipeline, capture mapping, eligibility, deterministic ranking, cross-surface deduplication, telemetry correlation, and migration are specified in `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`. |
 
 ## 7b. Ask Home synchronization status (September 28, 2026, commit `f4967e00`)
 

@@ -3,7 +3,7 @@
 **Date:** October 4, 2026
 **Status:** Proposed implementation plan
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
-**Primary references:** `AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.7; `ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `ASK_COZY_ARCHITECTURE_EXPLAINED.md`
+**Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.8; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
 ## 1. Objective
 
@@ -96,6 +96,7 @@ type SuggestedNextActionSource =
 
 interface SuggestedNextAction {
   id: string;
+  outcomeKey: SuggestedNextActionOutcomeKey;
   label: string;
   message: string;
   operationId: AskOperationId;
@@ -117,6 +118,8 @@ interface SuggestedNextAction {
     sourceExecutionId: string | null;
     reasonCodes: string[];
   };
+  createdAt: string;
+  expiresAt: string;
   priority: {
     tier: 'CONTINUE' | 'RECORD_ACTION' | 'RELATED' | 'DISCOVERY';
     score: number;
@@ -127,6 +130,7 @@ interface SuggestedNextAction {
 Contract rules:
 
 - `id`, `label`, `message`, and `operationId` are required.
+- `outcomeKey` is a bounded registry value owned by the target operation; it is never derived from `label` or `message`.
 - `operationId` must exist in `ASK_OPERATION_DEFINITIONS`.
 - `label` is concise UI copy; `message` is natural transcript text.
 - `message` is not reparsed to decide the operation for a selected app-authored action.
@@ -136,6 +140,23 @@ Contract rules:
 - An `UNAVAILABLE` candidate may support explanation in a capability catalog but is not rendered as an ordinary follow-up chip.
 - Reason codes are bounded registered tokens, not homeowner data.
 - Scores are deterministic and need not be exposed in the calm UI.
+- `createdAt` and `expiresAt` define the offered action's presentation lifetime. Selection always revalidates current state even before expiry.
+
+### 4.1 Selection proof and launch contract
+
+The client must not prove app authorship merely by echoing an `operationId`. A selected action submits:
+
+```ts
+interface SuggestedNextActionSelection {
+  suggestedActionId: string;
+  suggestedActionFromExecutionId: string;
+  message: string;
+}
+```
+
+The source execution's persisted result JSON is the offered-action ledger for the initial implementation. The server loads that execution by user and session, verifies its property scope, finds the exact unexpired action id, and copies the registered operation, entity context, outcome key, and provenance from the stored action. Client-supplied operation or entity fields are not authoritative for this path. This proves that the selection was app-authored without adding a database table. If the source execution or action cannot be verified, the request returns a typed stale/invalid-action recovery result; it must not silently fall back to semantic routing under the claimed action identity.
+
+Ordinary homeowner text and existing non-suggestion typed actions continue to use their current launch contracts. `sourceExecutionId` retains its refresh/reconciliation meaning, and `handoffFromExecutionId` retains its Skill-handoff telemetry meaning; neither is overloaded as the Suggested Next Action selection id.
 
 ## 5. Candidate model
 
@@ -154,6 +175,7 @@ Introduce an internal `SuggestedNextActionCandidate` that contains the target co
 3. Missing-detail producer
    - Uses canonical incomplete fields and supported correction/capture definitions.
    - Produces concrete actions such as “Add the microwave brand”.
+   - Resolves each missing fact through a registered `missingFactKey -> captureKey -> operationId` mapping; it cannot advertise a capture that has no active definition.
 
 4. Pending-work producer
    - Continues active clarification, capture, confirmation, monitor, or workflow state.
@@ -175,17 +197,23 @@ Introduce an internal `SuggestedNextActionCandidate` that contains the target co
 
 ### 5.2 Candidate identity
 
-Deduplication identity should be derived from:
+Deduplication identity is derived from registered fields:
 
 ```text
 operationId
 + interactionType
 + propertyId
 + entityType/entityId
-+ normalized intended outcome
++ outcomeKey
 ```
 
-Do not deduplicate on label or message alone. Different wording can represent the same action, and the same wording can target different entities.
+Do not infer an outcome from label or message. Each target operation declares its bounded outcome keys and tests their uniqueness. Different wording can represent the same action, and the same wording can target different entities.
+
+### 5.3 Producer inventory and failure isolation
+
+Before migration, generate a categorized inventory of every `suggestions:` declaration and compact action producer. The October 4, 2026 repository scan found 104 source files containing the broad `suggestions:` token; this is a discovery count, not a claim that all 104 are Ask follow-up producers. Classify each occurrence as an Ask compact follow-up, boundary action, domain-local recommendation, capability result, test fixture, or unrelated type.
+
+Each producer has a bounded candidate limit and may nominate only statically registered operation/outcome combinations. Static registry errors fail validation and CI. At runtime, an invalid or failed producer is reported and its candidates are dropped; it must not crash application startup or invalidate an otherwise safe answer.
 
 ## 6. Eligibility pipeline
 
@@ -211,9 +239,10 @@ Create a pure, ordered evaluator where possible. Each rule returns a state and r
 
 7. Freshness
    - Context version is current where material; otherwise selection triggers a safe refresh or current-target recovery.
+   - Maintain a domain freshness matrix listing the authoritative version function for versioned domains and the current-record requery rule for domains without a version today. “Where material” is not an implementation decision.
 
 8. Context readiness
-   - Required facts are present or have registered typed captures.
+   - Required facts are present or every missing fact resolves through the registered fact-to-capture-to-operation mapping.
 
 9. Interaction conflict
    - Do not compete with an active clarification, capture, or confirmation unless the action explicitly continues or safely cancels it.
@@ -222,7 +251,9 @@ Create a pure, ordered evaluator where possible. Each rule returns a state and r
     - Suppress the current operation/entity outcome, recently completed equivalent actions, and already asked equivalent prompts.
 
 11. Safety and boundary compatibility
-    - Emergency and restricted boundaries suppress promotional actions and retain only safe recovery actions.
+   - Emergency and restricted boundaries suppress promotional actions and retain only safe recovery actions.
+
+The evaluator supports a `SAFE_RECOVERY_ONLY` mode for emergency, restricted, unavailable, expired, and cancellation results. In that mode only retry, correction, safe read, property selection, cancellation recovery, or unrestricted new-question actions can survive; discovery and promotional candidates are excluded.
 
 The evaluator returns structured reasons for audit and tests. Selection repeats all authoritative checks through the existing invocation path.
 
@@ -249,6 +280,8 @@ The evaluator returns structured reasons for audit and tests. Selection repeats 
 - source-specific confidence; and
 - diversity penalty for repeated operation/domain destinations.
 
+Define versioned integer weights before implementation. Tier bases must not overlap after bounded adjustments. The final ordering is `score DESC`, producer precedence, `operationId`, `outcomeKey`, entity type, entity id, then action id. A minimum display score omits weak candidates. These constants and the ranking policy version belong in one registry and are snapshot-tested.
+
 Do not use generated prose or an unreviewed model score to make an action executable. A model may later help order already eligible, bounded candidates only after an evaluation proves deterministic ranking insufficient.
 
 ### 7.3 Cross-surface winner selection
@@ -259,6 +292,22 @@ Do not use generated prose or an unreviewed model score to make an action execut
 - Merge non-sensitive provenance reason codes from suppressed duplicates.
 - Reserve at most one broad discovery action when a stronger continuation or record action exists.
 - Return at most four actions.
+
+Result-card and block actions publish the same semantic identity fields to response finalization even when they remain rendered in their richer surface. They do not need to become follow-up candidates, but their identities suppress equivalent compact candidates before the response is persisted.
+
+### 7.4 Pipeline placement and performance budget
+
+Run the shared pipeline in backend response finalization after the operation result and platform boundary state exist, but before the execution result is validated, persisted, and returned. The orchestrator assembles one bounded evaluation context with batched property access, entity, health, pending-work, and recent-history data; producers must not perform unbounded per-candidate queries.
+
+Initial implementation budgets:
+
+- no more than 12 nominated candidates per producer and 60 total before deduplication;
+- batch entity and authorization reads by property/domain;
+- no remote model call in eligibility, ranking, or executable-action construction;
+- record pipeline duration, query count, dropped-producer count, and candidate counts; and
+- if the budget or a nonessential producer fails, return the safe answer with fewer actions rather than delaying or failing the execution.
+
+The exact latency and query thresholds must be set from the existing Ask service budget during Phase 2 and encoded in tests/telemetry before producer migration begins.
 
 ## 8. Copy policy
 
@@ -303,15 +352,19 @@ Work:
 
 - Add schema, enums, limits, and validation.
 - Add `suggestedNextActions` to the execution result/response.
+- Persist the offered typed actions in the source execution result and add the verified selection request fields from §4.1.
 - Keep `suggestions: string[]` temporarily so producers can migrate incrementally within the branch.
 - Add a compatibility adapter that converts only explicitly mapped strings; do not infer operation ids from arbitrary text.
 - Preserve persisted historical executions whose result JSON contains only strings.
+- Update `followUps.ts` and response parsing to prefer typed actions when present and fall back to historical strings only when typed actions are absent.
+- Keep `suppressRepeatedAskSuggestions` during migration, but generalize its history input to registered semantic identities; remove the independent string-only branch when Phase 5 completes.
 
 Exit:
 
 - Old persisted results still render.
 - New typed results validate on backend and frontend.
 - The composer behavior is unchanged.
+- A forged, expired, cross-session, cross-user, or cross-property action selection is rejected as a typed recovery result.
 
 ### Phase 2 — Candidate, eligibility, ranking, and deduplication services
 
@@ -323,6 +376,7 @@ Add focused modules under `apps/backend/src/services/ask/suggestedActions/`:
 - `suggestedNextActionRanking.ts`
 - `suggestedNextActionDeduplication.ts`
 - `suggestedNextActionPolicy.ts`
+- `suggestedNextActionRegistry.ts` for outcome keys, producer declarations, capture mappings, weights, and ranking policy version
 
 Reuse rather than duplicate:
 
@@ -335,9 +389,11 @@ Reuse rather than duplicate:
 - capability readiness and launch contracts; and
 - existing context-version helpers owned by each domain.
 
+Run the pipeline at the response-finalization boundary described in §7.4. Build a domain freshness matrix and a categorized baseline producer inventory before migrating domain output.
+
 Exit:
 
-- Pure tests cover all eligibility reasons, tier ordering, semantic identity, source precedence, diversity, limits, and deterministic repeatability.
+- Pure tests cover all eligibility reasons, safe-recovery-only mode, tier ordering, exact weight/tie-break behavior, semantic identity, source precedence, diversity, limits, selection proof, expiry, producer failure isolation, and deterministic repeatability.
 
 ### Phase 3 — High-value producer migration
 
@@ -358,6 +414,8 @@ For each producer:
 - add a stale-selection recovery test; and
 - remove the corresponding string compatibility mapping after the domain is complete.
 
+Each domain exits only when its producer inventory is zero for unmapped compact strings, its operation/outcome declarations pass static validation, its freshness source is recorded, and its focused read/write/role/stale journeys pass. Domain completion is independent: one migrated domain must not depend on the remaining string producers.
+
 Exit:
 
 - Every displayed migrated action reaches the intended operation/entity without semantic routing.
@@ -375,6 +433,8 @@ Migrate:
 - confirmation receipts not covered in Phase 3; and
 - landing starters.
 
+Landing starters share the action vocabulary and renderer but remain a separate ranking surface because they do not follow a source execution. Platform recovery candidates use `SAFE_RECOVERY_ONLY` policy rather than competing with normal discovery actions.
+
 Refactor `askNextActions.ts` to nominate capability candidates into the shared policy rather than append an independently rendered list when the destination can be represented as a Suggested Next Action. Retain rich `CAPABILITY_LIST` blocks for genuine multi-capability comparison/discovery results; do not flatten those results into four chips.
 
 Exit:
@@ -389,6 +449,7 @@ Exit:
 - Move `FollowUpRow` and related hooks to typed actions.
 - Delete string-to-operation compatibility mappings.
 - Make CI reject a newly added raw suggestion producer.
+- Remove the string-only history-suppression branch after historical rendering compatibility is isolated from new production.
 
 Exit:
 
@@ -409,13 +470,15 @@ Primary files:
 Requirements:
 
 - Render `label`, not the transcript message, on the chip/button.
-- On selection, submit `message` with operation and entity launch context.
+- On selection, submit `message`, `suggestedActionId`, and `suggestedActionFromExecutionId`; do not treat client-echoed operation/entity context as proof of authorship.
 - Preserve the unrestricted composer beside or below the suggestions.
 - Do not auto-send merely because only one action exists.
 - Disable an action only while its own request is pending; do not globally disable unrelated text input longer than necessary.
 - Preserve horizontal scrolling, keyboard access, focus visibility, accessible names, reduced motion, and narrow-width behavior.
 - If selection returns a stale/invalid result, retain the original answer and show the server-provided recovery action.
 - Avoid rendering the same semantic action in both a result card and the follow-up row.
+- Hide or disable actions whose `expiresAt` has passed and refresh/recover through the server; never silently send expired actions as ordinary text.
+- Use server-returned presentation identities to suppress overlap with rich result-card and block actions.
 
 ## 11. Analytics and evaluation
 
@@ -438,10 +501,14 @@ Safe properties:
 - clarification required;
 - completion state;
 - stale rejection;
-- suppression category; and
-- source surface.
+- suppression category;
+- source surface;
+- selection id and resulting execution id as the non-sensitive outcome join;
+- source execution id, with analytics access controls equivalent to existing execution telemetry.
 
 Do not log label/message text, entity ids, addresses, financial values, document content, or other homeowner data in general analytics.
+
+The selection event creates one correlation record in the existing execution-event/analytics path linking the verified offered action to the resulting execution. Do not reuse `handoffFromExecutionId` for this purpose. Outcome attribution follows that join through completion, governed pending state, intentional deferral, stale rejection, or abandonment.
 
 ### 11.2 Quality measures
 
@@ -461,8 +528,10 @@ Optimize for operation/entity precision and successful completion, not raw click
 ### 12.1 Contract and governance
 
 - Schema rejects unknown operations, invalid interaction types, excessive labels/messages, unbounded reason codes, and malformed entity context.
-- Startup validation confirms producer operation ids and Skill ownership where applicable.
+- Static validation and CI confirm producer operation ids, outcome keys, capture mappings, and Skill ownership where applicable.
+- Runtime candidate validation degrades by dropping and reporting an invalid producer; registry drift must not create an application startup crash loop.
 - A typed action cannot be sourced from generated model prose.
+- A client cannot forge app authorship by supplying an operation id or entity id; selection is resolved from the stored source execution.
 
 ### 12.2 Eligibility and security
 
@@ -482,6 +551,8 @@ Optimize for operation/entity precision and successful completion, not raw click
 - Semantic duplicates across every source collapse to one winner.
 - No more than four actions render.
 - Deterministic inputs produce deterministic order.
+- Exact score ties follow the documented registry tie-break sequence.
+- Rich result-card identities suppress equivalent compact actions.
 
 ### 12.4 Frontend
 
@@ -491,6 +562,7 @@ Optimize for operation/entity precision and successful completion, not raw click
 - Keyboard, focus, screen reader, 390-pixel width, horizontal overflow, and reduced motion.
 - Pending, stale, access-lost, and failed states.
 - Historical string-only execution compatibility while retained.
+- Action expiry, forged selection, and cross-session/source-execution rejection.
 
 ### 12.5 Focused integrated journeys
 
@@ -522,9 +594,13 @@ It should generate or verify:
 
 CI should fail on missing/extra ids, mismatched adapter effects, unowned operations not present in an explicit platform allowlist, undeclared typed action operations, and stale documentation tables.
 
+The generated Suggested Next Action report also lists producer source, target operation, outcome key, capture mapping, supported entity types, freshness strategy, and presentation surface. Documentation paths are `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`, `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md`, and `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md`.
+
 ## 14. Skill and adapter governance follow-up
 
 This work is related but separable from typed action delivery. Do not silently assign ownership because doing so changes runtime policy and health enforcement.
+
+Track these decisions in a companion governance plan or ticket set. They are not prerequisites for completing the typed-action pipeline unless a migrated action targets an operation whose current ownership is itself unresolved.
 
 Recommended decisions:
 
@@ -546,10 +622,20 @@ The increment is complete when:
 - the composer remains unrestricted and is covered by explicit tests;
 - all newly produced compact next actions use the typed contract;
 - migrated actions reach the declared operation/entity without semantic reclassification;
+- every selected action is verified against the unexpired offered set stored on its source execution;
 - one server policy owns eligibility, ranking, and cross-surface deduplication;
+- outcome identity, capture routing, weights, tie-breaks, and domain freshness strategies are registered rather than inferred from prose;
 - stale, unauthorized, unavailable, and inapplicable actions fail safely;
 - the calm surface shows at most four concrete actions and avoids filler;
 - consequential actions still require review and confirmation;
 - analytics measure precision, completion, clarification, suppression, and manual-input escape without collecting raw homeowner text;
 - documentation parity checks cover operations, Skills, adapter keys, governed adapters, handlers, handoffs, and typed action producers; and
 - the architecture guide, Ask Redo FRD, conversational UI audit, and implementation plan remain mutually consistent.
+
+## 16. Delivery, rollback, and verification
+
+Use the additive typed/string compatibility boundary for incremental migration and rollback. Do not add a production feature flag solely for this work: the repository has no real-user rollout requirement, and the old read path remains available until Phase 5. If a future deployment requirement explicitly needs simultaneous selectable implementations, document that requirement before introducing a flag.
+
+Rollback before Phase 5 means stopping typed production for the affected migrated producer and restoring its explicit compatibility mapping; historical typed results remain readable. Phase 5 occurs only after all categorized compact producers are migrated and telemetry shows no unresolved selection-authorship, stale-action, or operation/entity precision defects.
+
+Verification follows repository policy: requirements review, Graphify/code-path tracing, contract inspection, static registry validation, pure policy tests, frontend component tests, and environment-independent integrated journeys. A later live-environment checklist may verify representative selection, stale recovery, confirmation, and analytics correlation when such an environment exists; unavailable local databases or browser infrastructure do not block implementation completion and must not be claimed as executed.

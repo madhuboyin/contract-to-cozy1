@@ -972,6 +972,7 @@ Replace `suggestions: string[]` with a common typed recommendation contract afte
 ```ts
 interface SuggestedNextAction {
   id: string;
+  outcomeKey: SuggestedNextActionOutcomeKey;
   label: string;
   message: string;
   operationId: AskOperationId;
@@ -988,10 +989,13 @@ interface SuggestedNextAction {
     missingFactKeys?: string[];
   };
   provenance: {
-    source: 'OPERATION_RESULT' | 'ENTITY_ACTION' | 'MISSING_DETAIL' | 'SKILL_HANDOFF' | 'CAPABILITY_RECOMMENDATION' | 'ACTIVE_GOAL' | 'PLATFORM_STATE';
+    source: 'OPERATION_RESULT' | 'ENTITY_ACTION' | 'MISSING_DETAIL' | 'SKILL_HANDOFF' | 'CAPABILITY_RECOMMENDATION' | 'ACTIVE_GOAL' | 'PLATFORM_STATE' | 'LANDING_STARTER';
     sourceOperationId?: AskOperationId;
+    sourceExecutionId?: string;
     reasonCodes: string[];
   };
+  createdAt: string;
+  expiresAt: string;
   priority: {
     tier: 'CONTINUE' | 'RECORD_ACTION' | 'RELATED' | 'DISCOVERY';
     score: number;
@@ -999,15 +1003,17 @@ interface SuggestedNextAction {
 }
 ```
 
-The server should collect candidates from the current result, exact entity actions, missing details, unfinished work, Skill handoffs, active goals, and capability recommendations. It should then apply hard eligibility filters for property access, household role, lifecycle applicability, Skill/operation health, entity existence and freshness, required context, recent completion, duplication, and pending interaction conflicts.
+The server should collect candidates from the current result, exact entity actions, missing details, unfinished work, Skill handoffs, active goals, and capability recommendations. It should then apply hard eligibility filters for property access, household role, lifecycle applicability, Skill/operation health, entity existence and freshness, required context, recent completion, duplication, and pending interaction conflicts. Missing-context candidates must resolve through a registered `missingFactKey -> captureKey -> operationId` mapping. Emergency, restricted, unavailable, expired, and cancellation results use a safe-recovery-only policy that excludes discovery and promotional actions.
 
 Rank immediate continuation first, then exact record action, related analysis, and broad discovery. Prefer concrete labels such as “Add the microwave brand” or “Change the guest room floor” over “Add details” or “Learn more”. Show at most three or four high-confidence actions in the calm follow-up row; leaving a slot empty is better than filling it with a weak recommendation.
 
-Clicking a typed action sends both its natural-language `message`—so the transcript remains readable—and its operation/entity context. The backend must recheck authorization, applicability, freshness, and confirmation requirements at execution time. Typed context prevents an app-authored suggestion from being misrouted; it never bypasses governance. Arbitrary homeowner text continues through the normal routing and clarification cascade.
+Clicking a typed action sends its natural-language `message`, action id, and source execution id. The persisted source execution is the initial offered-action ledger: the backend loads it under the current user/session/property, verifies the exact action is unexpired, and copies the registered operation, entity context, outcome key, and provenance from server-stored data. Client-echoed operation/entity fields are not proof that an action was app-authored. The backend then rechecks authorization, applicability, freshness, and confirmation requirements. Invalid or stale selections return a typed recovery result rather than silently falling back to semantic routing. Arbitrary homeowner text continues through the normal routing and clarification cascade.
 
-Deduplication must operate across suggestion chips, entity actions, block actions, Skill handoffs, capability recommendations, and landing starters rather than inside each source independently. The winning action should retain provenance explaining why it was shown.
+Deduplication must operate across suggestion chips, entity actions, block actions, Skill handoffs, capability recommendations, and landing starters rather than inside each source independently. Identity uses registered operation, interaction type, property/entity, and `outcomeKey`; it is never inferred from display copy. Rich result-card actions publish the same identity so response finalization can suppress an equivalent compact chip. The winning action should retain provenance explaining why it was shown.
 
-Measure suggestion coverage, click-to-intended-operation precision, click-to-completion, clarification after click, stale-action rejection, duplicate suppression, abandonment, and the manual-input escape rate. Optimize for click-to-success precision rather than click-through rate.
+The shared pipeline runs during backend response finalization, after the operation result and boundary state exist but before validation, persistence, and return. It uses a bounded, batch-loaded evaluation context; producer failures drop and report that producer rather than crashing startup or the answer. Ranking uses versioned integer weights, non-overlapping tier ranges, a minimum display threshold, and a documented stable tie-break. Domain freshness is explicit in a matrix: use an authoritative context version where one exists and a current-record requery rule otherwise.
+
+Measure suggestion coverage, click-to-intended-operation precision, click-to-completion, clarification after click, stale-action rejection, duplicate suppression, abandonment, and the manual-input escape rate. A distinct selection id links the verified offered action to the resulting execution through existing execution-event/analytics infrastructure; do not overload Skill-handoff or source-refresh identifiers. Optimize for click-to-success precision rather than click-through rate.
 
 The documentation catalog should be generated from registries and statically declared action definitions, with CI parity checks for operation ids, Skill ownership, adapter bindings/effects, handoffs, and typed suggestion producers. Dynamic values should be documented as templates and scenario branches rather than copied examples.
 
