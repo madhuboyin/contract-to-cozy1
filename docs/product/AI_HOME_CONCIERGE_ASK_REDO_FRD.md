@@ -3,8 +3,8 @@ title: "AI Home Concierge — Ask Redo"
 subtitle: "The conversational operating layer for the Living Home Record"
 document_type: "Functional Requirements Document"
 status: "Implementation in progress"
-version: "1.6"
-date: "August 11, 2026"
+version: "1.7"
+date: "October 4, 2026"
 accountable_product_area: "Homeowner Product"
 primary_customer_jobs:
   - "Stay Ahead"
@@ -19,8 +19,8 @@ primary_customer_jobs:
 | Field | Value |
 | --- | --- |
 | Status | Implementation in progress |
-| Version | 1.6 |
-| Date | August 11, 2026 |
+| Version | 1.7 |
+| Date | October 4, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Property Context, Home Intelligence, Frontend Platform, AI Platform |
 | Primary framework dependency | [ContractToCozy Product Framework](./ContractToCozy_Product_Framework.md) |
@@ -33,6 +33,14 @@ primary_customer_jobs:
 ## Implementation status snapshot — August 11, 2026
 
 This FRD is the living product and implementation contract for Ask. The repository now contains the durable Ask foundation and multiple end-to-end vertical slices. “Implemented” below means the repository behavior exists and has passed the slice-level validation recorded during implementation; it does not imply that every phase exit criterion, production rollout gate, or full desktop/mobile E2E certification is complete.
+
+### Product-direction synchronization — October 4, 2026
+
+Ask must preserve unrestricted homeowner input. The composer is not an operation allowlist: a homeowner may always type any question, correction, or request, which continues through the normal safety, routing, clarification, authorization, and confirmation pipeline.
+
+The next recommendation-platform increment is **high-precision Suggested Next Actions**. Its purpose is to anticipate the most useful next request so accurately that the homeowner often does not need to formulate it, while retaining free-form input as a permanent escape hatch. App-authored recommendations must move from free-text-only strings toward typed, server-governed actions carrying a homeowner-facing label, transcript message, registered operation, exact entity context when known, evaluated eligibility, provenance, and priority. Clicking one supplies deterministic routing context but never bypasses current authorization, applicability, freshness, capture, or confirmation checks.
+
+This increment also unifies currently separate recommendation surfaces—operation suggestions, entity actions, result/block actions, confirmation receipts, Skill handoffs, dynamic capability recommendations, platform recovery suggestions, and landing starters—under one eligibility, ranking, deduplication, telemetry, and accessibility policy. Migration is additive until all producers and clients support the typed contract.
 
 ### As-built platform foundation
 
@@ -1490,7 +1498,8 @@ The backend response schema determines which blocks and actions are rendered. Th
 ### 27.5 Composer
 
 - Multiline input with clear send/cancel behavior.
-- Suggested prompts based on current surface and available capabilities.
+- Homeowners may enter any text; the composer must never restrict input to registered operations, displayed suggestions, or known entities.
+- Suggested prompts based on current surface and available capabilities reduce formulation effort but remain optional.
 - Attachments only for registered document-assisted operations.
 - Character and attachment limits communicated accessibly.
 - Disabled state explains why input cannot be submitted.
@@ -1518,6 +1527,73 @@ The backend response schema determines which blocks and actions are rendered. Th
 - Complex results offer `Expand` or `Open workspace` while preserving the same execution.
 - Long results use bounded pagination or `View all`; the conversation does not become an unbounded record dump.
 - Confirmation controls show property, entity, values, recipient/channel, and exact effect before execution.
+
+### 27.7a High-precision Suggested Next Actions
+
+#### Contract
+
+Every app-authored conversational recommendation must converge on a versioned `SuggestedNextAction` contract containing:
+
+- stable action id;
+- concise homeowner-facing `label`;
+- natural-language `message` retained in the transcript;
+- registered `operationId`;
+- interaction type;
+- property and exact entity identity when known, plus a context/freshness version when meaningful;
+- evaluated eligibility state, reason codes, and supported missing-fact keys;
+- provenance source, source operation, and reason codes; and
+- priority tier and deterministic score.
+
+Raw free-text suggestions may remain temporarily during migration but must not be the target representation. Generated model prose may not create an executable suggested action.
+
+#### Candidate sources
+
+The server may collect candidates from:
+
+- the current operation result and its exact entity actions;
+- missing or incomplete canonical details;
+- an unfinished clarification, capture, confirmation, workflow, or receipt continuation;
+- allowlisted Skill handoffs;
+- active, durable homeowner goals;
+- governed capability recommendations; and
+- shared platform recovery states such as missing property, insufficient role, expiry, cancellation, or temporary unavailability.
+
+#### Eligibility
+
+Before ranking, the server must filter or downgrade candidates using current:
+
+- selected property and property access;
+- household-role authorization floor;
+- operation, Skill, dependency, and route health;
+- home-lifecycle applicability;
+- entity existence, ownership, and freshness;
+- required context and availability of a registered capture definition;
+- pending clarification, capture, or confirmation conflicts;
+- recently completed operations and previously asked questions; and
+- cross-surface duplication.
+
+Only eligible actions are shown as immediately selectable. `NEEDS_CONTEXT` may be shown only when the missing context can be collected through a registered typed capture. Eligibility is re-evaluated when the action is selected.
+
+#### Ranking and presentation
+
+The default priority is:
+
+1. continue active work;
+2. complete or correct the exact record currently in view;
+3. inspect or act on a directly related result;
+4. discover a broader capability.
+
+The calm follow-up surface shows no more than four actions and should normally show two or three. The system must prefer an empty slot over a low-confidence filler. Labels must name the entity and outcome whenever possible—for example “Add the microwave brand” rather than “Add details”. When the next step requires a bounded value, selecting the action should open the registered selector or capture control instead of requiring the homeowner to retype the instruction.
+
+#### Selection semantics and safety
+
+Selecting a Suggested Next Action sends both the natural-language message and typed launch context. The operation hint and entity identity prevent an app-authored action from being routed ambiguously; they do not authorize the operation. The backend repeats operation registration, property access, role, applicability, entity, freshness, safety, and confirmation checks before returning or changing anything.
+
+The unrestricted composer remains visible and usable whenever the execution state safely permits input. A homeowner-entered message is not required to match, reference, or derive from a displayed action.
+
+#### Cross-surface deduplication
+
+One server-owned policy must deduplicate semantic destinations across operation suggestions, entity actions, block actions, Skill handoffs, capability cards, receipt continuations, recovery actions, and landing starters. When candidates converge on the same operation/entity/outcome, the highest-priority eligible candidate wins and retains the combined provenance needed for audit.
 
 ### 27.8 Loading and streaming
 
@@ -1638,6 +1714,10 @@ Track:
 - `ask_answer_returned`
 - `ask_capability_recommended`
 - `ask_capability_opened`
+- `ask_suggested_action_impression`
+- `ask_suggested_action_selected`
+- `ask_suggested_action_suppressed`
+- `ask_suggested_action_outcome`
 - `ask_confirmation_presented`
 - `ask_action_confirmed`
 - `ask_action_cancelled`
@@ -1653,6 +1733,7 @@ Track:
 - intent family;
 - source surface;
 - readiness and reason codes;
+- suggested-action id, source category, priority tier, eligibility state, and suppression reason;
 - property-present boolean, not address;
 - capture key and field count, not raw answer;
 - safety tier;
@@ -1674,6 +1755,13 @@ Do not place raw messages, addresses, balances, rates, premiums, policy numbers,
 - correction rate;
 - helpfulness;
 - downstream action and verified outcome;
+- suggested-action coverage;
+- suggested-action click-to-intended-operation precision;
+- suggested-action click-to-completion rate;
+- clarification-after-suggested-action rate;
+- stale suggested-action rejection rate;
+- cross-surface duplicate suppression rate;
+- manual-input escape rate after suggestions are shown;
 - model-call containment;
 - p50/p95 latency;
 - cost per outcome; and
@@ -1901,8 +1989,9 @@ Deliverables:
 - multi-property portfolio queries;
 - notification-to-Ask continuity;
 - document-assisted reviewed capture;
-- broader knowledge grounding; and
-- calibrated follow-up suggestions based on verified outcomes.
+- broader knowledge grounding;
+- calibrated follow-up suggestions based on verified outcomes; and
+- unified typed Suggested Next Actions with server-owned eligibility, ranking, provenance, and cross-surface deduplication while preserving unrestricted composer input.
 
 **Implementation status — August 11, 2026:** Phase 7 is partially implemented. The continuity foundation adds an authenticated, server-owned pending-work inbox for one selected property at a time. It discovers durable executions awaiting entity selection, clarification, Property Context capture, or confirmation across prior browser sessions and devices; excludes expired retention records; transitions expired interactive prompts to `EXPIRED`; rechecks current property access; resumes the original session and execution rather than creating a duplicate request; records `CONTINUATION_OPENED`; refreshes session activity; and renders an accessible continuation card in both the panel and full workspace. Read-only history and pending-work requests are aborted when their surface unmounts. Mutating confirmation requests use a stable attempt key for the browser session and reconcile the durable execution after a lost/disconnected response; authorization consent itself is reset and must be given again. Refinance-rate and Maintenance deadline triggers now create durable, idempotent notification-to-Ask continuations and deep-link to the exact execution; this satisfies the first monitor-continuity slice without introducing multi-property aggregation. Question and inline-capture drafts remain device-local convenience state, while actionable execution state is server-owned. Multi-property portfolio resolution and aggregation are explicitly deferred by product decision: Ask must continue to target exactly one selected property, or general guidance with no property, until a later approved phase. The remaining Phase 7 deliverables are broader notification-family coverage, document-assisted reviewed capture, generalized consented preference reuse, broader governed knowledge grounding, and verified-outcome-calibrated follow-up suggestions.
 
@@ -2004,6 +2093,7 @@ Every operation must include:
 - expected domain calls and prohibited calls;
 - negative/adversarial variants; and
 - correction/follow-up turns.
+- app-authored Suggested Next Actions, including expected operation/entity context, eligibility, suppression, and completion outcome;
 
 ### 34.3 Grounded-answer evaluation
 
@@ -2016,6 +2106,8 @@ Evaluate separately:
 - source/freshness accuracy;
 - limitation and confidence correctness;
 - capability validity;
+- suggested-action operation and entity precision;
+- suggested-action eligibility, freshness, provenance, and deduplication correctness;
 - confirmation/action correctness; and
 - narrative faithfulness when synthesis is enabled.
 
@@ -2036,6 +2128,10 @@ Include cross-property access, hidden prompt extraction, document injection, mod
 - Every missing-context capture uses a registered canonical owner.
 - Successful capture re-evaluates and resumes the original execution.
 - No internal fact key is required from or shown to a homeowner.
+- Homeowners can always submit unrestricted text when the composer is safely available; displayed Suggested Next Actions never form an input allowlist.
+- Every selectable app-authored Suggested Next Action names a registered operation, carries auditable provenance, and is eligible at render time.
+- Selecting a Suggested Next Action reaches its intended operation and entity without depending on semantic reclassification, while all normal authorization and confirmation checks still run.
+- Duplicate semantic destinations are not shown simultaneously across follow-up chips, entity actions, Skill handoffs, capability recommendations, and landing starters.
 - Out-of-scope coding prompts do not reach a code-execution or general coding response.
 
 ### 35.2 Representative journey acceptance
@@ -2072,6 +2168,7 @@ Include cross-property access, hidden prompt extraction, document injection, mod
 - Quick panel, full workspace, and mobile surface render the same execution status and authoritative blocks.
 - Closing/minimizing and reopening a non-expired execution restores its conversation, pending requirement, and draft.
 - Focus enters and exits the panel predictably, Escape behavior is safe, send/close/expand controls are labeled, and result/error announcements are not noisy.
+- Suggested Next Actions are concrete, context-specific, keyboard accessible, and limited to the highest-confidence continuations; the composer remains visible as the unrestricted alternative.
 
 ## 36. Risks and mitigations
 

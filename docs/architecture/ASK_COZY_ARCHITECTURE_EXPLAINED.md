@@ -1,6 +1,6 @@
 # How Ask Cozy Works: Orchestrator, Adapters, Skills and Friends
 
-An easy-to-read guide to the main moving parts behind Ask Cozy. It was updated from the code under `apps/backend/src/services/ask/`, `apps/backend/src/services/skills/`, `apps/frontend/src/components/ask/` and related folders on 2026-10-03. It describes code-traced behavior and focused static-test evidence, not observed production behavior.
+An easy-to-read guide to the main moving parts behind Ask Cozy. It was updated from the code under `apps/backend/src/services/ask/`, `apps/backend/src/services/skills/`, `apps/frontend/src/components/ask/` and related folders on 2026-10-04. It describes code-traced behavior and focused static-test evidence, not observed production behavior.
 
 ## The big picture
 
@@ -9,9 +9,9 @@ Ask Cozy is the chat-style front door to a home's record. You type a question or
 Think of a hotel front desk:
 
 - **The orchestrator** is the concierge. It listens, decides who can help, checks you are allowed to ask, and hands back the answer.
-- **Operations** are the individual services on the menu, such as "what maintenance is pending?" or "complete this task". There are 118 of them, grouped into 45 Skills (see the catalog below).
+- **Operations** are the individual services on the menu, such as "what maintenance is pending?" or "complete this task". There are 118: 106 are grouped into 45 Skills and 12 are platform-owned operations without a Skill (see the catalog below).
 - **Skills** are departments (Maintenance, Coverage, Savings). Each department owns a group of operations and the rules for them.
-- **Adapters** (called capability handlers in the code) are the staff who actually do the work by calling the real home-record services.
+- **Operation adapter keys** identify the capability handler that actually performs an operation. A **capability handler** is the dispatch implementation. A **Skill adapter definition** is the richer governed contract—owner, effect, timeout, retry safety, and idempotency—used by Skill-owned operations. These concepts usually line up, but they are not synonyms.
 - **Context providers** fetch the facts staff need first, such as which property this is.
 - **The trust validator** is the manager who checks the answer before it is shown.
 
@@ -121,13 +121,13 @@ New Skills are created with `npm run skill:create -- --spec <file>`, which scaff
 
 ## Catalog: Skills, Operations and Adapters
 
-This catalog was generated from the live registries (`ASK_OPERATION_DEFINITIONS` and `SKILL_DEFINITIONS`) on 2026-10-02: **118 operations**, **45 Skills** and **118 adapters**. Each operation has exactly one adapter of its own, so the adapter list is shown next to its operation. If you add or rename one, regenerate this section rather than editing it by hand.
+This catalog was checked against the live registries (`ASK_OPERATION_DEFINITIONS`, `SKILL_DEFINITIONS`, `SKILL_ADAPTER_DEFINITIONS`, and the capability-handler registry) on 2026-10-04: **118 operations**, **45 Skills**, **118 unique operation adapter keys / registered capability handlers**, and **106 governed Skill adapter definitions**. Each operation declares exactly one adapter key, but the 12 platform operations listed below are intentionally outside a Skill and therefore do not have a `SkillAdapterDefinition`. If a registry entry changes, regenerate and parity-check this section rather than editing counts by hand.
 
 How to read the tables:
 
-- **Kind**: READ looks something up, WRITE changes the record (the registry marks it as a command; most go through a confirm card, but this catalog does not check each one), MONITOR sets up a watch or reminder, BOUNDARY is a safety response.
+- **Kind**: a simplified homeowner-visible behavior label. READ looks something up or performs non-mutating guidance, WRITE creates or changes a governed record, MONITOR sets up a watch or reminder, and BOUNDARY is a safety response. This is not a substitute for the adapter effect: some decision operations prepare durable workflow state even though their primary result is an analysis, while monitor adapters use mutation preparation to create the watch.
 - **Min role**: the lowest household role allowed (Viewer < Contributor < Owner). A dash means no property is involved.
-- **Adapter**: the key that `capabilityInvoke` uses to find the handler.
+- **Adapter**: the operation adapter key that `capabilityInvoke` uses to find the handler. For Skill-owned operations the same key resolves to a versioned `SkillAdapterDefinition`; platform operations currently have only the handler binding.
 
 ### Skills (45)
 
@@ -426,7 +426,7 @@ How to read the tables:
 
 | Operation | Adapter | Kind | Min role | What it does |
 | --- | --- | --- | --- | --- |
-| `MAJOR_EVENT_ENTRY` | `major-event.entry` | WRITE | Viewer | Prepare for a major home event |
+| `MAJOR_EVENT_ENTRY` | `major-event.entry` | READ | Viewer | Prepare for a major home event |
 
 #### Seller Prep Checklist (`seller-prep`)
 
@@ -465,7 +465,7 @@ How to read the tables:
 | `INCIDENT_CLAIM_STATUS` | `incident-claim.status` | READ | Viewer | Review recorded incidents and insurance claims |
 | `CLAIM_FILE` | `incident-claim.file` | WRITE | Contributor | Start a governed insurance or warranty claim record |
 | `CLAIM_TRANSITION` | `incident-claim.transition` | WRITE | Contributor | Advance a recorded claim through its valid lifecycle |
-| `INCIDENT_CONTINUATION` | `incident-claim.continuation` | WRITE | Viewer | Continue from an emergency boundary into incident records and claims |
+| `INCIDENT_CONTINUATION` | `incident-claim.continuation` | READ | Viewer | Continue from an emergency boundary into incident records and claims |
 
 #### Home Operations (`home-operations`)
 
@@ -514,7 +514,7 @@ How to read the tables:
 
 #### Operations that belong to no Skill (12)
 
-These are platform-level operations: safety boundaries, discovery, the general-guidance fallback, and confirmation steps for captured facts. They are not routed through a Skill.
+These are platform-level operations: safety boundaries, discovery, the general-guidance fallback, recall workflows, captured-record confirmation, and goal attachment. They have operation adapter keys and registered capability handlers, but no Skill owner or governed Skill adapter definition. That distinction is architectural, not merely documentation: `skillRuntimeUnavailableReason` has no Skill policy to enforce for them. Recall, capture, and goal operations are candidates for explicit domain ownership; safety, discovery, and general guidance should remain platform-owned but should gain an equally explicit platform-adapter contract.
 
 | Operation | Adapter | Kind | Min role | What it does |
 | --- | --- | --- | --- | --- |
@@ -533,11 +533,19 @@ These are platform-level operations: safety boundaries, discovery, the general-g
 
 ## Suggested next actions
 
-After an answer, Ask can show clickable follow-up prompts. There are three separate sources, and only the first is listed per operation below:
+After an answer, Ask can show several kinds of actions. The homeowner may always ignore them and type any question in the composer. Suggested actions are a precision and convenience layer, never an input allowlist.
 
-1. **Suggestion chips from the operation itself.** Each handler returns a `suggestions` list of short prompts. Clicking one sends it as a new question that goes through normal routing. The calm frontend docks at most four suggestions from the latest answer above the composer and removes questions already asked. Backend repeat suppression separately removes the current or recently completed question through `askSuggestionPolicy.ts`.
-2. **Skill handoffs.** A small allowlist of "after X, offer Y" transitions (9 today, listed at the end of this section). They are drawn as a draftable next question and never run anything by themselves.
-3. **Dynamic next actions.** `askNextActions.ts` adds governed capability recommendations and missing-fact capture cards, ranked per user and home. These cannot be listed per operation because they depend on the home record.
+The current implementation has more than three action surfaces:
+
+1. **Operation suggestion chips.** A handler returns a `suggestions` list of prompts. Clicking one currently sends a new question through normal routing. The calm frontend docks at most four from the latest answer and removes questions already asked. Backend repeat suppression separately removes the current or recently completed question through `askSuggestionPolicy.ts`.
+2. **Boundary and platform-state suggestions.** Permission, property-required, unavailable, lifecycle-mismatch, cancellation, expiration, retry, and safety results can suggest recovery without belonging to one domain handler branch.
+3. **Typed entity and block actions.** Item actions already carry an operation, interaction type, and exact entity identity; block actions may continue in conversation, open structured capture, refresh, or navigate.
+4. **Confirmation-receipt continuations.** A completed write can offer the most relevant next record action after canonical reconciliation.
+5. **Skill handoffs.** A nine-entry allowlist can recommend a next Skill after an eligible result. It never executes that Skill automatically.
+6. **Dynamic next actions.** `askNextActions.ts` fetches up to ten governed capability candidates, excludes the current and recently completed capabilities, promotes explicitly related capabilities and active-goal matches, and renders at most five. A `NEEDS_CONTEXT` candidate qualifies only when its missing fact has a supported capture definition; at most one missing-fact capture request is appended.
+7. **Landing starters.** The no-turn launch state can offer property-aware starter prompts independently of the latest answer.
+
+The per-operation table below catalogs operation-produced conversational suggestions. It is not, by itself, a complete inventory of every visible action surface. Cross-cutting states and typed actions must be documented and validated separately.
 
 **How this list was built.** It was extracted from the source by parsing each handler and following the functions it calls (static analysis, updated 2026-10-03). Nothing was executed against real data, so treat it as the set of prompts an operation *can* offer, not what a given user sees:
 
@@ -585,7 +593,7 @@ This follows the same read → exact entity → declared operation → review �
 | `MAINTENANCE_STATUS` | “Show overdue tasks only”<br>“What maintenance is due soon?”<br>“Create a maintenance task”<br>“Try this seasonal question again”<br>“Show completed ‹…› tasks”<br>“Show dismissed ‹…› tasks”<br>“What ‹…› tasks are pending?” |
 | `MAINTENANCE_TASK_CREATE` | “What maintenance is pending?”<br>“Open Maintenance instead”<br>**After confirming:** “What maintenance is still pending?” · “Create another maintenance task” |
 | `MAINTENANCE_TASK_COMPLETE` | “What maintenance is pending?”<br>“Create a maintenance task”<br>“Open Maintenance instead”<br>**After confirming:** “What maintenance is still pending?” · “Show maintenance completed this year” |
-| `MAINTENANCE_TASK_UPDATE` | “Update ‹…› (one per item)”<br>“Assign ‹…› to ‹…› (one per item)”<br>**After confirming:** “What maintenance is pending?” · “Reopen ‹…›” |
+| `MAINTENANCE_TASK_UPDATE` | “Update ‹…› (one per item)”<br>“Assign ‹…› to ‹…› (one per item)”<br>“Snooze reminders for ‹…› for one week”<br>**After confirming:** “What maintenance is pending?” · “Reopen ‹…›” |
 | `MAINTENANCE_FORECAST` | “What maintenance is pending?” |
 | `HOME_DEADLINE_MONITOR` | “Remind me when ‹…› is due (one per item)”<br>**After confirming:** “Reschedule ‹…›” · “Archive ‹…›” · “What maintenance is still pending?” |
 
@@ -596,7 +604,7 @@ This follows the same read → exact entity → declared operation → review �
 | `REPLACEMENT_GUIDANCE` | “Should I repair or replace ‹…›? (one per item)”<br>“How much should I reserve for ‹…› replacement?”<br>“Show my capital timeline”<br>“Should I repair or replace my ‹…›? (one per item)”<br>“What changed about this decision?” |
 | `HVAC_DECISION_START` | “Should I repair or replace my ‹…›? (one per item)”<br>“What changed about this decision?” |
 | `HVAC_DECISION_CONTINUE` | “Show my active home decisions”<br>“Compare a new quote for this decision”<br>“Abandon this decision”<br>“What's the status of my ‹…› decision? (one per item)”<br>“Should I repair or replace my ‹…›?” |
-| `HVAC_SPECIALIST_ENGAGE` | “Should I repair or replace my furnace?”<br>“Help me decide about ‹…› from my Home Actions (one per item)”<br>“Open my Home Actions”<br>“What needs my attention?” |
+| `HVAC_SPECIALIST_ENGAGE` | “Should I repair or replace my furnace?”<br>“Help me decide about ‹…› from my Home Actions (one per item)”<br>“Open my Home Actions”<br>“What needs my attention?”<br>When a recommendation is ready: “What changed about this decision?” · “Compare a new quote for this decision”<br>When context is needed: “My HVAC condition is good” · “It was installed in 2012” · “The replacement estimate is $8,000” |
 | `HVAC_DECISION_SCENARIO` | “Should I repair or replace my ‹…›?” |
 | `HVAC_DECISION_ABANDON` | None listed |
 | `HVAC_PREFERENCE_SAVE` | “Save that we plan to sell in about 18 months”<br>“Remember I want to minimize long-term cost”<br>**After confirming:** “Should I repair or replace my HVAC?” |
@@ -625,7 +633,7 @@ This follows the same read → exact entity → declared operation → review �
 | `WARRANTY_CORRECT` | “Correct the expiry date of the ‹…› warranty (one per item)”<br>“Correct the provider of the ‹…› warranty”<br>“Correct the expiry date of the ‹…› warranty”<br>**After confirming:** “Show my warranties” |
 | `ROOM_RENAME` | Declared room actions: “Rename this room.”, “Change the type of this room.”, and “Change the floor level of this room.” If no exact room is resolved, Ask suggests up to three canonical-room prompts such as “Rename Kitchen” or “Change the floor level of Guest room”.<br>**After confirming:** “Show my rooms” |
 | `ROOM_CREATE` | Viewer permission boundary and completion receipt: “Show my rooms”. The form and review steps keep the workflow inline and declare no traditional-page suggestion. |
-| `INVENTORY_ITEM_CREATE` | “Show my inventory”<br>**After confirming:** “Show my home inventory” |
+| `INVENTORY_ITEM_CREATE` | Before confirmation or from a boundary: “Show my inventory”<br>**After confirming:** “Set the purchase date for this inventory item” · “Update the condition of this inventory item” · “Update the model of this inventory item” or “Update the brand of this inventory item” |
 | `PROPERTY_CONTEXT_AREA_CAPTURE` | “How complete is my home record?” |
 
 #### Capital Planning
@@ -924,7 +932,7 @@ This follows the same read → exact entity → declared operation → review �
 | `CAPTURE_EVENT_CONFIRM` | None listed |
 | `CAPTURE_WARRANTY_CONFIRM` | None listed |
 | `CAPTURE_EVIDENCE_CONFIRM` | None listed |
-| `SELL_HOLD_RENT_GOAL_CAPTURE` | None listed |
+| `SELL_HOLD_RENT_GOAL_CAPTURE` | “Open Sell / Hold / Rent”<br>“What would help me get ready to sell?” |
 
 ### Skill handoffs (suggested next Skill)
 
@@ -941,6 +949,69 @@ Eligible only when the source operation finishes with one of the listed statuses
 | `INSPECTION_FINDING_UPDATE` | `HOME_ACTIONS` (home-operations) | `review-home-actions-feed` | completed |
 | `DOCUMENT_PROMOTION_CONFIRM` | `PROPERTY_SUMMARY` (property-record) | `summarize-property-record` | completed |
 | `BUYER_LIFECYCLE_UPDATE` | `PROPERTY_SUMMARY` (property-record) | `summarize-property-record` | completed |
+
+### Cross-cutting platform-state suggestions
+
+These do not belong in every operation row because they are emitted by shared execution policy:
+
+| State | Examples | Purpose |
+| --- | --- | --- |
+| Capability unavailable | “What maintenance is pending?”, “Summarize my home record”, “Which items are missing coverage?” | Recover toward deterministic, available reads |
+| Property required | “You can also ask a general home-care question without selecting a property.” | Preserve a useful no-property path |
+| Permission required | “Ask a read-only question about this home” | Recover without advertising an unauthorized write |
+| Audience/lifecycle mismatch | “Summarize my home record”, “What maintenance is pending?”, “What should I plan for next?” | Move to an applicable operation |
+| Skill binding expired | “Ask this question again” | Re-resolve current policy and versions |
+| Pending request cancelled | “Ask a new question” | Return to unrestricted conversation |
+
+### Recommended evolution: high-precision Suggested Next Actions
+
+The target is not to restrict the composer. The target is to make the most likely useful continuations accurate enough that homeowners rarely need to formulate the next request themselves.
+
+Replace `suggestions: string[]` with a common typed recommendation contract after an additive migration:
+
+```ts
+interface SuggestedNextAction {
+  id: string;
+  label: string;
+  message: string;
+  operationId: AskOperationId;
+  interactionType: 'CONVERSATION_CONTINUE' | 'FILTER_RESULT' | 'MUTATE_RECORD' | 'START_WORKFLOW' | 'NAVIGATE';
+  entityContext?: {
+    propertyId: string;
+    entityType?: string;
+    entityId?: string;
+    contextVersion?: string;
+  };
+  eligibility: {
+    state: 'ELIGIBLE' | 'NEEDS_CONTEXT' | 'UNAVAILABLE';
+    reasonCodes: string[];
+    missingFactKeys?: string[];
+  };
+  provenance: {
+    source: 'OPERATION_RESULT' | 'ENTITY_ACTION' | 'MISSING_DETAIL' | 'SKILL_HANDOFF' | 'CAPABILITY_RECOMMENDATION' | 'ACTIVE_GOAL' | 'PLATFORM_STATE';
+    sourceOperationId?: AskOperationId;
+    reasonCodes: string[];
+  };
+  priority: {
+    tier: 'CONTINUE' | 'RECORD_ACTION' | 'RELATED' | 'DISCOVERY';
+    score: number;
+  };
+}
+```
+
+The server should collect candidates from the current result, exact entity actions, missing details, unfinished work, Skill handoffs, active goals, and capability recommendations. It should then apply hard eligibility filters for property access, household role, lifecycle applicability, Skill/operation health, entity existence and freshness, required context, recent completion, duplication, and pending interaction conflicts.
+
+Rank immediate continuation first, then exact record action, related analysis, and broad discovery. Prefer concrete labels such as “Add the microwave brand” or “Change the guest room floor” over “Add details” or “Learn more”. Show at most three or four high-confidence actions in the calm follow-up row; leaving a slot empty is better than filling it with a weak recommendation.
+
+Clicking a typed action sends both its natural-language `message`—so the transcript remains readable—and its operation/entity context. The backend must recheck authorization, applicability, freshness, and confirmation requirements at execution time. Typed context prevents an app-authored suggestion from being misrouted; it never bypasses governance. Arbitrary homeowner text continues through the normal routing and clarification cascade.
+
+Deduplication must operate across suggestion chips, entity actions, block actions, Skill handoffs, capability recommendations, and landing starters rather than inside each source independently. The winning action should retain provenance explaining why it was shown.
+
+Measure suggestion coverage, click-to-intended-operation precision, click-to-completion, clarification after click, stale-action rejection, duplicate suppression, abandonment, and the manual-input escape rate. Optimize for click-to-success precision rather than click-through rate.
+
+The documentation catalog should be generated from registries and statically declared action definitions, with CI parity checks for operation ids, Skill ownership, adapter bindings/effects, handoffs, and typed suggestion producers. Dynamic values should be documented as templates and scenario branches rather than copied examples.
+
+Ownership should also become explicit. A dedicated Recalls Skill is the clearest owner for `RECALL_REVIEW` and `RECALL_MATCH_UPDATE`; `SELL_HOLD_RENT_GOAL_CAPTURE` should be evaluated for ownership by the existing Sell, Hold, or Rent Skill; and the four `CAPTURE_*` operations should either belong to a governed conversational-capture Skill or to their canonical domain Skills. Discovery, safety boundaries, and general guidance should remain platform-owned but gain a versioned platform-adapter definition with governance equivalent to a Skill adapter. These ownership changes require deliberate policy review because assigning a Skill changes runtime health and authorization enforcement.
 
 ## Other related components
 

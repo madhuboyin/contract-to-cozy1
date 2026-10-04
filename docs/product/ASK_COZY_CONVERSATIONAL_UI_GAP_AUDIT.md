@@ -1,7 +1,7 @@
 # Ask Cozy Conversational UI — Prototype-to-Implementation Gap Audit
 
 **Date:** September 26, 2026  
-**Updated:** September 28, 2026 through commit `f4967e00`
+**Updated:** October 4, 2026; high-precision Suggested Next Actions synchronized with Ask Redo FRD v1.7
 **Status:** Living implementation audit; original findings are retained where useful and superseded behavior is identified explicitly
 **Scope:** Ask Cozy conversational UI only; this is not a review of ContractToCozy's broader feature set  
 **Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
@@ -19,6 +19,8 @@ The recommended next implementation is a maintenance-first vertical slice that c
 
 **September 28 retry-continuity synchronization:** failed and retryable-unavailable answers now expose one execution-level retry. The browser sends the failed execution id plus an idempotency key; the server re-authorizes and replays the persisted question, property, resolved operation, and stable launch target against current records, then records and persists successor lineage. Retry labels are not conversational suggestions, and previously saved labels such as “Ask this question again” are filtered from the follow-up row when a retry action is present. This closes the duplicate-retry and literal-label submission defect described by IW-CALM-004/006; it does not relax confirmation or consequential-action safeguards.
 
+**October 4 Suggested Next Actions synchronization:** the desired end state is not a constrained chatbot. The composer remains unrestricted and any homeowner-entered text continues through normal routing. The product gap is that app-authored next actions are split among free-text suggestions, typed item actions, block actions, receipts, Skill handoffs, capability recommendations, platform recovery states, and landing starters. These sources do not yet share one contract, eligibility pass, ranking, provenance model, or deduplication policy. The recommended increment is a typed, server-governed `SuggestedNextAction` model that makes the highest-confidence next steps prominent enough to reduce formulation effort without removing the free-form escape hatch.
+
 ## 2. Classification summary
 
 | Prototype principle | Classification | Current implementation | Required change |
@@ -34,6 +36,7 @@ The recommended next implementation is a maintenance-first vertical slice that c
 | Active-work continuity | **Modify** | Pending work can be resumed, cancelled, or dismissed; sessions can be pinned, searched, restored, and deleted. Desktop gives the transcript history a permanent left rail. | Promote active work above transcript retrieval. Keep history available, but reduce its default visual priority in the calm shell. |
 | Contextual follow-up burden | **Modify** | Inline capture supports conversational field collection; an earlier working-tree change had raised the maximum sequence from three fields to seven; it was reverted (FRD v1.114). | Add a UX guardrail: do not turn a seven-field form into seven chat turns by default. Group compatible fields into one compact structured capture or split only when the answer genuinely changes the next question. |
 | Responsive and accessible behavior | **Reuse** | Mobile history/context sheets, safe-area spacing, horizontal suggestion scrolling, focus management, live status, keyboard composition handling, and voice accessibility are implemented. | Preserve these behaviors while changing hierarchy. Add narrow-width acceptance checks for the stateful launch, trust line, confirmation, and receipt. |
+| High-precision Suggested Next Actions | **Add / unify** | Operation suggestions are free-text strings; entity actions, Skill handoffs, capability cards, receipts, recovery states, and launch starters use separate contracts and deduplication rules. The calm row shows at most four latest-answer strings. | Preserve unrestricted typing, but unify app-authored recommendations under a typed operation/entity-aware contract with server-owned eligibility, priority, provenance, cross-surface deduplication, click-time revalidation, and outcome telemetry. |
 
 ## 3. What should be reused
 
@@ -130,6 +133,27 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 - one primary continuation; and
 - reconciliation/retry state when the final outcome is unknown.
 
+### 5.4 High-precision Suggested Next Actions
+
+The goal is to reduce how often a homeowner must decide what to type next, not to limit what can be typed. The composer remains the permanent unrestricted path.
+
+Add a common typed action contract with:
+
+- stable id, concise label, and natural-language transcript message;
+- registered operation and interaction type;
+- selected property, exact entity identity, and freshness version when available;
+- eligibility state, reason codes, and supported missing-context keys;
+- provenance identifying the producing result, entity action, missing-detail rule, Skill handoff, capability recommendation, active goal, or platform recovery state; and
+- deterministic priority tier and score.
+
+Collect candidates from all existing recommendation surfaces, then apply one server-side policy. Hard filters cover authorization, lifecycle applicability, operation and Skill health, entity existence and freshness, supported capture, pending-interaction conflicts, recent completion, and duplication. Rank active-work continuation first, then an exact record action, a directly related capability, and finally broad discovery. Show no more than four, normally two or three, and leave a slot empty instead of offering a weak generic prompt.
+
+Use specific labels such as “Add the microwave brand”, “Change the guest room floor”, or “Show the 3 overdue tasks”. When a bounded value is needed, selection should open the existing typed capture or selector rather than asking the homeowner to restate the request.
+
+Selection carries both the readable message and typed operation/entity context. The typed context prevents an app-authored action from being semantically misrouted; it does not grant permission or bypass confirmation. The backend rechecks every relevant policy and freshness condition on selection.
+
+Deduplicate across launch entries, result actions, follow-up chips, Skill handoffs, capability lists, and receipts. The highest-priority eligible action wins, while its provenance remains available for audit and measurement.
+
 ## 6. What should be removed or demoted
 
 - Demote “How can I help with your home?” when meaningful property state is available. Keep it only as a no-property or no-context fallback.
@@ -142,7 +166,7 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 
 ### ACUI-001 — Stateful maintenance launch
 
-**Priority:** P0  
+**Priority:** P0
 **Owners:** `AskWorkspace.tsx`, `CalmLanding.tsx`, `conciergeStateStrip.ts`
 
 **Outcome:** A selected home opens with a useful state summary rather than a blank chatbot prompt.
@@ -266,6 +290,28 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 - Accessibility checks include focus return, live status, keyboard submission/composition, accessible names, and reduced-motion-safe behavior.
 - Tests verify the optional full Maintenance page action remains secondary and preserves return context.
 
+### ACUI-009 — Unified high-precision Suggested Next Actions
+
+**Priority:** P0
+**Owners:** Ask response contract, operation handlers, Skill handoff resolver, `askNextActions.ts`, suggestion policy, `ExecutionCard.tsx`, `FollowUpRow.tsx`, analytics
+
+**Outcome:** The homeowner sees a small set of accurate, contextual next steps while retaining the ability to type anything.
+
+**Acceptance criteria:**
+
+- The response schema exposes versioned typed Suggested Next Actions with label, message, operation, interaction type, entity context, eligibility, provenance, and priority.
+- User-entered composer text remains unrestricted and continues through ordinary routing.
+- Operation suggestions, entity actions, eligible receipt continuations, Skill handoffs, dynamic capability recommendations, and platform recovery suggestions can enter one candidate pipeline.
+- Ineligible, stale, unavailable, unauthorized, recently completed, or duplicate candidates are not shown as selectable actions.
+- At most four actions render; two or three are preferred when they cover the likely continuations.
+- Selecting an action supplies its registered operation and exact entity context without bypassing authorization, freshness, capture, or confirmation.
+- A candidate that becomes stale between render and selection fails safely and returns a current recovery action.
+- Semantic duplicates are suppressed across the follow-up row, result actions, capability list, Skill handoff, receipt, and landing state.
+- Labels name the entity and outcome when available and avoid generic filler.
+- Keyboard, screen-reader, narrow-width, and horizontal-overflow behavior remain correct.
+- Telemetry distinguishes impressions, selection, suppression, intended-operation match, clarification, completion, stale rejection, abandonment, and manual-input escape.
+- Contract, producer, ranking, deduplication, authorization, freshness, frontend, and integrated-journey tests pass without relying on a live environment.
+
 ## 7a. Status at HEAD (September 26, 2026)
 
 | Ticket | Status |
@@ -278,6 +324,7 @@ Define a compact receipt composition from existing `WORKFLOW_PROGRESS` and `OUTP
 | ACUI-003 | **Implemented in code (FRD v1.118):** readable trust line under the answer; the workflow action is the dominant step. Browser-covered by ACUI-008 (fixture-backed). No client-side ordering guard (handler order already correct). |
 | ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Browser-covered by ACUI-008 (fixture-backed). |
 | ACUI-008 | **Implemented (FRD v1.120):** `e2e/ask/maintenanceJourney.spec.ts`, 9 scenarios at desktop and 390px. Fixture-backed; not a live-backend run. |
+| ACUI-009 | **Planned October 4, 2026; not implemented.** Contract, candidate pipeline, eligibility, ranking, cross-surface deduplication, direct dispatch, telemetry, and migration are specified in `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`. |
 
 ## 7b. Ask Home synchronization status (September 28, 2026, commit `f4967e00`)
 
