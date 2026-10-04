@@ -6,7 +6,7 @@ import {
 } from './suggestedNextActionEligibility';
 import { compareRanked, meetsMinimumDisplayScore, scoreSuggestedNextActionCandidate, type Ranked } from './suggestedNextActionRanking';
 import { deduplicateSuggestedNextActions } from './suggestedNextActionDeduplication';
-import { SUGGESTED_NEXT_ACTION_LIMITS } from './suggestedNextActionRegistry';
+import { RANKING_MODE, SUGGESTED_NEXT_ACTION_LIMITS, type SuggestedNextActionRankingMode } from './suggestedNextActionRegistry';
 import { suggestedNextActionSemanticKeyHash } from './suggestedNextActionIdentity';
 import { candidateIdentityFields } from './suggestedNextActionCandidate';
 
@@ -42,9 +42,12 @@ export interface PolicyInput {
   nominations: ReadonlyMap<string, readonly unknown[]>;
   eligibility: EligibilityContext;
   presentationIdentities?: ReadonlySet<string>;
+  /** Defaults to the registry's RANKING_MODE (TIER_ONLY). */
+  rankingMode?: SuggestedNextActionRankingMode;
 }
 
 export function selectSuggestedNextActions(input: PolicyInput): PolicyResult {
+  const mode = input.rankingMode ?? RANKING_MODE;
   const diagnostics: PolicyDiagnostics = {
     nominated: 0, invalidCandidates: 0, droppedOverProducerLimit: 0, droppedOverTotalLimit: 0, eligible: 0, rejections: {},
     belowMinimumScore: 0, duplicatesMerged: 0, suppressedByPresentation: 0, droppedByDiscoveryReserve: 0, droppedByLimit: 0,
@@ -78,7 +81,7 @@ export function selectSuggestedNextActions(input: PolicyInput): PolicyResult {
   // 3. Score (diversity is applied below, once winners are known), then deduplicate on semantic identity.
   const ranked: Ranked[] = eligible.map(({ candidate, verdict }) => ({
     candidate,
-    score: scoreSuggestedNextActionCandidate({ candidate, ready: verdict.state === 'ELIGIBLE' }),
+    score: scoreSuggestedNextActionCandidate({ candidate, ready: verdict.state === 'ELIGIBLE', mode }),
   })).sort(compareRanked);
   const dedup = deduplicateSuggestedNextActions(ranked, input.presentationIdentities);
   diagnostics.suppressedByPresentation = dedup.suppressedByPresentation;
@@ -96,13 +99,13 @@ export function selectSuggestedNextActions(input: PolicyInput): PolicyResult {
         candidate: entry.winner.candidate,
         score: scoreSuggestedNextActionCandidate({
           candidate: entry.winner.candidate, ready: entry.verdict.state === 'ELIGIBLE',
-          repeatsAlreadyChosen: operationRepeats.get(entry.winner.candidate.operationId) ?? 0,
+          repeatsAlreadyChosen: operationRepeats.get(entry.winner.candidate.operationId) ?? 0, mode,
         }),
       } satisfies Ranked,
     })).sort((a, b) => compareRanked(a.ranked, b.ranked));
     const best = rescored[0]!;
     pool.splice(pool.indexOf(best.entry), 1);
-    if (!meetsMinimumDisplayScore(best.ranked.score)) { diagnostics.belowMinimumScore += 1; continue; }
+    if (!meetsMinimumDisplayScore(best.ranked.score, mode)) { diagnostics.belowMinimumScore += 1; continue; }
     operationRepeats.set(best.ranked.candidate.operationId, (operationRepeats.get(best.ranked.candidate.operationId) ?? 0) + 1);
     chosen.push({ candidate: best.ranked.candidate, verdict: best.entry.verdict, score: best.ranked.score, mergedReasonCodes: best.entry.winner.mergedReasonCodes });
   }

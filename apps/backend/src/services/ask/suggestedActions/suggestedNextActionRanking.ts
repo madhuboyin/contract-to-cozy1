@@ -2,7 +2,7 @@
 // candidates always produce the same order. Weights and the policy version live in the registry and are snapshot-tested.
 import type { SuggestedNextActionCandidate } from './suggestedNextActionCandidate';
 import {
-  MIN_DISPLAY_SCORE, SCORE_WEIGHTS, SOURCE_PRECEDENCE, TIER_BASE_SCORE,
+  MIN_DISPLAY_SCORE, RANKING_MODE, SCORE_WEIGHTS, SOURCE_PRECEDENCE, TIER_BASE_SCORE, type SuggestedNextActionRankingMode,
 } from './suggestedNextActionRegistry';
 
 export interface ScoreInput {
@@ -13,10 +13,14 @@ export interface ScoreInput {
   recentlyDone?: boolean;
   /** How many already-selected candidates share this candidate's operation destination. */
   repeatsAlreadyChosen?: number;
+  /** Defaults to the registry's RANKING_MODE. */
+  mode?: SuggestedNextActionRankingMode;
 }
 
 export function scoreSuggestedNextActionCandidate(input: ScoreInput): number {
   const { candidate } = input;
+  // Tier-only: the tier is the whole score, so ordering falls through to the deterministic tie-break sequence.
+  if ((input.mode ?? RANKING_MODE) === 'TIER_ONLY') return TIER_BASE_SCORE[candidate.tier];
   const { signals } = candidate;
   let score = TIER_BASE_SCORE[candidate.tier];
   if (signals.exactEntityMatch) score += SCORE_WEIGHTS.exactEntityMatch;
@@ -57,6 +61,6 @@ export function compareRanked(a: Ranked, b: Ranked): number {
     || compareText(a.candidate.message, b.candidate.message);
 }
 
-export function meetsMinimumDisplayScore(score: number): boolean {
-  return score >= MIN_DISPLAY_SCORE;
+export function meetsMinimumDisplayScore(score: number, mode: SuggestedNextActionRankingMode = RANKING_MODE): boolean {
+  return mode === 'TIER_ONLY' || score >= MIN_DISPLAY_SCORE;
 }

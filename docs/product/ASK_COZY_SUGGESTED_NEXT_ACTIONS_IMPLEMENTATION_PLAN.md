@@ -297,7 +297,7 @@ The evaluator returns structured reasons for audit and tests. Selection repeats 
 - source-specific confidence; and
 - diversity penalty for repeated operation/domain destinations.
 
-Define versioned integer weights before implementation. Tier bases must not overlap after bounded adjustments. The final ordering is `score DESC`, producer precedence, `operationId`, `outcomeKey`, entity type, entity id, then action id. A minimum display score omits weak candidates. These constants and the ranking policy version belong in one registry and are snapshot-tested.
+**First release ranks by tier only** (`RANKING_MODE = TIER_ONLY` in the registry): tier, then the fixed tie-break sequence below, with no boosts, penalties or minimum score. The weighted scoring described here is built and tested but ships switched off; enable it (`WEIGHTED`) only if real chips feel wrong in practice, and bump the policy version when you do. Define versioned integer weights before enabling it. Tier bases must not overlap after bounded adjustments. The final ordering is `score DESC`, producer precedence, `operationId`, `outcomeKey`, entity type, entity id, then action id. A minimum display score omits weak candidates. These constants and the ranking policy version belong in one registry and are snapshot-tested.
 
 Do not use generated prose or an unreviewed model score to make an action executable. A model may later help order already eligible, bounded candidates only after an evaluation proves deterministic ranking insufficient.
 
@@ -727,9 +727,9 @@ New modules under `apps/backend/src/services/ask/suggestedActions/`: `suggestedN
 
 | Gate | Where | Value / status |
 | --- | --- | --- |
-| Versioned weights | `SCORE_WEIGHTS`, `SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION = sna-rank-1` | exact entity +100, current-result ownership +60, active goal +80, materiality 0/20/40/60, ready +40, confidence up to +40, recency penalty -150, diversity -50 per repeat capped at -150. Snapshot-pinned by hash in `suggestedNextActionsPhase2.test.js`. |
+| Versioned weights (**shipped OFF**: first release is `RANKING_MODE = TIER_ONLY`; weights apply only if switched to `WEIGHTED`) | `SCORE_WEIGHTS`, `SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION = sna-rank-1` | exact entity +100, current-result ownership +60, active goal +80, materiality 0/20/40/60, ready +40, confidence up to +40, recency penalty -150, diversity -50 per repeat capped at -150. Snapshot-pinned by hash in `suggestedNextActionsPhase2.test.js`. |
 | Tier bases | `TIER_BASE_SCORE` | CONTINUE 4000, RECORD_ACTION 3000, RELATED 2000, DISCOVERY 1000. Tests prove no tier can cross another after adjustments (max +380, min -300). |
-| Minimum score | `MIN_DISPLAY_SCORE` | 1060 (see B.2.2). |
+| Minimum score (**shipped OFF**, WEIGHTED mode only) | `MIN_DISPLAY_SCORE` | 1060 (see B.2.2). |
 | Limits | `SUGGESTED_NEXT_ACTION_LIMITS` | 4 shown, 12 per producer, 60 total, 1 discovery action beside a stronger one. |
 | Latency / query thresholds | `SUGGESTED_NEXT_ACTION_BUDGET` | 250 ms pipeline budget (nonessential producers dropped first), at most 6 batched context queries. Initial values chosen for the Raspberry Pi; measured p50/p95 from `ask_suggested_actions_pipeline_duration_seconds` should replace them once typed producers exist. The 6-query ceiling is declared and documented, not yet enforced by a runtime counter. |
 | Source precedence | `SOURCE_PRECEDENCE` | PENDING_WORK, PLATFORM_STATE, ENTITY_ACTION, MISSING_DETAIL, OPERATION_RESULT, SKILL_HANDOFF, ACTIVE_GOAL, CAPABILITY_RECOMMENDATION. |
@@ -739,7 +739,7 @@ New modules under `apps/backend/src/services/ask/suggestedActions/`: `suggestedN
 | Injected clock | `suggestedNextActionClock.ts` | Used by materialization; determinism tested. |
 | Outcome vocabularies | `SUGGESTED_ACTION_OUTCOMES` | `INVENTORY_ITEM_CORRECT` (13 outcomes) and `CAPTURE_FACT_CONFIRM`. Other domains declare theirs as they migrate; an operation with no entry cannot nominate a typed action. |
 
-**Decisions needed from you before Phase 3:** approve or change the weights, minimum score and 250 ms budget; confirm that the unenforced query ceiling is acceptable for now; confirm per-domain missing-detail mappings are added with each domain rather than up front.
+**Decisions (October 4, 2026, owner):** start with the simple tier-only ranking and add weights later only if the chips feel wrong in practice; the weights and minimum score stay in the code, switched off. Still open: confirm the 250 ms budget, that the 6-query ceiling stays declared but unenforced, and that per-domain missing-detail mappings are added with each domain.
 
 ### B.4 Verification
 

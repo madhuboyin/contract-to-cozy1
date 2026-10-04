@@ -41,7 +41,17 @@ export const SUGGESTED_NEXT_ACTION_BUDGET = {
 
 export const SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION = 'sna-rank-1';
 
-/** Tier bases are 1000 apart; bounded adjustments below can never carry a candidate across a tier boundary. */
+/**
+ * How candidates are ordered.
+ *  - TIER_ONLY (shipping default): order by tier (continue > record action > related > discovery), then the deterministic tie-break
+ *    sequence below. No boosts, no penalties, no minimum score. Simple and predictable for a first version.
+ *  - WEIGHTED: adds the signal weights, penalties and minimum display score below. Built, tested and deliberately switched off;
+ *    turn it on only if real chips feel wrong in practice, then bump the policy version.
+ */
+export type SuggestedNextActionRankingMode = 'TIER_ONLY' | 'WEIGHTED';
+export const RANKING_MODE: SuggestedNextActionRankingMode = 'TIER_ONLY';
+
+/** Used in both modes. Tier bases are 1000 apart; bounded adjustments below can never carry a candidate across a tier boundary. */
 export const TIER_BASE_SCORE: Readonly<Record<SuggestedNextActionTier, number>> = {
   CONTINUE: 4000,
   RECORD_ACTION: 3000,
@@ -49,6 +59,7 @@ export const TIER_BASE_SCORE: Readonly<Record<SuggestedNextActionTier, number>> 
   DISCOVERY: 1000,
 };
 
+/** WEIGHTED mode only. */
 export const SCORE_WEIGHTS = {
   exactEntityMatch: 100,
   currentResultOwnership: 60,
@@ -66,7 +77,7 @@ export const SCORE_WEIGHTS = {
 } as const;
 
 /**
- * Candidates scoring below this after adjustments are omitted rather than used as filler (plan §3.3). Set so a DISCOVERY action must
+ * WEIGHTED mode only. Candidates scoring below this after adjustments are omitted rather than used as filler (plan §3.3). Set so a DISCOVERY action must
  * earn at least 60 points of readiness/confidence/signal above its tier base (ready + confidence >= 0.5 passes; a discovery action
  * with no signal, or a repeat of an already-chosen destination, does not). Every higher tier clears it with room to spare.
  */

@@ -66,8 +66,8 @@ test('the registry validates: tiers cannot overlap after bounded adjustments, ou
 });
 
 test('ranking policy constants are snapshot-pinned (change them deliberately, with the policy version)', () => {
-  const snapshot = JSON.stringify({ v: registry.SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION, tiers: registry.TIER_BASE_SCORE, w: registry.SCORE_WEIGHTS, min: registry.MIN_DISPLAY_SCORE, limits: registry.SUGGESTED_NEXT_ACTION_LIMITS, precedence: registry.SOURCE_PRECEDENCE, budget: registry.SUGGESTED_NEXT_ACTION_BUDGET });
-  assert.equal(createHash('sha256').update(snapshot).digest('hex').slice(0, 16), 'f5213cd9b296973e', `weights changed; bump SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION and update this hash (got ${createHash('sha256').update(snapshot).digest('hex').slice(0, 16)})`);
+  const snapshot = JSON.stringify({ v: registry.SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION, tiers: registry.TIER_BASE_SCORE, w: registry.SCORE_WEIGHTS, min: registry.MIN_DISPLAY_SCORE, limits: registry.SUGGESTED_NEXT_ACTION_LIMITS, precedence: registry.SOURCE_PRECEDENCE, budget: registry.SUGGESTED_NEXT_ACTION_BUDGET, mode: registry.RANKING_MODE });
+  assert.equal(createHash('sha256').update(snapshot).digest('hex').slice(0, 16), 'f593f954f4630f2c', `weights changed; bump SUGGESTED_NEXT_ACTION_RANKING_POLICY_VERSION and update this hash (got ${createHash('sha256').update(snapshot).digest('hex').slice(0, 16)})`);
 });
 
 test('every inventory missing-fact mapping resolves to a real correction field and the full correction field set is covered', () => {
@@ -169,20 +169,20 @@ test('the evaluator does not mutate the candidate or the context', () => {
 
 // ---- ranking ---------------------------------------------------------------------------------------------------------
 
-test('tier order always holds regardless of signals: continuation > record action > related > discovery', () => {
+test('WEIGHTED mode: tier order always holds regardless of signals: continuation > record action > related > discovery', () => {
   const best = { exactEntityMatch: true, currentResultOwnership: true, activeGoalMatch: true, materiality: 3, sourceConfidence: 1 };
   const worst = { exactEntityMatch: false, currentResultOwnership: false, activeGoalMatch: false, materiality: 0, sourceConfidence: 0 };
-  const score = (tier, signals, extra = {}) => scoreSuggestedNextActionCandidate({ candidate: candidate({ tier, signals }), ready: true, ...extra });
+  const score = (tier, signals, extra = {}) => scoreSuggestedNextActionCandidate({ candidate: candidate({ tier, signals }), ready: true, mode: 'WEIGHTED', ...extra });
   const hardest = (tier) => ({ high: score(tier, best), low: score(tier, worst, { recentlyDone: true, repeatsAlreadyChosen: 9, ready: false }) });
   assert.ok(hardest('RECORD_ACTION').low > hardest('RELATED').high);
   assert.ok(hardest('CONTINUE').low > hardest('RECORD_ACTION').high);
   assert.ok(hardest('RELATED').low > hardest('DISCOVERY').high);
 });
 
-test('exact entity beats a generic domain action within a tier; ties break by the documented sequence', () => {
-  const exact = { candidate: candidate(), score: scoreSuggestedNextActionCandidate({ candidate: candidate(), ready: true }) };
+test('WEIGHTED mode: exact entity beats a generic domain action within a tier; ties break by the documented sequence', () => {
+  const exact = { candidate: candidate(), score: scoreSuggestedNextActionCandidate({ candidate: candidate(), ready: true, mode: 'WEIGHTED' }) };
   const genericCandidate = candidate({ signals: { exactEntityMatch: false, currentResultOwnership: true, activeGoalMatch: false, materiality: 2, sourceConfidence: 0.8 }, entityContext: { propertyId: 'prop-1', entityType: null, entityId: null, contextVersion: null } });
-  const generic = { candidate: genericCandidate, score: scoreSuggestedNextActionCandidate({ candidate: genericCandidate, ready: true }) };
+  const generic = { candidate: genericCandidate, score: scoreSuggestedNextActionCandidate({ candidate: genericCandidate, ready: true, mode: 'WEIGHTED' }) };
   assert.ok(compareRanked(exact, generic) < 0);
   const a = { candidate: candidate({ source: 'ENTITY_ACTION' }), score: 100 };
   const b = { candidate: candidate({ source: 'CAPABILITY_RECOMMENDATION' }), score: 100 };
@@ -194,6 +194,25 @@ test('exact entity beats a generic domain action within a tier; ties break by th
   const f = { candidate: candidate({ entityContext: { propertyId: 'prop-1', entityType: 'INVENTORY_ITEM', entityId: 'item-1', contextVersion: null } }), score: 100 };
   assert.ok(compareRanked(f, e) < 0, 'then entity id');
   assert.equal(compareRanked(a, a), 0);
+});
+
+test('shipping default is TIER_ONLY: signals do not change a candidate score, only the tier does', () => {
+  assert.equal(registry.RANKING_MODE, 'TIER_ONLY');
+  const rich = candidate({ signals: { exactEntityMatch: true, currentResultOwnership: true, activeGoalMatch: true, materiality: 3, sourceConfidence: 1 } });
+  const bare = candidate({ signals: { exactEntityMatch: false, currentResultOwnership: false, activeGoalMatch: false, materiality: 0, sourceConfidence: 0 } });
+  assert.equal(scoreSuggestedNextActionCandidate({ candidate: rich, ready: true }), registry.TIER_BASE_SCORE.RECORD_ACTION);
+  assert.equal(scoreSuggestedNextActionCandidate({ candidate: bare, ready: false, recentlyDone: true, repeatsAlreadyChosen: 9 }), registry.TIER_BASE_SCORE.RECORD_ACTION);
+});
+
+test('TIER_ONLY ordering: tier first, then the fixed tie-break sequence, identical on every run', () => {
+  const lists = [
+    withEntity(0, { tier: 'DISCOVERY', outcomeKey: 'ADD_NOTES' }), withEntity(1, { tier: 'RELATED', outcomeKey: 'ADD_SERIAL_NUMBER' }),
+    withEntity(2, { tier: 'RECORD_ACTION', outcomeKey: 'ADD_MODEL' }), withEntity(3, { tier: 'RECORD_ACTION', outcomeKey: 'ADD_BRAND' }),
+  ];
+  const run = (list) => selectSuggestedNextActions({ nominations: nominations(list), eligibility: ctx({ entities: modelEntities(4) }) }).selected.map((s) => `${s.candidate.tier}:${s.candidate.outcomeKey}`);
+  const expected = ['RECORD_ACTION:ADD_BRAND', 'RECORD_ACTION:ADD_MODEL', 'RELATED:ADD_SERIAL_NUMBER', 'DISCOVERY:ADD_NOTES'];
+  assert.deepEqual(run(lists), expected, 'same tier orders by operationId, then outcomeKey');
+  assert.deepEqual(run([...lists].reverse()), expected);
 });
 
 // ---- deduplication ---------------------------------------------------------------------------------------------------
@@ -242,18 +261,19 @@ test('never more than four actions', () => {
   assert.equal(result.diagnostics.droppedByLimit, 6, 'extras are counted, not silently kept');
 });
 
-test('a weak discovery candidate is omitted rather than used as filler; one with real signal is kept', () => {
+test('WEIGHTED mode: a weak discovery candidate is omitted rather than used as filler; one with real signal is kept', () => {
   const discovery = (signals, over = {}) => candidate({
     tier: 'DISCOVERY', source: 'CAPABILITY_RECOMMENDATION', operationId: 'CAPTURE_FACT_CONFIRM', outcomeKey: 'CAPTURE_PROPERTY_FACT',
     entityContext: { propertyId: 'prop-1', entityType: null, entityId: null, contextVersion: null },
     signals: { exactEntityMatch: false, currentResultOwnership: false, activeGoalMatch: false, materiality: 0, sourceConfidence: 0, ...signals }, ...over,
   });
-  const run = (c) => selectSuggestedNextActions({ nominations: nominations([c]), eligibility: ctx({ operationTargetEntityType: () => null }) });
+  const run = (c, rankingMode = 'WEIGHTED') => selectSuggestedNextActions({ nominations: nominations([c]), eligibility: ctx({ operationTargetEntityType: () => null }), rankingMode });
   const weak = run(discovery({ sourceConfidence: 0 }));
   assert.equal(weak.selected.length, 0);
   assert.equal(weak.diagnostics.belowMinimumScore, 1);
   assert.equal(run(discovery({ sourceConfidence: 0.5 })).selected.length, 1);
   assert.equal(run(discovery({ sourceConfidence: 0, currentResultOwnership: true })).selected.length, 1);
+  assert.equal(run(discovery({ sourceConfidence: 0 }), 'TIER_ONLY').selected.length, 1, 'tier-only ships with no minimum score');
 });
 
 test('semantically identical nominations collapse to one action', () => {
@@ -284,10 +304,10 @@ test('at most one DISCOVERY action survives when a stronger action exists', () =
   assert.equal(onlyDiscovery.selected.length, 3, 'with nothing stronger, discovery is not capped by the reserve');
 });
 
-test('a diversity penalty prefers a different destination over a fourth action on the same operation', () => {
+test('WEIGHTED mode: a diversity penalty prefers a different destination over a fourth action on the same operation', () => {
   const sameOp = [0, 1, 2].map((i) => withEntity(i, { tier: 'RELATED', outcomeKey: ['ADD_BRAND', 'ADD_MODEL', 'ADD_SERIAL_NUMBER'][i], signals: { exactEntityMatch: false, currentResultOwnership: false, activeGoalMatch: false, materiality: 0, sourceConfidence: 0.5 } }));
   const other = candidate({ tier: 'RELATED', operationId: 'CAPTURE_FACT_CONFIRM', outcomeKey: 'CAPTURE_PROPERTY_FACT', entityContext: { propertyId: 'prop-1', entityType: null, entityId: null, contextVersion: null }, signals: { exactEntityMatch: false, currentResultOwnership: false, activeGoalMatch: false, materiality: 0, sourceConfidence: 0.5 } });
-  const result = selectSuggestedNextActions({ nominations: nominations([...sameOp, other]), eligibility: ctx({ entities: modelEntities(3) }) });
+  const result = selectSuggestedNextActions({ nominations: nominations([...sameOp, other]), eligibility: ctx({ entities: modelEntities(3) }), rankingMode: 'WEIGHTED' });
   const order = result.selected.map((s) => s.candidate.operationId);
   assert.ok(order.indexOf('CAPTURE_FACT_CONFIRM') < order.lastIndexOf('INVENTORY_ITEM_CORRECT'), `diverse destination should not be last: ${order}`);
 });
