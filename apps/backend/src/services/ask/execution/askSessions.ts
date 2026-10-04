@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
 import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPendingWorkItem, type AskRecentSessionPage, type AskRecentSessionSummary, type AskSessionUpdateRequest, type ContinueAskExecution } from '../../../productFramework/ask/ask.contract';
@@ -220,6 +221,10 @@ async function expirePendingInteraction(execution: AskExecution): Promise<AskExe
   if (execution.status === 'RUNNING') return reclaimOrphanedRunningExecution(execution);
   const interactionExpiresAt = pendingInteractionExpiresAt(execution);
   if (!interactionExpiresAt || interactionExpiresAt > new Date()) return execution;
+  const restartActions = await finalizeRecoveryActions({
+    status: 'EXPIRED', executionId: execution.id, userId: execution.userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+    operationId: execution.operationId, candidates: () => restartAfterExpiryCandidates(execution),
+  });
   const updated = await prisma.askExecution.updateMany({
     where: { id: execution.id, userId: execution.userId, status: execution.status },
     data: {
@@ -227,7 +232,7 @@ async function expirePendingInteraction(execution: AskExecution): Promise<AskExe
       resultJson: asInputJson({
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
         blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'pending-work-expired', title: 'This pending request expired', status: 'EXPIRED', description: 'No action was performed. Ask the question again to use current home records and settings.', details: [], actions: [] }],
-        captureRequests: [], clarification: null, confirmation: null, suggestions: ['Ask this question again'],
+        captureRequests: [], clarification: null, confirmation: null, suggestions: [], suggestedNextActions: restartActions,
         ...preservedExecutionHistory(execution.resultJson, [{ type: 'WORKFLOW_PROGRESS', id: 'pending-work-expired', title: 'This pending request expired', status: 'EXPIRED', description: 'No action was performed.', details: [], actions: [] }]),
       }),
     },

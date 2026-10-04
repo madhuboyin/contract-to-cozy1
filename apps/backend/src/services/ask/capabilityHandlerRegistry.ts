@@ -100,7 +100,7 @@ export function operationalUnavailableResult(reason:
         : 'This capability has been paused by an operational control. Your home record was not changed.',
       suggestions: ['Ask about recorded maintenance, coverage, savings, inventory, home actions, or your property summary.'],
     }],
-    suggestions: ['What maintenance is pending?', 'Summarize my home record', 'Which items are missing coverage?'],
+    suggestions: [],
   };
 }
 

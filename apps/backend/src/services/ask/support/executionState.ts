@@ -238,7 +238,7 @@ export async function expireIfSkillBindingChanged(execution: AskExecution): Prom
           tone: 'CAUTION',
           actions: [],
         }],
-        captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+        captureRequests: [], confirmation: null, clarification: null, suggestions: [],
         ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY' as const, id: 'ask-skill-binding-expired', title: 'This request is no longer available', body: 'No action was performed.', tone: 'CAUTION' as const, actions: [] }]),
       }),
     },

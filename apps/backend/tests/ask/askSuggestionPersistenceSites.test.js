@@ -44,7 +44,7 @@ test('a verified selection cannot take its operation or entity from the client (
 });
 
 test('every file that persists an Ask result carries a reviewed finalizer classification', () => {
-  assert.deepEqual(unclassified(scan().persistence), [], 'classify the new persistence site in scripts/ask-suggestion-sites.js (WIRED, VIA_EXECUTE_OPERATION, PENDING_INTERACTION, RECOVERY_PHASE_4, LEDGER_PRESERVING)');
+  assert.deepEqual(unclassified(scan().persistence), [], 'classify the new persistence site in scripts/ask-suggestion-sites.js (WIRED, VIA_EXECUTE_OPERATION, PENDING_INTERACTION, RECOVERY_FINALIZED, LEDGER_PRESERVING)');
   const files = JSON.parse(readFileSync(BASELINE, 'utf8')).files;
   assert.deepEqual(Object.entries(files).filter(([, info]) => info.finalizer === 'UNCLASSIFIED' || !info.note).map(([file]) => file), []);
 });

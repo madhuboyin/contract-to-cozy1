@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { finalizeRecoveryActions, restartAfterExpiryCandidates, reviewCurrentInventoryItemCandidates } from '../suggestedActions/recoveryCandidates';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
 import { loadCompletedSuggestedActionKeyHashes } from '../suggestedActions/suggestedNextActionHistory';
 import { AskExecution, Prisma } from '@prisma/client';
@@ -56,7 +57,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
           captureRequests: [],
           confirmation: null,
           clarification: null,
-          suggestions: unavailable.suggestions,
+          suggestions: [],
           ...preservedExecutionHistory(execution.resultJson, unavailable.blocks),
         }),
         completedAt: new Date(),
@@ -182,11 +183,16 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   // incorrectly assert that no action occurred. Recovery replays only the
   // already-confirmed input through domain idempotency controls.
   if ((!expiresAt || expiresAt <= new Date()) && !recoveringClaim) {
+    // Plan C.13: "Start <task> again" only for operations whose stored message recreates the request.
+    const restartActions = await finalizeRecoveryActions({
+      status: 'EXPIRED', executionId: execution.id, userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+      operationId: execution.operationId, candidates: () => restartAfterExpiryCandidates(execution),
+    });
     const expired = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {
         status: 'EXPIRED', reasonCode: 'ASK_CONFIRMATION_EXPIRED', completedAt: new Date(),
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-expired', title: 'Confirmation expired', status: 'EXPIRED', description: 'No action was performed. Ask again to review current home records and settings.', details: [], actions: [] }], captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'], ...preservedExecutionHistory(execution.resultJson, [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-expired', title: 'Confirmation expired', status: 'EXPIRED', description: 'No action was performed.', details: [], actions: [] }]) }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-expired', title: 'Confirmation expired', status: 'EXPIRED', description: 'No action was performed. Ask again to review current home records and settings.', details: [], actions: [] }], captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActions: restartActions, ...preservedExecutionHistory(execution.resultJson, [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-expired', title: 'Confirmation expired', status: 'EXPIRED', description: 'No action was performed.', details: [], actions: [] }]) }),
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'EXPIRED', metadataJson: asInputJson({ reason: 'CONFIRMATION_EXPIRED' }) } });
@@ -321,6 +327,17 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     // allowed to overwrite. If the guard doesn't match, a concurrent winner
     // already moved this execution past RUNNING; re-read and return its
     // actual current state instead of fabricating an EXPIRED one.
+    // Plan C.13: "Review current <item>" only when the conflicted record is an inventory item that still exists.
+    const conflictLaunch = execution.launchContextJson && typeof execution.launchContextJson === 'object' && !Array.isArray(execution.launchContextJson)
+      ? execution.launchContextJson as Record<string, unknown> : {};
+    const reviewActions = await finalizeRecoveryActions({
+      status: 'EXPIRED', executionId: execution.id, userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+      operationId: execution.operationId,
+      candidates: () => reviewCurrentInventoryItemCandidates({
+        propertyId: execution.propertyId, sourceOperationId: execution.operationId,
+        itemId: conflictLaunch.entityType === 'INVENTORY_ITEM' && typeof conflictLaunch.entityId === 'string' ? conflictLaunch.entityId : null,
+      }),
+    });
     await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.updateMany({
         where: { id: execution.id, status: 'RUNNING' },
@@ -329,7 +346,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
           resultJson: asInputJson({
             schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
             blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'confirmation-conflict', title: 'This changed before it could be confirmed', status: 'EXPIRED', description, details: [], actions: [] }],
-            captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+            captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActions: reviewActions,
             // External review's specific example: the conflict handling
             // correctly blocks the stale write, but was replacing resultJson
             // wholesale, discarding the original response and continuation
@@ -507,7 +524,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
             type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed',
             body: 'No action was performed. You can ask the question again whenever you are ready.', tone: 'DEFAULT', actions: [],
           }],
-          captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask a new question'],
+          captureRequests: [], confirmation: null, clarification: null, suggestions: [],
           ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed', body: 'No action was performed.', tone: 'DEFAULT', actions: [] }]),
         }),
         completedAt: new Date(),
@@ -543,7 +560,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
         captureRequests: [],
         confirmation: null,
         clarification: null,
-        suggestions: [command.cancellation.suggestion],
+        suggestions: [],
         ...preservedExecutionHistory(execution.resultJson, blocks),
       }),
       completedAt: new Date(),

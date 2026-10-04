@@ -628,7 +628,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
           blocks: askFailureBlocks(caught, retryable),
           captureRequests: [], confirmation: null, clarification: null,
-          suggestions: retryable ? ['Ask this question again'] : [],
+          suggestions: [],
           ...preservedExecutionHistory(execution.resultJson, askFailureBlocks(caught, retryable)),
         }),
       },

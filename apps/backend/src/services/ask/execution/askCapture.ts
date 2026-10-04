@@ -248,7 +248,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
             captureRequests: [],
             confirmation: null,
             clarification: null,
-            suggestions: unavailable.suggestions,
+            suggestions: [],
             ...preservedExecutionHistory(execution.resultJson, unavailable.blocks),
           }),
           completedAt: new Date(),

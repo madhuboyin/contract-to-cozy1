@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
 import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type ResolveAskExecutionProperty, type SubmitAskClarification } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
@@ -40,6 +41,10 @@ export async function submitAskClarification(userId: string, executionId: string
   const savedClarification = clarification as Record<string, unknown>;
   const expiresAt = typeof savedClarification.expiresAt === 'string' ? new Date(savedClarification.expiresAt) : null;
   if (savedClarification.version !== input.clarificationVersion || !expiresAt || expiresAt <= new Date()) {
+    const restartActions = await finalizeRecoveryActions({
+      status: 'EXPIRED', executionId: execution.id, userId: execution.userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+      operationId: execution.operationId, candidates: () => restartAfterExpiryCandidates(execution),
+    });
     const expired = await prisma.askExecution.update({
       where: { id: execution.id },
       data: {
@@ -49,7 +54,7 @@ export async function submitAskClarification(userId: string, executionId: string
         resultJson: asInputJson({
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
           blocks: [{ type: 'SUMMARY', id: 'clarification-expired', title: 'This clarification expired', body: 'Ask the question again so the answer uses current home records and routing rules.', tone: 'CAUTION', actions: [] }],
-          captureRequests: [], confirmation: null, clarification: null, suggestions: ['Ask this question again'],
+          captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActions: restartActions,
           ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY' as const, id: 'clarification-expired', title: 'This clarification expired', body: 'No action was performed.', tone: 'CAUTION' as const, actions: [] }]),
         }),
       },
@@ -187,7 +192,7 @@ export async function submitAskClarification(userId: string, executionId: string
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
           blocks: failureBlocks,
           captureRequests: [], confirmation: null, clarification: null,
-          suggestions: retryable ? ['Ask this question again'] : [],
+          suggestions: [],
           ...preservedExecutionHistory(execution.resultJson, failureBlocks),
         }),
       },
@@ -273,7 +278,7 @@ export async function resolveAskExecutionProperty(userId: string, executionId: s
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
           blocks: failureBlocks,
           captureRequests: [], confirmation: null, clarification: null,
-          suggestions: retryable ? ['Ask this question again'] : [],
+          suggestions: [],
           ...preservedExecutionHistory(execution.resultJson, failureBlocks),
         }),
       },

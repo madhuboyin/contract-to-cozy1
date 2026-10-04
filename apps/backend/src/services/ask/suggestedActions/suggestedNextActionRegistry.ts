@@ -118,14 +118,34 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
   INVENTORY_ITEM_CREATE: ['ADD_ITEM_TO_ROOM'],
   MAINTENANCE_TASK_UPDATE: ['REOPEN_TASK', 'RESUME_REMINDERS'],
   CAPTURE_FACT_CONFIRM: ['CAPTURE_PROPERTY_FACT'],
+  // Phase 4 platform recovery (plan C.13). Outcomes are operation-owned: only the operations listed in
+  // RESTART_AFTER_EXPIRY_LABELS declare the restart outcome, and only INVENTORY_LOOKUP declares the exact-record review.
+  MAINTENANCE_TASK_CREATE: ['RESTART_AFTER_EXPIRY'],
+  REFINANCE_RATE_MONITOR: ['RESTART_AFTER_EXPIRY'],
+  QUOTE_COMPARISON_CREATE: ['RESTART_AFTER_EXPIRY'],
+  INVENTORY_LOOKUP: ['REVIEW_CURRENT_RECORD'],
+};
+
+/**
+ * Reviewed, bounded labels for the "start this again" chip offered after a confirmation, clarification or pending request expires
+ * (plan C.13). An operation is listed only if its stored message alone recreates the request: it is message-routable, targets no
+ * entity, and reads neither `launchContext.outcomeKey` nor an entity from the launch context. Anything absent gets no chip.
+ */
+export const RESTART_AFTER_EXPIRY_LABELS: Readonly<Record<string, string>> = {
+  MAINTENANCE_TASK_CREATE: 'Start the maintenance task again',
+  REFINANCE_RATE_MONITOR: 'Start the refinance rate monitor again',
+  QUOTE_COMPARISON_CREATE: 'Start the quote comparison again',
 };
 
 export function isRegisteredOutcome(operationId: string, outcomeKey: string): boolean {
   return (SUGGESTED_ACTION_OUTCOMES[operationId] ?? []).includes(outcomeKey);
 }
 
-/** Outcomes the operation registry explicitly allows to be offered again after completion (plan §4.1). None yet. */
-export const REPEATABLE_OUTCOMES: ReadonlySet<string> = new Set<string>();
+/** Outcomes the operation registry explicitly allows to be offered again after completion (plan §4.1): recovery can recur. */
+export const REPEATABLE_OUTCOMES: ReadonlySet<string> = new Set<string>([
+  ...Object.keys(RESTART_AFTER_EXPIRY_LABELS).map((operationId) => `${operationId}:RESTART_AFTER_EXPIRY`),
+  'INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD',
+]);
 
 export function isRepeatableOutcome(operationId: string, outcomeKey: string): boolean {
   return REPEATABLE_OUTCOMES.has(`${operationId}:${outcomeKey}`);

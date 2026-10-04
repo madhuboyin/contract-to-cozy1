@@ -803,7 +803,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
   const typedTarget = resolveTypedActionTarget(items, launchContext, {
     entityType: 'INVENTORY_ITEM', outcomeRegistered: Boolean(correctionFieldForOutcome('INVENTORY_ITEM_CORRECT', launchContext?.outcomeKey)), versionOf: inventoryItemContextVersion,
   });
-  if (typedTarget.kind === 'STALE') return staleSuggestedActionResult();
+  if (typedTarget.kind === 'STALE') return staleSuggestedActionResult({ propertyId, item: items.find((candidate) => candidate.id === launchContext?.entityId), sourceOperationId: 'INVENTORY_ITEM_CORRECT' });
   const selected = typedTarget.kind === 'TARGET' ? typedTarget.row : exactEntityMatch(items.map((item) => ({ ...item, title: item.name })), message, launchContext);
   if (!selected) {
     return {

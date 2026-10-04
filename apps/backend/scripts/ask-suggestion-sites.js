@@ -36,19 +36,19 @@ const NOT_A_WRITE = /resultJson:\s*(?:true|false|unknown|Prisma\.JsonValue|strin
 //   WIRED                        calls finalizeSuggestedNextActions itself before persisting
 //   VIA_EXECUTE_OPERATION        its handler results come from executeOperation, whose finalize() runs the finalizer
 //   PENDING_INTERACTION          writes while a confirmation/clarification is open; no compact actions (eligibility rule 9)
-//   RECOVERY_PHASE_4             failure/expiry/cancel/stale branches; string-only today, become the platform-recovery producer
+//   RECOVERY_FINALIZED           expiry/conflict/stale/failure/cancel branches; typed recovery chips come from recoveryCandidates.ts via the shared finalizer (plan C.13), or the branch deliberately has none
 //   LEDGER_PRESERVING            copies or spreads an existing stored result without producing new actions
 const FINALIZER_CLASSIFICATION = {
   'src/services/ask/execution/executeOperation.ts': { finalizer: 'WIRED', note: 'finalize() seam; refreshAskExecutionAfterConflict atomically replaces the stored ledger' },
-  'src/services/ask/execution/createAskExecution.ts': { finalizer: 'WIRED', note: 'routing clarification calls the finalizer; the main result comes from executeOperation; failure + stale-selection recovery branches are RECOVERY_PHASE_4' },
-  'src/services/ask/execution/askConfirm.ts': { finalizer: 'WIRED', note: 'confirmed result calls the finalizer; expiry/conflict/cancel/unavailable branches are RECOVERY_PHASE_4' },
-  'src/services/ask/execution/askClarification.ts': { finalizer: 'VIA_EXECUTE_OPERATION', note: 'resumption and property selection run executeOperation; failure branches are RECOVERY_PHASE_4' },
-  'src/services/ask/execution/askCapture.ts': { finalizer: 'VIA_EXECUTE_OPERATION', note: 'capture/replay results come from executeOperation; ledger preserved on refresh; unavailable branch is RECOVERY_PHASE_4' },
+  'src/services/ask/execution/createAskExecution.ts': { finalizer: 'WIRED', note: 'routing clarification calls the finalizer; the main result comes from executeOperation; failure branch persists no chip (retry button); stale-selection recovery is the typed unavailable result, no chip' },
+  'src/services/ask/execution/askConfirm.ts': { finalizer: 'WIRED', note: 'confirmed result calls the finalizer; expiry and conflict branches build typed recovery chips through finalizeRecoveryActions (C.13); cancel/unavailable persist no compact strings' },
+  'src/services/ask/execution/askClarification.ts': { finalizer: 'VIA_EXECUTE_OPERATION', note: 'resumption and property selection run executeOperation; expiry builds the restart chip through finalizeRecoveryActions; failure branches persist no chip (the retry button covers them)' },
+  'src/services/ask/execution/askCapture.ts': { finalizer: 'VIA_EXECUTE_OPERATION', note: 'capture/replay results come from executeOperation; ledger preserved on refresh; unavailable branch persists no compact strings (C.13)' },
   'src/services/ask/execution/askRetry.ts': { finalizer: 'LEDGER_PRESERVING', note: 'spreads the retried result and only adds continuesExecutionId' },
-  'src/services/ask/execution/askSessions.ts': { finalizer: 'RECOVERY_PHASE_4', note: 'skill-binding expiry and cancellation results' },
+  'src/services/ask/execution/askSessions.ts': { finalizer: 'RECOVERY_FINALIZED', note: 'pending-work expiry builds the restart chip through finalizeRecoveryActions (C.13); orphan reclaim persists no chip' },
   'src/services/ask/execution/askFeedback.ts': { finalizer: 'PENDING_INTERACTION', note: 'writes a clarification (no suggestions)' },
-  'src/services/ask/support/executionState.ts': { finalizer: 'RECOVERY_PHASE_4', note: 'unsupported-schema fallback result (no actions)' },
-  'src/services/ask/askNotificationContinuation.service.ts': { finalizer: 'RECOVERY_PHASE_4', note: 'proactive continuation execution; string suggestions only; Phase 4 decides its producer' },
+  'src/services/ask/support/executionState.ts': { finalizer: 'RECOVERY_FINALIZED', note: 'skill-binding expiry and unsupported-schema fallback results (no actions)' },
+  'src/services/ask/askNotificationContinuation.service.ts': { finalizer: 'RECOVERY_FINALIZED', note: 'proactive continuation execution; string suggestions only; out of Phase 4 recovery scope' },
   'src/services/ask/conversationalUnderstanding/conversationalCapture.ts': { finalizer: 'PENDING_INTERACTION', note: 'child capture executions are created NEEDS_CONFIRMATION with suggestions: []' },
   'src/services/ask/handlers/buyerConfirm.handler.ts': { finalizer: 'PENDING_INTERACTION', note: 'confirmation edit write' },
   'src/services/ask/handlers/maintenanceConfirm.handler.ts': { finalizer: 'PENDING_INTERACTION', note: 'confirmation edit write' },
