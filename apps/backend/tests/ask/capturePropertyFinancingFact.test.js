@@ -21,10 +21,10 @@ test('capturePropertyFinancingFact creates the idempotency-gating PropertyFactEv
   assert.ok(txIdx > 0);
   const firstStatementIdx = writerSource.indexOf('const evidence = await tx.propertyFactEvidence.create(', txIdx);
   const supersedeIdx = writerSource.indexOf('await tx.propertyFactEvidence.updateMany(', txIdx);
-  const upsertIdx = writerSource.indexOf('await tx.propertyFinancingProfile.upsert(', txIdx);
+  const upsertIdx = writerSource.indexOf('await writeMortgageRateGuarded(tx, propertyId, interestRateBps);', txIdx);
   assert.ok(firstStatementIdx > txIdx, 'expected the evidence create to be inside the transaction');
   assert.ok(firstStatementIdx < supersedeIdx, 'the evidence create must run before the supersession updateMany');
-  assert.ok(supersedeIdx < upsertIdx, 'supersession must run before the canonical PropertyFinancingProfile upsert');
+  assert.ok(supersedeIdx < upsertIdx, 'supersession must run before the canonical PropertyFinancingProfile write');
 });
 
 test('the supersession updateMany excludes the row the same transaction just created', () => {
@@ -42,7 +42,7 @@ test('duplicate-key recovery is an outer catch around the whole transaction, nev
   assert.match(catchBlock, /prisma\.propertyFactEvidence\.findFirst\(\{\s*where: \{ propertyId, factKey: FINANCING_CAPTURE_FACT_KEY, captureExecutionId: input\.captureExecutionId \}/);
   // Recovery must return the original attempt's row, never call the upsert
   // again for a replay.
-  assert.doesNotMatch(catchBlock, /propertyFinancingProfile\.upsert/);
+  assert.doesNotMatch(catchBlock, /propertyFinancingProfile\.(upsert|createMany|updateMany)|writeMortgageRateGuarded/);
 });
 
 test('the input schema takes a percent value (e.g. 6.75), not basis points, and bounds it to a sane 0-100 range', () => {
@@ -71,4 +71,14 @@ test('confirmCaptureFact routes financial.currentMortgage to capturePropertyFina
   const branchIdx = body.indexOf('if (factKey === FINANCING_CAPTURE_FACT_KEY) {');
   const branchBlock = body.slice(branchIdx, body.indexOf('} else {', branchIdx));
   assert.match(branchBlock, /captureExecutionId: execution\.id/);
+});
+
+test('the canonical profile write is the guarded helper: createMany then one conditional updateMany, never an unconditional upsert', () => {
+  const helperIdx = writerSource.indexOf('export async function writeMortgageRateGuarded(');
+  assert.ok(helperIdx > 0);
+  const helper = writerSource.slice(helperIdx, writerSource.indexOf('export async function capturePropertyFinancingFact('));
+  assert.match(helper, /createMany\(\{[\s\S]*mortgageStatus: 'MORTGAGED'[\s\S]*skipDuplicates: true/);
+  assert.match(helper, /mortgageStatus: \{ in: \['UNKNOWN', 'MORTGAGED'\] \}/);
+  assert.match(helper, /throw new PropertyMortgageRateRefusedError\(\)/);
+  assert.doesNotMatch(writerSource, /propertyFinancingProfile\.upsert\(/);
 });

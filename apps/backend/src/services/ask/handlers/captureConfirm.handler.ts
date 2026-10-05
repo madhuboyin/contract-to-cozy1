@@ -6,7 +6,7 @@ import { prisma } from '../../../lib/prisma';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
 import { capturePropertyFact } from '../../../modules/propertyContext/application/capturePropertyFact';
-import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
+import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY, PropertyMortgageRateRefusedError } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { captureWarranty } from '../../../modules/propertyContext/application/captureWarranty';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
 import { PropertyContextAccessDeniedError } from '../../../modules/propertyContext/application/getPropertyContext';
@@ -67,6 +67,9 @@ async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<Confir
   } catch (error) {
     if (error instanceof PropertyContextAccessDeniedError) {
       throw Object.assign(new Error('You do not have permission to update this property record.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    }
+    if (error instanceof PropertyMortgageRateRefusedError) {
+      throw Object.assign(new Error('Your property record says there is no mortgage, so a mortgage rate was not saved. Update the financing profile first if that has changed.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
     }
     throw error;
   }

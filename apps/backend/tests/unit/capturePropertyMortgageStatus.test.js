@@ -5,6 +5,7 @@ require('ts-node/register');
 
 const { Prisma } = require('@prisma/client');
 const writer = require('../../src/modules/propertyContext/application/capturePropertyMortgageStatus.ts');
+const rateWriter = require('../../src/modules/propertyContext/application/capturePropertyFinancingFact.ts');
 const { PROPERTY_FACT_CATALOG, getFactDefinition, getFactDefinitionsForScope } = require('../../src/modules/propertyContext/catalog/factCatalog.ts');
 const { createPropertyFact } = require('../../src/modules/propertyContext/domain/facts.ts');
 const { financialAssembler } = require('../../src/modules/propertyContext/infrastructure/prismaAssemblers.ts');
@@ -23,7 +24,11 @@ function createFakeStore(seed = {}) {
     locks: new Map(), // propertyId -> promise chain tail
     replayKeys: new Set(),
   };
-  const matches = (row, where) => Object.entries(where).every(([k, v]) => (v !== null && typeof v === 'object' && 'not' in v ? row[k] !== v.not : (row[k] ?? null) === v));
+  const matches = (row, where) => Object.entries(where).every(([k, v]) => {
+    if (v !== null && typeof v === 'object' && 'not' in v) return row[k] !== v.not;
+    if (v !== null && typeof v === 'object' && 'in' in v) return v.in.includes(row[k]);
+    return (row[k] ?? null) === v;
+  });
   const deps = (over = {}) => ({
     resolveAccess: async () => ({ role: 'CONTRIBUTOR' }),
     readProfile: async () => (store.profile ? { ...store.profile } : null),
@@ -31,7 +36,8 @@ function createFakeStore(seed = {}) {
     now: () => new Date('2026-10-04T12:00:00.000Z'),
     emitChange: async (tx, input) => { if (over.failEmit) throw new Error('emit failed'); await tick(); tx.undo.push(() => store.changes.pop()); store.changes.push(input.changedFactKeys[0]); },
     async transaction(callback) {
-      const tx = { undo: [], heldLock: null, releases: [] };
+      const tx = { undo: [], heldLock: null, releases: [], ended: false };
+      tx.done = new Promise((resolve) => { tx.finish = resolve; });
       const acquire = async (propertyId) => {
         if (tx.releases.length) return;
         const previous = store.locks.get(propertyId) ?? Promise.resolve();
@@ -62,8 +68,18 @@ function createFakeStore(seed = {}) {
       tx.propertyFinancingProfile = {
         async createMany({ data }) {
           await tick();
-          if (!store.profile) { store.profile = { ...data[0] }; tx.undo.push(() => { store.profile = null; }); }
-          return { count: 0 };
+          // INSERT ... ON CONFLICT DO NOTHING: another transaction's UNCOMMITTED insert of the same key makes this wait until that
+          // transaction commits or aborts, then re-evaluate (it is never visible before commit, and an abort removes it).
+          for (;;) {
+            if (!store.profile) {
+              store.profile = { ...data[0] };
+              store.profileOwner = tx;
+              tx.undo.push(() => { store.profile = null; store.profileOwner = null; });
+              return { count: 1 };
+            }
+            if (store.profileOwner && store.profileOwner !== tx && !store.profileOwner.ended) { await store.profileOwner.done; continue; }
+            return { count: 0 };
+          }
         },
         async updateMany({ where, data }) {
           await acquire(where.propertyId); // row lock, held until the transaction ends
@@ -82,6 +98,9 @@ function createFakeStore(seed = {}) {
         for (const undo of tx.undo.reverse()) undo();
         throw error;
       } finally {
+        tx.ended = true;
+        if (store.profileOwner === tx) store.profileOwner = null;
+        tx.finish();
         for (const release of tx.releases) release();
       }
     },
@@ -253,4 +272,97 @@ test('authorization and input: below CONTRIBUTOR is denied before any write; onl
   for (const bad of ['UNKNOWN', 'MAYBE', '', undefined]) await assert.rejects(() => capture(deps(), bad), /./);
   assert.deepEqual([...writer.MORTGAGE_STATUS_ANSWERS], ['MORTGAGED', 'NO_MORTGAGE']);
   assert.equal(createPropertyFact('financial.mortgageStatus', 'MORTGAGED').state, 'KNOWN');
+});
+
+// ---- cross-writer integrity: status capture vs the existing rate writer -------------------------------------------------------------
+
+// A rate capture as the production writer performs it, minus the unrelated parts: evidence create (idempotency gate), then THE
+// production guarded profile write (`writeMortgageRateGuarded`), all in one transaction so a refusal rolls the evidence back.
+async function rateCapture(deps, rateBps, executionId) {
+  try {
+    await deps.transaction(async (tx) => {
+      await tx.propertyFactEvidence.create({ data: { propertyId: PROPERTY, factKey: 'financial.currentMortgage', captureExecutionId: executionId } });
+      await rateWriter.writeMortgageRateGuarded(tx, PROPERTY, rateBps);
+    });
+    return 'CAPTURED';
+  } catch (error) {
+    if (error instanceof rateWriter.PropertyMortgageRateRefusedError) return 'REFUSED';
+    throw error;
+  }
+}
+
+// The writer this review replaced: an unconditional upsert that ignores mortgageStatus.
+async function naiveRateCapture(deps, store, rateBps) {
+  await deps.transaction(async (tx) => {
+    await tick();
+    if (!store.profile) { store.profile = { propertyId: PROPERTY, mortgageStatus: 'UNKNOWN', hasSecondMortgage: false, hasPMI: false, interestRateBps: rateBps }; return; }
+    store.profile.interestRateBps = rateBps;
+  });
+}
+
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => { state = (state * 1664525 + 1013904223) >>> 0; return state / 0x100000000; };
+}
+const jitter = async (random) => { for (let i = 0, n = Math.floor(random() * 5); i < n; i += 1) await tick(); };
+const INITIAL_PROFILES = [
+  null,
+  { propertyId: PROPERTY, mortgageStatus: 'UNKNOWN', hasSecondMortgage: false, hasPMI: false },
+  { propertyId: PROPERTY, mortgageStatus: 'UNKNOWN', interestRateBps: 610, hasSecondMortgage: false, hasPMI: false },
+  { propertyId: PROPERTY, mortgageStatus: 'MORTGAGED', interestRateBps: 650, hasSecondMortgage: false, hasPMI: false },
+];
+
+test('mixed concurrency: NO_MORTGAGE status capture vs rate capture can only end as NO_MORTGAGE with no rate, or MORTGAGED with a rate', async () => {
+  const outcomes = new Set();
+  for (let iteration = 0; iteration < 300; iteration += 1) {
+    const random = seededRandom(iteration + 1);
+    const initial = INITIAL_PROFILES[iteration % INITIAL_PROFILES.length];
+    const { store, deps } = createFakeStore({ profile: initial ? { ...initial } : null });
+    const rateCount = 1 + (iteration % 2);
+    const jobs = [
+      (async () => { await jitter(random); return ['status', (await capture(deps(), 'NO_MORTGAGE', { captureExecutionId: `s-${iteration}` })).outcome]; })(),
+      ...Array.from({ length: rateCount }, (_, i) => (async () => { await jitter(random); return ['rate', await rateCapture(deps(), 700 + i, `r-${iteration}-${i}`)]; })()),
+    ];
+    const results = await Promise.all(jobs);
+    const profile = store.profile;
+    const hasRate = profile.interestRateBps !== undefined && profile.interestRateBps !== null;
+    assert.ok(
+      (profile.mortgageStatus === 'NO_MORTGAGE' && !hasRate) || (profile.mortgageStatus === 'MORTGAGED' && hasRate),
+      `iteration ${iteration}: invalid final state ${JSON.stringify(profile)} from ${JSON.stringify(results)} (initial ${JSON.stringify(initial)})`,
+    );
+    outcomes.add(profile.mortgageStatus);
+    // Every refused rate capture rolled its evidence row back; every captured one kept it.
+    const rateResults = results.filter(([kind]) => kind === 'rate').map(([, outcome]) => outcome);
+    const rateEvidence = store.evidence.filter((row) => row.factKey === 'financial.currentMortgage').length;
+    assert.equal(rateEvidence, rateResults.filter((outcome) => outcome === 'CAPTURED').length, `iteration ${iteration}: evidence matches captured rates`);
+    if (rateResults.includes('REFUSED')) assert.equal(profile.mortgageStatus, 'NO_MORTGAGE', 'a rate is refused only because the status is NO_MORTGAGE');
+  }
+  assert.deepEqual([...outcomes].sort(), ['MORTGAGED', 'NO_MORTGAGE'], 'both valid outcomes occurred, so the interleavings were not one-sided');
+});
+
+test('mixed concurrency control: the previous unconditional rate write DOES produce NO_MORTGAGE with a rate under the same harness', async () => {
+  let violations = 0;
+  for (let iteration = 0; iteration < 300; iteration += 1) {
+    const random = seededRandom(iteration + 1);
+    const initial = INITIAL_PROFILES[iteration % INITIAL_PROFILES.length];
+    const { store, deps } = createFakeStore({ profile: initial ? { ...initial } : null });
+    await Promise.all([
+      (async () => { await jitter(random); await capture(deps(), 'NO_MORTGAGE'); })(),
+      (async () => { await jitter(random); await naiveRateCapture(deps(), store, 700); })(),
+    ]);
+    // (A null profile means the naive write landed on another transaction's uncommitted row that then rolled back: a lost write, not a violation.)
+    if (store.profile && store.profile.mortgageStatus === 'NO_MORTGAGE' && store.profile.interestRateBps != null) violations += 1;
+  }
+  assert.ok(violations > 0, 'the harness must be able to catch the bug the guard fixes');
+});
+
+test('guarded rate write: new profile is MORTGAGED with the rate; UNKNOWN becomes MORTGAGED; MORTGAGED keeps its status; NO_MORTGAGE is refused and rolls back', async () => {
+  for (const [initial, expectStatus, expectOutcome] of [[null, 'MORTGAGED', 'CAPTURED'], [INITIAL_PROFILES[1], 'MORTGAGED', 'CAPTURED'], [INITIAL_PROFILES[3], 'MORTGAGED', 'CAPTURED'],
+    [{ propertyId: PROPERTY, mortgageStatus: 'NO_MORTGAGE', hasSecondMortgage: false, hasPMI: false }, 'NO_MORTGAGE', 'REFUSED']]) {
+    const { store, deps } = createFakeStore({ profile: initial ? { ...initial } : null });
+    assert.equal(await rateCapture(deps(), 725, 'exec-x'), expectOutcome);
+    assert.equal(store.profile.mortgageStatus, expectStatus);
+    if (expectOutcome === 'CAPTURED') { assert.equal(store.profile.interestRateBps, 725); assert.equal(store.evidence.length, 1); }
+    else { assert.equal(store.profile.interestRateBps ?? null, null, 'no rate on a NO_MORTGAGE profile'); assert.equal(store.evidence.length, 0, 'evidence rolled back'); }
+  }
 });

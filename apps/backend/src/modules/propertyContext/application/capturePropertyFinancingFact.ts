@@ -25,6 +25,15 @@ import { emitPropertyChangeWithTransaction } from '../../../propertyChanges/prop
 
 export const FINANCING_CAPTURE_FACT_KEY = 'financial.currentMortgage' as const;
 
+/**
+ * The household's mortgage status is NO_MORTGAGE, so a mortgage rate cannot be recorded. Raised from inside the transaction, so the
+ * evidence row created before it rolls back with everything else. (Cross-writer integrity with `capturePropertyMortgageStatus`.)
+ */
+export class PropertyMortgageRateRefusedError extends Error {
+  readonly code = 'MORTGAGE_STATUS_NO_MORTGAGE';
+  constructor() { super('A mortgage rate cannot be recorded while the mortgage status is NO_MORTGAGE.'); }
+}
+
 // A percent value ("6.75" for 6.75%), not basis points -- matching how a
 // homeowner actually states a mortgage rate in conversation. Bounds are a
 // sanity check, not a product-accurate ceiling: negative or triple-digit-plus
@@ -46,6 +55,27 @@ const NON_FIRSTHAND_CONFIDENCE = 0.5;
 
 function isNonFirsthandAttribution(attribution: AskCaptureAttribution | null | undefined): boolean {
   return attribution === 'THIRD_PARTY_RELAYED' || attribution === 'INFERRED';
+}
+
+/**
+ * Cross-writer integrity with `capturePropertyMortgageStatus`: a rate must never land on a NO_MORTGAGE profile (the status writer
+ * refuses NO_MORTGAGE over an existing rate; this is the mirror image). Both halves are single statements, never read-then-write:
+ *  - no row yet: create it as MORTGAGED with the rate (ON CONFLICT DO NOTHING, so a concurrent creator never aborts the transaction);
+ *  - row exists: ONE conditional UPDATE, only while the status is UNKNOWN or MORTGAGED, moving UNKNOWN -> MORTGAGED with the rate;
+ *  - NO_MORTGAGE: zero rows match, which throws and rolls back the caller's transaction, evidence row included.
+ * Must be called inside the caller's transaction.
+ */
+export async function writeMortgageRateGuarded(tx: Prisma.TransactionClient, propertyId: string, interestRateBps: number): Promise<void> {
+  const created = await tx.propertyFinancingProfile.createMany({
+    data: [{ propertyId, mortgageStatus: 'MORTGAGED', interestRateBps }],
+    skipDuplicates: true,
+  });
+  if (created.count > 0) return;
+  const updated = await tx.propertyFinancingProfile.updateMany({
+    where: { propertyId, mortgageStatus: { in: ['UNKNOWN', 'MORTGAGED'] } },
+    data: { interestRateBps, mortgageStatus: 'MORTGAGED' },
+  });
+  if (updated.count !== 1) throw new PropertyMortgageRateRefusedError();
 }
 
 export async function capturePropertyFinancingFact(
@@ -95,12 +125,8 @@ export async function capturePropertyFinancingFact(
         data: { supersededAt: observedAt },
       });
 
-      // Step 3 -- the actual canonical value, a separate 1:1 model.
-      await tx.propertyFinancingProfile.upsert({
-        where: { propertyId },
-        create: { propertyId, interestRateBps },
-        update: { interestRateBps },
-      });
+      // Step 3 -- the actual canonical value, written atomically against mortgageStatus (see `writeMortgageRateGuarded`).
+      await writeMortgageRateGuarded(tx, propertyId, interestRateBps);
 
       // Step 4 -- emit, then commit.
       await emitPropertyChangeWithTransaction(tx, {
@@ -126,6 +152,10 @@ export async function capturePropertyFinancingFact(
     });
     propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: FINANCING_CAPTURE_FACT_KEY, outcome: 'success' });
   } catch (error) {
+    if (error instanceof PropertyMortgageRateRefusedError) {
+      propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: FINANCING_CAPTURE_FACT_KEY, outcome: 'rejected' });
+      throw error;
+    }
     // Duplicate-key recovery is an outer catch, not an inner one: a P2002 on
     // step 1's create aborts the whole Postgres transaction, so steps 2-4
     // never ran this attempt regardless of where the JS error is caught.
