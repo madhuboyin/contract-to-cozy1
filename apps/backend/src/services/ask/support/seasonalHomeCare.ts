@@ -8,6 +8,10 @@ import { type AskPresentationBlock } from '../../../productFramework/ask/ask.con
 import { type AskOperationResult } from '../askOperationRegistry';
 import { getNextSeason, resolveCurrentSeasonWindow, type Season } from '../../seasonal/seasonWindow';
 
+/** The two stored starter messages. The launch's message, not a routing guess, selects this or next season (see the handler). */
+export const SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE = 'What home care should I do this season?';
+export const SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE = 'What should I do to get ready for next season?';
+
 export type SeasonalClimateRegion = 'VERY_COLD' | 'COLD' | 'MODERATE' | 'WARM' | 'TROPICAL';
 export type SeasonalHomeCareFocus = 'THIS_SEASON' | 'NEXT_SEASON';
 /** Where the region came from: the property's saved setting, the local zip-prefix table, or the national default for an unmapped zip. */

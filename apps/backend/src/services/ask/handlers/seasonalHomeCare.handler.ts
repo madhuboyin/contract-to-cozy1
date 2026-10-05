@@ -4,11 +4,12 @@
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { prisma } from '../../../lib/prisma';
-import { buildSeasonalHomeCareResult, type SeasonalClimateRegion, type SeasonalHomeCareFocus } from '../support/seasonalHomeCare';
+import {
+  buildSeasonalHomeCareResult, SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE, SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE,
+  type SeasonalClimateRegion, type SeasonalHomeCareFocus,
+} from '../support/seasonalHomeCare';
 
-/** The two stored starter messages. The launch's message, not a routing guess, decides which season is shown. */
-export const SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE = 'What home care should I do this season?';
-export const SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE = 'What should I do to get ready for next season?';
+export { SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE, SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE };
 
 const NEXT_SEASON_PATTERN = /\bnext season\b|\bget(?:ting)? ready for (?:the )?(?:next|coming|upcoming)\b|\bupcoming season\b/i;
 

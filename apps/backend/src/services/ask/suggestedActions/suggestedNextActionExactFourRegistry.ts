@@ -72,6 +72,8 @@ export const PRODUCER_SLOT_GRANTS: Readonly<Record<string, ProducerSlotGrant>> =
     allowed: new Set(['CONTINUE_WORK', 'EXACT_RECORD', 'HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY', mayClaimCurrentResultOwnership: true,
     ownershipRequiresRegisteredRelationship: true,
   },
+  // Curated starters (inventory D-O4/D-O16): last-resort fill only. A starter producer may occupy no other slot class and claims nothing.
+  'starter.seasonal-home-care': { allowed: new Set(['CURATED_STARTER']), fallback: 'HOME_OPPORTUNITY' },
 };
 
 type ClassifiableCandidate = {
