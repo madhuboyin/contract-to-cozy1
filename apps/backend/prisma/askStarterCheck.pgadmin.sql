@@ -4,8 +4,8 @@
 -- First run the two questions in Ask, as a VIEWER, on a property with no recorded data:
 --   1. How complete is my home record?
 --   2. Give me a summary of my home record
--- Then run this whole query. There is nothing to replace: it finds those two questions asked in the last 6 hours (change the 6 below to widen
--- the window) and shows the property id on each row so you can confirm it is the empty property. Expect two rows (one per question).
+-- Then run this whole query. There is nothing to replace: it shows the 10 most recent executions whose text contains either question (no time
+-- window, case-insensitive) and the property id on each row so you can confirm it is the empty property. Expect your two runs at the top.
 SELECT
   e."createdAt",
   e."propertyId",
@@ -30,6 +30,7 @@ SELECT
                          jsonb_array_elements(COALESCE(it.item -> 'actions', '[]'::jsonb)) AS ia
         ) AS a) AS actions
 FROM "ask_executions" e
-WHERE e."createdAt" > now() - make_interval(hours => 6)
-  AND e."message" IN ('How complete is my home record?', 'Give me a summary of my home record')
-ORDER BY e."createdAt";
+WHERE e."message" ILIKE '%how complete is my home record%'
+   OR e."message" ILIKE '%summary of my home record%'
+ORDER BY e."createdAt" DESC
+LIMIT 10;
