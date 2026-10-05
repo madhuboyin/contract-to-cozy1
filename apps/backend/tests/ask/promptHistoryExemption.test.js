@@ -110,41 +110,11 @@ test('the exemption is consulted only by the prompt-history rule: completed sema
   assert.equal((source.match(/isPromptHistoryExemptOutcome\(/g) ?? []).length, 1, 'used in exactly one rule');
 });
 
-// Owner decision D-O15: the global CAPABILITY_DISCOVERY starter may take the exemption, via a narrow explicit allowlist.
-test('D-O15: the property-less allowlist is exactly CAPABILITY_DISCOVERY and the registry still ships empty', () => {
-  assert.deepEqual([...outcomes.PROMPT_HISTORY_EXEMPT_PROPERTYLESS_OPERATIONS], ['CAPABILITY_DISCOVERY']);
-  assert.equal(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.size, 0);
-});
-
-test('D-O15: CAPABILITY_DISCOVERY is accepted as an exempt entry, and the widening does not relax any other operation', () => {
-  const problems = (entries) => withRegistered(entries, () => outcomes.validateSuggestedNextActionRegistry());
-  assert.deepEqual(problems([['CAPABILITY_DISCOVERY', 'EXPLORE_TOOLS', { exempt: true }]]), [], 'the allowlisted global operation is accepted');
-  // Other property-less or non-read-only operations are still rejected by the general rules.
-  assert.ok(problems([['MAINTENANCE_TASK_CREATE', 'RESTART_AFTER_EXPIRY', { exempt: true }]]).some((p) => /not a read-only operation family/.test(p)));
-  assert.ok(problems([['HOME_DIGITAL_WILL', 'OPEN_PLAN', { exempt: true }]]).some((p) => /not a viewer-floor operation/.test(p)));
-  assert.deepEqual(outcomes.validateSuggestedNextActionRegistry(), [], 'cleanup left the registry valid');
-});
-
-test('D-O15: an allowlisted operation that stops being property-less, deterministic or standard-safety is rejected', () => {
-  const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
-  const definition = ASK_OPERATION_DEFINITIONS.CAPABILITY_DISCOVERY;
-  const original = { requiresProperty: definition.requiresProperty, propertyRoleFloor: definition.propertyRoleFloor, safetyClass: definition.safetyClass };
-  try {
-    withRegistered([['CAPABILITY_DISCOVERY', 'EXPLORE_TOOLS', { exempt: true }]], () => {
-      definition.requiresProperty = true; definition.propertyRoleFloor = 'VIEWER'; definition.safetyClass = 'MATERIAL_DECISION';
-      const found = outcomes.validateSuggestedNextActionRegistry();
-      assert.ok(found.some((p) => /requires a property/.test(p)));
-      assert.ok(found.some((p) => /has a role floor/.test(p)));
-      assert.ok(found.some((p) => /not standard safety/.test(p)));
-    });
-  } finally { Object.assign(definition, original); }
-});
-
-test('D-O15: the starter identity is per property: the candidate carries the viewed property, and a different property is rejected', () => {
-  withRegistered([['CAPABILITY_DISCOVERY', 'EXPLORE_TOOLS', { exempt: true }]], () => {
-    const base = { ...ctx('What can Cozy do?'), operationAvailability: new Map([['CAPABILITY_DISCOVERY', null]]), operationRequiresProperty: () => false };
-    const make = (propertyId) => ({ ...candidate('CAPABILITY_DISCOVERY', 'EXPLORE_TOOLS', 'What can Cozy do?'), entityContext: { propertyId, entityType: null, entityId: null, contextVersion: null } });
-    assert.equal(evaluateSuggestedNextActionEligibility(make('p1'), base).state, 'ELIGIBLE', 'viewed property, history-exempt');
-    assert.notEqual(evaluateSuggestedNextActionEligibility(make('p2'), base).state, 'ELIGIBLE', 'another property is rejected');
-  });
+// Owner decision D-O15 (revisited): CAPABILITY_DISCOVERY is NOT a starter, so the exemption stays property-scoped only.
+test('D-O15: a property-less operation (CAPABILITY_DISCOVERY) cannot be an exempt entry', () => {
+  const problems = withRegistered([['CAPABILITY_DISCOVERY', 'EXPLORE_TOOLS', { exempt: true }]], () => outcomes.validateSuggestedNextActionRegistry());
+  assert.ok(problems.some((p) => /not a read-only operation family/.test(p)));
+  assert.ok(problems.some((p) => /not property-scoped/.test(p)));
+  assert.equal(outcomes.PROMPT_HISTORY_EXEMPT_PROPERTYLESS_OPERATIONS, undefined);
+  assert.deepEqual(outcomes.validateSuggestedNextActionRegistry(), []);
 });

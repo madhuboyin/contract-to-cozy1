@@ -162,7 +162,7 @@ export function isRepeatableOutcome(operationId: string, outcomeKey: string): bo
  * D-O10). This is deliberately a SEPARATE property from `REPEATABLE_OUTCOMES`: repeatable completion ("this may be done again") and
  * recent-prompt deduplication ("this exact text was just asked") are different concepts, and tying the second to the first would also
  * change the existing repeatable recovery outcomes. Starters only: every entry must be an explicit, reviewed `operation:outcome`
- * for a read-only, viewer-floor, standard-safety, property-scoped operation (checked by `validateSuggestedNextActionRegistry`), except the explicit property-less allowlist below.
+ * for a read-only, viewer-floor, standard-safety, property-scoped operation (checked by `validateSuggestedNextActionRegistry`).
  * Empty until the starter list is approved (inventory D-O4); no entry is invented here.
  */
 export const PROMPT_HISTORY_EXEMPT_OUTCOMES: ReadonlySet<string> = new Set<string>([]);
@@ -173,15 +173,6 @@ export function isPromptHistoryExemptOutcome(operationId: string, outcomeKey: st
 
 /** Operation families a prompt-history-exempt (starter) outcome may belong to: read-only answers, never a command, monitor or decision. */
 export const PROMPT_HISTORY_EXEMPT_FAMILIES: ReadonlySet<string> = new Set(['RECORD_QUERY', 'STATUS_SUMMARY']);
-
-/**
- * The ONE deliberate exception to the property-scoped, read-only-family and viewer-floor rules above (owner decision D-O15): the global,
- * property-less `CAPABILITY_DISCOVERY` list. It stays a narrow, explicit allowlist, not a relaxation of the general rules: an entry is
- * accepted only if the operation is deterministic, standard-safety, property-less and has no role floor (it reads no property data).
- * Its starter identity is PER-PROPERTY: the candidate carries the property being viewed (`entityContext.propertyId`), so the lifecycle
- * record (user + property + operation + outcome) is per property even though the operation is global; the starter text stays global.
- */
-export const PROMPT_HISTORY_EXEMPT_PROPERTYLESS_OPERATIONS: ReadonlySet<string> = new Set(['CAPABILITY_DISCOVERY']);
 
 // ---- TTL (plan §4) -----------------------------------------------------------------------------------------------------------
 
@@ -296,13 +287,6 @@ export function validateSuggestedNextActionRegistry(): string[] {
     const [operationId, outcomeKey] = key.split(':');
     if (!operationId || !outcomeKey || !isRegisteredOutcome(operationId, outcomeKey)) { problems.push(`prompt-history exempt: ${key} is not a registered outcome`); continue; }
     const definition = ASK_OPERATION_DEFINITIONS[operationId as keyof typeof ASK_OPERATION_DEFINITIONS];
-    if (PROMPT_HISTORY_EXEMPT_PROPERTYLESS_OPERATIONS.has(operationId)) {
-      if (definition.executionMode !== 'DETERMINISTIC') problems.push(`prompt-history exempt: ${key} is not a deterministic operation`);
-      if (definition.safetyClass !== 'STANDARD') problems.push(`prompt-history exempt: ${key} is not standard safety`);
-      if (definition.requiresProperty) problems.push(`prompt-history exempt: ${key} is on the property-less allowlist but requires a property`);
-      if (definition.propertyRoleFloor !== null) problems.push(`prompt-history exempt: ${key} is on the property-less allowlist but has a role floor`);
-      continue;
-    }
     if (!PROMPT_HISTORY_EXEMPT_FAMILIES.has(definition.family)) problems.push(`prompt-history exempt: ${key} is not a read-only operation family (${definition.family})`);
     if (definition.propertyRoleFloor !== 'VIEWER') problems.push(`prompt-history exempt: ${key} is not a viewer-floor operation`);
     if (definition.safetyClass !== 'STANDARD') problems.push(`prompt-history exempt: ${key} is not standard safety`);
