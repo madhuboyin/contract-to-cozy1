@@ -74,6 +74,7 @@ export const PRODUCER_SLOT_GRANTS: Readonly<Record<string, ProducerSlotGrant>> =
   },
   // Curated starters (inventory D-O4/D-O16): last-resort fill only. A starter producer may occupy no other slot class and claims nothing.
   'starter.seasonal-home-care': { allowed: new Set(['CURATED_STARTER']), fallback: 'HOME_OPPORTUNITY' },
+  'starter.home-basics': { allowed: new Set(['CURATED_STARTER']), fallback: 'HOME_OPPORTUNITY' },
 };
 
 type ClassifiableCandidate = {
@@ -158,7 +159,9 @@ export const SUPPORTED_DISMISSALS_PER_PROPERTY = 30;
  * source exists for them); "Not now" is for starters and home-profile gaps.
  */
 export type DismissalReason = 'NOT_NOW' | 'NOT_RELEVANT';
-const STARTER_DISMISSIBLE: ReadonlySet<string> = new Set(['SEASONAL_HOME_CARE:REVIEW_THIS_SEASON', 'SEASONAL_HOME_CARE:PREPARE_NEXT_SEASON']);
+const STARTER_DISMISSIBLE: ReadonlySet<string> = new Set([
+  'SEASONAL_HOME_CARE:REVIEW_THIS_SEASON', 'SEASONAL_HOME_CARE:PREPARE_NEXT_SEASON', 'HOME_BASICS_GUIDE:REVIEW_SAFETY_BASICS', 'HOME_BASICS_GUIDE:REVIEW_MONTHLY_ROUTINE',
+]);
 const PROFILE_GAP_OPERATIONS: ReadonlySet<string> = new Set(['PROPERTY_CONTEXT_AREA_CAPTURE']);
 export function dismissalReasonsFor(operationId: string, outcomeKey: string): readonly DismissalReason[] {
   if (STARTER_DISMISSIBLE.has(`${operationId}:${outcomeKey}`)) return ['NOT_NOW', 'NOT_RELEVANT'];

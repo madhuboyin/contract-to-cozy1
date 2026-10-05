@@ -155,6 +155,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('MATERIAL_SPECS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PROPERTY_BRIEFS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('GUIDANCE_JOURNEYS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('HOME_BASICS_GUIDE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('SEASONAL_HOME_CARE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('GUIDANCE_JOURNEY_CONTINUE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('GUIDANCE_STEP_SKIP', ALL_MODES),

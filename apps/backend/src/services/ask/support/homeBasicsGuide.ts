@@ -1,0 +1,69 @@
+// Ask support: the authored home-basics read (exact-four starter source, inventory D-O4, owner approved October 5, 2026). PURE and entirely
+// data-independent: authored, evergreen general guidance with no input but the focus. It reads no recorded home data, makes no external call
+// and assesses nothing about the home. The CONTENT below is a DRAFT for product and safety review; it is deliberately conservative and
+// defers to the homeowner's own manufacturer instructions, local codes and utilities. Not registered as a message route.
+import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
+import { type AskOperationResult } from '../askOperationRegistry';
+
+export type HomeBasicsFocus = 'SAFETY_BASICS' | 'MONTHLY_ROUTINE';
+
+/** The two stored starter messages; the launch's message selects the focus (see the handler). */
+export const HOME_BASICS_SAFETY_MESSAGE = 'What home safety basics should I know?';
+export const HOME_BASICS_MONTHLY_MESSAGE = 'What should I check around my home each month?';
+
+interface BasicsItem { id: string; title: string; description: string }
+interface BasicsGuide { title: string; intro: string; sectionTitle: string; items: readonly BasicsItem[] }
+
+const GUIDES: Readonly<Record<HomeBasicsFocus, BasicsGuide>> = {
+  SAFETY_BASICS: {
+    title: 'Home safety basics',
+    intro: 'A few things worth knowing about any home, whatever its size or age.',
+    sectionTitle: 'Know these first',
+    items: [
+      { id: 'water-shutoff', title: 'Find your main water shutoff', description: 'Know where it is and that it turns. If a pipe bursts, shutting it off quickly limits the damage.' },
+      { id: 'electrical-panel', title: 'Know your electrical panel', description: 'Find the panel, and check that the breakers are labeled so you can switch off one circuit in an emergency.' },
+      { id: 'gas-shutoff', title: 'Know about gas', description: 'If you have gas service, know where the shutoff is. If you ever smell gas, leave the home and call your gas utility or emergency number from outside.' },
+      { id: 'alarms', title: 'Smoke and carbon monoxide alarms', description: 'Have working alarms on every level and near sleeping areas, test them regularly, and replace them by the manufacturer\'s date.' },
+      { id: 'extinguisher', title: 'Keep a fire extinguisher where you can reach it', description: 'Keep one near the kitchen, check that its gauge is in the green, and know how to use it.' },
+      { id: 'emergency-contacts', title: 'Keep emergency numbers handy', description: 'Keep your utilities, a trusted plumber and electrician, and your insurer\'s claims line somewhere everyone in the household can find them.' },
+    ],
+  },
+  MONTHLY_ROUTINE: {
+    title: 'A simple monthly home routine',
+    intro: 'A short walk-through each month catches small problems before they become expensive ones.',
+    sectionTitle: 'Once a month',
+    items: [
+      { id: 'walkthrough', title: 'Walk through every room', description: 'Look for new stains, cracks, damp spots, musty smells or anything that looks or sounds different from last month.' },
+      { id: 'leaks', title: 'Check under sinks and around fixtures', description: 'Look and feel for moisture under sinks and around toilets, the water heater and appliance hookups.' },
+      { id: 'alarm-test', title: 'Test smoke and carbon monoxide alarms', description: 'Press the test button and note any chirping that signals a low battery.' },
+      { id: 'filters', title: 'Check air filters', description: 'Look at your heating and cooling filter and replace it when it is dirty, following the manufacturer\'s guidance.' },
+      { id: 'outside', title: 'Look around the outside', description: 'Check that water drains away from the house, that downspouts are clear, and for loose or damaged siding, railings or steps.' },
+    ],
+  },
+};
+
+export function homeBasicsFocus(message: string): HomeBasicsFocus {
+  return /\bmonth(?:ly)?\b|\beach month\b|\bevery month\b/i.test(message) ? 'MONTHLY_ROUTINE' : 'SAFETY_BASICS';
+}
+
+export function buildHomeBasicsResult(focus: HomeBasicsFocus): AskOperationResult {
+  const guide = GUIDES[focus];
+  const boundary: AskPresentationBlock = {
+    type: 'BOUNDARY', id: 'home-basics-boundary', title: 'General guidance',
+    body: 'This is general guidance, not an assessment of your home. Follow your manufacturers\' instructions, local codes and your utilities\' advice, and call a licensed professional or emergency services when in doubt.',
+    severity: 'INFO', suggestions: [],
+  };
+  return {
+    status: 'ANSWERED', reasonCode: 'HOME_BASICS_READY',
+    blocks: [{
+      type: 'SUMMARY', id: 'home-basics-summary', title: guide.title, body: guide.intro, tone: 'DEFAULT', actions: [],
+    }, {
+      type: 'GROUPED_LIST', id: 'home-basics-items', title: guide.title, actions: [], filters: [],
+      sections: [{
+        id: `home-basics-${focus.toLowerCase()}`, title: guide.sectionTitle, count: guide.items.length,
+        items: guide.items.map((item) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null })),
+      }],
+    }, boundary],
+    suggestions: [],
+  };
+}

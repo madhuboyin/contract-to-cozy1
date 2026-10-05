@@ -33,6 +33,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   GUIDANCE_JOURNEYS_LIST: new Set(['guidance-journeys-boundary']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['guidance-journey-boundary']),
   SEASONAL_HOME_CARE: new Set(['seasonal-home-care-boundary']),
+  HOME_BASICS_GUIDE: new Set(['home-basics-boundary']),
   GUIDANCE_STEP_SKIP: new Set(['guidance-step-boundary']),
   GUIDANCE_JOURNEY_DISMISS: new Set(['guidance-step-boundary']),
   HOA_COMPLIANCE_STATUS: new Set(['hoa-compliance-boundary']),

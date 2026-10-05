@@ -68,6 +68,7 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'GUIDANCE_JOURNEY_CONTINUE',
     // Seasonal home care (exact-four starter source): launch-only; seasonal questions route to MAINTENANCE_STATUS.
     'SEASONAL_HOME_CARE',
+    'HOME_BASICS_GUIDE',
     // Guided journey continuation Phase 3: confirmation-gated, reached only by declared actions on the continuation view.
     'GUIDANCE_STEP_SKIP',
     'GUIDANCE_JOURNEY_DISMISS',

@@ -132,6 +132,8 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
   INVENTORY_LOOKUP: ['REVIEW_CURRENT_RECORD'],
   // Exact-four curated starters (inventory D-O4/D-O16): the two outcomes of the launch-only seasonal home-care read.
   SEASONAL_HOME_CARE: ['REVIEW_THIS_SEASON', 'PREPARE_NEXT_SEASON'],
+  // The authored home-basics read's two outcomes (inventory D-O4).
+  HOME_BASICS_GUIDE: ['REVIEW_SAFETY_BASICS', 'REVIEW_MONTHLY_ROUTINE'],
 };
 
 /**

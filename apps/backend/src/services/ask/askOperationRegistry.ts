@@ -118,6 +118,7 @@ export type AskOperationId =
   | 'GUIDANCE_JOURNEYS_LIST'
   | 'GUIDANCE_JOURNEY_CONTINUE'
   | 'SEASONAL_HOME_CARE'
+  | 'HOME_BASICS_GUIDE'
   | 'GUIDANCE_STEP_SKIP'
   | 'GUIDANCE_JOURNEY_DISMISS'
   | 'HOA_COMPLIANCE_STATUS'
@@ -307,6 +308,9 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // home's climate region and season. Reached only by a stored starter's typed launch; not retrievable by message, because seasonal
   // questions already route to MAINTENANCE_STATUS over the homeowner's generated checklist and this must not compete with it.
   'SEASONAL_HOME_CARE',
+  // Authored home basics (exact-four starter source, inventory D-O4): static, data-independent guidance reached only by a stored starter's
+  // typed launch; not retrievable by message, so it cannot compete with grounded guidance or the maintenance reads.
+  'HOME_BASICS_GUIDE',
   // Phase 3: skip one step / dismiss one journey. Confirmation-gated writes reached only by the declared actions on the
   // continuation view (and, for dismiss, its summary).
   'GUIDANCE_STEP_SKIP',
@@ -482,6 +486,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   GUIDANCE_JOURNEYS_LIST: definition('GUIDANCE_JOURNEYS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.journeys', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   // Guided journey continuation Phase 1: reads one journey through guidanceJourneyService.getJourneyById without AI advice.
   // Seasonal home care: reads no recorded home data (the zip code, an optional saved climate region, the date and the local seasonal catalog).
+  // Home basics: authored, evergreen guidance; reads no home data at all.
+  HOME_BASICS_GUIDE: definition('HOME_BASICS_GUIDE', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-basics.guide', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   SEASONAL_HOME_CARE: definition('SEASONAL_HOME_CARE', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'seasonal.home-care', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   GUIDANCE_JOURNEY_CONTINUE: definition('GUIDANCE_JOURNEY_CONTINUE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.continue', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY', 'EMPTY_STATE']),
   GUIDANCE_STEP_SKIP: definition('GUIDANCE_STEP_SKIP', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance-overview.step-skip', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),

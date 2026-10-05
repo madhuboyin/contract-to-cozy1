@@ -47,6 +47,9 @@ const POOL_OPERATIONS = Object.values(ASK_OPERATION_DEFINITIONS)
   .filter((d) => d.propertyRoleFloor === 'VIEWER' && d.safetyClass === 'STANDARD' && (d.family === 'RECORD_QUERY' || d.family === 'STATUS_SUMMARY') && d.requiresProperty)
   .filter((d) => { const p = getAskAudiencePolicy(d.operationId); return p && p.eligibleOperatingModes.length === 4 && p.unknownModeBehavior === 'ALLOW_GENERAL'; })
   .map((d) => d.operationId)
+  // Hypothetical starters come only from operations with NO real outcome entry: the harness never touches a real entry (registerProvisional), so a
+  // real starter source (SEASONAL_HOME_CARE, HOME_BASICS_GUIDE) or any operation with registered outcomes would be an unregistered, ineligible starter here.
+  .filter((operationId) => !outcomes.SUGGESTED_ACTION_OUTCOMES[operationId])
   .sort();
 
 const outcomeFor = (operationId) => `OPEN_${operationId}`.slice(0, 79);
