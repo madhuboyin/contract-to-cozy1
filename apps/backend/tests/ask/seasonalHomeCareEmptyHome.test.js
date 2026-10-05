@@ -20,7 +20,7 @@ test('region: saved wins, then the local zip-prefix table, else the national def
   assert.deepEqual(deriveSeasonalClimateRegion('  '), { region: 'MODERATE', source: 'NATIONAL_DEFAULT' });
 });
 
-test('EXECUTED: 19 of 20 season x climate-region cells return asset-free CONTENT; the one gap is FALL x TROPICAL (a catalog hole, not a data dependency)', () => {
+test('EXECUTED: all 20 season x climate-region cells return asset-free CONTENT (D-O16 option a closed FALL x TROPICAL by authoring tropical fall templates)', () => {
   const empties = [];
   for (const season of Object.keys(DATES)) {
     for (const region of REGIONS) {
@@ -29,15 +29,22 @@ test('EXECUTED: 19 of 20 season x climate-region cells return asset-free CONTENT
       for (const task of tasks) assert.equal(task.requiredAssetType == null && task.requiredAssetCheck == null, true, 'asset-free only');
     }
   }
-  assert.deepEqual(empties, ['FALL/TROPICAL'], 'a gap in the local catalog: no asset-free fall template lists TROPICAL');
+  assert.deepEqual(empties, []);
+  assert.ok(seasonalAssetFreeTasks('FALL', 'TROPICAL').length >= 2, 'at least two tasks so a list is not a single row');
 });
 
-test('the FALL x TROPICAL gap answers a bounded limited state (never an error), so the starter is not dependable for tropical-zip homes in fall', () => {
-  const result = buildSeasonalHomeCareResult({ zipCode: '33101', savedClimateRegion: 'TROPICAL', now: DATES.FALL, focus: 'THIS_SEASON' });
+test('a tropical home in fall (and "next season" asked in summer) gets a real answer, not a limited state', () => {
+  for (const [now, focus] of [[DATES.FALL, 'THIS_SEASON'], [DATES.SUMMER, 'NEXT_SEASON']]) {
+    const result = buildSeasonalHomeCareResult({ zipCode: '33101', savedClimateRegion: 'TROPICAL', now, focus });
+    assert.equal(result.status, 'ANSWERED');
+    assert.ok(result.blocks[1].sections[0].items.length >= 2);
+  }
+});
+
+test('the bounded limited state still exists for a hypothetical cell with no task (the builder never errors)', () => {
+  const result = buildSeasonalHomeCareResult({ zipCode: '33101', savedClimateRegion: 'NOT_A_REGION', now: DATES.FALL, focus: 'THIS_SEASON' });
   assert.equal(result.status, 'READY_WITH_LIMITATIONS');
   assert.equal(result.reasonCode, 'SEASONAL_HOME_CARE_NO_GENERAL_TASKS');
-  const summer = buildSeasonalHomeCareResult({ zipCode: '33101', savedClimateRegion: 'TROPICAL', now: DATES.SUMMER, focus: 'NEXT_SEASON' });
-  assert.equal(summer.status, 'READY_WITH_LIMITATIONS', 'next season from summer is fall, the same gap');
 });
 
 test('EXECUTED: an empty-home answer (zip only) is ANSWERED with a summary, a task list and a boundary, and the blocks satisfy the real block schema', () => {
