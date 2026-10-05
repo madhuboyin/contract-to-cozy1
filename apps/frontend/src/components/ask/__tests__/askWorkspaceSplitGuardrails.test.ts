@@ -53,7 +53,8 @@ describe('AskWorkspace split guardrails', () => {
   it('keeps the add-inventory workflow compact and balanced', () => {
     const source = read(path.join(workspaceDir, 'CaptureCards.tsx'));
     expect(source).toContain("request.captureKey === 'INVENTORY_ITEM_CREATE_INPUTS'");
-    expect(source).toContain("data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create'");
+    expect(source).toContain("compactInventoryCompletion = schema.type === 'GROUP' && request.captureKey === 'INVENTORY_ITEM_COMPLETE_DETAILS'");
+    expect(source).toContain("compactInventoryCompletion ? 'inventory-item-completion'");
     expect(source).toContain("compactInventoryCreate && (field.key === 'name' || field.key === 'category')");
     expect(source).toContain('compact={compactWorkflow}');
   });
