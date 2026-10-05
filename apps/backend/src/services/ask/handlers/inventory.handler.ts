@@ -736,7 +736,6 @@ export function inventoryMissingDetailCandidates(
   ];
   const shortName = item.name.length > 40 ? `${item.name.slice(0, 39)}…` : item.name;
   return missing.slice(0, context.limit ?? 3).map(({ field, outcomeKey }) => ({
-    producerId: 'inventory.missing-details',
     source: 'MISSING_DETAIL' as const,
     sourceOperationId: context.sourceOperationId,
     label: `Add the ${INVENTORY_CORRECTION_FIELDS[field].label} of ${shortName}`,
@@ -764,7 +763,6 @@ export function roomAddItemCandidates(
 ): SuggestedNextActionCandidate[] {
   const shortName = room.name.length > 40 ? `${room.name.slice(0, 39)}…` : room.name;
   return [{
-    producerId: 'rooms.add-item',
     source: 'OPERATION_RESULT' as const,
     sourceOperationId: context.sourceOperationId,
     label: `Add an item to ${shortName}`,

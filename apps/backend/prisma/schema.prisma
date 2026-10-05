@@ -2496,6 +2496,7 @@ model User {
   capabilityGovernanceReviews     CapabilityGovernanceReview[]
   askSessions                     AskSession[]
   askExecutions                   AskExecution[]
+  askSuggestedActionLifecycles    AskSuggestedActionLifecycle[]
   refinanceRateMonitors           RefinanceRateMonitor[]
 
   // Household Collaboration
@@ -4182,6 +4183,7 @@ model Property {
   propertyContextCaptures PropertyContextCaptureReceipt[]
   askSessions              AskSession[]
   askExecutions            AskExecution[]
+  askSuggestedActionLifecycles AskSuggestedActionLifecycle[]
   refinanceRateMonitors    RefinanceRateMonitor[]
 
   inventoryOcrSessions     InventoryOcrSession[]
@@ -8102,6 +8104,47 @@ model AskExecution {
   @@index([parentExecutionId])
   @@index([linkedExecutionId])
   @@map("ask_executions")
+}
+
+// Ask Cozy exact-four (plan C.15.4, Ask Redo FRD v1.25 §27.7a): the durable per-user lifecycle of an offered Suggested Next Action
+// outcome. Identity is user + property + operation + outcome + entity scope; `lastReasonCode` is metadata and never part of the
+// identity, so a changed explanation cannot create a parallel row and bypass a cooldown. Persisting an answer is an OFFER, not proof
+// of display, so cooldown starts at offer time (the fields say offered, not shown). Stores no label, message or homeowner text.
+enum AskSuggestedActionDismissalReason {
+  NOT_NOW
+  NOT_RELEVANT
+}
+
+model AskSuggestedActionLifecycle {
+  id          String @id @default(cuid())
+  userId      String
+  propertyId  String
+  operationId String
+  outcomeKey  String
+  // Non-null so the composite unique key works; empty string means "not entity-scoped".
+  entityType  String @default("")
+  entityId    String @default("")
+
+  lastReasonCode String?
+  firstOfferedAt DateTime
+  lastOfferedAt  DateTime
+  offerCount     Int      @default(0)
+  selectedAt     DateTime?
+  completedAt    DateTime?
+  dismissedAt    DateTime?
+  dismissalReason AskSuggestedActionDismissalReason?
+  suppressedUntil DateTime?
+  // Hash of the material state (for example the unresolved registry fact keys for an area); a NOT_RELEVANT dismissal lapses when it changes.
+  contextFingerprint String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId, operationId, outcomeKey, entityType, entityId])
+  @@index([userId, propertyId, suppressedUntil])
+  @@map("ask_suggested_action_lifecycles")
 }
 
 model AskExecutionEvent {

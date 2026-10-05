@@ -28,7 +28,7 @@ const NOW = new Date('2026-10-04T12:00:00.000Z');
 const clock = fixedSuggestedNextActionClock(NOW);
 
 const candidate = (over = {}) => ({
-  producerId: 'test.producer', source: 'MISSING_DETAIL', sourceOperationId: 'INVENTORY_LOOKUP',
+  source: 'MISSING_DETAIL', sourceOperationId: 'INVENTORY_LOOKUP',
   label: 'Add the microwave brand', message: 'What brand is the microwave?',
   operationId: 'INVENTORY_ITEM_CORRECT', interactionType: 'MUTATE_RECORD', outcomeKey: 'ADD_BRAND',
   entityContext: { propertyId: 'prop-1', entityType: 'INVENTORY_ITEM', entityId: 'item-1', contextVersion: 'v1' },
@@ -323,7 +323,7 @@ test('invalid, over-limit and ineligible nominations are counted, not silently k
 });
 
 test('the total candidate cap holds across producers', () => {
-  const lists = Array.from({ length: 8 }, (_, p) => Array.from({ length: 12 }, (_, i) => withEntity(i, { producerId: `test.p${p}` })));
+  const lists = Array.from({ length: 8 }, (_, p) => Array.from({ length: 12 }, (_, i) => withEntity(i)));
   const result = selectSuggestedNextActions({ nominations: new Map(lists.map((l, i) => [`p${i}`, l])), eligibility: ctx({ entities: modelEntities(12) }) });
   assert.equal(result.diagnostics.droppedOverTotalLimit, 96 - 60);
 });

@@ -939,7 +939,6 @@ export async function homeEventFollowUpCandidates(
       contextVersion: typeof event.revision === 'number' ? homeEventContextVersion({ id: event.id, revision: event.revision }) : null,
     };
     const candidate = (outcomeKey: string, label: string, field: string, reason: string): SuggestedNextActionCandidate => ({
-      producerId: 'home-events.follow-up',
       source: 'MISSING_DETAIL' as const,
       sourceOperationId: context.sourceOperationId,
       label,

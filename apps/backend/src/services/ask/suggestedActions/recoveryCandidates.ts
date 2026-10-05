@@ -34,7 +34,7 @@ export function restartAfterExpiryCandidates(source: {
   const message = source.message.trim();
   if (!message || message.length > 300) return [];
   return [{
-    producerId: 'platform.restart-after-expiry', source: 'PLATFORM_STATE', sourceOperationId: source.operationId,
+    source: 'PLATFORM_STATE', sourceOperationId: source.operationId,
     label, message, operationId: source.operationId, interactionType: 'START_WORKFLOW', outcomeKey: 'RESTART_AFTER_EXPIRY',
     entityContext: { propertyId: source.propertyId, entityType: null, entityId: null, contextVersion: null },
     tier: 'CONTINUE', requiredFacts: [], reasonCodes: ['REQUEST_EXPIRED'],
@@ -47,7 +47,7 @@ export function reviewCurrentInventoryItemCandidate(
   item: { id: string; name: string; updatedAt: Date }, context: { propertyId: string; sourceOperationId: string | null },
 ): SuggestedNextActionCandidate[] {
   return [{
-    producerId: 'platform.review-current-record', source: 'PLATFORM_STATE', sourceOperationId: context.sourceOperationId,
+    source: 'PLATFORM_STATE', sourceOperationId: context.sourceOperationId,
     label: `Review current ${shorten(item.name, 40)}`, message: `Show the current details of my ${shorten(item.name, 80)}.`,
     operationId: 'INVENTORY_LOOKUP', interactionType: 'CONVERSATION_CONTINUE', outcomeKey: 'REVIEW_CURRENT_RECORD',
     entityContext: {

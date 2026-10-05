@@ -378,7 +378,6 @@ export async function warrantyExpiryReminderCandidates(
     }
     const provider = warranty.providerName.length > 40 ? `${warranty.providerName.slice(0, 39)}…` : warranty.providerName;
     return [{
-      producerId: 'warranties.expiry-reminder',
       source: 'OPERATION_RESULT' as const,
       sourceOperationId: context.sourceOperationId,
       label: `Remind me before the ${provider} warranty expires`,

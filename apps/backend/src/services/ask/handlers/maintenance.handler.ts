@@ -358,7 +358,6 @@ export function maintenanceUndoCandidates(
   const shortTitle = title.length > 40 ? `${title.slice(0, 39)}…` : title;
   const reopen = context.undo === 'REOPEN';
   return [{
-    producerId: 'maintenance.undo-update',
     source: 'OPERATION_RESULT' as const,
     sourceOperationId: 'MAINTENANCE_TASK_UPDATE',
     label: reopen ? `Reopen ${shortTitle}` : `Resume reminders for ${shortTitle}`,

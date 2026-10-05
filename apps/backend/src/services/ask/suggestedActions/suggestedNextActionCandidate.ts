@@ -1,5 +1,6 @@
 // Plan §5: an internal candidate is the target action contract plus the evaluation inputs. Producers nominate candidates;
-// they never declare final visibility, state, score, id, or expiry. Those are decided by the pipeline and materialized here.
+// they never declare final visibility, state, score, id, expiry, or their own identity. Those are decided by the pipeline and
+// materialized here; the producer identity is the registered nominations key and is carried beside the candidate, never inside it.
 import { z } from 'zod';
 import {
   SUGGESTED_NEXT_ACTION_INTERACTION_TYPES, SUGGESTED_NEXT_ACTION_SOURCES, SUGGESTED_NEXT_ACTION_TIERS,
@@ -7,12 +8,12 @@ import {
 } from '../../../productFramework/ask/ask.contract';
 import { OUTCOME_TTL_OVERRIDES_MS, TIER_BASE_SCORE, SCORE_WEIGHTS } from './suggestedNextActionRegistry';
 import { SUGGESTED_NEXT_ACTION_DEFAULT_TTL_MS } from './suggestedNextAction.contract';
+import { SUGGESTED_NEXT_ACTION_SLOT_CLASSES } from './suggestedNextActionExactFourRegistry';
 import { deriveSuggestedNextActionId, type SuggestedNextActionIdentityFields } from './suggestedNextActionIdentity';
 
 const TOKEN = /^[A-Z][A-Z0-9_]{2,79}$/;
 
 export const SuggestedNextActionCandidateSchema = z.object({
-  producerId: z.string().regex(/^[a-z][a-z0-9.-]{2,79}$/),
   source: z.enum(SUGGESTED_NEXT_ACTION_SOURCES),
   sourceOperationId: z.string().trim().min(1).max(120).nullable(),
   label: z.string().trim().min(1).max(80),
@@ -27,6 +28,8 @@ export const SuggestedNextActionCandidateSchema = z.object({
     contextVersion: z.string().trim().min(1).max(160).nullable(),
   }),
   tier: z.enum(SUGGESTED_NEXT_ACTION_TIERS),
+  /** Exact-four placement class (plan C.15). Optional: when absent it is derived from source/tier/traits/entity context. */
+  slotClass: z.enum(SUGGESTED_NEXT_ACTION_SLOT_CLASSES).optional(),
   /** Missing fact keys the action needs; each must resolve through the registered fact -> capture -> operation mapping. */
   requiredFacts: z.array(z.string().regex(TOKEN)).max(8),
   reasonCodes: z.array(z.string().regex(TOKEN)).max(8),

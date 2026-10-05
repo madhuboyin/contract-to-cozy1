@@ -133,6 +133,20 @@ export const askSuggestedActionsProducerFailuresTotal = new Counter({
   registers: [register],
 });
 
+export const askSuggestedActionsExactFourTotal = new Counter({
+  name: 'ask_suggested_actions_exact_four_total',
+  help: 'Exact-four Suggested Next Action outcomes, exactly one increment per execution, by bounded result (FULL, DEGRADED, EXEMPT)',
+  labelNames: ['result'] as const,
+  registers: [register],
+});
+
+export const askSuggestedActionsExactFourReasonsTotal = new Counter({
+  name: 'ask_suggested_actions_exact_four_reasons_total',
+  help: 'Exact-four reason codes by bounded result; one execution can add several, so never sum this as an answer count; never homeowner text or ids',
+  labelNames: ['result', 'reason'] as const,
+  registers: [register],
+});
+
 export const askSkillContextProviderTotal = new Counter({
   name: 'ask_skill_context_provider_total',
   help: 'Skill context provider invocations by immutable provider version and bounded result status',
