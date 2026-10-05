@@ -162,6 +162,10 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('PRICE_FINALIZATIONS_LIST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('DO_NOTHING_SIMULATION', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('WARRANTY_LOOKUP', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  // Explicit, not implicit: RECALL_REVIEW belongs to no skill, so execution never evaluated an audience policy for it and absence meant
+  // "allowed in every mode". Exact-four may launch it as urgent work, and relying on absence is fragile (adding it to a skill later would
+  // fail validation and fail closed). This entry states the current behavior: every mode, viewer floor, discoverable.
+  definePolicy('RECALL_REVIEW', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('APPLIANCE_FAILURE_RISK', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('MAINTENANCE_BUDGET_FORECAST', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOUSEHOLD_INVITATION', OWNER_LIFECYCLE_MODES),

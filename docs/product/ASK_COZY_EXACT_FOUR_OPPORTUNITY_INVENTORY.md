@@ -1,13 +1,16 @@
-# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, for owner review)
+# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 2, for owner review)
 
-**Status:** DRAFT for owner review. No producer, registry entry or code has been written for it. Governing scope: `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md` Appendix C.15 and C.16, and `ASK_COZY_EXACT_FOUR_REGISTRY_PACKET.md`.
+**Status:** REVISION 2 after owner review (three corrections below). No producer or opportunity registry entry has been written; the only code change is the explicit `RECALL_REVIEW` audience policy (finding 7). Governing scope: `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md` Appendix C.15 and C.16, and `ASK_COZY_EXACT_FOUR_REGISTRY_PACKET.md`.
 
 **Evidence labels.** *Executed*: produced by running the code (the operation, role, audience and safety facts below were dumped from `askOperationRegistry.ts` and `getAskAudiencePolicy`). *Code-read*: traced by reading source. *Unverified*: a proposal whose data source I have not confirmed. Nothing here ran against the real backend.
 
 ## 1. Findings that change the design (read first)
 
 1. **A viewer's row is carried by starters, not opportunities (code-read, arithmetic).** Viewers cannot use profile captures (`PROPERTY_CONTEXT_AREA_CAPTURE` is a CONTRIBUTOR operation) or the exact-record mutation chips, and the policy allows at most **one** opportunity or capability unrelated to the current answer. So a viewer's four is: urgent work and continuation (when they exist) + at most one opportunity + **starters for everything else**. Worst case is three or four starters. Starters are also removed when their destination is already on screen (presentation deduplication) and when they are the current answer's own outcome, so the eligible pool must exceed four. I propose **at least eight defined starters, with at least six expected to be eligible on a sparse home** (section 4). A sparse new home may have only about four starters that always return non-empty content, which is too thin; the viewer fixture must test exactly that case.
-2. **Read-only outcomes must be declared repeatable, or they exhaust themselves (executed).** Eligibility suppresses an outcome already completed in the session unless the operation registry declares it repeatable (`completedSemanticKeyHashes ... && !isRepeatableOutcome`), and the lifecycle now also suppresses completed non-repeatable outcomes durably in every slot class. A read starter the user opens once would never be offered again. Proposal: every read-only starter and read-only opportunity outcome goes in `REPEATABLE_OUTCOMES`; repetition is then governed by the offer cooldown and the soft starter rotation. Mutation and capture outcomes stay non-repeatable.
+2. **Read-only outcomes must be declared repeatable, or they exhaust themselves. Two mechanisms, with different status.**
+   - *Session-level suppression is ACTIVE today (executed code path).* The production finalizer is passed `completedSemanticKeyHashes` by `executeOperation.ts` and `askConfirm.ts` (`loadCompletedSuggestedActionKeyHashes`), and the eligibility `HISTORY` rule drops an outcome already completed in the session unless `isRepeatableOutcome`. A read starter opened once in a session is not offered again in that session.
+   - *Durable lifecycle suppression is IMPLEMENTED BUT NOT ACTIVE.* `askSuggestedActionLifecycle.service.ts` and the policy's `completedLifecycleKeys` exist and are tested, but nothing calls them from the finalizer; they activate only with the atomic wiring (step 10). Until then the lifecycle table (not yet pushed) has no effect.
+   - *Proposal (narrowed after review).* Declare repeatable **only the specific read outcomes this inventory approves** (the reviewed O1 to O3 and starters, once approved), by explicit entry in `REPEATABLE_OUTCOMES`; not a blanket rule for every read operation, and a registry test must fail for any outcome that is repeatable without an approved entry. Repetition is then governed by the offer cooldown and the soft starter rotation (both inactive until wiring; the session rule above is the only active one).
 3. **Ask's existing operating mode is derived from the onboarding `ownershipState` (code-read), the signal you ruled out for audiences.** `operatingModeForOwnershipState` maps `SHOPPING` and `UNDER_CONTRACT` to BUYING, `RECENT_OWNER` and `ESTABLISHED_OWNER` to OWNING, and `PREPARING_TRANSFER` to SELLING; the audience policy then gates operations by mode. Executed policy facts: 68 operations allow every mode including `UNKNOWN`; `SELL_HOLD_RENT_ANALYSIS`, `CAPITAL_RESERVE_PLAN` and `SELLER_PREP_CHECKLIST` allow OWNING and SELLING and **explain** (not eligible) when the mode is `UNKNOWN`; `REFINANCE_ANALYSIS` allows OWNING only; the `BUYER_*` operations allow BUYING only. Executed with a VIEWER household and a homeowner account (`evaluateAskAudienceApplicability`, purpose EXECUTION):
 
    | Operation | UNKNOWN | OWNING | SELLING | BUYING |
@@ -22,14 +25,14 @@
 4. **Most "why now" signals already exist as Property Context facts (code-read), so one batched snapshot read can feed the whole opportunity producer.** The catalog has `recalls.unresolvedMatches`, `inspection.openFindings`, `events.activeRadarMatches`, `financial.upcomingCapitalExposure`, `coverage.warranties`, `coverage.insurancePolicies`, `maintenance.tasks`, `guidance.activeSignals` and `risk.activeIncidents`. Two signals are not catalog facts and are **unverified**: hidden-savings matches (for the savings opportunity) and refinance opportunities (which today surface through the Home Actions loader). The producer is nonessential and is dropped first when the 250 ms pipeline budget is exceeded; for a viewer that would remove opportunities but not starters, so starters must not depend on the same snapshot (D-O5).
 5. **Speculative intent cannot create an opportunity, but an open decision can be continued (code-read).** Selling/holding/renting is recorded only as a decision thread whose own copy says nothing was listed or sold. Offering "Compare selling, renting, and staying" because the user might sell is excluded. Offering "Pick up your sell, hold or rent comparison" when the user already has an **open** decision thread is a continuation of work they started, so it is `CONTINUE_WORK`, not an opportunity.
 6. **Mortgage chips stay out of the first activation (from step 8a).** There is no operation that can launch mortgage status, and the rate has no typed launch. The only mortgage-related item proposed here is the read-only refinance analysis, gated on a known status and rate and on mode OWNING.
-7. **`RECALL_REVIEW` has no audience policy entry (executed).** Every other candidate has one. Before it can be an urgent-work launch it needs a policy (all modes, viewer) or an explicit exemption; I could not tell from the code whether absence means "allowed" or "blocked", and I have not run it.
+7. **`RECALL_REVIEW` is allowed today; the gap was fragility, now closed (executed and code-read).** It has no audience policy entry, but execution only looks up a policy when the operation belongs to a skill (`audiencePolicy = skill ? getAskAudiencePolicy(...) : undefined`), `RECALL_REVIEW` belongs to none, and discovery treats a missing policy as discoverable (`if (!policy) return true`). Executed: 12 operations have no policy and all 12 are skill-less (`RECALL_REVIEW`, `RECALL_MATCH_UPDATE`, `CAPABILITY_DISCOVERY`, the three boundary operations, `GROUNDED_GUIDANCE`, the four `CAPTURE_*_CONFIRM` operations and `SELL_HOLD_RENT_GOAL_CAPTURE`). Relying on absence is fragile: adding `RECALL_REVIEW` to a skill would fail `validateAskAudiencePolicies` and execution would fail closed (`ASK_SKILL_POLICY_MISMATCH`). **Resolved:** `askAudiencePolicy.ts` now carries an explicit all-mode, viewer-floor, discoverable policy for `RECALL_REVIEW`, with a test pinning that it matches the previous behavior in every mode, equals the operation's role floor, and that the policy set still validates. `RECALL_MATCH_UPDATE` (a CONTRIBUTOR command) is not an exact-four launch and is left as is.
 
 ## 2. Slot sources that are not opportunities
 
 | Slot class | Proposed source | Launch (read, VIEWER) | Why-now signal | Status |
 |---|---|---|---|---|
 | `URGENT_WORK` | Canonical Home Actions with priority `NOW` (`HOME_ACTION_PRIORITIES` = NOW, SOON, PLAN, CONSIDER) | `HOME_ACTIONS` | A `NOW` action exists | Code-read; adapter not built |
-| `URGENT_WORK` | Unresolved recall matches | `RECALL_REVIEW` | `recalls.unresolvedMatches` non-empty | Needs finding 7 resolved |
+| `URGENT_WORK` | Unresolved recall matches | `RECALL_REVIEW` | `recalls.unresolvedMatches` non-empty | Finding 7 resolved (explicit policy added) |
 | `URGENT_WORK` | Active high-severity radar matches | `HOME_EVENT_RADAR_FEED` | `events.activeRadarMatches` with severity `high` or above | Severity threshold unverified |
 | `CONTINUE_WORK` | Open decision thread (sell/hold/rent, HVAC) and open guidance journey | `HVAC_DECISION_CONTINUE`, `GUIDANCE_JOURNEYS_LIST`, sell/hold/rent analysis | The thread or journey is open (not abandoned, completed or archived) | Existing continuation mechanisms; needs registering as a granted producer |
 
@@ -41,13 +44,23 @@ Labels lead with the outcome and avoid product names. Every launch is a read-onl
 
 | # | Label (outcome-led) | Operation | Outcome key | Who may get it | Why-now token and source | Evidence |
 |---|---|---|---|---|---|---|
-| O1 | See the big projects coming up | `CAPITAL_RESERVE_PLAN` | `REVIEW_CAPITAL_OUTLOOK` | VIEWER+; OWNING or SELLING | `WHY_NOW_CAPITAL_ITEMS_UPCOMING`: a ready capital timeline item with its window in the next 24 months (`financial.upcomingCapitalExposure`) | Executed ops facts; signal code-read |
-| O2 | Check what's expiring soon | `WARRANTY_LOOKUP` | `REVIEW_EXPIRING_WARRANTIES` | VIEWER+; all modes | `WHY_NOW_WARRANTY_EXPIRING`: a warranty expiring within 60 days (`coverage.warranties`) | Executed ops facts; signal code-read; 60 days is my proposal |
+| O1 | See the big projects coming up | `CAPITAL_RESERVE_PLAN` | `REVIEW_CAPITAL_OUTLOOK` | VIEWER+; OWNING or SELLING | `WHY_NOW_CAPITAL_ITEMS_UPCOMING`: a ready capital timeline item with its window in the next 24 months (`financial.upcomingCapitalExposure`) | Executed ops facts; signal and launch code-read (see verification) |
+| O2 | Check what's expiring soon | `WARRANTY_LOOKUP` | `REVIEW_EXPIRING_WARRANTIES` | VIEWER+; all modes | `WHY_NOW_WARRANTY_EXPIRING`: a warranty expiring within `WARRANTY_EXPIRING_DAYS` (60) days (`coverage.warranties`) | Executed ops facts; signal and launch code-read; message-dependent (see verification) |
 | O3 | Review the open inspection items | `INSPECTION_FINDINGS` | `REVIEW_OPEN_FINDINGS` | VIEWER+; all modes | `WHY_NOW_OPEN_FINDINGS`: at least one unresolved finding (`inspection.openFindings`) | Executed ops facts; signal code-read |
 | O4 | Look for savings you may be missing | `SAVINGS_OPPORTUNITIES` | `REVIEW_SAVINGS_MATCHES` | VIEWER+; all modes | `WHY_NOW_SAVINGS_MATCHES`: unreviewed hidden-savings matches exist | **Unverified source**: matches are not a catalog fact |
 | O5 | Check whether refinancing could help | `REFINANCE_ANALYSIS` | `REVIEW_REFINANCE_OUTLOOK` | VIEWER+; **OWNING only** | `WHY_NOW_REFINANCE_OPPORTUNITY`: status `MORTGAGED`, a recorded rate, and an open refinance opportunity from the radar | **Unverified source**; reads `interestRateBps` from the financing profile, not `financial.currentMortgage` (recorded contract defect) |
 | O6 | Get the home ready to list | `SELLER_PREP_CHECKLIST` | `REVIEW_SELLER_PREP` | VIEWER+; OWNING or SELLING | `WHY_NOW_SALE_CASE_ACTIVE`: a live sale case (`PREPARING`, `LISTED`, `UNDER_CONTRACT`), the same governed signal as the SELLER audience | Executed ops facts; signal is the step 7 adapter |
 | O7 | Keep your closing on track | `BUYER_DEADLINES` | `REVIEW_BUYER_DEADLINES` | VIEWER+; **BUYING only** | `WHY_NOW_BUYER_JOURNEY_ACTIVE`: a pre-closing buyer journey with a milestone due within 14 days | Executed ops facts; 14 days is my proposal. **Conflicts with finding 3**: the operation is gated by `ownershipState`-derived BUYING while the audience is workflow-derived |
+
+**Verification of O1 to O3 (the approval conditions; code-read, nothing run against a database)**
+
+| | Launch routing | What the handler reads from the stored message | Exact signal predicate | Result |
+|---|---|---|---|---|
+| O3 `INSPECTION_FINDINGS` | Forced by the stored `operationId` ("a declared item action is authoritative", `createAskExecution.ts`), so no message classification is involved | **Nothing.** `inspectionFindingsResult(userId, propertyId)` ignores the message | `inspection.openFindings` is findings with `status = 'OPEN'` on `CONFIRMED` reports (`prismaAssemblers.ts`); predicate: count at least 1 | Message-free and the predicate matches the handler's own data |
+| O1 `CAPITAL_RESERVE_PLAN` | Forced the same way | Only a horizon: `parseCapitalTimelineHorizonRequest` matches "5 year" or "10 year" and returns null otherwise | `financial.upcomingCapitalExposure` is items with `windowEnd >= now` and a READY analysis; predicate: at least one starting within 24 months | The stored message must contain neither phrase (so it uses the default horizon); the 24-month predicate must be checked against the default horizon the answer shows (**not yet checked**) |
+| O2 `WARRANTY_LOOKUP` | Forced the same way | **The message decides the focus**: `warrantyFocus` treats "expiring", "runs out" and similar as the expiring view | The handler's own constant `WARRANTY_EXPIRING_DAYS = 60` (the 60 days I proposed is that existing constant) | Not message-free. The stored message must say "expiring" (server-authored, so deterministic), and the why-now predicate must **import the same constant**, or the chip could promise expiring warranties the answer does not show |
+
+So: O3 is cleared. O1 and O2 are conditional on the checks above, plus a test that each stored message produces the intended focus.
 
 **Deliberately not proposed for the first activation**
 
@@ -77,30 +90,45 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 | S9 | Review your daily home habits | `HOME_HABITS` | Unverified |
 | S10 | Pick up a guided journey | `GUIDANCE_JOURNEYS_LIST` | No (needs a journey) |
 
-Each starter carries a **readiness predicate** (for example S7 requires at least one inventory item) so an empty-state answer is never offered as a helpful next step. That leaves four dependable starters (S1 to S4) on a brand-new home, which is exactly the viewer worst case and no margin; the viewer fixture must prove the row reaches four there, and I would not activate if it only reaches four by luck (D-O4).
+**The "eight defined, six expected eligible" bar is withdrawn (owner review).** A count is a heuristic and does not establish exact-four availability: on a sparse home only S1 to S4 are dependable, and those are still unverified. It is replaced by a behavior-level invariant.
+
+**Invariant (to be enforced by an enumerating test, not asserted by a count).** *For every minimum supported viewer state, the governed deterministic fallbacks alone yield four eligible, distinct, ledger-backed actions after eligibility, presentation deduplication, history and cooldown.* A **deterministic fallback** is a starter whose eligibility depends only on facts the finalizer already holds for that state (no data-dependent readiness that can be empty), whose operation is available, in-role and in-audience for that state, and whose answer is meaningful for it.
+
+**Minimum supported viewer states to enumerate (each must pass):**
+
+| Dimension | Values |
+|---|---|
+| Household role | VIEWER (the minimum); CONTRIBUTOR and OWNER must also pass (they have more, never fewer) |
+| Operating mode | `UNKNOWN`, `BUYING`, `OWNING`, `SELLING` (so only operations allowed in every mode can be deterministic fallbacks) |
+| Home data | empty property (no inventory, rooms, warranties, documents, journeys), plus a minimally seeded property |
+| **Current answer** | **Every message-routable operation, and the landing state.** This is the state that breaks a count: if the current answer is itself one of the dependable starters, that starter is removed (the current outcome is never re-offered), and any other starter its card already presents is removed by presentation deduplication. With four dependable starters, asking "what maintenance is coming up" can leave two |
+| Degraded availability | any single operation disabled by operational controls, and the opportunity producer dropped by the pipeline budget (starters must not depend on it) |
+| Session history | starters already used in the session (they must be repeatable) |
+
+**What the invariant implies today.** Because the worst-case current answer removes the answer itself plus whatever its blocks present, the deterministic pool must exceed four by the largest number of starter destinations any single answer can remove. That number is a measurable property (run `collectPresentationIdentities` over each operation's real result blocks), not a guess. If it cannot be established, exact-four is **not activated** for that state; shortage is never redefined as acceptable. Each starter keeps a readiness predicate so an empty-state answer is never offered, but a predicate-gated starter does not count as a deterministic fallback.
 
 ## 5. Outcome registry and launch entries needed (for approval)
 
 - **Outcomes** registered per operation in `SUGGESTED_ACTION_OUTCOMES` (for example `PROPERTY_SUMMARY: ['OPEN_SUMMARY']`), bounded tokens, validated by the registry test.
-- **Repeatable** set: every read outcome above in `REPEATABLE_OUTCOMES` (finding 2).
+- **Repeatable** set: only the specifically reviewed read outcomes (O1 to O3 and the approved starters), each by explicit entry in `REPEATABLE_OUTCOMES`; a registry test fails for a repeatable outcome without an approved entry (finding 2).
 - **Producer grants:** `home-opportunities.signals` (HOME_OPPORTUNITY only, no ownership or goal claims), `home-opportunities.urgent` (URGENT_WORK only), `home-starters.curated` (CURATED_STARTER only), plus the existing result producer unchanged.
 - **Ownership:** none of these claim current-result ownership; they are unrelated opportunities, so the one-opportunity cap, the seven-day cooldown and the reserved-slot rule apply.
-- **Launch:** the verified selection already routes by the stored `operationId`; each read operation must be confirmed to accept a message-free launch (some parse sub-parameters from the message). I have not verified this per operation.
+- **Launch:** the verified selection already routes by the stored `operationId`; routing is forced by the stored `operationId` (verified), so launch never depends on message classification; handlers may still read the server-authored stored message for sub-parameters. Verified for O1 to O3 (section 3); not yet verified for the starters or O4 to O7.
 
-## 6. Decisions requested
+## 6. Decisions (revision 2)
 
-| # | Decision | Recommendation |
+| # | Decision | Status after owner review |
 |---|---|---|
-| D-O1 | Approve, drop or add opportunities O1 to O7 | Approve O1, O2, O3 now (signals are catalog facts). Hold O4 and O5 until their sources are verified. Decide O6, O7 with D-O3 |
-| D-O2 | Declare read-only outcomes repeatable | Approve |
-| D-O3 | Reconcile operating mode with workflow state (buyer journey and sale case first, `ownershipState` as fallback) | Treat as a separate, broader change. For the first activation use only all-mode operations for starters, and accept existing mode gating for O1, O5, O6, O7 |
-| D-O4 | Starter list, readiness predicates and the "at least eight defined, six eligible" bar | Approve the bar; add or replace starters until a sparse-home viewer fixture clears it with margin |
-| D-O5 | Starters must not depend on the opportunity snapshot | Approve; starters use cheap per-operation readiness checks |
-| D-O6 | Plants: define a why-now signal or defer | Defer |
-| D-O7 | Mortgage chips | Defer, as decided in step 8a |
-| D-O8 | Label copy and the 60 and 14 day windows | Review wording |
-| D-O9 | `RECALL_REVIEW` audience policy gap | Resolve before it is used as urgent work |
+| D-O1 | Opportunities O1 to O7 | **O1 to O3 approved conceptually**, contingent on verifying message-free typed launch and the exact signal predicates: O3 is verified; O1 needs the horizon alignment check and a stored message with no "5 year" or "10 year"; O2 needs the shared `WARRANTY_EXPIRING_DAYS` predicate and an "expiring" message. O4 and O5 held until sources are verified. O6 and O7 wait for D-O3 |
+| D-O2 | Repeatable read outcomes | **Narrowed:** only the specifically reviewed read outcomes, by explicit registry entry, never a blanket rule for future read operations |
+| D-O3 | Operating-mode reconciliation | **Kept separate**, as proposed. First activation uses only all-mode operations for starters and accepts existing mode gating for O1, O5, O6, O7 |
+| D-O4 | Starter bar | **Not approved.** The count is withdrawn; the behavior-level invariant and state matrix above replace it. Needs your approval of the matrix and of the "do not activate if a state cannot be proven" rule |
+| D-O5 | Starters must not depend on the opportunity snapshot | Recommended; implied by the degraded-availability row |
+| D-O6 | Plants | Defer |
+| D-O7 | Mortgage chips | Defer |
+| D-O8 | Label copy and windows | Review wording; the 60-day window is the existing `WARRANTY_EXPIRING_DAYS` constant, the 24-month and 14-day windows are still my proposals |
+| D-O9 | `RECALL_REVIEW` audience policy | **Resolved:** explicit all-mode viewer policy added and tested (finding 7) |
 
 ## 7. What I would build next (after your review)
 
-Registry entries and repeatable declarations, then the three producers behind a shared batched context read, each with its grant and tests; then the viewer sparse-home fixture as the activation gate. None of it is wired into the live finalizer until the atomic activation.
+First the enumerating availability test and the measurement of how many starter destinations a single answer can remove (this decides whether the starter pool is sufficient and is the activation gate); then registry entries and the specifically reviewed repeatable declarations; then the three producers behind a shared batched context read, each with its grant and tests. None of it is wired into the live finalizer until the atomic activation.

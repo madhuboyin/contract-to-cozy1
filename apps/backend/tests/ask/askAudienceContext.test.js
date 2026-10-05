@@ -174,3 +174,26 @@ test('journey-neutral workflows do not add lifecycle copy or a journey-correctio
   assert.deepEqual(presented.blocks[0].actions, []);
   assert.equal(presented.parameters.audiencePresentation.journeyCorrectionOffered, false);
 });
+
+// ---- RECALL_REVIEW: explicit all-mode viewer policy (exact-four urgent-work launch) -----------------------------------------------
+
+test('RECALL_REVIEW has an explicit all-mode, viewer-floor, discoverable audience policy that matches its previous implicit behavior', () => {
+  const { getAskAudiencePolicy, evaluateAskAudienceApplicability, isAskOperationDiscoverableForAudience, validateAskAudiencePolicies } = require('../../src/services/ask/askAudiencePolicy.ts');
+  const { getAskOperationDefinition } = require('../../src/services/ask/askOperationRegistry.ts');
+  const { getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
+  const policy = getAskAudiencePolicy('RECALL_REVIEW');
+  assert.ok(policy, 'an explicit policy exists');
+  assert.deepEqual([...policy.eligibleOperatingModes].sort(), ['BUYING', 'OWNING', 'SELLING', 'UNKNOWN']);
+  assert.equal(policy.minimumHouseholdRole, getAskOperationDefinition('RECALL_REVIEW').propertyRoleFloor, 'no weaker or stronger than the operation floor');
+  assert.equal(policy.minimumHouseholdRole, 'VIEWER');
+  assert.equal(policy.discoveryBehavior, 'SHOW');
+  // Allowed for every mode, for a viewer: the same outcome absence produced.
+  for (const operatingMode of ['UNKNOWN', 'BUYING', 'OWNING', 'SELLING']) {
+    const decision = evaluateAskAudienceApplicability({ policy, accountRole: 'HOMEOWNER', householdRole: 'VIEWER', operatingMode, purpose: 'EXECUTION' });
+    assert.equal(decision.allowed, true, operatingMode);
+    assert.equal(isAskOperationDiscoverableForAudience({ operationId: 'RECALL_REVIEW', accountRole: 'HOMEOWNER', householdRole: 'VIEWER', operatingMode }), true, operatingMode);
+  }
+  // It is still skill-less, so execution does not evaluate it today; the entry is documentation plus protection against a later skill addition.
+  assert.equal(getSkillForOperation('RECALL_REVIEW'), undefined);
+  assert.deepEqual(validateAskAudiencePolicies(), [], 'the policy set still validates');
+});
