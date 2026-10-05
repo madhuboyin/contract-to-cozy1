@@ -50,7 +50,7 @@ function createFakeStore(seed = {}) {
       tx.propertyFactEvidence = {
         async create({ data }) {
           await tick();
-          const key = `${data.propertyId}|${data.captureExecutionId}`;
+          const key = `${data.propertyId}|${data.factKey}|${data.captureExecutionId}`; // the real unique is (propertyId, factKey, captureExecutionId)
           if (data.captureExecutionId && store.replayKeys.has(key)) throw new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'test' });
           const row = { id: `ev-${++store.idSeq}`, ...data, supersededAt: null };
           store.evidence.push(row);
@@ -278,11 +278,15 @@ test('authorization and input: below CONTRIBUTOR is denied before any write; onl
 
 // A rate capture as the production writer performs it, minus the unrelated parts: evidence create (idempotency gate), then THE
 // production guarded profile write (`writeMortgageRateGuarded`), all in one transaction so a refusal rolls the evidence back.
-async function rateCapture(deps, rateBps, executionId) {
+async function rateCapture(deps, rateBps, executionId, announced = []) {
+  const emit = async (tx, input) => { await tick(); tx.undo.push(() => announced.pop()); announced.push([...input.changedFactKeys]); };
   try {
     await deps.transaction(async (tx) => {
-      await tx.propertyFactEvidence.create({ data: { propertyId: PROPERTY, factKey: 'financial.currentMortgage', captureExecutionId: executionId } });
-      await rateWriter.writeMortgageRateGuarded(tx, PROPERTY, rateBps);
+      const evidence = await tx.propertyFactEvidence.create({ data: { propertyId: PROPERTY, factKey: 'financial.currentMortgage', captureExecutionId: executionId } });
+      await rateWriter.recordMortgageRate(tx, {
+        propertyId: PROPERTY, interestRateBps: rateBps, observedAt: new Date('2026-10-04T12:00:00Z'), rateEvidence: { id: evidence.id, confidence: 0.9 },
+        sourceType: 'USER_REPORTED', captureExecutionId: executionId, captureChannel: null,
+      }, emit);
     });
     return 'CAPTURED';
   } catch (error) {
@@ -318,10 +322,11 @@ test('mixed concurrency: NO_MORTGAGE status capture vs rate capture can only end
     const random = seededRandom(iteration + 1);
     const initial = INITIAL_PROFILES[iteration % INITIAL_PROFILES.length];
     const { store, deps } = createFakeStore({ profile: initial ? { ...initial } : null });
+    const announced = [];
     const rateCount = 1 + (iteration % 2);
     const jobs = [
       (async () => { await jitter(random); return ['status', (await capture(deps(), 'NO_MORTGAGE', { captureExecutionId: `s-${iteration}` })).outcome]; })(),
-      ...Array.from({ length: rateCount }, (_, i) => (async () => { await jitter(random); return ['rate', await rateCapture(deps(), 700 + i, `r-${iteration}-${i}`)]; })()),
+      ...Array.from({ length: rateCount }, (_, i) => (async () => { await jitter(random); return ['rate', await rateCapture(deps(), 700 + i, `r-${iteration}-${i}`, announced)]; })()),
     ];
     const results = await Promise.all(jobs);
     const profile = store.profile;
@@ -336,6 +341,11 @@ test('mixed concurrency: NO_MORTGAGE status capture vs rate capture can only end
     const rateEvidence = store.evidence.filter((row) => row.factKey === 'financial.currentMortgage').length;
     assert.equal(rateEvidence, rateResults.filter((outcome) => outcome === 'CAPTURED').length, `iteration ${iteration}: evidence matches captured rates`);
     if (rateResults.includes('REFUSED')) assert.equal(profile.mortgageStatus, 'NO_MORTGAGE', 'a rate is refused only because the status is NO_MORTGAGE');
+    // Only a rate capture can have moved the status to MORTGAGED here (the status writer asks for NO_MORTGAGE), so it must have announced it.
+    const startedUnanswered = !initial || initial.mortgageStatus === 'UNKNOWN';
+    if (startedUnanswered && profile.mortgageStatus === 'MORTGAGED') {
+      assert.ok(announced.some((keys) => keys.includes('financial.mortgageStatus') && keys.includes('financial.currentMortgage')), `iteration ${iteration}: the implicit status transition was not announced`);
+    }
   }
   assert.deepEqual([...outcomes].sort(), ['MORTGAGED', 'NO_MORTGAGE'], 'both valid outcomes occurred, so the interleavings were not one-sided');
 });
@@ -362,7 +372,51 @@ test('guarded rate write: new profile is MORTGAGED with the rate; UNKNOWN become
     const { store, deps } = createFakeStore({ profile: initial ? { ...initial } : null });
     assert.equal(await rateCapture(deps(), 725, 'exec-x'), expectOutcome);
     assert.equal(store.profile.mortgageStatus, expectStatus);
-    if (expectOutcome === 'CAPTURED') { assert.equal(store.profile.interestRateBps, 725); assert.equal(store.evidence.length, 1); }
+    // The rate's own evidence, plus a SYSTEM_DERIVED status row when the capture moved the status (anything but an already-MORTGAGED profile).
+    const statusMoved = !initial || initial.mortgageStatus === 'UNKNOWN';
+    if (expectOutcome === 'CAPTURED') { assert.equal(store.profile.interestRateBps, 725); assert.equal(store.evidence.length, statusMoved ? 2 : 1); }
     else { assert.equal(store.profile.interestRateBps ?? null, null, 'no rate on a NO_MORTGAGE profile'); assert.equal(store.evidence.length, 0, 'evidence rolled back'); }
   }
+});
+
+test('rate capture announces the status it implicitly changes: both fact keys, plus SYSTEM_DERIVED status evidence; only the rate when the status already was MORTGAGED', async () => {
+  for (const [initial, expectStatusAnnounced] of [[null, true], [INITIAL_PROFILES[1], true], [INITIAL_PROFILES[2], true], [INITIAL_PROFILES[3], false]]) {
+    const { store, deps } = createFakeStore({ profile: initial ? { ...initial } : null });
+    const announced = [];
+    assert.equal(await rateCapture(deps(), 690, 'exec-a', announced), 'CAPTURED');
+    assert.equal(announced.length, 1, 'exactly one change per capture');
+    if (expectStatusAnnounced) {
+      assert.deepEqual(announced[0], ['financial.currentMortgage', 'financial.mortgageStatus']);
+      const status = store.evidence.filter((row) => row.factKey === 'financial.mortgageStatus');
+      assert.equal(status.length, 1);
+      assert.equal(status[0].sourceType, 'SYSTEM_DERIVED');
+      assert.equal(status[0].supersededAt, null);
+    } else {
+      assert.deepEqual(announced[0], ['financial.currentMortgage']);
+      assert.equal(store.evidence.filter((row) => row.factKey === 'financial.mortgageStatus').length, 0, 'no status evidence when the status did not change');
+    }
+    assert.equal(store.profile.mortgageStatus, 'MORTGAGED');
+  }
+});
+
+test('a later implicit transition supersedes earlier status evidence (never two active rows)', async () => {
+  const { store, deps } = createFakeStore({ profile: { propertyId: PROPERTY, mortgageStatus: 'UNKNOWN', hasSecondMortgage: false, hasPMI: false } });
+  store.evidence.push({ id: 'old-status', propertyId: PROPERTY, factKey: 'financial.mortgageStatus', supersededAt: null });
+  assert.equal(await rateCapture(deps(), 700, 'exec-b', []), 'CAPTURED');
+  const status = store.evidence.filter((row) => row.factKey === 'financial.mortgageStatus');
+  assert.equal(status.length, 2);
+  assert.equal(status.filter((row) => row.supersededAt === null).length, 1);
+  assert.notEqual(status.find((row) => row.id === 'old-status').supersededAt, null);
+});
+
+test('a refused rate announces nothing and leaves neither rate nor status evidence behind', async () => {
+  const { store, deps } = createFakeStore({ profile: { propertyId: PROPERTY, mortgageStatus: 'NO_MORTGAGE', hasSecondMortgage: false, hasPMI: false } });
+  const announced = [];
+  assert.equal(await rateCapture(deps(), 700, 'exec-c', announced), 'REFUSED');
+  assert.deepEqual(announced, []);
+  assert.equal(store.evidence.length, 0);
+});
+
+test('the status capture chip is invalidated by the implicit transition: the change names financial.mortgageStatus, the key a status-capture consumer watches', () => {
+  assert.equal(rateWriter.MORTGAGE_STATUS_FACT_KEY_FOR_RATE, writer.MORTGAGE_STATUS_FACT_KEY, 'the rate writer and the status writer name the same fact');
 });

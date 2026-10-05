@@ -7,6 +7,7 @@ require('ts-node/register');
 
 const svc = require('../../src/services/ask/suggestedActions/askSuggestedActionLifecycle.service.ts');
 const reg = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
+const { askSuggestedActionsLifecycleMissingRowTotal } = require('../../src/lib/metrics.ts');
 const { selectExactFourSuggestedNextActions } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourPolicy.ts');
 
 // ASK_COZY_EXACT_FOUR_REGISTRY_PACKET section 8 / plan C.15.4 step 5: durable lifecycle record. No local database: a fake delegate
@@ -240,7 +241,7 @@ test('completion suppresses the outcome durably unless it is repeatable; selecti
   assert.ok(loaded.completedKeys.has(reg.lifecycleKey(id())), 'completed: suppressed long after the offer cooldown ended');
   assert.equal(loaded.cooldownKeys.size, 0, 'the offer cooldown itself has ended');
   const empty = fakeDb();
-  await svc.recordSuggestedActionSelected('u1', 'p1', id(), NOW, empty.db);
+  assert.equal(await svc.recordSuggestedActionSelected('u1', 'p1', id(), NOW, empty.db), false, 'no row: not a success');
   assert.equal(empty.rows.size, 0, 'selection never creates a row');
 });
 
@@ -291,4 +292,26 @@ test('loaded lifecycle keys suppress offered profile chips in the exact-four pol
   });
   assert.equal(run('PROFILE_GAP').selected.length, 0, 'cooled profile chip is suppressed');
   assert.equal(run('EXACT_RECORD').selected.length, 1, 'the exact record in view is never cooled');
+});
+
+test('selection and completion report success only when exactly one row was updated; a missing row is counted separately and still fails open', async () => {
+  askSuggestedActionsLifecycleMissingRowTotal.reset();
+  const { db } = fakeDb();
+  assert.equal(await svc.recordSuggestedActionSelected('u1', 'p1', id(), NOW, db), false, 'nothing was ever offered');
+  assert.equal(await svc.recordSuggestedActionCompleted('u1', 'p1', id(), NOW, db), false);
+  await svc.recordSuggestedActionOffers({ userId: 'u1', propertyId: 'p1', now: NOW, offers: [offer()] }, db);
+  assert.equal(await svc.recordSuggestedActionSelected('u1', 'p1', id(), later(HOUR), db), true, 'offered: exactly one row');
+  assert.equal(await svc.recordSuggestedActionCompleted('u1', 'p1', id(), later(2 * HOUR), db), true);
+  // A wrong lifecycle identity (for example the wrong outcome) matches nothing, which used to read as success.
+  assert.equal(await svc.recordSuggestedActionSelected('u1', 'p1', id({ outcomeKey: 'CAPTURE_CORE_DETAILS' }), later(HOUR), db), false);
+  const counts = (await askSuggestedActionsLifecycleMissingRowTotal.get()).values;
+  const count = (event) => counts.find((v) => v.labels.event === event)?.value ?? 0;
+  assert.equal(count('SELECTED'), 2, 'two selections matched no row');
+  assert.equal(count('COMPLETED'), 1);
+  // More than one match (impossible under the unique key, but never reported as success) and a thrown failure both stay false.
+  const many = { askSuggestedActionLifecycle: { upsert: async () => ({}), updateMany: async () => ({ count: 2 }), findMany: async () => [] } };
+  assert.equal(await svc.recordSuggestedActionSelected('u1', 'p1', id(), NOW, many), false);
+  const failing = fakeDb({ failWrites: true });
+  assert.equal(await svc.recordSuggestedActionCompleted('u1', 'p1', id(), NOW, failing.db), false);
+  assert.equal(count('COMPLETED'), 1, 'a thrown failure is not counted as a missing row');
 });

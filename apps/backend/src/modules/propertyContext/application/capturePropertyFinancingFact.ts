@@ -59,23 +59,89 @@ function isNonFirsthandAttribution(attribution: AskCaptureAttribution | null | u
 
 /**
  * Cross-writer integrity with `capturePropertyMortgageStatus`: a rate must never land on a NO_MORTGAGE profile (the status writer
- * refuses NO_MORTGAGE over an existing rate; this is the mirror image). Both halves are single statements, never read-then-write:
+ * refuses NO_MORTGAGE over an existing rate; this is the mirror image). Every statement is conditional, never read-then-write:
  *  - no row yet: create it as MORTGAGED with the rate (ON CONFLICT DO NOTHING, so a concurrent creator never aborts the transaction);
- *  - row exists: ONE conditional UPDATE, only while the status is UNKNOWN or MORTGAGED, moving UNKNOWN -> MORTGAGED with the rate;
- *  - NO_MORTGAGE: zero rows match, which throws and rolls back the caller's transaction, evidence row included.
- * Must be called inside the caller's transaction.
+ *  - UNKNOWN -> MORTGAGED with the rate (one conditional UPDATE);
+ *  - already MORTGAGED: update the rate only (one conditional UPDATE);
+ *  - NO_MORTGAGE: neither matches, which throws and rolls back the caller's transaction, evidence row included.
+ * Returns whether the STATUS changed, so the caller can announce `financial.mortgageStatus` as well. Two rounds absorb a status that
+ * moves between the two conditional updates. Must be called inside the caller's transaction.
  */
-export async function writeMortgageRateGuarded(tx: Prisma.TransactionClient, propertyId: string, interestRateBps: number): Promise<void> {
+export async function writeMortgageRateGuarded(tx: Prisma.TransactionClient, propertyId: string, interestRateBps: number): Promise<{ statusChanged: boolean }> {
   const created = await tx.propertyFinancingProfile.createMany({
     data: [{ propertyId, mortgageStatus: 'MORTGAGED', interestRateBps }],
     skipDuplicates: true,
   });
-  if (created.count > 0) return;
-  const updated = await tx.propertyFinancingProfile.updateMany({
-    where: { propertyId, mortgageStatus: { in: ['UNKNOWN', 'MORTGAGED'] } },
-    data: { interestRateBps, mortgageStatus: 'MORTGAGED' },
+  if (created.count > 0) return { statusChanged: true };
+  for (let round = 0; round < 2; round += 1) {
+    const promoted = await tx.propertyFinancingProfile.updateMany({
+      where: { propertyId, mortgageStatus: 'UNKNOWN' },
+      data: { interestRateBps, mortgageStatus: 'MORTGAGED' },
+    });
+    if (promoted.count === 1) return { statusChanged: true };
+    const rateOnly = await tx.propertyFinancingProfile.updateMany({
+      where: { propertyId, mortgageStatus: 'MORTGAGED' },
+      data: { interestRateBps },
+    });
+    if (rateOnly.count === 1) return { statusChanged: false };
+  }
+  throw new PropertyMortgageRateRefusedError();
+}
+
+export const MORTGAGE_STATUS_FACT_KEY_FOR_RATE = 'financial.mortgageStatus' as const;
+
+export interface RecordMortgageRateInput {
+  propertyId: string;
+  interestRateBps: number;
+  observedAt: Date;
+  /** The rate's own evidence row, already created in this transaction. */
+  rateEvidence: { id: string; confidence: number | null };
+  sourceType: PropertyFactSourceType;
+  captureExecutionId: string | null;
+  captureChannel: string | null;
+}
+
+/**
+ * Steps 3 and 4 of the rate capture, inside the caller's transaction: the guarded canonical write, then ONE property change that
+ * names every fact the capture changed. When the rate implicitly moved the status (new profile or UNKNOWN -> MORTGAGED), the status
+ * is announced too (`changedFactKeys` carries both) and gets its own SYSTEM_DERIVED evidence row, so consumers watching
+ * `financial.mortgageStatus` refresh and a pending status-capture chip is invalidated.
+ */
+export async function recordMortgageRate(
+  tx: Prisma.TransactionClient,
+  input: RecordMortgageRateInput,
+  emitChange: typeof emitPropertyChangeWithTransaction = emitPropertyChangeWithTransaction,
+): Promise<{ statusChanged: boolean }> {
+  const { statusChanged } = await writeMortgageRateGuarded(tx, input.propertyId, input.interestRateBps);
+  if (statusChanged) {
+    const statusEvidence = await tx.propertyFactEvidence.create({
+      data: {
+        propertyId: input.propertyId, factKey: MORTGAGE_STATUS_FACT_KEY_FOR_RATE, sourceType: 'SYSTEM_DERIVED', observationState: 'KNOWN',
+        sourceEntityType: 'PROPERTY_CONTEXT_CAPTURE', sourceEntityId: input.rateEvidence.id, confidence: null, observedAt: input.observedAt,
+        verifiedAt: null, captureExecutionId: input.captureExecutionId, captureChannel: input.captureChannel, attribution: null, extractionConfidence: null,
+      },
+    });
+    await tx.propertyFactEvidence.updateMany({
+      where: { propertyId: input.propertyId, factKey: MORTGAGE_STATUS_FACT_KEY_FOR_RATE, supersededAt: null, id: { not: statusEvidence.id } },
+      data: { supersededAt: input.observedAt },
+    });
+  }
+  const changedFactKeys = statusChanged ? [FINANCING_CAPTURE_FACT_KEY, MORTGAGE_STATUS_FACT_KEY_FOR_RATE] : [FINANCING_CAPTURE_FACT_KEY];
+  await emitChange(tx, {
+    propertyId: input.propertyId,
+    sourceType: 'PROPERTY_FACT',
+    sourceEntityId: input.rateEvidence.id,
+    sourceRevision: input.observedAt.toISOString(),
+    changeType: 'PROPERTY_FACT_CHANGED',
+    changedFactKeys,
+    canonicalReferences: changedFactKeys.map((fieldPath) => ({ entityType: 'PROPERTY', entityId: input.propertyId, fieldPath })),
+    occurredAt: input.observedAt,
+    detectedAt: input.observedAt,
+    confidence: input.rateEvidence.confidence,
+    sourceHealth: 'CURRENT',
+    signals: { homeownerRelevant: true, lifecycleAdvanced: false, propertyEffectConfirmed: true, urgentSafetyCondition: false, canonicalActionPriority: null },
   });
-  if (updated.count !== 1) throw new PropertyMortgageRateRefusedError();
+  return { statusChanged };
 }
 
 export async function capturePropertyFinancingFact(
@@ -125,29 +191,11 @@ export async function capturePropertyFinancingFact(
         data: { supersededAt: observedAt },
       });
 
-      // Step 3 -- the actual canonical value, written atomically against mortgageStatus (see `writeMortgageRateGuarded`).
-      await writeMortgageRateGuarded(tx, propertyId, interestRateBps);
-
-      // Step 4 -- emit, then commit.
-      await emitPropertyChangeWithTransaction(tx, {
-        propertyId,
-        sourceType: 'PROPERTY_FACT',
-        sourceEntityId: evidence.id,
-        sourceRevision: observedAt.toISOString(),
-        changeType: 'PROPERTY_FACT_CHANGED',
-        changedFactKeys: [FINANCING_CAPTURE_FACT_KEY],
-        canonicalReferences: [{ entityType: 'PROPERTY', entityId: propertyId, fieldPath: FINANCING_CAPTURE_FACT_KEY }],
-        occurredAt: observedAt,
-        detectedAt: observedAt,
-        confidence: evidence.confidence,
-        sourceHealth: 'CURRENT',
-        signals: {
-          homeownerRelevant: true,
-          lifecycleAdvanced: false,
-          propertyEffectConfirmed: true,
-          urgentSafetyCondition: false,
-          canonicalActionPriority: null,
-        },
+      // Steps 3-4 -- the canonical value, written atomically against mortgageStatus, then ONE change naming every fact it changed
+      // (including financial.mortgageStatus when the rate implicitly moved it). See `recordMortgageRate`.
+      await recordMortgageRate(tx, {
+        propertyId, interestRateBps, observedAt, rateEvidence: { id: evidence.id, confidence: evidence.confidence },
+        sourceType: input.sourceType, captureExecutionId: input.captureExecutionId ?? null, captureChannel: input.captureChannel ?? null,
       });
     });
     propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: FINANCING_CAPTURE_FACT_KEY, outcome: 'success' });

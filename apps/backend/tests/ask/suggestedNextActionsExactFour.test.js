@@ -350,6 +350,7 @@ test('production grants: the result producer may continue and fix records but no
   assert.deepEqual([...result.allowed].sort(), ['CONTINUE_WORK', 'EXACT_RECORD', 'HOME_OPPORTUNITY']);
   assert.equal(result.mayClaimCurrentResultOwnership, true);
   assert.notEqual(result.mayClaimActiveGoalMatch, true, 'the result producer has no goal source');
+  assert.equal(result.ownershipRequiresRegisteredRelationship, true, 'a shared transport producer needs a registered relationship, not a blanket grant');
   const probe = (producerId, slotClass) => registry.resolveGrantedSlotClass({ slotClass, source: 'OPERATION_RESULT', tier: 'RELATED', traits: { continuesPending: false }, entityContext: { entityId: null } }, producerId);
   assert.deepEqual(probe('operation-result.candidates', 'EXACT_RECORD'), { slotClass: 'EXACT_RECORD', denied: false });
   assert.deepEqual(probe('operation-result.candidates', 'URGENT_WORK'), { slotClass: 'HOME_OPPORTUNITY', denied: true });
@@ -486,4 +487,77 @@ test('curated starter rotation is soft: least recently offered first, never offe
   assert.equal(need4.exactFour.startersWithinRotationWindow, 1, 'the one inside the window is reported');
   const same = run(starters, {});
   assert.equal(same.selected.length, 4, 'without rotation data the shared deterministic order applies');
+});
+
+// ---- review: ownership needs a registered relationship, not a shared-producer grant ------------------------------------------------
+
+const fs = require('node:fs');
+const nodePath = require('node:path');
+const { SUGGESTED_ACTION_OUTCOMES } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
+const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
+
+test('result-producer ownership holds only when the TRUSTED current operation owns the outcome; a handler-set sourceOperationId is not proof', () => {
+  const gaps = [named('g1', 'PROFILE_GAP'), named('g2', 'PROFILE_GAP'), named('g3', 'PROFILE_GAP'), named('g4', 'PROFILE_GAP')];
+  const brand = (over = {}) => named('brand', 'EXACT_RECORD', {
+    source: 'OPERATION_RESULT', sourceOperationId: 'INVENTORY_ITEM_CORRECT', operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: 'ADD_BRAND',
+    entityContext: { propertyId: 'prop-1', entityType: 'INVENTORY_ITEM', entityId: 'item-1', contextVersion: 'v1' }, ...claim({ currentResultOwnership: true }), ...over,
+  });
+  // Production grants (no override): the shared producer id.
+  const real = (candidates, currentOperationId) => selectExactFourSuggestedNextActions({
+    nominations: new Map([['operation-result.candidates', candidates]]), eligibility: ctx(), actionableCompleteness: 0.95, currentOperationId,
+  });
+  const owned = real([brand()], 'INVENTORY_ITEM_CORRECT');
+  assert.equal(owned.exactFour.signalClaimsDenied, 0);
+  assert.equal(owned.evaluated[0].currentResultOwnership, true);
+  const owned2 = real([brand()], 'INVENTORY_ITEM_CREATE');
+  assert.equal(owned2.evaluated[0].currentResultOwnership, true, 'creating an item also owns its missing-detail follow-ups');
+  for (const [label, op] of [['unrelated operation', 'WARRANTY_CORRECT'], ['no trusted operation', null], ['undefined', undefined], ['lookalike', 'INVENTORY_ITEM_CORRECT_X']]) {
+    const denied = real([brand()], op);
+    assert.equal(denied.exactFour.signalClaimsDenied, 1, label);
+    assert.equal(denied.evaluated[0].currentResultOwnership, false, label);
+  }
+  // The candidate's own sourceOperationId (handler-controlled) claims the right operation, but the trusted one decides.
+  const forged = real([brand({ sourceOperationId: 'INVENTORY_ITEM_CORRECT' })], 'ROOM_CREATE');
+  assert.equal(forged.evaluated[0].currentResultOwnership, false);
+  // A denied claim loses every benefit: it counts against the one-unrelated cap and cannot take the reserved slot.
+  const opp = (id) => named(id, 'HOME_OPPORTUNITY', { source: 'OPERATION_RESULT', ...claim({ currentResultOwnership: true }) });
+  const two = real([opp('o1'), opp('o2')], 'WARRANTY_CORRECT');
+  assert.equal(two.selected.length, 1, 'ungranted ownership is capped as an unrelated opportunity');
+  const reserved = selectExactFourSuggestedNextActions({
+    nominations: new Map([['operation-result.candidates', [opp('strong')]], ['x', gaps]]), eligibility: ctx(), actionableCompleteness: 0.5, currentOperationId: 'WARRANTY_CORRECT',
+    slotGrants: { 'operation-result.candidates': { allowed: new Set(['HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY', mayClaimCurrentResultOwnership: true, ownershipRequiresRegisteredRelationship: true }, x: { allowed: new Set(ALL), fallback: 'PROFILE_GAP' } },
+  });
+  assert.equal(reserved.exactFour.opportunityReserved, false, 'a denied ownership claim cannot reserve the opportunity slot');
+});
+
+test('ownership relationships: every owned outcome is a registered outcome of an operation that exists, and every source operation is a real handler call site', () => {
+  const handlerSource = ['inventory', 'homeRecordWrites', 'maintenance', 'warranties', 'recordConfirm', 'captureConfirm']
+    .map((name) => fs.readFileSync(nodePath.join(__dirname, `../../src/services/ask/handlers/${name}.handler.ts`), 'utf8')).join('\n');
+  const PLATFORM_RECOVERY = new Set(['MAINTENANCE_TASK_CREATE', 'REFINANCE_RATE_MONITOR', 'QUOTE_COMPARISON_CREATE', 'INVENTORY_LOOKUP']);
+  for (const [sourceOperation, owned] of Object.entries(registry.RESULT_OWNERSHIP_RELATIONSHIPS)) {
+    assert.ok(sourceOperation in ASK_OPERATION_DEFINITIONS, `${sourceOperation} is a registered operation`);
+    assert.ok(owned.length > 0);
+    for (const entry of owned) {
+      const [operationId, outcomeKey] = entry.split(':');
+      assert.ok(operationId in ASK_OPERATION_DEFINITIONS, `${entry}: target operation exists`);
+      assert.ok((SUGGESTED_ACTION_OUTCOMES[operationId] ?? []).includes(outcomeKey), `${entry} is a registered outcome`);
+    }
+    if (!PLATFORM_RECOVERY.has(sourceOperation)) assert.ok(handlerSource.includes(`sourceOperationId: '${sourceOperation}'`), `${sourceOperation} is a real handler call site`);
+  }
+  assert.equal(registry.currentOperationOwnsOutcome('INVENTORY_ITEM_CORRECT', { operationId: 'HOME_EVENT_CORRECT', outcomeKey: 'ADD_AMOUNT' }), false);
+  assert.equal(registry.currentOperationOwnsOutcome('HOME_EVENT_CORRECT', { operationId: 'HOME_EVENT_CORRECT', outcomeKey: 'ADD_AMOUNT' }), true);
+  assert.equal(registry.currentOperationOwnsOutcome('MADE_UP_OPERATION', { operationId: 'HOME_EVENT_CORRECT', outcomeKey: 'ADD_AMOUNT' }), false);
+});
+
+test('the real handler candidate builders satisfy the relationship registry for the operations that call them (no legitimate ownership is lost)', () => {
+  const { inventoryMissingDetailCandidates, roomAddItemCandidates } = require('../../src/services/ask/handlers/inventory.handler.ts');
+  const item = { id: 'item-1', name: 'Dishwasher', updatedAt: new Date('2026-10-04T00:00:00Z') };
+  const missing = inventoryMissingDetailCandidates(item, { propertyId: 'prop-1', sourceOperationId: 'INVENTORY_ITEM_CORRECT' });
+  assert.ok(missing.length > 0);
+  for (const candidate of missing) {
+    assert.equal(candidate.signals.currentResultOwnership, true);
+    for (const op of ['INVENTORY_ITEM_CORRECT', 'INVENTORY_ITEM_CREATE']) assert.equal(registry.currentOperationOwnsOutcome(op, candidate), true, `${op} owns ${candidate.outcomeKey}`);
+  }
+  const rooms = roomAddItemCandidates({ id: 'room-1', name: 'Kitchen', updatedAt: new Date() }, { propertyId: 'prop-1', sourceOperationId: 'ROOM_CREATE' });
+  for (const candidate of rooms) for (const op of ['ROOM_CREATE', 'ROOM_RENAME']) assert.equal(registry.currentOperationOwnsOutcome(op, candidate), true, `${op} owns ${candidate.outcomeKey}`);
 });

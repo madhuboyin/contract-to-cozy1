@@ -9,7 +9,7 @@ import {
 } from './suggestedNextActionPolicy';
 import { compareRanked } from './suggestedNextActionRanking';
 import {
-  COOLDOWN_EXEMPT_SLOT_CLASSES, EXACT_FOUR, lifecycleKey, EXACT_FOUR_SHORTAGE_REASONS, STARTER_ROTATION_MS, evaluateSignalClaims, grantForProducer, OPPORTUNITY_SLOT_CLASSES, SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION,
+  COOLDOWN_EXEMPT_SLOT_CLASSES, EXACT_FOUR, lifecycleKey, EXACT_FOUR_SHORTAGE_REASONS, STARTER_ROTATION_MS, currentOperationOwnsOutcome, evaluateSignalClaims, grantForProducer, OPPORTUNITY_SLOT_CLASSES, SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION,
   SUGGESTED_NEXT_ACTION_SLOT_CLASSES, PRODUCER_SLOT_GRANTS, REGISTERED_WHY_NOW_REASONS, resolveGrantedSlotClass,
   type ProducerSlotGrant, type ExactFourExemptReason, type ExactFourShortageReason, type SuggestedNextActionSlotClass,
 } from './suggestedNextActionExactFourRegistry';
@@ -38,6 +38,11 @@ export interface ExactFourInput extends PolicyInput {
   starterLastOfferedAtMs?: ReadonlyMap<string, number>;
   /** Clock for the starter rotation window; the policy itself never reads one. Without it no rotation diagnostic is produced. */
   rotationNowMs?: number;
+  /**
+   * The operation of the TRUSTED current execution (the finalizer's own `operationId`), never read from a candidate. Ownership claims
+   * from a producer whose grant requires a registered relationship are honored only when this operation owns the candidate's outcome.
+   */
+  currentOperationId?: string | null;
   /** Overrides the server-owned producer grants (tests only; production uses the registry). */
   slotGrants?: Readonly<Record<string, ProducerSlotGrant>>;
   /** Overrides the registered why-now reason tokens (tests only; production uses the registry). */
@@ -111,7 +116,9 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
       exactFour: { policyVersion: SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION, applicability: 'EXEMPT', exemptReason },
       evaluated: legacy.selected.map((entry) => {
         const granted = resolveGrantedSlotClass(entry.candidate, entry.producerId, grants);
-        const signals = evaluateSignalClaims(entry.candidate.signals, grantForProducer(entry.producerId, grants));
+        const signals = evaluateSignalClaims(entry.candidate.signals, grantForProducer(entry.producerId, grants), {
+          ownershipRelationshipHolds: currentOperationOwnsOutcome(input.currentOperationId, entry.candidate),
+        });
         return { slotClass: granted.slotClass, currentResultOwnership: signals.currentResultOwnership, activeGoalMatch: signals.activeGoalMatch };
       }),
     };
@@ -140,7 +147,9 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
     const producerId = producerByCandidate.get(winner.candidate)!;
     const granted = grantedClass(winner.candidate, producerId);
     if (granted.denied) slotClassDenied += 1;
-    const signals = evaluateSignalClaims(winner.candidate.signals, grantForProducer(producerId, grants));
+    const signals = evaluateSignalClaims(winner.candidate.signals, grantForProducer(producerId, grants), {
+      ownershipRelationshipHolds: currentOperationOwnsOutcome(input.currentOperationId, winner.candidate),
+    });
     signalClaimsDenied += signals.deniedClaims;
     return {
       candidate: winner.candidate, producerId, verdict: verdictByCandidate.get(winner.candidate)!, score: winner.score,

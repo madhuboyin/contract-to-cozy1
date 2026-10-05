@@ -1,6 +1,7 @@
 // ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN Appendix C.15 / Ask Redo FRD §27.7a: reviewed configuration for the exact-four
 // selection policy. Versioned registry data, never handler prose. Self-contained (no handler imports) like the main registry.
 import type { SuggestedNextAction } from '../../../productFramework/ask/ask.contract';
+import { SUGGESTED_ACTION_OUTCOMES } from './suggestedNextActionRegistry';
 
 export const SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION = 'sna-exact-four-1';
 
@@ -53,15 +54,23 @@ export interface ProducerSlotGrant {
    * claim is cleared and counted (`signalClaimsDenied`). Both default to not allowed.
    */
   mayClaimCurrentResultOwnership?: boolean;
+  /**
+   * A SHARED transport producer (every handler's candidates flow through `operation-result.candidates`) is not proof of semantic
+   * ownership. When true, an ownership claim is honored only if the TRUSTED current execution operation owns the candidate's target
+   * outcome in `RESULT_OWNERSHIP_RELATIONSHIPS`. The candidate's own `sourceOperationId` is handler-set and is never the proof.
+   */
+  ownershipRequiresRegisteredRelationship?: boolean;
   mayClaimActiveGoalMatch?: boolean;
 }
 export const UNREGISTERED_PRODUCER_GRANT: ProducerSlotGrant = { allowed: new Set(['HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY' };
 export const PRODUCER_SLOT_GRANTS: Readonly<Record<string, ProducerSlotGrant>> = {
   // Handler-attached candidates describe the answer in front of the homeowner: continuing it and fixing its records. Urgent work
   // and starters need their own registered producers (step 4).
-  // Its candidates are built from the answer in front of the homeowner, so it may claim current-result ownership; it has no goal source.
+  // It may claim current-result ownership ONLY for an outcome the current execution's operation owns (RESULT_OWNERSHIP_RELATIONSHIPS);
+  // it has no goal source.
   'operation-result.candidates': {
     allowed: new Set(['CONTINUE_WORK', 'EXACT_RECORD', 'HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY', mayClaimCurrentResultOwnership: true,
+    ownershipRequiresRegisteredRelationship: true,
   },
 };
 
@@ -147,12 +156,47 @@ export function grantForProducer(producerId: string | undefined, grants: Readonl
 
 export interface EvaluatedSignals { currentResultOwnership: boolean; activeGoalMatch: boolean; deniedClaims: number }
 
-/** The ownership and goal signals a candidate may actually carry: its claims, cleared where the producer's grant does not allow them. */
+/**
+ * Registered ownership relationships: the operation that RAN (the trusted current execution) -> the target outcomes (`operation:outcome`)
+ * whose actions it legitimately owns. Derived from the handlers' real call sites and cross-checked by tests against the outcome
+ * vocabulary and the handler sources. An unlisted operation owns nothing.
+ */
+const INVENTORY_DETAIL_OUTCOMES = (SUGGESTED_ACTION_OUTCOMES.INVENTORY_ITEM_CORRECT ?? []).map((outcome) => `INVENTORY_ITEM_CORRECT:${outcome}`);
+const HOME_EVENT_FOLLOW_UPS = ['HOME_EVENT_CORRECT:LINK_INVENTORY_ITEM', 'HOME_EVENT_CORRECT:ADD_AMOUNT'] as const;
+const WARRANTY_REMINDER = ['HOME_DEADLINE_MONITOR:MONITOR_WARRANTY_EXPIRY'] as const;
+const ROOM_ADD_ITEM = ['INVENTORY_ITEM_CREATE:ADD_ITEM_TO_ROOM'] as const;
+export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly string[]>> = {
+  INVENTORY_ITEM_CORRECT: INVENTORY_DETAIL_OUTCOMES,
+  INVENTORY_ITEM_CREATE: INVENTORY_DETAIL_OUTCOMES,
+  HOME_EVENT_CORRECT: HOME_EVENT_FOLLOW_UPS,
+  CAPTURE_EVENT_CONFIRM: HOME_EVENT_FOLLOW_UPS,
+  WARRANTY_CORRECT: WARRANTY_REMINDER,
+  CAPTURE_WARRANTY_CONFIRM: WARRANTY_REMINDER,
+  ROOM_CREATE: ROOM_ADD_ITEM,
+  ROOM_RENAME: ROOM_ADD_ITEM,
+  MAINTENANCE_TASK_UPDATE: ['MAINTENANCE_TASK_UPDATE:REOPEN_TASK', 'MAINTENANCE_TASK_UPDATE:RESUME_REMINDERS'],
+  // Platform recovery (plan C.13): the failed operation owns its own "start this again", and a lookup owns its exact-record review.
+  MAINTENANCE_TASK_CREATE: ['MAINTENANCE_TASK_CREATE:RESTART_AFTER_EXPIRY'],
+  REFINANCE_RATE_MONITOR: ['REFINANCE_RATE_MONITOR:RESTART_AFTER_EXPIRY'],
+  QUOTE_COMPARISON_CREATE: ['QUOTE_COMPARISON_CREATE:RESTART_AFTER_EXPIRY'],
+  INVENTORY_LOOKUP: ['INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD'],
+};
+
+/** Does the TRUSTED current execution operation own this candidate's target outcome? */
+export function currentOperationOwnsOutcome(currentOperationId: string | null | undefined, target: { operationId: string; outcomeKey: string }): boolean {
+  if (!currentOperationId) return false;
+  return (RESULT_OWNERSHIP_RELATIONSHIPS[currentOperationId] ?? []).includes(`${target.operationId}:${target.outcomeKey}`);
+}
+
+/** The ownership and goal signals a candidate may actually carry: its claims, cleared where the producer's grant (and relationship) do not allow them. */
 export function evaluateSignalClaims(
   signals: { currentResultOwnership: boolean; activeGoalMatch: boolean },
   grant: ProducerSlotGrant,
+  context: { ownershipRelationshipHolds: boolean } = { ownershipRelationshipHolds: false },
 ): EvaluatedSignals {
-  const ownership = signals.currentResultOwnership && grant.mayClaimCurrentResultOwnership === true;
+  const ownershipAllowed = grant.mayClaimCurrentResultOwnership === true
+    && (grant.ownershipRequiresRegisteredRelationship !== true || context.ownershipRelationshipHolds);
+  const ownership = signals.currentResultOwnership && ownershipAllowed;
   const goal = signals.activeGoalMatch && grant.mayClaimActiveGoalMatch === true;
   return {
     currentResultOwnership: ownership, activeGoalMatch: goal,

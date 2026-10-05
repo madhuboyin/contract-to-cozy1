@@ -147,6 +147,13 @@ export const askSuggestedActionsExactFourReasonsTotal = new Counter({
   registers: [register],
 });
 
+export const askSuggestedActionsLifecycleMissingRowTotal = new Counter({
+  name: 'ask_suggested_actions_lifecycle_missing_row_total',
+  help: 'Lifecycle selection or completion updates that matched no row (a failed offer write or a wrong lifecycle identity) by bounded event (SELECTED, COMPLETED)',
+  labelNames: ['event'] as const,
+  registers: [register],
+});
+
 export const askSkillContextProviderTotal = new Counter({
   name: 'ask_skill_context_provider_total',
   help: 'Skill context provider invocations by immutable provider version and bounded result status',

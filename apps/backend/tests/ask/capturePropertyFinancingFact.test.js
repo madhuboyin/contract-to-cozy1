@@ -21,14 +21,14 @@ test('capturePropertyFinancingFact creates the idempotency-gating PropertyFactEv
   assert.ok(txIdx > 0);
   const firstStatementIdx = writerSource.indexOf('const evidence = await tx.propertyFactEvidence.create(', txIdx);
   const supersedeIdx = writerSource.indexOf('await tx.propertyFactEvidence.updateMany(', txIdx);
-  const upsertIdx = writerSource.indexOf('await writeMortgageRateGuarded(tx, propertyId, interestRateBps);', txIdx);
+  const upsertIdx = writerSource.indexOf('await recordMortgageRate(tx, {', txIdx);
   assert.ok(firstStatementIdx > txIdx, 'expected the evidence create to be inside the transaction');
   assert.ok(firstStatementIdx < supersedeIdx, 'the evidence create must run before the supersession updateMany');
   assert.ok(supersedeIdx < upsertIdx, 'supersession must run before the canonical PropertyFinancingProfile write');
 });
 
 test('the supersession updateMany excludes the row the same transaction just created', () => {
-  const idx = writerSource.indexOf('await tx.propertyFactEvidence.updateMany(');
+  const idx = writerSource.indexOf('await tx.propertyFactEvidence.updateMany(', writerSource.indexOf('await prisma.$transaction(async (tx) => {'));
   assert.ok(idx > 0);
   const block = writerSource.slice(idx, writerSource.indexOf(');', idx));
   assert.match(block, /id: \{ not: evidence\.id \}/, 'missing the id exclusion clause -- without it this blanket updateMany would immediately re-supersede its own new row');
@@ -73,12 +73,14 @@ test('confirmCaptureFact routes financial.currentMortgage to capturePropertyFina
   assert.match(branchBlock, /captureExecutionId: execution\.id/);
 });
 
-test('the canonical profile write is the guarded helper: createMany then one conditional updateMany, never an unconditional upsert', () => {
+test('the canonical profile write is the guarded helper: createMany then conditional updates only, never an unconditional upsert, and it announces both facts', () => {
   const helperIdx = writerSource.indexOf('export async function writeMortgageRateGuarded(');
   assert.ok(helperIdx > 0);
-  const helper = writerSource.slice(helperIdx, writerSource.indexOf('export async function capturePropertyFinancingFact('));
+  const helper = writerSource.slice(helperIdx, writerSource.indexOf('export const MORTGAGE_STATUS_FACT_KEY_FOR_RATE'));
   assert.match(helper, /createMany\(\{[\s\S]*mortgageStatus: 'MORTGAGED'[\s\S]*skipDuplicates: true/);
-  assert.match(helper, /mortgageStatus: \{ in: \['UNKNOWN', 'MORTGAGED'\] \}/);
+  assert.match(helper, /where: \{ propertyId, mortgageStatus: 'UNKNOWN' \}/);
+  assert.match(helper, /where: \{ propertyId, mortgageStatus: 'MORTGAGED' \}/);
   assert.match(helper, /throw new PropertyMortgageRateRefusedError\(\)/);
   assert.doesNotMatch(writerSource, /propertyFinancingProfile\.upsert\(/);
+  assert.match(writerSource, /changedFactKeys = statusChanged \? \[FINANCING_CAPTURE_FACT_KEY, MORTGAGE_STATUS_FACT_KEY_FOR_RATE\]/);
 });

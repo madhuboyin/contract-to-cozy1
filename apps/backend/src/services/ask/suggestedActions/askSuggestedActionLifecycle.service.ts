@@ -9,6 +9,7 @@
 // answer. Every "extend suppression" write is a single conditional update (raise-only), so concurrent offers can only lengthen a
 // cooldown, never shorten a longer "Not now".
 import { logger } from '../../../lib/logger';
+import { askSuggestedActionsLifecycleMissingRowTotal } from '../../../lib/metrics';
 import { prisma } from '../../../lib/prisma';
 import { COOLDOWN_MS, lifecycleKey, offerCooldownMs, type LifecycleIdentity, type SuggestedNextActionSlotClass } from './suggestedNextActionExactFourRegistry';
 import type { ExactFourEvaluation } from './suggestedNextActionExactFourPolicy';
@@ -127,25 +128,36 @@ export async function recordSuggestedActionOffers(input: RecordOffersInput, db: 
   }
 }
 
-/** Selection and completion are state markers on an existing row; a missing row (never recorded) is not created here. */
-export async function recordSuggestedActionSelected(userId: string, propertyId: string, identity: LifecycleIdentity, now: Date, db: LifecycleDb = defaultDb()): Promise<boolean> {
+/**
+ * Selection and completion are state markers on an existing row; a missing row (never recorded) is not created here. They return true
+ * only when exactly one row was updated. A zero-row update (a failed offer write, or a wrong lifecycle identity) is counted and logged
+ * separately from a thrown write failure, and still fails open: the caller's flow is never blocked.
+ */
+async function markLifecycleState(
+  event: 'SELECTED' | 'COMPLETED', userId: string, propertyId: string, identity: LifecycleIdentity, data: Record<string, Date>, db: LifecycleDb,
+): Promise<boolean> {
   try {
-    await db.askSuggestedActionLifecycle.updateMany({ where: where(userId, propertyId, identity), data: { selectedAt: now } });
-    return true;
+    const result = await db.askSuggestedActionLifecycle.updateMany({ where: where(userId, propertyId, identity), data });
+    if (result.count === 1) return true;
+    if (result.count === 0) {
+      askSuggestedActionsLifecycleMissingRowTotal.inc({ event });
+      logger.warn({ userId, propertyId, event, operationId: identity.operationId, outcomeKey: identity.outcomeKey }, '[ask-suggested-actions] lifecycle update matched no row');
+    } else {
+      logger.warn({ userId, propertyId, event, matched: result.count }, '[ask-suggested-actions] lifecycle update matched more than one row');
+    }
+    return false;
   } catch (error) {
-    logger.warn({ err: error, userId, propertyId }, '[ask-suggested-actions] lifecycle selection write failed');
+    logger.warn({ err: error, userId, propertyId, event }, '[ask-suggested-actions] lifecycle write failed');
     return false;
   }
 }
 
-export async function recordSuggestedActionCompleted(userId: string, propertyId: string, identity: LifecycleIdentity, now: Date, db: LifecycleDb = defaultDb()): Promise<boolean> {
-  try {
-    await db.askSuggestedActionLifecycle.updateMany({ where: where(userId, propertyId, identity), data: { completedAt: now } });
-    return true;
-  } catch (error) {
-    logger.warn({ err: error, userId, propertyId }, '[ask-suggested-actions] lifecycle completion write failed');
-    return false;
-  }
+export function recordSuggestedActionSelected(userId: string, propertyId: string, identity: LifecycleIdentity, now: Date, db: LifecycleDb = defaultDb()): Promise<boolean> {
+  return markLifecycleState('SELECTED', userId, propertyId, identity, { selectedAt: now }, db);
+}
+
+export function recordSuggestedActionCompleted(userId: string, propertyId: string, identity: LifecycleIdentity, now: Date, db: LifecycleDb = defaultDb()): Promise<boolean> {
+  return markLifecycleState('COMPLETED', userId, propertyId, identity, { completedAt: now }, db);
 }
 
 export interface RecordDismissalInput {
