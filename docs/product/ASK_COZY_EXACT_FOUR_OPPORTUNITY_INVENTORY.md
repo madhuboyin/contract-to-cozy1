@@ -224,6 +224,16 @@ Until those exist, the gate is **not** established and exact-four must not activ
 
 **Recommendation for D-O4.** Approve in principle a new `SEASONAL_HOME_CARE`-style read-only operation (two outcomes) as the first new starter source, subject to an executed empty-home run; and decide whether to commission one or two further content operations, or to accept that viewer on an empty home needs the starter inventory to be authored content rather than reads of recorded data. D-O4 stays unapproved until the starters are built and proven.
 
+
+**Seasonal home-care read: stage 1 built and executed (owner approved in principle, October 5, 2026).** `services/ask/support/seasonalHomeCare.ts` is a **pure** builder, not yet registered as an operation, so it is not routable and changes no live behavior. Inputs: the property's required zip code, an optional saved climate region, the date, and the local catalog; it reads no recorded home data and makes no external call. `seasonalHomeCareEmptyHome.test.js` (7 tests) executes it:
+- Region: saved, else the local zip-prefix table (the same order as `ClimateZoneService`), else the national default `MODERATE`, with the source reported so the answer says when it used the default.
+- **19 of 20 season x region cells return asset-free content. The one gap is FALL x TROPICAL**: no asset-free fall template lists `TROPICAL`, a hole in the local catalog, not a data dependency. 17 zip prefixes and FL, HI and PR map to `TROPICAL`, so tropical-zip homes get a bounded `READY_WITH_LIMITATIONS` state in fall (and for "next season" asked in summer). That is the empty-state class D-O13 does not count, so **as it stands the starter is dependable except for tropical homes in fall**.
+- THIS_SEASON and NEXT_SEASON are distinct answers (two starter outcomes on one operation), blocks satisfy the real block schema, and the boundary states the answer is general guidance, not an assessment of the home.
+
+**Owner decision needed (D-O16): how to close FALL x TROPICAL.** Options: (a) author asset-free fall templates for the tropical region in the catalog (a product-content change that also feeds the seasonal checklist); (b) let the tropical fall answer fall back to the `WARM` list with an explicit stated approximation; (c) accept that tropical homes in fall do not get this starter and treat that cell as a state where exact-four degrades (it must be proven and stated, not silent). My recommendation is (a), because it fixes a real gap in the product and keeps the starter deterministic.
+
+**Not done:** registering it as an operation (definition, routing pattern, audience and trust policy, coverage matrix, skill package, calibration evidence and certification corpus rows: the `WARRANTY_LOOKUP` slice touched about 30 files) is a **live-routing change** and has not been started; it needs your go-ahead, and the routing patterns must be designed so they do not capture existing seasonal questions.
+
 ## 5. Outcome registry and launch entries needed (for approval)
 
 - **Outcomes** registered per operation in `SUGGESTED_ACTION_OUTCOMES` (for example `PROPERTY_SUMMARY: ['OPEN_SUMMARY']`), bounded tokens, validated by the registry test.
