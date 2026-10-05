@@ -157,6 +157,23 @@ export function isRepeatableOutcome(operationId: string, outcomeKey: string): bo
   return REPEATABLE_OUTCOMES.has(`${operationId}:${outcomeKey}`);
 }
 
+/**
+ * Outcomes whose identical stored prompt MAY be offered again even though it was asked in the recent-history window (owner decision
+ * D-O10). This is deliberately a SEPARATE property from `REPEATABLE_OUTCOMES`: repeatable completion ("this may be done again") and
+ * recent-prompt deduplication ("this exact text was just asked") are different concepts, and tying the second to the first would also
+ * change the existing repeatable recovery outcomes. Starters only: every entry must be an explicit, reviewed `operation:outcome`
+ * for a read-only, viewer-floor, standard-safety, property-scoped operation (checked by `validateSuggestedNextActionRegistry`).
+ * Empty until the starter list is approved (inventory D-O4); no entry is invented here.
+ */
+export const PROMPT_HISTORY_EXEMPT_OUTCOMES: ReadonlySet<string> = new Set<string>([]);
+
+export function isPromptHistoryExemptOutcome(operationId: string, outcomeKey: string): boolean {
+  return PROMPT_HISTORY_EXEMPT_OUTCOMES.has(`${operationId}:${outcomeKey}`);
+}
+
+/** Operation families a prompt-history-exempt (starter) outcome may belong to: read-only answers, never a command, monitor or decision. */
+export const PROMPT_HISTORY_EXEMPT_FAMILIES: ReadonlySet<string> = new Set(['RECORD_QUERY', 'STATUS_SUMMARY']);
+
 // ---- TTL (plan §4) -----------------------------------------------------------------------------------------------------------
 
 /** Per-`operationId:outcomeKey` override of the interaction-type default; always capped at the source execution expiry. None yet. */
@@ -265,6 +282,15 @@ export function validateSuggestedNextActionRegistry(): string[] {
   for (const key of REPEATABLE_OUTCOMES) {
     const [operationId, outcomeKey] = key.split(':');
     if (!operationId || !outcomeKey || !isRegisteredOutcome(operationId, outcomeKey)) problems.push(`repeatable: ${key} is not a registered outcome`);
+  }
+  for (const key of PROMPT_HISTORY_EXEMPT_OUTCOMES) {
+    const [operationId, outcomeKey] = key.split(':');
+    if (!operationId || !outcomeKey || !isRegisteredOutcome(operationId, outcomeKey)) { problems.push(`prompt-history exempt: ${key} is not a registered outcome`); continue; }
+    const definition = ASK_OPERATION_DEFINITIONS[operationId as keyof typeof ASK_OPERATION_DEFINITIONS];
+    if (!PROMPT_HISTORY_EXEMPT_FAMILIES.has(definition.family)) problems.push(`prompt-history exempt: ${key} is not a read-only operation family (${definition.family})`);
+    if (definition.propertyRoleFloor !== 'VIEWER') problems.push(`prompt-history exempt: ${key} is not a viewer-floor operation`);
+    if (definition.safetyClass !== 'STANDARD') problems.push(`prompt-history exempt: ${key} is not standard safety`);
+    if (!definition.requiresProperty) problems.push(`prompt-history exempt: ${key} is not property-scoped`);
   }
   for (const key of Object.keys(OUTCOME_TTL_OVERRIDES_MS)) {
     const [operationId, outcomeKey] = key.split(':');

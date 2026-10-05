@@ -1,4 +1,4 @@
-# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 4, for owner review)
+# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 5, for owner review)
 
 **Status:** REVISION 2 after owner review (three corrections below). No producer or opportunity registry entry has been written; the only code change is the explicit `RECALL_REVIEW` audience policy (finding 7). Governing scope: `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md` Appendix C.15 and C.16, and `ASK_COZY_EXACT_FOUR_REGISTRY_PACKET.md`.
 
@@ -127,7 +127,7 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 |---|---|---|
 | Current rules | **11** | 4 + 6 history removals (5 recent plus the current message) + 1 disabled operation |
 | Current rules, and the finalizer also excludes the current answer's outcome | **12** | one more removal |
-| A starter-specific prompt-history exemption exists | **5** | 4 + 1 disabled operation; history no longer removes exempt starters |
+| The starter-specific prompt-history exemption is registered for the starters (**the real mechanism, measured with it registered**) | **5** | 4 + 1 disabled operation; history no longer removes exempt starters |
 | Same, and the current answer's outcome is excluded | **6** | 4 + 1 disabled + 1 current |
 
 **Verdict for the four dependable starters (S1 to S4) as they stand: the invariant is RED.** One disabled operation leaves three; one starter used in the last five turns leaves three; four starters used in a row leave none. A user exploring by clicking starters is the normal case, so this is not an edge. Only about four starters can be shown to return content on a sparse home, so the current rules (11 or 12) cannot be met; the rule change (5 or 6) can be, with S1 to S4 plus one or two more dependable starters.
@@ -136,7 +136,7 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D-O10 | **Add a starter-specific prompt-history exemption, as a separate registry property** (for example `PROMPT_HISTORY_EXEMPT_OUTCOMES`, explicit approved entries, starters only). **Not** a global change keyed on `isRepeatableOutcome` | Approve the starter-specific form. Repeatable *completion* ("this may be done again") and recent-*prompt* deduplication ("this exact text was just asked") are different concepts; tying the second to the first would also change the four existing repeatable outcomes (executed: `INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD` and the three `RESTART_AFTER_EXPIRY` outcomes), which this change has no reason to touch. A separate property leaves them unchanged and makes the exemption reviewable per starter. Repetition is then governed by the offer cooldown and soft rotation (inactive until wiring) |
+| D-O10 | **Starter-specific prompt-history exemption, as a separate registry property** | **APPROVED and IMPLEMENTED (October 5, 2026).** `PROMPT_HISTORY_EXEMPT_OUTCOMES` (separate from `REPEATABLE_OUTCOMES`) and `isPromptHistoryExemptOutcome` in `suggestedNextActionRegistry.ts`; the prompt-history eligibility rule (`EQUIVALENT_PROMPT_ASKED`) consults it and nothing else, so the four existing repeatable recovery outcomes behave exactly as before (tested). **It ships empty:** no starter is approved yet (D-O4), so no entry is invented; adding one is an explicit, reviewed registry change. `validateSuggestedNextActionRegistry` requires each entry to be a registered outcome of a read-only family (`RECORD_QUERY` or `STATUS_SUMMARY`), viewer-floor, standard-safety, property-scoped operation, and rejects commands, contributor-floor reads and material-decision reads |
 | D-O11 | Populate `currentOutcomeKeyHashes` so the answer just produced is not re-offered | Approve in principle (it fixes a real UX gap) but note it raises the minimal pool by one (6 with D-O10) |
 | D-O12 | Should a card or button with the same destination suppress a starter (the plan says a visible action with the same semantic destination suppresses the compact one)? Today it cannot, because identities need an entity | Decide explicitly. If yes, define an entity-less operation-level identity; it removes more starters, so the measurement must be re-run with the largest number of starter destinations a single answer presents. I have not measured that number |
 | D-O4 | Starter pool | Needs at least 5 to 6 dependable starters **after** D-O10 (S1 to S4 plus one or two). The measurement gives the number; **proving the starters are dependable is the activation gate (section 4b)**, not this test. Not approvable until then |

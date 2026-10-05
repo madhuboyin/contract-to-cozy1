@@ -47,15 +47,23 @@ const POOL_OPERATIONS = Object.values(ASK_OPERATION_DEFINITIONS)
 const outcomeFor = (operationId) => `OPEN_${operationId}`.slice(0, 79);
 const messageFor = (operationId) => `Show me ${operationId.toLowerCase().replace(/_/g, ' ')}`;
 
-function registerProvisional(operationIds, { repeatable = false } = {}) {
+function registerProvisional(operationIds, { repeatable = false, promptHistoryExempt = false } = {}) {
   const added = [];
   for (const op of operationIds) {
     if (outcomes.SUGGESTED_ACTION_OUTCOMES[op]) continue; // never touch a real entry
     outcomes.SUGGESTED_ACTION_OUTCOMES[op] = [outcomeFor(op)];
     if (repeatable) outcomes.REPEATABLE_OUTCOMES.add(`${op}:${outcomeFor(op)}`);
+    // The REAL starter-specific exemption (D-O10), registered for the duration of the test only.
+    if (promptHistoryExempt) outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(`${op}:${outcomeFor(op)}`);
     added.push(op);
   }
-  return () => { for (const op of added) { delete outcomes.SUGGESTED_ACTION_OUTCOMES[op]; outcomes.REPEATABLE_OUTCOMES.delete(`${op}:${outcomeFor(op)}`); } };
+  return () => {
+    for (const op of added) {
+      delete outcomes.SUGGESTED_ACTION_OUTCOMES[op];
+      outcomes.REPEATABLE_OUTCOMES.delete(`${op}:${outcomeFor(op)}`);
+      outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.delete(`${op}:${outcomeFor(op)}`);
+    }
+  };
 }
 
 const starterCandidate = (operationId) => ({
@@ -81,13 +89,15 @@ async function availabilityFor({ role, mode, disabled = null }) {
 /**
  * One row, exactly as the exact-four policy would build it from the deterministic starters alone.
  * `removedByHistory` = starters whose stored message is among the last HISTORY_WINDOW completed messages or the current message.
- * `promptHistoryExemptStarters` models the proposed STARTER-SPECIFIC prompt-history exemption (what-if; a separate property from
- * repeatable completion, which is a different concept). Production applies no such exemption.
+ * The prompt-history exemption (D-O10) is the REAL registry property: a starter is exempt only if it was registered with
+ * `promptHistoryExempt` for the duration of the test (a separate property from repeatable completion, a different concept).
  */
-async function rowFor({ pool, role = 'VIEWER', mode = 'UNKNOWN', disabled = null, removedByHistory = 0, promptHistoryExemptStarters = false, currentOperation = null }) {
+async function rowFor({ pool, role = 'VIEWER', mode = 'UNKNOWN', disabled = null, removedByHistory = 0, currentOperation = null }) {
   const operationAvailability = await availabilityFor({ role, mode, disabled });
   const recent = pool.slice(0, removedByHistory).map(messageFor);
-  const asked = new Set(pool.slice(0, removedByHistory).filter(() => !promptHistoryExemptStarters).map((op) => suggestionKey(messageFor(op))));
+  // The REAL history window: these stored messages are what the finalizer would put in askedMessageKeys. Whether they remove a starter is
+  // decided by the real eligibility rule (and the real exemption property), not by this harness.
+  const asked = new Set(pool.slice(0, removedByHistory).map((op) => suggestionKey(messageFor(op))));
   const eligibility = {
     mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability,
     operationRequiresProperty: (id) => getAskOperationDefinition(id).requiresProperty, operationTargetEntityType: (id) => requiredAskTargetEntity(id),
@@ -201,15 +211,18 @@ test('MEASUREMENT: four dependable starters fail the arithmetic under a single d
     assert.equal((await rowFor({ pool, removedByHistory: 4 })).selected, 0, 'four starters used in a row leave none');
     const failing = await failingStates(pool);
     assert.ok(failing.length > 0, 'the invariant is RED for the four-starter pool');
-    // ...and the same with the proposed rule change, because disabling one operation alone leaves three.
-    assert.ok((await failingStates(pool, { promptHistoryExemptStarters: true })).every((s) => s.disabled !== null), 'with a starter-specific exemption only the disabled-operation states fail');
   } finally { restore(); }
+  // ...and with the REAL exemption registered, only the disabled-operation states fail (disabling one operation alone leaves three).
+  const restoreExempt = registerProvisional(pool, { promptHistoryExempt: true });
+  try {
+    assert.ok((await failingStates(pool)).every((state) => state.disabled !== null), 'with the starter-specific exemption only the disabled-operation states fail');
+  } finally { restoreExempt(); }
 });
 
-async function minimalPoolSize(options) {
+async function minimalPoolSize({ exempt = false, ...options } = {}) {
   for (let size = 4; size <= POOL_OPERATIONS.length; size += 1) {
     const pool = POOL_OPERATIONS.slice(0, size);
-    const restore = registerProvisional(pool);
+    const restore = registerProvisional(pool, { promptHistoryExempt: exempt });
     try { if ((await failingStates(pool, options)).length === 0) return size; } finally { restore(); }
   }
   return null;
@@ -220,13 +233,13 @@ test('MEASUREMENT: minimal deterministic pool under CURRENT rules = 4 + 6 histor
   assert.equal(await minimalPoolSize({}), 11);
 });
 
-test('MEASUREMENT: with a starter-specific prompt-history exemption the minimal pool is 4 + 1 disabled operation = 5', async () => {
-  assert.equal(await minimalPoolSize({ promptHistoryExemptStarters: true }), 5);
+test('MEASUREMENT: with the REAL starter-specific prompt-history exemption registered, the minimal pool is 4 + 1 disabled operation = 5', async () => {
+  assert.equal(await minimalPoolSize({ exempt: true }), 5);
 });
 
 test('MEASUREMENT: if the finalizer also excluded the current answer\'s own outcome, the minimal pool grows by one: 6 with the exemption, 12 under the current rules', async () => {
   // 4 fallbacks + 1 disabled operation + 1 current answer (distinct from the disabled one in the worst case).
-  assert.equal(await minimalPoolSize({ promptHistoryExemptStarters: true, withCurrentOperation: true }), 6);
+  assert.equal(await minimalPoolSize({ exempt: true, withCurrentOperation: true }), 6);
   // Current rules: 4 + 6 history + 1 disabled + 1 current = 12, which exceeds what can be proven dependable (only about four starters are).
   assert.equal(await minimalPoolSize({ withCurrentOperation: true }), 12);
 });
@@ -242,13 +255,13 @@ test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds exactly
 
 test('every message-routable operation as the current answer: it removes a starter only when it is a starter, so the pool needs at most one extra', async () => {
   const pool = POOL_OPERATIONS.slice(0, 6);
-  const restore = registerProvisional(pool);
+  const restore = registerProvisional(pool, { promptHistoryExempt: true });
   try {
     const routable = Object.values(ASK_OPERATION_DEFINITIONS).filter((d) => d.messageRoutable).map((d) => d.operationId);
     assert.ok(routable.length > 60, `${routable.length} message-routable operations`);
     for (const current of routable) {
       // Only an operation that IS a starter has an outcome to exclude; every other current answer leaves the pool untouched.
-      const row = await rowFor({ pool, currentOperation: pool.includes(current) ? current : null, promptHistoryExemptStarters: true });
+      const row = await rowFor({ pool, currentOperation: pool.includes(current) ? current : null });
       assert.equal(row.selected, Math.min(4, pool.length - (pool.includes(current) ? 1 : 0)), current); // a row never shows more than four
       assert.equal(row.shortage, 0, `${current} still reaches four`);
     }

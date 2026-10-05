@@ -6,7 +6,7 @@ import type { AskOperationUnavailableReason } from '../support/answerGuards';
 import type { SuggestedNextActionCandidate } from './suggestedNextActionCandidate';
 import { candidateIdentityFields } from './suggestedNextActionCandidate';
 import { suggestedNextActionSemanticKeyHash } from './suggestedNextActionIdentity';
-import { DOMAIN_FRESHNESS_MATRIX, isRegisteredOutcome, isRepeatableOutcome, missingFactCaptureFor } from './suggestedNextActionRegistry';
+import { DOMAIN_FRESHNESS_MATRIX, isPromptHistoryExemptOutcome, isRegisteredOutcome, isRepeatableOutcome, missingFactCaptureFor } from './suggestedNextActionRegistry';
 
 export type SuggestedNextActionMode = 'NORMAL' | 'SAFE_RECOVERY_ONLY';
 
@@ -126,7 +126,9 @@ export function evaluateSuggestedNextActionEligibility(candidate: SuggestedNextA
   const hash = suggestedNextActionSemanticKeyHash(candidateIdentityFields(candidate));
   if (ctx.currentOutcomeKeyHashes.has(hash)) return suppressed('HISTORY', 'CURRENT_OUTCOME');
   if (ctx.completedSemanticKeyHashes.has(hash) && !isRepeatableOutcome(operationId, candidate.outcomeKey)) return suppressed('HISTORY', 'EQUIVALENT_COMPLETED');
-  if (ctx.askedMessageKeys.has(ctx.messageKey(candidate.message))) return suppressed('HISTORY', 'EQUIVALENT_PROMPT_ASKED');
+  // A recently asked identical prompt is suppressed unless this outcome is explicitly registered as prompt-history exempt (starters only,
+  // D-O10). Repeatable COMPLETION is a different concept and does not exempt a prompt.
+  if (ctx.askedMessageKeys.has(ctx.messageKey(candidate.message)) && !isPromptHistoryExemptOutcome(operationId, candidate.outcomeKey)) return suppressed('HISTORY', 'EQUIVALENT_PROMPT_ASKED');
 
   // 11. Safety/boundary: in recovery mode only recovery-trait, non-promotional candidates survive.
   if (ctx.mode === 'SAFE_RECOVERY_ONLY' && (!candidate.traits.recovery || candidate.traits.promotional)) return suppressed('SAFETY_BOUNDARY', 'SAFE_RECOVERY_ONLY');
