@@ -805,6 +805,9 @@ export const AskCaptureRequestSchema = z.object({
   fallbackHref: z.string().startsWith('/').nullable().optional(),
   confirmationText: z.string().nullable().default(null),
   expectedContextVersion: z.string(),
+  // Some bounded, item-scoped workflows are clearer as one form even when
+  // Calm Answers normally asks GROUP fields conversationally one at a time.
+  presentation: z.enum(['CONVERSATIONAL', 'FORM']).optional(),
   // The homeowner may skip this question for now (Property Summary per-area capture). Skipping writes nothing.
   skippable: z.boolean().optional(),
 });

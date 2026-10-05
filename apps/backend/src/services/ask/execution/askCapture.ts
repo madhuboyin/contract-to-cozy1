@@ -29,7 +29,7 @@ import { updateInsurancePolicy } from '../../home-management.service';
 import { areaCapturePrompt, areaCaptureStateFrom, areaCaptureSubmitResult } from '../handlers/propertySummary.handler';
 import { AREA_CAPTURE_MESSAGES, areaCaptureFallbackHref, asInputJson, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, HouseholdInvitationInputSchema, InventoryCreateInputSchema, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskWorkflowInputSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, RadarTaskAnswerSchema, RadarTaskTargetSchema, RoomCreateInputSchema, terminalStatus } from '../askHandlerSupport';
 import { householdInvitationResult, householdWorkflowVersion, ROOM_CREATE_CAPTURE_KEY, roomCreateContextVersion, roomCreateResult } from '../handlers/homeRecordWrites.handler';
-import { INVENTORY_CREATE_CAPTURE_KEY, inventoryCreateContextVersion, inventoryItemCreateResult } from '../handlers/inventory.handler';
+import { INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY, INVENTORY_CREATE_CAPTURE_KEY, inventoryCompleteDetailsResult, inventoryCreateContextVersion, inventoryItemContextVersion, inventoryItemCreateResult } from '../handlers/inventory.handler';
 import { claimFileResult, ClaimFileWorkflowInputSchema } from '../handlers/claims.handler';
 import { RADAR_PREFERENCES_CAPTURE_KEY, RADAR_TASK_CAPTURE_KEY, radarCaptureError, radarPreferencesBodyFromAnswer, radarPreferencesContextVersion, radarPreferencesFormResult, radarTaskContextVersion, radarTaskFormResult } from '../handlers/homeEventRadar.handler';
 import { executeOperation } from '../execution/executeOperation';
@@ -644,6 +644,19 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
       canonicalOwner = 'PropertyRadarNotificationPreference';
     }
     captureId = input.idempotencyKey;
+  } else if (execution.operationId === 'INVENTORY_ITEM_CORRECT' && input.captureKey === INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY) {
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to update an inventory item.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown> : {};
+    const itemId = typeof storedParameters.inventoryCompletionItemId === 'string' ? storedParameters.inventoryCompletionItemId : null;
+    if (!itemId) throw Object.assign(new Error('This inventory form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const currentItem = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId: execution.propertyId } });
+    if (!currentItem || inventoryItemContextVersion(currentItem) !== input.expectedContextVersion) throw Object.assign(new Error('This inventory item changed while the form was open. Start again from Add missing details.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    result = await inventoryCompleteDetailsResult(userId, execution.propertyId, itemId, input.answer, typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null);
+    capturedContextVersion = input.expectedContextVersion;
+    captureId = input.idempotencyKey;
+    canonicalOwner = 'InventoryItem';
   } else if (execution.operationId === 'INVENTORY_ITEM_CREATE') {
     if (input.captureKey !== INVENTORY_CREATE_CAPTURE_KEY) {
       const error = new Error('This inventory capture is no longer active.');

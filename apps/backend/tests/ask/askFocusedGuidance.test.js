@@ -545,7 +545,7 @@ test('degraded accepted work names missing facts and makes record correction the
     id: `home-action-missing-details-${action.id}`,
     label: 'Add missing details',
     interactionType: 'START_WORKFLOW',
-    message: 'Correct the install date of this inventory item.',
+    message: 'Complete the missing details for this inventory item.',
     operationId: 'INVENTORY_ITEM_CORRECT',
     entityType: 'INVENTORY_ITEM',
     entityId: 'hvac-1',
@@ -592,7 +592,7 @@ test('degraded accepted work still offers missing-detail correction when the pro
     ['Add missing details', 'PRIMARY'],
     ['Snooze reminders', 'SECONDARY'],
   ]);
-  assert.equal(guidance.actions[0].message, 'Update the missing details for this inventory item.');
+  assert.equal(guidance.actions[0].message, 'Complete the missing details for this inventory item.');
   assert.equal(guidance.actions[0].operationId, 'INVENTORY_ITEM_CORRECT');
   assert.equal(guidance.actions[0].entityId, 'hvac-1');
   const limitation = result.blocks.find((block) => block.id === 'focused-home-action-missing-details');
@@ -617,7 +617,7 @@ test('legacy accepted work with no typed asset asks for an inventory-scoped corr
   const primary = result.blocks.find((block) => block.id === 'focused-home-action-guidance').actions[0];
   assert.equal(primary.label, 'Add missing details');
   assert.equal(primary.operationId, 'INVENTORY_ITEM_CORRECT');
-  assert.equal(primary.message, 'Correct missing details for inventory item "HVAC Furnace".');
+  assert.equal(primary.message, 'Complete the missing details for inventory item "HVAC Furnace".');
   assert.notEqual(primary.operationId, 'PROPERTY_SUMMARY');
   assert.equal(primary.entityId, undefined, 'without a canonical item id the correction handler must clarify rather than guess');
 });

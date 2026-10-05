@@ -291,6 +291,7 @@ export interface AskCaptureRequest {
   fallbackHref?: string | null;
   confirmationText: string | null;
   expectedContextVersion: string;
+  presentation?: 'CONVERSATIONAL' | 'FORM';
   /** The homeowner may skip this question for now; skipping saves nothing (Property Summary per-area capture). */
   skippable?: boolean;
 }

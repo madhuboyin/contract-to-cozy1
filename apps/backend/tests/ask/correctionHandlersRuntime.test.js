@@ -885,6 +885,19 @@ test('inventory propose: an unspecified field asks which detail to correct inste
   assert.equal(result.confirmation, undefined);
 });
 
+test('inventory completion opens one item-scoped form containing every supported missing detail', async () => {
+  itemModel();
+  const result = await proposeInventory('Complete the missing details for this inventory item.');
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  assert.equal(result.captureRequests.length, 1);
+  const request = result.captureRequests[0];
+  assert.equal(request.presentation, 'FORM');
+  assert.equal(request.captureKey, 'INVENTORY_ITEM_COMPLETE_DETAILS');
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['purchasedOn', 'lastServicedOn', 'replacementCostCents']);
+  assert.match(request.helpText, /coverage are reviewed separately/i);
+  assert.equal(calls.updateItem.length, 0, 'opening the completion form writes nothing');
+});
+
 test('inventory item actions: contributors get one action per correctable field, all pinned to the operation; the row schema accepts them', () => {
   const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
   assert.ok(AskPresentationBlockSchema, 'the block schema export must exist for this test to mean anything');
@@ -895,8 +908,8 @@ test('inventory item actions: contributors get one action per correctable field,
   const block = { type: 'GROUPED_LIST', id: 'inventory-results', title: 'Inventory', filters: [], sections: [{ id: 's', title: 's', count: 1, items: [row] }], actions: [] };
   const parsed = AskPresentationBlockSchema.safeParse(block);
   assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues ?? []).slice(0, 200));
-  // ...but the cap still holds: thirteen actions are refused
-  const tooMany = { ...block, sections: [{ ...block.sections[0], items: [{ ...row, actions: Array.from({ length: 13 }, (_, index) => ({ ...row.actions[0], id: `b${index}` })) }] }] };
+  // ...but the bounded row-action cap still holds.
+  const tooMany = { ...block, sections: [{ ...block.sections[0], items: [{ ...row, actions: Array.from({ length: 17 }, (_, index) => ({ ...row.actions[0], id: `b${index}` })) }] }] };
   assert.equal(AskPresentationBlockSchema.safeParse(tooMany).success, false);
 });
 

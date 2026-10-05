@@ -239,18 +239,12 @@ function missingDetailLabels(action: RankedHomeAction): string[] {
   ].map((value) => value.trim()).filter(Boolean))].slice(0, 5);
 }
 
-function inventoryCorrectionMessageForMissingDetails(labels: readonly string[]): string {
-  const first = labels[0] ?? '';
-  if (/install(?:ed|ation)?(?: date| year)?/i.test(first)) return 'Correct the install date of this inventory item.';
-  if (/purchase(?:d)? date/i.test(first)) return 'Correct the purchase date of this inventory item.';
-  if (/last[- ]servic(?:e|ed) date|service history/i.test(first)) return 'Correct the last serviced date of this inventory item.';
-  if (/condition/i.test(first)) return 'Correct the condition of this inventory item.';
-  if (/replacement (?:cost|price|value)/i.test(first)) return 'Correct the replacement cost of this inventory item.';
-  if (/purchase (?:cost|price|value)/i.test(first)) return 'Correct the purchase cost of this inventory item.';
-  if (/brand|manufacturer/i.test(first)) return 'Correct the brand of this inventory item.';
-  if (/model/i.test(first)) return 'Correct the model of this inventory item.';
-  if (/serial/i.test(first)) return 'Correct the serial number of this inventory item.';
-  return 'Update the missing details for this inventory item.';
+function inventoryCorrectionMessageForMissingDetails(_labels: readonly string[]): string {
+  // This CTA represents completion, not a request to correct one named fact.
+  // Keeping the message field-agnostic lets every inventory category open the
+  // same bounded multi-field form. Explicit single-field actions still name
+  // their field and retain the existing correction confirmation.
+  return 'Complete the missing details for this inventory item.';
 }
 
 function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boolean) {
@@ -291,7 +285,7 @@ function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boo
         // No typed asset survived into this legacy work item. Keep the correction scoped to inventory and let
         // INVENTORY_ITEM_CORRECT either resolve this exact display label or ask which equipment item is meant;
         // whole-property completeness can select an unrelated area such as Location and must not be substituted.
-        message: `Correct missing details for inventory item "${action.presentation.subject?.label ?? action.signal}".`,
+        message: `Complete the missing details for inventory item "${action.presentation.subject?.label ?? action.signal}".`,
         operationId: 'INVENTORY_ITEM_CORRECT' as const,
         style: 'PRIMARY' as const,
       }

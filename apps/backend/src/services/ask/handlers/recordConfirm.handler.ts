@@ -5,6 +5,7 @@ import { PROPERTY_AREA_CAPTURE_FEATURE, PROPERTY_AREA_CAPTURE_OPERATION } from '
 import { getFactDefinition } from '../../../modules/propertyContext/catalog/factCatalog';
 import { AskExecution, HouseholdRole, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type EditAskConfirmation } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -230,6 +231,35 @@ async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promis
 
 async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
+  const completion = z.object({ itemId: z.string(), corrections: z.array(z.object({ field: z.enum(['name', 'installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model', 'serialNo', 'purchaseCostCents', 'replacementCostCents', 'notes', 'category', 'roomId']), value: z.string() })).min(1).max(12) }).safeParse(parameters.inventoryCompletion);
+  if (completion.success) {
+    const item = await prisma.inventoryItem.findFirst({ where: { id: completion.data.itemId, propertyId: execution.propertyId! } });
+    if (!item) throw Object.assign(new Error('This inventory item is no longer available. It may have been deleted.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    const patch: Record<string, unknown> = {};
+    let alreadyApplied = true;
+    for (const correction of completion.data.corrections) {
+      const invalid = await inventoryFieldValueError(execution.propertyId!, correction.field, correction.value);
+      if (invalid) throw Object.assign(new Error(invalid), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+      const normalized = inventoryFieldNormalized(correction.field, correction.value);
+      const blocker = await inventoryCorrectionBlocker(execution.propertyId!, item, correction.field, normalized);
+      if (blocker) throw Object.assign(new Error(blocker), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+      if (inventoryFieldCurrent(item, correction.field) !== normalized) alreadyApplied = false;
+      Object.assign(patch, inventoryFieldPatch(correction.field, normalized));
+    }
+    if (!alreadyApplied && parameters.inventoryCorrectionContextVersion !== inventoryItemContextVersion(item)) throw Object.assign(new Error('This inventory item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    if (!alreadyApplied) {
+      await inventoryService.updateItem(execution.propertyId!, item.id, patch);
+      await markCoverageAnalysisStale(execution.propertyId!);
+      await markItemCoverageAnalysesStale(execution.propertyId!, item.id);
+      await markReplaceRepairStale(execution.propertyId!, item.id);
+      await markRiskPremiumOptimizerStale(execution.propertyId!);
+      await markDoNothingRunsStale(execution.propertyId!);
+    }
+    const updated = await prisma.inventoryItem.findUniqueOrThrow({ where: { id: item.id } });
+    const result: AskOperationResult = { status: 'COMPLETED', reasonCode: 'INVENTORY_ITEM_DETAILS_COMPLETED', contextVersion: inventoryItemContextVersion(updated), blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inventory-completed-${item.id}`, title: 'Inventory details updated', status: 'COMPLETED', description: `${completion.data.corrections.length} ${completion.data.corrections.length === 1 ? 'detail was' : 'details were'} saved and dependent analyses were marked for refresh.`, details: [{ label: 'Item', value: item.name }], actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/inventory?tab=items&openItemId=${encodeURIComponent(item.id)}`, style: 'PRIMARY' }] }], suggestions: [`Which items are missing coverage?`], suggestedNextActionCandidates: inventoryMissingDetailCandidates(updated, { propertyId: execution.propertyId!, sourceOperationId: 'INVENTORY_ITEM_CORRECT' }) };
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    return { result, artifactType: 'INVENTORY_ITEM', artifactId: item.id, refreshedExecutions: refresh.refreshedExecutions };
+  }
   const candidate = InventoryItemCorrectionInputSchema.safeParse(parameters.inventoryCorrection);
   if (!candidate.success) throw Object.assign(new Error('The inventory correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const { itemId, field, value } = candidate.data;

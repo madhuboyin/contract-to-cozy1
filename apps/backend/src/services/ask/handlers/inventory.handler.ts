@@ -506,6 +506,7 @@ const INVENTORY_CATEGORY_OPTIONS: readonly CorrectionOption[] = INVENTORY_CATEGO
 // Sentinel written into the room dropdown to mean "no room" (parallel to INVENTORY_ITEM_CREATE's INVENTORY_NO_ROOM_VALUE
 // and HOME_EVENT_CORRECT's HOME_EVENT_LINK_NONE_VALUE) -- an editable field's value is always a non-empty string.
 export const INVENTORY_CORRECTION_NO_ROOM_VALUE = 'NONE';
+export const INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY = 'INVENTORY_ITEM_COMPLETE_DETAILS';
 
 export const INVENTORY_CORRECTION_FIELDS = {
   // The homeowner-facing label only (max matches the inventory update validator). It is NOT the item's appliance
@@ -530,6 +531,78 @@ export const INVENTORY_CORRECTION_FIELDS = {
 } as const;
 
 type InventoryCorrectionField = keyof typeof INVENTORY_CORRECTION_FIELDS;
+
+const INVENTORY_COMPLETION_FIELDS: readonly InventoryCorrectionField[] = [
+  'installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model',
+  'serialNo', 'purchaseCostCents', 'replacementCostCents',
+];
+
+function inventoryCompletionFields(item: Record<string, unknown>): InventoryCorrectionField[] {
+  return INVENTORY_COMPLETION_FIELDS.filter((field) => {
+    const value = item[field];
+    return value == null || value === '' || (field === 'condition' && value === 'UNKNOWN');
+  });
+}
+
+function inventoryCompletionCaptureRequest(item: Record<string, unknown> & { id: string; name: string }, contextVersion: string): AskCaptureRequest {
+  const fields = inventoryCompletionFields(item);
+  return {
+    requirementId: `inventory-complete-${item.id}`,
+    captureKey: INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY,
+    classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
+    title: `Complete ${item.name} details`,
+    question: 'Add the missing details you know. Leave optional fields blank when you are not sure.',
+    helpText: 'Age is calculated from the install date. Warranty and insurance coverage are reviewed separately so linked records and evidence keep their existing safeguards.',
+    inputSchema: { type: 'GROUP', fields: fields.map((field) => {
+      const meta = INVENTORY_CORRECTION_FIELDS[field];
+      const inputSchema = meta.kind === 'DATE'
+        ? { type: 'APPROXIMATE_DATE' as const, allowedPrecisions: ['EXACT_DATE'] as Array<'EXACT_DATE'> }
+        : meta.kind === 'MONEY'
+          ? { type: 'DECIMAL' as const, min: 0, max: MAX_INVENTORY_MONEY_DOLLARS, unit: 'USD' }
+          : meta.kind === 'SELECT'
+            ? { type: 'SINGLE_SELECT' as const, options: [...meta.options] }
+            : { type: 'SHORT_TEXT' as const, maxLength: meta.max };
+      return { key: field, label: meta.label.replace(/^./, (letter) => letter.toUpperCase()), required: false, inputSchema };
+    }) },
+    currentAnswer: Object.fromEntries(fields.map((field) => [field, null])),
+    allowNotSure: true, sensitivity: 'STANDARD',
+    destinationLabel: `Used to prepare updates to ${item.name}; nothing changes until you confirm`,
+    confirmationText: null, expectedContextVersion: contextVersion,
+  };
+}
+
+export async function inventoryCompleteDetailsResult(userId: string, propertyId: string, itemId: string, answer?: Record<string, unknown>, sourceExecutionId?: string | null): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  if (access.role === HouseholdRole.VIEWER) return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'inventory-complete-permission', title: 'A contributor or owner can update this item', body: 'Your role can view inventory details but cannot change them.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+  const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId } });
+  if (!item) return { status: 'BLOCKED', reasonCode: 'INVENTORY_ITEM_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'inventory-complete-missing', title: 'This inventory item is no longer available', body: 'Open the current inventory and choose another item.', tone: 'CAUTION', actions: [] }], suggestions: ['Show my home inventory'] };
+  const contextVersion = inventoryItemContextVersion(item);
+  const missing = inventoryCompletionFields(item as unknown as Record<string, unknown>);
+  if (!answer) {
+    if (!missing.length) return { status: 'COMPLETED', reasonCode: 'INVENTORY_ITEM_DETAILS_COMPLETE', contextVersion, blocks: [{ type: 'SUMMARY', id: 'inventory-details-complete', title: `${item.name} has no missing item details`, body: 'You can still review warranty or insurance coverage separately.', tone: 'DEFAULT', actions: [] }], suggestions: [`Which items are missing coverage?`] };
+    return { status: 'NEEDS_CONTEXT', reasonCode: 'INVENTORY_ITEM_COMPLETE_DETAILS_REQUIRED', contextVersion, parameters: { inventoryCompletionItemId: item.id, sourceExecutionId: sourceExecutionId ?? null }, blocks: [{ type: 'SUMMARY', id: 'inventory-complete-details', title: `Complete ${item.name} details`, body: 'Enter the missing information you know in one form. Nothing changes until you review and confirm.', tone: 'DEFAULT', actions: [] }], captureRequests: [inventoryCompletionCaptureRequest(item as unknown as Record<string, unknown> & { id: string; name: string }, contextVersion)], suggestions: [] };
+  }
+  const corrections: Array<{ field: InventoryCorrectionField; value: string }> = [];
+  for (const field of missing) {
+    const raw = answer[field];
+    if (raw == null || raw === '') continue;
+    let value: string;
+    if (INVENTORY_CORRECTION_FIELDS[field].kind === 'DATE' && typeof raw === 'object' && !Array.isArray(raw)) value = String((raw as { value?: unknown }).value ?? '');
+    else value = String(raw);
+    const invalid = await inventoryFieldValueError(propertyId, field, value);
+    if (invalid) throw Object.assign(new Error(`${INVENTORY_CORRECTION_FIELDS[field].label}: ${invalid}`), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    corrections.push({ field, value: inventoryFieldNormalized(field, value) });
+  }
+  if (!corrections.length) throw Object.assign(new Error('Add at least one detail, or close the form for now.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'INVENTORY_ITEM_COMPLETE_DETAILS_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { inventoryCompletion: { itemId: item.id, corrections }, inventoryCorrectionContextVersion: contextVersion, sourceExecutionId: sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'inventory-complete-review', title: `Review ${item.name} details`, body: 'Confirm these updates together. Coverage remains a separate linked-record review.', tone: 'DEFAULT', actions: [] }],
+    confirmation: { confirmationId: `inventory-complete-${item.id}-1`, version: 1, title: `Save ${item.name} details?`, description: 'This updates the canonical inventory item and refreshes dependent analyses.', fields: [{ label: 'Item', value: item.name }, ...corrections.map(({ field, value }) => ({ label: INVENTORY_CORRECTION_FIELDS[field].label, value: inventoryFieldDisplay(field, value) }))], editableFields: [], confirmLabel: 'Save details', consentText: 'I authorize these updates to the shared home inventory record.', expiresAt: expiresAt.toISOString() },
+    suggestions: [],
+  };
+}
 
 const MAX_INVENTORY_MONEY_DOLLARS = 10_000_000;
 
@@ -821,6 +894,9 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
   }
   const field = inventoryCorrectionFieldFor(message, launchContext?.outcomeKey);
   if (!field) {
+    if (/\b(?:complete|add|update|fill in)\b.{0,35}\bmissing details\b/i.test(message)) {
+      return inventoryCompleteDetailsResult(userId, propertyId, selected.id, undefined, launchContext?.sourceExecutionId);
+    }
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'INVENTORY_CORRECTION_FIELD_REQUIRED',
       ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', `Which detail should change for ${selected.name}? Ask can correct its name, dates, condition, brand, model, serial number, costs, notes, room, or category.`),

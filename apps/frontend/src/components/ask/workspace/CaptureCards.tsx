@@ -543,7 +543,7 @@ export function InlineCaptureCard({
   };
 
   // FRD §11.12 IW-CONV-004: a plain workflow group is asked one question at a time, then submitted as the same single request.
-  if (calm && canAskConversationally(request) && schema.type === 'GROUP') {
+  if (calm && request.presentation !== 'FORM' && canAskConversationally(request) && schema.type === 'GROUP') {
     return <ConversationalCapture request={request} fields={schema.fields} values={values} saving={saving} error={error} autoFocus={autoFocus}
       onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onSubmit={(final) => void save(null, false, final)} />;
   }

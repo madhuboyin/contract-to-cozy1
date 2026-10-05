@@ -732,7 +732,7 @@ const maintenanceForecastPattern = /\b(?:forecast|predict(?:ed|ion|ive)?|upcomin
 const maintenanceCompletePattern = /^\s*(?:please\s+)?(?:(?:mark|set)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:complete|completed|done)|(?:complete|finish)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair))\b|\b(?:i|we) (?:completed|finished)\b.{0,100}\b(?:task|maintenance|gutter|filter|service|inspection|cleaning|repair)\b/i;
 // First-party collection continuation. It is a read/select step, not a create or blind update: the inventory handler
 // resolves canonical item identity and exposes only that item's missing, supported correction fields.
-const inventoryMissingDetailsContinuationPattern = /^\s*add\s+(?:or|\/)\s+update\s+missing\s+details[.!?]*\s*$/i;
+const inventoryMissingDetailsContinuationPattern = /^\s*(?:(?:add\s+(?:or|\/)\s+update)|complete|fill\s+in|update)\s+(?:the\s+)?missing\s+details(?:\s+for\s+(?:this\s+)?inventory\s+item(?:\s+"[^"]+")?)?[.!?]*\s*$/i;
 // Inventory date correction (Phase 3 write slice). Requires an explicit
 // correction verb, one of the three correctable date fields, and an
 // inventory/appliance/item noun -- deliberately narrower than
@@ -1172,7 +1172,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('HOME_EVENT_VISIBILITY', 0.97);
   }
   if (inventoryMissingDetailsContinuationPattern.test(message)) {
-    return resolved('INVENTORY_LOOKUP', 0.99);
+    return resolved(/\bfor\s+(?:this\s+)?inventory\s+item\b/i.test(message) ? 'INVENTORY_ITEM_CORRECT' : 'INVENTORY_LOOKUP', 0.99);
   }
   if (inventoryItemCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_ITEM_CORRECT', 0.97);
