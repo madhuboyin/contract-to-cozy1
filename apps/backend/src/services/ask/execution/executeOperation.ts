@@ -684,8 +684,10 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   RECALL_MATCH_UPDATE: ['RECALL_REVIEW'],
   // The item's status is exactly what SELLER_PREP_CHECKLIST's list shows per row.
   SELLER_PREP_ITEM_DECISION: ['SELLER_PREP_CHECKLIST'],
-  // The corrected date is shown on the inventory lists and the Property Summary inventory collection.
-  INVENTORY_ITEM_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'],
+  // Corrected inventory facts are shown on the inventory lists and Property Summary, and can change
+  // the confidence/eligibility of Home Actions derived from that exact item. Refresh HOME_ACTIONS too
+  // so a focused missing-detail continuation recomputes the originating recommendation after save.
+  INVENTORY_ITEM_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS'],
   // The corrected revision replaces the event row shown in the item-history and Property Summary timeline lists.
   HOME_EVENT_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'],
   // Warranty rows are carried by PROPERTY_SUMMARY's property-warranties collection.

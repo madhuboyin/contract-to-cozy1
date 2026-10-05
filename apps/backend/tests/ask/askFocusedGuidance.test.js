@@ -519,6 +519,57 @@ test('accepted work offers Complete and Snooze in Ask instead of navigating to W
   assert.match(actions[1].message, /^Snooze\b/);
 });
 
+test('degraded accepted work names missing facts and makes record correction the primary action', () => {
+  const action = acceptedWorkAction({
+    confidence: { score: 0.35, label: 'LOW', missing: ['Installation year', 'Current condition'] },
+    recommendationResponse: {
+      status: 'LOW_CONFIDENCE',
+      reasonCode: 'RECOMMENDATION_LOW_CONFIDENCE',
+      safeNextAction: 'Add the missing home information before acting.',
+      missingFacts: ['Installation year', 'Current condition'],
+    },
+    presentation: {
+      variant: 'ACCEPTED_WORK', summary: 'The HVAC record is incomplete.', keyFacts: [], factGroups: [],
+      subject: { kind: 'INVENTORY_ITEM', id: 'hvac-1', label: 'HVAC Furnace' },
+    },
+    feedbackControls: ['CORRECT_FACT', 'SNOOZE'],
+  });
+  const result = buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, { canContribute: true });
+  const guidance = result.blocks.find((block) => block.id === 'focused-home-action-guidance');
+  assert.match(guidance.sections[0].items[0].title, /Installation year, Current condition/);
+  assert.deepEqual(guidance.actions.map((candidate) => [candidate.label, candidate.style]), [
+    ['Add missing details', 'PRIMARY'],
+    ['Snooze reminders', 'SECONDARY'],
+  ]);
+  assert.deepEqual(guidance.actions[0], {
+    id: `home-action-missing-details-${action.id}`,
+    label: 'Add missing details',
+    interactionType: 'START_WORKFLOW',
+    message: 'Correct the install date of this inventory item.',
+    operationId: 'INVENTORY_ITEM_CORRECT',
+    entityType: 'INVENTORY_ITEM',
+    entityId: 'hvac-1',
+    style: 'PRIMARY',
+  });
+  assert.equal(require('../../src/services/ask/askOperationRegistry.ts').resolveAskOperation(guidance.actions[0].message).operationId, 'INVENTORY_ITEM_CORRECT');
+  assert.ok(require('../../src/services/ask/execution/executeOperation.ts').ASK_MUTATION_IMPACT_MAP.INVENTORY_ITEM_CORRECT.includes('HOME_ACTIONS'));
+  const limitation = result.blocks.find((block) => block.id === 'focused-home-action-missing-details');
+  assert.match(limitation.body, /Missing: Installation year, Current condition/);
+  assert.match(limitation.body, /recompute this same Home Action/);
+  for (const block of result.blocks) {
+    const parsed = AskPresentationBlockSchema.safeParse(block);
+    assert.ok(parsed.success, `${block.id}: ${parsed.success ? '' : JSON.stringify(parsed.error.issues)}`);
+  }
+
+  const viewer = buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, { canContribute: false });
+  const viewerLimitation = viewer.blocks.find((block) => block.id === 'focused-home-action-missing-details');
+  assert.match(viewerLimitation.body, /owner or contributor must update/i);
+  assert.deepEqual(
+    viewer.blocks.find((block) => block.id === 'focused-home-action-guidance').actions.map((candidate) => candidate.label),
+    ['Open work'],
+  );
+});
+
 test('accepted work follows governed controls and resolves reported completion inside Ask', () => {
   const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
   const build = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options).blocks.find((block) => block.id === 'focused-home-action-guidance').actions;

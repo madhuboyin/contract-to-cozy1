@@ -232,6 +232,27 @@ function resolveGroupDReplacementGuidanceRouting(
 // terminal state: Ask offers the governed verify/reopen decisions inline. Verification is limited to evidence
 // tiers where an explicit homeowner attestation is sufficient; regulated and safety work must use stronger
 // domain evidence and therefore only exposes the safe reopen action here.
+function missingDetailLabels(action: RankedHomeAction): string[] {
+  return [...new Set([
+    ...(action.recommendationResponse.missingFacts ?? []),
+    ...(action.confidence.missing ?? []),
+  ].map((value) => value.trim()).filter(Boolean))].slice(0, 5);
+}
+
+function inventoryCorrectionMessageForMissingDetails(labels: readonly string[]): string {
+  const first = labels[0] ?? '';
+  if (/install(?:ed|ation)?(?: date| year)?/i.test(first)) return 'Correct the install date of this inventory item.';
+  if (/purchase(?:d)? date/i.test(first)) return 'Correct the purchase date of this inventory item.';
+  if (/last[- ]servic(?:e|ed) date|service history/i.test(first)) return 'Correct the last serviced date of this inventory item.';
+  if (/condition/i.test(first)) return 'Correct the condition of this inventory item.';
+  if (/replacement (?:cost|price|value)/i.test(first)) return 'Correct the replacement cost of this inventory item.';
+  if (/purchase (?:cost|price|value)/i.test(first)) return 'Correct the purchase cost of this inventory item.';
+  if (/brand|manufacturer/i.test(first)) return 'Correct the brand of this inventory item.';
+  if (/model/i.test(first)) return 'Correct the model of this inventory item.';
+  if (/serial/i.test(first)) return 'Correct the serial number of this inventory item.';
+  return 'Update the missing details for this inventory item.';
+}
+
 function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boolean) {
   const workItem = action.workItem;
   if (!canContribute || !workItem || action.presentation?.variant !== 'ACCEPTED_WORK') return null;
@@ -248,10 +269,36 @@ function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boo
       { ...common, id: `home-action-reopen-${action.id}`, label: 'Still needs attention', message: 'Reopen this reported completion.', style: (attestationCanVerify ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' },
     ];
   }
+  const missingDetails = action.recommendationResponse.status !== 'AVAILABLE'
+    ? missingDetailLabels(action)
+    : [];
+  const subject = action.presentation.subject;
+  const missingDetailsAction = missingDetails.length > 0
+    ? subject?.kind === 'INVENTORY_ITEM'
+      ? {
+        id: `home-action-missing-details-${action.id}`,
+        label: 'Add missing details',
+        interactionType: 'START_WORKFLOW' as const,
+        message: inventoryCorrectionMessageForMissingDetails(missingDetails),
+        operationId: 'INVENTORY_ITEM_CORRECT' as const,
+        entityType: 'INVENTORY_ITEM',
+        entityId: subject.id,
+        style: 'PRIMARY' as const,
+      }
+      : {
+        id: `home-action-missing-details-${action.id}`,
+        label: 'Add missing details',
+        interactionType: 'START_WORKFLOW' as const,
+        message: 'Fill in the missing details in my home record.',
+        operationId: 'PROPERTY_SUMMARY' as const,
+        style: 'PRIMARY' as const,
+      }
+    : null;
   const controls = new Set<string>(action.feedbackControls);
   const actions = [
-    ...(controls.has('COMPLETE') ? [{ ...common, id: `home-action-complete-${action.id}`, label: 'Mark complete', message: 'Complete this work item.', style: 'PRIMARY' as const }] : []),
-    ...(controls.has('SNOOZE') ? [{ ...common, id: `home-action-snooze-${action.id}`, label: 'Snooze reminders', message: 'Snooze this work item.', style: (controls.has('COMPLETE') ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' }] : []),
+    ...(missingDetailsAction ? [missingDetailsAction] : []),
+    ...(controls.has('COMPLETE') ? [{ ...common, id: `home-action-complete-${action.id}`, label: 'Mark complete', message: 'Complete this work item.', style: (missingDetailsAction ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' }] : []),
+    ...(controls.has('SNOOZE') ? [{ ...common, id: `home-action-snooze-${action.id}`, label: 'Snooze reminders', message: 'Snooze this work item.', style: (controls.has('COMPLETE') || missingDetailsAction ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' }] : []),
   ];
   return actions.length ? actions : null;
 }
@@ -430,6 +477,13 @@ export function buildFocusedHomeActionGuidance(
       .find((group) => /preparation|checklist/i.test(group.label))
       ?.facts ?? []
     : [];
+  const missingDetails = action.recommendationResponse.status !== 'AVAILABLE'
+    ? missingDetailLabels(action)
+    : [];
+  const acceptedWorkNeedsDetails = action.presentation?.variant === 'ACCEPTED_WORK' && missingDetails.length > 0;
+  const recommendedAction = acceptedWorkNeedsDetails
+    ? `Add the missing details to continue: ${missingDetails.join(', ')}.`
+    : action.recommendedAction;
   const preparationItems = preparationFacts.length
     ? preparationFacts.map((fact, index) => ({
       id: `${action.id}-preparation-${index + 1}`,
@@ -441,7 +495,7 @@ export function buildFocusedHomeActionGuidance(
     }))
     : [{
       id: action.id,
-      title: action.recommendedAction,
+      title: recommendedAction,
       description: action.expectedOutcome,
       meta: [timing, `${action.confidence.label.toLowerCase()} confidence`],
       status: action.state,
@@ -526,6 +580,18 @@ export function buildFocusedHomeActionGuidance(
       observedAt: evidence.observedAt,
     })),
   }];
+
+  if (acceptedWorkNeedsDetails) {
+    blocks.splice(2, 0, {
+      type: 'LIMITATION',
+      id: 'focused-home-action-missing-details',
+      title: 'Details needed before a confident recommendation',
+      body: options.canContribute === false
+        ? `Missing: ${missingDetails.join(', ')}. An owner or contributor must update these details before Ask can recompute this recommendation.`
+        : `Missing: ${missingDetails.join(', ')}. Add or correct these details, then Ask will recompute this same Home Action from the updated record.`,
+      severity: 'CAUTION',
+    });
+  }
 
   if (boundaryParts.length) {
     blocks.push({
