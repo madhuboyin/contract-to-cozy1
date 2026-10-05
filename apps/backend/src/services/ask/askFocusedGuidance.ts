@@ -269,11 +269,10 @@ function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boo
       { ...common, id: `home-action-reopen-${action.id}`, label: 'Still needs attention', message: 'Reopen this reported completion.', style: (attestationCanVerify ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' },
     ];
   }
-  const missingDetails = action.recommendationResponse.status !== 'AVAILABLE'
-    ? missingDetailLabels(action)
-    : [];
+  const recommendationDegraded = action.recommendationResponse.status !== 'AVAILABLE';
+  const missingDetails = recommendationDegraded ? missingDetailLabels(action) : [];
   const subject = action.presentation.subject;
-  const missingDetailsAction = missingDetails.length > 0
+  const missingDetailsAction = recommendationDegraded
     ? subject?.kind === 'INVENTORY_ITEM'
       ? {
         id: `home-action-missing-details-${action.id}`,
@@ -477,12 +476,13 @@ export function buildFocusedHomeActionGuidance(
       .find((group) => /preparation|checklist/i.test(group.label))
       ?.facts ?? []
     : [];
-  const missingDetails = action.recommendationResponse.status !== 'AVAILABLE'
-    ? missingDetailLabels(action)
-    : [];
-  const acceptedWorkNeedsDetails = action.presentation?.variant === 'ACCEPTED_WORK' && missingDetails.length > 0;
+  const recommendationDegraded = action.recommendationResponse.status !== 'AVAILABLE';
+  const missingDetails = recommendationDegraded ? missingDetailLabels(action) : [];
+  const acceptedWorkNeedsDetails = action.presentation?.variant === 'ACCEPTED_WORK' && recommendationDegraded;
   const recommendedAction = acceptedWorkNeedsDetails
-    ? `Add the missing details to continue: ${missingDetails.join(', ')}.`
+    ? missingDetails.length > 0
+      ? `Add the missing details to continue: ${missingDetails.join(', ')}.`
+      : 'Add or update the missing home details to continue.'
     : action.recommendedAction;
   const preparationItems = preparationFacts.length
     ? preparationFacts.map((fact, index) => ({
@@ -587,8 +587,12 @@ export function buildFocusedHomeActionGuidance(
       id: 'focused-home-action-missing-details',
       title: 'Details needed before a confident recommendation',
       body: options.canContribute === false
-        ? `Missing: ${missingDetails.join(', ')}. An owner or contributor must update these details before Ask can recompute this recommendation.`
-        : `Missing: ${missingDetails.join(', ')}. Add or correct these details, then Ask will recompute this same Home Action from the updated record.`,
+        ? missingDetails.length > 0
+          ? `Missing: ${missingDetails.join(', ')}. An owner or contributor must update these details before Ask can recompute this recommendation.`
+          : 'The stored work item does not identify the exact missing fields. An owner or contributor must review and update the home record before Ask can recompute this recommendation.'
+        : missingDetails.length > 0
+          ? `Missing: ${missingDetails.join(', ')}. Add or correct these details, then Ask will recompute this same Home Action from the updated record.`
+          : 'The stored work item does not identify the exact missing fields. Choose Add missing details to select the information to update; Ask will then recompute this same Home Action from the updated record.',
       severity: 'CAUTION',
     });
   }

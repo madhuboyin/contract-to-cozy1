@@ -570,6 +570,36 @@ test('degraded accepted work names missing facts and makes record correction the
   );
 });
 
+test('degraded accepted work still offers missing-detail correction when the producer names no missing fields', () => {
+  const action = acceptedWorkAction({
+    confidence: { score: null, label: 'LOW', missing: [] },
+    recommendationResponse: {
+      status: 'DATA_UNAVAILABLE',
+      reasonCode: 'RECOMMENDATION_DATA_UNAVAILABLE',
+      safeNextAction: 'Add the missing home information or continue with a qualified professional using the original records.',
+      missingFacts: [],
+    },
+    presentation: {
+      variant: 'ACCEPTED_WORK', summary: 'The HVAC record is incomplete.', keyFacts: [], factGroups: [],
+      subject: { kind: 'INVENTORY_ITEM', id: 'hvac-1', label: 'HVAC Furnace' },
+    },
+    feedbackControls: ['CORRECT_FACT', 'SNOOZE'],
+  });
+  const result = buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, { canContribute: true });
+  const guidance = result.blocks.find((block) => block.id === 'focused-home-action-guidance');
+  assert.equal(guidance.sections[0].items[0].title, 'Add or update the missing home details to continue.');
+  assert.deepEqual(guidance.actions.map((candidate) => [candidate.label, candidate.style]), [
+    ['Add missing details', 'PRIMARY'],
+    ['Snooze reminders', 'SECONDARY'],
+  ]);
+  assert.equal(guidance.actions[0].message, 'Update the missing details for this inventory item.');
+  assert.equal(guidance.actions[0].operationId, 'INVENTORY_ITEM_CORRECT');
+  assert.equal(guidance.actions[0].entityId, 'hvac-1');
+  const limitation = result.blocks.find((block) => block.id === 'focused-home-action-missing-details');
+  assert.match(limitation.body, /does not identify the exact missing fields/i);
+  assert.match(limitation.body, /Choose Add missing details/i);
+});
+
 test('accepted work follows governed controls and resolves reported completion inside Ask', () => {
   const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
   const build = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options).blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
