@@ -44,12 +44,13 @@ test('MEASURED: no presented action in the production sources declares an outcom
   assert.deepEqual(overlap, [], 'a starter operation now has a presented action with an outcome: re-measure D-O12 before shipping');
 });
 
-test('a presented action can publish an identity only for a REGISTERED outcome, and PROPERTY_SUMMARY has none registered, so it cannot be suppressed by presentation at all', () => {
-  assert.equal(SUGGESTED_ACTION_OUTCOMES.PROPERTY_SUMMARY, undefined);
-  const blocks = [{ type: 'GROUPED_LIST', sections: [{ items: [{ id: 'i1', entityType: 'INVENTORY_ITEM', actions: [
-    { operationId: 'PROPERTY_SUMMARY', outcomeKey: 'OPEN_SUMMARY', interactionType: 'CONVERSATION_CONTINUE' },
-  ] }] }] }];
-  assert.equal(collectPresentationIdentities(blocks, 'p1').size, 0);
+test('a presented action publishes an identity only for a REGISTERED outcome: an unregistered one publishes none, and the registered starter outcomes are the only ones a future action could collide with', () => {
+  const action = (operationId, outcomeKey) => [{ type: 'GROUPED_LIST', sections: [{ items: [{ id: 'i1', entityType: 'INVENTORY_ITEM', actions: [{ operationId, outcomeKey, interactionType: 'CONVERSATION_CONTINUE' }] }] }] }];
+  assert.equal(collectPresentationIdentities(action('PROPERTY_SUMMARY', 'OPEN_SUMMARY'), 'p1').size, 0, 'an unregistered outcome publishes nothing');
+  // PROPERTY_SUMMARY now has registered starter outcomes (D-O4), so an entity action declaring one WOULD publish an entity-scoped identity; no handler does
+  // (the scan above), and an entity-scoped identity never equals an entity-less starter key.
+  assert.deepEqual(SUGGESTED_ACTION_OUTCOMES.PROPERTY_SUMMARY, ['REVIEW_HOME_SUMMARY', 'REVIEW_COMPLETENESS']);
+  assert.equal(collectPresentationIdentities(action('PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY'), 'p1').size, 1);
 });
 
 test('the real collector with the realistic worst answer (an inventory item offering every correctable field) publishes entity identities that no starter shares', () => {

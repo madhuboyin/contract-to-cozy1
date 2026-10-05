@@ -51,6 +51,7 @@ export const ASK_LAUNCH_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = n
   'GUIDANCE_JOURNEY_CONTINUE',
   'SEASONAL_HOME_CARE',
   'HOME_BASICS_GUIDE',
+  'HIRING_GUIDE',
 ]);
 
 export type AskInteractionClass =
@@ -1210,6 +1211,21 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     idempotency: { status: 'TRACED', notes: 'Pure read (three findFirst/findMany queries plus the violations-to-journey join).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
     handoff: { status: 'TRACED', notes: 'The page is /dashboard/hoa?propertyId=; each violation links to its guidance journey (guidance-overview?journeyId=) as the page does, or to Guidance Overview when none is linked.' },
+  },
+  HIRING_GUIDE: {
+    track: 'Home intelligence and work',
+    rollClass: 'READ_RESULT',
+    canonicalOwner: 'hiring-guide.read',
+    roleFloor: 'VIEWER',
+    messageRoutable: false,
+    confirmationCapable: false,
+    correctionModes: [],
+    note: 'Exact-four starter source (inventory D-O4). Authored, evergreen guidance on what to ask and confirm before hiring a contractor, with no input at all; it reads no recorded home data, makes no external call, gives no legal advice and assesses no contractor. Non-routable: reached only by a stored starter\'s typed launch, so it cannot compete with quote comparison. The content is a draft for product review.',
+    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer: SUMMARY (title and one line), GROUPED_LIST (one section of six short items with a description each) and BOUNDARY (general guidance, not legal advice, rules vary by location).' },
+    freshnessSource: { status: 'TRACED', notes: 'No contextVersion; authored static content, identical on every request until the content is revised.' },
+    idempotency: { status: 'TRACED', notes: 'Pure read with no writes, no database and no external call; always returns the same answer.' },
+    reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: the answer carries no page link, because the guidance is general.' },
   },
   HOME_BASICS_GUIDE: {
     track: 'Home intelligence and work',

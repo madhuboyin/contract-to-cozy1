@@ -43,19 +43,24 @@ const PROPERTY = 'prop-1';
 const HISTORY_WINDOW = 5;
 
 // Real all-mode, VIEWER-floor, STANDARD-safety, read-only operations: the pool the hypothetical "dependable" starters come from.
-const POOL_OPERATIONS = Object.values(ASK_OPERATION_DEFINITIONS)
+const STRUCTURAL_POOL = Object.values(ASK_OPERATION_DEFINITIONS)
   .filter((d) => d.propertyRoleFloor === 'VIEWER' && d.safetyClass === 'STANDARD' && (d.family === 'RECORD_QUERY' || d.family === 'STATUS_SUMMARY') && d.requiresProperty)
   .filter((d) => { const p = getAskAudiencePolicy(d.operationId); return p && p.eligibleOperatingModes.length === 4 && p.unknownModeBehavior === 'ALLOW_GENERAL'; })
   .map((d) => d.operationId)
   // Hypothetical starters come only from operations with NO real outcome entry: the harness never touches a real entry (registerProvisional), so a
   // real starter source (SEASONAL_HOME_CARE, HOME_BASICS_GUIDE) or any operation with registered outcomes would be an unregistered, ineligible starter here.
-  .filter((operationId) => !outcomes.SUGGESTED_ACTION_OUTCOMES[operationId])
   .sort();
+const POOL_OPERATIONS = STRUCTURAL_POOL.filter((operationId) => !outcomes.SUGGESTED_ACTION_OUTCOMES[operationId]);
 
 const outcomeFor = (operationId) => `OPEN_${operationId}`.slice(0, 79);
 const messageFor = (operationId) => `Show me ${operationId.toLowerCase().replace(/_/g, ' ')}`;
 /** One starter. `variant` makes a second, distinct starter (outcome and message) on the SAME operation, e.g. PROPERTY_SUMMARY's completeness focus. */
-const spec = (operationId, variant = null) => ({
+const REAL_PROPERTY_SUMMARY = {
+  null: { outcomeKey: 'REVIEW_HOME_SUMMARY', message: 'Give me a summary of my home record' },
+  REVIEW_COMPLETENESS: { outcomeKey: 'REVIEW_COMPLETENESS', message: 'How complete is my home record?' },
+};
+// PROPERTY_SUMMARY now has REAL registered starter outcomes (D-O4); the harness uses them rather than provisional ones.
+const spec = (operationId, variant = null) => operationId === 'PROPERTY_SUMMARY' ? { operationId, ...REAL_PROPERTY_SUMMARY[variant] } : ({
   operationId,
   outcomeKey: variant ? `${variant}_${operationId}`.slice(0, 79) : outcomeFor(operationId),
   message: variant ? `${messageFor(operationId)} (${variant.toLowerCase().replace(/_/g, ' ')})` : messageFor(operationId),
@@ -73,9 +78,10 @@ function registerProvisional(starters, { repeatable = false, promptHistoryExempt
   for (const starter of starters) {
     const { operationId: op, outcomeKey } = starter;
     const existing = outcomes.SUGGESTED_ACTION_OUTCOMES[op];
-    if (existing && !existing.__provisional) continue; // never touch a real entry
     const record = { starter, outcome: false, repeatable: false, exempt: false };
-    if (!existing) { const list = [outcomeKey]; Object.defineProperty(list, '__provisional', { value: true }); outcomes.SUGGESTED_ACTION_OUTCOMES[op] = list; record.outcome = true; }
+    const real = Boolean(existing && !existing.__provisional); // a REAL outcome list is never edited, but the exemption and repeatable flags still apply to it
+    if (real) { /* registered outcome already present */ }
+    else if (!existing) { const list = [outcomeKey]; Object.defineProperty(list, '__provisional', { value: true }); outcomes.SUGGESTED_ACTION_OUTCOMES[op] = list; record.outcome = true; }
     else if (!existing.includes(outcomeKey)) { existing.push(outcomeKey); record.outcome = true; }
     if (repeatable && !outcomes.REPEATABLE_OUTCOMES.has(specKey(starter))) { outcomes.REPEATABLE_OUTCOMES.add(specKey(starter)); record.repeatable = true; }
     // The REAL starter-specific exemption (D-O10), registered for the duration of the test only.
@@ -207,7 +213,7 @@ test('D-O11: the finalizer populates the current-outcome set from the verified l
   // Executed: a REPEATABLE outcome whose stored message was asked recently is still suppressed by the prompt-history rule.
   const restore = registerProvisional([spec('PROPERTY_SUMMARY')], { repeatable: true });
   try {
-    assert.equal(outcomes.isRepeatableOutcome('PROPERTY_SUMMARY', outcomeFor('PROPERTY_SUMMARY')), true);
+    assert.equal(outcomes.isRepeatableOutcome('PROPERTY_SUMMARY', spec('PROPERTY_SUMMARY').outcomeKey), true);
     const availability = await availabilityFor({ role: 'VIEWER', mode: 'UNKNOWN' });
     const ctx = {
       mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability: availability, operationRequiresProperty: () => true, operationTargetEntityType: () => null,
@@ -225,7 +231,7 @@ test('D-O11: the finalizer populates the current-outcome set from the verified l
 
 test('the real pool of all-mode, viewer, standard read operations is large enough to draw hypothetical starters from', () => {
   assert.ok(POOL_OPERATIONS.length >= 12, `pool has ${POOL_OPERATIONS.length}`); // 28 operations qualify structurally; HYPOTHETICAL for measurement only (many are data-dependent or typed-only)
-  for (const op of ['PROPERTY_SUMMARY', 'HOME_STATUS_BOARD', 'MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST']) assert.ok(POOL_OPERATIONS.includes(op), `${op} qualifies`);
+  for (const op of ['PROPERTY_SUMMARY', 'HOME_STATUS_BOARD', 'MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST']) assert.ok(STRUCTURAL_POOL.includes(op), `${op} qualifies structurally`);
 });
 
 test('mode and role do not change the verdict for all-mode viewer starters (CONTRIBUTOR and OWNER never have fewer)', async () => {

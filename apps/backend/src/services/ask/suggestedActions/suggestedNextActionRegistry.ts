@@ -134,6 +134,10 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
   SEASONAL_HOME_CARE: ['REVIEW_THIS_SEASON', 'PREPARE_NEXT_SEASON'],
   // The authored home-basics read's two outcomes (inventory D-O4).
   HOME_BASICS_GUIDE: ['REVIEW_SAFETY_BASICS', 'REVIEW_MONTHLY_ROUTINE'],
+  // The authored hiring guide's one outcome (inventory D-O4).
+  HIRING_GUIDE: ['REVIEW_HIRING_CHECKLIST'],
+  // The home-record summary's two starters (inventory D-O4): a plain summary and the completeness focus, both message-routable reads.
+  PROPERTY_SUMMARY: ['REVIEW_HOME_SUMMARY', 'REVIEW_COMPLETENESS'],
 };
 
 /**

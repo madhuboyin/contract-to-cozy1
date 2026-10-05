@@ -72,6 +72,8 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   'SEASONAL_HOME_CARE',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like SEASONAL_HOME_CARE.
   'HOME_BASICS_GUIDE',
+  // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like the two above.
+  'HIRING_GUIDE',
 ];
 
 export interface SkillOperationGovernanceContext {
