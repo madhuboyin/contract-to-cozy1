@@ -29,6 +29,7 @@ import { SUGGESTED_NEXT_ACTION_PRODUCERS, type SuggestedNextActionProducer } fro
 import { getSuggestedNextActionEntityValidator } from './suggestedNextActionEntityValidators';
 import './entityValidators/registerAll';
 import { collectPresentationIdentities } from './suggestedNextActionPresentationIdentities';
+import { loadCurrentOutcomeKeyHashes } from './suggestedNextActionHistory';
 import { systemSuggestedNextActionClock, type SuggestedNextActionClock } from './suggestedNextActionClock';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
@@ -70,6 +71,8 @@ export interface FinalizeSuggestedNextActionsDeps {
   /** Per-operation availability (health/authorization/audience reasons) for the property. */
   loadOperationAvailability?: (input: { userId: string; propertyId: string | null }) => Promise<EligibilityContext['operationAvailability']>;
   loadExecutionExpiresAt?: (executionId: string) => Promise<Date | null>;
+  /** D-O11: semantic-key hashes of the verified launch outcome of this execution (empty for an ordinary typed question). */
+  loadCurrentOutcomeKeyHashes?: (executionId: string) => Promise<ReadonlySet<string>>;
   entityValidatorFor?: typeof getSuggestedNextActionEntityValidator;
   /** Monotonic ms clock for the pipeline budget. */
   nowMs?: () => number;
@@ -178,7 +181,7 @@ export async function finalizeSuggestedNextActionsWithReport(
       completedSemanticKeyHashes: typeof input.completedSemanticKeyHashes === 'function' ? await input.completedSemanticKeyHashes() : (input.completedSemanticKeyHashes ?? new Set()),
       askedMessageKeys: new Set([input.message, ...(input.recentCompletedMessages ?? [])].map(suggestionKey).filter(Boolean)),
       messageKey: suggestionKey,
-      currentOutcomeKeyHashes: new Set(),
+      currentOutcomeKeyHashes: await (deps.loadCurrentOutcomeKeyHashes ?? loadCurrentOutcomeKeyHashes)(input.executionId),
     };
   } catch (error) {
     report.contextFailed = true;

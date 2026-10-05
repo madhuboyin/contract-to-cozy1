@@ -196,9 +196,9 @@ test('presentation deduplication cannot remove a starter: a STRUCTURAL proof fro
   } finally { restore(); }
 });
 
-test('the finalizer passes an EMPTY current-outcome set and the prompt-history rule ignores repeatability (so the current answer and recent starters are removed by message text only)', async () => {
+test('D-O11: the finalizer populates the current-outcome set from the verified launch event (empty for a typed question), and the prompt-history rule still ignores repeatability', async () => {
   const finalizeSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts'), 'utf8');
-  assert.ok(/currentOutcomeKeyHashes: new Set\(\)/.test(finalizeSource), 'currentOutcomeKeyHashes is never populated');
+  assert.ok(/currentOutcomeKeyHashes: await \(deps\.loadCurrentOutcomeKeyHashes \?\? loadCurrentOutcomeKeyHashes\)\(input\.executionId\)/.test(finalizeSource), 'currentOutcomeKeyHashes comes from the verified launch event');
   const executeSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8');
   assert.ok(/take: 5,\s*\n\s*select: \{ message: true, operationId: true \}/.test(executeSource), 'the history window is the last 5 completed executions');
   // Executed: a REPEATABLE outcome whose stored message was asked recently is still suppressed by the prompt-history rule.

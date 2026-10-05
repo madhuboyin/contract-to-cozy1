@@ -349,6 +349,7 @@ function deps(over = {}) {
     deps: {
       clock,
       loadOperationAvailability: async () => { calls.availability += 1; return availability; },
+      loadCurrentOutcomeKeyHashes: async () => new Set(),
       loadExecutionExpiresAt: async () => { calls.expires += 1; return new Date(NOW.getTime() + 10 * 24 * 3600_000); },
       entityValidatorFor: (type) => (type === 'INVENTORY_ITEM' ? async (ids) => { calls.validator += 1; return new Map(ids.map((id) => [id, { exists: true, propertyId: 'prop-1', currentContextVersion: 'v1' }])); } : undefined),
       ...over,
