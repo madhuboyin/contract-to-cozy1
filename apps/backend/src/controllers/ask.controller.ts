@@ -1,9 +1,10 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
-import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema } from '../productFramework/ask/ask.contract';
+import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
+import { dismissSuggestedAction, DismissSuggestedActionError } from '../services/ask/suggestedActions/dismissSuggestedAction';
 import {
   PropertyContextCaptureValidationError,
   PropertyContextIdempotencyConflictError,
@@ -366,6 +367,26 @@ export async function postAskFeedback(req: AuthRequest, res: Response, next: Nex
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_EXECUTION_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Ask execution not found.' } });
+    return next(error);
+  }
+}
+
+// Explicit "Not now" / "Not relevant" on one offered Suggested Next Action. The reason is the only client input; the server resolves the rest.
+export async function postDismissSuggestedAction(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const input = DismissSuggestedActionSchema.safeParse(req.body);
+    if (!input.success || !SUGGESTED_NEXT_ACTION_ID_PATTERN.test(req.params.actionId)) {
+      return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_DISMISSAL', message: 'Choose not now or not relevant for one offered action.' } });
+    }
+    await dismissSuggestedAction({ userId, executionId: req.params.executionId, actionId: req.params.actionId, reason: input.data.reason });
+    return res.status(200).json({ success: true, data: { dismissed: true, reason: input.data.reason } });
+  } catch (error) {
+    if (error instanceof DismissSuggestedActionError) {
+      const status = error.code === 'EXECUTION_NOT_FOUND' || error.code === 'ACTION_NOT_OFFERED' ? 404 : error.code === 'WRITE_FAILED' ? 503 : error.code === 'ACCESS_DENIED' ? 403 : 400;
+      return res.status(status).json({ success: false, error: { code: `ASK_DISMISSAL_${error.code}`, message: 'This action cannot be dismissed that way.' } });
+    }
     return next(error);
   }
 }

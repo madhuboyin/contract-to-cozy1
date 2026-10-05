@@ -885,6 +885,11 @@ export type SuggestedNextAction = z.infer<typeof SuggestedNextActionSchema>;
 
 // Plan §4.1: the client proves an app-authored selection by naming the offered action and the execution that offered it. It never
 // supplies the operation or entity; the server resolves those from the stored offer.
+// An explicit dismissal of one offered action ("Not now" or "Not relevant"). The server resolves the action from its own stored offer; the
+// client names only the reason.
+export const DismissSuggestedActionSchema = z.object({ reason: z.enum(['NOT_NOW', 'NOT_RELEVANT']) }).strict();
+export type DismissSuggestedAction = z.infer<typeof DismissSuggestedActionSchema>;
+
 export const SuggestedNextActionSelectionSchema = z.object({
   suggestedActionId: z.string().regex(SUGGESTED_NEXT_ACTION_ID_PATTERN),
   suggestedActionFromExecutionId: z.string().trim().min(1).max(160),

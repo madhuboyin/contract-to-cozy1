@@ -145,6 +145,31 @@ export function offerCooldownMs(slotClass: SuggestedNextActionSlotClass, current
   return null;
 }
 
+/**
+ * Owner-approved supported bound (October 5, 2026): at most this many ACTIVE dismissals (NOT_NOW or NOT_RELEVANT) are kept per user and
+ * property. A new dismissal beyond it lifts the oldest ones, so the lifecycle table cannot grow without bound and an old dismissal
+ * cannot suppress an outcome forever. The bound is a product limit, not a data-protection rule.
+ */
+export const SUPPORTED_DISMISSALS_PER_PROPERTY = 30;
+
+/**
+ * What a homeowner may dismiss, and how. Everything not listed is not dismissible (fail closed): continuing work, urgent work and exact-record
+ * fixes are never dismissed by this control. "Not relevant" is for curated starters only (opportunities have no producer yet, so no fingerprint
+ * source exists for them); "Not now" is for starters and home-profile gaps.
+ */
+export type DismissalReason = 'NOT_NOW' | 'NOT_RELEVANT';
+const STARTER_DISMISSIBLE: ReadonlySet<string> = new Set(['SEASONAL_HOME_CARE:REVIEW_THIS_SEASON', 'SEASONAL_HOME_CARE:PREPARE_NEXT_SEASON']);
+const PROFILE_GAP_OPERATIONS: ReadonlySet<string> = new Set(['PROPERTY_CONTEXT_AREA_CAPTURE']);
+export function dismissalReasonsFor(operationId: string, outcomeKey: string): readonly DismissalReason[] {
+  if (STARTER_DISMISSIBLE.has(`${operationId}:${outcomeKey}`)) return ['NOT_NOW', 'NOT_RELEVANT'];
+  if (PROFILE_GAP_OPERATIONS.has(operationId)) return ['NOT_NOW'];
+  return [];
+}
+/** A starter has no changing material state, so its "not relevant" fingerprint is a fixed, versioned token: it lapses only when the starter is revised. */
+export function starterDismissalFingerprint(operationId: string, outcomeKey: string): string {
+  return `STARTER:${operationId}:${outcomeKey}:v1`;
+}
+
 export interface LifecycleIdentity { operationId: string; outcomeKey: string; entityType: string | null; entityId: string | null }
 
 /** The lifecycle record's identity within one user and property. `reasonCode` is deliberately not part of it. */

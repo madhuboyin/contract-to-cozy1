@@ -11,7 +11,7 @@
 import { logger } from '../../../lib/logger';
 import { askSuggestedActionsLifecycleMissingRowTotal } from '../../../lib/metrics';
 import { prisma } from '../../../lib/prisma';
-import { COOLDOWN_MS, lifecycleKey, offerCooldownMs, type LifecycleIdentity, type SuggestedNextActionSlotClass } from './suggestedNextActionExactFourRegistry';
+import { COOLDOWN_MS, SUPPORTED_DISMISSALS_PER_PROPERTY, lifecycleKey, offerCooldownMs, type LifecycleIdentity, type SuggestedNextActionSlotClass } from './suggestedNextActionExactFourRegistry';
 import type { ExactFourEvaluation } from './suggestedNextActionExactFourPolicy';
 import type { SelectedCandidate } from './suggestedNextActionPolicy';
 import { isRepeatableOutcome } from './suggestedNextActionRegistry';
@@ -201,6 +201,36 @@ export async function recordSuggestedActionDismissal(input: RecordDismissalInput
   } catch (error) {
     logger.warn({ err: error, userId: input.userId, propertyId: input.propertyId }, '[ask-suggested-actions] lifecycle dismissal write failed');
     return false;
+  }
+}
+
+/**
+ * Keeps at most SUPPORTED_DISMISSALS_PER_PROPERTY active dismissals for this user and property: every dismissal beyond the newest N is
+ * lifted (its dismissal fields cleared; a "not now" row also drops its suppression, since that is where its 30 days live). The rows stay as
+ * offer history. Fails open: a failure here never blocks the dismissal that was just recorded. Returns how many were lifted.
+ */
+export async function enforceDismissalCap(userId: string, propertyId: string, db: LifecycleDb = defaultDb(), cap: number = SUPPORTED_DISMISSALS_PER_PROPERTY): Promise<number> {
+  try {
+    const rows = await db.askSuggestedActionLifecycle.findMany({
+      where: { userId, propertyId, dismissalReason: { not: null } },
+      orderBy: [{ dismissedAt: 'desc' }, { id: 'asc' }],
+      skip: cap,
+      select: { id: true, dismissalReason: true },
+    } as never) as unknown as Array<{ id: string; dismissalReason: string | null }>;
+    if (rows.length === 0) return 0;
+    const ids = rows.map((row) => row.id);
+    await db.askSuggestedActionLifecycle.updateMany({
+      where: { userId, propertyId, id: { in: ids }, dismissalReason: 'NOT_RELEVANT' },
+      data: { dismissedAt: null, dismissalReason: null, contextFingerprint: null },
+    });
+    await db.askSuggestedActionLifecycle.updateMany({
+      where: { userId, propertyId, id: { in: ids }, dismissalReason: 'NOT_NOW' },
+      data: { dismissedAt: null, dismissalReason: null, contextFingerprint: null, suppressedUntil: null },
+    });
+    return ids.length;
+  } catch (error) {
+    logger.warn({ err: error, userId, propertyId }, '[ask-suggested-actions] dismissal cap enforcement failed; dismissal kept');
+    return 0;
   }
 }
 
