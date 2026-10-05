@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
+import { areaScopeForOutcome, loadAreaCaptureAllowlist } from '../suggestedActions/profileAreaAllowlist';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type RecordAskCaptureEvent, type SubmitAskCaptureRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { askInlineCapturesTotal } from '../../../lib/metrics';
@@ -684,7 +685,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
     result = await areaCaptureSubmitResult(userId, execution.propertyId, state.scope, new Set(state.skipFactKeys), state.sourceExecutionId, {
       requirementId: input.requirementId, captureKey: input.captureKey, answer: input.answer,
       expectedContextVersion: input.expectedContextVersion, sensitiveDataConfirmed: input.sensitiveDataConfirmed === true,
-    });
+    }, new Set(state.excludedFactKeys));
     captureId = input.idempotencyKey;
     capturedContextVersion = input.expectedContextVersion;
     canonicalOwner = 'PropertyContext';
@@ -1061,7 +1062,11 @@ const areaScopeForMessage = (message: string): PropertyAreaCaptureScope | null =
 
 registerCapabilityHandler('property-context.area-capture', async (envelope) => {
   const launch = envelope.launchContext;
-  const scope = areaScopeForMessage(envelope.message);
+  // Typed launch (a verified Suggested Next Action): the area comes from the server-held outcome key through the registry's
+  // outcome -> area mapping. Message text never decides it, and an unknown typed outcome is not routable (no fallback to the message).
+  // The legacy message-routed launch (the Property Summary rows) keeps its existing behavior.
+  const typedOutcome = launch?.outcomeKey ?? null;
+  const scope = typedOutcome ? areaScopeForOutcome(typedOutcome) : areaScopeForMessage(envelope.message);
   const entityMatches = !launch?.entityType || launch.entityType !== 'PROPERTY_CONTEXT_AREA' || launch.entityId === scope;
   const declaredStart = launch?.operationId === 'PROPERTY_CONTEXT_AREA_CAPTURE' && launch.surface !== 'ASK_REFRESH' && scope !== null && entityMatches;
   const notRoutable = (): AskOperationResult => ({
@@ -1080,19 +1085,38 @@ registerCapabilityHandler('property-context.area-capture', async (envelope) => {
     }
     // "Continue" from a receipt carries that workflow's skips; a start from any other result begins with none.
     let skip = new Set<string>();
+    // The server-owned allowlist (packet D3): a typed launch asks only the unresolved, applicable, consumer-backed facts its chip promised.
+    // A failed computation fails CLOSED: a chip that promised a bounded set must not silently open the unbounded flow.
+    let excluded = new Set<string>();
+    if (typedOutcome) {
+      try {
+        excluded = new Set((await loadAreaCaptureAllowlist(envelope.userId, envelope.propertyId!, scope)).excludedFactKeys);
+      } catch (error) {
+        logger.warn({ err: error, propertyId: envelope.propertyId, scope }, '[ask-area-capture] allowlist unavailable; typed launch not started');
+        return {
+          status: 'UNAVAILABLE', reasonCode: 'AREA_CAPTURE_ALLOWLIST_UNAVAILABLE',
+          blocks: [{ type: 'SUMMARY', id: 'area-capture-allowlist-unavailable', title: 'Home details are not available right now', body: 'Nothing has changed. You can try again in a moment or add details from your home record.', tone: 'CAUTION', actions: [{ id: 'open-property-record', label: 'Open property record', href: areaCaptureFallbackHref(envelope.propertyId!, scope), style: 'SECONDARY' }] }],
+          suggestions: [],
+        };
+      }
+    }
     const sourceId = launch.sourceExecutionId ?? null;
     if (sourceId) {
       const source = await prisma.askExecution.findFirst({ where: { id: sourceId, userId: envelope.userId, propertyId: envelope.propertyId!, operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE' }, select: { parametersJson: true } });
       const inherited = source ? areaCaptureStateFrom(source.parametersJson) : null;
-      if (inherited && inherited.scope === scope) skip = new Set(inherited.skipFactKeys);
+      if (inherited && inherited.scope === scope) {
+        skip = new Set(inherited.skipFactKeys);
+        // "Continue" keeps the workflow's allowlist, so a receipt cannot widen a bounded flow into the full area.
+        if (!typedOutcome) excluded = new Set(inherited.excludedFactKeys);
+      }
     }
-    return areaCapturePrompt(envelope.userId, envelope.propertyId!, scope, skip, sourceId);
+    return areaCapturePrompt(envelope.userId, envelope.propertyId!, scope, skip, sourceId, undefined, excluded);
   }
   // A refresh of this execution re-asks with ITS OWN stored skips (never reset, never client-supplied); anything else is not routable.
   if (launch?.surface === 'ASK_REFRESH') {
     const own = await prisma.askExecution.findFirst({ where: { id: envelope.executionId, userId: envelope.userId }, select: { parametersJson: true } });
     const state = own ? areaCaptureStateFrom(own.parametersJson) : null;
-    if (state) return areaCapturePrompt(envelope.userId, envelope.propertyId!, state.scope, new Set(state.skipFactKeys), state.sourceExecutionId);
+    if (state) return areaCapturePrompt(envelope.userId, envelope.propertyId!, state.scope, new Set(state.skipFactKeys), state.sourceExecutionId, undefined, new Set(state.excludedFactKeys));
   }
   return notRoutable();
 });

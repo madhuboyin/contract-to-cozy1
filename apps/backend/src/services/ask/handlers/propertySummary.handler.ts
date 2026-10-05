@@ -343,13 +343,19 @@ export function areaCaptureRowActions(scope: string, canManage: boolean, unmetCo
 const AreaCaptureStateSchema = z.object({
   areaScope: z.enum(PROPERTY_AREA_CAPTURE_SCOPES),
   skipFactKeys: z.array(z.string().max(120)).max(AREA_CAPTURE_MAX_SKIPPED).default([]),
+  // Server-computed allowlist exclusions for a typed launch (packet D3): facts the flow must not ask. Never client-supplied and never
+  // displayed as skipped; empty for the legacy message-routed launch, which keeps its previous behavior.
+  excludedFactKeys: z.array(z.string().max(120)).max(AREA_CAPTURE_MAX_SKIPPED).default([]),
   sourceExecutionId: z.string().nullable().default(null),
 });
 
-export function areaCaptureStateFrom(parametersJson: unknown): { scope: PropertyAreaCaptureScope; skipFactKeys: string[]; sourceExecutionId: string | null } | null {
+export function areaCaptureStateFrom(parametersJson: unknown): { scope: PropertyAreaCaptureScope; skipFactKeys: string[]; excludedFactKeys: string[]; sourceExecutionId: string | null } | null {
   const parsed = AreaCaptureStateSchema.safeParse(parametersJson);
-  return parsed.success ? { scope: parsed.data.areaScope, skipFactKeys: parsed.data.skipFactKeys, sourceExecutionId: parsed.data.sourceExecutionId } : null;
+  return parsed.success ? { scope: parsed.data.areaScope, skipFactKeys: parsed.data.skipFactKeys, excludedFactKeys: parsed.data.excludedFactKeys, sourceExecutionId: parsed.data.sourceExecutionId } : null;
 }
+
+/** The facts the question-choosing evaluator must leave out: the user's skips plus the server-owned exclusions. Every site that reproduces the question must use this. */
+export const areaEffectiveSkip = (skip: ReadonlySet<string>, excluded: ReadonlySet<string>): string[] => [...new Set([...skip, ...excluded])];
 
 export const AreaCaptureAnswerSchema = z.object({
   scope: z.enum(PROPERTY_AREA_CAPTURE_SCOPES),
@@ -381,12 +387,13 @@ function areaValueDisplay(schema: { type: string; [key: string]: unknown }, valu
 
 export async function areaCapturePrompt(
   userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, sourceExecutionId: string | null, notice?: string,
+  excluded: ReadonlySet<string> = new Set(),
 ): Promise<AskOperationResult> {
   const [evaluation, progress] = await Promise.all([
-    evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: [...skip] } }),
-    areaCaptureProgress(userId, propertyId, scope, skip),
+    evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: areaEffectiveSkip(skip, excluded) } }),
+    areaCaptureProgress(userId, propertyId, scope, skip, excluded),
   ]);
-  const parameters = { areaScope: scope, skipFactKeys: [...skip], sourceExecutionId };
+  const parameters = { areaScope: scope, skipFactKeys: [...skip], ...(excluded.size ? { excludedFactKeys: [...excluded] } : {}), sourceExecutionId };
   const noticeBlock: AskPresentationBlock[] = notice ? [{ type: 'SUMMARY', id: 'area-capture-notice', title: notice, body: 'Nothing was saved. You can come back to it any time.', tone: 'DEFAULT', actions: [] }] : [];
   const requirement = evaluation.requirements[0];
   if (!requirement || requirement.capture.inputSchema.type === 'RELATIONAL_SELECT_CREATE' || requirement.capture.inputSchema.type === 'RELATIONAL_UPDATE') {
@@ -416,10 +423,11 @@ export async function areaCapturePrompt(
 export async function areaCaptureSubmitResult(
   userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, sourceExecutionId: string | null,
   submitted: { requirementId: string; captureKey: string; answer: Record<string, unknown>; expectedContextVersion: string; sensitiveDataConfirmed: boolean },
+  excluded: ReadonlySet<string> = new Set(),
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) throw areaCaptureError('ASK_PERMISSION_REQUIRED', 'A contributor or owner is required to add home details.');
-  const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: [...skip] } });
+  const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION, operationInput: { scope, skipFactKeys: areaEffectiveSkip(skip, excluded) } });
   const active = evaluation.requirements[0];
   if (!active || active.requirementId !== submitted.requirementId || active.capture.captureKey !== submitted.captureKey) {
     throw areaCaptureError('ASK_CAPTURE_NOT_ACTIVE', 'This question is no longer the current one. Start again from the area.');
@@ -432,7 +440,7 @@ export async function areaCaptureSubmitResult(
     return new Set([...skip, ...active.capture.factKeys]);
   };
   if (Object.keys(submitted.answer).length === 1 && submitted.answer[AREA_SKIP_MARKER] === true) {
-    return areaCapturePrompt(userId, propertyId, scope, withSkipped(), sourceExecutionId, 'Skipped for now');
+    return areaCapturePrompt(userId, propertyId, scope, withSkipped(), sourceExecutionId, 'Skipped for now', excluded);
   }
   const definition = getCaptureDefinition(submitted.captureKey);
   if (definition.mode === 'RELATIONAL') throw areaCaptureError('ASK_CAPTURE_NOT_ACTIVE', 'This question cannot be answered here.');
@@ -448,7 +456,7 @@ export async function areaCaptureSubmitResult(
   if (!answers.length) throw areaCaptureError('ASK_CAPTURE_VALIDATION_ERROR', 'Answer at least one question, or skip it.');
   // "Not sure" for everything saves nothing: it is treated as a skip so the same question does not come straight back.
   if (answers.every(({ value }) => value === null || value === 'UNKNOWN')) {
-    return areaCapturePrompt(userId, propertyId, scope, withSkipped(), sourceExecutionId, 'Marked not sure for this session');
+    return areaCapturePrompt(userId, propertyId, scope, withSkipped(), sourceExecutionId, 'Marked not sure for this session', excluded);
   }
   const fieldSchemas: Array<{ factKey: string; label: string; schema: { type: string; [key: string]: unknown } }> = definition.mode === 'SCALAR'
     ? [{ factKey: definition.factKeys[0], label: definition.title, schema: definition.inputSchema as { type: string } }]
@@ -467,11 +475,11 @@ export async function areaCaptureSubmitResult(
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'AREA_CAPTURE_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
-      areaScope: scope, skipFactKeys: [...skip], sourceExecutionId,
+      areaScope: scope, skipFactKeys: [...skip], ...(excluded.size ? { excludedFactKeys: [...excluded] } : {}), sourceExecutionId,
       areaCapture: { scope, requirementId: active.requirementId, captureKey: submitted.captureKey, answer: submitted.answer, expectedContextVersion: contextVersion, rows, areas },
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [areaProgressBlock(propertyId, scope, await areaCaptureProgress(userId, propertyId, scope, skip), false, false)],
+    blocks: [areaProgressBlock(propertyId, scope, await areaCaptureProgress(userId, propertyId, scope, skip, excluded), false, false)],
     confirmation: {
       confirmationId: `area-capture-${createHash('sha256').update(`${propertyId}:${scope}:${active.requirementId}`).digest('hex').slice(0, 12)}-1`, version: 1,
       title: `Save "${definition.title}" to your home record?`,

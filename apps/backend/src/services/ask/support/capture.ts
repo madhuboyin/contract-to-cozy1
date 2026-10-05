@@ -21,7 +21,7 @@ export function areaCaptureFallbackHref(propertyId: string, scope: string): stri
   return anchor ? `${base}/edit#${anchor}` : base;
 }
 
-export async function areaCaptureProgress(userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>) {
+export async function areaCaptureProgress(userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, excluded: ReadonlySet<string> = new Set()) {
   // Every area scope is loaded: fact applicability (for example a condo not owning a private fence) reads facts from other areas.
   const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] });
   const entry = getContextCompleteness(snapshot).scopes.find((candidate) => candidate.scope === scope);
@@ -29,7 +29,8 @@ export async function areaCaptureProgress(userId: string, propertyId: string, sc
   const writable = new Set<string>(PROPERTY_FACT_CATALOG.filter((fact) => fact.scope === scope && fact.writable).map((fact) => fact.key));
   return {
     percent: entry?.completenessPercent ?? 100,
-    askable: unmet.filter((key) => writable.has(key) && !skip.has(key)),
+    // `excluded` is the server-owned allowlist (never shown as skipped): those facts are simply not asked in this flow.
+    askable: unmet.filter((key) => writable.has(key) && !skip.has(key) && !excluded.has(key)),
     skipped: unmet.filter((key) => writable.has(key) && skip.has(key)),
     otherSurface: unmet.filter((key) => !writable.has(key)),
   };

@@ -118,6 +118,12 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
   INVENTORY_ITEM_CREATE: ['ADD_ITEM_TO_ROOM'],
   MAINTENANCE_TASK_UPDATE: ['REOPEN_TASK', 'RESUME_REMINDERS'],
   CAPTURE_FACT_CONFIRM: ['CAPTURE_PROPERTY_FACT'],
+  // Exact-four profile gaps (packet D3): one bounded outcome per Property Context area. The area, and the facts a launch may ask about,
+  // are resolved from this outcome by the server-owned mapping in actionableProfileRegistry (`profileAreaForOutcome`), never from message text.
+  PROPERTY_CONTEXT_AREA_CAPTURE: [
+    'CAPTURE_CORE_DETAILS', 'CAPTURE_LOCATION_DETAILS', 'CAPTURE_STRUCTURE_DETAILS', 'CAPTURE_EXTERIOR_DETAILS',
+    'CAPTURE_RESPONSIBILITY_DETAILS', 'CAPTURE_SYSTEMS_DETAILS', 'CAPTURE_SAFETY_DETAILS',
+  ],
   // Phase 4 platform recovery (plan C.13). Outcomes are operation-owned: only the operations listed in
   // RESTART_AFTER_EXPIRY_LABELS declare the restart outcome, and only INVENTORY_LOOKUP declares the exact-record review.
   MAINTENANCE_TASK_CREATE: ['RESTART_AFTER_EXPIRY'],

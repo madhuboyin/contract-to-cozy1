@@ -19,7 +19,7 @@ import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../../
 import { markReplaceRepairStale } from '../../replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../../riskPremiumOptimizer.service';
 import { humanDate } from '../askFormatting';
-import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom } from '../handlers/propertySummary.handler';
+import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom, areaEffectiveSkip } from '../handlers/propertySummary.handler';
 import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, WARRANTY_CORRECTION_FIELDS, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from '../handlers/homeRecordWrites.handler';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
@@ -644,7 +644,8 @@ async function confirmPropertyAreaCapture(ctx: ConfirmCapabilityContext): Promis
     const capture = await captureFeatureContext(propertyId, userId, {
       requirementId: stored.requirementId, captureKey: stored.captureKey,
       featureKey: PROPERTY_AREA_CAPTURE_FEATURE, operationKey: PROPERTY_AREA_CAPTURE_OPERATION,
-      operationInput: { scope: stored.scope, skipFactKeys: state.skipFactKeys },
+      // Identical to the question that was asked: the user's skips plus the server-owned exclusions, or the requirement id would not match.
+      operationInput: { scope: stored.scope, skipFactKeys: areaEffectiveSkip(new Set(state.skipFactKeys), new Set(state.excludedFactKeys)) },
       expectedContextVersion: stored.expectedContextVersion, idempotencyKey, answer: stored.answer,
     }) as { updatedFactKeys?: string[] };
     updatedFactKeys = Array.isArray(capture.updatedFactKeys) ? capture.updatedFactKeys : [];
@@ -658,7 +659,7 @@ async function confirmPropertyAreaCapture(ctx: ConfirmCapabilityContext): Promis
   }
   const writtenAreas = [...new Set(updatedFactKeys.map((key) => areaLabel(getFactDefinition(key).scope)))];
   const skip = new Set(state.skipFactKeys);
-  const progress = await areaCaptureProgress(userId, propertyId, state.scope, skip);
+  const progress = await areaCaptureProgress(userId, propertyId, state.scope, skip, new Set(state.excludedFactKeys));
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'AREA_CAPTURE_SAVED',
     blocks: [{
