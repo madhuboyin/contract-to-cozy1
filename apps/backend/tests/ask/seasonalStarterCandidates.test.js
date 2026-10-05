@@ -30,10 +30,10 @@ test('two starters, distinct outcomes and messages on ONE operation, both declar
   }
 });
 
-test('the outcomes are registered, the registry still validates, and the D-O10 exemption is NOT populated (D-O4 is not approved)', () => {
+test('the outcomes are registered, the registry validates, and both starters are approved: prompt-history exempt AND repeatable (D-O4)', () => {
   assert.deepEqual(outcomes.SUGGESTED_ACTION_OUTCOMES.SEASONAL_HOME_CARE, ['REVIEW_THIS_SEASON', 'PREPARE_NEXT_SEASON']);
   assert.deepEqual(outcomes.validateSuggestedNextActionRegistry(), []);
-  assert.equal(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.size, 0);
+  for (const key of ['SEASONAL_HOME_CARE:REVIEW_THIS_SEASON', 'SEASONAL_HOME_CARE:PREPARE_NEXT_SEASON']) { assert.ok(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key)); assert.ok(outcomes.REPEATABLE_OUTCOMES.has(key)); }
 });
 
 test('the grant lets the starter producer occupy CURATED_STARTER only; any other claimed class falls back and is denied', () => {
@@ -45,11 +45,11 @@ test('the grant lets the starter producer occupy CURATED_STARTER only; any other
   assert.equal(PRODUCER_SLOT_GRANTS[STARTER_SEASONAL_PRODUCER_ID].mayClaimCurrentResultOwnership, undefined);
 });
 
-test('NOT WIRED: no finalizer producer nominates the starters', () => {
-  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates']);
+test('WIRED: the finalizer producer registry nominates the seasonal starters', () => {
+  assert.ok(SUGGESTED_NEXT_ACTION_PRODUCERS.some((p) => p.id === STARTER_SEASONAL_PRODUCER_ID));
 });
 
-test('real eligibility: the starters are eligible when available, and prompt history suppresses one until the D-O4 exemption is registered', () => {
+test('real eligibility: the starters are eligible when available, and a recently asked starter is NOT suppressed (the D-O10 exemption)', () => {
   const [starter] = seasonalHomeCareStarters('p1');
   const ctx = (asked) => ({
     mode: 'NORMAL', sourcePropertyId: 'p1', operationAvailability: new Map([['SEASONAL_HOME_CARE', null]]),
@@ -57,7 +57,5 @@ test('real eligibility: the starters are eligible when available, and prompt his
     completedSemanticKeyHashes: new Set(), askedMessageKeys: new Set(asked ? [suggestionKey(starter.message)] : []), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
   });
   assert.equal(evaluateSuggestedNextActionEligibility(starter, ctx(false)).state, 'ELIGIBLE');
-  const asked = evaluateSuggestedNextActionEligibility(starter, ctx(true));
-  assert.equal(asked.state, 'SUPPRESSED');
-  assert.deepEqual(asked.reasonCodes, ['EQUIVALENT_PROMPT_ASKED']);
+  assert.equal(evaluateSuggestedNextActionEligibility(starter, ctx(true)).state, 'ELIGIBLE');
 });

@@ -44,8 +44,8 @@ function withRegistered(entries, body) {
   }
 }
 
-test('ships empty: no starter is approved yet, so no entry is invented, and the registry validates', () => {
-  assert.equal(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.size, 0);
+test('ships with exactly the seven approved starters (D-O4 activation), and the registry validates', () => {
+  assert.deepEqual([...outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES].sort(), [...outcomes.CURATED_STARTER_OUTCOME_KEYS].sort());
   assert.deepEqual(outcomes.validateSuggestedNextActionRegistry(), []);
 });
 

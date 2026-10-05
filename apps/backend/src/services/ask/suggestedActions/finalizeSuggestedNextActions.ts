@@ -23,7 +23,16 @@ import { materializeSuggestedNextAction } from './suggestedNextActionCandidate';
 import {
   type EligibilityContext, type EntityRecordState, type SuggestedNextActionMode,
 } from './suggestedNextActionEligibility';
-import { selectSuggestedNextActions, type PolicyDiagnostics } from './suggestedNextActionPolicy';
+import type { PolicyDiagnostics } from './suggestedNextActionPolicy';
+import {
+  resolveExactFourExemption, selectExactFourSuggestedNextActions, type ExactFourDiagnostics, type ExactFourInput,
+} from './suggestedNextActionExactFourPolicy';
+import { resolveSuggestedNextActionSlotClass, SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION, type LifecycleIdentity } from './suggestedNextActionExactFourRegistry';
+import { recordExactFourDiagnostics } from './suggestedNextActionExactFourDiagnostics';
+import {
+  loadLifecycleState, offersFromExactFour, recordSuggestedActionOffers, type LifecycleState,
+} from './askSuggestedActionLifecycle.service';
+import { loadActionableCompletenessForFinalizer } from './actionableCompletenessLoader';
 import { SUGGESTED_NEXT_ACTION_BUDGET } from './suggestedNextActionRegistry';
 import { SUGGESTED_NEXT_ACTION_PRODUCERS, type SuggestedNextActionProducer } from './suggestedNextActionProducers';
 import { getSuggestedNextActionEntityValidator } from './suggestedNextActionEntityValidators';
@@ -73,6 +82,12 @@ export interface FinalizeSuggestedNextActionsDeps {
   loadExecutionExpiresAt?: (executionId: string) => Promise<Date | null>;
   /** D-O11: semantic-key hashes of the verified launch outcome of this execution (empty for an ordinary typed question). */
   loadCurrentOutcomeKeyHashes?: (executionId: string) => Promise<ReadonlySet<string>>;
+  /** Durable lifecycle (cooldowns, dismissals, completed outcomes, starter rotation) for this user and property; fails open with `ok: false`. */
+  loadLifecycleState?: typeof loadLifecycleState;
+  /** Persists what this answer offered (every offer; fails open). */
+  recordOffers?: typeof recordSuggestedActionOffers;
+  /** Actionable profile completeness, loaded ONLY when a nominated candidate can occupy a profile or opportunity slot. */
+  loadActionableCompleteness?: (input: { userId: string; propertyId: string }) => Promise<{ fraction: number | null; audienceUncertain: boolean }>;
   entityValidatorFor?: typeof getSuggestedNextActionEntityValidator;
   /** Monotonic ms clock for the pipeline budget. */
   nowMs?: () => number;
@@ -93,6 +108,8 @@ export interface FinalizeSuggestedNextActionsReport {
   durationMs: number;
   droppedProducers: Array<{ producer: string; reason: 'ERROR' | 'BUDGET' }>;
   diagnostics: PolicyDiagnostics | null;
+  /** The exact-four outcome (policy version, applicability, shortage and reasons); null when nothing was nominated or the context failed. */
+  exactFour: ExactFourDiagnostics | null;
   contextFailed: boolean;
 }
 
@@ -104,7 +121,7 @@ export async function finalizeSuggestedNextActionsWithReport(
   const startedAt = nowMs();
   const clock = deps.clock ?? systemSuggestedNextActionClock;
   const mode = resolveSuggestedNextActionMode(input.result, input.operationId);
-  const report: FinalizeSuggestedNextActionsReport = { mode, durationMs: 0, droppedProducers: [], diagnostics: null, contextFailed: false };
+  const report: FinalizeSuggestedNextActionsReport = { mode, durationMs: 0, droppedProducers: [], diagnostics: null, exactFour: null, contextFailed: false };
   // The candidate field is internal: whatever happens below it is never persisted.
   const { suggestedNextActionCandidates: _internal, ...withoutCandidates } = input.result;
   const passthrough = (actions: SuggestedNextAction[]): AskOperationResult => ({ ...withoutCandidates, suggestedNextActions: actions });
@@ -136,8 +153,22 @@ export async function finalizeSuggestedNextActionsWithReport(
   }
   const nominated = [...nominations.values()].reduce((sum, list) => sum + list.length, 0);
   askSuggestedActionsCandidatesTotal.inc({ stage: 'nominated', mode }, nominated);
-  // Nothing nominated: no reads, no ledger beyond an empty list.
-  if (nominated === 0) return finish(passthrough([]));
+  // Nothing nominated: no reads, no ledger beyond an empty list. A property-scoped, ordinary (not recovery, not pending) turn that nominated
+  // NOTHING (for example every starter producer dropped for budget) is still reported as the approved bounded shortage diagnostic, never silently.
+  if (nominated === 0) {
+    const pending = Boolean(input.result.clarification || input.result.confirmation || (input.result.captureRequests?.length ?? 0) > 0);
+    if (mode === 'NORMAL' && input.propertyId && !pending) {
+      const shortageReasons: Array<'NO_CANDIDATES' | 'PRODUCER_DROPPED'> = ['NO_CANDIDATES'];
+      if (report.droppedProducers.length > 0) shortageReasons.push('PRODUCER_DROPPED');
+      report.exactFour = {
+        policyVersion: SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION, applicability: 'EXACT_FOUR', shortage: 4, shortageReasons, selectedBySlot: {},
+        belowCompletenessThreshold: false, completenessUnknown: false, audienceUncertain: false, slotClassDenied: 0, signalClaimsDenied: 0,
+        startersWithinRotationWindow: 0, opportunityReserved: false,
+      };
+      recordExactFourDiagnostics(report.exactFour);
+    }
+    return finish(passthrough([]));
+  }
 
   // 2. One batched evaluation context. Any failure here ships the safe answer with no typed actions.
   let eligibility: EligibilityContext;
@@ -189,12 +220,61 @@ export async function finalizeSuggestedNextActionsWithReport(
     return finish(passthrough([]));
   }
 
-  // 3. The pure policy.
-  const policy = selectSuggestedNextActions({
+  // 3. Exact-four inputs (lifecycle, completeness) and the pure policy. Every extra read is lazy and fails open: a lifecycle or completeness
+  // outage can never strip the row of actions, and is reported as a bounded diagnostic reason instead.
+  const nominatedRaw = [...nominations.values()].flat() as Array<Record<string, any>>;
+  const exemptReason = resolveExactFourExemption(eligibility);
+  const upstreamShortageReasons: Array<'PRODUCER_DROPPED' | 'CONTEXT_FAILED'> = [];
+  if (report.droppedProducers.length > 0) upstreamShortageReasons.push('PRODUCER_DROPPED');
+  let lifecycle: LifecycleState | null = null;
+  let actionableCompleteness: number | null = 1;
+  let audienceUncertain = false;
+  if (!exemptReason && input.propertyId) {
+    const starterIdentities: LifecycleIdentity[] = nominatedRaw
+      .filter((c) => c?.slotClass === 'CURATED_STARTER' && typeof c.operationId === 'string' && typeof c.outcomeKey === 'string')
+      .map((c) => ({
+        operationId: c.operationId, outcomeKey: c.outcomeKey,
+        entityType: typeof c.entityContext?.entityType === 'string' ? c.entityContext.entityType : null,
+        entityId: typeof c.entityContext?.entityId === 'string' ? c.entityContext.entityId : null,
+      }));
+    lifecycle = await (deps.loadLifecycleState ?? loadLifecycleState)({ userId: input.userId, propertyId: input.propertyId, now: clock.now(), rotationIdentities: starterIdentities });
+    if (!lifecycle.ok) upstreamShortageReasons.push('CONTEXT_FAILED');
+    // Completeness only changes the order of profile-first and opportunity slots, so it is loaded only when a nominated candidate could occupy one.
+    const canUseProfileOrOpportunity = nominatedRaw.some((c) => {
+      try {
+        const slotClass = resolveSuggestedNextActionSlotClass({
+          slotClass: c.slotClass, source: c.source, tier: c.tier, traits: { continuesPending: Boolean(c.traits?.continuesPending) }, entityContext: { entityId: c.entityContext?.entityId ?? null },
+        });
+        return slotClass === 'PROFILE_GAP' || slotClass === 'HOME_OPPORTUNITY' || slotClass === 'GOVERNED_CAPABILITY';
+      } catch { return false; }
+    });
+    if (canUseProfileOrOpportunity) {
+      try {
+        const completeness = await (deps.loadActionableCompleteness ?? loadActionableCompletenessForFinalizer)({ userId: input.userId, propertyId: input.propertyId });
+        actionableCompleteness = completeness.fraction;
+        audienceUncertain = completeness.audienceUncertain;
+      } catch (error) {
+        actionableCompleteness = null;
+        logger.warn({ err: error, executionId: input.executionId }, '[ask-suggested-actions] actionable completeness failed; profile-first applies');
+      }
+    }
+  }
+  const exactFourInput: ExactFourInput = {
     nominations,
     eligibility,
     presentationIdentities: collectPresentationIdentities(input.result.blocks, input.propertyId),
-  });
+    actionableCompleteness,
+    audienceUncertain,
+    cooldownLifecycleKeys: lifecycle?.cooldownKeys,
+    completedLifecycleKeys: lifecycle?.completedKeys,
+    starterLastOfferedAtMs: lifecycle?.lastOfferedAtMs,
+    rotationNowMs: clock.now().getTime(),
+    currentOperationId: input.operationId,
+    upstreamShortageReasons,
+  };
+  const policy = selectExactFourSuggestedNextActions(exactFourInput);
+  report.exactFour = policy.exactFour;
+  recordExactFourDiagnostics(policy.exactFour);
   report.diagnostics = policy.diagnostics;
   askSuggestedActionsCandidatesTotal.inc({ stage: 'invalid', mode }, policy.diagnostics.invalidCandidates);
   askSuggestedActionsCandidatesTotal.inc({ stage: 'eligible', mode }, policy.diagnostics.eligible);
@@ -215,6 +295,10 @@ export async function finalizeSuggestedNextActionsWithReport(
     mergedReasonCodes: entry.mergedReasonCodes,
     eligibility: { state: entry.verdict.state, reasonCodes: entry.verdict.reasonCodes, missingFactKeys: entry.verdict.missingFactKeys },
   }));
+  // 5. Persist what was offered (exact-four answers only; every offer, so selection, completion and starter rotation have a row). Fail open.
+  if (policy.exactFour.applicability === 'EXACT_FOUR' && input.propertyId) {
+    await (deps.recordOffers ?? recordSuggestedActionOffers)({ userId: input.userId, propertyId: input.propertyId, offers: offersFromExactFour(policy.selected, policy.evaluated), now });
+  }
   return finish(passthrough(actions));
 }
 

@@ -69,7 +69,7 @@ test('the authored content makes no claim about the home and defers to manufactu
   assert.match(JSON.stringify(buildHomeBasicsResult('SAFETY_BASICS')), /smell gas, leave the home/);
 });
 
-test('starters: two typed CURATED_STARTER candidates on one operation, outcomes registered, CURATED_STARTER-only grant, dismissible, NOT wired', () => {
+test('starters: two typed CURATED_STARTER candidates on one operation, outcomes registered, CURATED_STARTER-only grant, dismissible, registered with the finalizer', () => {
   const starters = homeBasicsStarters('p1');
   assert.deepEqual(starters.map((s) => s.outcomeKey), ['REVIEW_SAFETY_BASICS', 'REVIEW_MONTHLY_ROUTINE']);
   for (const starter of starters) {
@@ -78,9 +78,9 @@ test('starters: two typed CURATED_STARTER candidates on one operation, outcomes 
   }
   assert.deepEqual(outcomes.SUGGESTED_ACTION_OUTCOMES.HOME_BASICS_GUIDE, ['REVIEW_SAFETY_BASICS', 'REVIEW_MONTHLY_ROUTINE']);
   assert.deepEqual(outcomes.validateSuggestedNextActionRegistry(), []);
-  assert.equal(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.size, 0, 'the D-O10 exemption still waits for D-O4');
+  assert.ok(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has('HOME_BASICS_GUIDE:REVIEW_SAFETY_BASICS') && outcomes.REPEATABLE_OUTCOMES.has('HOME_BASICS_GUIDE:REVIEW_SAFETY_BASICS'), 'approved: exempt AND repeatable');
   assert.deepEqual([...exactFour.PRODUCER_SLOT_GRANTS[STARTER_HOME_BASICS_PRODUCER_ID].allowed], ['CURATED_STARTER']);
-  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates']);
+  assert.ok(SUGGESTED_NEXT_ACTION_PRODUCERS.some((p) => p.id === STARTER_HOME_BASICS_PRODUCER_ID), 'the starter producer is registered');
 });
 
 test('SUPPLY ARITHMETIC (inventory 4a): PROPERTY_SUMMARY x2 + SEASONAL x2 + HOME_BASICS x2 = 6 starters on three operations; the largest group is 2, so a typed question needs 4 + 2 = 6 (7 for a launched answer, D-O11)', () => {

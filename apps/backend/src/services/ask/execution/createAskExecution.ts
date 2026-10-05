@@ -27,6 +27,7 @@ import { askOperationSemanticIndexVersion, normalizeAskMessage } from '../askSem
 import { reclaimOrphanedRunningExecution } from '../execution/askSessions';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
 import { suggestedNextActionSemanticKeyHash } from '../suggestedActions/suggestedNextActionIdentity';
+import { recordSuggestedActionCompleted, recordSuggestedActionSelected } from '../suggestedActions/askSuggestedActionLifecycle.service';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
 
 function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
@@ -227,6 +228,13 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           entityId: suggestionResolution.action.entityContext.entityId, outcomeKey: suggestionResolution.action.outcomeKey,
         }),
       }) } });
+      // The durable lifecycle row learns of the selection (fail open; a missing row is counted, never created here).
+      const selected = suggestionResolution.action;
+      if (selected.entityContext.propertyId) {
+        await recordSuggestedActionSelected(userId, selected.entityContext.propertyId, {
+          operationId: selected.operationId, outcomeKey: selected.outcomeKey, entityType: selected.entityContext.entityType, entityId: selected.entityContext.entityId,
+        }, new Date());
+      }
     } catch {
       // Telemetry must never fail the answer the user asked for.
     }
@@ -545,6 +553,13 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         completedAt,
       },
     });
+    // A verified starter or action whose answer completed is a completed outcome (non-repeatable ones then stop being offered; repeatable starters rotate).
+    if (suggestionResolution?.kind === 'VERIFIED' && (result.status === 'ANSWERED' || result.status === 'COMPLETED') && suggestionResolution.action.entityContext.propertyId) {
+      const done = suggestionResolution.action;
+      await recordSuggestedActionCompleted(userId, done.entityContext.propertyId!, {
+        operationId: done.operationId, outcomeKey: done.outcomeKey, entityType: done.entityContext.entityType, entityId: done.entityContext.entityId,
+      }, new Date());
+    }
     if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ skillId: selectedSkill?.id ?? null, skillVersion: selectedSkill?.version ?? null, operationId: operation.operationId, operationVersion: operation.version, blockTypes: result.blocks.map((block) => block.type) }) } });
     if (validation) await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, semantic: validation.semantic, repaired: validation.repaired, sourceCompletionState: validation.trust.checks.sourceIntegrity }) } });

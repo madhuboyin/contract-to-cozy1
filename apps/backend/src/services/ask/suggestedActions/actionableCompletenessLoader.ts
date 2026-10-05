@@ -1,0 +1,30 @@
+// Default loader for the finalizer's actionable-profile completeness (exact-four, plan C.15.1). Used ONLY when a nominated candidate could
+// occupy a profile or opportunity slot, so a starters-only turn pays nothing. It reads the full Property Context snapshot and the governed
+// audience state; any failure returns `fraction: null` (the policy then runs profile-first and reports it), never a guess.
+import { logger } from '../../../lib/logger';
+import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
+import { getFactDefinition, isFactApplicable } from '../../../modules/propertyContext/catalog/factCatalog';
+import { PROPERTY_AREA_CAPTURE_SCOPES } from '../../../modules/propertyContext/catalog/featureRequirementRegistry';
+import { computeActionableCompleteness, type ProfileFactObservation } from './actionableProfileRegistry';
+import { loadProfileAudienceState } from './profileAudienceAdapter';
+
+export async function loadActionableCompletenessForFinalizer(input: { userId: string; propertyId: string }): Promise<{ fraction: number | null; audienceUncertain: boolean }> {
+  try {
+    const [snapshot, audience] = await Promise.all([
+      getPropertyContext(input.propertyId, { userId: input.userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] }),
+      loadProfileAudienceState(input.propertyId),
+    ]);
+    const facts: Record<string, ProfileFactObservation> = {};
+    for (const [key, fact] of Object.entries(snapshot.facts)) facts[key] = { state: fact.state as ProfileFactObservation['state'], value: fact.value };
+    const completeness = computeActionableCompleteness({
+      facts, activeAudiences: audience.audiences, audienceUncertain: !audience.ok,
+      isCatalogApplicable: (factKey) => {
+        try { return isFactApplicable(getFactDefinition(factKey), snapshot.facts); } catch { return true; }
+      },
+    });
+    return { fraction: completeness.fraction, audienceUncertain: completeness.audienceUncertain };
+  } catch (error) {
+    logger.warn({ err: error, propertyId: input.propertyId }, '[ask-suggested-actions] actionable completeness load failed');
+    return { fraction: null, audienceUncertain: true };
+  }
+}

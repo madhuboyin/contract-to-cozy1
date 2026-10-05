@@ -155,8 +155,21 @@ export function isRegisteredOutcome(operationId: string, outcomeKey: string): bo
   return (SUGGESTED_ACTION_OUTCOMES[operationId] ?? []).includes(outcomeKey);
 }
 
+/**
+ * The curated starters (owner decision D-O4, conditionally approved October 5, 2026; wording approved, 34 of 34). Each needs BOTH a repeatable
+ * declaration (a completed starter may be offered again) AND a prompt-history exemption (a recently asked starter message is not suppressed):
+ * the two are different concepts and neither implies the other. `starterRegistryPinned.test.js` pins this list.
+ */
+export const CURATED_STARTER_OUTCOME_KEYS: readonly string[] = [
+  'PROPERTY_SUMMARY:REVIEW_HOME_SUMMARY', 'PROPERTY_SUMMARY:REVIEW_COMPLETENESS',
+  'SEASONAL_HOME_CARE:REVIEW_THIS_SEASON', 'SEASONAL_HOME_CARE:PREPARE_NEXT_SEASON',
+  'HOME_BASICS_GUIDE:REVIEW_SAFETY_BASICS', 'HOME_BASICS_GUIDE:REVIEW_MONTHLY_ROUTINE',
+  'HIRING_GUIDE:REVIEW_HIRING_CHECKLIST',
+];
+
 /** Outcomes the operation registry explicitly allows to be offered again after completion (plan §4.1): recovery can recur. */
 export const REPEATABLE_OUTCOMES: ReadonlySet<string> = new Set<string>([
+  ...CURATED_STARTER_OUTCOME_KEYS,
   ...Object.keys(RESTART_AFTER_EXPIRY_LABELS).map((operationId) => `${operationId}:RESTART_AFTER_EXPIRY`),
   'INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD',
 ]);
@@ -171,9 +184,9 @@ export function isRepeatableOutcome(operationId: string, outcomeKey: string): bo
  * recent-prompt deduplication ("this exact text was just asked") are different concepts, and tying the second to the first would also
  * change the existing repeatable recovery outcomes. Starters only: every entry must be an explicit, reviewed `operation:outcome`
  * for a read-only, viewer-floor, standard-safety, property-scoped operation (checked by `validateSuggestedNextActionRegistry`).
- * Empty until the starter list is approved (inventory D-O4); no entry is invented here.
+ * Populated with the approved curated starters only (inventory D-O4); adding an entry is an explicit, reviewed registry change.
  */
-export const PROMPT_HISTORY_EXEMPT_OUTCOMES: ReadonlySet<string> = new Set<string>([]);
+export const PROMPT_HISTORY_EXEMPT_OUTCOMES: ReadonlySet<string> = new Set<string>(CURATED_STARTER_OUTCOME_KEYS);
 
 export function isPromptHistoryExemptOutcome(operationId: string, outcomeKey: string): boolean {
   return PROMPT_HISTORY_EXEMPT_OUTCOMES.has(`${operationId}:${outcomeKey}`);
