@@ -8,7 +8,7 @@ import type { ExactFourDiagnostics } from './suggestedNextActionExactFourPolicy'
 
 export interface ExactFourOutcomeSample {
   result: 'FULL' | 'DEGRADED' | 'EXEMPT';
-  /** Zero or more bounded reasons: exempt reason, shortage reasons, and COMPLETENESS_UNKNOWN / SLOT_CLASS_DENIED when they occurred. */
+  /** Zero or more bounded reasons: exempt reason, shortage reasons, and COMPLETENESS_UNKNOWN / SLOT_CLASS_DENIED / SIGNAL_CLAIM_DENIED when they occurred. */
   reasons: string[];
 }
 
@@ -17,6 +17,7 @@ export function exactFourOutcome(diagnostics: ExactFourDiagnostics): ExactFourOu
   const reasons = new Set<string>(diagnostics.shortageReasons);
   if (diagnostics.completenessUnknown) reasons.add('COMPLETENESS_UNKNOWN');
   if (diagnostics.slotClassDenied > 0) reasons.add('SLOT_CLASS_DENIED');
+  if (diagnostics.signalClaimsDenied > 0) reasons.add('SIGNAL_CLAIM_DENIED');
   if (diagnostics.shortage === 0) return { result: 'FULL', reasons: [...reasons] };
   if (reasons.size === 0) reasons.add('UNEXPLAINED');
   return { result: 'DEGRADED', reasons: [...reasons] };

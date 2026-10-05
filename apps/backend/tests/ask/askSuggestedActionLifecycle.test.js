@@ -98,23 +98,27 @@ test('lifecycle key is operation + outcome + entity scope and ignores everything
 
 // ---- pure suppression ----------------------------------------------------------------------------------------------------------
 
-test('isLifecycleRowSuppressed: time cooldown, NOT_RELEVANT until the fingerprint changes, completion unless repeatable', () => {
+test('pure suppression: time cooldown, NOT_RELEVANT bound to a fingerprint, and completion (a separate concern)', () => {
   const row = (over = {}) => ({ operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', outcomeKey: 'CAPTURE_SAFETY_DETAILS', entityType: '', entityId: '', completedAt: null, dismissalReason: null, suppressedUntil: null, contextFingerprint: null, ...over });
-  assert.equal(svc.isLifecycleRowSuppressed(row(), NOW), false);
-  assert.equal(svc.isLifecycleRowSuppressed(row({ suppressedUntil: later(HOUR) }), NOW), true);
-  assert.equal(svc.isLifecycleRowSuppressed(row({ suppressedUntil: later(-HOUR) }), NOW), false, 'expired cooldown');
+  assert.equal(svc.isCooldownOrDismissalActive(row(), NOW), false);
+  assert.equal(svc.isCooldownOrDismissalActive(row({ suppressedUntil: later(HOUR) }), NOW), true);
+  assert.equal(svc.isCooldownOrDismissalActive(row({ suppressedUntil: later(-HOUR) }), NOW), false, 'expired cooldown');
   const notRelevant = row({ dismissalReason: 'NOT_RELEVANT', contextFingerprint: 'fp-1' });
-  assert.equal(svc.isLifecycleRowSuppressed(notRelevant, NOW, 'fp-1'), true);
-  assert.equal(svc.isLifecycleRowSuppressed(notRelevant, NOW, 'fp-2'), false, 'lapses when the material state changes');
-  assert.equal(svc.isLifecycleRowSuppressed(row({ dismissalReason: 'NOT_RELEVANT' }), NOW, null), true, 'no fingerprint on either side stays suppressed');
-  assert.equal(svc.isLifecycleRowSuppressed(row({ dismissalReason: 'NOT_NOW', suppressedUntil: later(-DAY) }), NOW), false);
+  assert.equal(svc.isCooldownOrDismissalActive(notRelevant, NOW, 'fp-1'), true);
+  assert.equal(svc.isCooldownOrDismissalActive(notRelevant, NOW, 'fp-2'), false, 'lapses when the material state changes');
+  assert.equal(svc.isCooldownOrDismissalActive(notRelevant, NOW, null), true, 'current state unknown: the dismissal is respected');
+  assert.equal(svc.isCooldownOrDismissalActive(row({ dismissalReason: 'NOT_RELEVANT' }), NOW, null), false, 'no dismissal fingerprint means no state boundary: it never suppresses');
+  assert.equal(svc.isCooldownOrDismissalActive(row({ dismissalReason: 'NOT_RELEVANT' }), NOW, 'fp-1'), false);
+  assert.equal(svc.isCooldownOrDismissalActive(row({ dismissalReason: 'NOT_NOW', suppressedUntil: later(-DAY) }), NOW), false);
+  assert.equal(svc.isCompletionSuppressing(row({ completedAt: NOW })), true);
+  assert.equal(svc.isCompletionSuppressing(row({ operationId: 'MAINTENANCE_TASK_CREATE', outcomeKey: 'RESTART_AFTER_EXPIRY', completedAt: NOW })), false, 'a registry-repeatable outcome is not suppressed by completion');
+  assert.equal(svc.isCompletionSuppressing(row()), false);
   assert.equal(svc.isLifecycleRowSuppressed(row({ completedAt: NOW }), NOW), true);
-  assert.equal(svc.isLifecycleRowSuppressed(row({ operationId: 'MAINTENANCE_TASK_CREATE', outcomeKey: 'RESTART_AFTER_EXPIRY', completedAt: NOW }), NOW), false, 'a registry-repeatable outcome is not suppressed by completion');
 });
 
 // ---- offers --------------------------------------------------------------------------------------------------------------------
 
-test('offers: only cooldown-governed classes are recorded, with offer-based suppression and no text', async () => {
+test('every offer is persisted; only a class with an offer cooldown also gets suppressedUntil', async () => {
   const { db, rows } = fakeDb();
   const result = await svc.recordSuggestedActionOffers({
     userId: 'u1', propertyId: 'p1', now: NOW, offers: [
@@ -122,17 +126,37 @@ test('offers: only cooldown-governed classes are recorded, with offer-based supp
       offer({ outcomeKey: 'CAPTURE_CORE_DETAILS', slotClass: 'HOME_OPPORTUNITY', operationId: 'SELL_HOLD_RENT_VIEW' }),
       offer({ outcomeKey: 'OWNED', slotClass: 'HOME_OPPORTUNITY', currentResultOwnership: true }),
       offer({ outcomeKey: 'EXACT', slotClass: 'EXACT_RECORD' }),
+      offer({ outcomeKey: 'URGENT', slotClass: 'URGENT_WORK' }),
+      offer({ outcomeKey: 'CONTINUE', slotClass: 'CONTINUE_WORK' }),
       offer({ outcomeKey: 'STARTER', slotClass: 'CURATED_STARTER' }),
     ],
   }, db);
-  assert.deepEqual(result, { attempted: 2, ok: true });
-  const [profile, opportunity] = only(rows);
-  assert.equal(profile.suppressedUntil.getTime(), NOW.getTime() + 24 * HOUR);
-  assert.equal(opportunity.suppressedUntil.getTime(), NOW.getTime() + 7 * DAY);
-  assert.equal(profile.offerCount, 1);
-  assert.equal(profile.firstOfferedAt.getTime(), NOW.getTime());
-  assert.equal(profile.lastReasonCode, 'AREA_INCOMPLETE');
-  assert.ok(!JSON.stringify(profile).includes('label') && !('message' in profile));
+  assert.deepEqual(result, { attempted: 7, ok: true });
+  assert.equal(rows.size, 7, 'exempt classes, owned opportunities and starters all have a row');
+  const byOutcome = Object.fromEntries(only(rows).map((row) => [row.outcomeKey, row]));
+  assert.equal(byOutcome.CAPTURE_SAFETY_DETAILS.suppressedUntil.getTime(), NOW.getTime() + 24 * HOUR);
+  assert.equal(byOutcome.CAPTURE_CORE_DETAILS.suppressedUntil.getTime(), NOW.getTime() + 7 * DAY);
+  for (const outcome of ['OWNED', 'EXACT', 'URGENT', 'CONTINUE', 'STARTER']) assert.equal(byOutcome[outcome].suppressedUntil, null, `${outcome} has no offer cooldown`);
+  for (const row of only(rows)) { assert.equal(row.offerCount, 1); assert.equal(row.lastOfferedAt.getTime(), NOW.getTime()); assert.ok(!('message' in row)); }
+});
+
+test('selection and completion of a cooldown-exempt action have a row to mark, and completion suppresses it in every class', async () => {
+  const { db, rows } = fakeDb();
+  const exact = id({ operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: 'ADD_BRAND', entityType: 'INVENTORY_ITEM', entityId: 'item-1' });
+  await svc.recordSuggestedActionOffers({ userId: 'u1', propertyId: 'p1', now: NOW, offers: [{ ...exact, slotClass: 'EXACT_RECORD', currentResultOwnership: true }] }, db);
+  assert.equal(await svc.recordSuggestedActionSelected('u1', 'p1', exact, later(HOUR), db), true);
+  assert.equal(only(rows)[0].selectedAt.getTime(), later(HOUR).getTime(), 'selection found the row');
+  await svc.recordSuggestedActionCompleted('u1', 'p1', exact, later(2 * HOUR), db);
+  const state = await svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: later(90 * DAY) }, db);
+  assert.ok(state.completedKeys.has(reg.lifecycleKey(exact)));
+  assert.ok(!state.cooldownKeys.has(reg.lifecycleKey(exact)), 'no offer cooldown ever applied to the exact record');
+});
+
+test('offers are built from the policy\'s evaluated output, never from raw candidate claims', () => {
+  const selected = [{ candidate: { operationId: 'A_OP', outcomeKey: 'A_OUT', entityContext: { entityType: null, entityId: null }, reasonCodes: ['WHY_X'], signals: { currentResultOwnership: true } } }];
+  const offers = svc.offersFromExactFour(selected, [{ slotClass: 'HOME_OPPORTUNITY', currentResultOwnership: false, activeGoalMatch: false }]);
+  assert.deepEqual(offers, [{ operationId: 'A_OP', outcomeKey: 'A_OUT', entityType: null, entityId: null, slotClass: 'HOME_OPPORTUNITY', currentResultOwnership: false, reasonCode: 'WHY_X' }]);
+  assert.equal(reg.offerCooldownMs(offers[0].slotClass, offers[0].currentResultOwnership), 7 * DAY, 'the denied ownership claim does not buy a cooldown exemption');
 });
 
 test('a changed reason code updates metadata on the SAME row (it cannot create a parallel row and bypass cooldown)', async () => {
@@ -163,21 +187,47 @@ test('an offer never shortens a longer "Not now"; concurrent offers only lengthe
 
 // ---- dismissal, selection, completion -------------------------------------------------------------------------------------------
 
-test('dismissal: NOT_NOW suppresses 30 days, NOT_RELEVANT until the fingerprint changes; it is durable even with no prior offer', async () => {
+test('dismissal: NOT_NOW suppresses 30 days; NOT_RELEVANT needs a fingerprint and holds until it changes; durable with no prior offer', async () => {
   const notNow = fakeDb();
   assert.equal(await svc.recordSuggestedActionDismissal({ userId: 'u1', propertyId: 'p1', identity: id(), reason: 'NOT_NOW', now: NOW }, notNow.db), true);
-  let loaded = await svc.loadSuppressedLifecycleKeys({ userId: 'u1', propertyId: 'p1', now: later(29 * DAY) }, notNow.db);
-  assert.ok(loaded.keys.has(reg.lifecycleKey(id())));
-  loaded = await svc.loadSuppressedLifecycleKeys({ userId: 'u1', propertyId: 'p1', now: later(31 * DAY) }, notNow.db);
-  assert.equal(loaded.keys.size, 0, 'Not now lapses after 30 days');
+  let loaded = await svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: later(29 * DAY) }, notNow.db);
+  assert.ok(loaded.cooldownKeys.has(reg.lifecycleKey(id())));
+  loaded = await svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: later(31 * DAY) }, notNow.db);
+  assert.equal(loaded.cooldownKeys.size, 0, 'Not now lapses after 30 days');
+
+  const refused = fakeDb();
+  for (const bad of [undefined, null, '', '   ']) {
+    assert.equal(await svc.recordSuggestedActionDismissal({ userId: 'u1', propertyId: 'p1', identity: id(), reason: 'NOT_RELEVANT', now: NOW, contextFingerprint: bad }, refused.db), false, `fingerprint ${JSON.stringify(bad)}`);
+  }
+  assert.equal(refused.rows.size, 0, 'a NOT_RELEVANT without a state boundary is refused and writes nothing');
 
   const notRelevant = fakeDb();
-  await svc.recordSuggestedActionDismissal({ userId: 'u1', propertyId: 'p1', identity: id(), reason: 'NOT_RELEVANT', now: NOW, contextFingerprint: 'fp-1' }, notRelevant.db);
+  assert.equal(await svc.recordSuggestedActionDismissal({ userId: 'u1', propertyId: 'p1', identity: id(), reason: 'NOT_RELEVANT', now: NOW, contextFingerprint: 'fp-1' }, notRelevant.db), true);
   const key = reg.lifecycleKey(id());
-  const same = await svc.loadSuppressedLifecycleKeys({ userId: 'u1', propertyId: 'p1', now: later(365 * DAY), currentFingerprints: new Map([[key, 'fp-1']]) }, notRelevant.db);
-  assert.ok(same.keys.has(key), 'no time limit');
-  const changed = await svc.loadSuppressedLifecycleKeys({ userId: 'u1', propertyId: 'p1', now: later(DAY), currentFingerprints: new Map([[key, 'fp-2']]) }, notRelevant.db);
-  assert.equal(changed.keys.size, 0, 'lapses when the material state changes');
+  const same = await svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: later(365 * DAY), currentFingerprints: new Map([[key, 'fp-1']]) }, notRelevant.db);
+  assert.ok(same.cooldownKeys.has(key), 'no time limit');
+  const changed = await svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: later(DAY), currentFingerprints: new Map([[key, 'fp-2']]) }, notRelevant.db);
+  assert.equal(changed.cooldownKeys.size, 0, 'lapses when the material state changes');
+});
+
+test('regression: an offer after a lapsed NOT_RELEVANT must NOT re-bind the dismissal to the new state', async () => {
+  const { db, rows } = fakeDb();
+  const key = reg.lifecycleKey(id());
+  await svc.recordSuggestedActionDismissal({ userId: 'u1', propertyId: 'p1', identity: id(), reason: 'NOT_RELEVANT', now: NOW, contextFingerprint: 'fp-1' }, db);
+  // The material state changes: the dismissal lapses and the action is offered again.
+  const lapsed = () => svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: later(2 * DAY), currentFingerprints: new Map([[key, 'fp-2']]) }, db);
+  assert.equal((await lapsed()).cooldownKeys.has(key), false);
+  await svc.recordSuggestedActionOffers({ userId: 'u1', propertyId: 'p1', now: later(2 * DAY), offers: [offer({ slotClass: 'HOME_OPPORTUNITY', operationId: id().operationId })] }, db);
+  assert.equal(only(rows)[0].contextFingerprint, 'fp-1', 'the offer never overwrites the dismissal fingerprint');
+  assert.equal(only(rows)[0].offerCount, 1);
+  // Old behavior: the offer wrote fp-2 into the row, so the unchanged dismissal matched the new state and suppressed it again.
+  // Isolate the dismissal branch from the offer's own time cooldown:
+  const dismissalOnly = { ...only(rows)[0], suppressedUntil: null };
+  assert.equal(svc.isCooldownOrDismissalActive(dismissalOnly, later(2 * DAY + HOUR), 'fp-2'), false, 'the lapsed dismissal is not re-bound to the new state');
+  assert.equal(svc.isCooldownOrDismissalActive(dismissalOnly, later(2 * DAY + HOUR), 'fp-1'), true, 'it would apply again only if the state returned to what was dismissed');
+  // A later NOT_NOW clears a stale NOT_RELEVANT fingerprint.
+  await svc.recordSuggestedActionDismissal({ userId: 'u1', propertyId: 'p1', identity: id(), reason: 'NOT_NOW', now: later(3 * DAY) }, db);
+  assert.equal(only(rows)[0].contextFingerprint, null);
 });
 
 test('completion suppresses the outcome durably unless it is repeatable; selection only marks an existing row', async () => {
@@ -186,8 +236,9 @@ test('completion suppresses the outcome durably unless it is repeatable; selecti
   assert.equal(await svc.recordSuggestedActionSelected('u1', 'p1', id(), later(HOUR), db), true);
   assert.equal(only(rows)[0].selectedAt.getTime(), later(HOUR).getTime());
   await svc.recordSuggestedActionCompleted('u1', 'p1', id(), later(2 * HOUR), db);
-  const loaded = await svc.loadSuppressedLifecycleKeys({ userId: 'u1', propertyId: 'p1', now: later(90 * DAY) }, db);
-  assert.ok(loaded.keys.has(reg.lifecycleKey(id())), 'completed: suppressed long after the offer cooldown ended');
+  const loaded = await svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: later(90 * DAY) }, db);
+  assert.ok(loaded.completedKeys.has(reg.lifecycleKey(id())), 'completed: suppressed long after the offer cooldown ended');
+  assert.equal(loaded.cooldownKeys.size, 0, 'the offer cooldown itself has ended');
   const empty = fakeDb();
   await svc.recordSuggestedActionSelected('u1', 'p1', id(), NOW, empty.db);
   assert.equal(empty.rows.size, 0, 'selection never creates a row');
@@ -196,12 +247,12 @@ test('completion suppresses the outcome durably unless it is repeatable; selecti
 test('scoping: another user, another property and another entity are not suppressed', async () => {
   const { db } = fakeDb();
   await svc.recordSuggestedActionDismissal({ userId: 'u1', propertyId: 'p1', identity: id(), reason: 'NOT_NOW', now: NOW }, db);
-  const load = (userId, propertyId) => svc.loadSuppressedLifecycleKeys({ userId, propertyId, now: later(DAY) }, db);
-  assert.equal((await load('u1', 'p1')).keys.size, 1);
-  assert.equal((await load('u2', 'p1')).keys.size, 0);
-  assert.equal((await load('u1', 'p2')).keys.size, 0);
+  const load = (userId, propertyId) => svc.loadLifecycleState({ userId, propertyId, now: later(DAY) }, db);
+  assert.equal((await load('u1', 'p1')).cooldownKeys.size, 1);
+  assert.equal((await load('u2', 'p1')).cooldownKeys.size, 0);
+  assert.equal((await load('u1', 'p2')).cooldownKeys.size, 0);
   const entity = reg.lifecycleKey(id({ entityType: 'INVENTORY_ITEM', entityId: 'item-1' }));
-  assert.ok(!(await load('u1', 'p1')).keys.has(entity));
+  assert.ok(!(await load('u1', 'p1')).cooldownKeys.has(entity));
 });
 
 // ---- failure behavior ------------------------------------------------------------------------------------------------------------
@@ -212,7 +263,7 @@ test('writes fail open (reported, never thrown) and a failed read applies no coo
   assert.equal(await svc.recordSuggestedActionDismissal({ userId: 'u1', propertyId: 'p1', identity: id(), reason: 'NOT_NOW', now: NOW }, failing.db), false);
   assert.equal(await svc.recordSuggestedActionSelected('u1', 'p1', id(), NOW, failing.db), false);
   assert.equal(await svc.recordSuggestedActionCompleted('u1', 'p1', id(), NOW, failing.db), false);
-  assert.deepEqual(await svc.loadSuppressedLifecycleKeys({ userId: 'u1', propertyId: 'p1', now: NOW }, failing.db), { keys: new Set(), ok: false });
+  assert.deepEqual(await svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: NOW }, failing.db), { cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: false });
 });
 
 // ---- policy integration ----------------------------------------------------------------------------------------------------------
@@ -220,7 +271,7 @@ test('writes fail open (reported, never thrown) and a failed read applies no coo
 test('loaded lifecycle keys suppress offered profile chips in the exact-four policy but never the exact record', async () => {
   const { db } = fakeDb();
   await svc.recordSuggestedActionOffers({ userId: 'u1', propertyId: 'p1', now: NOW, offers: [offer({ operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: 'ADD_BRAND', entityType: 'INVENTORY_ITEM', entityId: 'item-1' })] }, db);
-  const { keys } = await svc.loadSuppressedLifecycleKeys({ userId: 'u1', propertyId: 'p1', now: later(HOUR) }, db);
+  const { cooldownKeys: keys } = await svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now: later(HOUR) }, db);
   const candidate = (slotClass) => ({
     source: 'MISSING_DETAIL', sourceOperationId: 'INVENTORY_LOOKUP', label: 'Add the brand', message: 'What brand?', operationId: 'INVENTORY_ITEM_CORRECT',
     interactionType: 'MUTATE_RECORD', outcomeKey: 'ADD_BRAND', slotClass, tier: 'RELATED', requiredFacts: [], reasonCodes: [],

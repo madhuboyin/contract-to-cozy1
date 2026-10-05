@@ -50,7 +50,7 @@ function ctx(over = {}) {
   };
 }
 const ALL = registry.SUGGESTED_NEXT_ACTION_SLOT_CLASSES;
-const GRANT_ALL = { 'test.producer': { allowed: new Set(ALL), fallback: 'HOME_OPPORTUNITY' } };
+const GRANT_ALL = { 'test.producer': { allowed: new Set(ALL), fallback: 'HOME_OPPORTUNITY', mayClaimCurrentResultOwnership: true, mayClaimActiveGoalMatch: true } };
 const run = (list, over = {}) => selectExactFourSuggestedNextActions({
   slotGrants: GRANT_ALL, nominations: new Map([['test.producer', list]]), eligibility: ctx(over.eligibility), actionableCompleteness: 0.5, ...over, ...(over.eligibility ? { eligibility: ctx(over.eligibility) } : {}),
 });
@@ -348,6 +348,8 @@ test('tier, trait and source claims cannot promote either: they only choose amon
 test('production grants: the result producer may continue and fix records but not claim urgent work or starters; unknown producers are opportunities only', () => {
   const result = registry.PRODUCER_SLOT_GRANTS['operation-result.candidates'];
   assert.deepEqual([...result.allowed].sort(), ['CONTINUE_WORK', 'EXACT_RECORD', 'HOME_OPPORTUNITY']);
+  assert.equal(result.mayClaimCurrentResultOwnership, true);
+  assert.notEqual(result.mayClaimActiveGoalMatch, true, 'the result producer has no goal source');
   const probe = (producerId, slotClass) => registry.resolveGrantedSlotClass({ slotClass, source: 'OPERATION_RESULT', tier: 'RELATED', traits: { continuesPending: false }, entityContext: { entityId: null } }, producerId);
   assert.deepEqual(probe('operation-result.candidates', 'EXACT_RECORD'), { slotClass: 'EXACT_RECORD', denied: false });
   assert.deepEqual(probe('operation-result.candidates', 'URGENT_WORK'), { slotClass: 'HOME_OPPORTUNITY', denied: true });
@@ -422,4 +424,66 @@ test('producer identity is the nominations key and is not part of the candidate 
   // The legacy at-most-four policy carries the same bound identity.
   const legacy = selectSuggestedNextActions({ nominations: new Map([['plain.producer', [urgent]]]), eligibility: ctx() });
   assert.equal(legacy.selected[0].producerId, 'plain.producer');
+});
+
+// ---- review: ownership/goal are producer claims; completion applies to every class; starter rotation --------------------------------
+
+const claim = (over) => ({ signals: { exactEntityMatch: false, currentResultOwnership: false, activeGoalMatch: false, materiality: 1, sourceConfidence: 0.9, ...over } });
+const noClaims = { 'test.producer': { allowed: new Set(ALL), fallback: 'HOME_OPPORTUNITY' } };
+
+test('ownership and goal claims count only when the producer grant allows them; a denied claim is cleared and counted', () => {
+  const gaps = [named('g1', 'PROFILE_GAP'), named('g2', 'PROFILE_GAP'), named('g3', 'PROFILE_GAP'), named('g4', 'PROFILE_GAP')];
+  for (const [label, over] of [['ownership', { currentResultOwnership: true }], ['goal', { activeGoalMatch: true }]]) {
+    // No grant: the claim is cleared, so the opportunity is not strong and does not take the reserved slot.
+    const denied = run([...gaps, named('opp', 'HOME_OPPORTUNITY', claim(over))], { slotGrants: noClaims });
+    assert.equal(denied.exactFour.signalClaimsDenied, 1, label);
+    assert.equal(denied.exactFour.opportunityReserved, false, label);
+    assert.ok(!labels(denied).includes('opp'), label);
+    assert.ok(exactFourOutcome(denied.exactFour).reasons.includes('SIGNAL_CLAIM_DENIED'), label);
+    // Granted: honored.
+    const granted = run([...gaps, named('opp', 'HOME_OPPORTUNITY', claim(over))]);
+    assert.equal(granted.exactFour.signalClaimsDenied, 0, label);
+    assert.equal(granted.exactFour.opportunityReserved, true, label);
+  }
+});
+
+test('a denied ownership claim cannot dodge the unrelated-opportunity cap, and the evaluated output says so (lifecycle input)', () => {
+  const owned = claim({ currentResultOwnership: true });
+  const list = [named('o1', 'HOME_OPPORTUNITY', owned), named('o2', 'HOME_OPPORTUNITY', owned), named('o3', 'HOME_OPPORTUNITY', owned)];
+  const withGrant = run(list, { actionableCompleteness: 0.95 });
+  assert.equal(withGrant.selected.length, 3, 'granted ownership is uncapped');
+  assert.ok(withGrant.evaluated.every((entry) => entry.currentResultOwnership === true));
+  const without = run(list, { slotGrants: noClaims, actionableCompleteness: 0.95 });
+  assert.equal(without.selected.length, 1, 'ungranted claims are cleared, so the one-unrelated cap applies');
+  assert.equal(without.exactFour.signalClaimsDenied, 3);
+  assert.equal(without.evaluated.length, without.selected.length, 'evaluated is aligned with selected');
+  assert.equal(without.evaluated[0].currentResultOwnership, false, 'the lifecycle gets the evaluated value, not the raw claim');
+  assert.equal(without.selected[0].candidate.signals.currentResultOwnership, true, 'the raw candidate claim is untouched');
+});
+
+test('completed outcomes are suppressed in EVERY class (offer cooldown still spares the exempt ones)', () => {
+  const list = [named('cont', 'CONTINUE_WORK'), named('urg', 'URGENT_WORK'), named('rec', 'EXACT_RECORD'), named('gap', 'PROFILE_GAP'), named('opp', 'HOME_OPPORTUNITY'), named('start', 'CURATED_STARTER')];
+  const keys = new Set(list.map(lcKey));
+  const cooled = run(list, { cooldownLifecycleKeys: keys, actionableCompleteness: 0.5 });
+  assert.deepEqual([...labels(cooled)].sort(), ['cont', 'rec', 'urg'], 'cooldown spares exempt classes only');
+  const completed = run(list, { completedLifecycleKeys: keys, actionableCompleteness: 0.5 });
+  assert.equal(completed.selected.length, 0, 'completion suppresses all seven, including urgent work and the exact record');
+  assert.equal(completed.diagnostics.rejections['COMPLETED:SUPPRESSED'], 6);
+  assert.deepEqual(completed.exactFour.shortageReasons, ['COOLDOWN_SUPPRESSED']);
+});
+
+test('curated starter rotation is soft: least recently offered first, never offered before stale before recent, and the oldest still fills the row', () => {
+  const NOW_MS = Date.parse('2026-10-04T12:00:00Z');
+  const D = 24 * 3600 * 1000;
+  const starters = ['s-never', 's-old', 's-mid', 's-recent'].map((id) => named(id, 'CURATED_STARTER'));
+  const offered = new Map([[lcKey(starters[1]), NOW_MS - 20 * D], [lcKey(starters[2]), NOW_MS - 8 * D], [lcKey(starters[3]), NOW_MS - 1 * D]]);
+  const need2 = run([named('rec', 'EXACT_RECORD'), named('gap', 'PROFILE_GAP'), ...starters], { starterLastOfferedAtMs: offered, rotationNowMs: NOW_MS });
+  assert.deepEqual(labels(need2).slice(2), ['s-never', 's-old'], 'never offered, then the least recently offered');
+  assert.equal(need2.exactFour.startersWithinRotationWindow, 0, 'enough starters outside the 7-day window');
+  const need4 = run(starters, { starterLastOfferedAtMs: offered, rotationNowMs: NOW_MS });
+  assert.deepEqual(labels(need4), ['s-never', 's-old', 's-mid', 's-recent'], 'a recently offered starter still fills the row rather than creating a shortage');
+  assert.equal(need4.exactFour.shortage, 0);
+  assert.equal(need4.exactFour.startersWithinRotationWindow, 1, 'the one inside the window is reported');
+  const same = run(starters, {});
+  assert.equal(same.selected.length, 4, 'without rotation data the shared deterministic order applies');
 });

@@ -1,6 +1,9 @@
 // Plan C.15.4 step 5 / Ask Redo FRD §27.7a: durable lifecycle of offered Suggested Next Action outcomes. NOT wired into the finalizer
 // (exact-four activates atomically at the end). Identity is user + property + operation + outcome + entity scope; the reason code is
-// metadata. Persisting an answer is an OFFER, so cooldown starts at offer time. Nothing here stores a label, message or homeowner text.
+// metadata. Persisting an answer is an OFFER, so cooldown starts at offer time. EVERY offered typed action is recorded (cooldown-exempt
+// classes and curated starters included) so selection, completion and starter rotation have a row; only a class with an offer
+// cooldown also gets `suppressedUntil`. `contextFingerprint` is the DISMISSAL fingerprint: only a dismissal writes it, offers never do.
+// Nothing here stores a label, message or homeowner text.
 //
 // Writes are best effort and fail open: a failed write is logged and counted by the caller's report, and never changes or blocks the
 // answer. Every "extend suppression" write is a single conditional update (raise-only), so concurrent offers can only lengthen a
@@ -8,6 +11,8 @@
 import { logger } from '../../../lib/logger';
 import { prisma } from '../../../lib/prisma';
 import { COOLDOWN_MS, lifecycleKey, offerCooldownMs, type LifecycleIdentity, type SuggestedNextActionSlotClass } from './suggestedNextActionExactFourRegistry';
+import type { ExactFourEvaluation } from './suggestedNextActionExactFourPolicy';
+import type { SelectedCandidate } from './suggestedNextActionPolicy';
 import { isRepeatableOutcome } from './suggestedNextActionRegistry';
 
 export type LifecycleDismissalReason = 'NOT_NOW' | 'NOT_RELEVANT';
@@ -17,6 +22,7 @@ export interface LifecycleRow {
   outcomeKey: string;
   entityType: string;
   entityId: string;
+  lastOfferedAt?: Date;
   completedAt: Date | null;
   dismissalReason: LifecycleDismissalReason | null;
   suppressedUntil: Date | null;
@@ -24,25 +30,51 @@ export interface LifecycleRow {
 }
 
 /**
- * Whether a lifecycle row suppresses its outcome now (pure).
- *  - a time cooldown suppresses until `suppressedUntil`;
- *  - "Not relevant" suppresses while the material-state fingerprint is unchanged (equal, including both absent);
- *  - a completed outcome is suppressed unless the operation registry declares it repeatable.
+ * Offer cooldown or explicit dismissal (pure). Cooldown-exempt slot classes ignore this; completion is separate (below).
+ *  - a time suppression (an offer cooldown or "Not now") holds until `suppressedUntil`;
+ *  - "Not relevant" holds while the dismissal fingerprint matches the current material state. A dismissal without a fingerprint has no
+ *    meaningful state boundary, so it never suppresses (the write path refuses to create one). When the caller cannot supply the
+ *    current fingerprint, the dismissal is respected (the state change cannot be shown).
  */
-export function isLifecycleRowSuppressed(row: LifecycleRow, now: Date, currentFingerprint: string | null = null): boolean {
+export function isCooldownOrDismissalActive(row: LifecycleRow, now: Date, currentFingerprint: string | null = null): boolean {
   if (row.suppressedUntil && row.suppressedUntil.getTime() > now.getTime()) return true;
-  if (row.dismissalReason === 'NOT_RELEVANT' && (row.contextFingerprint ?? null) === (currentFingerprint ?? null)) return true;
-  if (row.completedAt && !isRepeatableOutcome(row.operationId, row.outcomeKey)) return true;
+  if (row.dismissalReason === 'NOT_RELEVANT' && row.contextFingerprint !== null) {
+    return currentFingerprint === null || row.contextFingerprint === currentFingerprint;
+  }
   return false;
 }
 
+/** A completed outcome is suppressed in every slot class unless the operation registry declares it repeatable (pure). */
+export function isCompletionSuppressing(row: LifecycleRow): boolean {
+  return row.completedAt !== null && !isRepeatableOutcome(row.operationId, row.outcomeKey);
+}
+
+/** Either reason (pure). */
+export function isLifecycleRowSuppressed(row: LifecycleRow, now: Date, currentFingerprint: string | null = null): boolean {
+  return isCooldownOrDismissalActive(row, now, currentFingerprint) || isCompletionSuppressing(row);
+}
+
 export interface OfferedAction extends LifecycleIdentity {
-  /** The granted slot class the action occupied (never a producer's claim). */
+  /** The GRANTED slot class the action occupied (never a producer's claim). */
   slotClass: SuggestedNextActionSlotClass;
+  /** The EVALUATED ownership (after the producer grant), never the raw candidate claim. */
   currentResultOwnership: boolean;
   /** One bounded reason token, metadata only. */
   reasonCode?: string | null;
-  contextFingerprint?: string | null;
+}
+
+/** Builds offers from the exact-four policy's evaluated output; the raw candidate claims are never read for governance. */
+export function offersFromExactFour(
+  selected: readonly Pick<SelectedCandidate, 'candidate'>[],
+  evaluated: readonly ExactFourEvaluation[],
+  reasonCodeOf: (candidate: SelectedCandidate['candidate']) => string | null = (candidate) => candidate.reasonCodes[0] ?? null,
+): OfferedAction[] {
+  return selected.map((entry, index) => ({
+    operationId: entry.candidate.operationId, outcomeKey: entry.candidate.outcomeKey,
+    entityType: entry.candidate.entityContext.entityType, entityId: entry.candidate.entityContext.entityId,
+    slotClass: evaluated[index]!.slotClass, currentResultOwnership: evaluated[index]!.currentResultOwnership,
+    reasonCode: reasonCodeOf(entry.candidate),
+  }));
 }
 
 /** The narrow slice of the Prisma delegate this service uses, so tests can inject a fake and no local database is needed. */
@@ -68,29 +100,30 @@ async function raiseSuppression(db: LifecycleDb, userId: string, propertyId: str
 
 export interface RecordOffersInput { userId: string; propertyId: string; offers: readonly OfferedAction[]; now: Date }
 
-/** Records that these actions were offered on a persisted answer. Fails open; returns whether every write succeeded. */
+/**
+ * Records that these actions were offered on a persisted answer. EVERY offer is recorded; only a class with an offer cooldown also
+ * gets `suppressedUntil`. Fails open; returns whether every write succeeded.
+ */
 export async function recordSuggestedActionOffers(input: RecordOffersInput, db: LifecycleDb = defaultDb()): Promise<{ attempted: number; ok: boolean }> {
-  const governed = input.offers.filter((offer) => offerCooldownMs(offer.slotClass, offer.currentResultOwnership) !== null);
   try {
-    await Promise.all(governed.map(async (offer) => {
-      const until = new Date(input.now.getTime() + offerCooldownMs(offer.slotClass, offer.currentResultOwnership)!);
+    await Promise.all(input.offers.map(async (offer) => {
+      const cooldown = offerCooldownMs(offer.slotClass, offer.currentResultOwnership);
+      const until = cooldown === null ? null : new Date(input.now.getTime() + cooldown);
       await db.askSuggestedActionLifecycle.upsert({
         where: { userId_propertyId_operationId_outcomeKey_entityType_entityId: where(input.userId, input.propertyId, offer) },
         create: {
           ...where(input.userId, input.propertyId, offer), firstOfferedAt: input.now, lastOfferedAt: input.now, offerCount: 1,
-          lastReasonCode: offer.reasonCode ?? null, contextFingerprint: offer.contextFingerprint ?? null, suppressedUntil: until,
+          lastReasonCode: offer.reasonCode ?? null, suppressedUntil: until,
         },
-        update: {
-          lastOfferedAt: input.now, offerCount: { increment: 1 }, lastReasonCode: offer.reasonCode ?? null,
-          ...(offer.contextFingerprint !== undefined ? { contextFingerprint: offer.contextFingerprint } : {}),
-        },
+        // Offers never touch `contextFingerprint` (the dismissal fingerprint) or the dismissal fields.
+        update: { lastOfferedAt: input.now, offerCount: { increment: 1 }, lastReasonCode: offer.reasonCode ?? null },
       });
-      await raiseSuppression(db, input.userId, input.propertyId, offer, until);
+      if (until) await raiseSuppression(db, input.userId, input.propertyId, offer, until);
     }));
-    return { attempted: governed.length, ok: true };
+    return { attempted: input.offers.length, ok: true };
   } catch (error) {
     logger.warn({ err: error, userId: input.userId, propertyId: input.propertyId }, '[ask-suggested-actions] lifecycle offer write failed; answer unaffected');
-    return { attempted: governed.length, ok: false };
+    return { attempted: input.offers.length, ok: false };
   }
 }
 
@@ -117,31 +150,41 @@ export async function recordSuggestedActionCompleted(userId: string, propertyId:
 
 export interface RecordDismissalInput {
   userId: string; propertyId: string; identity: LifecycleIdentity; reason: LifecycleDismissalReason; now: Date;
-  /** Material-state fingerprint at dismissal; a NOT_RELEVANT dismissal lapses when the current fingerprint differs. */
+  /**
+   * The server-computed material-state fingerprint at dismissal. REQUIRED (non-empty) for NOT_RELEVANT: without a meaningful state
+   * boundary the dismissal would suppress indefinitely, so the write is refused. Ignored for NOT_NOW.
+   */
   contextFingerprint?: string | null;
 }
 
 /**
  * Explicit dismissal only (never inferred from ignoring a chip). Upserts so a dismissal is durable even if no offer row exists.
- * "Not now" raises suppression to now + 30 days; "Not relevant" suppresses until the fingerprint changes. Authorization and the
- * "Doesn't apply" routing (applicability flow vs "Not now") belong to the caller.
+ * "Not now" raises suppression to now + 30 days; "Not relevant" suppresses while the dismissal fingerprint matches the current state.
+ * The caller (the dismissal endpoint, not built yet) owns authorization, resolving identity from the persisted action, restricting
+ * NOT_RELEVANT to opportunity and starter outcomes, and routing "Doesn't apply".
  */
 export async function recordSuggestedActionDismissal(input: RecordDismissalInput, db: LifecycleDb = defaultDb()): Promise<boolean> {
+  const fingerprint = input.contextFingerprint?.trim() || null;
+  if (input.reason === 'NOT_RELEVANT' && !fingerprint) {
+    logger.warn({ userId: input.userId, propertyId: input.propertyId }, '[ask-suggested-actions] NOT_RELEVANT refused: no material-state fingerprint');
+    return false;
+  }
   try {
     const base = where(input.userId, input.propertyId, input.identity);
+    const notNowUntil = new Date(input.now.getTime() + COOLDOWN_MS.notNow);
     await db.askSuggestedActionLifecycle.upsert({
       where: { userId_propertyId_operationId_outcomeKey_entityType_entityId: base },
       create: {
         ...base, firstOfferedAt: input.now, lastOfferedAt: input.now, offerCount: 0, dismissedAt: input.now, dismissalReason: input.reason,
-        contextFingerprint: input.contextFingerprint ?? null,
-        suppressedUntil: input.reason === 'NOT_NOW' ? new Date(input.now.getTime() + COOLDOWN_MS.notNow) : null,
+        contextFingerprint: input.reason === 'NOT_RELEVANT' ? fingerprint : null, suppressedUntil: input.reason === 'NOT_NOW' ? notNowUntil : null,
       },
       update: {
         dismissedAt: input.now, dismissalReason: input.reason,
-        ...(input.reason === 'NOT_RELEVANT' ? { contextFingerprint: input.contextFingerprint ?? null } : {}),
+        // The fingerprint belongs to the dismissal: set for NOT_RELEVANT, cleared for NOT_NOW so a stale one cannot linger.
+        contextFingerprint: input.reason === 'NOT_RELEVANT' ? fingerprint : null,
       },
     });
-    if (input.reason === 'NOT_NOW') await raiseSuppression(db, input.userId, input.propertyId, input.identity, new Date(input.now.getTime() + COOLDOWN_MS.notNow));
+    if (input.reason === 'NOT_NOW') await raiseSuppression(db, input.userId, input.propertyId, input.identity, notNowUntil);
     return true;
   } catch (error) {
     logger.warn({ err: error, userId: input.userId, propertyId: input.propertyId }, '[ask-suggested-actions] lifecycle dismissal write failed');
@@ -149,33 +192,52 @@ export async function recordSuggestedActionDismissal(input: RecordDismissalInput
   }
 }
 
-export interface LoadSuppressedInput {
+export interface LoadLifecycleStateInput {
   userId: string; propertyId: string; now: Date;
-  /** Current material-state fingerprint per lifecycle key, for "Not relevant" lapse checks; absent means no fingerprint. */
+  /** Current material-state fingerprint per lifecycle key, for "Not relevant" lapse checks; absent means unknown (dismissal respected). */
   currentFingerprints?: ReadonlyMap<string, string>;
+  /** Curated starter candidates in this evaluation: their rows are returned even when nothing suppresses them, for rotation. */
+  rotationIdentities?: readonly LifecycleIdentity[];
+}
+
+export interface LifecycleState {
+  /** Offer cooldown or explicit dismissal in force. The policy ignores these for cooldown-exempt granted classes. */
+  cooldownKeys: Set<string>;
+  /** Completed, non-repeatable outcomes. The policy applies these to EVERY class. */
+  completedKeys: Set<string>;
+  /** Last offer time (ms) for each returned row, for starter rotation. */
+  lastOfferedAtMs: Map<string, number>;
+  ok: boolean;
 }
 
 /**
- * The lifecycle keys currently suppressed for this user and property, in one query. A read failure fails OPEN: it returns an empty
- * set and `ok: false`, so a lifecycle outage can never strip the row of actions; the caller records the failure as a diagnostic.
+ * The lifecycle state for this user and property in one query. A read failure fails OPEN: empty state and `ok: false`, so a lifecycle
+ * outage can never strip the row of actions; the caller records the failure as a diagnostic.
  */
-export async function loadSuppressedLifecycleKeys(input: LoadSuppressedInput, db: LifecycleDb = defaultDb()): Promise<{ keys: Set<string>; ok: boolean }> {
+export async function loadLifecycleState(input: LoadLifecycleStateInput, db: LifecycleDb = defaultDb()): Promise<LifecycleState> {
+  const empty: LifecycleState = { cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: false };
   try {
+    const rotation = (input.rotationIdentities ?? []).map((identity) => scope(identity));
     const rows = await db.askSuggestedActionLifecycle.findMany({
       where: {
         userId: input.userId, propertyId: input.propertyId,
-        OR: [{ suppressedUntil: { gt: input.now } }, { dismissalReason: 'NOT_RELEVANT' }, { completedAt: { not: null } }],
+        OR: [{ suppressedUntil: { gt: input.now } }, { dismissalReason: 'NOT_RELEVANT' }, { completedAt: { not: null } }, ...rotation],
       },
-      select: { operationId: true, outcomeKey: true, entityType: true, entityId: true, completedAt: true, dismissalReason: true, suppressedUntil: true, contextFingerprint: true },
+      select: {
+        operationId: true, outcomeKey: true, entityType: true, entityId: true, lastOfferedAt: true, completedAt: true, dismissalReason: true,
+        suppressedUntil: true, contextFingerprint: true,
+      },
     });
-    const keys = new Set<string>();
+    const state: LifecycleState = { cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true };
     for (const row of rows) {
       const key = lifecycleKey({ operationId: row.operationId, outcomeKey: row.outcomeKey, entityType: row.entityType, entityId: row.entityId });
-      if (isLifecycleRowSuppressed(row, input.now, input.currentFingerprints?.get(key) ?? null)) keys.add(key);
+      if (row.lastOfferedAt) state.lastOfferedAtMs.set(key, row.lastOfferedAt.getTime());
+      if (isCooldownOrDismissalActive(row, input.now, input.currentFingerprints?.get(key) ?? null)) state.cooldownKeys.add(key);
+      if (isCompletionSuppressing(row)) state.completedKeys.add(key);
     }
-    return { keys, ok: true };
+    return state;
   } catch (error) {
     logger.warn({ err: error, userId: input.userId, propertyId: input.propertyId }, '[ask-suggested-actions] lifecycle read failed; no cooldown applied');
-    return { keys: new Set(), ok: false };
+    return empty;
   }
 }

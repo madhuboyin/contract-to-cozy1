@@ -47,12 +47,22 @@ export const REGISTERED_WHY_NOW_REASONS: ReadonlySet<string> = new Set<string>()
 export interface ProducerSlotGrant {
   allowed: ReadonlySet<SuggestedNextActionSlotClass>;
   fallback: SuggestedNextActionSlotClass;
+  /**
+   * `currentResultOwnership` and `activeGoalMatch` on a candidate are producer claims, and they steer governance (the unrelated-
+   * opportunity cap, offer cooldown, the reserved opportunity slot). A claim counts only when the producer's grant allows it; a denied
+   * claim is cleared and counted (`signalClaimsDenied`). Both default to not allowed.
+   */
+  mayClaimCurrentResultOwnership?: boolean;
+  mayClaimActiveGoalMatch?: boolean;
 }
 export const UNREGISTERED_PRODUCER_GRANT: ProducerSlotGrant = { allowed: new Set(['HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY' };
 export const PRODUCER_SLOT_GRANTS: Readonly<Record<string, ProducerSlotGrant>> = {
   // Handler-attached candidates describe the answer in front of the homeowner: continuing it and fixing its records. Urgent work
   // and starters need their own registered producers (step 4).
-  'operation-result.candidates': { allowed: new Set(['CONTINUE_WORK', 'EXACT_RECORD', 'HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY' },
+  // Its candidates are built from the answer in front of the homeowner, so it may claim current-result ownership; it has no goal source.
+  'operation-result.candidates': {
+    allowed: new Set(['CONTINUE_WORK', 'EXACT_RECORD', 'HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY', mayClaimCurrentResultOwnership: true,
+  },
 };
 
 type ClassifiableCandidate = {
@@ -96,7 +106,7 @@ export function resolveGrantedSlotClass(
   grants: Readonly<Record<string, ProducerSlotGrant>> = PRODUCER_SLOT_GRANTS,
 ): { slotClass: SuggestedNextActionSlotClass; denied: boolean } {
   const requested = resolveSuggestedNextActionSlotClass(candidate);
-  const grant = (producerId !== undefined ? grants[producerId] : undefined) ?? UNREGISTERED_PRODUCER_GRANT;
+  const grant = grantForProducer(producerId, grants);
   return grant.allowed.has(requested) ? { slotClass: requested, denied: false } : { slotClass: grant.fallback, denied: true };
 }
 
@@ -130,3 +140,28 @@ export interface LifecycleIdentity { operationId: string; outcomeKey: string; en
 export function lifecycleKey(identity: LifecycleIdentity): string {
   return JSON.stringify([identity.operationId, identity.outcomeKey, identity.entityType ?? '', identity.entityId ?? '']);
 }
+
+export function grantForProducer(producerId: string | undefined, grants: Readonly<Record<string, ProducerSlotGrant>> = PRODUCER_SLOT_GRANTS): ProducerSlotGrant {
+  return (producerId !== undefined ? grants[producerId] : undefined) ?? UNREGISTERED_PRODUCER_GRANT;
+}
+
+export interface EvaluatedSignals { currentResultOwnership: boolean; activeGoalMatch: boolean; deniedClaims: number }
+
+/** The ownership and goal signals a candidate may actually carry: its claims, cleared where the producer's grant does not allow them. */
+export function evaluateSignalClaims(
+  signals: { currentResultOwnership: boolean; activeGoalMatch: boolean },
+  grant: ProducerSlotGrant,
+): EvaluatedSignals {
+  const ownership = signals.currentResultOwnership && grant.mayClaimCurrentResultOwnership === true;
+  const goal = signals.activeGoalMatch && grant.mayClaimActiveGoalMatch === true;
+  return {
+    currentResultOwnership: ownership, activeGoalMatch: goal,
+    deniedClaims: Number(signals.currentResultOwnership && !ownership) + Number(signals.activeGoalMatch && !goal),
+  };
+}
+
+/**
+ * Curated starters are governed by a SOFT rotation, not a cooldown (a hard cooldown would manufacture shortages): every offer is
+ * recorded, starters not offered within this window are preferred, then the least recently offered, and the oldest still fills the row.
+ */
+export const STARTER_ROTATION_MS = 7 * 24 * HOUR_MS;
