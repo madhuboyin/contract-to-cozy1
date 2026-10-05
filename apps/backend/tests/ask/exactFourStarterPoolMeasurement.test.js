@@ -18,16 +18,21 @@ const { evaluateSuggestedNextActionEligibility } = require('../../src/services/a
 const { collectPresentationIdentities } = require('../../src/services/ask/suggestedActions/suggestedNextActionPresentationIdentities.ts');
 const { suggestedNextActionSemanticKey, suggestedNextActionSemanticKeyHash } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
 
-// ASK_COZY_EXACT_FOUR_OPPORTUNITY_INVENTORY section 4: the behavior-level availability invariant. Measures, with the REAL eligibility
-// rules, availability function and exact-four policy, how many deterministic starters the row needs. The starters themselves are
-// PROVISIONAL (registered inside the test and removed afterward); nothing here changes production registries.
+// ASK_COZY_EXACT_FOUR_OPPORTUNITY_INVENTORY section 4a: an ARITHMETIC MEASUREMENT of how many deterministic starters the exact-four row
+// needs. It is NOT the activation gate. It runs the REAL availability function, eligibility rules and exact-four policy over role x
+// operating mode x (one disabled operation) x prompt-history removals x (the current answer's outcome), with starters registered
+// provisionally inside the test and removed afterward; production registries are untouched.
 //
-// Removal mechanisms measured (all code-read from the finalizer path and then executed here):
-//   1. operation availability (health / role / audience), including a single disabled operation;
-//   2. the prompt-history rule: the message of any of the last 5 completed executions in the session, plus the current message, is
-//      suppressed (`recentCompletedMessages` take: 5, plus `input.message`), and that rule does NOT consult repeatability;
-//   3. completed semantic history (not applied to repeatable outcomes);
-//   4. presentation deduplication (structurally cannot match an entity-less starter, proven below).
+// What it covers: operation availability, the prompt-history window, the current answer's outcome, and, by construction, a DROPPED
+// opportunity producer (the row is built from starters alone, so urgent work, continuation, profile gaps and opportunities are all
+// absent: the worst case).
+//
+// What it does NOT cover, and the activation gate must (see the inventory, section 4b):
+//   - empty versus minimally seeded home data, and whether each starter really returns content there (readiness is an INPUT here: the
+//     pool is assumed dependable, not measured);
+//   - real producers and real handler results (so presentation identities from real blocks, and real message-routable current answers);
+//   - actual cooldown, dismissal and lifecycle states (nothing here loads lifecycle rows);
+//   - each starter's real content.
 
 const PROPERTY = 'prop-1';
 const HISTORY_WINDOW = 5;
@@ -42,12 +47,12 @@ const POOL_OPERATIONS = Object.values(ASK_OPERATION_DEFINITIONS)
 const outcomeFor = (operationId) => `OPEN_${operationId}`.slice(0, 79);
 const messageFor = (operationId) => `Show me ${operationId.toLowerCase().replace(/_/g, ' ')}`;
 
-function registerProvisional(operationIds) {
+function registerProvisional(operationIds, { repeatable = false } = {}) {
   const added = [];
   for (const op of operationIds) {
     if (outcomes.SUGGESTED_ACTION_OUTCOMES[op]) continue; // never touch a real entry
     outcomes.SUGGESTED_ACTION_OUTCOMES[op] = [outcomeFor(op)];
-    outcomes.REPEATABLE_OUTCOMES.add(`${op}:${outcomeFor(op)}`);
+    if (repeatable) outcomes.REPEATABLE_OUTCOMES.add(`${op}:${outcomeFor(op)}`);
     added.push(op);
   }
   return () => { for (const op of added) { delete outcomes.SUGGESTED_ACTION_OUTCOMES[op]; outcomes.REPEATABLE_OUTCOMES.delete(`${op}:${outcomeFor(op)}`); } };
@@ -76,13 +81,13 @@ async function availabilityFor({ role, mode, disabled = null }) {
 /**
  * One row, exactly as the exact-four policy would build it from the deterministic starters alone.
  * `removedByHistory` = starters whose stored message is among the last HISTORY_WINDOW completed messages or the current message.
- * `promptHistoryRespectsRepeatable` models the proposed rule change (what-if); production does not apply it.
+ * `promptHistoryExemptStarters` models the proposed STARTER-SPECIFIC prompt-history exemption (what-if; a separate property from
+ * repeatable completion, which is a different concept). Production applies no such exemption.
  */
-async function rowFor({ pool, role = 'VIEWER', mode = 'UNKNOWN', disabled = null, removedByHistory = 0, promptHistoryRespectsRepeatable = false, currentOperation = null }) {
+async function rowFor({ pool, role = 'VIEWER', mode = 'UNKNOWN', disabled = null, removedByHistory = 0, promptHistoryExemptStarters = false, currentOperation = null }) {
   const operationAvailability = await availabilityFor({ role, mode, disabled });
   const recent = pool.slice(0, removedByHistory).map(messageFor);
-  const repeatable = (op) => outcomes.isRepeatableOutcome(op, outcomeFor(op));
-  const asked = new Set(pool.slice(0, removedByHistory).filter((op) => !(promptHistoryRespectsRepeatable && repeatable(op))).map((op) => suggestionKey(messageFor(op))));
+  const asked = new Set(pool.slice(0, removedByHistory).filter(() => !promptHistoryExemptStarters).map((op) => suggestionKey(messageFor(op))));
   const eligibility = {
     mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability,
     operationRequiresProperty: (id) => getAskOperationDefinition(id).requiresProperty, operationTargetEntityType: (id) => requiredAskTargetEntity(id),
@@ -124,12 +129,14 @@ async function failingStates(pool, options = {}) {
 
 // ---- structural facts ---------------------------------------------------------------------------------------------------------------
 
-test('presentation deduplication can NEVER remove a starter: identities need an entity, a starter has none', () => {
+test('presentation deduplication cannot remove a starter: a STRUCTURAL proof from the collector\'s guard, checked against seven representative shapes (not an exhaustive enumeration of block shapes)', () => {
+  const collectorSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/suggestedActions/suggestedNextActionPresentationIdentities.ts'), 'utf8');
+  assert.ok(/if \(Array\.isArray\(record\.actions\) && entityType && entityId\)/.test(collectorSource), 'the structural premise: identities are published only for a node that has BOTH an entity type and an id');
   const restore = registerProvisional(['PROPERTY_SUMMARY']);
   try {
     const starterKey = suggestedNextActionSemanticKey({ operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE', propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: outcomeFor('PROPERTY_SUMMARY') });
     const action = { operationId: 'PROPERTY_SUMMARY', outcomeKey: outcomeFor('PROPERTY_SUMMARY'), interactionType: 'CONVERSATION_CONTINUE' };
-    // Every node shape a block can have: with and without an entity, nested, in arrays.
+    // Seven representative node shapes (with and without an entity, nested, in arrays). Representative, not exhaustive: the proof is the guard above.
     const shapes = [
       [{ entityType: 'INVENTORY_ITEM', id: 'item-1', actions: [action] }],
       [{ items: [{ entityType: 'WARRANTY', id: 'w-1', actions: [action, action] }] }],
@@ -150,7 +157,7 @@ test('the finalizer passes an EMPTY current-outcome set and the prompt-history r
   const executeSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8');
   assert.ok(/take: 5,\s*\n\s*select: \{ message: true, operationId: true \}/.test(executeSource), 'the history window is the last 5 completed executions');
   // Executed: a REPEATABLE outcome whose stored message was asked recently is still suppressed by the prompt-history rule.
-  const restore = registerProvisional(['PROPERTY_SUMMARY']);
+  const restore = registerProvisional(['PROPERTY_SUMMARY'], { repeatable: true });
   try {
     assert.equal(outcomes.isRepeatableOutcome('PROPERTY_SUMMARY', outcomeFor('PROPERTY_SUMMARY')), true);
     const availability = await availabilityFor({ role: 'VIEWER', mode: 'UNKNOWN' });
@@ -184,7 +191,7 @@ test('mode and role do not change the verdict for all-mode viewer starters (CONT
   } finally { restore(); }
 });
 
-test('MEASUREMENT: the four dependable starters (S1 to S4) fail the invariant under a single disabled operation or any prior starter use', async () => {
+test('MEASUREMENT: four dependable starters fail the arithmetic under a single disabled operation or any prior starter use', async () => {
   const pool = ['PROPERTY_SUMMARY', 'HOME_STATUS_BOARD', 'MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST'];
   const restore = registerProvisional(pool);
   try {
@@ -195,7 +202,7 @@ test('MEASUREMENT: the four dependable starters (S1 to S4) fail the invariant un
     const failing = await failingStates(pool);
     assert.ok(failing.length > 0, 'the invariant is RED for the four-starter pool');
     // ...and the same with the proposed rule change, because disabling one operation alone leaves three.
-    assert.ok((await failingStates(pool, { promptHistoryRespectsRepeatable: true })).every((s) => s.disabled !== null), 'with the rule change only the disabled-operation states fail');
+    assert.ok((await failingStates(pool, { promptHistoryExemptStarters: true })).every((s) => s.disabled !== null), 'with a starter-specific exemption only the disabled-operation states fail');
   } finally { restore(); }
 });
 
@@ -213,13 +220,37 @@ test('MEASUREMENT: minimal deterministic pool under CURRENT rules = 4 + 6 histor
   assert.equal(await minimalPoolSize({}), 11);
 });
 
-test('MEASUREMENT: if the prompt-history rule respected repeatability, the minimal pool would be 4 + 1 disabled operation = 5', async () => {
-  assert.equal(await minimalPoolSize({ promptHistoryRespectsRepeatable: true }), 5);
+test('MEASUREMENT: with a starter-specific prompt-history exemption the minimal pool is 4 + 1 disabled operation = 5', async () => {
+  assert.equal(await minimalPoolSize({ promptHistoryExemptStarters: true }), 5);
 });
 
-test('MEASUREMENT: if the finalizer also excluded the current answer\'s own outcome, the minimal pool grows by one: 6 with the rule change, 12 under the current rules', async () => {
+test('MEASUREMENT: if the finalizer also excluded the current answer\'s own outcome, the minimal pool grows by one: 6 with the exemption, 12 under the current rules', async () => {
   // 4 fallbacks + 1 disabled operation + 1 current answer (distinct from the disabled one in the worst case).
-  assert.equal(await minimalPoolSize({ promptHistoryRespectsRepeatable: true, withCurrentOperation: true }), 6);
+  assert.equal(await minimalPoolSize({ promptHistoryExemptStarters: true, withCurrentOperation: true }), 6);
   // Current rules: 4 + 6 history + 1 disabled + 1 current = 12, which exceeds what can be proven dependable (only about four starters are).
   assert.equal(await minimalPoolSize({ withCurrentOperation: true }), 12);
+});
+
+test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds exactly four existing, non-starter outcomes, which a rule keyed on repeatability would also change', () => {
+  const entries = [...outcomes.REPEATABLE_OUTCOMES].sort();
+  assert.deepEqual(entries, [
+    'INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD', 'MAINTENANCE_TASK_CREATE:RESTART_AFTER_EXPIRY', 'QUOTE_COMPARISON_CREATE:RESTART_AFTER_EXPIRY', 'REFINANCE_RATE_MONITOR:RESTART_AFTER_EXPIRY',
+  ]);
+  // Repeatable COMPLETION ("this may be done again") and recent-PROMPT deduplication ("this exact text was just asked") are different concepts.
+  // Tying the second to the first would hide-or-show those four recovery actions as a side effect; a separate, starter-only property does not.
+});
+
+test('every message-routable operation as the current answer: it removes a starter only when it is a starter, so the pool needs at most one extra', async () => {
+  const pool = POOL_OPERATIONS.slice(0, 6);
+  const restore = registerProvisional(pool);
+  try {
+    const routable = Object.values(ASK_OPERATION_DEFINITIONS).filter((d) => d.messageRoutable).map((d) => d.operationId);
+    assert.ok(routable.length > 60, `${routable.length} message-routable operations`);
+    for (const current of routable) {
+      // Only an operation that IS a starter has an outcome to exclude; every other current answer leaves the pool untouched.
+      const row = await rowFor({ pool, currentOperation: pool.includes(current) ? current : null, promptHistoryExemptStarters: true });
+      assert.equal(row.selected, Math.min(4, pool.length - (pool.includes(current) ? 1 : 0)), current); // a row never shows more than four
+      assert.equal(row.shortage, 0, `${current} still reaches four`);
+    }
+  } finally { restore(); }
 });

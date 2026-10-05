@@ -1,4 +1,4 @@
-# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 3, for owner review)
+# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 4, for owner review)
 
 **Status:** REVISION 2 after owner review (three corrections below). No producer or opportunity registry entry has been written; the only code change is the explicit `RECALL_REVIEW` audience policy (finding 7). Governing scope: `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md` Appendix C.15 and C.16, and `ASK_COZY_EXACT_FOUR_REGISTRY_PACKET.md`.
 
@@ -107,15 +107,15 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 
 **What the invariant implies today.** Because the worst-case current answer removes the answer itself plus whatever its blocks present, the deterministic pool must exceed four by the largest number of starter destinations any single answer can remove. That number is a measurable property (run `collectPresentationIdentities` over each operation's real result blocks), not a guess. If it cannot be established, exact-four is **not activated** for that state; shortage is never redefined as acceptable. Each starter keeps a readiness predicate so an empty-state answer is never offered, but a predicate-gated starter does not count as a deterministic fallback.
 
-### 4a. Availability measurement (executed; revision 3)
+### 4a. Availability measurement (executed; revision 4: an arithmetic measurement, NOT the activation gate)
 
-`tests/ask/exactFourAvailabilityMatrix.test.js` runs the real availability function (role and operating mode), the real eligibility rules and the real exact-four policy over the state matrix above, with starters registered provisionally inside the test (production registries untouched). The pool it draws hypothetical starters from is the 28 operations that are all-mode, viewer-floor, standard-safety reads; that is structural only, since many are data-dependent or typed-only.
+`tests/ask/exactFourStarterPoolMeasurement.test.js` runs the real availability function (role and operating mode), the real eligibility rules and the real exact-four policy over role, operating mode, one disabled operation, prompt-history removals and the current answer's outcome, with starters registered provisionally inside the test (production registries untouched). It is a **useful arithmetic measurement of how many deterministic starters the row needs**; it is not the activation gate, and section 4b lists what the gate still needs. The pool it draws hypothetical starters from is the 28 operations that are all-mode, viewer-floor, standard-safety reads; that is structural only, since many are data-dependent or typed-only, and **whether each starter is dependable is an input to the test, not something it measures**.
 
 **What actually removes a starter today (executed or source-guarded):**
 
 | Mechanism | Removes starters? | Evidence |
 |---|---|---|
-| Presentation deduplication | **No, structurally.** A published identity needs a node with `entityType` and `id`; a starter has neither, so its semantic key can never be in the set | Executed over every block shape in the test |
+| Presentation deduplication | **No, structurally.** A published identity needs a node with `entityType` and `id`; a starter has neither, so its semantic key can never be in the set | **Structural proof** from the collector's guard (asserted against its source), checked against seven representative node shapes; not an exhaustive enumeration of block shapes |
 | The current answer's own outcome | **No, today.** The finalizer passes `currentOutcomeKeyHashes: new Set()`, so the answer the user just got can be re-offered (a UX gap, and the reason the invariant's "current answer" row only matters if this is fixed) | Source guard |
 | Prompt history | **Yes, and it ignores repeatability.** The stored message of any of the last 5 completed executions in the session plus the current message is suppressed. Declaring an outcome repeatable does **not** help | Executed: a repeatable outcome whose message was asked is `SUPPRESSED: EQUIVALENT_PROMPT_ASKED` |
 | Completed semantic history | Only non-repeatable outcomes | Code-read |
@@ -127,19 +127,32 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 |---|---|---|
 | Current rules | **11** | 4 + 6 history removals (5 recent plus the current message) + 1 disabled operation |
 | Current rules, and the finalizer also excludes the current answer's outcome | **12** | one more removal |
-| Prompt-history rule respects repeatability | **5** | 4 + 1 disabled operation; history no longer removes repeatable starters |
+| A starter-specific prompt-history exemption exists | **5** | 4 + 1 disabled operation; history no longer removes exempt starters |
 | Same, and the current answer's outcome is excluded | **6** | 4 + 1 disabled + 1 current |
 
 **Verdict for the four dependable starters (S1 to S4) as they stand: the invariant is RED.** One disabled operation leaves three; one starter used in the last five turns leaves three; four starters used in a row leave none. A user exploring by clicking starters is the normal case, so this is not an edge. Only about four starters can be shown to return content on a sparse home, so the current rules (11 or 12) cannot be met; the rule change (5 or 6) can be, with S1 to S4 plus one or two more dependable starters.
 
-**Decisions this forces (new):**
+**Decisions this forces (revised after review):**
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D-O10 | Make the prompt-history rule respect `isRepeatableOutcome` (a small eligibility change, not made here) | Approve. It is the difference between an unmeetable 11 and a meetable 5. Existing repeatable outcomes (the platform "start again" and "review current record" actions) would no longer be hidden by recent identical messages, which is the intent of declaring them repeatable. Repetition is then governed by the offer cooldown and soft rotation (inactive until wiring) |
+| D-O10 | **Add a starter-specific prompt-history exemption, as a separate registry property** (for example `PROMPT_HISTORY_EXEMPT_OUTCOMES`, explicit approved entries, starters only). **Not** a global change keyed on `isRepeatableOutcome` | Approve the starter-specific form. Repeatable *completion* ("this may be done again") and recent-*prompt* deduplication ("this exact text was just asked") are different concepts; tying the second to the first would also change the four existing repeatable outcomes (executed: `INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD` and the three `RESTART_AFTER_EXPIRY` outcomes), which this change has no reason to touch. A separate property leaves them unchanged and makes the exemption reviewable per starter. Repetition is then governed by the offer cooldown and soft rotation (inactive until wiring) |
 | D-O11 | Populate `currentOutcomeKeyHashes` so the answer just produced is not re-offered | Approve in principle (it fixes a real UX gap) but note it raises the minimal pool by one (6 with D-O10) |
 | D-O12 | Should a card or button with the same destination suppress a starter (the plan says a visible action with the same semantic destination suppresses the compact one)? Today it cannot, because identities need an entity | Decide explicitly. If yes, define an entity-less operation-level identity; it removes more starters, so the measurement must be re-run with the largest number of starter destinations a single answer presents. I have not measured that number |
-| D-O4 | Starter pool | Needs at least 5 to 6 dependable starters **after** D-O10 (S1 to S4 plus one or two), proven by this test on a sparse home; not approvable until those are verified to return content |
+| D-O4 | Starter pool | Needs at least 5 to 6 dependable starters **after** D-O10 (S1 to S4 plus one or two). The measurement gives the number; **proving the starters are dependable is the activation gate (section 4b)**, not this test. Not approvable until then |
+
+### 4b. What the real activation gate still needs (not covered by the measurement)
+
+| Missing dimension | Why the measurement does not cover it | What the gate needs |
+|---|---|---|
+| Empty versus minimally seeded home data | Starter readiness is an input (assumed dependable), not measured | Real handlers or fixtures run against an empty and a minimally seeded property, asserting each counted starter returns meaningful content (not an empty-state answer) |
+| Every message-routable current operation | The test enumerates every routable operation as "current", but only as an outcome-exclusion; presentation effects come from real result blocks it does not have | Run each routable operation's real result blocks through the real finalizer and count removals, including any entity-less identity if D-O12 introduces one |
+| Real cooldown, dismissal and lifecycle states | Nothing here loads lifecycle rows | Fixture lifecycle rows: starters dismissed "Not now" or "Not relevant", completed non-repeatable outcomes, soft rotation. Needs a decision on the **supported bound** (how many starters a user may dismiss before exact-four is allowed to degrade), because an unbounded dismissal count cannot be guaranteed |
+| A dropped opportunity producer | Covered **by construction** only: the row is built from starters alone, which is the worst case (no urgent work, continuation, profile gap or opportunity) | Also test a real pipeline where the producer is dropped for budget, and that starters do not share its snapshot |
+| Real starter readiness and content | Assumed | The readiness predicate of each starter, executed on both data states |
+| Real producers | The starters are synthetic candidates | The three producers with their grants, end to end through the finalizer |
+
+Until those exist, the gate is **not** established and exact-four must not activate; the measurement only says how large the dependable pool has to be.
 
 ## 5. Outcome registry and launch entries needed (for approval)
 
