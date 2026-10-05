@@ -33,7 +33,7 @@ import { useCalmAnswers } from '@/features/ask/calmAnswers';
 import { followUpItems, type FollowUpItem } from '@/features/ask/followUps';
 import { CalmLanding } from './calm/CalmLanding';
 import { PendingTurn } from './calm/PendingTurn';
-import { FollowUpRow } from './calm/FollowUpRow';
+import { FollowUpRow } from './calm/FollowUpRow'; import { useStarterDismissal } from './workspace/useStarterDismissal';
 import { ACCESS_LOST_CODES, ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED, AskPromptAttribution, AskPromptSource, askFailureCode, askServiceIsPaused, askSuggestionKey, contextPanelStorageKey, draftStorageKey, fallbackPrompts, newId, updateAskLocation, useConciergeHome, useMediaQuery } from './workspace/support';
 import { CapabilityCategoryIcon, CapabilityExplorer, ConciergeHome } from './workspace/ConciergeHome';
 import { ConfirmationCard } from './workspace/CaptureCards';
@@ -251,7 +251,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const usingFallbackPrompts = personalizedFeaturedPrompts.length === 0;
   const featuredPrompts = usingFallbackPrompts ? fallbackPrompts : personalizedFeaturedPrompts;
   const latestExecutionId = latestExecution?.executionId ?? '';
-  const followUps = calm ? followUpItems(latestExecution, askedQuestionKeys, askSuggestionKey) : [];
+  const starterDismissal = useStarterDismissal(latestExecution?.executionId); const followUps = starterDismissal.visible(calm ? followUpItems(latestExecution, askedQuestionKeys, askSuggestionKey) : []);
   // A typed action submits its transcript message with verified-selection proof; a historical string is asked as plain text,
   // exactly as before (SUGGESTED_NEXT_ACTIONS plan §9 Phase 1 compatibility boundary).
   const pickFollowUp = (item: FollowUpItem) => {
@@ -438,7 +438,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} />}{renderComposer('footer')}</footer>}
+      {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />}{renderComposer('footer')}</footer>}
         </div>
         {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
           <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />

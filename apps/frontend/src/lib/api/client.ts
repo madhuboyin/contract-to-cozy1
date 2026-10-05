@@ -1126,6 +1126,10 @@ class APIClient {
   async submitAskFeedback(executionId: string, payload: { rating: 'UP' | 'DOWN'; comment?: string }): Promise<APIResponse<import('@/features/ask/types').AskFeedbackResponse>> {
     return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/feedback`, { method: 'POST', body: payload });
   }
+  /** Explicit "Not now" / "Not relevant" on one offered Suggested Next Action. The server resolves the action from its own stored offer. */
+  async dismissSuggestedAction(executionId: string, actionId: string, reason: 'NOT_NOW' | 'NOT_RELEVANT'): Promise<APIResponse<{ dismissed: boolean; reason: 'NOT_NOW' | 'NOT_RELEVANT' }>> {
+    return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/suggested-actions/${encodeURIComponent(actionId)}/dismiss`, { method: 'POST', body: { reason } });
+  }
   async submitHomeActionUsefulnessFeedback(executionId: string, homeActionId: string, payload: { rating: 'USEFUL' | 'NOT_USEFUL'; comment?: string }): Promise<APIResponse<{ id: string; rating: 'USEFUL' | 'NOT_USEFUL' }>> {
     return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/priority-list/${encodeURIComponent(homeActionId)}/feedback`, { method: 'POST', body: payload });
   }

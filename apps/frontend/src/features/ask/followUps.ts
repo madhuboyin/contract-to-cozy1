@@ -30,6 +30,14 @@ export function followUpSuggestions(
   return shown;
 }
 
+/**
+ * A curated starter (a last-resort, recommendation-class DISCOVERY action) can be put off or marked not relevant. This only decides whether to SHOW the
+ * control; the server is the authority on what is dismissible and refuses anything else, in which case the control is withdrawn.
+ */
+export function isDismissibleStarterAction(action: SuggestedNextAction): boolean {
+  return action.provenance.source === 'CAPABILITY_RECOMMENDATION' && action.priority.tier === 'DISCOVERY';
+}
+
 /** One compact follow-up as rendered: a server-authored typed action, or a historical plain-text suggestion. */
 export type FollowUpItem =
   | { kind: 'ACTION'; key: string; label: string; action: SuggestedNextAction }
