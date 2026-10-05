@@ -208,6 +208,22 @@ The general rule is *four, plus the largest number of starters any one operation
 
 Until those exist, the gate is **not** established and exact-four must not activate; the measurement only says how large the dependable pool has to be.
 
+
+### 4d. Where four or five more data-independent starters could come from (D-O4 candidate analysis, code-read, October 5, 2026)
+
+**Existing operations cannot supply them.** I listed every deterministic, standard-safety, viewer-floor operation and compared it with the empty-home results above and the handlers not yet classified (`DIY_PROJECTS` `DIY_NO_ACTIVE_PROJECTS`, `HOME_UPGRADE_SCENARIOS` `HOME_UPGRADE_NOT_STARTED` or `HOME_UPGRADE_NO_SCENARIOS`, `MATERIAL_SPECS_LIST` `MATERIAL_SPECS_EMPTY`, `PROPERTY_BRIEFS_LIST` `PROPERTY_BRIEFS_EMPTY`, `NEGOTIATION_SHIELD_CASES` `NEGOTIATION_SHIELD_NO_CASES`). Every one reads recorded data and answers an empty state on an empty home. Beyond `PROPERTY_SUMMARY`, **no existing operation is data-independent**, so D-O4 needs **new** read-only operations (or content-bearing variants), which is a build decision, not a registry edit.
+
+**One credible source, with its conditions met on paper.** A seasonal and regional home-care read, from the local seasonal catalog:
+- *Region input is guaranteed:* `Property.state` and `zipCode` are required columns, and `ClimateZoneService` derives the region from a **local** JSON (`zipToClimateRegion.json`, zip prefix then state default, falling back to `MODERATE`), with no external call. That satisfies the D-O14 condition (guaranteed region input, local fallback). The fallback is a guess for unmapped zips, so the answer must say when the region is the national default.
+- *Content is local:* `seasonalTaskTemplates.json` has 41 templates; the ones with **no asset requirement** number 6 (fall), 4 (spring), 6 (summer) and 11 (winter), so every season has content that does not depend on recorded assets. Asset-gated templates are filtered by property facts, so only the asset-free ones count.
+- *Not yet verified:* there is no Ask operation for it today; the viewer-safe selection rules (the seasonal applicability policy filters on recorded facts and responsibilities) are untested against an empty home; and a real run is needed.
+
+**Shared-operation arithmetic limits how many starters one operation can supply.** The pool must exceed four by the **largest number of starters one operation supplies** (D-O10 arithmetic, section 4a), so adding several outcomes to one operation raises the requirement as it adds supply. Two outcomes from a seasonal operation (for example *this season* and *what to prepare for next season*) would not move the requirement above 6 (7 with D-O11), but they only supply two of the four or five needed. The remaining two or three must come from **other distinct operations**.
+
+**What is not yet identified.** I found no second and third data-independent source in the code. Possible directions, each needing your product call and an authored read-only operation: static homeowner-education content (for example a "first-year home basics" or safety-basics read), or a deterministic read of the product's own capability summary that is not routed through `CAPABILITY_DISCOVERY` (excluded by D-O15). I am not proposing them as approved starters.
+
+**Recommendation for D-O4.** Approve in principle a new `SEASONAL_HOME_CARE`-style read-only operation (two outcomes) as the first new starter source, subject to an executed empty-home run; and decide whether to commission one or two further content operations, or to accept that viewer on an empty home needs the starter inventory to be authored content rather than reads of recorded data. D-O4 stays unapproved until the starters are built and proven.
+
 ## 5. Outcome registry and launch entries needed (for approval)
 
 - **Outcomes** registered per operation in `SUGGESTED_ACTION_OUTCOMES` (for example `PROPERTY_SUMMARY: ['OPEN_SUMMARY']`), bounded tokens, validated by the registry test.
