@@ -32,7 +32,7 @@ test('every one of the 86 Ask operations resolves to a registered capability han
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(operationIds.length, 118);
+  assert.equal(operationIds.length, 119);
   assert.deepEqual(validateCapabilityHandlerRegistry(), []);
 });
 

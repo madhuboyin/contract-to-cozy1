@@ -62,6 +62,7 @@ import './handlers/guidanceOverview.handler';
 import './handlers/propertyBrief.handler';
 import './handlers/homeTimeline.handler';
 import './handlers/materialSpecs.handler';
+import './handlers/seasonalHomeCare.handler';
 import './handlers/applianceOracleBudget.handler';
 import './handlers/doNothingSimulator.handler';
 import './handlers/warranties.handler';

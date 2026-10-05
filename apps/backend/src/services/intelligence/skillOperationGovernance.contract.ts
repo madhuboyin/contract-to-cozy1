@@ -67,6 +67,9 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   // this list crash-looped production at boot (2026-09-29).
   'RECALL_REVIEW',
   'RECALL_MATCH_UPDATE',
+  // Exact-four starter source (inventory D-O4/D-O16): a non-routable, launch-only, data-independent read. Deliberately skill-less, the
+  // same precedent as RECALL_REVIEW above; it must stay in this list or the boot-time governance check fails.
+  'SEASONAL_HOME_CARE',
 ];
 
 export interface SkillOperationGovernanceContext {

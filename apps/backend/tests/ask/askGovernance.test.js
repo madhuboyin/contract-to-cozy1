@@ -41,7 +41,7 @@ test('every Ask operation has a complete governed definition', () => {
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
   // + GUIDANCE_STEP_SKIP and GUIDANCE_JOURNEY_DISMISS (guided journey continuation Phase 3).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 118);
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 119);
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);

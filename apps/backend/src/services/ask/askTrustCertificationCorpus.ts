@@ -243,6 +243,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PRICE_FINALIZATIONS_LIST: 'The price you locked in with Bright Electric is $2,400 for the panel upgrade, down from a $2,800 quote, finalized on September 12.',
   HOA_COMPLIANCE_STATUS: 'Our HOA dues are $250 monthly to Maple Ridge HOA; the next dues payment is due November 1.',
   GUIDANCE_JOURNEYS_LIST: 'Two guided journeys are in progress with four steps left between them; the next step on the water heater is to compare replacement quotes.',
+  SEASONAL_HOME_CARE: 'This fall, general tasks for your climate include clearing gutters, testing the smoke and carbon monoxide detectors, and checking the storm windows.',
   GUIDANCE_JOURNEY_CONTINUE: 'The water heater journey is on its second of four steps, and the next step is to compare replacement quotes.',
   GUIDANCE_STEP_SKIP: 'The selected step of the guided journey is skipped after confirmation, when its policy allows it.',
   GUIDANCE_JOURNEY_DISMISS: 'The selected guided journey is dismissed after confirmation and leaves your list.',

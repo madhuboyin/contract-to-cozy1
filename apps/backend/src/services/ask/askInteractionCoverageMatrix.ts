@@ -49,6 +49,7 @@ export const ASK_DIRECT_MUTATION_OPERATION_IDS: ReadonlySet<AskOperationId> = ne
 // READ_RESULT (not INTERNAL_CAPTURE, which is for capture commands).
 export const ASK_LAUNCH_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
   'GUIDANCE_JOURNEY_CONTINUE',
+  'SEASONAL_HOME_CARE',
 ]);
 
 export type AskInteractionClass =
@@ -1208,6 +1209,21 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     idempotency: { status: 'TRACED', notes: 'Pure read (three findFirst/findMany queries plus the violations-to-journey join).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
     handoff: { status: 'TRACED', notes: 'The page is /dashboard/hoa?propertyId=; each violation links to its guidance journey (guidance-overview?journeyId=) as the page does, or to Guidance Overview when none is linked.' },
+  },
+  SEASONAL_HOME_CARE: {
+    track: 'Home intelligence and work',
+    rollClass: 'READ_RESULT',
+    canonicalOwner: 'seasonal.home-care',
+    roleFloor: 'VIEWER',
+    messageRoutable: false,
+    confirmationCapable: false,
+    correctionModes: [],
+    note: 'Exact-four starter source (inventory D-O4/D-O16). A pure, data-independent read: the property\'s required zip code (or a saved climate region), the date and the local seasonal template catalog; asset-gated templates are excluded because they depend on recorded data. It reads no recorded home data, makes no external call and decides nothing about the home. Non-routable: seasonal questions already route to MAINTENANCE_STATUS over the generated checklist. Reached only by a stored starter\'s typed launch.',
+    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer: SUMMARY (season, task count, the climate-region note including when the national default was used), GROUPED_LIST (up to eight tasks with why each matters, priority and DIY meta) and BOUNDARY (general guidance, not an assessment).' },
+    freshnessSource: { status: 'TRACED', notes: 'No contextVersion; computed on each request from the date, the zip code and the local catalog.' },
+    idempotency: { status: 'TRACED', notes: 'Pure read with no writes and no external call; repeating it returns the same answer for the same date.' },
+    reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
+    handoff: { status: 'TRACED', notes: 'Bare href to /dashboard/seasonal (the seasonal checklist page).' },
   },
   GUIDANCE_JOURNEY_CONTINUE: {
     track: 'Home intelligence and work',
