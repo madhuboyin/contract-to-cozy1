@@ -1,4 +1,4 @@
-# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 5, for owner review)
+# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 6, for owner review)
 
 **Status:** REVISION 2 after owner review (three corrections below). No producer or opportunity registry entry has been written; the only code change is the explicit `RECALL_REVIEW` audience policy (finding 7). Governing scope: `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md` Appendix C.15 and C.16, and `ASK_COZY_EXACT_FOUR_REGISTRY_PACKET.md`.
 
@@ -6,7 +6,7 @@
 
 ## 1. Findings that change the design (read first)
 
-1. **A viewer's row is carried by starters, not opportunities (code-read, arithmetic).** Viewers cannot use profile captures (`PROPERTY_CONTEXT_AREA_CAPTURE` is a CONTRIBUTOR operation) or the exact-record mutation chips, and the policy allows at most **one** opportunity or capability unrelated to the current answer. So a viewer's four is: urgent work and continuation (when they exist) + at most one opportunity + **starters for everything else**. Worst case is three or four starters. Starters are also removed by history and availability rules (section 4a measures exactly which; **an earlier version of this paragraph wrongly said presentation deduplication and the current answer's own outcome remove starters; the measurement shows neither does today**), so the eligible pool must exceed four. I propose **at least eight defined starters, with at least six expected to be eligible on a sparse home** (section 4). A sparse new home may have only about four starters that always return non-empty content, which is too thin; the viewer fixture must test exactly that case.
+1. **A viewer's row is carried by starters, not opportunities (code-read, arithmetic).** Viewers cannot use profile captures (`PROPERTY_CONTEXT_AREA_CAPTURE` is a CONTRIBUTOR operation) or the exact-record mutation chips, and the policy allows at most **one** opportunity or capability unrelated to the current answer. So a viewer's four is: urgent work and continuation (when they exist) + at most one opportunity + **starters for everything else**. Worst case is three or four starters. Starters are also removed by history and availability rules (section 4a measures exactly which; **an earlier version of this paragraph wrongly said presentation deduplication and the current answer's own outcome remove starters; the measurement shows neither does today**), so the eligible pool must exceed four. I propose **at least eight defined starters, with at least six expected to be eligible on a sparse home** (section 4). **Corrected in revision 6:** the earlier "about four dependable starters" was wrong; section 4c shows that on an empty home only one candidate operation (and at most three starters) return content rather than an explicit empty state.
 2. **Read-only outcomes must be declared repeatable, or they exhaust themselves. Two mechanisms, with different status.**
    - *Session-level suppression is ACTIVE today (executed code path).* The production finalizer is passed `completedSemanticKeyHashes` by `executeOperation.ts` and `askConfirm.ts` (`loadCompletedSuggestedActionKeyHashes`), and the eligibility `HISTORY` rule drops an outcome already completed in the session unless `isRepeatableOutcome`. A read starter opened once in a session is not offered again in that session.
    - *Durable lifecycle suppression is IMPLEMENTED BUT NOT ACTIVE.* `askSuggestedActionLifecycle.service.ts` and the policy's `completedLifecycleKeys` exist and are tested, but nothing calls them from the finalizer; they activate only with the atomic wiring (step 10). Until then the lifecycle table (not yet pushed) has no effect.
@@ -80,14 +80,14 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 | # | Label | Operation | Always returns content on a sparse home? |
 |---|---|---|---|
 | S1 | See how complete your home record is | `PROPERTY_SUMMARY` | Expected (unverified); also the only starter executed as `APPLICABLE_GENERAL` in every mode |
-| S2 | See your home at a glance | `HOME_STATUS_BOARD` | Likely (unverified) |
-| S3 | See what maintenance is coming up | `MAINTENANCE_STATUS` | Likely (seasonal tasks generate) |
-| S4 | Preview the next few months of upkeep | `MAINTENANCE_FORECAST` | Likely |
+| S2 | See your home at a glance | `HOME_STATUS_BOARD` | **No (executed): `STATUS_BOARD_EMPTY` ("Nothing is on the Status Board yet")** |
+| S3 | See what maintenance is coming up | `MAINTENANCE_STATUS` | **No (code-read): "No maintenance tasks are recorded for this home yet"**; seasonal tasks come from a separate generator and are not guaranteed |
+| S4 | Preview the next few months of upkeep | `MAINTENANCE_FORECAST` | **No (code-read): status `NOT_APPLICABLE`, `MAINTENANCE_FORECAST_NO_VERIFIED_SYSTEMS`** (needs verified HVAC, roof or water-heater inventory) |
 | S5 | See what changed in your home recently | `HOME_CHANGE_SUMMARY` | No (empty on a new home) |
 | S6 | Review your home's history | `HOME_TIMELINE_EVENTS` | No |
 | S7 | Browse what's recorded about your systems and appliances | `INVENTORY_LOOKUP` | No (needs items) |
 | S8 | Find a document you've saved | `DOCUMENT_LOOKUP` | No (needs documents) |
-| S9 | Review your daily home habits | `HOME_HABITS` | Unverified |
+| S9 | Review your daily home habits | `HOME_HABITS` | **No (executed): `HOME_HABITS_EMPTY`** |
 | S10 | Pick up a guided journey | `GUIDANCE_JOURNEYS_LIST` | No (needs a journey) |
 
 **The "eight defined, six expected eligible" bar is withdrawn (owner review).** A count is a heuristic and does not establish exact-four availability: on a sparse home only S1 to S4 are dependable, and those are still unverified. It is replaced by a behavior-level invariant.
@@ -140,6 +140,47 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 | D-O11 | Populate `currentOutcomeKeyHashes` so the answer just produced is not re-offered | Approve in principle (it fixes a real UX gap) but note it raises the minimal pool by one (6 with D-O10) |
 | D-O12 | Should a card or button with the same destination suppress a starter (the plan says a visible action with the same semantic destination suppresses the compact one)? Today it cannot, because identities need an entity | Decide explicitly. If yes, define an entity-less operation-level identity; it removes more starters, so the measurement must be re-run with the largest number of starter destinations a single answer presents. I have not measured that number |
 | D-O4 | Starter pool | Needs at least 5 to 6 dependable starters **after** D-O10 (S1 to S4 plus one or two). The measurement gives the number; **proving the starters are dependable is the activation gate (section 4b)**, not this test. Not approvable until then |
+
+### 4c. Which starters return content on an empty home (executed where a pure builder exists; revision 6)
+
+`tests/ask/starterEmptyHomeReadiness.test.js` (9 tests) runs every candidate whose result builder is a pure exported function with an empty input, and pins the answer. The rest are classified from the source and still need a real run against an empty property.
+
+| Operation | Empty-home answer | Evidence |
+|---|---|---|
+| `PROPERTY_SUMMARY` | **Content.** Built from the property row itself, plus a completeness block; throws only if the property does not exist. The stored message decides the focus (`isPropertyCompletenessRequest` matches "How complete is my home record?" and does not match a plain "summary" message) | Code-read; message-to-focus executed |
+| `CAPABILITY_DISCOVERY` | **Content, data-independent.** Property-less (`requiresProperty` false, no role floor), a capability list, not data-dependent. It is global rather than property-scoped, which the plan's "property-scoped starter" wording may not allow | Code-read |
+| `HOME_STATUS_BOARD` | Empty state `STATUS_BOARD_EMPTY` | **Executed** |
+| `HOME_TIMELINE_EVENTS` | Empty state `HOME_TIMELINE_EMPTY` | **Executed** |
+| `GUIDANCE_JOURNEYS_LIST` | Empty state `GUIDANCE_JOURNEYS_EMPTY` | **Executed** |
+| `HOME_HABITS` | Empty state `HOME_HABITS_EMPTY` | **Executed** |
+| `PROJECT_TRACKER_PROJECTS` | Empty state `PROJECT_TRACKER_NO_PROJECTS` | **Executed** |
+| `WARRANTY_LOOKUP` | Empty state `WARRANTY_NOT_RECORDED` (status `READY_WITH_LIMITATIONS`) | **Executed** |
+| `HOA_COMPLIANCE_STATUS` | Empty state `HOA_COMPLIANCE_EMPTY` | **Executed** |
+| `MAINTENANCE_STATUS` | Empty state ("No maintenance tasks are recorded for this home yet"); the handler also parses many message filters | Code-read |
+| `MAINTENANCE_FORECAST` | **`NOT_APPLICABLE`**, `MAINTENANCE_FORECAST_NO_VERIFIED_SYSTEMS` | Code-read |
+| `HOME_CHANGE_SUMMARY` | Empty state `HOME_CHANGE_SUMMARY_NONE` | Code-read |
+| `INVENTORY_LOOKUP` | `INVENTORY_NOT_RECORDED` (`READY_WITH_LIMITATIONS`) | Code-read |
+| `DOCUMENT_LOOKUP` | `NO_DOCUMENTS_ON_FILE` | Code-read |
+| `INSPECTION_FINDINGS` | `NO_OPEN_INSPECTION_FINDINGS` | Code-read |
+| `RECALL_REVIEW` | `NO_OPEN_RECALL_MATCHES` | Code-read |
+| `HOME_EVENT_RADAR_FEED` | "No monitored events recorded yet" (UNCOVERED) | Code-read |
+| `PLANT_CARE_OUTLOOK` | "No plants or garden zones tracked yet" | Code-read |
+| `NEIGHBORHOOD_CHANGE_FEED` | Depends on external source coverage (`NEIGHBORHOOD_COVERAGE_NOT_CONFIGURED` possible) | Code-read |
+| `PAST_HAZARD_EXPOSURE` | Depends on external coverage; can be **`UNAVAILABLE`** (`REVIEWED_SOURCE_COVERAGE_REQUIRED`) | Code-read |
+
+**Conclusion.** On an empty home only `PROPERTY_SUMMARY` and `CAPABILITY_DISCOVERY` are content-independent. `PROPERTY_SUMMARY` can supply two starters (a summary message and a completeness-focus message, which are distinct outcomes and distinct messages), so the data-independent pool is **at most three**, against a required **5 (6 with the current outcome excluded)** after D-O10. **The gap is two to three starters.** Everything else answers an empty home with an empty state.
+
+**Why an empty-state starter is not a safe fallback for a viewer.** The empty states point the user at adding data (Inventory, Maintenance, Documents). A VIEWER cannot add data, so for them such a starter is a dead end. A starter that answers `NOT_APPLICABLE` (the forecast) is worse: `NOT_APPLICABLE` is in the finalizer's recovery set, so the answer it produces is itself exempt from exact-four and shows only safe recovery actions.
+
+**Who the empty-home state actually binds (analysis, not measured).** A CONTRIBUTOR or OWNER on an empty home has many profile gaps (up to seven area chips), so the row is filled by profile capture and starters are not needed. The binding states are (1) a **VIEWER on an empty home** (profile chips and mutation chips are unavailable to them) and (2) a home that is complete and quiet, where data exists and starters are data-rich. So the hard state is narrow: a viewer invited to a home that has little recorded.
+
+**New decisions this forces:**
+
+| # | Decision | Recommendation |
+|---|---|---|
+| D-O13 | Does an empty-state answer with a concrete next step count as a deterministic fallback? | **No for a viewer** (they cannot take the next step), and never for a `NOT_APPLICABLE` answer. For contributors and owners an actionable empty state is acceptable but they rarely need starters |
+| D-O14 | Is **VIEWER x empty home** a supported minimum state for exact-four? | Decide explicitly. If yes, the data-independent pool must reach 5 to 6: build two to three data-independent, viewer-appropriate starters (for example season-and-region home-care basics from the seasonal catalog, which depend on the date and climate region, not on recorded data) and prove them. If no, document it as the one state where exact-four degrades, with the bounded diagnostic, and state that this is a product decision, not a silent redefinition |
+| D-O15 | May a global, property-less operation (`CAPABILITY_DISCOVERY`) be a starter, given the plan says "property-scoped"? | Decide; it is the cheapest data-independent starter |
 
 ### 4b. What the real activation gate still needs (not covered by the measurement)
 
