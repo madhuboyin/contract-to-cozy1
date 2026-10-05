@@ -537,7 +537,7 @@ const INVENTORY_COMPLETION_FIELDS: readonly InventoryCorrectionField[] = [
   'serialNo', 'purchaseCostCents', 'replacementCostCents',
 ];
 
-function inventoryCompletionFields(item: Record<string, unknown>): InventoryCorrectionField[] {
+export function inventoryCompletionFields(item: Record<string, unknown>): InventoryCorrectionField[] {
   return INVENTORY_COMPLETION_FIELDS.filter((field) => {
     const value = item[field];
     return value == null || value === '' || (field === 'condition' && value === 'UNKNOWN');

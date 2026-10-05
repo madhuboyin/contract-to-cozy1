@@ -622,6 +622,20 @@ test('legacy accepted work with no typed asset asks for an inventory-scoped corr
   assert.equal(primary.entityId, undefined, 'without a canonical item id the correction handler must clarify rather than guess');
 });
 
+test('degraded accepted work stops asking for details once the inventory item is complete', () => {
+  const action = acceptedWorkAction({
+    confidence: { score: 0.4, label: 'LOW', missing: [] },
+    recommendationResponse: { status: 'LOW_CONFIDENCE', reasonCode: 'RECOMMENDATION_LOW_CONFIDENCE', safeNextAction: 'Review.', missingFacts: [] },
+    presentation: { variant: 'ACCEPTED_WORK', summary: 'x', keyFacts: [], factGroups: [], subject: { kind: 'INVENTORY_ITEM', id: 'hvac-1', label: 'HVAC Furnace' } },
+    feedbackControls: ['COMPLETE', 'SNOOZE'],
+  });
+  const result = buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, { canContribute: true, inventoryDetailsComplete: true });
+  const guidance = result.blocks.find((block) => block.id === 'focused-home-action-guidance');
+  assert.ok(!guidance.actions.some((candidate) => candidate.label === 'Add missing details'));
+  assert.notEqual(guidance.sections[0].items[0].title, 'Add or update the missing home details to continue.');
+  assert.equal(result.blocks.find((block) => block.id === 'focused-home-action-missing-details'), undefined);
+});
+
 test('accepted work follows governed controls and resolves reported completion inside Ask', () => {
   const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
   const build = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options).blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
