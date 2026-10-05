@@ -227,6 +227,29 @@ test('the accepted-work projection humanizes a stale enum work-item title', asyn
   acceptedWorkRows.length = 0;
 });
 
+test('accepted maintenance work with no confidence score is available, not data-unavailable, and keeps its own action', async () => {
+  const row = (id, confidence, missingContext) => ({
+    id, propertyId: 'property-1', title: 'HVAC Furnace', homeownerReason: 'Annual service is due.',
+    expectedOutcome: 'Complete the task and record the outcome.', state: 'ACCEPTED', acceptanceState: 'ACCEPTED', disposition: null,
+    priority: 'SOON', safetyTier: 'MATERIAL_FINANCIAL', dueAt: new Date('2026-10-31T00:00:00.000Z'), dueWindowStart: null, dueWindowEnd: null,
+    snoozedUntil: null, supersededByWorkItemId: null, confidence, missingContext, subjectType: 'INVENTORY_ITEM', subjectId: 'hvac-1',
+    sourceVersion: 'v1', workKey: `work-key-${id}`, createdAt: new Date('2026-08-01T00:00:00.000Z'), updatedAt: new Date('2026-08-20T00:00:00.000Z'), executions: [],
+  });
+  acceptedWorkRows.length = 0;
+  acceptedWorkRows.push(row('wi-null', null, []));
+  const [unscored] = await appendAcceptedOperationalWork('property-1', []);
+  assert.equal(unscored.recommendationResponse.status, 'AVAILABLE');
+  assert.equal(unscored.recommendedAction, 'HVAC Furnace');
+  assert.doesNotMatch(unscored.recommendedAction, /missing home information/i);
+  assert.equal(unscored.job, 'STAY_AHEAD');
+
+  acceptedWorkRows.length = 0;
+  acceptedWorkRows.push(row('wi-gap', null, ['Install date']));
+  const [gap] = await appendAcceptedOperationalWork('property-1', []);
+  assert.notEqual(gap.recommendationResponse.status, 'AVAILABLE', 'a named gap still degrades the card');
+  acceptedWorkRows.length = 0;
+});
+
 test('accepted guidance work recovers its inventory subject from the canonical journey', async () => {
   acceptedWorkRows.length = 0;
   guidanceJourneys.length = 0;

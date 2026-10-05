@@ -6,6 +6,7 @@ import {
   homeActionLaunchEligibilityReasons,
   type HomeAction,
 } from '../productFramework';
+import { buildRecommendationResponseContract } from '../productFramework/recommendationResponse.contract';
 import { prisma } from '../lib/prisma';
 import { emitHomeActionsSurfaced, emitNorthStarLineageEvent } from './analytics';
 import {
@@ -1154,6 +1155,11 @@ export async function appendAcceptedOperationalWork(
       signal: displayTitle,
       whyItMatters: item.homeownerReason,
       recommendedAction: displayCopy.recommendedAction,
+      // Work with no confidence score (a maintenance task is a commitment, not a model recommendation) and no named
+      // gaps is not "data unavailable"; only a stored low score or named missing context degrades it.
+      ...(item.confidence == null && item.missingContext.length === 0
+        ? { recommendationResponse: buildRecommendationResponseContract({ status: 'AVAILABLE', safetyTier: item.safetyTier, reasonCode: 'ACCEPTED_WORK_NO_CONFIDENCE_MODEL' }) }
+        : {}),
       expectedOutcome: displayCopy.expectedOutcome,
       presentation: {
         variant: 'ACCEPTED_WORK',
@@ -1639,8 +1645,9 @@ export async function getHomeContinuityProjection(
 
   const attentionActionIds = new Set(feed.actions.slice(0, 5).map((action) => action.id));
   const decisions = feed.actions
-    .filter((action) => action.job === 'DECIDE' ||
-      ['MATERIAL_FINANCIAL', 'REGULATED_COVERAGE'].includes(action.governance.safetyTier))
+    // A decision is an action whose job is to choose between options. Safety tier only says how careful to be, so a
+    // moderate-risk maintenance task or a completion check is active work, not a decision.
+    .filter((action) => action.job === 'DECIDE')
     .filter((action) => !attentionActionIds.has(action.id))
     .slice(0, 3);
 

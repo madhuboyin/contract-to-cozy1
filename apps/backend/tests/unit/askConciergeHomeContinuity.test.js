@@ -42,3 +42,9 @@ test('Unified Home and Ask Concierge consume the same continuity projection', ()
   assert.match(concierge, /askCategoryLabel: category\.categoryLabel/);
   assert.doesNotMatch(concierge, /askQuestion: focusedHomeActionQuestion\(action\),\s*\.\.\.category/);
 });
+
+test('Decisions to make is selected by job, not by safety tier', () => {
+  const homeService = fs.readFileSync(path.resolve(__dirname, '../../src/services/homeActions.service.ts'), 'utf8');
+  assert.match(homeService, /\.filter\(\(action\) => action\.job === 'DECIDE'\)/);
+  assert.doesNotMatch(homeService, /\['MATERIAL_FINANCIAL', 'REGULATED_COVERAGE'\]\.includes\(action\.governance\.safetyTier\)/);
+});

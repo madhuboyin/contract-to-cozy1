@@ -4,7 +4,6 @@
 import { HouseholdRole } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
-import { inventoryCompletionFields } from './inventory.handler';
 import { logger } from '../../../lib/logger';
 import { type AskCaptureRequest, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { buyerPlanContextProvider } from '../../skills/context/buyerPlanContext.provider';
@@ -399,22 +398,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     const policyConflict = conflictTermId
       ? (await getConflictedInsurancePolicyTerms(propertyId, prisma)).find((term) => term.termId === conflictTermId) ?? null
       : null;
-    // Accepted work stores a confidence snapshot; when it is low but names no gaps and the linked inventory item is
-    // already complete, "Add missing details" would dead-end on "no missing item details".
-    const acceptedSubject = focusedAction.presentation?.variant === 'ACCEPTED_WORK' ? focusedAction.presentation.subject : null;
-    // Legacy accepted work has no typed asset (subject is the WORK_ITEM); the CTA resolves it by display name, so do too.
-    const inventoryDetailsComplete = acceptedSubject
-      && focusedAction.recommendationResponse.status !== 'AVAILABLE'
-      && (focusedAction.recommendationResponse.missingFacts ?? []).length === 0
-      && (focusedAction.confidence.missing ?? []).length === 0
-      ? await (async () => {
-        const candidates = acceptedSubject.kind === 'INVENTORY_ITEM'
-          ? await prisma.inventoryItem.findMany({ where: { id: acceptedSubject.id, propertyId } })
-          : await prisma.inventoryItem.findMany({ where: { propertyId, name: { equals: acceptedSubject.label, mode: 'insensitive' } }, take: 2 });
-        return candidates.length === 1 && inventoryCompletionFields(candidates[0] as unknown as Record<string, unknown>).length === 0;
-      })()
-      : false;
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict, captureFeature, applianceCount, inventoryDetailsComplete });
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict, captureFeature, applianceCount });
   }
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);

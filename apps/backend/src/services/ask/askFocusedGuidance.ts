@@ -247,7 +247,7 @@ function inventoryCorrectionMessageForMissingDetails(_labels: readonly string[])
   return 'Complete the missing details for this inventory item.';
 }
 
-function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boolean, inventoryDetailsComplete = false) {
+function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boolean) {
   const workItem = action.workItem;
   if (!canContribute || !workItem || action.presentation?.variant !== 'ACCEPTED_WORK') return null;
   const common = {
@@ -263,8 +263,7 @@ function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boo
       { ...common, id: `home-action-reopen-${action.id}`, label: 'Still needs attention', message: 'Reopen this reported completion.', style: (attestationCanVerify ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' },
     ];
   }
-  // A stored low-confidence snapshot with no named gaps must not keep asking for details the item already has.
-  const recommendationDegraded = action.recommendationResponse.status !== 'AVAILABLE' && !inventoryDetailsComplete;
+  const recommendationDegraded = action.recommendationResponse.status !== 'AVAILABLE';
   const missingDetails = recommendationDegraded ? missingDetailLabels(action) : [];
   const subject = action.presentation.subject;
   const missingDetailsAction = recommendationDegraded
@@ -391,8 +390,6 @@ export function buildFocusedHomeActionGuidance(
     captureFeature?: { featureKey: string; operationKey: string; operationInput?: Record<string, unknown> } | null;
     // Appliances recorded for this home, when this is the Appliances insight; null/undefined otherwise.
     applianceCount?: number | null;
-    // True when the accepted work's inventory item already has every completion field, so "add missing details" would dead-end.
-    inventoryDetailsComplete?: boolean;
   } = {},
 ): AskOperationResult {
   const title = focusedTitle(action);
@@ -403,7 +400,7 @@ export function buildFocusedHomeActionGuidance(
   const checklist = !specificRouting && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
-  const acceptedWorkActions = !specificRouting && !checklist ? resolveAcceptedWorkActions(action, options.canContribute === true, options.inventoryDetailsComplete === true) : null;
+  const acceptedWorkActions = !specificRouting && !checklist ? resolveAcceptedWorkActions(action, options.canContribute === true) : null;
   const policyConflictSection = !specificRouting && !checklist && !acceptedWorkActions && options.policyConflict?.conflicts.length
     ? buildPolicyConflictSection(options.policyConflict, options.canContribute === true)
     : null;
@@ -478,7 +475,7 @@ export function buildFocusedHomeActionGuidance(
     : [];
   const recommendationDegraded = action.recommendationResponse.status !== 'AVAILABLE';
   const missingDetails = recommendationDegraded ? missingDetailLabels(action) : [];
-  const acceptedWorkNeedsDetails = action.presentation?.variant === 'ACCEPTED_WORK' && recommendationDegraded && !options.inventoryDetailsComplete;
+  const acceptedWorkNeedsDetails = action.presentation?.variant === 'ACCEPTED_WORK' && recommendationDegraded;
   const recommendedAction = acceptedWorkNeedsDetails
     ? missingDetails.length > 0
       ? `Add the missing details to continue: ${missingDetails.join(', ')}.`
