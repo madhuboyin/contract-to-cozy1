@@ -894,6 +894,7 @@ export const financialAssembler: PropertyContextAssembler = {
       prisma.propertyFinancingProfile.findUnique({
         where: { propertyId },
         select: {
+          mortgageStatus: true,
           purchasePriceCents: true,
           purchaseDate: true,
           mortgageType: true,
@@ -1004,8 +1005,17 @@ export const financialAssembler: PropertyContextAssembler = {
           validUntil: new Date(mortgageObservedAt.getTime() + 90 * 24 * 60 * 60 * 1000),
         }
       : undefined;
+    // UNKNOWN is the unanswered state, exposed as a null value so the fact is UNKNOWN until the household answers. A status never
+    // goes stale on a timer (no validUntil): it changes only when the household changes it.
+    const mortgageStatus = profile && profile.mortgageStatus !== 'UNKNOWN' ? profile.mortgageStatus : null;
+    // `financial.financingProfile` keeps its existing content: status is its own fact, not a new field on that row.
+    const { mortgageStatus: _statusExposedSeparately, ...financingProfileRow } = profile ?? ({} as NonNullable<typeof profile>);
+    const mortgageStatusEvidence = mortgageStatus && profile
+      ? { source: 'USER_REPORTED' as const, verified: false, confidence: null, observedAt: profile.updatedAt, validUntil: null }
+      : undefined;
     const values: Record<string, unknown> = {
-      'financial.financingProfile': profile ? serializeContextRow(profile) : null,
+      'financial.mortgageStatus': mortgageStatus,
+      'financial.financingProfile': profile ? serializeContextRow(financingProfileRow) : null,
       'financial.currentMortgage': currentMortgage ? serializeContextRow(currentMortgage) : null,
       'financial.latestEquity': latestEquity ? serializeContextRow(latestEquity) : null,
       'financial.reserveFund': reserveFund ? serializeContextRow(reserveFund) : null,
@@ -1025,7 +1035,9 @@ export const financialAssembler: PropertyContextAssembler = {
     return Object.entries(values).map(([key, value]) => {
       const metadata = key === 'financial.currentMortgage'
         ? evidence.get(key) ?? mortgageEvidence
-        : evidence.get(key);
+        : key === 'financial.mortgageStatus'
+          ? evidence.get(key) ?? mortgageStatusEvidence
+          : evidence.get(key);
       return withPropertyId(createPropertyFact(key, value, metadata, now), propertyId);
     });
   },

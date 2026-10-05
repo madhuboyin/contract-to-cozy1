@@ -125,6 +125,10 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'risk.report', scope: 'RISK', canonicalOwner: 'RiskAssessmentReport', correctionPath: '/dashboard/properties/:propertyId/risk-assessment', writable: false },
   { key: 'risk.activeIncidents', scope: 'RISK', canonicalOwner: 'Incident', correctionPath: '/dashboard/properties/:propertyId/incidents', writable: false },
   { key: 'financial.financingProfile', scope: 'FINANCIAL', canonicalOwner: 'PropertyFinancingProfile', correctionPath: '/dashboard/properties/:propertyId/tools/financing/profile', writable: false },
+  // Mortgage applicability (Ask exact-four, packet D5). UNKNOWN is the unanswered state (value null); MORTGAGED and NO_MORTGAGE are
+  // answers. Not writable through the generic scalar writer: the dedicated `capturePropertyMortgageStatus` enforces the
+  // UNKNOWN-only transition atomically with the write.
+  { key: 'financial.mortgageStatus', scope: 'FINANCIAL', canonicalOwner: 'PropertyFinancingProfile.mortgageStatus', correctionPath: '/dashboard/properties/:propertyId/tools/financing/profile', writable: false },
   { key: 'financial.currentMortgage', scope: 'FINANCIAL', canonicalOwner: 'PropertyFinancingProfile', correctionPath: '/dashboard/properties/:propertyId/tools/financing/profile', writable: false },
   { key: 'financial.latestEquity', scope: 'FINANCIAL', canonicalOwner: 'EquityPosition', correctionPath: '/dashboard/properties/:propertyId/tools/financing', writable: false },
   { key: 'financial.reserveFund', scope: 'FINANCIAL', canonicalOwner: 'HomeReserveFund', correctionPath: '/dashboard/properties/:propertyId/tools/reserve-fund', writable: false },
