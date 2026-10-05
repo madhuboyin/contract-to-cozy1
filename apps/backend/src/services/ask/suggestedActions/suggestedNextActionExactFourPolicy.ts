@@ -25,6 +25,12 @@ export interface ExactFourInput extends PolicyInput {
    */
   actionableCompleteness: number | null;
   /**
+   * The completeness score came from an audience lookup that failed (`ActionableCompleteness.audienceUncertain`), so the denominator may
+   * be too small and the fraction overstated. Like unknown completeness it fails profile-first: the home is not treated as at or above
+   * 90%, and the uncertainty is reported.
+   */
+  audienceUncertain?: boolean;
+  /**
    * Lifecycle keys (`lifecycleKey`: operation + outcome + entity scope) in offer cooldown or explicit dismissal, from the durable
    * lifecycle record (`loadLifecycleState().cooldownKeys`). Never applied to a granted CONTINUE_WORK, URGENT_WORK or EXACT_RECORD.
    */
@@ -63,6 +69,8 @@ export type ExactFourDiagnostics =
     belowCompletenessThreshold: boolean;
     /** Completeness could not be computed; the policy ran profile-first. Reported even when four were selected. */
     completenessUnknown: boolean;
+    /** The audience lookup behind the completeness score failed; the policy ran profile-first. Reported even when four were selected. */
+    audienceUncertain: boolean;
     /** Candidates whose requested slot class was outside their producer's server-owned grant (demoted, never promoted). */
     slotClassDenied: number;
     /** Ownership or active-goal claims the producer's grant did not allow (cleared, never honored). */
@@ -196,7 +204,8 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
   for (const slotClass of ['CONTINUE_WORK', 'URGENT_WORK', 'EXACT_RECORD'] as const) takeClass(slotClass);
 
   const completenessUnknown = input.actionableCompleteness === null;
-  const below = completenessUnknown || input.actionableCompleteness! < EXACT_FOUR.completenessThreshold;
+  const audienceUncertain = input.audienceUncertain === true;
+  const below = completenessUnknown || audienceUncertain || input.actionableCompleteness! < EXACT_FOUR.completenessThreshold;
   let opportunityReserved = false;
   if (below) {
     const open = EXACT_FOUR.count - chosen.length;
@@ -252,7 +261,7 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
     exactFour: {
       policyVersion: SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION, applicability: 'EXACT_FOUR', shortage,
       shortageReasons: EXACT_FOUR_SHORTAGE_REASONS.filter((reason) => reasons.has(reason)),
-      selectedBySlot, belowCompletenessThreshold: below, completenessUnknown, slotClassDenied, signalClaimsDenied, startersWithinRotationWindow, opportunityReserved,
+      selectedBySlot, belowCompletenessThreshold: below, completenessUnknown, audienceUncertain, slotClassDenied, signalClaimsDenied, startersWithinRotationWindow, opportunityReserved,
     },
     evaluated: chosen.map((entry) => ({ slotClass: entry.slotClass, currentResultOwnership: entry.currentResultOwnership, activeGoalMatch: entry.activeGoalMatch })),
   };

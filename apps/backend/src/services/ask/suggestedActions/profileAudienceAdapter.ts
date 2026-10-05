@@ -1,6 +1,6 @@
 // Plan C.15.4 step 7 / packet D12: the governed audience adapter. It decides which audience-conditional profile facts belong in the
 // actionable-completeness denominator, from GOVERNED WORKFLOW STATE ONLY:
-//   BUYER   an active buyer journey for the property (`HomeBuyerChecklist`);
+//   BUYER   an active buyer journey for the property (`HomeBuyerChecklist`) that has NOT yet closed (see BUYER_ACTIVE_STAGES);
 //   SELLER  a sale case in a live state (`PropertySaleCase`).
 // Both active apply the union; neither excludes all seven conditional facts (see `computeActionableCompleteness`).
 //
@@ -21,6 +21,7 @@ export type AudienceActivationReason = 'BUYER_JOURNEY_ACTIVE' | 'SALE_CASE_ACTIV
 
 export interface BuyerJourneyState {
   status: string;
+  stage: string;
   completedAt: Date | null;
   cancelledAt: Date | null;
   handoffCompletedAt: Date | null;
@@ -30,12 +31,19 @@ export interface BuyerJourneyState {
 export interface SaleCaseState { status: string }
 
 /**
- * Active buyer journey (pure): status ACTIVE and not completed, cancelled, handed off or transitioned to the recurring home. Any
- * ACTIVE stage counts, including the post-closing stages, until handoff; narrowing by stage is an owner decision.
+ * The buyer stages in which the audience-conditional facts matter (owner decision): the pre-closing acquisition stages only. The audience
+ * STOPS at CLOSED; every post-closing stage (MOVE_IN, FIRST_30_DAYS, DAYS_31_TO_90, HANDED_OFF) is excluded. A stage not listed here,
+ * including any added later, is inactive until the owner classifies it.
+ */
+export const BUYER_ACTIVE_STAGES: ReadonlySet<string> = new Set(['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP']);
+
+/**
+ * Active buyer journey (pure): status ACTIVE, in a pre-closing stage, and not completed, cancelled, handed off or transitioned to the
+ * recurring home.
  */
 export function isBuyerJourneyActive(journey: BuyerJourneyState | null): boolean {
-  return journey !== null && journey.status === 'ACTIVE' && journey.completedAt === null && journey.cancelledAt === null
-    && journey.handoffCompletedAt === null && journey.transitionedToRecurringAt === null;
+  return journey !== null && journey.status === 'ACTIVE' && BUYER_ACTIVE_STAGES.has(journey.stage) && journey.completedAt === null
+    && journey.cancelledAt === null && journey.handoffCompletedAt === null && journey.transitionedToRecurringAt === null;
 }
 
 /** Live sale case (pure): preparing, listed or under contract. Closed and cancelled cases are over. */
@@ -55,8 +63,10 @@ export interface ProfileAudienceState {
   audiences: ProfileAudience[];
   reasons: AudienceActivationReason[];
   /**
-   * False when a lookup failed. The audience set then contains only what could be established (never a guess), so completeness
-   * falls back toward the base denominator; callers should record the failure as a diagnostic.
+   * False when a lookup failed. The audience set then contains only what could be established (never a guess), so the denominator may be
+   * too small. This MUST propagate: pass `activeAudiences: state.audiences` and `audienceUncertain: !state.ok` to
+   * `computeActionableCompleteness`, and the result's `audienceUncertain` to the exact-four policy, which then does not treat the home
+   * as at or above 90% and reports the uncertainty.
    */
   ok: boolean;
 }
@@ -66,7 +76,7 @@ export async function loadProfileAudienceState(propertyId: string, db: ProfileAu
   const [journey, saleCase] = await Promise.allSettled([
     db.homeBuyerChecklist.findUnique({
       where: { propertyId },
-      select: { status: true, completedAt: true, cancelledAt: true, handoffCompletedAt: true, transitionedToRecurringAt: true },
+      select: { status: true, stage: true, completedAt: true, cancelledAt: true, handoffCompletedAt: true, transitionedToRecurringAt: true },
     }),
     db.propertySaleCase.findUnique({ where: { propertyId }, select: { status: true } }),
   ]);

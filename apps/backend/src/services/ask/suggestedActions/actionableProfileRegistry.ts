@@ -222,6 +222,11 @@ export interface UnresolvedProfileFact {
 }
 
 export interface ActionableCompleteness extends ProfileDenominator {
+  /**
+   * The audience lookup failed, so the denominator may be missing an active audience's facts and `fraction` may be overstated. The
+   * exact-four policy must not treat an uncertain score as established completeness.
+   */
+  audienceUncertain: boolean;
   /** Known weight over applicable weight, in [0, 1]. */
   fraction: number;
   knownWeight: number;
@@ -242,6 +247,8 @@ export interface ActionableCompleteness extends ProfileDenominator {
 export interface ActionableCompletenessInput {
   facts: Readonly<Record<string, ProfileFactObservation | undefined>>;
   activeAudiences: Iterable<ProfileAudience>;
+  /** `!loadProfileAudienceState(...).ok`. Defaults to false; carried to the result unchanged. */
+  audienceUncertain?: boolean;
   /** The catalog's `notApplicableWhen` evaluation (`isFactApplicable`); the registry cannot import the catalog. Defaults to applicable. */
   isCatalogApplicable?: (factKey: string) => boolean;
 }
@@ -280,5 +287,5 @@ export function computeActionableCompleteness(input: ActionableCompletenessInput
     bucket.factKeys.push(item.factKey);
     if (!item.blockedBy) bucket.askNowFactKeys.push(item.factKey);
   }
-  return { ...denominator, fraction: totalWeight === 0 ? 1 : knownWeight / totalWeight, knownWeight, totalWeight, unresolved, unresolvedByArea };
+  return { ...denominator, audienceUncertain: input.audienceUncertain === true, fraction: totalWeight === 0 ? 1 : knownWeight / totalWeight, knownWeight, totalWeight, unresolved, unresolvedByArea };
 }

@@ -16,6 +16,7 @@ export function exactFourOutcome(diagnostics: ExactFourDiagnostics): ExactFourOu
   if (diagnostics.applicability === 'EXEMPT') return { result: 'EXEMPT', reasons: [diagnostics.exemptReason] };
   const reasons = new Set<string>(diagnostics.shortageReasons);
   if (diagnostics.completenessUnknown) reasons.add('COMPLETENESS_UNKNOWN');
+  if (diagnostics.audienceUncertain) reasons.add('AUDIENCE_UNCERTAIN');
   if (diagnostics.slotClassDenied > 0) reasons.add('SLOT_CLASS_DENIED');
   if (diagnostics.signalClaimsDenied > 0) reasons.add('SIGNAL_CLAIM_DENIED');
   if (diagnostics.shortage === 0) return { result: 'FULL', reasons: [...reasons] };
