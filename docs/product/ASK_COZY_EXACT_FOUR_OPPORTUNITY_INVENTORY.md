@@ -1,4 +1,4 @@
-# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 6, for owner review)
+# Ask Cozy exact-four: opportunity and starter inventory (step 8b draft, revision 7, for owner review)
 
 **Status:** REVISION 2 after owner review (three corrections below). No producer or opportunity registry entry has been written; the only code change is the explicit `RECALL_REVIEW` audience policy (finding 7). Governing scope: `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md` Appendix C.15 and C.16, and `ASK_COZY_EXACT_FOUR_REGISTRY_PACKET.md`.
 
@@ -130,6 +130,19 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 | The starter-specific prompt-history exemption is registered for the starters (**the real mechanism, measured with it registered**) | **5** | 4 + 1 disabled operation; history no longer removes exempt starters |
 | Same, and the current answer's outcome is excluded | **6** | 4 + 1 disabled + 1 current |
 
+**Shared operations (owner review, revision 7).** The table above assumes each starter is its own operation. A disabled operation removes **every** starter on it at once, so an operation that supplies two starters counts twice against the disabled-operation allowance. `PROPERTY_SUMMARY` is the case in point (a summary message and a completeness-focus message are distinct outcomes and distinct messages, but one operation). The measurement now models starters individually (an operation, outcome and message each) and applies availability by operation. With `PROPERTY_SUMMARY` supplying two starters:
+
+| Regime | Distinct-operation pool | With `PROPERTY_SUMMARY` x2 |
+|---|---|---|
+| Starter-specific prompt-history exemption registered | 5 | **6** |
+| Same, and the current answer's outcome excluded | 6 | **7** |
+| Current rules | 11 | 12 |
+| Current rules, and the current outcome excluded | 12 | 13 |
+
+The general rule is *four, plus the largest number of starters any one operation supplies, plus the current outcome if it is excluded* (plus six history removals under the current rules).
+
+**A structural cap the measurement exposed.** The policy truncates each producer's nominations to `perProducerCandidates` = **12** *before* eligibility, so a single starter producer can never put more than 12 candidates in play and the tail is silently dropped (executed: 14 nominated, 2 dropped). The 13 needed under the current rules with the current outcome excluded therefore cannot come from one producer. This does not bite the recommended regime (6 or 7), but any design that relies on a large pool must either split starters across producers or raise the limit deliberately.
+
 **Verdict for the four dependable starters (S1 to S4) as they stand: the invariant is RED.** One disabled operation leaves three; one starter used in the last five turns leaves three; four starters used in a row leave none. A user exploring by clicking starters is the normal case, so this is not an edge. Only about four starters can be shown to return content on a sparse home, so the current rules (11 or 12) cannot be met; the rule change (5 or 6) can be, with S1 to S4 plus one or two more dependable starters.
 
 **Decisions this forces (revised after review):**
@@ -147,8 +160,8 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 
 | Operation | Empty-home answer | Evidence |
 |---|---|---|
-| `PROPERTY_SUMMARY` | **Content.** Built from the property row itself, plus a completeness block; throws only if the property does not exist. The stored message decides the focus (`isPropertyCompletenessRequest` matches "How complete is my home record?" and does not match a plain "summary" message) | Code-read; message-to-focus executed |
-| `CAPABILITY_DISCOVERY` | **Content, data-independent.** Property-less (`requiresProperty` false, no role floor), a capability list, not data-dependent. It is global rather than property-scoped, which the plan's "property-scoped starter" wording may not allow | Code-read |
+| `PROPERTY_SUMMARY` | **Content (executed against a stubbed data layer).** `propertySummaryEmptyHome.test.js` captures the real handler and runs it with the property row, access, record overview and feature context stubbed to an empty-property shape, and the **real** `getContextCompleteness` over a snapshot with no facts (0%). Both starter messages return content for a VIEWER and a CONTRIBUTOR (a completeness answer titled "...Property Context is N% complete" with the list of areas that can improve, and a plain "short version" answer with record-freshness evidence), and they are genuinely different answers. **Caveat:** this proves the handler's own logic, not that the real data layer returns this shape for a real empty property; that needs a run against one | **Executed (stubbed data layer)** |
+| `CAPABILITY_DISCOVERY` | **Content, data-independent (not executed).** Property-less (`requiresProperty` false, no role floor), a capability list, not data-dependent. It is global rather than property-scoped, which the plan's "property-scoped starter" wording may not allow | Code-read |
 | `HOME_STATUS_BOARD` | Empty state `STATUS_BOARD_EMPTY` | **Executed** |
 | `HOME_TIMELINE_EVENTS` | Empty state `HOME_TIMELINE_EMPTY` | **Executed** |
 | `GUIDANCE_JOURNEYS_LIST` | Empty state `GUIDANCE_JOURNEYS_EMPTY` | **Executed** |
@@ -168,9 +181,9 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 | `NEIGHBORHOOD_CHANGE_FEED` | Depends on external source coverage (`NEIGHBORHOOD_COVERAGE_NOT_CONFIGURED` possible) | Code-read |
 | `PAST_HAZARD_EXPOSURE` | Depends on external coverage; can be **`UNAVAILABLE`** (`REVIEWED_SOURCE_COVERAGE_REQUIRED`) | Code-read |
 
-**Conclusion.** On an empty home only `PROPERTY_SUMMARY` and `CAPABILITY_DISCOVERY` are content-independent. `PROPERTY_SUMMARY` can supply two starters (a summary message and a completeness-focus message, which are distinct outcomes and distinct messages), so the data-independent pool is **at most three**, against a required **5 (6 with the current outcome excluded)** after D-O10. **The gap is two to three starters.** Everything else answers an empty home with an empty state.
+**Conclusion.** On an empty home only `PROPERTY_SUMMARY` and `CAPABILITY_DISCOVERY` are content-independent. The evidence is uneven and should be read that way: `PROPERTY_SUMMARY` x2 is **executed against a stubbed data layer**; `CAPABILITY_DISCOVERY` is **code-read only**; everything else is an executed or code-read empty state. The data-independent pool is therefore **at most three starters**, and because two of them share one operation (`PROPERTY_SUMMARY`), the required pool after D-O10 is **6** (7 with the current outcome excluded), not 5 (6). **The gap is three to four starters**, not two to three.
 
-**Why an empty-state starter is not a safe fallback for a viewer.** The empty states point the user at adding data (Inventory, Maintenance, Documents). A VIEWER cannot add data, so for them such a starter is a dead end. A starter that answers `NOT_APPLICABLE` (the forecast) is worse: `NOT_APPLICABLE` is in the finalizer's recovery set, so the answer it produces is itself exempt from exact-four and shows only safe recovery actions.
+**What the empty states offer a viewer (executed classification) and why this is a product judgment, not a proof.** Each of the seven executed empty states carries exactly **one** action, a navigation link ("Open Status Board", "Open Warranties", and so on) to a `/dashboard/...` page; none carries a typed or contributor-only action. So a viewer **can** follow the only offered action. What the test does **not** establish is whether the destination page is useful to a viewer: the empty state's message is "add this data", and a viewer lacks the add-data actions. Calling that a dead end is therefore a **product judgment** (the only next step is to leave Ask for a page where the suggested step is unavailable to them), which D-O13 asks you to make; it is not a measured fact. The `NOT_APPLICABLE` forecast is a separate, code-read concern: `NOT_APPLICABLE` is in the finalizer's recovery set, so the answer it produces is itself exempt from exact-four and shows only safe recovery actions.
 
 **Who the empty-home state actually binds (analysis, not measured).** A CONTRIBUTOR or OWNER on an empty home has many profile gaps (up to seven area chips), so the row is filled by profile capture and starters are not needed. The binding states are (1) a **VIEWER on an empty home** (profile chips and mutation chips are unavailable to them) and (2) a home that is complete and quiet, where data exists and starters are data-rich. So the hard state is narrow: a viewer invited to a home that has little recorded.
 
@@ -178,8 +191,8 @@ Starters are viewer-safe, all-mode, `STANDARD` safety, read-only, and repeatable
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D-O13 | Does an empty-state answer with a concrete next step count as a deterministic fallback? | **No for a viewer** (they cannot take the next step), and never for a `NOT_APPLICABLE` answer. For contributors and owners an actionable empty state is acceptable but they rarely need starters |
-| D-O14 | Is **VIEWER x empty home** a supported minimum state for exact-four? | Decide explicitly. If yes, the data-independent pool must reach 5 to 6: build two to three data-independent, viewer-appropriate starters (for example season-and-region home-care basics from the seasonal catalog, which depend on the date and climate region, not on recorded data) and prove them. If no, document it as the one state where exact-four degrades, with the bounded diagnostic, and state that this is a product decision, not a silent redefinition |
+| D-O13 | Does an empty-state answer with a concrete next step count as a deterministic fallback? | **A product judgment, not a measured fact** (see above). My recommendation: not for a viewer, whose only offered action is a navigation link to a page where the suggested step (add data) is unavailable to them, and never for a `NOT_APPLICABLE` answer. For contributors and owners an actionable empty state is acceptable, but they rarely need starters |
+| D-O14 | Is **VIEWER x empty home** a supported minimum state for exact-four? | Decide explicitly. If yes, the data-independent pool must reach **6 to 7** (after the shared-operation correction): build two to three data-independent, viewer-appropriate starters (for example season-and-region home-care basics from the seasonal catalog, which depend on the date and climate region, not on recorded data) and prove them. If no, document it as the one state where exact-four degrades, with the bounded diagnostic, and state that this is a product decision, not a silent redefinition |
 | D-O15 | May a global, property-less operation (`CAPABILITY_DISCOVERY`) be a starter, given the plan says "property-scoped"? | Decide; it is the cheapest data-independent starter |
 
 ### 4b. What the real activation gate still needs (not covered by the measurement)

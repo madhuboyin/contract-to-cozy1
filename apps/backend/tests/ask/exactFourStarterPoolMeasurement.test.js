@@ -13,6 +13,7 @@ const { getAskAudiencePolicy } = require('../../src/services/ask/askAudiencePoli
 const { requiredAskTargetEntity } = require('../../src/services/ask/askEntityResolution.ts');
 const { suggestionKey } = require('../../src/services/ask/askSuggestionPolicy.ts');
 const outcomes = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
+const { SUGGESTED_NEXT_ACTION_LIMITS } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
 const { selectExactFourSuggestedNextActions } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourPolicy.ts');
 const { evaluateSuggestedNextActionEligibility } = require('../../src/services/ask/suggestedActions/suggestedNextActionEligibility.ts');
 const { collectPresentationIdentities } = require('../../src/services/ask/suggestedActions/suggestedNextActionPresentationIdentities.ts');
@@ -22,6 +23,10 @@ const { suggestedNextActionSemanticKey, suggestedNextActionSemanticKeyHash } = r
 // needs. It is NOT the activation gate. It runs the REAL availability function, eligibility rules and exact-four policy over role x
 // operating mode x (one disabled operation) x prompt-history removals x (the current answer's outcome), with starters registered
 // provisionally inside the test and removed afterward; production registries are untouched.
+//
+// A starter is an (operation, outcome, message) SPEC, so one operation can supply several starters. A disabled operation removes ALL of
+// its starters at once; prompt history and the current outcome remove starters individually, and the adversarial choice is disjoint from the
+// disabled group (the worst case).
 //
 // What it covers: operation availability, the prompt-history window, the current answer's outcome, and, by construction, a DROPPED
 // opportunity producer (the row is built from starters alone, so urgent work, continuation, profile gaps and opportunities are all
@@ -46,29 +51,48 @@ const POOL_OPERATIONS = Object.values(ASK_OPERATION_DEFINITIONS)
 
 const outcomeFor = (operationId) => `OPEN_${operationId}`.slice(0, 79);
 const messageFor = (operationId) => `Show me ${operationId.toLowerCase().replace(/_/g, ' ')}`;
+/** One starter. `variant` makes a second, distinct starter (outcome and message) on the SAME operation, e.g. PROPERTY_SUMMARY's completeness focus. */
+const spec = (operationId, variant = null) => ({
+  operationId,
+  outcomeKey: variant ? `${variant}_${operationId}`.slice(0, 79) : outcomeFor(operationId),
+  message: variant ? `${messageFor(operationId)} (${variant.toLowerCase().replace(/_/g, ' ')})` : messageFor(operationId),
+});
+const specKey = (starter) => `${starter.operationId}:${starter.outcomeKey}`;
 
-function registerProvisional(operationIds, { repeatable = false, promptHistoryExempt = false } = {}) {
+/** `size` distinct-operation starters, from the real pool. */
+const singletonPool = (size) => POOL_OPERATIONS.slice(0, size).map((op) => spec(op));
+/** `size` starters where PROPERTY_SUMMARY supplies TWO (summary and completeness focus) and the rest are distinct operations. */
+const groupedPool = (size) => [spec('PROPERTY_SUMMARY'), spec('PROPERTY_SUMMARY', 'REVIEW_COMPLETENESS'), ...POOL_OPERATIONS.filter((op) => op !== 'PROPERTY_SUMMARY').slice(0, size - 2).map((op) => spec(op))];
+
+function registerProvisional(starters, { repeatable = false, promptHistoryExempt = false } = {}) {
+  // Tracks exactly what THIS call added, so nested registrations cannot remove each other's entries.
   const added = [];
-  for (const op of operationIds) {
-    if (outcomes.SUGGESTED_ACTION_OUTCOMES[op]) continue; // never touch a real entry
-    outcomes.SUGGESTED_ACTION_OUTCOMES[op] = [outcomeFor(op)];
-    if (repeatable) outcomes.REPEATABLE_OUTCOMES.add(`${op}:${outcomeFor(op)}`);
+  for (const starter of starters) {
+    const { operationId: op, outcomeKey } = starter;
+    const existing = outcomes.SUGGESTED_ACTION_OUTCOMES[op];
+    if (existing && !existing.__provisional) continue; // never touch a real entry
+    const record = { starter, outcome: false, repeatable: false, exempt: false };
+    if (!existing) { const list = [outcomeKey]; Object.defineProperty(list, '__provisional', { value: true }); outcomes.SUGGESTED_ACTION_OUTCOMES[op] = list; record.outcome = true; }
+    else if (!existing.includes(outcomeKey)) { existing.push(outcomeKey); record.outcome = true; }
+    if (repeatable && !outcomes.REPEATABLE_OUTCOMES.has(specKey(starter))) { outcomes.REPEATABLE_OUTCOMES.add(specKey(starter)); record.repeatable = true; }
     // The REAL starter-specific exemption (D-O10), registered for the duration of the test only.
-    if (promptHistoryExempt) outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(`${op}:${outcomeFor(op)}`);
-    added.push(op);
+    if (promptHistoryExempt && !outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(specKey(starter))) { outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(specKey(starter)); record.exempt = true; }
+    added.push(record);
   }
   return () => {
-    for (const op of added) {
-      delete outcomes.SUGGESTED_ACTION_OUTCOMES[op];
-      outcomes.REPEATABLE_OUTCOMES.delete(`${op}:${outcomeFor(op)}`);
-      outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.delete(`${op}:${outcomeFor(op)}`);
+    for (const record of added) {
+      if (record.repeatable) outcomes.REPEATABLE_OUTCOMES.delete(specKey(record.starter));
+      if (record.exempt) outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.delete(specKey(record.starter));
+      if (!record.outcome) continue;
+      const list = outcomes.SUGGESTED_ACTION_OUTCOMES[record.starter.operationId];
+      if (list && list.__provisional) { const index = list.indexOf(record.starter.outcomeKey); if (index >= 0) list.splice(index, 1); if (list.length === 0) delete outcomes.SUGGESTED_ACTION_OUTCOMES[record.starter.operationId]; }
     }
   };
 }
 
-const starterCandidate = (operationId) => ({
-  source: 'CAPABILITY_RECOMMENDATION', sourceOperationId: null, label: `Open ${operationId}`, message: messageFor(operationId), operationId,
-  interactionType: 'CONVERSATION_CONTINUE', outcomeKey: outcomeFor(operationId), slotClass: 'CURATED_STARTER', tier: 'DISCOVERY', requiredFacts: [], reasonCodes: [],
+const starterCandidate = (starter) => ({
+  source: 'CAPABILITY_RECOMMENDATION', sourceOperationId: null, label: `Open ${starter.operationId}`, message: starter.message, operationId: starter.operationId,
+  interactionType: 'CONVERSATION_CONTINUE', outcomeKey: starter.outcomeKey, slotClass: 'CURATED_STARTER', tier: 'DISCOVERY', requiredFacts: [], reasonCodes: [],
   entityContext: { propertyId: PROPERTY, entityType: null, entityId: null, contextVersion: null },
   signals: { exactEntityMatch: false, currentResultOwnership: false, activeGoalMatch: false, materiality: 0, sourceConfidence: 0.5 },
   traits: { recovery: false, promotional: false, continuesPending: false },
@@ -76,7 +100,7 @@ const starterCandidate = (operationId) => ({
 
 const ONBOARDING_BY_MODE = { UNKNOWN: null, BUYING: 'SHOPPING', OWNING: 'ESTABLISHED_OWNER', SELLING: 'PREPARING_TRANSFER' };
 
-/** Runs the real availability function for a role and operating mode, with at most one operation disabled. */
+/** Runs the real availability function for a role and operating mode, with at most one OPERATION disabled. */
 async function availabilityFor({ role, mode, disabled = null }) {
   const original = prisma.propertyOnboarding.findUnique;
   prisma.propertyOnboarding.findUnique = async () => (ONBOARDING_BY_MODE[mode] ? { ownershipState: ONBOARDING_BY_MODE[mode] } : null);
@@ -88,53 +112,64 @@ async function availabilityFor({ role, mode, disabled = null }) {
 
 /**
  * One row, exactly as the exact-four policy would build it from the deterministic starters alone.
- * `removedByHistory` = starters whose stored message is among the last HISTORY_WINDOW completed messages or the current message.
- * The prompt-history exemption (D-O10) is the REAL registry property: a starter is exempt only if it was registered with
- * `promptHistoryExempt` for the duration of the test (a separate property from repeatable completion, a different concept).
+ *  - `disabled` is an OPERATION id: availability removes every starter on it at once.
+ *  - `removedByHistory` starters (the last HISTORY_WINDOW completed messages plus the current message) are removed by the real prompt-history
+ *    rule unless the real exemption is registered. The adversarial choice is disjoint from the disabled group.
+ *  - `currentRemoval` models a populated current-outcome set: one more starter, disjoint from the others, is excluded by outcome.
  */
-async function rowFor({ pool, role = 'VIEWER', mode = 'UNKNOWN', disabled = null, removedByHistory = 0, currentOperation = null }) {
+async function rowFor({ pool, role = 'VIEWER', mode = 'UNKNOWN', disabled = null, removedByHistory = 0, currentRemoval = false }) {
   const operationAvailability = await availabilityFor({ role, mode, disabled });
-  const recent = pool.slice(0, removedByHistory).map(messageFor);
-  // The REAL history window: these stored messages are what the finalizer would put in askedMessageKeys. Whether they remove a starter is
-  // decided by the real eligibility rule (and the real exemption property), not by this harness.
-  const asked = new Set(pool.slice(0, removedByHistory).map((op) => suggestionKey(messageFor(op))));
+  const available = pool.filter((starter) => starter.operationId !== disabled);
+  const historyRemoved = available.slice(0, removedByHistory);
+  const currentStarter = currentRemoval ? available.slice(removedByHistory)[0] ?? null : null;
+  const asked = new Set(historyRemoved.map((starter) => suggestionKey(starter.message)));
   const eligibility = {
     mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability,
     operationRequiresProperty: (id) => getAskOperationDefinition(id).requiresProperty, operationTargetEntityType: (id) => requiredAskTargetEntity(id),
     entities: new Map(), validatedEntityTypes: new Set(), pendingInteractionActive: false, completedSemanticKeyHashes: new Set(),
     askedMessageKeys: asked, messageKey: suggestionKey,
-    // The finalizer passes an EMPTY set today (guarded below). `currentOperation` models the eligibility design's intent: never re-offer the outcome the
-    // answer just produced. It is the extra removal a populated set would add.
-    currentOutcomeKeyHashes: new Set(currentOperation ? [suggestedNextActionSemanticKeyHash({ operationId: currentOperation, interactionType: 'CONVERSATION_CONTINUE', propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: outcomeFor(currentOperation) })] : []),
+    // The finalizer passes an EMPTY set today (guarded below). A populated set is the eligibility design's intent: never re-offer what the
+    // answer just produced.
+    currentOutcomeKeyHashes: new Set(currentStarter ? [suggestedNextActionSemanticKeyHash({ operationId: currentStarter.operationId, interactionType: 'CONVERSATION_CONTINUE', propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: currentStarter.outcomeKey })] : []),
   };
-  assert.ok(recent.length <= pool.length);
-  const result = selectExactFourSuggestedNextActions({
-    nominations: new Map([['home-starters.curated', pool.map(starterCandidate)]]), eligibility, actionableCompleteness: 0.95,
-    slotGrants: { 'home-starters.curated': { allowed: new Set(['CURATED_STARTER']), fallback: 'CURATED_STARTER' } },
-  });
+  // The policy truncates each producer's nominations to `perProducerCandidates` BEFORE eligibility, so a pool larger than the limit must come
+  // from several producers; the requirement is measured independently of that cap (the cap itself is pinned by its own test below).
+  const limit = SUGGESTED_NEXT_ACTION_LIMITS.perProducerCandidates;
+  const nominations = new Map();
+  const slotGrants = {};
+  for (let offset = 0, producer = 0; offset < pool.length; offset += limit, producer += 1) {
+    const id = `home-starters.curated${producer}`;
+    nominations.set(id, pool.slice(offset, offset + limit).map(starterCandidate));
+    slotGrants[id] = { allowed: new Set(['CURATED_STARTER']), fallback: 'CURATED_STARTER' };
+  }
+  const result = selectExactFourSuggestedNextActions({ nominations, eligibility, actionableCompleteness: 0.95, slotGrants });
   return { selected: result.selected.length, shortage: result.exactFour.shortage, reasons: result.exactFour.shortageReasons };
 }
 
-/** The supported-state matrix for a pool: role x mode x (no disabled op | each op disabled) x history removals 0..6. */
-async function failingStates(pool, options = {}) {
+/** The supported-state matrix for a pool: role x mode x (no disabled operation | each distinct operation disabled) x history removals 0..6 x current. */
+async function failingStates(pool, { withCurrentRemoval = false } = {}) {
   const failing = [];
-  const { withCurrentOperation = false, ...rowOptions } = options;
-  // Role and mode were shown independent for all-mode viewer starters, so the (larger) current-operation enumeration uses a reduced set.
-  const roles = withCurrentOperation ? ['VIEWER'] : ['VIEWER', 'CONTRIBUTOR', 'OWNER'];
-  const modes = withCurrentOperation ? ['UNKNOWN', 'OWNING'] : ['UNKNOWN', 'BUYING', 'OWNING', 'SELLING'];
-  for (const role of roles) {
-    for (const mode of modes) {
-      for (const disabled of [null, ...pool]) {
-        for (const currentOperation of withCurrentOperation ? [null, ...pool] : [null]) {
-          for (let removedByHistory = 0; removedByHistory <= Math.min(HISTORY_WINDOW + 1, pool.length); removedByHistory += 1) {
-            const row = await rowFor({ pool, role, mode, disabled, removedByHistory, currentOperation, ...rowOptions });
-            if (row.shortage > 0) failing.push({ role, mode, disabled, currentOperation, removedByHistory, selected: row.selected });
-          }
-        }
-      }
+  const operations = [...new Set(pool.map((starter) => starter.operationId))];
+  const roles = withCurrentRemoval ? ['VIEWER'] : ['VIEWER', 'CONTRIBUTOR', 'OWNER'];
+  const modes = withCurrentRemoval ? ['UNKNOWN', 'OWNING'] : ['UNKNOWN', 'BUYING', 'OWNING', 'SELLING'];
+  for (const role of roles) for (const mode of modes) for (const disabled of [null, ...operations]) for (const currentRemoval of withCurrentRemoval ? [false, true] : [false]) {
+    for (let removedByHistory = 0; removedByHistory <= Math.min(HISTORY_WINDOW + 1, pool.length); removedByHistory += 1) {
+      const row = await rowFor({ pool, role, mode, disabled, removedByHistory, currentRemoval });
+      if (row.shortage > 0) failing.push({ role, mode, disabled, currentRemoval, removedByHistory, selected: row.selected });
     }
   }
   return failing;
+}
+
+async function minimalPoolSize({ exempt = false, grouped = false, withCurrentRemoval = false } = {}) {
+  const build = grouped ? groupedPool : singletonPool;
+  const limit = grouped ? POOL_OPERATIONS.length + 1 : POOL_OPERATIONS.length;
+  for (let size = grouped ? 4 : 4; size <= limit; size += 1) {
+    const pool = build(size);
+    const restore = registerProvisional(pool, { promptHistoryExempt: exempt });
+    try { if ((await failingStates(pool, { withCurrentRemoval })).length === 0) return size; } finally { restore(); }
+  }
+  return null;
 }
 
 // ---- structural facts ---------------------------------------------------------------------------------------------------------------
@@ -142,7 +177,7 @@ async function failingStates(pool, options = {}) {
 test('presentation deduplication cannot remove a starter: a STRUCTURAL proof from the collector\'s guard, checked against seven representative shapes (not an exhaustive enumeration of block shapes)', () => {
   const collectorSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/suggestedActions/suggestedNextActionPresentationIdentities.ts'), 'utf8');
   assert.ok(/if \(Array\.isArray\(record\.actions\) && entityType && entityId\)/.test(collectorSource), 'the structural premise: identities are published only for a node that has BOTH an entity type and an id');
-  const restore = registerProvisional(['PROPERTY_SUMMARY']);
+  const restore = registerProvisional([spec('PROPERTY_SUMMARY')]);
   try {
     const starterKey = suggestedNextActionSemanticKey({ operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE', propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: outcomeFor('PROPERTY_SUMMARY') });
     const action = { operationId: 'PROPERTY_SUMMARY', outcomeKey: outcomeFor('PROPERTY_SUMMARY'), interactionType: 'CONVERSATION_CONTINUE' };
@@ -167,17 +202,17 @@ test('the finalizer passes an EMPTY current-outcome set and the prompt-history r
   const executeSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8');
   assert.ok(/take: 5,\s*\n\s*select: \{ message: true, operationId: true \}/.test(executeSource), 'the history window is the last 5 completed executions');
   // Executed: a REPEATABLE outcome whose stored message was asked recently is still suppressed by the prompt-history rule.
-  const restore = registerProvisional(['PROPERTY_SUMMARY'], { repeatable: true });
+  const restore = registerProvisional([spec('PROPERTY_SUMMARY')], { repeatable: true });
   try {
     assert.equal(outcomes.isRepeatableOutcome('PROPERTY_SUMMARY', outcomeFor('PROPERTY_SUMMARY')), true);
     const availability = await availabilityFor({ role: 'VIEWER', mode: 'UNKNOWN' });
     const ctx = {
       mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability: availability, operationRequiresProperty: () => true, operationTargetEntityType: () => null,
       entities: new Map(), validatedEntityTypes: new Set(), pendingInteractionActive: false, completedSemanticKeyHashes: new Set(),
-      askedMessageKeys: new Set([suggestionKey(messageFor('PROPERTY_SUMMARY'))]), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
+      askedMessageKeys: new Set([suggestionKey(spec('PROPERTY_SUMMARY').message)]), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
     };
     const { SuggestedNextActionCandidateSchema } = require('../../src/services/ask/suggestedActions/suggestedNextActionCandidate.ts');
-    const verdict = evaluateSuggestedNextActionEligibility(SuggestedNextActionCandidateSchema.parse(starterCandidate('PROPERTY_SUMMARY')), ctx);
+    const verdict = evaluateSuggestedNextActionEligibility(SuggestedNextActionCandidateSchema.parse(starterCandidate(spec('PROPERTY_SUMMARY'))), ctx);
     assert.equal(verdict.state, 'SUPPRESSED');
     assert.deepEqual(verdict.reasonCodes, ['EQUIVALENT_PROMPT_ASKED']);
   } finally { restore(); }
@@ -191,7 +226,7 @@ test('the real pool of all-mode, viewer, standard read operations is large enoug
 });
 
 test('mode and role do not change the verdict for all-mode viewer starters (CONTRIBUTOR and OWNER never have fewer)', async () => {
-  const pool = ['PROPERTY_SUMMARY', 'HOME_STATUS_BOARD', 'MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST', 'HOME_CHANGE_SUMMARY'];
+  const pool = singletonPool(5);
   const restore = registerProvisional(pool);
   try {
     const baseline = await rowFor({ pool, role: 'VIEWER', mode: 'UNKNOWN' });
@@ -201,47 +236,73 @@ test('mode and role do not change the verdict for all-mode viewer starters (CONT
   } finally { restore(); }
 });
 
-test('MEASUREMENT: four dependable starters fail the arithmetic under a single disabled operation or any prior starter use', async () => {
-  const pool = ['PROPERTY_SUMMARY', 'HOME_STATUS_BOARD', 'MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST'];
+test('SHARED OPERATION: disabling one operation removes every starter on it at once, while prompt history removes starters individually', async () => {
+  const pool = groupedPool(8); // PROPERTY_SUMMARY supplies two starters
+  const restore = registerProvisional(pool);
+  try {
+    assert.equal(pool.filter((starter) => starter.operationId === 'PROPERTY_SUMMARY').length, 2);
+    assert.notEqual(pool[0].outcomeKey, pool[1].outcomeKey, 'two distinct outcomes');
+    assert.notEqual(pool[0].message, pool[1].message, 'two distinct messages');
+    assert.equal((await rowFor({ pool })).selected, 4, 'pristine pool of 8');
+    // Disabling PROPERTY_SUMMARY drops BOTH of its starters: 8 - 2 = 6 still reach four, but a pool of 5 would not.
+    const small = groupedPool(5);
+    const restoreSmall = registerProvisional(small);
+    try {
+      assert.equal((await rowFor({ pool: small, disabled: 'PROPERTY_SUMMARY' })).selected, 3, 'both summary starters vanish with the operation');
+      assert.equal((await rowFor({ pool: small, disabled: 'DIY_PROJECTS' })).selected, 4, 'a singleton operation removes only one');
+    } finally { restoreSmall(); }
+    // History removes starters individually, by their own messages: removing one summary message leaves the other starter.
+    assert.equal((await rowFor({ pool, removedByHistory: 1 })).selected, 4, 'one history removal of 8');
+  } finally { restore(); }
+});
+
+test('STRUCTURAL CAP: a single producer\'s nominations are truncated to perProducerCandidates (12) before eligibility, so a starter pool above 12 must come from several producers', () => {
+  assert.equal(SUGGESTED_NEXT_ACTION_LIMITS.perProducerCandidates, 12);
+  const pool = singletonPool(14);
+  const restore = registerProvisional(pool);
+  try {
+    const eligibility = {
+      mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability: new Map(pool.map((starter) => [starter.operationId, null])),
+      operationRequiresProperty: () => true, operationTargetEntityType: () => null, entities: new Map(), validatedEntityTypes: new Set(), pendingInteractionActive: false,
+      completedSemanticKeyHashes: new Set(), askedMessageKeys: new Set(), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
+    };
+    const result = selectExactFourSuggestedNextActions({
+      nominations: new Map([['home-starters.curated', pool.map(starterCandidate)]]), eligibility, actionableCompleteness: 0.95,
+      slotGrants: { 'home-starters.curated': { allowed: new Set(['CURATED_STARTER']), fallback: 'CURATED_STARTER' } },
+    });
+    assert.equal(result.diagnostics.nominated, 14);
+    assert.equal(result.diagnostics.droppedOverProducerLimit, 2, 'the last two starters never reach eligibility');
+  } finally { restore(); }
+});
+
+test('MEASUREMENT: four starters fail the arithmetic under a single disabled operation or any prior starter use', async () => {
+  const pool = singletonPool(4);
   const restore = registerProvisional(pool);
   try {
     assert.equal((await rowFor({ pool })).shortage, 0, 'a pristine session reaches four');
-    assert.equal((await rowFor({ pool, disabled: 'HOME_STATUS_BOARD' })).selected, 3, 'one disabled operation leaves three');
+    assert.equal((await rowFor({ pool, disabled: pool[1].operationId })).selected, 3, 'one disabled operation leaves three');
     assert.equal((await rowFor({ pool, removedByHistory: 1 })).selected, 3, 'one starter used in the last five turns leaves three');
     assert.equal((await rowFor({ pool, removedByHistory: 4 })).selected, 0, 'four starters used in a row leave none');
-    const failing = await failingStates(pool);
-    assert.ok(failing.length > 0, 'the invariant is RED for the four-starter pool');
+    assert.ok((await failingStates(pool)).length > 0, 'the invariant is RED for the four-starter pool');
   } finally { restore(); }
-  // ...and with the REAL exemption registered, only the disabled-operation states fail (disabling one operation alone leaves three).
   const restoreExempt = registerProvisional(pool, { promptHistoryExempt: true });
   try {
     assert.ok((await failingStates(pool)).every((state) => state.disabled !== null), 'with the starter-specific exemption only the disabled-operation states fail');
   } finally { restoreExempt(); }
 });
 
-async function minimalPoolSize({ exempt = false, ...options } = {}) {
-  for (let size = 4; size <= POOL_OPERATIONS.length; size += 1) {
-    const pool = POOL_OPERATIONS.slice(0, size);
-    const restore = registerProvisional(pool, { promptHistoryExempt: exempt });
-    try { if ((await failingStates(pool, options)).length === 0) return size; } finally { restore(); }
-  }
-  return null;
-}
-
-test('MEASUREMENT: minimal deterministic pool under CURRENT rules = 4 + 6 history removals + 1 disabled operation = 11', async () => {
-  // History removes up to 6 distinct starters (the last 5 completed messages plus the current one), a disabled operation removes 1.
+test('MEASUREMENT (distinct operations): current rules 11; exemption 5; with the current outcome excluded 12 and 6', async () => {
   assert.equal(await minimalPoolSize({}), 11);
-});
-
-test('MEASUREMENT: with the REAL starter-specific prompt-history exemption registered, the minimal pool is 4 + 1 disabled operation = 5', async () => {
   assert.equal(await minimalPoolSize({ exempt: true }), 5);
+  assert.equal(await minimalPoolSize({ withCurrentRemoval: true }), 12);
+  assert.equal(await minimalPoolSize({ exempt: true, withCurrentRemoval: true }), 6);
 });
 
-test('MEASUREMENT: if the finalizer also excluded the current answer\'s own outcome, the minimal pool grows by one: 6 with the exemption, 12 under the current rules', async () => {
-  // 4 fallbacks + 1 disabled operation + 1 current answer (distinct from the disabled one in the worst case).
-  assert.equal(await minimalPoolSize({ exempt: true, withCurrentOperation: true }), 6);
-  // Current rules: 4 + 6 history + 1 disabled + 1 current = 12, which exceeds what can be proven dependable (only about four starters are).
-  assert.equal(await minimalPoolSize({ withCurrentOperation: true }), 12);
+test('MEASUREMENT (PROPERTY_SUMMARY supplies TWO starters): the largest operation group removes two at once, so the pool grows by one: exemption 6; with the current outcome 7; current rules 12 and 13 (13 exceeds the per-producer cap of 12)', async () => {
+  assert.equal(await minimalPoolSize({ exempt: true, grouped: true }), 6);
+  assert.equal(await minimalPoolSize({ exempt: true, grouped: true, withCurrentRemoval: true }), 7);
+  assert.equal(await minimalPoolSize({ grouped: true }), 12);
+  assert.equal(await minimalPoolSize({ grouped: true, withCurrentRemoval: true }), 13);
 });
 
 test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds exactly four existing, non-starter outcomes, which a rule keyed on repeatability would also change', () => {
@@ -250,19 +311,18 @@ test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds exactly
     'INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD', 'MAINTENANCE_TASK_CREATE:RESTART_AFTER_EXPIRY', 'QUOTE_COMPARISON_CREATE:RESTART_AFTER_EXPIRY', 'REFINANCE_RATE_MONITOR:RESTART_AFTER_EXPIRY',
   ]);
   // Repeatable COMPLETION ("this may be done again") and recent-PROMPT deduplication ("this exact text was just asked") are different concepts.
-  // Tying the second to the first would hide-or-show those four recovery actions as a side effect; a separate, starter-only property does not.
 });
 
 test('every message-routable operation as the current answer: it removes a starter only when it is a starter, so the pool needs at most one extra', async () => {
-  const pool = POOL_OPERATIONS.slice(0, 6);
+  const pool = singletonPool(6);
   const restore = registerProvisional(pool, { promptHistoryExempt: true });
   try {
     const routable = Object.values(ASK_OPERATION_DEFINITIONS).filter((d) => d.messageRoutable).map((d) => d.operationId);
     assert.ok(routable.length > 60, `${routable.length} message-routable operations`);
     for (const current of routable) {
-      // Only an operation that IS a starter has an outcome to exclude; every other current answer leaves the pool untouched.
-      const row = await rowFor({ pool, currentOperation: pool.includes(current) ? current : null });
-      assert.equal(row.selected, Math.min(4, pool.length - (pool.includes(current) ? 1 : 0)), current); // a row never shows more than four
+      const isStarter = pool.some((starter) => starter.operationId === current);
+      const row = await rowFor({ pool, currentRemoval: isStarter });
+      assert.equal(row.selected, Math.min(4, pool.length - (isStarter ? 1 : 0)), current); // a row never shows more than four
       assert.equal(row.shortage, 0, `${current} still reaches four`);
     }
   } finally { restore(); }
