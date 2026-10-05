@@ -288,8 +288,11 @@ function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boo
         id: `home-action-missing-details-${action.id}`,
         label: 'Add missing details',
         interactionType: 'START_WORKFLOW' as const,
-        message: 'Fill in the missing details in my home record.',
-        operationId: 'PROPERTY_SUMMARY' as const,
+        // No typed asset survived into this legacy work item. Keep the correction scoped to inventory and let
+        // INVENTORY_ITEM_CORRECT either resolve this exact display label or ask which equipment item is meant;
+        // whole-property completeness can select an unrelated area such as Location and must not be substituted.
+        message: `Correct missing details for inventory item "${action.presentation.subject?.label ?? action.signal}".`,
+        operationId: 'INVENTORY_ITEM_CORRECT' as const,
         style: 'PRIMARY' as const,
       }
     : null;

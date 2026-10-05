@@ -1080,12 +1080,37 @@ export async function appendAcceptedOperationalWork(
       supersededByWorkItemId: null,
       OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }],
     },
-    include: { executions: true },
+    include: { executions: true, sources: true },
   });
+  // Older accepted GUIDANCE work can have a PROPERTY subject even when its canonical journey is tied to one
+  // inventory item. Recover that typed identity in one bounded query so focused Ask actions edit the relevant
+  // equipment record instead of falling back to unrelated whole-property completeness.
+  const guidanceExecutionIds = [...new Set(items.flatMap((item) => [
+    ...item.executions
+      .filter((execution) => execution.executionType === 'GUIDANCE')
+      .map((execution) => execution.executionEntityId),
+    ...item.sources
+      .filter((source) => source.active && source.sourceType === 'GUIDANCE')
+      .map((source) => source.sourceEntityId),
+  ]))];
+  const guidanceInventoryByJourneyId = new Map((guidanceExecutionIds.length > 0
+    ? await prisma.guidanceJourney.findMany({
+      where: { id: { in: guidanceExecutionIds }, propertyId },
+      select: { id: true, inventoryItemId: true },
+    })
+    : []).flatMap((journey) => journey.inventoryItemId ? [[journey.id, journey.inventoryItemId] as const] : []));
   const projected: RankedHomeAction[] = [];
   for (const item of items) {
     if (represented.has(item.id)) continue;
     const primaryExecution = item.executions.find((entry) => entry.role === 'PRIMARY') ?? item.executions[0];
+    const guidanceJourneyId = primaryExecution?.executionType === 'GUIDANCE'
+      ? primaryExecution.executionEntityId
+      : item.sources.find((source) => source.active && source.sourceType === 'GUIDANCE')?.sourceEntityId ?? null;
+    const inventoryItemId = item.subjectType === 'INVENTORY_ITEM'
+      ? item.subjectId
+      : guidanceJourneyId
+        ? guidanceInventoryByJourneyId.get(guidanceJourneyId) ?? null
+        : null;
     // Home Intelligence Functional Completeness FRD Phase 4 (HI-OUT-002).
     // Only a maintenance-backed item routes to a real completion adapter
     // this slice (see homeActionCompletion.service.ts). The "Mark done"
@@ -1153,8 +1178,8 @@ export async function appendAcceptedOperationalWork(
           },
         ],
         factGroups: [],
-        subject: item.subjectType === 'INVENTORY_ITEM'
-          ? { kind: 'INVENTORY_ITEM', id: item.subjectId, label: displayTitle.slice(0, 180) }
+        subject: inventoryItemId
+          ? { kind: 'INVENTORY_ITEM', id: inventoryItemId, label: displayTitle.slice(0, 180) }
           : { kind: 'WORK_ITEM', id: item.id, label: displayTitle.slice(0, 180) },
         detailLabel: 'Why this work?',
         group: null,

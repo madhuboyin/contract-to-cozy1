@@ -600,6 +600,28 @@ test('degraded accepted work still offers missing-detail correction when the pro
   assert.match(limitation.body, /Choose Add missing details/i);
 });
 
+test('legacy accepted work with no typed asset asks for an inventory-scoped correction instead of property completeness', () => {
+  const action = acceptedWorkAction({
+    confidence: { score: null, label: 'LOW', missing: [] },
+    recommendationResponse: {
+      status: 'DATA_UNAVAILABLE', reasonCode: 'RECOMMENDATION_DATA_UNAVAILABLE',
+      safeNextAction: 'Add the missing home information.', missingFacts: [],
+    },
+    presentation: {
+      variant: 'ACCEPTED_WORK', summary: 'The HVAC record is incomplete.', keyFacts: [], factGroups: [],
+      subject: { kind: 'WORK_ITEM', id: 'work-1', label: 'HVAC Furnace' },
+    },
+    feedbackControls: ['CORRECT_FACT', 'SNOOZE'],
+  });
+  const result = buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, { canContribute: true });
+  const primary = result.blocks.find((block) => block.id === 'focused-home-action-guidance').actions[0];
+  assert.equal(primary.label, 'Add missing details');
+  assert.equal(primary.operationId, 'INVENTORY_ITEM_CORRECT');
+  assert.equal(primary.message, 'Correct missing details for inventory item "HVAC Furnace".');
+  assert.notEqual(primary.operationId, 'PROPERTY_SUMMARY');
+  assert.equal(primary.entityId, undefined, 'without a canonical item id the correction handler must clarify rather than guess');
+});
+
 test('accepted work follows governed controls and resolves reported completion inside Ask', () => {
   const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
   const build = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options).blocks.find((block) => block.id === 'focused-home-action-guidance').actions;

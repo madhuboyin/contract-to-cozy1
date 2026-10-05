@@ -53,10 +53,15 @@ const workEvents = new Map();
 let failNextResolve = false;
 
 const acceptedWorkRows = [];
+const guidanceJourneys = [];
 
 const prismaMock = {
+  guidanceJourney: {
+    findMany: async ({ where }) => guidanceJourneys.filter((journey) =>
+      journey.propertyId === where.propertyId && where.id.in.includes(journey.id)),
+  },
   operationalWorkItem: {
-    findMany: async () => acceptedWorkRows.map((row) => ({ ...row, executions: row.executions ?? [] })),
+    findMany: async () => acceptedWorkRows.map((row) => ({ ...row, executions: row.executions ?? [], sources: row.sources ?? [] })),
     findUnique: async ({ where }) => {
       // Looked up by id too (canonical-action scope check on the change emission).
       if (where.id) return workItems.get(where.id) ?? null;
@@ -145,6 +150,7 @@ function reset() {
   workSources.clear();
   workEvents.clear();
   failNextResolve = false;
+  guidanceJourneys.length = 0;
 }
 
 test('accepted operational work shows its task identity instead of a legacy completed outcome', () => {
@@ -218,6 +224,41 @@ test('the accepted-work projection humanizes a stale enum work-item title', asyn
     'Review the Water Heater risk',
   );
   assert.doesNotMatch(JSON.stringify(projected.presentation), /WATER_HEATER_TANK/);
+  acceptedWorkRows.length = 0;
+});
+
+test('accepted guidance work recovers its inventory subject from the canonical journey', async () => {
+  acceptedWorkRows.length = 0;
+  guidanceJourneys.length = 0;
+  guidanceJourneys.push({ id: 'journey-hvac', propertyId: 'property-1', inventoryItemId: 'hvac-1' });
+  acceptedWorkRows.push(acceptedRow('wi-hvac', 'HVAC Furnace', null, {
+    confidence: null,
+    missingContext: [],
+    executions: [{ executionType: 'GUIDANCE', executionEntityId: 'journey-hvac', role: 'PRIMARY' }],
+  }));
+
+  const [projected] = await appendAcceptedOperationalWork('property-1', []);
+
+  assert.deepEqual(projected.presentation.subject, { kind: 'INVENTORY_ITEM', id: 'hvac-1', label: 'HVAC Furnace' });
+  guidanceJourneys.length = 0;
+  acceptedWorkRows.length = 0;
+});
+
+test('accepted guidance work recovers its inventory subject from its durable source when no execution exists', async () => {
+  acceptedWorkRows.length = 0;
+  guidanceJourneys.length = 0;
+  guidanceJourneys.push({ id: 'journey-hvac', propertyId: 'property-1', inventoryItemId: 'hvac-1' });
+  acceptedWorkRows.push(acceptedRow('wi-hvac-source', 'HVAC Furnace', null, {
+    confidence: null,
+    missingContext: [],
+    executions: [],
+    sources: [{ sourceType: 'GUIDANCE', sourceEntityId: 'journey-hvac', sourceRole: 'TRIGGER', active: true }],
+  }));
+
+  const [projected] = await appendAcceptedOperationalWork('property-1', []);
+
+  assert.deepEqual(projected.presentation.subject, { kind: 'INVENTORY_ITEM', id: 'hvac-1', label: 'HVAC Furnace' });
+  guidanceJourneys.length = 0;
   acceptedWorkRows.length = 0;
 });
 
