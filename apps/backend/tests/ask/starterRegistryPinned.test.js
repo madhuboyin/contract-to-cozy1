@@ -54,9 +54,10 @@ test('PINNED: seven starters on four operations, each with a registered outcome,
   assert.deepEqual(outcomes.validateSuggestedNextActionRegistry(), []);
 });
 
-test('PINNED, conditional approval: the live exemption and repeatable registries do NOT yet contain the starters (waiting on content/safety review and real-database checks)', () => {
-  assert.equal(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.size, 0);
-  for (const candidate of ALL) assert.equal(outcomes.isRepeatableOutcome(candidate.operationId, candidate.outcomeKey), false, keyOf(candidate));
+test('PINNED, activated: the live registries contain exactly the seven approved starters, in BOTH the exemption and the repeatable set', () => {
+  assert.deepEqual([...outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES].sort(), ALL.map(keyOf).sort());
+  for (const candidate of ALL) assert.equal(outcomes.isRepeatableOutcome(candidate.operationId, candidate.outcomeKey), true, keyOf(candidate));
+  assert.deepEqual([...outcomes.CURATED_STARTER_OUTCOME_KEYS].sort(), ALL.map(keyOf).sort());
 });
 
 const ONBOARDING = { UNKNOWN: null, BUYING: 'SHOPPING', OWNING: 'ESTABLISHED_OWNER', SELLING: 'PREPARING_TRANSFER' };
@@ -65,15 +66,19 @@ async function availability(role, mode, disabled) {
   prisma.propertyOnboarding.findUnique = async () => (ONBOARDING[mode] ? { ownershipState: ONBOARDING[mode] } : null);
   try { return await evaluateAskOperationAvailability({ propertyId: PROPERTY, propertyAccess: { role }, controls: { ...readAskOperationalControls(), audienceDiscoveryEnabled: true, operationEnabled: (id) => id !== disabled } }); } finally { prisma.propertyOnboarding.findUnique = original; }
 }
+// Sets the two entries to exactly the requested state for the starters, then restores the live registries (the approved entries are LIVE now).
 const withEntries = async (body, { exempt, repeatable }) => {
-  const added = [];
-  for (const candidate of ALL) {
-    const key = keyOf(candidate);
-    if (exempt) { outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(key); added.push(['E', key]); }
-    if (repeatable) { outcomes.REPEATABLE_OUTCOMES.add(key); added.push(['R', key]); }
+  const original = ALL.map((candidate) => [keyOf(candidate), outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(keyOf(candidate)), outcomes.REPEATABLE_OUTCOMES.has(keyOf(candidate))]);
+  for (const [key] of original) {
+    (exempt ? outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(key) : outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.delete(key));
+    (repeatable ? outcomes.REPEATABLE_OUTCOMES.add(key) : outcomes.REPEATABLE_OUTCOMES.delete(key));
   }
-  const undo = () => { for (const [kind, key] of added) (kind === 'E' ? outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES : outcomes.REPEATABLE_OUTCOMES).delete(key); };
-  try { return await body(); } finally { undo(); }
+  try { return await body(); } finally {
+    for (const [key, wasExempt, wasRepeatable] of original) {
+      (wasExempt ? outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(key) : outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.delete(key));
+      (wasRepeatable ? outcomes.REPEATABLE_OUTCOMES.add(key) : outcomes.REPEATABLE_OUTCOMES.delete(key));
+    }
+  }
 };
 
 async function row({ role = 'VIEWER', mode = 'UNKNOWN', disabled = null, asked = [], completed = [], current = null }) {

@@ -83,6 +83,10 @@ function registerProvisional(starters, { repeatable = false, promptHistoryExempt
     if (real) { /* registered outcome already present */ }
     else if (!existing) { const list = [outcomeKey]; Object.defineProperty(list, '__provisional', { value: true }); outcomes.SUGGESTED_ACTION_OUTCOMES[op] = list; record.outcome = true; }
     else if (!existing.includes(outcomeKey)) { existing.push(outcomeKey); record.outcome = true; }
+    // The measurement models a pool UNDER a stated rule set. A real approved starter (D-O4 activation) is repeatable and exempt in the live registry, so when
+    // the run asks for the OLD rules (no exemption / not repeatable) those real entries are removed for the duration and restored afterwards.
+    if (!repeatable && outcomes.REPEATABLE_OUTCOMES.has(specKey(starter))) { outcomes.REPEATABLE_OUTCOMES.delete(specKey(starter)); record.restoreRepeatable = true; }
+    if (!promptHistoryExempt && outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(specKey(starter))) { outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.delete(specKey(starter)); record.restoreExempt = true; }
     if (repeatable && !outcomes.REPEATABLE_OUTCOMES.has(specKey(starter))) { outcomes.REPEATABLE_OUTCOMES.add(specKey(starter)); record.repeatable = true; }
     // The REAL starter-specific exemption (D-O10), registered for the duration of the test only.
     if (promptHistoryExempt && !outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(specKey(starter))) { outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(specKey(starter)); record.exempt = true; }
@@ -92,6 +96,8 @@ function registerProvisional(starters, { repeatable = false, promptHistoryExempt
     for (const record of added) {
       if (record.repeatable) outcomes.REPEATABLE_OUTCOMES.delete(specKey(record.starter));
       if (record.exempt) outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.delete(specKey(record.starter));
+      if (record.restoreRepeatable) outcomes.REPEATABLE_OUTCOMES.add(specKey(record.starter));
+      if (record.restoreExempt) outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(specKey(record.starter));
       if (!record.outcome) continue;
       const list = outcomes.SUGGESTED_ACTION_OUTCOMES[record.starter.operationId];
       if (list && list.__provisional) { const index = list.indexOf(record.starter.outcomeKey); if (index >= 0) list.splice(index, 1); if (list.length === 0) delete outcomes.SUGGESTED_ACTION_OUTCOMES[record.starter.operationId]; }
@@ -211,17 +217,17 @@ test('D-O11: the finalizer populates the current-outcome set from the verified l
   const executeSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8');
   assert.ok(/take: 5,\s*\n\s*select: \{ message: true, operationId: true \}/.test(executeSource), 'the history window is the last 5 completed executions');
   // Executed: a REPEATABLE outcome whose stored message was asked recently is still suppressed by the prompt-history rule.
-  const restore = registerProvisional([spec('PROPERTY_SUMMARY')], { repeatable: true });
+  const restore = registerProvisional([spec('HOME_STATUS_BOARD')], { repeatable: true });
   try {
-    assert.equal(outcomes.isRepeatableOutcome('PROPERTY_SUMMARY', spec('PROPERTY_SUMMARY').outcomeKey), true);
+    assert.equal(outcomes.isRepeatableOutcome('HOME_STATUS_BOARD', spec('HOME_STATUS_BOARD').outcomeKey), true);
     const availability = await availabilityFor({ role: 'VIEWER', mode: 'UNKNOWN' });
     const ctx = {
       mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability: availability, operationRequiresProperty: () => true, operationTargetEntityType: () => null,
       entities: new Map(), validatedEntityTypes: new Set(), pendingInteractionActive: false, completedSemanticKeyHashes: new Set(),
-      askedMessageKeys: new Set([suggestionKey(spec('PROPERTY_SUMMARY').message)]), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
+      askedMessageKeys: new Set([suggestionKey(spec('HOME_STATUS_BOARD').message)]), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
     };
     const { SuggestedNextActionCandidateSchema } = require('../../src/services/ask/suggestedActions/suggestedNextActionCandidate.ts');
-    const verdict = evaluateSuggestedNextActionEligibility(SuggestedNextActionCandidateSchema.parse(starterCandidate(spec('PROPERTY_SUMMARY'))), ctx);
+    const verdict = evaluateSuggestedNextActionEligibility(SuggestedNextActionCandidateSchema.parse(starterCandidate(spec('HOME_STATUS_BOARD'))), ctx);
     assert.equal(verdict.state, 'SUPPRESSED');
     assert.deepEqual(verdict.reasonCodes, ['EQUIVALENT_PROMPT_ASKED']);
   } finally { restore(); }
@@ -314,11 +320,14 @@ test('MEASUREMENT (PROPERTY_SUMMARY supplies TWO starters): the largest operatio
   assert.equal(await minimalPoolSize({ grouped: true, withCurrentRemoval: true }), 13);
 });
 
-test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds exactly four existing, non-starter outcomes, which a rule keyed on repeatability would also change', () => {
-  const entries = [...outcomes.REPEATABLE_OUTCOMES].sort();
-  assert.deepEqual(entries, [
+test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds four existing non-starter outcomes (plus the seven approved starters), which a rule keyed on repeatability would also change', () => {
+  const nonStarter = [...outcomes.REPEATABLE_OUTCOMES].filter((key) => !outcomes.CURATED_STARTER_OUTCOME_KEYS.includes(key)).sort();
+  assert.deepEqual(nonStarter, [
     'INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD', 'MAINTENANCE_TASK_CREATE:RESTART_AFTER_EXPIRY', 'QUOTE_COMPARISON_CREATE:RESTART_AFTER_EXPIRY', 'REFINANCE_RATE_MONITOR:RESTART_AFTER_EXPIRY',
   ]);
+  // The four existing outcomes are repeatable but NOT prompt-history exempt; the seven approved starters are BOTH.
+  for (const key of nonStarter) assert.equal(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), false, key);
+  for (const key of outcomes.CURATED_STARTER_OUTCOME_KEYS) { assert.ok(outcomes.REPEATABLE_OUTCOMES.has(key), key); assert.ok(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), key); }
   // Repeatable COMPLETION ("this may be done again") and recent-PROMPT deduplication ("this exact text was just asked") are different concepts.
 });
 

@@ -6,6 +6,10 @@
 // invalidate an otherwise safe answer, so producers may throw.
 import type { AskOperationResult } from '../askOperationRegistry';
 import type { SuggestedNextAction } from '../../../productFramework/ask/ask.contract';
+import {
+  homeBasicsStarters, hiringGuideStarters, propertySummaryStarters, seasonalHomeCareStarters,
+  STARTER_HIRING_GUIDE_PRODUCER_ID, STARTER_HOME_BASICS_PRODUCER_ID, STARTER_PROPERTY_SUMMARY_PRODUCER_ID, STARTER_SEASONAL_PRODUCER_ID,
+} from './starterCandidates';
 
 export interface ProducerContext {
   result: AskOperationResult;
@@ -32,4 +36,20 @@ export const resultCandidatesProducer: SuggestedNextActionProducer = {
   nominate: ({ result }) => result.suggestedNextActionCandidates ?? [],
 };
 
-export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [resultCandidatesProducer];
+/**
+ * The curated starters (exact-four, inventory D-O4): one registered producer per starter source, so each has its own server-owned grant
+ * (CURATED_STARTER only). They are NONESSENTIAL: the first dropped when the pipeline budget is exceeded. Each nominates only for a property-scoped
+ * turn and reads nothing: the candidates are static, and the shared finalizer's eligibility, lifecycle and policy decide visibility.
+ */
+const starterProducer = (id: string, nominate: (propertyId: string) => readonly unknown[]): SuggestedNextActionProducer => ({
+  id, source: 'CAPABILITY_RECOMMENDATION', essential: false,
+  nominate: ({ propertyId }) => (propertyId ? nominate(propertyId) : []),
+});
+export const starterProducers: readonly SuggestedNextActionProducer[] = [
+  starterProducer(STARTER_PROPERTY_SUMMARY_PRODUCER_ID, propertySummaryStarters),
+  starterProducer(STARTER_SEASONAL_PRODUCER_ID, seasonalHomeCareStarters),
+  starterProducer(STARTER_HOME_BASICS_PRODUCER_ID, homeBasicsStarters),
+  starterProducer(STARTER_HIRING_GUIDE_PRODUCER_ID, hiringGuideStarters),
+];
+
+export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [resultCandidatesProducer, ...starterProducers];

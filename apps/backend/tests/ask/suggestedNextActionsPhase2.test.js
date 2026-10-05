@@ -347,6 +347,7 @@ function deps(over = {}) {
   return {
     calls,
     deps: {
+      producers: [resultCandidatesProducer], // isolates these finalizer tests from the starter producers (exact-four activation has its own suite)
       clock,
       loadOperationAvailability: async () => { calls.availability += 1; return availability; },
       loadCurrentOutcomeKeyHashes: async () => new Set(),
@@ -458,10 +459,16 @@ test('mode: emergency/restricted boundaries and recovery statuses are SAFE_RECOV
 
 // ---- producers -------------------------------------------------------------------------------------------------------
 
-test('the only producer passes handler-attached candidates through, and nothing else nominates', () => {
+test('the result producer passes handler-attached candidates through, and nothing else nominates for a property-less turn', () => {
   assert.deepEqual(resultCandidatesProducer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }), []);
   assert.deepEqual(resultCandidatesProducer.nominate({ result: baseResult({ suggestedNextActionCandidates: [candidate()] }), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }).length, 1);
-  assert.equal(require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts').SUGGESTED_NEXT_ACTION_PRODUCERS.length, 1);
+  // Activation: the registry now also carries the four starter producers, which nominate ONLY for a property-scoped turn.
+  const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
+  assert.equal(SUGGESTED_NEXT_ACTION_PRODUCERS.length, 1 + starterProducers.length);
+  for (const producer of starterProducers) {
+    assert.deepEqual(producer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }), [], producer.id);
+    assert.ok(producer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: 'p1', message: 'm' }).length >= 1, producer.id);
+  }
 });
 
 test('entity types without a registered validator fail closed; only migrated domains have one', () => {
