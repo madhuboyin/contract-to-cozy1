@@ -1,7 +1,7 @@
 // apps/backend/src/routes/diy.routes.ts
 import { Router } from 'express';
 import { authenticate, requireMfa } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { requireRole } from '../middleware/auth.middleware';
@@ -63,16 +63,19 @@ router.get('/diy/templates/:templateId', getTemplateDetail);
 router.post('/properties/:propertyId/diy/decision', propertyAuthMiddleware, validateBody(DiyDecisionSchema), getDiyDecision);
 
 // ── Projects ──────────────────────────────────────────────────────────────────
-router.post('/properties/:propertyId/diy/projects', propertyAuthMiddleware, validateBody(CreateProjectSchema), createProject);
+// Every route that creates or changes project data requires the CONTRIBUTOR household role (propertyAuthMiddleware only resolves access, so
+// without the floor a VIEWER could mutate through the API). The floor sits right after property auth so a viewer is refused before validation.
+router.post('/properties/:propertyId/diy/projects', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(CreateProjectSchema), createProject);
 router.get('/properties/:propertyId/diy/projects', propertyAuthMiddleware, validate(ListProjectsSchema.transform((q) => ({ query: q }))), listProjects);
 router.get('/properties/:propertyId/diy/projects/:projectId', propertyAuthMiddleware, getProject);
-router.patch('/properties/:propertyId/diy/projects/:projectId', propertyAuthMiddleware, validateBody(UpdateProjectSchema), updateProject);
-router.patch('/properties/:propertyId/diy/projects/:projectId/steps/:stepId', propertyAuthMiddleware, validateBody(UpdateStepSchema), updateStep);
-router.post('/properties/:propertyId/diy/projects/:projectId/complete', propertyAuthMiddleware, validateBody(CompleteProjectSchema), completeProject);
-router.post('/properties/:propertyId/diy/projects/:projectId/abandon', propertyAuthMiddleware, validateBody(AbandonProjectSchema), abandonProject);
+router.patch('/properties/:propertyId/diy/projects/:projectId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(UpdateProjectSchema), updateProject);
+router.patch('/properties/:propertyId/diy/projects/:projectId/steps/:stepId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(UpdateStepSchema), updateStep);
+router.post('/properties/:propertyId/diy/projects/:projectId/complete', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(CompleteProjectSchema), completeProject);
+router.post('/properties/:propertyId/diy/projects/:projectId/abandon', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(AbandonProjectSchema), abandonProject);
 
 // ── AI Guide ──────────────────────────────────────────────────────────────────
-router.post('/properties/:propertyId/diy/ai-guide', propertyAuthMiddleware, validateBody(GenerateAiGuideSchema), generateAiGuide);
+// Generating a guide stores a DiyAiGuide for the property and spends AI budget, so it is a property write too.
+router.post('/properties/:propertyId/diy/ai-guide', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(GenerateAiGuideSchema), generateAiGuide);
 router.get('/properties/:propertyId/diy/ai-guide/:guideId', propertyAuthMiddleware, getAiGuide);
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

@@ -187,7 +187,7 @@ Optional-step semantics (review finding 6) are defined first:
 
 | ID | Prerequisite | Why | Type |
 | --- | --- | --- | --- |
-| **P0** | Add `requireHouseholdRole('CONTRIBUTOR')` to the DIY mutation routes | E15: a viewer can mutate today | Security fix |
+| **P0** | Add `requireHouseholdRole('CONTRIBUTOR')` to the DIY mutation routes | E15: a viewer can mutate today | Security fix. **Implemented October 6, 2026** (§12) |
 | **P1** | Template immutability or re-review, with revision provenance (O2) | E2: otherwise no Ask surface may call content reviewed | Admin and service change |
 | **P2** | Decide ownership and household permissions (O10) and record attribution columns | E15, E16 | Decision plus schema |
 | **P3** | Actor-aware, version-checked step and project transitions in the shared service; `updateStep` in one transaction; completion requires required steps `COMPLETED` and optional steps `COMPLETED` or `SKIPPED` | E5, E6, review findings 3, 5, 6 | Service fix, page behavior change |
@@ -259,3 +259,25 @@ Nothing starts until these are answered. Changes from revision 1 are marked.
 ## 11. Out of scope
 
 AI-generated guides in Ask; any HIGH or MODERATE safety project; regulated or permitted work; authored help branches and child-turn help; step media; step-level evidence; a seasonal-to-DIY mapping (until O5); canonical gas-service capture and the ASSESS flow (Phase 4); a notes editor and notes or photo display in Ask; the ADMIN module's wider revision tooling beyond what O2 requires; changing project creation or the AI guide path.
+
+## 12. P0 implementation record (October 6, 2026)
+
+P0 was implemented on its own, independent of the design approval, because it fixes a standing authorization gap (E15) on the existing DIY page.
+
+**Changed**
+
+- `apps/backend/src/routes/diy.routes.ts`: `requireHouseholdRole('CONTRIBUTOR')` now follows `propertyAuthMiddleware` on the six property-scoped routes that write: create project, patch project, patch step, complete, abandon, and generate AI guide (it stores a `DiyAiGuide` for the property and spends AI budget). The floor precedes body validation, so a viewer gets 403 regardless of the body. Left open: every GET, and `POST .../diy/decision` (a scoring call that reads the skill profile and writes nothing). Admin routes are unchanged (they have their own role, MFA and capability gate).
+- `apps/backend/tests/unit/diyMutationRoleFloor.test.js` (new): runs the real router's handler chains against a stubbed access lookup. For each of the six routes a viewer gets 403 before the controller and a contributor or owner is not refused by the floor; no access still gets 404; reads stay open to viewers; and a guard test requires that **every** non-read route under `/properties/:propertyId/diy` refuses a viewer, so a future write route cannot ship without the floor.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| New test against the fixed routes | 15 pass, 0 fail | Executed |
+| Same test against the original `diy.routes.ts` (negative control) | 8 pass, 7 fail (the six viewer refusals and the guard) | Executed |
+| Existing DIY and property-auth tests (`diyCapabilityActivation`, `diyAiGuideGeneration`, `diyHireRequiredBoundary`, `diyProjectsCapabilitySlice`, `propertyAuthMiddlewareMetrics`) | 32 pass, 0 fail | Executed |
+| Backend `npm run typecheck` | clean | Executed |
+
+**Not run:** the real HTTP stack, a database, or a browser. The handler chains ran with a stubbed access lookup, not Express.
+
+**Known consequence, not fixed here.** The DIY pages still show their controls to viewers [Code-traced]. A viewer's step update is awaited without a catch (an unhandled rejection), a viewer's "Stop this project" swallows the 403 (`.catch(() => null)`) and then navigates away as if it worked, and the complete sheet reports an error. Hiding or disabling these controls for viewers, using the property's `householdRole`, is a separate frontend change.
