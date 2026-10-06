@@ -1,7 +1,7 @@
 # DIY Completion Effects Through the Outbox — Step 3 Implementation Plan
 
 **Date:** October 6, 2026 (revision 3, after two external reviews the same day)
-**Status:** **Revision 3, approved for implementation (October 6, 2026): S3-1 to S3-5, S3-7 to S3-9 and S3-11 as written; S3-6 and S3-10 as corrected in this revision (§3.6, §4).** Slice 3a-0 (measurement, no behavior change) is approved to begin first, and the final handler dependency boundary is chosen after it. Nothing else is built. One schema change (an enum value), applied by you.
+**Status:** **Revision 3, approved for implementation (October 6, 2026): S3-1 to S3-5, S3-7 to S3-9 and S3-11 as written; S3-6 and S3-10 as corrected in this revision (§3.6, §4).** Slice 3a-0 (measurement, no behavior change) is done (§12) and proposes the final handler boundary for your confirmation. Nothing else is built. One schema change (an enum value), applied by you.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 3 (P4; decisions O3 and O13, approved October 6, 2026), D8, E6, E7, E17, E18
 **Follows:** [`ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md`](ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md) (step 2, pushed; its rollout is yours)
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20, plus its section 7 adversarial pass (§8). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -168,7 +168,7 @@ One change, additive: `DIY_PROJECT_COMPLETED` added to `DomainEventType`. No new
 
 ## 9. Risks
 
-1. **Worker import graph (C7).** A broken import could crash-loop the worker at boot (this repository has had that failure). Mitigated by the 3a-0 measurement, the injected boundary and the worker gate before any producer ships.
+1. **Worker import graph (C7).** Measured in 3a-0 (§12): both canonical services are already loaded by the worker today, so no new modules enter its graph. The remaining risk is the **production worker image replacing seven backend modules with stubs** (§12, F4), which the development closure does not reproduce; the 3c run applies the same stubs.
 2. **Latency.** The home-event link appears after the next worker cycle at the earliest; no promise is made.
 3. **Retry copy.** Failure text is fixed; the real error stays in `lastError` and the logs for you.
 4. **Refactoring the maintenance operation.** The extraction touches a heavily used service; the change is a split at the existing access-check boundary and is pinned by the existing task tests plus a new one for the viewer refusal.
@@ -208,3 +208,27 @@ One change, additive: `DIY_PROJECT_COMPLETED` added to `DomainEventType`. No new
 | 8. Explicit rollout order | §4, S3-10 |
 | 9. No 30-second promise | §3.7, S3-9 |
 | Additional validation | §7 |
+
+## 12. Slice 3a-0 record: measurements (October 6, 2026)
+
+No product code was changed. Two throwaway scripts (in the scratchpad, not committed) computed static import closures and loaded the worker. The one environment change: the worker's **generated Prisma client was stale** (September 13, so it lacked every table added since), which made the worker `tsc` report 148 errors unrelated to this plan; I regenerated it locally with `npm run prisma:generate` in `apps/workers` (no database involved). Anyone running the worker gate must do the same first.
+
+| # | Finding | Label |
+| --- | --- | --- |
+| F1 | **Neither canonical service adds anything to the worker.** `homeEvents.service.ts` (closure 70 backend files) and `PropertyMaintenanceTask.service.ts` (closure 367) are already in the worker's static closure: 0 files of either are new (the worker's closure is about 976 backend files). The maintenance service is reached through `homeOperationsReconciliation.job.ts`. Loading `worker.ts` for real (transpile-only, a placeholder database URL) loaded 4,007 modules in about 7.5 seconds and **both services were in the module cache**. This corrects plan item C7 and §9 risk 1: the feared new import graph does not exist; the file is named `PropertyMaintenanceTask.service.ts` (capital P), and a first pass that matched it case-insensitively on macOS miscounted it as new, which is why the check was repeated with real-case paths. | Executed (static closure and runtime load) |
+| F2 | Baseline gates after regenerating the client: worker `tsc --noEmit` 0 errors; `tsc --project tsconfig.docker.json --noEmit` reported 0 (not the Docker build itself, and it reads backend declarations from `../backend/dist`); `lint:worker-import-boundary` PASS (142 files); the job and poller unit tests 39/39 (the one failure seen before regenerating was the stale client). | Executed |
+| F3 | **No exhaustive dispatch test exists.** `processDomainEventsJob.test.js` does not iterate `DomainEventType`; an unhandled type is only discovered when an event of it is processed. The gate's dispatch test is new work. | Code-traced |
+| F4 | **The production worker image overwrites seven backend modules with stubs** (`apps/workers/scripts/build-worker-backend-overrides.js`: error middleware, admin audit, notification, gemini, JobQueue, analytics schemas, property service). The maintenance service's closure contains five of them (error middleware, notification, gemini, JobQueue, analytics schemas); the home event service's, two (error middleware, analytics schemas). The error stub is a faithful `APIError`; the analytics stub only replaces zod schemas with pass-through parsers; the JobQueue stub returns null queues. The maintenance service's own file calls only the analytics emitter (lines 257, 702, 722); whether anything on the **transitive** completion path calls the notification, gemini or JobQueue stubs was not traced. | Code-traced; transitive calls unverified |
+| F5 | `resolvePropertyAccess` uses the global client, not a transaction, and **performs a write** (it upserts a primary-owner membership for pre-household owners). It cannot be called inside the completion transaction as is. | Code-traced |
+| F6 | `startServer()` already throws a FATAL error before `app.listen` for agent deployment readiness (`assertAgentDeploymentReadiness`); the DIY template check runs after listen and only warns. `/api/ready` is static ("ready" whenever the process serves). A throw before `listen` therefore also keeps the pod from becoming ready. | Code-traced |
+| F7 | Both services run on the backend's own Prisma client inside the worker process (a second client with its own pool beside the worker's); this is how every `@worker-shared` service already behaves, not new. | Code-traced |
+
+**What this changes in the plan**
+
+1. **The handler boundary (proposed, S3-11):** a pure handler module `services/diy/diyCompletionEffects.ts` with **no service imports** (only types), taking the injected dependencies of §3.2, and a separate adapters module `services/diy/diyCompletionEffectsAdapters.ts` that wires `HomeEventsService`, the maintenance core and Prisma. The worker dispatches through `ProcessDomainEventsDeps` like every other handler. Because F1 removes the import-graph argument, **the maintenance extraction is justified only by §3.6 (no public way to complete a task without the access check)**, not by import size, and stays as small as that: a module-private function called by `updateTaskStatus` after its check and by the adapter.
+2. **In-transaction access (F5):** a read-only, transaction-capable variant of the access check is added (membership lookup and the legacy owner check, **no auto-create write**); `resolvePropertyAccess` keeps its behavior for everything else. A legacy owner with no membership row is accepted by the ownership check without writing one.
+3. **Fatal enum check (F6):** placed in `startServer()` before `listen`, next to the agent readiness assertion, using a catalog query for the enum label (`pg_enum` joined to `pg_type` for `DomainEventType`), with a message naming `prisma db push`.
+4. **Worker gate (F2, F3):** the gate is the existing four checks plus the **new exhaustive dispatch test**, with the local precondition that the worker's Prisma client is regenerated.
+5. **Stubs (F4):** the 3c run, and a new unit-level check in 3a, load the handler's adapters **with the same seven stubs applied** (as the scratch script does with `require.cache`), so a completion that depends on a stubbed module is caught before the image is built, not in production. The transitive-call question is answered by that run, not by this trace.
+
+**Not done here:** the Docker image build, a boot of the built `dist`, and any database. The closure scripts can be committed as a worker tool if you want the measurement repeatable.

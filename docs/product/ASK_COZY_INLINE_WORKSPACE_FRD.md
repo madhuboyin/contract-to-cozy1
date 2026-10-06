@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.203
+**Version:** 1.204
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.204 — DIY completion outbox, slice 3a-0 (measurements):** no product code changed. The worker already loads both services the completion effects need (confirmed by a static closure and by loading the worker), so no new module graph enters it; the real risks found are that the production worker image replaces seven backend modules with stubs (five of which the maintenance service reaches), that no test checks every event type has a handler, and that the existing access check cannot run inside a transaction and performs a write. The plan now proposes a pure handler with injected dependencies plus an adapters module, a transaction-capable read-only access check, a fatal enum check before the server listens, and a stubbed-module check. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` §12.
 
 **Revision 1.203 — DIY completion outbox plan, revision 3 (approved for implementation):** after a second review the plan verifies the actor's access inside the completion transaction and snapshots actor, property, project and task ids into the outbox payload (the worker uses the actor only for attribution, and the extracted maintenance core stays internal); a missing outbox enum value now fails backend start-up and readiness instead of warning; the worker validates the linked task's existence and property before creating anything; recovery of a dead-lettered event records the actor, time and a count in the event payload; and 3a and 3b are one release train deployed sequentially, with the real-Postgres run before the producer is enabled or the gap recorded. Slice 3a-0 (a measurement of the worker's import graph, no behavior change) starts first. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md`.
 
