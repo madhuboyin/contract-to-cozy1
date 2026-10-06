@@ -165,10 +165,36 @@ const aboutBoundary = (): AskPresentationBlock => ({
   severity: 'INFO', suggestions: [],
 });
 
-const quotedTitles = (tasks: SeasonalTemplate[]): string => {
-  const names = tasks.map((task) => `\u201c${task.title}\u201d`);
+const quotedTitles = (titles: readonly string[]): string => {
+  const names = titles.map((title) => `\u201c${title}\u201d`);
   return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 };
+
+// A title that reads like an internal key ("HVAC_FILTER_CHANGE") is record data, not language. The answer checker rejects authored text that
+// contains one (askAnswerTrustValidator INTERNAL_TOKEN), so such a title is never quoted in the lead sentence; the tasks are still listed below it.
+const INTERNAL_KEY_LIKE = /\b[A-Z]{3,}_[A-Z0-9_]{2,}\b/;
+
+/**
+ * The seasonal answers' lead sentence: the judgment (which tasks matter most, named, then how to pace the rest), shared by the general
+ * winter-style plan and the home's own recorded checklist so neither says "the first N". Seasonal on purpose: the callers decide what is urgent
+ * (catalog priority for the plan; priority and status for the recorded checklist) and pass the ordered urgent titles; this only words them.
+ * `when` is a phrase like "this winter"; omit it when the answer spans seasons. If a leading title cannot be quoted safely the sentence still
+ * makes the judgment (how many matter most, and that they are listed first) without naming them.
+ */
+export function seasonalLeadSentence(input: { urgentTitles: readonly string[]; laterCount: number; when?: string | null }): string {
+  const { urgentTitles, laterCount } = input;
+  const when = input.when ? ` ${input.when}` : '';
+  if (urgentTitles.length === 0) {
+    return `None of the ${laterCount === 1 ? 'one task' : `${laterCount} tasks`}${when} is urgent, so do ${laterCount === 1 ? 'it' : 'them'} when you have time.`;
+  }
+  const leading = urgentTitles.slice(0, 3);
+  const single = urgentTitles.length === 1;
+  const subject = single ? 'The one thing that matters most' : `The ${urgentTitles.length} things that matter most`;
+  const pace = `Do ${single ? 'that' : 'those'} soon${laterCount ? `; the other ${laterCount} can wait until you have time` : ''}.`;
+  if (leading.some((title) => INTERNAL_KEY_LIKE.test(title))) return `${subject}${when} ${single ? 'is' : 'are'} listed first. ${pace}`;
+  const more = urgentTitles.length > leading.length ? `, plus ${urgentTitles.length - leading.length} more` : '';
+  return `${subject}${when} ${single ? 'is' : 'are'} ${quotedTitles(leading)}${more}. ${pace}`;
+}
 
 export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOperationResult {
   const { season, year } = seasonalPlanWindow(input.now, input.focus);
@@ -188,11 +214,10 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
   const soon = shown.filter((task) => task.priority === 'CRITICAL');
   const later = shown.filter((task) => task.priority !== 'CRITICAL');
   // The judgment leads: what matters most, named (the producer's own priority tiers), then how to pace the rest. Climate and basis follow.
-  const when = input.focus === 'NEXT_SEASON' ? `before ${seasonWord}` : `this ${seasonWord}`;
-  const leading = soon.slice(0, 3);
-  const judgment = soon.length
-    ? `${soon.length === 1 ? 'The one thing that matters most' : `The ${soon.length} things that matter most`} ${when} ${soon.length === 1 ? 'is' : 'are'} ${quotedTitles(leading)}${soon.length > leading.length ? `, plus ${soon.length - leading.length} more` : ''}. Do ${soon.length === 1 ? 'that' : 'those'} soon${later.length ? `; the other ${later.length} can wait until you have time` : ''}.`
-    : `None of the ${shown.length === 1 ? 'one task' : `${shown.length} tasks`} ${when} is urgent, so do ${shown.length === 1 ? 'it' : 'them'} when you have time.`;
+  const judgment = seasonalLeadSentence({
+    urgentTitles: soon.map((task) => task.title), laterCount: later.length,
+    when: input.focus === 'NEXT_SEASON' ? `before ${seasonWord}` : `this ${seasonWord}`,
+  });
   const truncated = tasks.length > shown.length ? ` I am showing the top ${shown.length} of ${tasks.length}.` : '';
   const relation = input.focus === 'NEXT_SEASON' ? 'the next' : 'the current';
   let number = 0;

@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.185
+**Version:** 1.186
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.186 — conversational presentation Phase 2 closed with no new contract:** The Phase 2 inventory found no second-producer need for a new response field beyond Phase 1's `initialVisibleCount`. Two corrections shipped through existing contracts: seasonal next-steps cards now honor each action's declared `style` (so a card whose producer declares no primary action shows no filled button; workflow receipts remain a separate positional-style exception), and the winter plan and the home's recorded seasonal checklist share a seasonal-specific lead sentence that names the leading tasks instead of saying "the first N" (never quoting an internal-key-like title). Hiring-guide, monthly-routine and renovation disclosure decisions are recorded and not implemented. See `docs/architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_2_INVENTORY.md`.
 
 **Revision 1.185 — conversational presentation Phase 1 implemented:** Implements Appendix C.11 delivery phase 1 for the three reference scenarios through existing contracts, plus one additive, optional grouped-list section field (`initialVisibleCount`, producer-declared disclosure boundary; the client only expands and collapses). `TASK_GUIDE` footer actions now keep their declared style, so a guide may legitimately have no primary action; the furnace-filter guide declares none. Home-safety basics adds a separate `EMERGENCY` gas boundary (which, by the existing safety policy, puts that response in safe-recovery suggestion mode) and conditional unknown-gas wording only: no canonical gas-service fact exists, so present/absent personalization and capture remain Phase 4. Verified by producer, trust-validator, finalizer and component tests; no browser run, so layout is unverified. See `docs/architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_1_AUDIT.md` §9.
 

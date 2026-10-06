@@ -1,7 +1,7 @@
 # Ask Cozy — Conversational Presentation, Phase 2 Inventory
 
 **Date:** October 6, 2026
-**Status:** Inventory and recommendation. No code changed. One throwaway render probe was run and deleted.
+**Status:** Inventory complete and reviewed (October 6, 2026). Revision 2 incorporates the review: R1 and the narrowed seasonal wording fix are implemented (§8); R3 is a recorded product decision, not implemented; R4 is a recorded decision. Phase 2 closes with **no new contract**.
 **Plan:** [`ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md`](ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md) §5
 **Inputs:** [Phase 1 audit](ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_1_AUDIT.md) §9.5 (shipped as `11233b57`), FRD v1.185 Appendix C.11
 **Method:** `AUDIT_METHODOLOGY.md`. Labels: **[Executed]** ran and observed, **[Code-traced]** read not run, **[Inferred]** extrapolated (none is relied on). Searches are scoped to the directories named; "none found" means none found there.
@@ -42,6 +42,13 @@ So **the need exists in at least two more producers**, which justifies keeping t
 - They **cannot be merged by changing one line.** `reconcileResultView` forces `visibleCounts[section.id]` to at least 5 for every section (`resultViewState.ts:94`) and the hydrator accepts only 5–100 (`:37`). A declared count of 3 would be raised to 5 by reconciliation. Unifying them is a view-state design change, not an adoption.
 - Decision recommended: leave plan-layout disclosure local and record it (R4).
 
+Decisions recorded for the adoption candidates (review, October 6, 2026; **not implemented**, a separately approved content increment):
+
+- **Hiring guide.** Its six items are authored in an order, not ranked by importance, so setting `initialVisibleCount: 3` alone would imply a priority nobody chose. Disclosure requires **reordering** the lead set first. Recommended lead three: (1) check licensing and insurance, (2) get itemized written estimates, (3) put scope, price, schedule, payment and changes in a signed contract. That moves the contract/payment item up; references, permits and warranty/subcontractor checks sit under "Show 3 more". A continuation is added only if it launches a registered, relevant capability with correct targeting (for example quote comparison); otherwise no continuation is acceptable.
+- **Monthly routine.** Stays fully visible and does **not** use `initialVisibleCount`: five short, equally relevant checks performed as one routine; hiding two would imply a priority the producer does not own.
+- **Renovation readiness.** Local disclosure applies **only** to "Other open items", with an initial visible count of **five**. "Blocking" stays fully visible.
+- **Renovation truncation is a separate, pre-existing issue.** The producer delivers at most 20 items per section (`.slice(0, 20)`) while `section.count` can state more (`capitalPlanning.handler.ts:255-259`) [Code-traced]. `initialVisibleCount` and its "Show N more" expose only delivered items; they neither fix the cap nor tell the homeowner that more items exist. That needs honest truncation copy or paging, handled separately and not conflated with this field.
+
 Partial-window check: `initialVisibleCount` counts **delivered** items. A server-paged section (`offset`/`count`) with more items on the server than delivered shows "Show N more" for delivered items only; no current producer combines the two [Code-traced].
 
 ### 3.2 S2 next-steps recognized by block id
@@ -59,6 +66,8 @@ The contract already carries the semantic: `style: PRIMARY | SECONDARY | QUIET`.
 - `SeasonalNextSteps` (`SeasonalAnswerCards.tsx:83`): `index === 0 ? 'PRIMARY' : 'SECONDARY'`.
 - `CalmReceipt` (`CoreBlocks.tsx:125`): same rule, for workflow receipts (out of scope here).
 
+R1 fixes `SeasonalNextSteps` only. **`CalmReceipt` remains a separate positional-style exception**: it overrides declared style for workflow receipts and is outside this phase. R1 therefore does not eliminate the anti-pattern globally; the inventory should not be read as saying so.
+
 Effect of the first, by producer [Code-traced unless noted]:
 
 | `*-next` producer | Declared first action | Rendered first action | Divergence |
@@ -73,12 +82,14 @@ Effect of the first, by producer [Code-traced unless noted]:
 
 ### 3.4 S7 judgment-first summary wording
 
-The positional defect Phase 1 removed from the winter plan ("I recommend doing the first 3 soon") is present, unchanged, in the other seasonal producer and in a near variant elsewhere [Code-traced]:
+Of the two other producers I first listed, only one has the same correctness defect [Code-traced]:
 
-- `askSeasonalMaintenance.ts:182`: "Here are N things to focus on. I recommend doing the first X soon, and the other Y when you have time."
-- `homeHabitCoach.handler.ts:155`: "Here are N habits to work on, X past their suggested date, so I would start there."
+- **Same defect: the recorded seasonal checklist** (`askSeasonalMaintenance.ts:182`): "Here are N things to focus on. I recommend doing the first X soon, and the other Y when you have time." It refers to tasks by position rather than naming them.
+- **Not the same defect: Home Habit Coach** (`homeHabitCoach.handler.ts:155`): "…X past their suggested date, so I would start there." "There" refers to the explicitly named overdue group, not to the first X positions. It may be improved stylistically but is not a correctness defect, and is left unchanged absent a separate copy review.
 
-So **two further producers need the same ordering policy** (lead with the named top priorities, then pacing). This is a producer-side wording policy, not a schema field: both already know their ordered, prioritized items, and the sentence is text. The smallest fit is a shared pure helper that takes the ordered titles and the urgent count and returns the lead sentence, used by all three producers. Nothing about the response contract changes.
+A three-producer helper would couple different semantics: the winter plan ranks by catalog priority; the recorded checklist uses priority, status and recommended date; habits use overdue dates and coach ranking. **The helper is therefore seasonal-specific and shared only by the winter plan and the recorded seasonal checklist**: the callers decide what is urgent and pass the ordered urgent titles; the helper only words them. No broad cross-domain sentence generator is created.
+
+Finding while implementing (F18): naming record titles puts them in authored summary text, and the answer checker rejects authored text containing an internal-key-like token (`INTERNAL_TOKEN` in `askAnswerTrustValidator.ts`). The existing test "keeps the plan answer even with a code-like task title" caught the regression. The helper therefore never quotes a title that looks like an internal key; it still makes the judgment ("…is listed first") without naming it.
 
 ### 3.5 S8 personalization wording
 
@@ -101,7 +112,7 @@ S4 has no second consumer. S6 friction is real (Phase 1 touched `askAnswerTrustP
 | C3 personalization/basis field | 5 producers hand-write text | No consumer branches on it | **Defer to Phase 4** |
 | C4 persisted `responseIntent` / seven composition modes | n/a | n/a | **Rejected** per plan §5 and FRD C.11.2 |
 | C5 action-prominence semantics | n/a | Already in `style` | **No contract; renderer fix** (§3.3) |
-| C6 shared lead-sentence helper | Yes, 2 more producers (§3.4) | n/a (producer text) | **Producer-side helper, not a schema change** |
+| C6 lead-sentence helper | One more producer with the same defect (the recorded seasonal checklist); habits is a different semantic (§3.4) | n/a (producer text) | **Seasonal-specific producer-side helper, not a schema change; not a cross-domain helper** |
 
 ### 4.1 `initialVisibleCount` against the plan's required checklist (retrospective)
 
@@ -117,16 +128,16 @@ S4 has no second consumer. S6 friction is real (Phase 1 touched `askAnswerTrustP
 
 Other places that rebuild `GROUPED_LIST` sections: `askResultSynthesis.service.ts:13` maps sections to a title/count/items summary for narration, which intentionally ignores display fields [Code-traced].
 
-## 5. Recommendations (each needs separate approval; none is started)
+## 5. Recommendations and decisions
 
-| ID | Proposal | Type | Why |
-| --- | --- | --- | --- |
-| **R1** | `SeasonalNextSteps` honors each action's declared `style`; add a component test for a next-steps card with no primary action | Renderer fix, no contract | `home-basics-next` and `seasonal-home-care-next` (no setup) render a filled first button the producer did not declare (§3.3). Habits, seasonal checklist and the setup-enabled plan keep today's rendering |
-| **R2** | One shared pure lead-sentence helper (ordered priority titles, urgent count, pacing) used by the winter plan, `askSeasonalMaintenance.ts`, and the habits summary; producer tests assert named priorities instead of "the first N" | Producer-side, no contract | Same positional defect in two more producers (§3.4) |
-| **R3** | Content decisions for the owner, then adoption of the existing field: which hiring-guide items lead and whether it gets a continuation; whether the monthly routine and renovation "Other open items" (up to 20) declare `initialVisibleCount` | Product decision, then producer edits | Ordering of authored guidance is a product call; no new contract needed |
-| **R4** | Record, do not change: plan-layout disclosure stays local while record lists persist `visibleCounts`; unifying needs a floor/validation change in `resultViewState.ts` | Documentation | §3.1; revisit only if reloading loses expansion in practice |
+| ID | Decision | Status |
+| --- | --- | --- |
+| **R1** | `SeasonalNextSteps` honors each action's declared `style` (PRIMARY, SECONDARY, QUIET pass through; a card with no primary action is valid). `CalmReceipt` stays a separate positional-style exception | **Approved and implemented** (§8) |
+| **R2** (narrowed) | A seasonal-specific pure lead helper shared by the winter plan and the recorded seasonal checklist, naming the leading tasks. Home Habit Coach unchanged. No generic helper | **Approved as narrowed and implemented** (§8) |
+| **R3** | Hiring guide: reorder the lead three, then `initialVisibleCount: 3`; continuation only if it launches a registered relevant capability. Monthly routine: no disclosure. Renovation: "Other open items" only, initial five; the 20-delivered truncation is separate | **Decided, not implemented**; a separately approved content increment |
+| **R4** | Plan-layout disclosure stays local; persisted `ResultView.visibleCounts` assumes a floor of five and record-list behavior, and unifying would need hydration-validation and reconciliation changes, a precedence rule between producer defaults and saved user state, old view-state checks, and a persistence-scope decision (per result, session or execution), with no demonstrated homeowner problem | **Approved** (record only) |
 
-No R-item requires a schema change. If R1–R3 are approved, Phase 2 closes with no new contract, which is the outcome the plan permits.
+Phase 2 closes with **no new contract**: after R1 and the narrowed seasonal wording fix, no schema change beyond Phase 1's `initialVisibleCount` is required.
 
 ## 6. Adversarial pass
 
@@ -144,3 +155,27 @@ Absolute-language grep over this document (`never|always|none|zero|nothing|fully
 - Reading and `grep` across `apps/backend/src/services/ask`, `services/skills`, `apps/frontend/src/components/ask` and `features/ask` [Code-traced].
 - One throwaway jest render of `SeasonalNextSteps` (file created and deleted in the same step; `git status` clean of it) [Executed].
 - No code, schema, test or fixture changed. No browser, Playwright, service or database.
+
+## 8. Implementation and validation (R1 and narrowed R2, October 6, 2026)
+
+**Changed**
+
+- `apps/frontend/src/components/ask/SeasonalAnswerCards.tsx`: `SeasonalNextSteps` passes each action through unchanged (no position-based style).
+- `apps/backend/src/services/ask/support/seasonalHomeCare.ts`: new exported `seasonalLeadSentence` (seasonal-specific; names up to three leading tasks, counts the rest, paces them; falls back to "…is listed first" when a leading title looks like an internal key); the winter plan now uses it.
+- `apps/backend/src/services/ask/askSeasonalMaintenance.ts`: the recorded checklist's lead sentence uses the same helper with the urgent tasks' titles (urgent = `CRITICAL` and `PENDING`, as before). Output for the first test case: "These tasks come from the Summer 2026 checklist. The one thing that matters most is “Service air conditioner”. Do that soon; the other 1 can wait until you have time."
+- Tests: `seasonalNextSteps.test.tsx` (new), additions to `askSeasonalMaintenance.test.js`. The Playwright fixture strings for the seasonal plan, its boundary and the checklist summary were brought in line with the new copy (not run).
+- Home Habit Coach: unchanged.
+
+**Behavior change in R1.** Habits, the recorded checklist and the setup-enabled plan declare `PRIMARY` on their first action, so they render as before (component-tested with that shape). `home-basics-next` and the no-setup plan now show no filled button, matching what their producers declared. `ActionLink` renders `QUIET` like `SECONDARY` (existing behavior); R1 only stops overriding it.
+
+**Validation run**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| Backend `node --test` on the seasonal, maintenance, habit, checklist-layout, Phase 1 and startup-registry suites | 141 pass, 0 fail | Executed |
+| Backend `node --test` on the seasonal/maintenance suites plus `askTrustArchitecture` | 78 pass, 0 fail (includes the code-like-title guard) | Executed |
+| Backend `npm run typecheck` | clean | Executed |
+| Frontend `jest src/components/ask src/features/ask` | 578 pass, 5 fail: the same `maintenanceShelves` (4) and `displayPatterns` (1) failures that exist without this work | Component-tested |
+| Frontend `next build` | compiled successfully | Static |
+
+**Not run:** Playwright, browser, services, database. Pixel-level appearance of the unfilled next-steps cards is unverified.

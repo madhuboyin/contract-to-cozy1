@@ -1254,7 +1254,7 @@ function seasonalPlanExecution() {
         "type": "SUMMARY",
         "id": "seasonal-home-care-summary",
         "title": "Getting ready for winter",
-        "body": "Winter is the next season for your area. This is based on this home's zip code (a moderate climate). Here are 4 things to focus on. I recommend doing the first 2 soon, and the other 2 when you have time.",
+        "body": "The 2 things that matter most before winter are \u201cReplace furnace filters monthly\u201d and \u201cTest GFCI outlets\u201d. Do those soon; the other 2 can wait until you have time. Winter is the next season for your area. This is based on this home's zip code (a moderate climate).",
         "tone": "DEFAULT",
         "actions": []
       },
@@ -1351,7 +1351,7 @@ function seasonalPlanExecution() {
         "type": "BOUNDARY",
         "id": "seasonal-home-care-boundary",
         "title": "About this recommendation",
-        "body": "These are general seasonal tasks for the climate region, not an assessment of this home. They do not use anything recorded about your systems, so they become more specific as your home record fills in.",
+        "body": "This is general guidance for your climate, not an assessment of this home, and it does not use anything recorded about your systems. Once your home record lists them, your own seasonal checklist can add tasks specific to those systems.",
         "severity": "INFO",
         "suggestions": []
       },
@@ -1866,7 +1866,7 @@ function seasonalShelvesExecution() {
         "type": "SUMMARY",
         "id": "seasonal-maintenance-summary",
         "title": "3 summer tasks need attention",
-        "body": "These tasks come from the Summer 2026 checklist. Here are 3 things to focus on. I recommend doing the first 2 soon, and the other 1 when you have time.",
+        "body": "These tasks come from the Summer 2026 checklist. The 2 things that matter most are \u201cService air conditioner\u201d and \u201cInspect exterior drainage\u201d. Do those soon; the other 1 can wait until you have time.",
         "tone": "CAUTION",
         "actions": []
       },

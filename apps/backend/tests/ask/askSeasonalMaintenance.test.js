@@ -227,3 +227,39 @@ test('each view offers the other views, never the one it is on, and every offere
   const all = result('Show all summer tasks', context).blocks[1].sections.map((section) => section.id);
   assert.deepEqual(all, ['seasonal-soon', 'seasonal-completed', 'seasonal-dismissed']);
 });
+
+
+// Conversational presentation Phase 2 (R2, narrowed): the recorded checklist names its leading tasks instead of saying "the first X soon".
+const { seasonalLeadSentence } = require('../../src/services/ask/support/seasonalHomeCare.ts');
+
+test('the recorded checklist summary names the urgent tasks and paces the rest, with no positional reference', () => {
+  const response = result('what seasonal tasks are pending', { checklists: [checklist({ items: [
+    item({ id: 'cooling', title: 'Service air conditioner' }),
+    item({ id: 'drainage', title: 'Inspect exterior drainage', priority: 'RECOMMENDED' }),
+  ] })] });
+  const body = response.blocks[0].body;
+  assert.match(body, /The one thing that matters most is \u201cService air conditioner\u201d\. Do that soon; the other 1 can wait until you have time\./);
+  assert.doesNotMatch(body, /the first \d+|Here are|I recommend/);
+  assert.match(body, /^These tasks come from the Summer 2026 checklist\./);
+});
+
+test('the recorded checklist with nothing urgent says so for the tasks it has, and a completed view adds no lead sentence', () => {
+  const calm = result('what seasonal tasks are pending', { checklists: [checklist({ items: [item({ id: 'a', priority: 'RECOMMENDED' }), item({ id: 'b', title: 'Check caulk', priority: 'OPTIONAL' })] })] });
+  assert.match(calm.blocks[0].body, /None of the 2 tasks is urgent, so do them when you have time\./);
+  const done = result('what summer tasks are completed', { checklists: [checklist({ items: [item({ id: 'a', status: 'COMPLETED' })] })] });
+  assert.doesNotMatch(done.blocks[0].body, /matters? most|urgent/);
+});
+
+test('seasonalLeadSentence: names up to three leading tasks, counts the rest, and words singular and plural cases', () => {
+  assert.equal(seasonalLeadSentence({ urgentTitles: ['A', 'B', 'C', 'D'], laterCount: 0, when: 'this winter' }),
+    'The 4 things that matter most this winter are \u201cA\u201d, \u201cB\u201d and \u201cC\u201d, plus 1 more. Do those soon.');
+  assert.equal(seasonalLeadSentence({ urgentTitles: ['A', 'B'], laterCount: 3 }),
+    'The 2 things that matter most are \u201cA\u201d and \u201cB\u201d. Do those soon; the other 3 can wait until you have time.');
+  assert.equal(seasonalLeadSentence({ urgentTitles: [], laterCount: 1, when: 'before winter' }), 'None of the one task before winter is urgent, so do it when you have time.');
+});
+
+test('seasonalLeadSentence never quotes a code-like title: it keeps the judgment and says the tasks are listed first', () => {
+  const sentence = seasonalLeadSentence({ urgentTitles: ['HVAC_FILTER_CHANGE'], laterCount: 0 });
+  assert.equal(sentence, 'The one thing that matters most is listed first. Do that soon.');
+  assert.doesNotMatch(sentence, /HVAC_FILTER_CHANGE/);
+});

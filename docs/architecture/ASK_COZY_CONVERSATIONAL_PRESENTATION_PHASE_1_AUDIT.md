@@ -215,7 +215,7 @@ The home-habit review `TASK_GUIDE` producer already declares `PRIMARY` on its fi
 - **Help for the current task** (C.11.9) has no registered capability; the furnace guide therefore shows no primary action rather than a plan-level one pretending to be it. Stateful walkthrough, step help and persistent assessment remain Phase 3/4.
 - **Gas present/absent** is not modeled (no canonical fact); unknown/conditional wording only. Phase 4.
 - ZIP prefix 554 still resolves to the national default (disclosed in the answer); not repaired here.
-- `SeasonalNextSteps` still styles its first action `PRIMARY` by position (`seasonal-home-care-next`, `home-basics-next`); not changed because those cards present a recommended next step rather than a guide.
+- `SeasonalNextSteps` still styled its first action `PRIMARY` by position at the end of Phase 1, which left `home-basics-next` (declared `SECONDARY`) with a filled button. Corrected in Phase 2 R1 (Phase 2 inventory §3.3 and §8); `CalmReceipt` remains a separate positional-style exception.
 - The seasonal-plan boundary id and the `EMERGENCY` mode behavior apply to this one operation only; no generic policy change (Phase 2 inventory below).
 
 ### 9.5 Local special cases introduced (Phase 2 input)

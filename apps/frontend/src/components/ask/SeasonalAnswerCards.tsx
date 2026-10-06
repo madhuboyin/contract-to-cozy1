@@ -77,10 +77,11 @@ export function SeasonalAboutCard({ block }: { block: Extract<AskPresentationBlo
 }
 
 export function SeasonalNextSteps({ block }: { block: SummaryBlock }) {
-  const action = (candidate: AskAction, index: number) => {
+  // Each action keeps the style its producer declared (PRIMARY, SECONDARY or QUIET): the producer owns which step is recommended, so a card
+  // whose producer recommends none shows no filled button.
+  const action = (candidate: AskAction) => {
     const Icon = ACTION_ICONS[candidate.id];
-    // The first is the recommended step; the rest are alternatives, so only it is filled.
-    return <ActionLink key={candidate.id} action={{ ...candidate, style: index === 0 ? 'PRIMARY' : 'SECONDARY' }} icon={Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : undefined} />;
+    return <ActionLink key={candidate.id} action={candidate} icon={Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : undefined} />;
   };
   return (
     <section data-seasonal-next-steps="" aria-labelledby="seasonal-next-steps-heading" className="flex max-w-[800px] items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { seasonalTaskFacts, seasonalTemplateByKey } from './support/seasonalHomeCare';
+import { seasonalLeadSentence, seasonalTaskFacts, seasonalTemplateByKey } from './support/seasonalHomeCare';
 import type { AskOperationResult } from './askOperationRegistry';
 import type {
   SeasonalChecklistContext,
@@ -178,8 +178,9 @@ export function buildSeasonalMaintenanceResult(input: {
   const isUrgent = ({ item }: { item: SeasonalChecklistContextItem }) => item.priority === 'CRITICAL' && effectiveStatus(item) === 'PENDING';
   const soonCount = matches.filter(isUrgent).length;
   const laterCount = matches.length - soonCount;
+  // The urgent tasks are named (the same lead as the general plan), not referred to by position.
   const focusSentence = intent.view === 'OPEN' && matches.length
-    ? ` Here ${matches.length === 1 ? 'is 1 thing' : `are ${matches.length} things`} to focus on.${soonCount && laterCount ? ` I recommend doing the first ${soonCount} soon, and the other ${laterCount} when you have time.` : soonCount ? ` I recommend doing ${soonCount === 1 ? 'it' : 'all of them'} soon.` : ' None of these is urgent, so do them when you have time.'}`
+    ? ` ${seasonalLeadSentence({ urgentTitles: matches.filter(isUrgent).map(({ item }) => item.title), laterCount })}`
     : '';
   const summaryBody = matches.length
     ? `These tasks come from the ${checklistLabel}.${linkedCount ? ` ${linkedCount} ${linkedCount === 1 ? 'is' : 'are'} also linked to the canonical Maintenance record and shown only once.` : ''}${focusSentence}`
