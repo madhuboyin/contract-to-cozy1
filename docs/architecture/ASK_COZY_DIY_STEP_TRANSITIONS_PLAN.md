@@ -1,7 +1,7 @@
 # DIY Step and Project Transitions — Step 2 Implementation Plan
 
 **Date:** October 6, 2026
-**Status:** **Approved October 6, 2026: S2-1 to S2-9 at the recommended defaults (§11).** Nothing is built yet; implementation starts at slice 2a.
+**Status:** **Approved October 6, 2026: S2-1 to S2-9 at the recommended defaults (§11).** Slice 2a (schema and service) is implemented (§12); 2b and 2c are not started. **2a must ship together with 2b.**
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 2 (decisions O3, O10, O11, approved October 6, 2026), D3 and D8
 **Follows:** [`ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md`](ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md) (step 1, implemented; its rollout is the owner's and is independent of this step's code)
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20. Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -132,7 +132,7 @@ No change to `DiyProject.updatedAt` (it already exists and is now bumped by step
 
 | Slice | Deliverable |
 | --- | --- |
-| 2a | Schema edit, service transitions, completion service actor, unit and concurrency tests with mutation checks |
+| 2a | Schema edit, service transitions, completion service actor, unit and concurrency tests with mutation checks. **Done, see §12** |
 | 2b | Controller, validators, frontend types, client and page, with component tests |
 | 2c | Scratch Postgres extension, rollout notes (the in-flight-projects query and the owner's `db push` step), plan record |
 
@@ -169,3 +169,29 @@ The owner approved **S2-1 through S2-9 at the recommended defaults**:
 | S2-9 | Old tabs without a token fail with `400` until refreshed; no compatibility layer |
 
 **Release constraint carried forward.** Slices 2a (service) and 2b (routes, validators and page) must ship together: with 2a alone the service requires a token that the page does not yet send, so step updates on the existing page would be refused.
+
+## 12. Slice 2a record (October 6, 2026)
+
+**Changed**
+
+- `prisma/schema.prisma` (additive, `prisma validate` passes): `DiyProjectStep.updatedAt` (default now, `@updatedAt`) and `DiyProjectStep.completedByUserId`; `DiyProject.completedByUserId`; new enum `DiyProjectEventType` and append-only model `DiyProjectEvent` (project, optional step, `actorUserId` as a plain string so history survives a user being removed, from and to status, time, index on project and time).
+- `services/diy/stepTransitions.ts` (new, pure): the transition table and the completion rule.
+- `services/diy.service.ts`: `updateStep`, `completeProject` and `abandonProject` rewritten per §3. Each is one transaction that first claims the project row (reads the current version and writes conditionally on it, retrying a few times under contention), applies the rule, writes conditionally on the observed step state, records the actor, and writes the ledger row. Versions are `max(now, previous + 1ms)`, so a token can never repeat even if two writes land in the same millisecond. A missing or malformed token is `400 DIY_TOKEN_REQUIRED`; the other errors are as in §3.7.
+- `services/diyCompletion.service.ts`: `onComplete(project, actorUserId)`; the home event and the incident sync use the actor.
+- `controllers/diy.controller.ts`: passes `req.user.userId` and `expectedUpdatedAt` through; the step response gains `alreadyApplied`.
+- Tests: `diyStepTransitions.test.js` (19) and `diyCompletionActor.test.js` (2), on the shared fake, which gained project and step reads and conditional writes, automatic version stamping, nested relation filters and a ledger.
+
+**Two clarifications to the plan (please confirm)**
+
+1. **Any first activity on a step starts the project**, not only "Start step". The plan's table said start moves the project from `PLANNING` to `IN_PROGRESS`; the page also lets someone mark a pending step done directly, which previously left the project in `PLANNING` with completed steps. Completing or skipping a pending step now starts it too.
+2. **The completion response now returns the project after the completion effects ran**, so `homeEventId` is filled. Before, the controller read it from the row captured before the effects, so it was always null.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| New tests: transition table, completion rule, start, complete, reopen, skip rules, closed project, token required and stale, idempotent retries, completion and abandon, atomic rollback, simultaneous completions, two writers on one token, completion racing a reopen in both orders, versions on a frozen clock, actor attribution | 21 pass | Executed |
+| Mutation checks: completion rule dropped (1 test fails); step token not compared (3); safety-note steps skippable (2); step write drops the actor (2); versions can repeat (1); effects attributed to the creator (1); completion service uses the creator (1); abandon without the claim (1); reopen does not clear completion (1) | each caught; restored code passes 21 of 21 | Executed |
+| Backend `npm run typecheck`; DIY, governance, revision, route-role, Ask DIY and startup-registry suites | clean; 137 pass | Executed |
+
+**Not run:** Postgres. The fake serializes transactions like row locks, so the claim and the race tests demonstrate the logic but not real lock timing, `timestamp(3)` round trips of the version token, or the retry loop under real contention; slice 2c extends the guarded scratch run for exactly those. No route, validator or page change yet (slice 2b), so **the existing page cannot yet update a step** (it sends no token): do not deploy 2a without 2b. The raw maintenance and incident writes in `DiyCompletionService` are unchanged until step 3.

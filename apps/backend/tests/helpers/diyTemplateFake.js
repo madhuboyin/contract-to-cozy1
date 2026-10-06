@@ -16,14 +16,16 @@ const matches = (record, where = {}) => Object.entries(where).every(([key, value
     if ('not' in value) return value.not === null ? record[key] != null : record[key] !== value.not;
     if ('contains' in value) return String(record[key] ?? '').toLowerCase().includes(String(value.contains).toLowerCase());
     if ('has' in value) return Array.isArray(record[key]) && record[key].includes(value.has);
+    return record[key] != null && matches(record[key], value); // a nested relation filter, e.g. project: { propertyId }
   }
+  if (value instanceof Date) return record[key] instanceof Date && record[key].getTime() === value.getTime();
   return value === null ? record[key] == null : record[key] === value;
 });
 
 const pickKeys = (record, select) => Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, record[key]]));
 
 function makeDiyDb(templateSeeds = [], hooks = {}) {
-  const state = { templates: new Map(), revisions: [], writes: [], projects: [], uncommittedProjects: new Set(), txDepth: 0 };
+  const state = { templates: new Map(), revisions: [], writes: [], projects: [], events: [], uncommittedProjects: new Set(), txDepth: 0 };
   for (const seed of templateSeeds) {
     state.templates.set(seed.id, structuredClone({
       status: 'DRAFT', approvedBy: null, approvedAt: null, publishedRevisionId: null, featuredOrder: null, geminiPromptHint: null,
@@ -70,22 +72,76 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
   };
   // A project row created inside an open transaction is visible through the transaction client only, never through the global client, until the
   // transaction commits (what Postgres does under READ COMMITTED). `seesUncommitted` is true for the transaction client.
+  const stamp = () => new Date(Date.now());
+  const visible = (seesUncommitted) => (project) => seesUncommitted || !state.uncommittedProjects.has(project.id);
   function projectDelegate(seesUncommitted) {
+    const see = visible(seesUncommitted);
     return {
       async create({ data }) {
         fail('project.create');
-        const project = { id: `project-${state.projects.length + 1}`, steps: [], materials: [], tools: [], aiGuide: null, ...structuredClone(data) };
+        const project = { id: `project-${state.projects.length + 1}`, steps: [], materials: [], tools: [], aiGuide: null, updatedAt: stamp(), createdAt: stamp(), ...structuredClone(data) };
         state.projects.push(project);
         if (state.txDepth > 0) state.uncommittedProjects.add(project.id);
         state.writes.push({ model: 'project', op: 'create', data: structuredClone(data) });
         return structuredClone(project);
       },
-      async findFirst({ where }) {
-        const row = state.projects.find((project) => matches(project, where) && (seesUncommitted || !state.uncommittedProjects.has(project.id)));
-        return row ? structuredClone(row) : null;
+      async findFirst({ where, select }) {
+        const row = state.projects.find((project) => matches(project, where) && see(project));
+        if (!row) return null;
+        return select ? pickKeys(structuredClone(row), select) : structuredClone(row);
+      },
+      async findUnique({ where }) { const row = state.projects.find((project) => project.id === where.id && see(project)); return row ? structuredClone(row) : null; },
+      async updateMany({ where, data }) {
+        state.writes.push({ model: 'project', op: 'updateMany', where, dataKeys: Object.keys(data) });
+        fail('project.updateMany');
+        const rows = state.projects.filter((project) => matches(project, where) && see(project));
+        rows.forEach((row) => Object.assign(row, structuredClone(data), { updatedAt: data.updatedAt ?? stamp() }));
+        return { count: rows.length };
+      },
+      async update({ where, data }) {
+        state.writes.push({ model: 'project', op: 'update', dataKeys: Object.keys(data) });
+        fail('project.update');
+        const row = state.projects.find((project) => project.id === where.id);
+        if (!row) { const error = new Error('Record not found'); error.code = 'P2025'; throw error; }
+        Object.assign(row, structuredClone(data), { updatedAt: data.updatedAt ?? stamp() });
+        return structuredClone(row);
       },
     };
   }
+  const stepRecords = () => state.projects.flatMap((project) => project.steps.map((step) => ({ step, project })));
+  const joinedStep = ({ step, project }) => ({ ...step, projectId: project.id, project: { id: project.id, propertyId: project.propertyId, status: project.status } });
+  const projectStepDelegate = {
+    async createMany({ data }) {
+      fail('project.steps.createMany');
+      const project = state.projects.find((row) => row.id === data[0]?.projectId);
+      if (project) data.forEach((row) => project.steps.push({ id: `steps-${childSeq++}`, status: 'PENDING', notes: null, completedAt: null, completedByUserId: null, updatedAt: stamp(), ...structuredClone(row) }));
+      return { count: data.length };
+    },
+    async findFirst({ where }) {
+      const hit = stepRecords().find((record) => matches(joinedStep(record), where));
+      return hit ? structuredClone(joinedStep(hit)) : null;
+    },
+    async findMany({ where, orderBy, select }) {
+      let rows = stepRecords().filter((record) => matches(joinedStep(record), where)).map(joinedStep);
+      if (orderBy?.stepNumber === 'asc') rows = [...rows].sort((a, b) => a.stepNumber - b.stepNumber);
+      return rows.map((row) => (select ? pickKeys(structuredClone(row), select) : structuredClone(row)));
+    },
+    async updateMany({ where, data }) {
+      state.writes.push({ model: 'step', op: 'updateMany', where, dataKeys: Object.keys(data) });
+      fail('step.updateMany');
+      const hits = stepRecords().filter((record) => matches(joinedStep(record), where));
+      hits.forEach(({ step }) => Object.assign(step, structuredClone(data), { updatedAt: data.updatedAt ?? stamp() }));
+      return { count: hits.length };
+    },
+  };
+  const projectEventDelegate = {
+    async create({ data }) {
+      fail('event.create');
+      const row = { id: `event-${state.events.length + 1}`, at: stamp(), ...structuredClone(data) };
+      state.events.push(row);
+      return structuredClone(row);
+    },
+  };
   const projectChildren = (name) => ({
     async createMany({ data }) {
       fail(`project.${name}.createMany`);
@@ -133,7 +189,8 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     diyTemplateTool: children('tools'),
     diySkillProfile: { async findUnique() { return hooks.skillProfile ?? null; } },
     diyProject: projectDelegate(false),
-    diyProjectStep: projectChildren('steps'),
+    diyProjectStep: projectStepDelegate,
+    diyProjectEvent: projectEventDelegate,
     diyProjectMaterial: projectChildren('materials'),
     diyProjectTool: projectChildren('tools'),
     diyTemplateRevision: {
@@ -170,7 +227,7 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
       const previous = db.__tail;
       let release; db.__tail = new Promise((resolve) => { release = resolve; });
       await previous;
-      const snapshot = structuredClone({ templates: [...state.templates], revisions: state.revisions, projects: state.projects });
+      const snapshot = structuredClone({ templates: [...state.templates], revisions: state.revisions, projects: state.projects, events: state.events });
       const tx = { ...db, diyProject: projectDelegate(true) };
       state.txDepth += 1;
       try {
@@ -181,6 +238,7 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
         state.templates = new Map(snapshot.templates);
         state.revisions = snapshot.revisions;
         state.projects = snapshot.projects;
+        state.events = snapshot.events;
         state.uncommittedProjects.clear();
         throw error;
       } finally {

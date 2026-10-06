@@ -7,6 +7,7 @@ import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
 import { logger } from '../lib/logger';
+import { evaluateStepTransition, openStepsForCompletion, type DiyStepStatusValue } from './diy/stepTransitions';
 import { buildRevisionContent, checkRevisionIntegrity, computeContentHash } from './diyTemplateRevision.service';
 import {
   PUBLISHED_REVISION_INCLUDE, publishedTemplateDetail, publishedTemplateSummary, revisionContent, stepSnapshotId,
@@ -30,6 +31,12 @@ function evalQuantityFormula(formula: string, _propertyData: Record<string, numb
 
 // What the admin screens show of a template's live (published head) revision: its number, whether it was reviewed or backfilled, and when it went live.
 const LIVE_REVISION_SELECT = { revision: true, provenance: true, publishedAt: true } as const;
+
+// The next version of a row: the clock, but always strictly after the previous version so a token can never repeat.
+const nextVersion = (previous: Date) => new Date(Math.max(Date.now(), previous.getTime() + 1));
+
+// A project accepts step changes, completion and abandonment only while it is open.
+const OPEN_PROJECT_STATUSES: DiyProjectStatus[] = ['PLANNING', 'IN_PROGRESS'];
 
 // Template fields that are not reviewed content: merchandising order and an AI prompt hint. Editing them never forces a new revision.
 const NON_CONTENT_TEMPLATE_FIELDS = new Set(['featuredOrder', 'geminiPromptHint']);
@@ -483,31 +490,104 @@ export class DiyService {
     return prisma.diyProject.update({ where: { id: projectId }, data: patch });
   }
 
-  async updateStep(projectId: string, propertyId: string, stepId: string, patch: { status: any; notes?: string }) {
-    const project = await prisma.diyProject.findFirst({
-      where: { id: projectId, propertyId },
-      include: { steps: true },
-    });
-    if (!project) throw new APIError('Project not found', 404);
+  // ── Step and project transitions ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md. Every transition is one transaction that first CLAIMS the project row with a conditional
+  // write, so steps and completion queue behind each other, runs against the committed state, records the acting user, and leaves a ledger row. A
+  // caller supplies the version token it last saw (`expectedUpdatedAt`); a stale one is refused, never overwritten.
 
-    const step = project.steps.find((s) => s.id === stepId);
-    if (!step) throw new APIError('Step not found', 404);
+  /** The version token a request must carry. Required: a missing or malformed one is a client error, not a silent "latest wins". */
+  private parseVersionToken(value: unknown): Date {
+    const date = typeof value === 'string' || value instanceof Date ? new Date(value as string) : null;
+    if (!date || Number.isNaN(date.getTime())) throw new APIError('This request must carry the expectedUpdatedAt version it was based on.', 400, 'DIY_TOKEN_REQUIRED');
+    return date;
+  }
 
-    const updates: Prisma.DiyProjectUpdateInput = {};
-    if (project.status === 'PLANNING' && patch.status === 'IN_PROGRESS') {
-      updates.status = 'IN_PROGRESS';
-      updates.startedAt = new Date();
+  /**
+   * Locks and bumps the project row if it is open (and, when given, still at the caller's version). It reads the current version and writes
+   * conditionally on it, so two claims can never both succeed from the same version, and the new version is always strictly greater than the old
+   * (a clock-only version could repeat within one millisecond).
+   */
+  private async claimOpenProject(tx: Prisma.TransactionClient, projectId: string, propertyId: string, expected?: Date) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const current = await tx.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { status: true, updatedAt: true } });
+      if (!current) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+      if (!OPEN_PROJECT_STATUSES.includes(current.status)) {
+        throw new APIError('This project is already finished and can no longer be changed.', 409, 'DIY_PROJECT_CLOSED', { status: current.status });
+      }
+      if (expected && current.updatedAt.getTime() !== expected.getTime()) {
+        throw new APIError('This project changed while you were working. Reload it and try again.', 409, 'DIY_STALE', { status: current.status, updatedAt: current.updatedAt.toISOString() });
+      }
+      const claimed = await tx.diyProject.updateMany({
+        where: { id: projectId, propertyId, status: current.status, updatedAt: current.updatedAt },
+        data: { updatedAt: nextVersion(current.updatedAt) },
+      });
+      if (claimed.count === 1) return;
     }
+    throw new APIError('This project is being changed by someone else. Try again in a moment.', 409, 'DIY_STALE');
+  }
 
-    await prisma.diyProject.update({ where: { id: projectId }, data: updates });
+  async updateStep(
+    projectId: string,
+    propertyId: string,
+    stepId: string,
+    patch: { status: DiyStepStatusValue; notes?: string },
+    ctx: { actorUserId: string; expectedUpdatedAt?: unknown },
+  ) {
+    const expected = this.parseVersionToken(ctx.expectedUpdatedAt);
+    return prisma.$transaction(async (tx) => {
+      const findStep = () => tx.diyProjectStep.findFirst({ where: { id: stepId, projectId, project: { propertyId } } });
+      const wantsNotes = (step: { notes: string | null; status: DiyStepStatusValue }) =>
+        patch.notes !== undefined && patch.notes !== (step.notes ?? '') && (step.status === 'PENDING' || step.status === 'IN_PROGRESS');
 
-    return prisma.diyProjectStep.update({
-      where: { id: stepId },
-      data: {
-        status: patch.status,
-        notes: patch.notes ?? step.notes,
-        completedAt: patch.status === 'COMPLETED' ? new Date() : step.completedAt,
-      },
+      const before = await findStep();
+      if (!before) throw new APIError('Step not found', 404, 'STEP_NOT_FOUND');
+      // Idempotent by resulting state: already there (a double click, a retry), whatever the caller's version.
+      if (before.status === patch.status && !wantsNotes(before as any)) return { step: before, alreadyApplied: true };
+
+      await this.claimOpenProject(tx, projectId, propertyId);
+      const step = await findStep(); // re-read now that the project row is held
+      if (!step) throw new APIError('Step not found', 404, 'STEP_NOT_FOUND');
+      if (step.status === patch.status && !wantsNotes(step as any)) return { step, alreadyApplied: true };
+      if (step.updatedAt.getTime() !== expected.getTime()) {
+        throw new APIError('This step changed while you were working. Reload and try again.', 409, 'DIY_STALE', { status: step.status, updatedAt: step.updatedAt.toISOString() });
+      }
+
+      const notesOnly = step.status === patch.status;
+      const decision = notesOnly ? ({ kind: 'ALLOWED', event: null } as const) : evaluateStepTransition(step as any, patch.status);
+      if (decision.kind === 'REFUSED') {
+        const message = decision.reason === 'SKIP_REQUIRED_STEP' ? 'A required step cannot be skipped.'
+          : decision.reason === 'SKIP_SAFETY_STEP' ? 'A step with a safety note cannot be skipped.'
+            : `A ${step.status.toLowerCase().replace('_', ' ')} step cannot be changed to ${patch.status.toLowerCase().replace('_', ' ')}.`;
+        throw new APIError(message, 409, 'DIY_STEP_TRANSITION_NOT_ALLOWED', { reason: decision.reason, status: step.status });
+      }
+      if (decision.kind !== 'ALLOWED') return { step, alreadyApplied: true };
+
+      const now = new Date();
+      const completing = patch.status === 'COMPLETED' && !notesOnly;
+      const reopening = decision.event === 'STEP_REOPENED';
+      const written = await tx.diyProjectStep.updateMany({
+        where: { id: step.id, projectId, status: step.status, updatedAt: step.updatedAt },
+        data: {
+          status: patch.status,
+          notes: patch.notes ?? step.notes,
+          ...(completing ? { completedAt: now, completedByUserId: ctx.actorUserId } : {}),
+          ...(reopening ? { completedAt: null, completedByUserId: null } : {}),
+          updatedAt: nextVersion(step.updatedAt),
+        },
+      });
+      if (written.count === 0) {
+        throw new APIError('This step changed while you were working. Reload and try again.', 409, 'DIY_STALE', { status: step.status, updatedAt: step.updatedAt.toISOString() });
+      }
+      // The first activity on a step starts the project.
+      if (!notesOnly && step.status === 'PENDING') {
+        await tx.diyProject.updateMany({ where: { id: projectId, status: 'PLANNING' }, data: { status: 'IN_PROGRESS', startedAt: now } });
+      }
+      if (decision.event) {
+        await tx.diyProjectEvent.create({
+          data: { projectId, stepId: step.id, actorUserId: ctx.actorUserId, type: decision.event, fromStatus: step.status, toStatus: patch.status },
+        });
+      }
+      return { step: (await findStep())!, alreadyApplied: false };
     });
   }
 
@@ -515,41 +595,69 @@ export class DiyService {
     projectId: string,
     propertyId: string,
     payload: { actualMinutes?: number; actualMaterialCostCents?: number; notes?: string },
+    ctx: { actorUserId: string; expectedUpdatedAt?: unknown },
   ) {
-    const project = await prisma.diyProject.findFirst({ where: { id: projectId, propertyId } });
-    if (!project) throw new APIError('Project not found', 404);
-    if (project.status === 'COMPLETED') throw new APIError('Project already completed', 400);
-
-    const now = new Date();
-    const notesJson = payload.notes
-      ? [...((project.notesJson as any[]) ?? []), { text: payload.notes, createdAt: now.toISOString() }]
-      : project.notesJson;
-
-    const updated = await prisma.diyProject.update({
-      where: { id: projectId },
-      data: {
-        status: 'COMPLETED',
-        completedAt: now,
-        actualMinutes: payload.actualMinutes ?? null,
-        actualMaterialCostCents: payload.actualMaterialCostCents ?? null,
-        notesJson: notesJson ?? undefined,
-      },
+    const expected = this.parseVersionToken(ctx.expectedUpdatedAt);
+    const updated = await prisma.$transaction(async (tx) => {
+      await this.claimOpenProject(tx, projectId, propertyId, expected);
+      // The rule is checked against the steps as they are NOW, in this transaction, with the project row held: no step can change underneath it.
+      const steps = await tx.diyProjectStep.findMany({
+        where: { projectId }, orderBy: { stepNumber: 'asc' }, select: { id: true, stepNumber: true, title: true, isOptional: true, status: true },
+      });
+      const open = openStepsForCompletion(steps as any);
+      if (open.length > 0) {
+        throw new APIError(
+          `${open.length} ${open.length === 1 ? 'step is' : 'steps are'} still open. Complete required steps, and complete or skip optional ones, before finishing the project.`,
+          409,
+          'DIY_PROJECT_STEPS_INCOMPLETE',
+          { openSteps: open.map((step) => ({ id: step.id, stepNumber: step.stepNumber, title: step.title, isOptional: step.isOptional, status: step.status })) },
+        );
+      }
+      const project = await tx.diyProject.findFirst({ where: { id: projectId, propertyId } });
+      if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+      const now = new Date();
+      const notesJson = payload.notes
+        ? [...((project.notesJson as any[]) ?? []), { text: payload.notes, createdAt: now.toISOString() }]
+        : project.notesJson;
+      const completed = await tx.diyProject.update({
+        where: { id: projectId },
+        data: {
+          status: 'COMPLETED',
+          completedAt: now,
+          completedByUserId: ctx.actorUserId,
+          actualMinutes: payload.actualMinutes ?? null,
+          actualMaterialCostCents: payload.actualMaterialCostCents ?? null,
+          notesJson: notesJson ?? undefined,
+        },
+      });
+      await tx.diyProjectEvent.create({
+        data: { projectId, actorUserId: ctx.actorUserId, type: 'PROJECT_COMPLETED', fromStatus: project.status, toStatus: 'COMPLETED' },
+      });
+      return completed;
     });
 
-    await diyCompletionService.onComplete(updated);
-    return updated;
+    // Side effects after commit, as before (the durable outbox and the governed maintenance and incident writes are step 3), now attributed to the
+    // person who completed the project.
+    await diyCompletionService.onComplete(updated, ctx.actorUserId);
+    return (await prisma.diyProject.findUnique({ where: { id: projectId } })) ?? updated;
   }
 
-  async abandonProject(projectId: string, propertyId: string, hireOut: boolean) {
-    const project = await prisma.diyProject.findFirst({ where: { id: projectId, propertyId } });
-    if (!project) throw new APIError('Project not found', 404);
-
-    return prisma.diyProject.update({
-      where: { id: projectId },
-      data: {
-        status: hireOut ? 'HIRED_OUT' : 'ABANDONED',
-        abandonedAt: new Date(),
-      },
+  async abandonProject(
+    projectId: string,
+    propertyId: string,
+    hireOut: boolean,
+    ctx: { actorUserId: string; expectedUpdatedAt?: unknown },
+  ) {
+    const expected = this.parseVersionToken(ctx.expectedUpdatedAt);
+    return prisma.$transaction(async (tx) => {
+      await this.claimOpenProject(tx, projectId, propertyId, expected);
+      const before = await tx.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { status: true } });
+      const status = hireOut ? 'HIRED_OUT' : 'ABANDONED';
+      const updated = await tx.diyProject.update({ where: { id: projectId }, data: { status, abandonedAt: new Date() } });
+      await tx.diyProjectEvent.create({
+        data: { projectId, actorUserId: ctx.actorUserId, type: hireOut ? 'PROJECT_HIRED_OUT' : 'PROJECT_ABANDONED', fromStatus: before?.status ?? null, toStatus: status },
+      });
+      return updated;
     });
   }
 

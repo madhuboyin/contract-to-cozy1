@@ -19691,6 +19691,17 @@ enum DiyStepStatus {
   SKIPPED
 }
 
+// One row per DIY step or project transition (docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md): who did what, from which status to which.
+enum DiyProjectEventType {
+  STEP_STARTED
+  STEP_COMPLETED
+  STEP_SKIPPED
+  STEP_REOPENED
+  PROJECT_COMPLETED
+  PROJECT_ABANDONED
+  PROJECT_HIRED_OUT
+}
+
 enum DiyToolAction {
   ALREADY_OWNED
   RENT
@@ -19944,8 +19955,11 @@ model DiyProject {
   startedAt   DateTime?
   completedAt DateTime?
   abandonedAt DateTime?
+  // Who completed the project (the acting household member, not necessarily `userId`, the creator).
+  completedByUserId String?
 
   createdAt DateTime @default(now())
+  // Also the version token for complete and abandon: every step transition writes the project row, so it changes whenever any step changes.
   updatedAt DateTime @updatedAt
 
   property Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
@@ -19957,6 +19971,7 @@ model DiyProject {
   steps     DiyProjectStep[]
   materials DiyProjectMaterial[]
   tools     DiyProjectTool[]
+  events    DiyProjectEvent[]
 
   @@index([propertyId])
   @@index([userId])
@@ -19982,11 +19997,36 @@ model DiyProjectStep {
   status           DiyStepStatus @default(PENDING)
   notes            String?
   completedAt      DateTime?
+  // Who completed the step; cleared when it is reopened.
+  completedByUserId String?
+  // The version token for step updates (docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md). Existing rows take the time the column was added.
+  updatedAt        DateTime      @default(now()) @updatedAt
 
   project DiyProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  events  DiyProjectEvent[]
 
   @@unique([projectId, stepNumber])
   @@map("diy_project_steps")
+}
+
+// Append-only ledger of DIY transitions, written in the same transaction as the transition it records. `actorUserId` is the acting user and is
+// deliberately not a foreign key, so the history survives a user being removed. `fromStatus` and `toStatus` are step statuses for STEP_* events
+// and project statuses for PROJECT_* events.
+model DiyProjectEvent {
+  id          String              @id @default(cuid())
+  projectId   String
+  stepId      String?
+  actorUserId String
+  type        DiyProjectEventType
+  fromStatus  String?
+  toStatus    String
+  at          DateTime            @default(now())
+
+  project DiyProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  step    DiyProjectStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, at])
+  @@map("diy_project_events")
 }
 
 model DiyProjectMaterial {

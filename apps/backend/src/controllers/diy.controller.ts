@@ -146,16 +146,18 @@ export async function updateProject(req: Request, res: Response, next: NextFunct
 
 export async function updateStep(req: Request, res: Response, next: NextFunction) {
   try {
-    const step = await diyService.updateStep(
-      req.params.projectId, req.params.propertyId, req.params.stepId, req.body,
+    const { expectedUpdatedAt, ...patch } = req.body;
+    const { step, alreadyApplied } = await diyService.updateStep(
+      req.params.projectId, req.params.propertyId, req.params.stepId, patch, { actorUserId: req.user!.userId, expectedUpdatedAt },
     );
-    res.json({ success: true, data: { step } });
+    res.json({ success: true, data: { step, alreadyApplied } });
   } catch (err) { next(err); }
 }
 
 export async function completeProject(req: Request, res: Response, next: NextFunction) {
   try {
-    const project = await diyService.completeProject(req.params.projectId, req.params.propertyId, req.body);
+    const { expectedUpdatedAt, ...payload } = req.body;
+    const project = await diyService.completeProject(req.params.projectId, req.params.propertyId, payload, { actorUserId: req.user!.userId, expectedUpdatedAt });
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -173,7 +175,7 @@ export async function completeProject(req: Request, res: Response, next: NextFun
 export async function abandonProject(req: Request, res: Response, next: NextFunction) {
   try {
     const hireOut = req.body.hireOut ?? false;
-    await diyService.abandonProject(req.params.projectId, req.params.propertyId, hireOut);
+    await diyService.abandonProject(req.params.projectId, req.params.propertyId, hireOut, { actorUserId: req.user!.userId, expectedUpdatedAt: req.body.expectedUpdatedAt });
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

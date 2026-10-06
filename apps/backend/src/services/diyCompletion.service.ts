@@ -10,7 +10,9 @@ const homeEventsService = new HomeEventsService();
 const IMPROVEMENT_CATEGORIES: DiyProjectCategory[] = ['PAINTING', 'EXTERIOR', 'FLOORING'];
 
 export class DiyCompletionService {
-  async onComplete(project: DiyProject): Promise<void> {
+  // `actorUserId` is the household member who completed the project, not necessarily its creator (`project.userId`): the home event and the incident
+  // sync are attributed to them.
+  async onComplete(project: DiyProject, actorUserId: string): Promise<void> {
     const eventType = IMPROVEMENT_CATEGORIES.includes(project.category) ? 'IMPROVEMENT' : 'MAINTENANCE';
 
     let homeEventId: string | null = null;
@@ -18,7 +20,7 @@ export class DiyCompletionService {
     try {
       const event = await homeEventsService.createHomeEvent({
         propertyId: project.propertyId,
-        userId: project.userId,
+        userId: actorUserId,
         body: {
           type: eventType,
           importance: 'NORMAL',
@@ -81,7 +83,7 @@ export class DiyCompletionService {
 
     await Promise.all(updates);
     if (project.incidentId) {
-      await syncIncidentWorkItem(project.incidentId, project.userId);
+      await syncIncidentWorkItem(project.incidentId, actorUserId);
     }
   }
 }

@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.197
+**Version:** 1.198
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.198 — DIY step and project transitions, slice 2a (service):** DIY step updates, project completion and abandonment are now single transactions that claim the project row with a conditional write, validate against a transition table (skip only an optional step without a safety note, reopen allowed, same-status retries are no-ops), require and check version tokens that strictly increase, record the acting user on the step, the project and an append-only ledger, and enforce the completion rule (required steps completed, optional steps completed or skipped). The home event and incident sync are attributed to the person who completed the project. Service and tests only: the routes, validators and page are slice 2b, so this must ship with it; the raw maintenance and incident writes remain until step 3. Tested on a database-free fake with mutation checks; not exercised against Postgres. See `docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md` §12.
 
 **Revision 1.197 — DIY template revisions, slice 1e (rollout) and a project-creation fix:** Adds the one-time hand-run backfill (live templates become legacy revisions that are never treated as reviewed), a read-only verification file, a start-up warning that never blocks or writes, and a rollout runbook with a binding order (schema, backfill and verification, then deploy), because the homeowner DIY library is empty if the new code runs before the backfill. The whole revision stack was run against a throwaway Postgres 15 (18 checks, all passing), which also found and fixed a defect the earlier fakes could not show: starting a DIY project, from a template or an AI guide, read the new project back outside its own transaction and failed with "Project not found". Not run against any development or production database; production-sized performance and the Pi deployment were not exercised. See `docs/operations/DIY_TEMPLATE_REVISIONS_ROLLOUT.md` and the plan §16.
 
