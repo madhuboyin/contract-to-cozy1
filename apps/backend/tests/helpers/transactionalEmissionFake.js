@@ -17,6 +17,8 @@ function addTransactionalEmission(mock) {
   const cursorKey = (k) => `${k.propertyId}:${k.sourceType}:${k.sourceEntityId}`;
 
   const defaults = {
+    // A maintenance task completion also looks for open DIY projects linked to the task, inside its transaction (none by default).
+    diyProject: { findMany: async () => [] },
     propertyChange: {
       findUnique: async ({ where }) => {
         if (where.id) return [...changes.values()].find((row) => row.id === where.id) ?? null;

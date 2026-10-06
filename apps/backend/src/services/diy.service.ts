@@ -196,6 +196,14 @@ export class DiyService {
   ) {
     const { templateId, aiGuideId } = payload;
 
+    // A linked maintenance task must exist and belong to THIS property. `maintenanceTaskId` is a plain string (no foreign key), and both the completion
+    // effects and the reverse reconciliation trust the link, so it is checked when it is made. A task that is already completed is allowed: the project
+    // then shows "needs review" until it is finished (docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md section 3.5).
+    if (payload.maintenanceTaskId) {
+      const linked = await prisma.propertyMaintenanceTask.findFirst({ where: { id: payload.maintenanceTaskId, propertyId }, select: { id: true } });
+      if (!linked) throw new APIError('The linked maintenance task was not found for this property.', 404, 'DIY_TASK_NOT_FOUND');
+    }
+
     const skillProfile = await prisma.diySkillProfile.findUnique({ where: { userId } });
     const ownedTools: string[] = Array.isArray(skillProfile?.toolsOwnedJson) ? skillProfile.toolsOwnedJson as string[] : [];
 
@@ -652,60 +660,122 @@ export class DiyService {
       }
       await this.claimOpenProject(tx, projectId, propertyId, expected);
       // The rule is checked against the steps as they are NOW, in this transaction, with the project row held: no step can change underneath it.
-      const steps = await tx.diyProjectStep.findMany({
-        where: { projectId }, orderBy: { stepNumber: 'asc' }, select: { id: true, stepNumber: true, title: true, isOptional: true, status: true },
-      });
-      const open = openStepsForCompletion(steps as any);
-      if (open.length > 0) {
-        throw new APIError(
-          `${open.length} ${open.length === 1 ? 'step is' : 'steps are'} still open. Complete required steps, and complete or skip optional ones, before finishing the project.`,
-          409,
-          'DIY_PROJECT_STEPS_INCOMPLETE',
-          { openSteps: open.map((step) => ({ id: step.id, stepNumber: step.stepNumber, title: step.title, isOptional: step.isOptional, status: step.status })) },
-        );
-      }
-      const project = await tx.diyProject.findFirst({ where: { id: projectId, propertyId } });
-      if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
-      const now = new Date();
-      const notesJson = payload.notes
-        ? [...((project.notesJson as any[]) ?? []), { text: payload.notes, createdAt: now.toISOString() }]
-        : project.notesJson;
-      const completed = await tx.diyProject.update({
-        where: { id: projectId },
-        data: {
-          status: 'COMPLETED',
-          completedAt: now,
-          completedByUserId: ctx.actorUserId,
-          actualMinutes: payload.actualMinutes ?? null,
-          actualMaterialCostCents: payload.actualMaterialCostCents ?? null,
-          notesJson: notesJson ?? undefined,
-        },
-      });
-      await tx.diyProjectEvent.create({
-        data: { projectId, actorUserId: ctx.actorUserId, type: 'PROJECT_COMPLETED', fromStatus: project.status, toStatus: 'COMPLETED' },
-      });
-      // The outbox row, in the SAME transaction: a snapshot of what was completed. If this insert fails the whole completion rolls back, so there is
-      // never a completed project without its record. A worker creates the home event and completes the linked maintenance task from this payload
-      // (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md). Incidents are not touched (decision O13).
-      await DomainEventsService.emit({
-        type: 'DIY_PROJECT_COMPLETED',
-        propertyId,
-        userId: ctx.actorUserId,
-        idempotencyKey: DIY_COMPLETION_EVENT_KEY(projectId),
-        payload: {
-          projectId,
-          propertyId,
-          actorUserId: ctx.actorUserId,
-          completedAt: now.toISOString(),
-          title: project.title,
-          category: project.category,
-          actualMinutes: payload.actualMinutes ?? null,
-          actualMaterialCostCents: payload.actualMaterialCostCents ?? null,
-          maintenanceTaskId: project.maintenanceTaskId ?? null,
-        },
-      }, tx);
-      return completed;
+      const open = await this.openStepsWithin(tx, projectId);
+      if (open.length > 0) throw this.stepsIncompleteError(open);
+      return this.writeCompletion(tx, { projectId, propertyId, actorUserId: ctx.actorUserId, payload, basis: 'STEPS' });
     });
+  }
+
+  private async openStepsWithin(tx: Prisma.TransactionClient, projectId: string) {
+    const steps = await tx.diyProjectStep.findMany({
+      where: { projectId }, orderBy: { stepNumber: 'asc' }, select: { id: true, stepNumber: true, title: true, isOptional: true, status: true },
+    });
+    return openStepsForCompletion(steps as any) as Array<{ id: string; stepNumber: number; title: string; isOptional: boolean; status: string }>;
+  }
+
+  private stepsIncompleteError(open: Array<{ id: string; stepNumber: number; title: string; isOptional: boolean; status: string }>) {
+    return new APIError(
+      `${open.length} ${open.length === 1 ? 'step is' : 'steps are'} still open. Complete required steps, and complete or skip optional ones, before finishing the project.`,
+      409,
+      'DIY_PROJECT_STEPS_INCOMPLETE',
+      { openSteps: open.map((step) => ({ id: step.id, stepNumber: step.stepNumber, title: step.title, isOptional: step.isOptional, status: step.status })) },
+    );
+  }
+
+  /** The completion write, its ledger row and its outbox event, after the project row has been claimed and the completion rule has held. */
+  private async writeCompletion(
+    tx: Prisma.TransactionClient,
+    input: { projectId: string; propertyId: string; actorUserId: string; payload: { actualMinutes?: number; actualMaterialCostCents?: number; notes?: string }; basis: 'STEPS' | 'LINKED_TASK' },
+  ) {
+    const { projectId, propertyId, actorUserId, payload } = input;
+    const project = await tx.diyProject.findFirst({ where: { id: projectId, propertyId } });
+    if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+    const now = new Date();
+    const notesJson = payload.notes
+      ? [...((project.notesJson as any[]) ?? []), { text: payload.notes, createdAt: now.toISOString() }]
+      : project.notesJson;
+    const completed = await tx.diyProject.update({
+      where: { id: projectId },
+      data: {
+        status: 'COMPLETED',
+        completedAt: now,
+        completedByUserId: actorUserId,
+        completionBasis: input.basis,
+        actualMinutes: payload.actualMinutes ?? null,
+        actualMaterialCostCents: payload.actualMaterialCostCents ?? null,
+        notesJson: notesJson ?? undefined,
+      },
+    });
+    await tx.diyProjectEvent.create({
+      data: { projectId, actorUserId, type: 'PROJECT_COMPLETED', fromStatus: project.status, toStatus: 'COMPLETED' },
+    });
+    // The outbox row, in the SAME transaction: a snapshot of what was completed. If this insert fails the whole completion rolls back, so there is
+    // never a completed project without its record. A worker creates the home event and completes the linked maintenance task from this payload
+    // (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md). Incidents are not touched (decision O13).
+    await DomainEventsService.emit({
+      type: 'DIY_PROJECT_COMPLETED',
+      propertyId,
+      userId: actorUserId,
+      idempotencyKey: DIY_COMPLETION_EVENT_KEY(projectId),
+      payload: {
+        projectId,
+        propertyId,
+        actorUserId,
+        completedAt: now.toISOString(),
+        title: project.title,
+        category: project.category,
+        actualMinutes: payload.actualMinutes ?? null,
+        actualMaterialCostCents: payload.actualMaterialCostCents ?? null,
+        maintenanceTaskId: project.maintenanceTaskId ?? null,
+      },
+    }, tx);
+    return completed;
+  }
+
+  /**
+   * Applies the approved O12 rules to ONE open project whose linked maintenance task was completed elsewhere (docs/architecture/
+   * ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md section 3.2). The mode is exactly what the completion recorded; an unknown mode is never inferred and changes
+   * nothing. Every change is one transaction behind the step 2 claim (so it serializes with the person's own writes and bumps the version), with a ledger
+   * row attributed to the person who completed the task. Authorization was verified in the transaction that completed the task; this is system-driven.
+   */
+  async reconcileProjectFromLinkedTask(
+    projectId: string,
+    propertyId: string,
+    input: { mode: 'DIY' | 'PROVIDER' | null; actorUserId: string; completedAt: Date },
+  ): Promise<'HIRED_OUT' | 'COMPLETED' | 'CLOSED_BY_LINKED_TASK' | 'NEEDS_REVIEW' | 'ALREADY_CLOSED' | 'PROJECT_GONE'> {
+    if (input.mode === null) return 'NEEDS_REVIEW';
+    try {
+      return await prisma.$transaction(async (tx) => {
+        await this.claimOpenProject(tx, projectId, propertyId);
+        const before = await tx.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { status: true } });
+        if (input.mode === 'PROVIDER') {
+          await tx.diyProject.update({ where: { id: projectId }, data: { status: 'HIRED_OUT', abandonedAt: new Date(), completionBasis: 'LINKED_TASK' } });
+          await tx.diyProjectEvent.create({
+            data: { projectId, actorUserId: input.actorUserId, type: 'PROJECT_HIRED_OUT', fromStatus: before?.status ?? null, toStatus: 'HIRED_OUT' },
+          });
+          return 'HIRED_OUT' as const;
+        }
+        const open = await this.openStepsWithin(tx, projectId);
+        if (open.length === 0) {
+          // The same governed completion a person would make, including its outbox event (the home event), with the same basis.
+          await this.writeCompletion(tx, { projectId, propertyId, actorUserId: input.actorUserId, payload: {}, basis: 'STEPS' });
+          return 'COMPLETED' as const;
+        }
+        // Reconciled closure: the linked task is the evidence. Steps are left exactly as they were and no home event is written.
+        await tx.diyProject.update({
+          where: { id: projectId },
+          data: { status: 'COMPLETED', completedAt: input.completedAt, completedByUserId: input.actorUserId, completionBasis: 'LINKED_TASK' },
+        });
+        await tx.diyProjectEvent.create({
+          data: { projectId, actorUserId: input.actorUserId, type: 'PROJECT_CLOSED_BY_LINKED_TASK', fromStatus: before?.status ?? null, toStatus: 'COMPLETED' },
+        });
+        return 'CLOSED_BY_LINKED_TASK' as const;
+      });
+    } catch (error: any) {
+      if (error?.code === 'DIY_PROJECT_CLOSED') return 'ALREADY_CLOSED';
+      if (error?.code === 'PROJECT_NOT_FOUND') return 'PROJECT_GONE';
+      throw error;
+    }
   }
 
   async abandonProject(

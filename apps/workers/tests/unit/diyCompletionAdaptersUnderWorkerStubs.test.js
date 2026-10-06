@@ -37,12 +37,15 @@ test('the DIY completion adapters and the services they wrap load with the produ
     mod._compile(output, backend);
     mod.loaded = true;
   };
-  cache(path.join(backendSrc, 'lib/prisma.ts'), { prisma: { propertyMaintenanceTask: { findUnique: async () => null }, homeEvent: { findFirst: async () => null }, diyProject: { updateMany: async () => ({ count: 1 }) } } });
+  cache(path.join(backendSrc, 'lib/prisma.ts'), { prisma: { propertyMaintenanceTask: { findUnique: async () => null }, homeEvent: { findFirst: async () => null }, diyProject: { updateMany: async () => ({ count: 1 }) }, domainEvent: { findUnique: async () => null, update: async () => ({}) } } });
   for (const override of overrides) evaluateAsBackendModule(override);
 
   const adapters = require(path.join(backendSrc, 'services/diy/diyCompletionEffectsAdapters.ts'));
   assert.equal(typeof adapters.processDiyProjectCompletedEventWithDefaults, 'function');
   assert.equal(typeof adapters.defaultDiyCompletionEffectDeps.completeTask, 'function');
+  const reconcile = require(path.join(backendSrc, 'services/diy/diyTaskReconciliationAdapters.ts'));
+  assert.equal(typeof reconcile.processDiyTaskReconciliationEventWithDefaults, 'function');
+  assert.equal(typeof reconcile.defaultDiyTaskReconciliationDeps.reconcileProject, 'function');
   const maintenance = require(path.join(backendSrc, 'services/PropertyMaintenanceTask.service.ts'));
   assert.equal(typeof maintenance.completeMaintenanceTaskForDiyOutbox, 'function');
 
@@ -52,4 +55,11 @@ test('the DIY completion adapters and the services they wrap load with the produ
     adapters.processDiyProjectCompletedEventWithDefaults({ id: 'ev-1', payload: { projectId: 'p1', propertyId: 'prop-1', actorUserId: 'dana', completedAt: '2026-10-06T12:00:00.000Z', title: 'Paint', category: 'PAINTING', maintenanceTaskId: null } }),
     (error) => error.name === 'DiyCompletionEffectsFailed' && /HOME_EVENT/.test(error.message),
   );
+});
+
+test('the reconciliation handler path runs under the production stubs too: a malformed snapshot is a terminal error, and a deleted task is the typed skip', async () => {
+  const reconcile = require(path.join(backendSrc, 'services/diy/diyTaskReconciliationAdapters.ts'));
+  await assert.rejects(reconcile.processDiyTaskReconciliationEventWithDefaults({ id: 'ev-1', payload: { taskId: '' } }), (error) => error.terminal === true && error.code === 'SNAPSHOT_INVALID');
+  const payload = { taskId: 'gone', propertyId: 'prop-1', occurrenceId: 'o1', actorUserId: 'dana', completedAt: '2026-10-06T12:00:00.000Z', fulfillmentMode: 'DIY', projectIds: ['pA'] };
+  assert.deepEqual(await reconcile.processDiyTaskReconciliationEventWithDefaults({ id: 'ev-1', payload }), { result: 'TASK_DELETED', projectOutcomes: {} });
 });

@@ -148,9 +148,12 @@ test('the internal maintenance completion is imported by the DIY adapters and no
 
 // ---- the fatal start-up check ------------------------------------------------------------------------------------------------------------------
 
-test('start-up check: passes when the enum value exists, and FAILS (never warns) when it is missing or cannot be confirmed', async () => {
-  await assertDiyCompletionEventTypeAvailable({ $queryRaw: async () => [{ present: 1 }] });
-  await assert.rejects(assertDiyCompletionEventTypeAvailable({ $queryRaw: async () => [] }), /FATAL.*DIY_PROJECT_COMPLETED.*prisma db push/s);
+test('start-up check: passes when BOTH enum values exist, and FAILS (never warns) when either is missing or cannot be confirmed', async () => {
+  const both = [{ label: 'DIY_PROJECT_COMPLETED' }, { label: 'DIY_TASK_COMPLETED_RECONCILE' }];
+  await assertDiyCompletionEventTypeAvailable({ $queryRaw: async () => both });
+  await assert.rejects(assertDiyCompletionEventTypeAvailable({ $queryRaw: async () => [] }), /FATAL.*DIY_PROJECT_COMPLETED, DIY_TASK_COMPLETED_RECONCILE.*prisma db push/s);
+  await assert.rejects(assertDiyCompletionEventTypeAvailable({ $queryRaw: async () => [both[0]] }), /FATAL.*missing DIY_TASK_COMPLETED_RECONCILE/s);
+  await assert.rejects(assertDiyCompletionEventTypeAvailable({ $queryRaw: async () => [both[1]] }), /FATAL.*missing DIY_PROJECT_COMPLETED/s);
   await assert.rejects(assertDiyCompletionEventTypeAvailable({ $queryRaw: async () => { throw new Error('connection refused'); } }), /FATAL.*could not confirm.*connection refused/s);
   const index = src('index.ts');
   assert.ok(index.indexOf('await assertDiyCompletionEventTypeAvailable();') > index.indexOf('assertAgentDeploymentReadiness()'), 'the check runs in startServer');

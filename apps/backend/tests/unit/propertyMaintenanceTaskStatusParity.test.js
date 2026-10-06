@@ -123,7 +123,10 @@ const prismaMock = {
     findUnique: async () => ({ tasksCompleted: 1 }),
   },
   projectRecord: { findFirst: async () => null },
+  // A task completion now runs in a transaction that also looks for open DIY projects linked to the task (none here).
+  diyProject: { findMany: async () => [] },
 };
+prismaMock.$transaction = async (work) => work(prismaMock);
 
 const prismaPath = require.resolve('../../src/lib/prisma.ts');
 require.cache[prismaPath] = {

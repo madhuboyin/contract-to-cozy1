@@ -151,7 +151,7 @@ test('detail: the template id, head content with stable synthetic ids, the shape
 const start = (h, templateId = 't1', payload = {}) => h.diyService.createProject('prop-1', 'user-1', { templateId, ...payload });
 
 test('createProject copies the published head, not the working copy, and records the revision it copied', async () => {
-  const h = harness([tpl()], { skillProfile: { toolsOwnedJson: ['ROLLER'] } }); const revision = await goLive(h);
+  const h = harness([tpl()], { skillProfile: { toolsOwnedJson: ['ROLLER'] }, tasks: [{ id: 'task-1', propertyId: 'prop-1' }] }); const revision = await goLive(h);
   edit(h, { title: 'Draft title', steps: [{ id: 'd', stepNumber: 1, title: 'Draft only step', description: 'x', isOptional: false }], materials: [] });
   const project = await start(h, 't1', { maintenanceTaskId: 'task-1' });
   assert.deepEqual([project.title, project.templateId, project.templateRevisionId, project.maintenanceTaskId], ['Paint a room', 't1', revision.id, 'task-1']);

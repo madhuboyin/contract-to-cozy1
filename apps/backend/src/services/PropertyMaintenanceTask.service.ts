@@ -14,6 +14,7 @@ import {
   import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
   import { signalService } from './signal.service';
 import { logger } from '../lib/logger';
+import { planDiyTaskReconciliation, withOccurrenceId, emitDiyTaskReconciliation } from './diy/diyTaskReconciliationRequest';
 import { resolveSeasonalTaskDueDate } from '../utils/maintenanceDueDate';
 import { syncSeasonalChecklistStatus } from './seasonalChecklistStatus.service';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
@@ -1170,6 +1171,9 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
         followUpNeeded?: boolean;
         photoDocumentIds?: string[];
       },
+      // `accessVerifiedElsewhere`: the DIY completion outbox handler calls this without a second access check (its authorization was verified in the
+      // project-completion transaction); every public path leaves it false, so the reconciliation request below verifies access inside its transaction.
+      options?: { accessVerifiedElsewhere?: boolean },
     ): Promise<PropertyMaintenanceTask> {
       // Get current task state before update (need to check previous status)
       const task = await prisma.propertyMaintenanceTask.findUnique({
@@ -1202,9 +1206,26 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       // (bumped by every prior write) ensures only one request's write can
       // match; the loser re-reads and either replays idempotently or
       // surfaces a genuine conflict instead of silently double-applying.
-      const claimed = await prisma.propertyMaintenanceTask.updateMany({
-        where: { id: taskId, updatedAt: task.updatedAt },
-        data: updateData,
+      //
+      // Reverse reconciliation (docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md): the write and the request to reconcile linked DIY projects are
+      // ONE transaction, so the request exists exactly when the completion does. Nothing else runs inside it; the side effects stay after it, as before.
+      const completing = !wasCompleted && isNowCompleted;
+      const claimed = await prisma.$transaction(async (tx) => {
+        const request = completing
+          ? await planDiyTaskReconciliation(tx, { taskId, propertyId: task.propertyId, actorUserId: userId, accessVerifiedElsewhere: options?.accessVerifiedElsewhere === true })
+          : null;
+        const data = request
+          ? { ...updateData, completionMetadata: withOccurrenceId(updateData.completionMetadata, task.completionMetadata, request.occurrenceId) }
+          : updateData;
+        const written = await tx.propertyMaintenanceTask.updateMany({ where: { id: taskId, updatedAt: task.updatedAt }, data: data as any });
+        if (written.count === 1 && request) {
+          await emitDiyTaskReconciliation(tx, {
+            request, taskId, propertyId: task.propertyId, actorUserId: userId,
+            completedAt: (updateData.lastCompletedDate as Date | undefined) ?? new Date(),
+            fulfillmentMode: completionDetails?.fulfillmentMode ?? null, completionKey: completionIdempotencyKey ?? null,
+          });
+        }
+        return written;
       });
 
       if (claimed.count === 0) {
@@ -1337,9 +1358,27 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       // its own baseline. options.expectedUpdatedAt lets a caller that
       // already validated a specific version pin the CAS to THAT version
       // instead, so a write landing in its own outer gap is caught here too.
-      const claimed = await prisma.propertyMaintenanceTask.updateMany({
-        where: { id: taskId, updatedAt: options?.expectedUpdatedAt ?? existingTask.updatedAt },
-        data: updateData,
+      // Reverse reconciliation (see completeTaskCore): when this write moves the task into COMPLETED, the request to reconcile linked DIY projects is
+      // written in the same transaction. A status patch carries no completion mode or key, so the snapshot says "unknown".
+      const completing = !wasCompleted && (updateData as { status?: string }).status === 'COMPLETED';
+      const claimed = await prisma.$transaction(async (tx) => {
+        const request = completing
+          ? await planDiyTaskReconciliation(tx, { taskId, propertyId: existingTask.propertyId, actorUserId: userId, accessVerifiedElsewhere: false })
+          : null;
+        const data = request
+          ? { ...updateData, completionMetadata: withOccurrenceId((updateData as { completionMetadata?: unknown }).completionMetadata, existingTask.completionMetadata, request.occurrenceId) }
+          : updateData;
+        const written = await tx.propertyMaintenanceTask.updateMany({
+          where: { id: taskId, updatedAt: options?.expectedUpdatedAt ?? existingTask.updatedAt },
+          data: data as any,
+        });
+        if (written.count === 1 && request) {
+          await emitDiyTaskReconciliation(tx, {
+            request, taskId, propertyId: existingTask.propertyId, actorUserId: userId,
+            completedAt: ((updateData as { lastCompletedDate?: Date }).lastCompletedDate) ?? new Date(), fulfillmentMode: null, completionKey: null,
+          });
+        }
+        return written;
       });
       if (claimed.count === 0) {
         const error = new Error('This task was changed by a concurrent update. Reload it and try again.');
@@ -1584,5 +1623,13 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
  * else; `tests/unit/diyCompletionEffects.test.js` fails if anything but the DIY completion adapters does.
  */
 export const completeMaintenanceTaskForDiyOutbox = (
-  ...args: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>
-): Promise<PropertyMaintenanceTask> => PropertyMaintenanceTaskService['completeTaskCore'](...args);
+  userId: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>[0],
+  taskId: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>[1],
+  status: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>[2],
+  actualCost?: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>[3],
+  outcomeHealth?: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>[4],
+  completionIdempotencyKey?: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>[5],
+  completionDetails?: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>[6],
+): Promise<PropertyMaintenanceTask> =>
+  // Explicit positions: the options object must be the eighth argument whatever the caller omitted.
+  PropertyMaintenanceTaskService['completeTaskCore'](userId, taskId, status, actualCost, outcomeHealth, completionIdempotencyKey, completionDetails, { accessVerifiedElsewhere: true });

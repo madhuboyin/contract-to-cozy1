@@ -24,7 +24,7 @@ function harness(event, handlers = {}) {
     },
     notificationService: { create: async () => ({ id: 'n1' }) },
     refinanceTransitionAlert: noop, radarPropertyReconciliation: noop, recomputeRequested: noop, recomputeRetryRequested: noop, captureLinkReconcile: noop,
-    askExtractionRequested: noop, radarNotificationMaterialize: noop, goalCandidateAttach: noop, captureNotification: noop, diyProjectCompleted: noop,
+    askExtractionRequested: noop, radarNotificationMaterialize: noop, goalCandidateAttach: noop, captureNotification: noop, diyProjectCompleted: noop, diyTaskReconciliation: noop,
     ...handlers,
   };
   return { deps, writes, failure: () => writes.find((w) => ['FAILED', 'DEAD_LETTER'].includes(w.data?.status)), success: () => writes.find((w) => w.data?.status === 'PROCESSED') };
@@ -84,4 +84,25 @@ test('a terminal error is recognized by its flag, so a second copy of the class 
   const h = harness(event('DIY_PROJECT_COMPLETED'), { diyProjectCompleted: async () => { throw lookalike; } });
   await processDomainEventsJob({ batchSize: 1 }, h.deps);
   assert.equal(h.failure().data.status, 'DEAD_LETTER');
+});
+
+test('DIY_TASK_COMPLETED_RECONCILE reaches the injected reconciliation handler with the event id and payload, and its per-project outcomes are stored on the processed event', async () => {
+  const seen = [];
+  const payload = { taskId: 't1', propertyId: 'prop-1', occurrenceId: 'o1', actorUserId: 'dana', projectIds: ['pA'] };
+  const outcome = { result: 'APPLIED', projectOutcomes: { pA: 'HIRED_OUT' } };
+  const h = harness(event('DIY_TASK_COMPLETED_RECONCILE', { payload }), { diyTaskReconciliation: async (input) => { seen.push(input); return outcome; } });
+  const result = await processDomainEventsJob({ batchSize: 1 }, h.deps);
+  assert.equal(result.processed, 1);
+  assert.deepEqual(seen, [{ id: 'ev-DIY_TASK_COMPLETED_RECONCILE', payload }]);
+  assert.deepEqual(h.success().data.payload.processingOutcome, outcome);
+});
+
+test('a TERMINAL reconciliation error (a task on another property) dead-letters at once; a retryable one is FAILED with backoff', async () => {
+  const terminal = harness(event('DIY_TASK_COMPLETED_RECONCILE'), { diyTaskReconciliation: async () => { throw new TerminalDomainEventError('INTEGRITY_CROSS_PROPERTY', 'belongs to a different property'); } });
+  await processDomainEventsJob({ batchSize: 1 }, terminal.deps);
+  assert.equal(terminal.failure().data.status, 'DEAD_LETTER');
+  const retryable = harness(event('DIY_TASK_COMPLETED_RECONCILE'), { diyTaskReconciliation: async () => { throw new Error('PROJECT pB: boom'); } });
+  await processDomainEventsJob({ batchSize: 1 }, retryable.deps);
+  assert.equal(retryable.failure().data.status, 'FAILED');
+  assert.match(retryable.failure().data.lastError, /pB: boom/);
 });

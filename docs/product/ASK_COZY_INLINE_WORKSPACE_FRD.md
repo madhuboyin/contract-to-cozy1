@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.209
+**Version:** 1.210
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.210 — DIY reverse reconciliation, slice 4a (request, worker handler, transitions):** completing a maintenance task that has an open DIY project linked to it now writes, in the same transaction, a request keyed by a unique id stored on the task (so a repeated completion date cannot collide). A worker applies the approved rules to each linked project: a pro-completed task hires the project out, a DIY-completed task completes it normally when its steps are done or closes it by the linked task when they are not (steps untouched, no home event), and an unknown completion mode changes nothing. A deleted task ends the request as a recorded skip; each project's outcome is saved so a retry only redoes what failed. Creating a project now checks that its linked task exists on the same property, and the backend refuses to start if either new event type is missing from the database. Verified with unit and producer tests, mutation checks and a production-style worker build; the real-Postgres run, the disclosure and the page are slices 4c and 4b. See `docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md` §12.
 
 **Revision 1.209 — DIY reverse reconciliation plan, revision 2 (draft):** after review the plan keys each task completion's reconciliation request by a unique id generated inside the transaction and stored on the task (never by the completion date, which a caller can repeat), ends a deleted linked task as a typed skip that leaves projects unchanged and discloses "review", records a bounded outcome per project on the event so a retry or recovery only redoes what failed, and asks the person to "review the project and confirm whether you completed the work or hired a professional" instead of telling them to finish or stop it. The no-inference rule for an unknown completion mode was explicitly approved. Nothing is built. See `docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md`.
 

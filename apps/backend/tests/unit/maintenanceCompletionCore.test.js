@@ -15,6 +15,9 @@ const fake = {
     updateMany: async (args) => { writes.push(args); throw new Error('stop after the write (side effects are not under test)'); },
   },
   householdMember: { findUnique: async () => ({ role: state.role }) },
+  // The write now runs inside a transaction that also looks for open DIY projects linked to the task (none here).
+  diyProject: { findMany: async () => [] },
+  $transaction: async (work) => work(fake),
   property: { findFirst: async () => null },
 };
 const stub = (relative, exports) => { const resolved = require.resolve(relative); require.cache[resolved] = { id: resolved, filename: resolved, loaded: true, exports }; };

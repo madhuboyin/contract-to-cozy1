@@ -5,7 +5,7 @@
 //   (cd apps/workers && node scripts/build-worker-backend-overrides.js ../backend/dist ./stubs && npx tsc --project tsconfig.docker.json && npx tsc-alias -p tsconfig.docker.json)
 //   (cd apps/workers && node scripts/smoke-built-worker.js)
 // It links @worker-shared to backend/dist the way the image does (and removes the link again if it made it), imports the built domain-events job, checks
-// the production stubs are in effect, and pushes a DIY_PROJECT_COMPLETED event with a malformed payload through the DEFAULT handler path, which must
+// the production stubs are in effect, and pushes a malformed DIY_PROJECT_COMPLETED event and a malformed DIY_TASK_COMPLETED_RECONCILE event through the DEFAULT handler path, which must
 // dead-letter at once. It needs no database and no network.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -30,17 +30,20 @@ const cleanup = () => { if (linked) { try { fs.unlinkSync(link); } catch { /* al
   const notification = fs.readFileSync(require.resolve('@worker-shared/services/notification.service', { paths: [workersRoot] }), 'utf8');
   assert.ok(notification.includes('workerPersisted'), 'the worker notification override is in effect (the production stubs are applied)');
   const job = require(builtJob);
-  const writes = [];
-  const event = { id: 'ev-smoke', type: 'DIY_PROJECT_COMPLETED', status: 'PENDING', attempts: 0, availableAt: new Date(0), updatedAt: new Date(0), payload: { projectId: '' } };
-  const deps = {
-    prisma: { domainEvent: { findMany: async () => [event], updateMany: async (args) => { writes.push(args); return { count: 1 }; } }, notification: {}, intelligenceRecomputeRun: {}, intelligenceRecomputeTarget: {} },
-    notificationService: { create: async () => ({}) },
-  };
-  const result = await job.processDomainEventsJob({ batchSize: 1 }, deps);
-  const failure = writes.find((write) => ['FAILED', 'DEAD_LETTER'].includes(write.data?.status));
-  assert.deepEqual([result.failed, result.deadLettered], [0, 1]);
-  assert.match(failure.data.lastError, /missing required fields/);
-  console.log('SMOKE OK: the built worker job imports, the production stubs are applied, and the default DIY handler path dead-letters a malformed event at once.');
+  // Each DIY event type with a malformed payload, through the DEFAULT handler path of the built job: it must dead-letter at once.
+  for (const type of ['DIY_PROJECT_COMPLETED', 'DIY_TASK_COMPLETED_RECONCILE']) {
+    const writes = [];
+    const event = { id: 'ev-smoke', type, status: 'PENDING', attempts: 0, availableAt: new Date(0), updatedAt: new Date(0), payload: { projectId: '' } };
+    const deps = {
+      prisma: { domainEvent: { findMany: async () => [event], updateMany: async (args) => { writes.push(args); return { count: 1 }; } }, notification: {}, intelligenceRecomputeRun: {}, intelligenceRecomputeTarget: {} },
+      notificationService: { create: async () => ({}) },
+    };
+    const result = await job.processDomainEventsJob({ batchSize: 1 }, deps);
+    const failure = writes.find((write) => ['FAILED', 'DEAD_LETTER'].includes(write.data?.status));
+    assert.deepEqual([result.failed, result.deadLettered], [0, 1], type);
+    assert.match(failure.data.lastError, /missing required fields/, type);
+  }
+  console.log('SMOKE OK: the built worker job imports, the production stubs are applied, and the default handler path of each DIY event type dead-letters a malformed event at once.');
   cleanup();
   process.exit(0);
 })().catch((error) => { console.error('SMOKE FAILED', error); cleanup(); process.exit(1); });

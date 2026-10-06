@@ -148,6 +148,8 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     async findUnique({ where }) { const role = roleOf(where.propertyId_userId.userId, where.propertyId_userId.propertyId); return role ? { role } : null; },
   };
   const propertyDelegate = { async findFirst() { return null; } };
+  // Maintenance tasks, only for the link check at project creation: `hooks.tasks` is [{ id, propertyId }].
+  const maintenanceTaskDelegate = { async findFirst({ where }) { const row = (hooks.tasks ?? []).find((task) => matches(task, where)); return row ? { id: row.id } : null; } };
   // The outbox: unique idempotencyKey (P2002), recorded in `state.domainEvents`, rolled back with the transaction.
   const domainEventDelegate = {
     async findUnique({ where, select }) { const row = state.domainEvents.find((event) => event.idempotencyKey === where.idempotencyKey); return row ? (select ? pickKeys(structuredClone(row), select) : structuredClone(row)) : null; },
@@ -217,6 +219,7 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     diyProjectEvent: projectEventDelegate,
     householdMember: householdMemberDelegate,
     property: propertyDelegate,
+    propertyMaintenanceTask: maintenanceTaskDelegate,
     domainEvent: domainEventDelegate,
     diyProjectMaterial: projectChildren('materials'),
     diyProjectTool: projectChildren('tools'),

@@ -25,6 +25,7 @@ import {
   processRadarNotificationMaterializeEvent,
 } from '@worker-shared/modules/homeEventRadar/services/radarNotificationMaterializationReconciliation.service';
 import { processDiyProjectCompletedEventWithDefaults } from '@worker-shared/services/diy/diyCompletionEffectsAdapters';
+import { processDiyTaskReconciliationEventWithDefaults } from '@worker-shared/services/diy/diyTaskReconciliationAdapters';
 import { isTerminalDomainEventError } from '@worker-shared/services/domainEvents/terminalDomainEventError';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
@@ -53,6 +54,7 @@ export interface ProcessDomainEventsDeps {
   goalCandidateAttach?: typeof processGoalCandidateAttachEvent;
   captureNotification?: typeof processCaptureNotificationEvent;
   diyProjectCompleted?: typeof processDiyProjectCompletedEventWithDefaults;
+  diyTaskReconciliation?: typeof processDiyTaskReconciliationEventWithDefaults;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
@@ -68,6 +70,7 @@ const defaultDeps: ProcessDomainEventsDeps = {
   goalCandidateAttach: processGoalCandidateAttachEvent,
   captureNotification: processCaptureNotificationEvent,
   diyProjectCompleted: processDiyProjectCompletedEventWithDefaults,
+  diyTaskReconciliation: processDiyTaskReconciliationEventWithDefaults,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -533,6 +536,11 @@ export async function processDomainEventsJob(
           // Home event and linked maintenance completion (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md). Throws a terminal error for an
           // integrity failure (dead-lettered at once) and a plain error for a retryable failure.
           processingOutcome = await (deps.diyProjectCompleted ?? processDiyProjectCompletedEventWithDefaults)({ id: ev.id, payload: ev.payload });
+          break;
+        case 'DIY_TASK_COMPLETED_RECONCILE':
+          // A maintenance task linked to open DIY projects was completed elsewhere: apply the approved rules to each snapshotted project and record each
+          // project's outcome (docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md). Integrity failures throw a terminal error.
+          processingOutcome = await (deps.diyTaskReconciliation ?? processDiyTaskReconciliationEventWithDefaults)({ id: ev.id, payload: ev.payload });
           break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);

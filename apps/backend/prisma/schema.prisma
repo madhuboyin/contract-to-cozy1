@@ -9536,6 +9536,9 @@ enum DomainEventType {
   // DIY project completion (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md). Written in the same transaction as the project's COMPLETED
   // write; a worker handler creates the home event and completes the linked maintenance task from the payload snapshot.
   DIY_PROJECT_COMPLETED
+  // A maintenance task linked to open DIY projects was completed elsewhere (docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md). Written in the
+  // same transaction as the task's COMPLETED write; a worker applies the approved O12 rules to each snapshotted project.
+  DIY_TASK_COMPLETED_RECONCILE
 }
 
 enum DomainEventStatus {
@@ -19680,6 +19683,13 @@ enum DiyProjectStatus {
   HIRED_OUT
 }
 
+// Why a DIY project closed. STEPS: the person completed it through its steps. LINKED_TASK: it was closed from its linked maintenance task (completed with DIY
+// while steps were open, or hired out because a provider completed the task). Null: closed before this field existed, or not closed.
+enum DiyCompletionBasis {
+  STEPS
+  LINKED_TASK
+}
+
 enum DiyDecisionVerdict {
   DIY_RECOMMENDED
   BORDERLINE
@@ -19703,6 +19713,8 @@ enum DiyProjectEventType {
   PROJECT_COMPLETED
   PROJECT_ABANDONED
   PROJECT_HIRED_OUT
+  // Closed because the linked maintenance task was completed with DIY and the project's steps were not all done (basis LINKED_TASK).
+  PROJECT_CLOSED_BY_LINKED_TASK
 }
 
 enum DiyToolAction {
@@ -19960,6 +19972,7 @@ model DiyProject {
   abandonedAt DateTime?
   // Who completed the project (the acting household member, not necessarily `userId`, the creator).
   completedByUserId String?
+  completionBasis   DiyCompletionBasis?
 
   createdAt DateTime @default(now())
   // Also the version token for complete and abandon: every step transition writes the project row, so it changes whenever any step changes.
@@ -19982,6 +19995,8 @@ model DiyProject {
   @@index([templateId])
   @@index([templateRevisionId])
   @@index([category])
+  // The reverse lookup: open projects linked to a maintenance task that was just completed (reconciliation, step 4).
+  @@index([maintenanceTaskId])
   @@map("diy_projects")
 }
 
