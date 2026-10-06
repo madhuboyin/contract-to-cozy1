@@ -27,7 +27,6 @@ const REGION_WORDS: Record<SeasonalClimateRegion, string> = { VERY_COLD: 'a very
 const SEASON_WORDS: Record<Season, string> = { SPRING: 'spring', SUMMER: 'summer', FALL: 'fall', WINTER: 'winter' };
 const PRIORITY_ORDER: Record<string, number> = { CRITICAL: 0, RECOMMENDED: 1, OPTIONAL: 2 };
 const MAX_ITEMS = 8;
-const SEASONAL_PAGE = '/dashboard/seasonal';
 
 /** Mirrors ClimateZoneService.detectClimateRegion (zip prefix, else MODERATE) so the answer agrees with the seasonal checklist, and says which. */
 export function deriveSeasonalClimateRegion(zipCode: string | null | undefined, saved?: SeasonalClimateRegion | null): { region: SeasonalClimateRegion; source: ClimateRegionSource } {
@@ -49,7 +48,12 @@ export function buildSeasonalHomeCareResult(input: { zipCode: string | null | un
   const season = input.focus === 'NEXT_SEASON' ? getNextSeason(current) : current;
   const { region, source } = deriveSeasonalClimateRegion(input.zipCode, input.savedClimateRegion);
   const tasks = seasonalAssetFreeTasks(season, region);
-  const openPage = { id: 'open-seasonal-checklist', label: 'Open seasonal checklist', href: SEASONAL_PAGE, style: 'PRIMARY' as const };
+  // Opens the home's own generated checklist inside Ask (the maintenance read), not the desktop Seasonal page. The season word
+  // makes that read target the same season this answer is about.
+  const openPage = {
+    id: 'show-seasonal-checklist', label: 'Show my seasonal checklist', interactionType: 'START_WORKFLOW' as const,
+    message: `What seasonal maintenance tasks are on my ${SEASON_WORDS[season]} checklist?`, operationId: 'MAINTENANCE_STATUS', style: 'PRIMARY' as const,
+  };
   const regionNote = source === 'NATIONAL_DEFAULT'
     ? ` I could not map this zip code to a climate region, so this uses the national default (${REGION_WORDS[region]}); the seasonal settings page lets you change it.`
     : source === 'SAVED' ? ` This uses the climate region saved for this home (${REGION_WORDS[region]}).` : ` This is based on this home's zip code (${REGION_WORDS[region]}).`;

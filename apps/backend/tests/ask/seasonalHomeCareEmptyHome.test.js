@@ -80,5 +80,10 @@ test('an unmapped zip is answered with the national default and SAYS so; a mappe
 test('the answer never claims to assess the home: the boundary says general guidance and nothing recorded is read', () => {
   const result = buildSeasonalHomeCareResult({ zipCode: '78701', now: DATES.SPRING, focus: 'THIS_SEASON' });
   assert.match(result.blocks[2].body, /not an assessment of this home/);
-  assert.equal(result.blocks[0].actions[0].href, '/dashboard/seasonal');
+  // The checklist opens inside Ask (the maintenance read over the home's own generated checklist), not the desktop page.
+  const action = result.blocks[0].actions[0];
+  assert.equal(action.href, undefined);
+  assert.equal(action.interactionType, 'START_WORKFLOW');
+  assert.equal(action.operationId, 'MAINTENANCE_STATUS');
+  assert.match(action.message, /spring checklist/i);
 });

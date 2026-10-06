@@ -41,3 +41,47 @@ test('the repair-or-replace picker declares the operation each item sentence rou
   assert.equal(resolveAskOperation('Should I repair or replace HVAC Furnace?').operationId, 'HVAC_DECISION_START');
   assert.equal(resolveAskOperation('Should I repair or replace Oven Range?').operationId, 'REPLACEMENT_GUIDANCE');
 });
+
+// The answer-trust validator silently removes any block action whose id is not allowlisted for the operation. A schema-valid,
+// correctly-routed action is therefore still invisible to the homeowner unless it is declared in OPERATION_ACTION_IDS.
+test('every in-Ask next-step action survives the answer-trust validator for the operation that emits it', () => {
+  const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { getAskOperationDefinition } = require('../../src/services/ask/askOperationRegistry.ts');
+  const { buildSeasonalHomeCareResult } = require('../../src/services/ask/support/seasonalHomeCare.ts');
+  const view = inventoryViewItemAction('Water heater');
+  const add = inventoryAddItemAction();
+  const cases = [
+    ['INVENTORY_ITEM_CORRECT', 'WORKFLOW_PROGRESS', view, 'COMPLETED'],
+    ['INVENTORY_ITEM_CREATE', 'WORKFLOW_PROGRESS', view, 'COMPLETED'],
+    ['CAPTURE_EVIDENCE_CONFIRM', 'SUMMARY', inventoryViewItemAction('Water heater', 'SECONDARY'), 'COMPLETED'],
+    ['INVENTORY_LOOKUP', 'SUMMARY', add, 'READY_WITH_LIMITATIONS'],
+    ['REPLACEMENT_GUIDANCE', 'SUMMARY', inventoryShowAllAction(), 'READY_WITH_LIMITATIONS'],
+    ['REPLACEMENT_GUIDANCE', 'SUMMARY', add, 'READY_WITH_LIMITATIONS'],
+    ['HVAC_DECISION_START', 'SUMMARY', add, 'NOT_APPLICABLE'],
+    ['HVAC_DECISION_START', 'EMPTY_STATE', view, 'NOT_APPLICABLE'],
+    ['CAPITAL_RESERVE_PLAN', 'SUMMARY', add, 'READY_WITH_LIMITATIONS'],
+  ];
+  const seasonal = buildSeasonalHomeCareResult({ zipCode: '08536', now: new Date('2026-10-05T12:00:00Z'), focus: 'NEXT_SEASON' });
+  const seasonalAction = seasonal.blocks[0].actions[0];
+  cases.push(['SEASONAL_HOME_CARE', 'SUMMARY', seasonalAction, 'ANSWERED']);
+  assert.equal(seasonalAction.href, undefined, 'the seasonal CTA must stay in Ask');
+  assert.equal(resolveAskOperation(seasonalAction.message).operationId, seasonalAction.operationId);
+
+  for (const [operationId, type, action, status] of cases) {
+    const definition = getAskOperationDefinition(operationId);
+    const block = type === 'WORKFLOW_PROGRESS'
+      ? { type, id: 'b', title: 't', status: 'COMPLETED', description: 'd', details: [], actions: [action] }
+      : type === 'EMPTY_STATE' ? { type, id: 'b', title: 't', body: 'b', actions: [action] }
+        : { type, id: 'b', title: 't', body: 'b', tone: 'DEFAULT', actions: [action] };
+    const result = {
+      status, reasonCode: 'X', blocks: [block], suggestions: [],
+      parameters: {
+        audiencePresentation: { householdRole: 'OWNER' },
+        answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: definition.adapterKey, operationId, status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: new Date().toISOString() }] },
+      },
+    };
+    const validated = validateAskAnswerTrust({ question: 'q', operationId, propertyId: 'p1', result });
+    const kept = validated.result.blocks.flatMap((candidate) => candidate.actions ?? []).map((candidate) => candidate.id);
+    assert.deepEqual(kept, [action.id], `${operationId} must keep "${action.id}" (trust: ${(validated.trust?.reasonCodes ?? []).join(',')})`);
+  }
+});

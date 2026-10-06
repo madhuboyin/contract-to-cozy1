@@ -97,13 +97,13 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   SAVINGS_OPPORTUNITIES: new Set(['open-savings', 'review-all-savings']),
   OWNERSHIP_COSTS: new Set(['open-ownership-costs']),
   INVENTORY_LOOKUP: new Set(['add-inventory', 'search-inventory', 'open-inventory', 'add-inventory-item']),
-  INVENTORY_ITEM_CORRECT: new Set(['open-inventory']),
+  INVENTORY_ITEM_CORRECT: new Set(['open-inventory', 'view-inventory-item']),
   HOME_EVENT_CORRECT: new Set(['open-timeline', 'open-home-timeline']),
   HOME_EVENT_VISIBILITY: new Set(['open-timeline', 'open-home-timeline']),
   WARRANTY_CORRECT: new Set(['open-warranties']),
   ROOM_RENAME: new Set(['open-rooms']),
   ROOM_CREATE: new Set(),
-  INVENTORY_ITEM_CREATE: new Set(['open-inventory', 'open-rooms']),
+  INVENTORY_ITEM_CREATE: new Set(['open-inventory', 'open-rooms', 'view-inventory-item']),
   PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['open-property-record', 'continue-area-capture']),
   // Every action id PROPERTY_SUMMARY actually emits: the record link, one secondary "open the full collection"
   // link per section, and the contributor-only inline "Add a warranty" workflow action.
@@ -112,7 +112,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   CAPTURE_EVENT_CONFIRM: new Set(['open-timeline', 'open-home-timeline']),
   HOME_ACTIONS: new Set(['open-home', 'open-home-actions']),
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),
-  REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace']),
+  REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace', 'show-inventory', 'add-inventory-item']),
   // FRD v1.45: the analysis also shows the homeowner's own rate monitors (MONITOR renders its own pause/resume/stop).
   REFINANCE_ANALYSIS: new Set(['review-financing', 'open-radar', 'open-profile', 'edit-monitor']),
   REFINANCE_RATE_MONITOR: new Set(['open-radar', 'edit-monitor']),
@@ -133,7 +133,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   MATERIAL_SPECS_LIST: new Set(['open-material-specs']),
   GUIDANCE_JOURNEYS_LIST: new Set(['open-guidance-overview']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview', 'continue-step-in-ask', 'dismiss-guided-journey']),
-  SEASONAL_HOME_CARE: new Set(['open-seasonal-checklist']),
+  SEASONAL_HOME_CARE: new Set(['show-seasonal-checklist']),
+  // The attached-document receipt: an inventory item opens inline in Ask; a warranty keeps its page link.
+  CAPTURE_EVIDENCE_CONFIRM: new Set(['view-inventory-item', 'open-attached-record']),
   GUIDANCE_STEP_SKIP: new Set(['open-guidance-overview']),
   GUIDANCE_JOURNEY_DISMISS: new Set(['open-guidance-overview']),
   HOA_COMPLIANCE_STATUS: new Set(['open-hoa-compliance']),
@@ -156,7 +158,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'open-comparison']),
   HOME_DEADLINE_MONITOR: new Set(['open-task', 'open-maintenance', 'open-coverage', 'manage-reminder']),
   // FRD v1.47: + open-reserve-fund, the reserve-allocations list's own link, which was always stripped.
-  CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'open-timeline', 'open-timeline-table', 'open-reserve', 'open-reserve-fund', 'rerun-horizon-5', 'rerun-horizon-10']),
+  CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'add-inventory-item', 'open-timeline', 'open-timeline-table', 'open-reserve', 'open-reserve-fund', 'rerun-horizon-5', 'rerun-horizon-10']),
   // Item actions on the feed's events (FRD v1.40); the inline detail shows the ones valid for the live state.
   HOME_EVENT_RADAR_FEED: new Set(['open-radar', 'radar-include-dismissed', 'radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task', 'radar-notification-settings']),
   HOME_EVENT_RADAR_STATE: new Set(['open-radar']),
@@ -166,7 +168,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_EVENT_RADAR_PREFERENCES: new Set(['open-radar']),
   PROPERTY_TAX_APPEAL_READINESS: new Set(['open-property-tax']),
   RENOVATION_PERMIT_READINESS: new Set(['start-renovation', 'open-permits', 'open-case']),
-  HVAC_DECISION_START: new Set(['open-inventory']),
+  HVAC_DECISION_START: new Set(['open-inventory', 'add-inventory-item', 'view-inventory-item']),
   HVAC_DECISION_CONTINUE: new Set(['open-inventory']),
   BUYER_PLAN_STATUS: new Set(['open-next-buyer-task', 'open-buyer-plan', 'open-home']),
   // FRD v1.46: + the blocking-task item action; the inline task detail shows it only while the live task is open.
