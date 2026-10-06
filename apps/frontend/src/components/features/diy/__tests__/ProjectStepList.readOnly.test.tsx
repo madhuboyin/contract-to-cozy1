@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProjectStepList from '../ProjectStepList';
 import type { DiyProjectStep } from '@/types';
 
@@ -22,5 +22,24 @@ describe('ProjectStepList read-only mode (household viewer)', () => {
     expect(screen.getByRole('button', { name: 'Mark done' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start step' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Add a note…')).toBeInTheDocument();
+  });
+});
+
+describe('ProjectStepList reopen and skip rules (slice 2b)', () => {
+  const done = [
+    { id: 'a', stepNumber: 1, title: 'Done step', description: 'x', status: 'COMPLETED', isOptional: false, notes: null, updatedAt: '2026-10-06T12:00:00.001Z' },
+    { id: 'b', stepNumber: 2, title: 'Skipped step', description: 'y', status: 'SKIPPED', isOptional: true, notes: null, updatedAt: '2026-10-06T12:00:00.002Z' },
+  ] as unknown as DiyProjectStep[];
+
+  it('offers Reopen for completed and skipped steps, and not to a viewer or after the project finished', async () => {
+    const onUpdateStep = jest.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<ProjectStepList steps={done} onUpdateStep={onUpdateStep} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen step' }));
+    expect(onUpdateStep).toHaveBeenCalledWith('a', 'IN_PROGRESS', undefined);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reopen step' })).toBeEnabled());
+    rerender(<ProjectStepList steps={done} onUpdateStep={onUpdateStep} readOnly />);
+    expect(screen.queryByRole('button', { name: 'Reopen step' })).toBeNull();
+    rerender(<ProjectStepList steps={done} onUpdateStep={onUpdateStep} disabled />);
+    expect(screen.getByRole('button', { name: 'Reopen step' })).toBeDisabled();
   });
 });

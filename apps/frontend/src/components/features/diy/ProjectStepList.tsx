@@ -4,6 +4,7 @@ import { CheckCircle2, Circle, ChevronDown, ChevronUp, AlertTriangle, Lightbulb 
 import type { DiyProjectStep, DiyStepStatus } from '@/types';
 import { formatMinutes } from './DiyUtils';
 import SafetyWarningBanner from './SafetyWarningBanner';
+import { canSkipStep } from '@/lib/diy/diyProjectRules';
 
 interface Props {
   steps: DiyProjectStep[];
@@ -90,6 +91,18 @@ export default function ProjectStepList({ steps, onUpdateStep, disabled, readOnl
                 />
                 )}
 
+                {/* A finished step can be reopened to correct a mistake. */}
+                {!readOnly && (isDone || isSkipped) && (
+                  <button
+                    type="button"
+                    disabled={isPending || disabled}
+                    onClick={() => handleStatus(step, 'IN_PROGRESS')}
+                    className="rounded-xl border px-3 py-2 text-sm text-neutral-600 disabled:opacity-50"
+                  >
+                    {isPending ? 'Saving…' : 'Reopen step'}
+                  </button>
+                )}
+
                 {/* Actions */}
                 {!readOnly && !isDone && !isSkipped && (
                   <div className="flex gap-2">
@@ -111,7 +124,7 @@ export default function ProjectStepList({ steps, onUpdateStep, disabled, readOnl
                     >
                       {isPending ? 'Saving…' : 'Mark done'}
                     </button>
-                    {step.isOptional && (
+                    {canSkipStep(step) && (
                       <button
                         type="button"
                         disabled={isPending || disabled}

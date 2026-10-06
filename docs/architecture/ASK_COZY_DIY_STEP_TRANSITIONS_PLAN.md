@@ -195,3 +195,26 @@ The owner approved **S2-1 through S2-9 at the recommended defaults**:
 | Backend `npm run typecheck`; DIY, governance, revision, route-role, Ask DIY and startup-registry suites | clean; 137 pass | Executed |
 
 **Not run:** Postgres. The fake serializes transactions like row locks, so the claim and the race tests demonstrate the logic but not real lock timing, `timestamp(3)` round trips of the version token, or the retry loop under real contention; slice 2c extends the guarded scratch run for exactly those. No route, validator or page change yet (slice 2b), so **the existing page cannot yet update a step** (it sends no token): do not deploy 2a without 2b. The raw maintenance and incident writes in `DiyCompletionService` are unchanged until step 3.
+
+## 13. Slice 2b record (October 6, 2026)
+
+**Built (routes, validators, page).** The three write requests now require `expectedUpdatedAt` (an ISO datetime): the step update (the step's `updatedAt`), project completion and project abandonment (the project's `updatedAt`). A missing or malformed token is a 400 before the service runs. The controller passes the signed-in user and the token to the service and returns `{step, alreadyApplied}` for step updates. On the page:
+
+- every step change sends the version of the step that was on screen; complete and abandon send the project's;
+- `DIY_STALE` and `DIY_PROJECT_CLOSED` reload the project and say so ("This project changed while you were working. We've refreshed it." / "This project is already finished and can no longer be changed."); a refused transition or incomplete project reloads and shows the server's message;
+- **Reopen step** is offered for completed and skipped steps (not to viewers, disabled while the project is read-only);
+- **Skip** appears only for an optional step with no safety note (`canSkipStep`, mirroring the server);
+- **Complete Project** appears only when the completion rule holds (`openStepsForCompletion` is empty); while only optional steps remain, a hint says how many are left and that they can be done or skipped;
+- the completion sheet sends the project token and, on a stale, closed or incomplete answer, closes, refreshes the project and shows the message.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| Backend: request schema tests (4), plus DIY, revision, role-floor and completion-actor suites | 106 pass | Executed |
+| Frontend: page tests (tokens sent, stale reload, closed and refused messages, reopen, skip rules, completion gating and hint, completion and abandon stale handling), step-list reopen test, rules tests, viewer-access test | 24 pass | Executed |
+| Mutation checks: step token dropped (2 tests fail); abandon token dropped (1); completion gating loosened to ignore optional steps (1); skip allowed for any step (1) | each caught; originals restored | Executed |
+| Backend `npm run typecheck`; frontend `next build` | clean | Executed |
+| Wider frontend run (`src/components/features src/lib src/app`) | 450 pass, 10 fail in 5 suites that this slice does not touch (`propertyContextForm`, `contracts` (CTA), `buyerProfileCapture`, `toolDiscoveryEvents`, and the file-upload test in `client.test.ts`); my `client.ts` change is limited to the three DIY methods | Executed; failures not investigated |
+
+**Not run:** a browser, and a real backend. Slice 2a and 2b ship together; Postgres race behavior is slice 2c.

@@ -2,15 +2,20 @@
 import { useState } from 'react';
 import { X, PartyPopper } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { diyErrorCode } from '@/lib/diy/diyProjectRules';
 
 interface Props {
   propertyId: string;
   projectId: string;
+  /** The project's version (`updatedAt`) this completion is based on. */
+  expectedUpdatedAt: string;
   onCompleted: (homeEventId: string) => void;
+  /** The project changed under this sheet (a stale version, or steps that are no longer all done): the page reloads it and closes the sheet. */
+  onOutOfDate: (message: string) => void;
   onClose: () => void;
 }
 
-export default function ProjectCompleteSheet({ propertyId, projectId, onCompleted, onClose }: Props) {
+export default function ProjectCompleteSheet({ propertyId, projectId, expectedUpdatedAt, onCompleted, onOutOfDate, onClose }: Props) {
   const [minutes, setMinutes] = useState('');
   const [costDollars, setCostDollars] = useState('');
   const [notes, setNotes] = useState('');
@@ -23,12 +28,19 @@ export default function ProjectCompleteSheet({ propertyId, projectId, onComplete
     setError(null);
     try {
       const result = await api.completeDiyProject(propertyId, projectId, {
+        expectedUpdatedAt,
         actualMinutes: minutes ? parseInt(minutes) : undefined,
         actualMaterialCostCents: costDollars ? Math.round(parseFloat(costDollars) * 100) : undefined,
         notes: notes || undefined,
       });
       onCompleted(result.homeEventId);
     } catch (err: any) {
+      const code = diyErrorCode(err);
+      // Someone changed the project (or reopened a step) while this sheet was open: refresh it rather than keep a sheet that can no longer succeed.
+      if (code === 'DIY_STALE' || code === 'DIY_PROJECT_STEPS_INCOMPLETE' || code === 'DIY_PROJECT_CLOSED') {
+        onOutOfDate(err?.message ?? 'This project changed. We refreshed it.');
+        return;
+      }
       setError(err?.message ?? 'Failed to complete project');
     } finally {
       setLoading(false);

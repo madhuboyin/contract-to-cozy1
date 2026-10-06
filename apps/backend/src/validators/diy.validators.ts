@@ -60,18 +60,25 @@ export const UpdateProjectSchema = z.object({
   photoUrls: z.array(z.string().url()).optional(),
 });
 
+// The version a change is based on (docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md): the step's `updatedAt` for a step update, the project's
+// `updatedAt` for complete and abandon. Required, so a stale request is refused rather than silently winning.
+const expectedUpdatedAt = z.string().datetime({ message: 'expectedUpdatedAt must be the ISO timestamp of the version this change is based on' });
+
 export const UpdateStepSchema = z.object({
   status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED']),
   notes: z.string().optional(),
+  expectedUpdatedAt,
 });
 
 export const CompleteProjectSchema = z.object({
+  expectedUpdatedAt,
   actualMinutes: z.number().int().min(1).optional(),
   actualMaterialCostCents: z.number().int().min(0).optional(),
   notes: z.string().optional(),
 });
 
 export const AbandonProjectSchema = z.object({
+  expectedUpdatedAt,
   hireOut: z.boolean().default(false),
 });
 

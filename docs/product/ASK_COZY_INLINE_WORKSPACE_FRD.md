@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.198
+**Version:** 1.199
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.199 — DIY step and project transitions, slice 2b (routes, validators, page):** the step, complete and abandon requests now require a version token and the project page sends it. A stale or closed project reloads with a plain explanation; a finished or skipped step can be reopened; Skip is offered only for an optional step without a safety note; Complete Project appears only when every required step is done and every optional step is done or skipped, with a hint while optional steps remain. Component tests with mutation checks, typecheck and `next build` pass; not run in a browser or against Postgres. 2a and 2b must ship together. See `docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md` §13.
 
 **Revision 1.198 — DIY step and project transitions, slice 2a (service):** DIY step updates, project completion and abandonment are now single transactions that claim the project row with a conditional write, validate against a transition table (skip only an optional step without a safety note, reopen allowed, same-status retries are no-ops), require and check version tokens that strictly increase, record the acting user on the step, the project and an append-only ledger, and enforce the completion rule (required steps completed, optional steps completed or skipped). The home event and incident sync are attributed to the person who completed the project. Service and tests only: the routes, validators and page are slice 2b, so this must ship with it; the raw maintenance and incident writes remain until step 3. Tested on a database-free fake with mutation checks; not exercised against Postgres. See `docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md` §12.
 

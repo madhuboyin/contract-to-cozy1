@@ -6314,6 +6314,9 @@ export interface DiyProjectStep {
   status: DiyStepStatus;
   notes?: string;
   completedAt?: string;
+  completedByUserId?: string;
+  /** The version a change to this step must be based on (sent back as `expectedUpdatedAt`). */
+  updatedAt: string;
 }
 
 export interface DiyProjectMaterial {
@@ -6339,6 +6342,8 @@ export interface DiyProjectTool {
 }
 
 export interface DiyProjectDetail extends DiyProjectSummary {
+  /** The version complete and abandon must be based on. It changes whenever any step changes. */
+  updatedAt: string;
   description?: string;
   maintenanceTaskId?: string;
   incidentId?: string;

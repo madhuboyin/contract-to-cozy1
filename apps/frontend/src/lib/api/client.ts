@@ -5775,19 +5775,20 @@ class APIClient {
     return res.data.project;
   }
 
-  async updateDiyProjectStep(propertyId: string, projectId: string, stepId: string, patch: { status: import('@/types').DiyStepStatus; notes?: string }): Promise<import('@/types').DiyProjectStep> {
-    const res = await this.patch<{ step: import('@/types').DiyProjectStep }>(`/api/properties/${propertyId}/diy/projects/${projectId}/steps/${stepId}`, patch);
+  // `expectedUpdatedAt` is the version the change is based on (the step's `updatedAt`); a stale one is refused with code DIY_STALE.
+  async updateDiyProjectStep(propertyId: string, projectId: string, stepId: string, patch: { status: import('@/types').DiyStepStatus; notes?: string; expectedUpdatedAt: string }): Promise<{ step: import('@/types').DiyProjectStep; alreadyApplied: boolean }> {
+    const res = await this.patch<{ step: import('@/types').DiyProjectStep; alreadyApplied?: boolean }>(`/api/properties/${propertyId}/diy/projects/${projectId}/steps/${stepId}`, patch);
     if (!res.data?.step) throw new APIError('Failed to update step', 500);
-    return res.data.step;
+    return { step: res.data.step, alreadyApplied: Boolean(res.data.alreadyApplied) };
   }
 
-  async completeDiyProject(propertyId: string, projectId: string, payload: { actualMinutes?: number; actualMaterialCostCents?: number; notes?: string }): Promise<{ homeEventId: string }> {
+  async completeDiyProject(propertyId: string, projectId: string, payload: { expectedUpdatedAt: string; actualMinutes?: number; actualMaterialCostCents?: number; notes?: string }): Promise<{ homeEventId: string }> {
     const res = await this.post<{ homeEventId: string }>(`/api/properties/${propertyId}/diy/projects/${projectId}/complete`, payload);
     if (!res.data) throw new APIError('Failed to complete project', 500);
     return res.data;
   }
 
-  async abandonDiyProject(propertyId: string, projectId: string, payload: { hireOut?: boolean }): Promise<void> {
+  async abandonDiyProject(propertyId: string, projectId: string, payload: { expectedUpdatedAt: string; hireOut?: boolean }): Promise<void> {
     await this.post(`/api/properties/${propertyId}/diy/projects/${projectId}/abandon`, payload);
   }
 

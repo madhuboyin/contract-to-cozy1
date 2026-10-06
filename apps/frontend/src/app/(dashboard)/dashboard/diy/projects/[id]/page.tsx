@@ -11,6 +11,7 @@ import ToolsList from '@/components/features/diy/ToolsList';
 import ProjectCompleteSheet from '@/components/features/diy/ProjectCompleteSheet';
 import ViewOnlyNotice from '@/components/features/diy/ViewOnlyNotice';
 import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
+import { CLOSED_MESSAGE, STALE_MESSAGE, diyErrorCode, openStepsForCompletion } from '@/lib/diy/diyProjectRules';
 import { STATUS_LABELS, STATUS_COLOR, CATEGORY_EMOJI } from '@/components/features/diy/DiyUtils';
 
 export default function ProjectTrackerPage() {
@@ -35,14 +36,26 @@ export default function ProjectTrackerPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // A failed write: a stale or closed project is reloaded and explained; anything else shows the server's own message.
+  async function handleWriteError(err: any, fallback: string) {
+    const code = diyErrorCode(err);
+    if (code === 'DIY_STALE') { await load(); setError(STALE_MESSAGE); return; }
+    if (code === 'DIY_PROJECT_CLOSED') { await load(); setError(CLOSED_MESSAGE); return; }
+    if (code === 'DIY_STEP_TRANSITION_NOT_ALLOWED' || code === 'DIY_PROJECT_STEPS_INCOMPLETE') { await load(); setError(err?.message ?? fallback); return; }
+    setError(err?.message ?? fallback);
+  }
+
   async function handleStepUpdate(stepId: string, status: DiyStepStatus, notes?: string) {
     if (!propertyId || !project) return;
+    const step = project.steps.find((candidate) => candidate.id === stepId);
+    if (!step) return;
     setError(null);
     try {
-      await api.updateDiyProjectStep(propertyId, project.id, stepId, { status, notes });
+      // The change is based on the step version this page loaded; if someone else changed the step meanwhile the server refuses it.
+      await api.updateDiyProjectStep(propertyId, project.id, stepId, { status, notes, expectedUpdatedAt: step.updatedAt });
       await load();
     } catch (err: any) {
-      setError(err?.message ?? 'Could not update this step. Please try again.');
+      await handleWriteError(err, 'Could not update this step. Please try again.');
     }
   }
 
@@ -52,11 +65,11 @@ export default function ProjectTrackerPage() {
     setAbandoning(true);
     setError(null);
     try {
-      await api.abandonDiyProject(propertyId, project.id, { hireOut: false });
+      await api.abandonDiyProject(propertyId, project.id, { hireOut: false, expectedUpdatedAt: project.updatedAt });
       router.push(`/dashboard/diy?propertyId=${propertyId}`);
     } catch (err: any) {
-      // The project is unchanged, so stay here and say so rather than leaving as if it had been stopped.
-      setError(err?.message ?? 'Could not stop this project. Please try again.');
+      // The project is unchanged (or was refreshed), so stay here and say so rather than leaving as if it had been stopped.
+      await handleWriteError(err, 'Could not stop this project. Please try again.');
       setAbandoning(false);
     }
   }
@@ -75,7 +88,10 @@ export default function ProjectTrackerPage() {
 
   const requiredSteps = project.steps.filter((s) => !s.isOptional);
   const completedRequired = requiredSteps.filter((s) => s.status === 'COMPLETED').length;
-  const allDone = requiredSteps.length > 0 && completedRequired === requiredSteps.length;
+  // The project can finish only when every required step is completed and every optional step is completed or skipped.
+  const openSteps = openStepsForCompletion(project.steps);
+  const allDone = openSteps.length === 0;
+  const onlyOptionalLeft = openSteps.length > 0 && openSteps.every((step) => step.isOptional);
   const progressPct = requiredSteps.length > 0 ? Math.round((completedRequired / requiredSteps.length) * 100) : 0;
   const isFinished = project.status === 'COMPLETED' || project.status === 'ABANDONED' || project.status === 'HIRED_OUT';
 
@@ -167,6 +183,11 @@ export default function ProjectTrackerPage() {
       {/* Fixed bottom actions */}
       {!isFinished && canWrite && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 space-y-2">
+          {onlyOptionalLeft && (
+            <p data-optional-steps-left="" className="text-center text-xs text-neutral-600">
+              {openSteps.length === 1 ? '1 optional step is left' : `${openSteps.length} optional steps are left`}: do {openSteps.length === 1 ? 'it' : 'them'} or skip {openSteps.length === 1 ? 'it' : 'them'} to finish the project.
+            </p>
+          )}
           {allDone && (
             <button
               type="button"
@@ -200,9 +221,15 @@ export default function ProjectTrackerPage() {
         <ProjectCompleteSheet
           propertyId={propertyId}
           projectId={project.id}
+          expectedUpdatedAt={project.updatedAt}
           onCompleted={async () => {
             setShowComplete(false);
             await load();
+          }}
+          onOutOfDate={async (message) => {
+            setShowComplete(false);
+            await load();
+            setError(message);
           }}
           onClose={() => setShowComplete(false)}
         />
