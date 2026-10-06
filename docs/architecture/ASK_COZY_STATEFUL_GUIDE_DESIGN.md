@@ -1,7 +1,7 @@
 # Ask Cozy — Stateful GUIDE Design (Phase 3 design gate)
 
 **Date:** October 6, 2026 (revision 2 after review)
-**Status:** **Design for approval. Not approved. Nothing is built and no schema is changed.** Implementation is blocked until the decisions in §10 are answered.
+**Status:** **Approved October 6, 2026: decisions O2-O13 at their recommended defaults (O1 was approved in principle at review).** Nothing beyond P0 is built and no schema is changed. One input is still missing: a **named** content owner for the first production template (O7, §13). Implementation proceeds in the order in §13.
 **Plan:** [`ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md`](ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md) §6
 **Requirement authority:** `docs/product/ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.188, Appendix C.11.8 (the eight decisions this document must resolve)
 **Precedent reused:** [`ASK_COZY_GUIDED_JOURNEY_CONTINUATION_FRD.md`](../product/ASK_COZY_GUIDED_JOURNEY_CONTINUATION_FRD.md) (shipped; a stateful continuation over canonical state)
@@ -238,7 +238,7 @@ P0 can ship immediately and independently. P1-P5 are the same kind of "completio
 
 ## 10. Decisions requested
 
-Nothing starts until these are answered. Changes from revision 1 are marked.
+**All answered at the recommended defaults below; see §13 for the approval record.** Changes from revision 1 are marked.
 
 | ID | Decision | Recommended |
 | --- | --- | --- |
@@ -303,3 +303,45 @@ P0 was implemented on its own, independent of the design approval, because it fi
 | `jest` on `src/lib/property`, `src/components/features`, `src/app` | 246 pass, 1 fail: `propertyContextForm.test.ts` (a source-text check on the unrelated property create/edit pages; those files are untouched) | Component-tested |
 
 **Not run:** a browser, so layout and the notice's appearance are unverified. Not covered by a test: the property DIY tool page's viewer branch (built and type-checked only), and the complete sheet, which is reachable only through the now-hidden button.
+
+## 13. Approval record and implementation order (October 6, 2026)
+
+The owner approved decisions **O2 through O13 at the recommended defaults in §10**. O1 (additive `TASK_GUIDE` `progress` and `outline`, with the block as a snapshot that never owns progress) had been approved in principle at review and stands.
+
+| ID | Approved decision |
+| --- | --- |
+| O1 | Additive `TASK_GUIDE` `progress` and `outline`; a rendered snapshot with `asOf`, never the owner of progress |
+| O2 | **O2-A:** immutable published revision records (`DiyTemplateRevision`), with `createProject` snapshotting only from the latest published revision and recording `DiyProject.templateRevisionId`; projects without a revision record are not guideable. O2-B is the fallback only if O2-A proves infeasible, and any switch comes back for approval |
+| O3 | Accept the page behavior changes: completion invariant, version-checked transitions, outbox effects (including the later `homeEventId` in the page's completion response), maintenance completion through the governed path |
+| O4 | Self-reported completion, optional evidence, no photo gate |
+| O5 | Defer seasonal-to-DIY mapping; start only from existing DIY projects |
+| O6 | Superseded by O12 |
+| O7 | The owner or content team authors the first LOW-safety template; **no named person was given, so this is open for the production slice only** (see below) |
+| O8 | Reverse the FRD v1.58 decision for eligible, revision-backed, template-sourced projects only, after O2, O10 and the prerequisites |
+| O9 | Help in v1 is local disclosure only; no child-turn help, no LLM |
+| O10 | Property-shared: household VIEWER reads, CONTRIBUTOR and up mutate, attribution columns `completedByUserId` on `DiyProjectStep` and `DiyProject`, role floor on the page (done as P0) |
+| O11 | Optional steps must be completed or explicitly skipped before project completion |
+| O12 | Maintenance-to-DIY reconciliation by fulfillment mode (`PROVIDER` hires out; `DIY` completes through the governed path or a server-verified `LINKED_TASK` closure; unknown mode stays open and disclosed), with a stored `completionBasis` and an index on `DiyProject.maintenanceTaskId` |
+| O13 | DIY completion does not change incident status in v1; incident-linked completion stays on the page until the incident owner decides |
+
+**What approval does not settle**
+
+- **O7 needs a person or role by name.** The default says "owner or content team", which does not identify who authors, reviews and publishes the template. This does **not** block the engineering steps below or tests (a repository fixture can exercise the feature); it blocks only step 6 (production content) and any claim that real guides exist.
+- **Schema changes are now authorized in principle, not applied.** In total: `DiyTemplateRevision` and `DiyProject.templateRevisionId` (step 1); `DiyProjectStep.updatedAt`, `DiyProjectStep.completedByUserId`, `DiyProject.completedByUserId` (steps 2-3); `DiyProject.completionBasis` and an index on `maintenanceTaskId` (step 5); a new `DomainEventType` value and its worker handler (step 4). Per repository policy each is made by editing `prisma/schema.prisma` and applying with `prisma db push` (run by the owner against their database), with no migration scripts; workers need `prisma generate`.
+- **Verification still outstanding.** Two claims were stated as "not found" or not exercised and must be confirmed in the step that depends on them: that no incident allowed-transition table exists (step 4, only relevant if O13 is ever revisited) and that no other path edits an approved template's content (step 1, covered by the immutability tests).
+
+**Implementation order (the review's sequence, now approved)**
+
+| Step | Work | Status |
+| --- | --- | --- |
+| 0 | P0 role floor and viewer controls | **Done** (`78a2726a`, `c96da723`) |
+| 1 | P1: immutable template revisions (O2-A): schema, publish creates a revision, `createProject` snapshots from it, admin edits operate on the draft; tests including "an approved revision cannot change" | Not started |
+| 2 | P2/P3: attribution columns, `DiyProjectStep.updatedAt`, actor-aware and version-checked step and project transitions in the shared service, `updateStep` atomic, completion invariant (O11) | Not started |
+| 3 | P4: completion effects through the `DomainEvent` outbox, governed maintenance completion with the actor, no incident change (O13), recovery command | Not started |
+| 4 | P5: maintenance-to-DIY reconciliation (O12) | Not started |
+| 5 | Read-only `DIY_PROJECT_GUIDE` with additive `TASK_GUIDE` progress and outline; skill, allow-lists and validators (O8) | Not started |
+| 6 | `DIY_STEP_UPDATE` commands, then project completion and abandonment | Not started |
+| 7 | P6: first production template, **needs the O7 named owner** | Blocked on a name |
+| 8 | Help beyond local disclosure, seasonal-to-DIY mapping | Deferred (O9, O5) |
+
+Steps 1-4 change what the existing DIY page does (O3) and should ship and be verified before any Ask surface (step 5) claims content is reviewed.

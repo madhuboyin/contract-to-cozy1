@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.191
+**Version:** 1.192
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.192 — stateful GUIDE design approved:** `docs/architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md` revision 2 is approved at the recommended defaults for decisions O2-O13. This satisfies the C.11.8 design gate: it resolves all eight decisions and does not relax any of them. A stateful Ask guide is limited to eligible, revision-backed, template-sourced DIY projects (AI-generated guides excluded), keeps progress as canonical DIY state, treats completion as self-reported, and may not call content reviewed until immutable published template revisions exist. The approval reverses the v1.58 decision that stepping through DIY projects stays on the page, for those projects only. Nothing in Ask is implemented; a named content owner for the first production template is still needed. The owner runs any schema change with `prisma db push`.
 
 **Revision 1.191 — DIY pages stop offering write controls to household viewers:** Follow-up to the P0 role floor. The DIY project page, template page, DIY hub and the property DIY tool page hide the project, step, complete, stop and AI-guide controls for a household viewer and show a view-only notice; the rule is `householdRole !== 'VIEWER'` and the server remains the authority. A failed "stop this project" no longer navigates away as if it had worked, and a failed step update shows its error. Component tests (3 of the 9 page tests fail against the old project page) and a clean `next build`; no browser run. See `docs/architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md` §12.1.
 
