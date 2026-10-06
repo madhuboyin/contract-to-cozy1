@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.188
+**Version:** 1.189
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.189 — stateful GUIDE design revised after review (still not approved):** Revision 2 of `docs/architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md` resolves the nine review findings. It requires template content to be provably reviewed before any Ask guide may call it so (approval is currently attached to a template, not to a content snapshot, and an ACTIVE template can be edited in place), decides household ownership and a role floor (the DIY page's mutation routes enforce no role floor today), makes step and project transitions actor-aware and version-checked, moves completion effects to a durable outbox with a confirmation-gated recovery action and no read-time repair, defines optional-step semantics, limits v1 help to local disclosure, adds maintenance-to-DIY reconciliation by fulfillment mode, and audits incident side effects (a self-reported DIY completion currently yields a verified work item). No C.11.8 requirement is relaxed; nothing is implemented.
 
 **Revision 1.188 — stateful GUIDE design gate written (not approved):** Adds `docs/architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md`, which resolves the eight C.11.8 decisions without a new stepper store: guide only template-sourced DIY projects (AI-generated guides excluded), keep progress as the existing canonical `DiyProjectStep` state, treat completion as self-reported with optional attached evidence, make help read-only child turns, and require three existing DIY completion defects to be fixed first. No requirement in C.11.8 is relaxed, and nothing is implemented. The design asks nine owner decisions (O1-O9), including reversing the v1.58 decision that stepping through DIY projects stays on the page.
 

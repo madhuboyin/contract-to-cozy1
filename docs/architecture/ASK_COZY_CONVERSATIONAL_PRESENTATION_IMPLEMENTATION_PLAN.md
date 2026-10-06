@@ -106,7 +106,7 @@ Likely affected areas may include the response contract, execution/session conti
 
 ### 6.1 Status (October 6, 2026)
 
-The design gate is written: [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md). It resolves all eight FRD C.11.8 decisions (D1-D8) by building on the existing DIY step workflow and the shipped guided-journey continuation pattern rather than a new stepper store, lists five prerequisites (P1-P5; P2-P4 fix existing DIY completion behavior) and six delivery slices, and asks nine decisions (O1-O9). **Awaiting approval; nothing is implemented and no schema is changed.**
+The design gate is written and was reviewed once: [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) revision 2. The central recommendation (durable progress in the DIY domain, Ask as a continuation view over template-sourced projects) was accepted; revision 1 was **not approved** because several existing DIY defects were treated as acceptable boundaries. Revision 2 resolves all nine review findings: provable template review (immutable revisions or re-review on edit), a decided ownership and role model plus a role-floor fix on the DIY page, actor-aware and version-checked transitions, a durable outbox for completion effects with no read-time repair, defined optional-step semantics, local-only help in v1, reverse maintenance-to-DIY reconciliation, and an incident-effects audit. It asks 13 decisions (O1-O13) and lists seven prerequisites (P0-P6). **Awaiting approval; nothing is implemented and no schema is changed.**
 
 ## 7. Phase 4 — ASSESS and safety knowledge capture
 
