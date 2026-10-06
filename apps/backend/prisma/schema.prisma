@@ -19711,6 +19711,21 @@ enum DiySafetyLevel {
   HIGH
 }
 
+// Immutable published DIY template revisions (docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md).
+// GOVERNED: created through submit-for-review and approved against exactly this content. LEGACY_BACKFILL: created by the one-time backfill
+// for a template that was already live before revisions existed; its approval was attached to the template, not to this content, so it makes
+// no review or integrity claim (contentHash is null).
+enum DiyRevisionProvenance {
+  GOVERNED
+  LEGACY_BACKFILL
+}
+
+enum DiyRevisionRetiredReason {
+  SUPERSEDED
+  UNPUBLISHED
+  ARCHIVED
+}
+
 enum DiyAiGuideStatus {
   PENDING
   GENERATING
@@ -19777,12 +19792,71 @@ model DiyProjectTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // The published head: the one revision homeowners see and new projects copy. A template is live when this is set. The row's own columns and
+  // steps are the editable working copy; approvedBy/approvedAt above mirror the candidate revision's approval for the existing queue and admin UI.
+  publishedRevisionId String?              @unique
+  publishedRevision   DiyTemplateRevision? @relation("DiyTemplatePublishedRevision", fields: [publishedRevisionId], references: [id], onDelete: SetNull)
+  revisions           DiyTemplateRevision[] @relation("DiyTemplateRevisions")
+
   steps     DiyTemplateStep[]
   materials DiyTemplateMaterial[]
   tools     DiyTemplateTool[]
   projects  DiyProject[]
 
   @@map("diy_project_templates")
+}
+
+// An immutable snapshot of a template's working copy that went (or, for LEGACY_BACKFILL, is treated as having gone) through review. Content columns
+// and contentJson are written once, by services/diyTemplateRevision.service.ts only; the service has no content update. Prisma cannot make
+// columns write-once, so immutability is tamper-evident (contentHash is recomputed at publish and at every project creation), not tamper-proof.
+model DiyTemplateRevision {
+  id         String @id @default(cuid())
+  templateId String
+  revision   Int
+
+  // List and filter columns (so homeowner list queries filter and sort on the revision without parsing JSON).
+  slug               String
+  title              String
+  shortDescription   String
+  category           DiyProjectCategory
+  difficultyLevel    DiyDifficultyLevel
+  requiredSkillLevel DiySkillLevel
+  safetyLevel        DiySafetyLevel
+  permitRequirement  PermitRequirementStatus
+  estimatedMinutes   Int
+
+  estimatedMaterialCostMinCents Int?
+  estimatedMaterialCostMaxCents Int?
+  professionalCostMinCents      Int?
+  professionalCostMaxCents      Int?
+
+  tags String[]
+
+  // The rest of the snapshot: longDescription, steps[], materials[], tools[] as authored.
+  contentJson Json
+  // SHA-256 over a canonical serialization of every content field above. Computed by the application only; null for LEGACY_BACKFILL.
+  contentHash String?
+  provenance  DiyRevisionProvenance @default(GOVERNED)
+
+  submittedBy String?
+  submittedAt DateTime?
+  approvedBy  String?
+  approvedAt  DateTime?
+  publishedBy String?
+  publishedAt DateTime?
+  returnedAt  DateTime?
+  retiredAt   DateTime?
+  retiredReason DiyRevisionRetiredReason?
+
+  createdAt DateTime @default(now())
+
+  template     DiyProjectTemplate  @relation("DiyTemplateRevisions", fields: [templateId], references: [id], onDelete: Cascade)
+  publishedFor DiyProjectTemplate? @relation("DiyTemplatePublishedRevision")
+  projects     DiyProject[]
+
+  @@unique([templateId, revision])
+  @@index([templateId, publishedAt])
+  @@map("diy_template_revisions")
 }
 
 model DiyTemplateStep {
@@ -19843,6 +19917,9 @@ model DiyProject {
   propertyId String
   userId     String
   templateId String?
+  // The published revision this project copied its steps from. Null for a project from before revisions existed or from an AI guide; such a
+  // project is not offered as a reviewed guide in Ask.
+  templateRevisionId String?
   aiGuideId  String?
 
   title       String
@@ -19874,6 +19951,7 @@ model DiyProject {
   property Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   template DiyProjectTemplate? @relation(fields: [templateId], references: [id])
+  templateRevision DiyTemplateRevision? @relation(fields: [templateRevisionId], references: [id], onDelete: SetNull)
   aiGuide  DiyAiGuide?         @relation(fields: [aiGuideId], references: [id])
 
   steps     DiyProjectStep[]
@@ -19884,6 +19962,7 @@ model DiyProject {
   @@index([userId])
   @@index([status])
   @@index([templateId])
+  @@index([templateRevisionId])
   @@index([category])
   @@map("diy_projects")
 }

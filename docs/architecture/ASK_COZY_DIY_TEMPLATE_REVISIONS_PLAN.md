@@ -1,7 +1,7 @@
 # DIY Template Revisions — Step 1 Implementation Plan (immutable published content)
 
 **Date:** October 6, 2026
-**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Nothing is built and no schema is changed yet; implementation starts at slice 1a.
+**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Slice 1a is implemented (§12); slices 1b-1e are not started. The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 1; decision **O2-A** (approved October 6, 2026)
 **Why this comes first:** until published content is provably the content that was reviewed, no Ask surface may call a DIY guide "author-reviewed" (design D1).
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20. Labels: **[Code-traced]** read, not run; nothing here was executed. No service, database or browser was run, and **production template contents are unknown** (the repository seeds none).
@@ -135,7 +135,7 @@ The widened `UNPUBLISH` and `ARCHIVE` matter: a published template whose working
 
 | Slice | Deliverable |
 | --- | --- |
-| 1a | Schema edits and the revision service with tests (1-2, 9) |
+| 1a | Schema edits and the revision service with tests (1-2, 9). **Done, see §12** |
 | 1b | Transaction-safe transitions and the edit semantics (tests 3-6) |
 | 1c | Homeowner reads and `createProject` on revisions (tests 7-8) |
 | 1d | Admin UI changes with component tests |
@@ -181,3 +181,31 @@ The owner approved **R1 through R10 at the recommended defaults**:
 - Schema changes are made by editing `prisma/schema.prisma` only; the owner applies them with `prisma db push` and runs `prisma generate` in `apps/backend` and `apps/workers`. No migration scripts. The backfill is the one hand-run SQL artifact.
 - The rollout order in §6 is binding: schema, backfill and verification, then the code deploy. A scratch Postgres (never the owner's database) may be used to dry-run the backfill SQL.
 - The two checks still to run before coding, from §8, are part of slice 1a: confirm that no other code path writes template content, and that the admin frontend does not depend on PUT working in `REVIEW` or `APPROVED`.
+
+## 12. Slice 1a record (October 6, 2026)
+
+**Pre-coding checks (the two left open in §8)**
+
+- *No other code path writes template content.* Searched the whole repository excluding `node_modules` and docs for writes to the template, step, material and tool tables (and their SQL table names): template content is written only in `diy.service.ts` (`adminCreateTemplate` at lines 583-588, `adminUpdateTemplate` at 599-610), and `adminContentGovernance.service.ts` updates only status and approval (line 166). No script, seed, worker or `database/` file touches them [Code-traced].
+- *The admin frontend does not depend on PUT working in `REVIEW` or `APPROVED`.* The edit page renders `TemplateForm` and calls `adminUpdateDiyTemplate` without branching on status, and nothing requires an edit in those states; slice 1d adds the read-only handling [Code-traced].
+
+**Changed**
+
+- `apps/backend/prisma/schema.prisma` (additive; `prisma validate` passes): enums `DiyRevisionProvenance` (`GOVERNED`, `LEGACY_BACKFILL`) and `DiyRevisionRetiredReason`; model `DiyTemplateRevision` (typed list and filter columns, `contentJson`, nullable `contentHash`, lifecycle metadata, `@@unique([templateId, revision])`); `DiyProjectTemplate.publishedRevisionId` (unique) with its relations; `DiyProject.templateRevisionId` with relation and index.
+- `apps/backend/src/services/diyTemplateRevision.service.ts` (new, the only writer of revisions): canonical serialization and SHA-256 content hash; `checkRevisionIntegrity` (`VERIFIED`, `LEGACY_UNVERIFIED`, `MISMATCH`); `createCandidateRevision` (one open candidate per template, number allocated at insert, unique-key race becomes `REVISION_CONFLICT`); `approveRevision` and `returnRevision`; `publishRevision` (governed, approved, open, intact, equal to the working copy, HIGH-safety separation by the revision's approver, previous head retired as `SUPERSEDED`); `retireHead`. Every state change is a conditional write; the module has no function that changes revision content.
+- `apps/backend/tests/unit/diyTemplateRevision.test.js` (new, 18 tests, database-free fake).
+
+Not wired into anything yet: the governance transitions, the admin PUT, the homeowner reads and `createProject` are unchanged, so **no behavior changes until slices 1b-1c**.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| New test file | 18 pass, 0 fail | Executed |
+| Mutation checks: drop the working-copy hash check; drop the open-candidate condition on approve; drop the head-conflict condition on publish; add a rogue `diyTemplateRevision.update` elsewhere in `src` | each caused exactly one test to fail; the restored service passes 18 of 18 | Executed |
+| Backend `npm run typecheck` (after regenerating the local Prisma client, no database) | clean | Executed |
+| Neighbors: admin content governance integration, DIY route role floor, DIY capability, AI guide, hire-required boundary, Ask DIY projects, startup registry | 68 pass in total with the new file, 0 fail | Executed |
+
+**Not run:** any database, `prisma db push`, or the real Prisma client against Postgres. The fake enforces the unique key and evaluates the same `where` equality the service uses, but it is not Postgres: real behavior of the P2002 mapping, null equality in `updateMany`, and transaction isolation is **not exercised** until a scratch-database run in slice 1e.
+
+**Owner action:** none is required now. The schema change is additive and safe to apply at any time, but it is **required before slice 1b is deployed**. When you want it: `npx prisma db push` in `apps/backend`, then `npx prisma generate` in `apps/backend` and `apps/workers`. I ran `prisma generate` locally (no database) only so the service typechecks.

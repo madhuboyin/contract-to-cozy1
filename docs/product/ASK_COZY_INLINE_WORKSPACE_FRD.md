@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.192
+**Version:** 1.193
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.193 — DIY template revisions, slice 1a:** Adds the schema for immutable published DIY template revisions (`DiyTemplateRevision`, a published-head pointer on the template, a revision pointer on the project) and the revision service that creates, approves, returns, publishes and withdraws them with a content hash and conditional writes; it is the only writer of revisions and has no content update. Not yet wired into governance, admin edits, homeowner reads or project creation, so nothing a homeowner or admin sees changes. Unit-tested against a database-free fake with mutation checks; not exercised against Postgres, and the schema is not applied anywhere. This is groundwork for being able to call a DIY guide author-reviewed. See `docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md` §12.
 
 **Revision 1.192 — stateful GUIDE design approved:** `docs/architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md` revision 2 is approved at the recommended defaults for decisions O2-O13. This satisfies the C.11.8 design gate: it resolves all eight decisions and does not relax any of them. A stateful Ask guide is limited to eligible, revision-backed, template-sourced DIY projects (AI-generated guides excluded), keeps progress as canonical DIY state, treats completion as self-reported, and may not call content reviewed until immutable published template revisions exist. The approval reverses the v1.58 decision that stepping through DIY projects stays on the page, for those projects only. Nothing in Ask is implemented; a named content owner for the first production template is still needed. The owner runs any schema change with `prisma db push`.
 
