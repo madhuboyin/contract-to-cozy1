@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.183
+**Version:** 1.184
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.184 — Phase 1 execution clarification:** Clarifies that the answer anatomy in Appendix C.11 is a default rather than an inflexible block order, distinguishes decision-driving support from a formal `EVIDENCE` block, and records that emergency guidance, clarification, balanced comparison, and confirmation can require a different hierarchy or no primary action. The focused implementation plan now requires a written audit before edits but permits evidence-supported Phase 1 implementation in the same task; no additional approval gate is implied unless the audit finds unresolved material ambiguity.
 
 **Revision 1.183 — conversational presentation policy:** Adds Appendix C.11 as the governing policy for answer-first conversational composition. The policy treats ANSWER, RECOMMEND, GUIDE, ASSESS, EXPLAIN, COMPARE, and ACT as semantic composition modes rather than seven new renderer types; assigns judgment and safety semantics to the server while leaving only lossless responsive presentation to the client; narrows IW-PRES-008 so a view switch appears only when alternatives are genuinely useful; and separates refinements to the existing `TASK_GUIDE` from a later, explicitly designed stateful walkthrough capability. No implementation or schema change is implied by this revision.
 
@@ -1536,7 +1538,7 @@ An operation may compose more than one mode over successive turns. Implementatio
 
 ### C.11.4 Answer anatomy, density, and cards
 
-The default response order is: direct answer; Cozy judgment or priority; decision-driving detail; one visually dominant continuation when justified; compact personalization/trust disclosure; progressively disclosed evidence and secondary detail. Safety instructions, clarifications, balanced comparisons, and confirmation choices may legitimately have no single primary action.
+The default response hierarchy is: direct answer or Cozy judgment; decision-driving support; one visually dominant action when justified; contextual continuation; compact personalization/trust disclosure; and progressively disclosed evidence and secondary detail. Decision-driving support may be concise reasoning, a recorded fact, a personalization basis, or formal mapped evidence; not every answer requires an `EVIDENCE` block. This is a hierarchy, not an inflexible block sequence. Emergency guidance, clarification, balanced comparisons, and confirmation choices may require a different order or legitimately have no single primary action.
 
 Cards represent objects, entities, bounded actions, or meaningful interactive units—for example a quote, contractor, policy, appointment, property, document, maintenance event, workflow, or comparison option. Ordinary sentences and individual attributes such as time, cost, priority, and DIY suitability do not each receive a card. Compact metadata should read together, for example `High priority · about 15 min · $15–$40 · DIY`.
 

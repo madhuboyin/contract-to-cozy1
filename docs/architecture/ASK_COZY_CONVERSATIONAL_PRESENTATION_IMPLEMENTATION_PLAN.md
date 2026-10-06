@@ -4,13 +4,13 @@
 
 **Type:** Focused phased plan; no implementation or schema change in this document
 
-**Product authority:** `docs/product/ASK_COZY_INLINE_WORKSPACE_FRD.md`, especially Appendix C.11
+**Product authority:** `docs/product/ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.184, especially Appendix C.11
 
 **Audit context:** `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` and `docs/architecture/ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md`
 
 ## 1. Objective and boundary
 
-Make Ask Cozy consistently present an answer, judgment, evidence, action, and contextual continuation without replacing its response contract, operation registry, domain intelligence, action infrastructure, or canonical data models.
+Make Ask Cozy consistently lead with an answer or judgment, show the decision-driving support, offer a primary action when justified, and continue the current context without replacing its response contract, operation registry, domain intelligence, action infrastructure, or canonical data models. Formal evidence remains progressive unless safety, trust, or comprehension requires it earlier. Emergency guidance, clarification, balanced comparison, and confirmation may legitimately use a different hierarchy or no primary action.
 
 The first delivery is a presentation-consistency slice. It does not create a stateful walkthrough engine, silently capture facts, add a database, introduce seven renderer families, or make recommendation priority a client heuristic.
 
@@ -36,9 +36,13 @@ The first delivery is a presentation-consistency slice. It does not create a sta
 
 Each cause must be confirmed against the current producer and rendered reference fixture before editing; a screenshot alone is not proof of the producing path.
 
+The audit and implementation belong to the same Phase 1 task. Complete and save the audit before editing code. If repository evidence supports the approved requirements without material ambiguity, continue directly into the smallest coherent implementation. Stop and request direction only when the audit exposes an unresolved conflict in product behavior, safety, persistence, data ownership, or architecture that repository evidence cannot resolve.
+
 ## 4. Phase 1 — Presentation consistency
 
 ### 4.1 Audit artifacts
+
+Write the findings to `docs/architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_1_AUDIT.md`, following `docs/architecture/AUDIT_METHODOLOGY.md`. The focused audit holds trace evidence and the pre-edit conclusions; the FRD remains the source of requirements. After implementation, update that audit with the actual changes and validation, then add concise status/link updates to this plan and `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md`.
 
 For winter preparation, furnace-filter guidance, and home-safety basics, record:
 
@@ -49,6 +53,8 @@ For winter preparation, furnace-filter guidance, and home-safety basics, record:
 - local-only versus conversational versus durable actions;
 - generic suggestions that survive downstream suppression/deduplication;
 - current focused tests and fixture coverage.
+
+Use `graphify query` first, then direct code reading to verify the complete path. Locate the home-safety producer during this trace; do not assume that an existing home-basics component or documented block id proves which route handled the reported prompt.
 
 ### 4.2 Minimal implementation rules
 
@@ -71,7 +77,7 @@ For winter preparation, furnace-filter guidance, and home-safety basics, record:
 - `apps/frontend/src/features/ask/adaptivePresentation.ts`
 - the response-level suggested-action composition in `ExecutionCard`/workspace support
 
-The audit decides the actual edit set. Do not touch all listed files merely because they are listed.
+The audit decides the actual edit set. Do not touch all listed files merely because they are listed. The written audit is a prerequisite to edits, not a separate approval checkpoint unless it identifies the unresolved material ambiguity described in section 3.
 
 ### 4.4 Acceptance
 
@@ -100,9 +106,11 @@ Define an assessment-turn contract that asks one material question, records conv
 
 ## 8. Validation strategy
 
-Use requirements review, Graphify/code-path tracing, contract inspection, and focused environment-independent tests. Add producer tests before renderer snapshots when judgment semantics change. Add component tests for hierarchy, disclosure, keyboard behavior, ARIA state, focus, non-color urgency, and narrow width. Run existing lightweight typecheck/build or focused tests only when dependencies are already available. Do not start services, databases, Docker, or browser infrastructure solely for this work; report runtime behavior as unverified when appropriate.
+Use requirements review, Graphify/code-path tracing, contract inspection, and focused environment-independent tests. Add producer tests before renderer snapshots when judgment semantics change. Add component tests for hierarchy, disclosure, keyboard behavior, ARIA state, focus, non-color urgency, and narrow-width behavior. Run existing lightweight typecheck/build or focused tests only when dependencies are already available.
 
-After every code phase: correct findings from lightweight validation, update affected product/audit documentation, and run `graphify update .` as the final repository-maintenance step.
+Do not start or troubleshoot services, databases, Docker, Playwright, or any other browser-based test infrastructure for this work, including a fixture-only Playwright run. Component tests and static/build checks do not prove actual browser layout; report desktop, narrow-width, and runtime behavior as unverified unless an already-available non-prohibited check directly establishes it.
+
+After every code phase: correct findings from lightweight validation; update the Phase 1 audit, this plan's status, the conversational gap audit, and any materially affected FRD requirement or implementation-status note; then run `graphify update .` as the final repository-maintenance step. Do not rewrite an approved requirement merely to accommodate an implementation shortcut.
 
 ## 9. Principal regression risks
 
@@ -117,4 +125,4 @@ After every code phase: correct findings from lightweight validation, update aff
 
 ## 10. Deliverable after each phase
 
-Report current-architecture findings, confirmed root causes, reused contracts/components, exact files changed, before/after response shape for the three reference scenarios, tests and static checks actually run, checks not run, remaining limitations, and the next separately approved increment.
+Report current-architecture findings, confirmed root causes, reused contracts/components, exact files changed, before/after response shape for the three reference scenarios, tests and static checks actually run, prohibited or unavailable checks not run, remaining limitations, and the next separately approved increment. Link the Phase 1 audit and distinguish code-traced, statically tested, component-tested, and runtime-unverified claims.
