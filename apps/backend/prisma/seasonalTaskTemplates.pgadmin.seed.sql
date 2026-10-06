@@ -1,7 +1,7 @@
 -- Contract-to-Cozy seasonal task template seed for pgAdmin
 --
--- DATA SEED ONLY. This is not a schema migration. Generated from apps/backend/src/data/seasonalTaskTemplates.json (44 templates,
--- including the three TROPICAL fall templates added October 5, 2026). Run it after `prisma db push` has created the tables and enum types.
+-- DATA SEED ONLY. This is not a schema migration. Generated from apps/backend/src/data/seasonalTaskTemplates.json (45 templates,
+-- including the three TROPICAL fall templates added October 5, 2026 and WINTER_SMOKE_CO_TEST). Run it after `prisma db push` has created the tables and enum types.
 -- It never deletes anything and never touches user data. It is idempotent: it upserts each template by task_key and may be run again.
 --
 -- NOTE: unlike prisma/seasonalTasks.seed.ts, this also writes required_asset_type, required_asset_check and timing_offset_days, which that
@@ -59,6 +59,7 @@ VALUES
   (gen_random_uuid()::text, 'WINTER_TREE_PRUNING', 'WINTER', 'Prune dormant trees and shrubs', 'Trim dead branches and shape trees while dormant', 'Winter is ideal for pruning. Prevents storm damage to trees and property.', 150, 500, true, 4.0, 'OPTIONAL', 'LANDSCAPING', ARRAY['WARM','TROPICAL']::"ClimateRegion"[], NULL, NULL, -14, 'ANNUAL', true, now(), now()),
   (gen_random_uuid()::text, 'WINTER_ROOF_SNOW_LOAD', 'WINTER', 'Check roof for snow load', 'Monitor snow accumulation on roof, remove if excessive', 'Excessive snow can cause roof collapse. Warning signs: sagging ceilings, cracking noises.', 200, 600, false, 3.0, 'CRITICAL', 'ROOFING', ARRAY['VERY_COLD']::"ClimateRegion"[], NULL, NULL, -14, 'ANNUAL', true, now(), now()),
   (gen_random_uuid()::text, 'WINTER_FOUNDATION_SNOW_CLEAR', 'WINTER', 'Keep snow away from foundation', 'Clear snow from around foundation to prevent water infiltration during thaw', 'Snow melt can flood basements and damage foundations.', 0, 0, true, 1.0, 'RECOMMENDED', 'EXTERIOR', ARRAY['VERY_COLD','COLD']::"ClimateRegion"[], NULL, NULL, -14, 'ANNUAL', true, now(), now()),
+  (gen_random_uuid()::text, 'WINTER_SMOKE_CO_TEST', 'WINTER', 'Test smoke and carbon monoxide detectors', 'Test detectors and replace batteries according to manufacturer guidance.', 'Working detectors are a critical safety control during heating season.', 10, 100, true, 0.5, 'CRITICAL', 'SAFETY', ARRAY['VERY_COLD','COLD','MODERATE','WARM','TROPICAL']::"ClimateRegion"[], NULL, NULL, -7, 'SEMI_ANNUAL', true, now(), now()),
   (gen_random_uuid()::text, 'FALL_TROPICAL_STORM_READINESS', 'FALL', 'Review storm readiness for the rest of hurricane season', 'Check storm supplies, an evacuation plan and a way to protect windows and doors, and know where your shutoffs are', 'Tropical storm season runs into late fall. Being ready before a storm warning avoids rushed, costly decisions.', 25, 150, true, 1.0, 'CRITICAL', 'SAFETY', ARRAY['TROPICAL']::"ClimateRegion"[], NULL, NULL, -14, 'ANNUAL', true, now(), now()),
   (gen_random_uuid()::text, 'FALL_TROPICAL_DRAINAGE_CHECK', 'FALL', 'Clear gutters, downspouts and yard drains of debris', 'Remove leaves and debris so heavy tropical rain drains away from the house', 'Fall storms can drop a lot of rain quickly. Blocked drainage sends water toward the foundation and under roofing.', 0, 200, true, 1.5, 'RECOMMENDED', 'EXTERIOR', ARRAY['TROPICAL']::"ClimateRegion"[], NULL, NULL, -14, 'ANNUAL', true, now(), now()),
   (gen_random_uuid()::text, 'FALL_TROPICAL_MOISTURE_CHECK', 'FALL', 'Check for moisture and mold after the wet season', 'Look in bathrooms, closets, the attic and under sinks for damp spots, musty smells or mold, and run exhaust fans', 'Humid, wet weather lets mold start quietly. Catching damp spots early keeps repairs small.', 0, 100, true, 1.0, 'RECOMMENDED', 'SAFETY', ARRAY['TROPICAL']::"ClimateRegion"[], NULL, NULL, -14, 'ANNUAL', true, now(), now())
@@ -81,9 +82,17 @@ ON CONFLICT ("task_key") DO UPDATE SET
   "is_active" = EXCLUDED."is_active",
   "updated_at" = now();
 
+-- Retire the superseded twins (differently-keyed templates an older reference-data bootstrap created). Rows are kept, because checklist items
+-- reference them, but generation only reads active templates. One-time clean-up of items already created from them:
+-- prisma/seasonal-catalog-dedupe.pgadmin.sql.
+UPDATE "seasonal_task_templates"
+   SET "is_active" = false, "updated_at" = now()
+ WHERE "task_key" IN ('SUMMER_HVAC_FILTER_CHECK', 'SUMMER_EXTERIOR_DRAINAGE_CHECK', 'FALL_HEATING_SYSTEM_SERVICE', 'FALL_WINTERIZE_OUTDOOR_FAUCETS', 'WINTER_FREEZE_READINESS')
+   AND "is_active" = true;
+
 COMMIT;
 
--- Verification: expect 44 rows from this seed (more if other templates exist), and the three new tropical fall rows below.
+-- Verification: expect 45 active rows from this seed (more if other templates exist), and the three new tropical fall rows below.
 SELECT count(*) AS seasonal_task_templates FROM "seasonal_task_templates";
 SELECT "task_key", "season", "priority", "climate_regions"
 FROM "seasonal_task_templates"

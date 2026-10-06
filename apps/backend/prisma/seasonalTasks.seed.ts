@@ -82,6 +82,17 @@ async function seedSeasonalTasks() {
       }
     }
 
+    // Retire templates an older reference-data bootstrap created under different keys (rows stay: checklist items reference them).
+    // Item clean-up for databases that already used them: prisma/seasonal-catalog-dedupe.pgadmin.sql.
+    const retiredKeys: string[] = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), 'src/data/retiredSeasonalTaskKeys.json'), 'utf-8'),
+    );
+    const retired = await prisma.seasonalTaskTemplate.updateMany({
+      where: { taskKey: { in: retiredKeys }, isActive: true },
+      data: { isActive: false },
+    });
+    if (retired.count > 0) console.log(`   Retired ${retired.count} superseded template(s)`);
+
     console.log('✅ Seasonal task templates seeded successfully!');
     console.log(`   Created: ${created}`);
     console.log(`   Updated: ${updated}`);

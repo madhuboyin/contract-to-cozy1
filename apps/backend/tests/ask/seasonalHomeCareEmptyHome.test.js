@@ -102,7 +102,7 @@ test('a task walkthrough is one guide card built only from the template\'s own f
   const guide = buildSeasonalTaskWalkthrough({ ...input, taskKey: 'WINTER_FURNACE_FILTER_CHANGE' }).blocks[0];
   assert.equal(guide.type, 'TASK_GUIDE');
   assert.equal(guide.title, 'Replace furnace filters monthly');
-  assert.deepEqual(guide.eyebrow, ['Winter prep', 'Task 1 of 4']);
+  assert.deepEqual(guide.eyebrow, ['Winter prep', 'Task 1 of 5']);
   assert.equal(guide.icon, 'HVAC');
   assert.deepEqual(guide.chips.map((chip) => [chip.kind, chip.label]), [['PRIORITY_HIGH', 'High priority'], ['TIME', '~15 minutes'], ['COST', '$15\u2013$40'], ['DIY', 'DIY']]);
   assert.equal(guide.summary, 'Dirty filters reduce efficiency and can cause furnace failure in extreme cold.');

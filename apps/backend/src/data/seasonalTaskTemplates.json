@@ -739,6 +739,24 @@
       "recurrencePattern": "ANNUAL"
     },
     {
+      "taskKey": "WINTER_SMOKE_CO_TEST",
+      "season": "WINTER",
+      "title": "Test smoke and carbon monoxide detectors",
+      "description": "Test detectors and replace batteries according to manufacturer guidance.",
+      "whyItMatters": "Working detectors are a critical safety control during heating season.",
+      "typicalCostMin": 10,
+      "typicalCostMax": 100,
+      "isDiyPossible": true,
+      "estimatedHours": 0.5,
+      "priority": "CRITICAL",
+      "serviceCategory": "SAFETY",
+      "climateRegions": ["VERY_COLD", "COLD", "MODERATE", "WARM", "TROPICAL"],
+      "requiredAssetType": null,
+      "requiredAssetCheck": null,
+      "timingOffsetDays": -7,
+      "recurrencePattern": "SEMI_ANNUAL"
+    },
+    {
       "taskKey": "FALL_TROPICAL_STORM_READINESS",
       "season": "FALL",
       "title": "Review storm readiness for the rest of hurricane season",
