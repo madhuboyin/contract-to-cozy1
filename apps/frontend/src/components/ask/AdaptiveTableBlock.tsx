@@ -74,8 +74,30 @@ function DataTable({ block, className, rowDetail }: { block: TableBlock; classNa
   </div>;
 }
 
+// A short list of label/value facts (the home record summary) reads better as a grid of tiles than as a two-column table with a view switch:
+// three across on a wide screen, two on a tablet, one on a phone. The rows keep the table's data shape (`detail`, `recordedValue`).
+export const FACT_GRID_TABLE_IDS: ReadonlySet<string> = new Set(['property-summary-facts']);
+
+function FactGridTable({ block, renderAction }: { block: TableBlock; renderAction: (action: AskAction) => ReactNode }) {
+  const [labelKey, valueKey] = [block.columns[0]?.key, block.columns[1]?.key];
+  return <section data-fact-grid={block.id} className="rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby={`ask-table-${block.id}`}>
+    <h3 id={`ask-table-${block.id}`} className="font-semibold text-slate-950">{block.title}</h3>
+    {block.description && <p className="mt-1 text-xs leading-5 text-slate-500">{block.description}</p>}
+    <dl className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      {block.rows.map((row) => (
+        <div key={row.id} data-fact-tile={row.id} className="rounded-xl bg-slate-50 px-3.5 py-3">
+          <dt className="text-xs font-medium text-slate-500">{row.values[labelKey]}</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-slate-900">{row.values[valueKey] || 'Not recorded'}</dd>
+        </div>
+      ))}
+    </dl>
+    {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <span key={action.id}>{renderAction(action)}</span>)}</div>}
+  </section>;
+}
+
 export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: TableBlock; renderAction: (action: AskAction) => ReactNode; rowDetail?: TableRowDetailControls }) {
   const controls = useContext(ResultViewContext);
+  if (FACT_GRID_TABLE_IDS.has(block.id) && block.columns.length === 2 && block.rows.length > 0 && !rowDetail) return <FactGridTable block={block} renderAction={renderAction} />;
   const preference = controls?.view.presentationModes?.[block.id] ?? 'AUTO';
   const decision = resolveAdaptiveTablePresentation(block, preference);
   const setPreference = (mode: TablePresentationPreference) => controls?.change((view) => ({

@@ -83,17 +83,44 @@ export function propertyOverviewFactsSentence(property: {
   return `This is a ${bedsBaths}${noun}${built}${size}.`;
 }
 
-/** Compact overview facts for a scannable table. Only canonical recorded values are included. */
-export function propertyOverviewFactRows(property: {
+type OverviewFactProperty = {
   dwellingType: string | null; yearBuilt: number | null; propertySize: number | null; bedrooms: number | null; bathrooms: number | null;
-}) {
+  occupancyStatus?: string | null; occupantsCount?: number | null; heatingType?: string | null; coolingType?: string | null; roofType?: string | null;
+};
+
+// "Hvac" and "Central Ac" are what the generic title-casing would print for these two enums.
+const OVERVIEW_FACT_LABELS: Record<string, string> = { HVAC: 'HVAC', CENTRAL_AC: 'Central AC', WINDOW_AC: 'Window AC' };
+const overviewEnumValue = (value: string | null | undefined): string | null =>
+  value && value !== 'UNKNOWN' ? (OVERVIEW_FACT_LABELS[value] ?? readablePropertyValue(value)) : null;
+
+/**
+ * Compact overview facts for the fact grid (FRD Appendix C.10). Only canonical recorded values are included, so an unrecorded field is
+ * simply absent. Occupant count is household-private: it is shown to an owner only (`includeOccupantCount`).
+ */
+export function propertyOverviewFactRows(property: OverviewFactProperty, options: { includeOccupantCount?: boolean } = {}) {
+  const fact = (id: string, detail: string, recordedValue: string | null) => (recordedValue === null ? null : { id, values: { detail, recordedValue } });
   return [
-    property.dwellingType && property.dwellingType !== 'UNKNOWN' ? { id: 'home-type', values: { detail: 'Home type', recordedValue: readablePropertyValue(property.dwellingType) } } : null,
-    property.yearBuilt != null ? { id: 'year-built', values: { detail: 'Year built', recordedValue: String(property.yearBuilt) } } : null,
-    property.propertySize != null ? { id: 'living-area', values: { detail: 'Living area', recordedValue: `${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft` } } : null,
-    property.bedrooms != null ? { id: 'bedrooms', values: { detail: 'Bedrooms', recordedValue: String(property.bedrooms) } } : null,
-    property.bathrooms != null ? { id: 'bathrooms', values: { detail: 'Bathrooms', recordedValue: String(property.bathrooms) } } : null,
+    fact('home-type', 'Home type', overviewEnumValue(property.dwellingType)),
+    fact('year-built', 'Year built', property.yearBuilt != null ? String(property.yearBuilt) : null),
+    fact('living-area', 'Living area', property.propertySize != null ? `${new Intl.NumberFormat('en-US').format(property.propertySize)} sq ft` : null),
+    fact('bedrooms', 'Bedrooms', property.bedrooms != null ? String(property.bedrooms) : null),
+    fact('bathrooms', 'Bathrooms', property.bathrooms != null ? readablePropertyValue(property.bathrooms) : null),
+    fact('occupancy', 'Occupancy', overviewEnumValue(property.occupancyStatus)),
+    options.includeOccupantCount ? fact('occupants', 'Occupants', property.occupantsCount != null ? String(property.occupantsCount) : null) : null,
+    fact('heating', 'Heating', overviewEnumValue(property.heatingType)),
+    fact('cooling', 'Cooling', overviewEnumValue(property.coolingType)),
+    fact('roof', 'Roof', overviewEnumValue(property.roofType)),
   ].filter((row): row is NonNullable<typeof row> => row !== null);
+}
+
+/** One plain line naming the headline facts that are not recorded, so the grid's gaps are explained without printing empty tiles. */
+export function propertyOverviewMissingLine(property: OverviewFactProperty): string | null {
+  const missing = [
+    property.bedrooms == null ? 'bedrooms' : null,
+    property.bathrooms == null ? 'bathrooms' : null,
+    !overviewEnumValue(property.occupancyStatus) ? 'occupancy' : null,
+  ].filter((name): name is string => name !== null);
+  return missing.length ? `Not recorded yet: ${missing.join(', ')}.` : null;
 }
 
 /**
@@ -130,7 +157,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       select: {
         id: true, name: true, address: true, city: true, state: true, zipCode: true, dwellingType: true,
         propertyUse: true, occupancyStatus: true, propertySize: true, yearBuilt: true, bedrooms: true,
-        bathrooms: true, heatingType: true, coolingType: true, roofType: true, updatedAt: true,
+        bathrooms: true, occupantsCount: true, heatingType: true, coolingType: true, roofType: true, updatedAt: true,
       },
     }),
   ]);
@@ -189,7 +216,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       : `${completenessCounts.missing} missing, ${completenessCounts.conflicted} conflicted, and ${completenessCounts.stale} stale detail${pendingDetailCount === 1 ? '' : 's'} were found across ${incompleteScopes.length} area${incompleteScopes.length === 1 ? '' : 's'}. ${captureRequests.length ? 'The highest-priority detail is ready to answer below.' : 'Open the property record to review the affected areas.'}`
     : 'Property Context details are temporarily unavailable, so Ask cannot reliably determine which details are pending.';
   const vagueOverview = !roomFocus && !completenessFocus;
-  const factRows = vagueOverview ? propertyOverviewFactRows(property) : [];
+  const factRows = vagueOverview ? propertyOverviewFactRows(property, { includeOccupantCount: access.role === HouseholdRole.OWNER }) : [];
+  const missingLine = vagueOverview ? propertyOverviewMissingLine(property) : null;
   const statusObservation = vagueOverview ? propertyOverviewStatusObservation(pendingDetailCount) : null;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'property-summary',
@@ -218,7 +246,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   if (vagueOverview && factRows.length > 0) {
     blocks.push({
       type: 'TABLE', id: 'property-summary-facts', title: 'Home record summary',
-      description: 'Recorded facts from this home’s current canonical record.',
+      description: ['Recorded facts from this home’s current canonical record.', missingLine].filter(Boolean).join(' '),
       preferredPresentation: 'TABLE',
       columns: [{ key: 'detail', label: 'Detail' }, { key: 'recordedValue', label: 'Recorded value' }],
       rows: factRows,

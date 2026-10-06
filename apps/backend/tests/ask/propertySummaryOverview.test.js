@@ -15,7 +15,7 @@ const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const getPropertyContextModule = require('../../src/modules/propertyContext/application/getPropertyContext.ts');
 const evaluateModule = require('../../src/modules/propertyContext/application/evaluateFeatureContext.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewStatusObservation, propertyOverviewSuggestions } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
+const { propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewMissingLine, propertyOverviewStatusObservation, propertyOverviewSuggestions } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
 const { PROPERTY_RECORD_CONTEXT_SCOPES } = require('../../src/services/propertyRecordOverview.service.ts');
 const { getContextCompleteness } = require('../../src/modules/propertyContext/application/getContextCompleteness.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
@@ -128,4 +128,61 @@ test('an explicit completeness question is unaffected: it still gets the ring, t
   assert.ok(result.blocks.some((block) => block.id === 'property-completeness-progress'));
   assert.ok(result.blocks.some((block) => block.id === 'property-completeness'));
   assert.notEqual(summaryOf(result).actions.length, 0);
+});
+
+// FRD Appendix C.10: the facts grid.
+const FULL = { ...PROPERTY, occupancyStatus: 'OWNER_OCCUPIED', occupantsCount: 4, heatingType: 'HVAC', coolingType: 'CENTRAL_AC', roofType: 'SHINGLE' };
+
+test('the facts grid adds occupancy, heating, cooling and roof, in a fixed order, with readable labels', () => {
+  assert.deepEqual(propertyOverviewFactRows(FULL).map((row) => [row.values.detail, row.values.recordedValue]), [
+    ['Home type', 'Townhouse'], ['Year built', '1994'], ['Living area', '1,933 sq ft'], ['Bedrooms', '3'], ['Bathrooms', '2.5'],
+    ['Occupancy', 'Owner Occupied'], ['Heating', 'HVAC'], ['Cooling', 'Central AC'], ['Roof', 'Shingle'],
+  ]);
+  assert.equal(propertyOverviewFactRows({ ...FULL, bathrooms: 2 }).find((row) => row.id === 'bathrooms').values.recordedValue, '2');
+});
+
+test('occupant count is shown to an owner only, and an unrecorded or UNKNOWN fact is absent rather than printed', () => {
+  assert.ok(!propertyOverviewFactRows(FULL).some((row) => row.id === 'occupants'));
+  assert.ok(!propertyOverviewFactRows(FULL, { includeOccupantCount: false }).some((row) => row.id === 'occupants'));
+  const withCount = propertyOverviewFactRows(FULL, { includeOccupantCount: true });
+  assert.deepEqual(withCount.find((row) => row.id === 'occupants').values, { detail: 'Occupants', recordedValue: '4' });
+  assert.deepEqual(withCount.map((row) => row.id).slice(5, 8), ['occupancy', 'occupants', 'heating']);
+  const sparse = propertyOverviewFactRows({ ...FULL, occupancyStatus: 'UNKNOWN', occupantsCount: null, heatingType: 'UNKNOWN', coolingType: null, roofType: null }, { includeOccupantCount: true });
+  assert.deepEqual(sparse.map((row) => row.id), ['home-type', 'year-built', 'living-area', 'bedrooms', 'bathrooms']);
+  assert.ok(sparse.every((row) => !/Not recorded/.test(row.values.recordedValue)));
+});
+
+test('the missing line names only bedrooms, bathrooms and occupancy, and is absent when all three are recorded', () => {
+  assert.equal(propertyOverviewMissingLine({ ...FULL, bedrooms: null, bathrooms: null, occupancyStatus: 'UNKNOWN' }), 'Not recorded yet: bedrooms, bathrooms, occupancy.');
+  assert.equal(propertyOverviewMissingLine({ ...FULL, occupancyStatus: null }), 'Not recorded yet: occupancy.');
+  assert.equal(propertyOverviewMissingLine(FULL), null);
+});
+
+test('the real handler: an owner sees the occupant count, a viewer does not, and the missing line rides in the table description', async () => {
+  install({}, FULL, 'OWNER');
+  const owner = (await invoke()).blocks.find((block) => block.id === 'property-summary-facts');
+  assert.ok(owner.rows.some((row) => row.id === 'occupants'));
+  assert.equal(owner.description, 'Recorded facts from this home’s current canonical record.');
+  install({}, FULL, 'VIEWER');
+  const viewer = (await invoke()).blocks.find((block) => block.id === 'property-summary-facts');
+  assert.ok(!viewer.rows.some((row) => row.id === 'occupants'));
+  assert.ok(viewer.rows.some((row) => row.id === 'occupancy'));
+  install({}, { ...FULL, bedrooms: null, bathrooms: null }, 'OWNER');
+  const sparse = (await invoke()).blocks.find((block) => block.id === 'property-summary-facts');
+  assert.equal(sparse.description, 'Recorded facts from this home’s current canonical record. Not recorded yet: bedrooms, bathrooms.');
+  AskPresentationBlockSchema.parse(sparse);
+});
+
+test('the answer checker keeps the answer when the table description says what is not recorded yet', async () => {
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  install({}, { ...FULL, bedrooms: null, bathrooms: null, occupancyStatus: 'UNKNOWN' }, 'OWNER');
+  const question = 'Tell me about my home';
+  const result = await invoke(question);
+  const checked = validateAskAnswerTrustPipeline({
+    question, operationId: 'PROPERTY_SUMMARY', propertyId: 'p1', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('PROPERTY_SUMMARY')]),
+  });
+  assert.equal(checked.semantic.outcome, 'PASS', JSON.stringify(checked.semantic));
+  assert.ok(checked.result.blocks.some((block) => block.id === 'property-summary-facts'));
 });
