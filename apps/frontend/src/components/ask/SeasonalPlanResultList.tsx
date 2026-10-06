@@ -15,7 +15,11 @@ type Section = GroupedListBlock['sections'][number];
 // Also the home's own checklist answer (`seasonal-maintenance-items`), which uses the same groups and cards.
 export const SEASONAL_PLAN_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-tasks', 'seasonal-maintenance-items']);
 // The Home Habit Coach list uses the same cards; its rows also carry their own inline action (Review), shown beside the expand toggle.
-export const PLAN_LAYOUT_BLOCK_IDS: ReadonlySet<string> = new Set([...SEASONAL_PLAN_BLOCK_IDS, 'home-habits-items']);
+// The other checklist answers use the same cards too: the hiring guide, the home-basics guides, the renovation readiness checklist and the
+// property-tax appeal readiness list (FRD Appendix C.9).
+export const PLAN_LAYOUT_BLOCK_IDS: ReadonlySet<string> = new Set([
+  ...SEASONAL_PLAN_BLOCK_IDS, 'home-habits-items', 'hiring-guide-items', 'home-basics-items', 'renovation-readiness-items', 'tax-readiness-gaps',
+]);
 
 export type PlanItemAction = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: NonNullable<AskGroupedListItem['actions']>[number]['interactionType']) => void;
 

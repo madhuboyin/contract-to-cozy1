@@ -32,7 +32,7 @@ export function buildHiringGuideResult(): AskOperationResult {
       type: 'GROUPED_LIST', id: 'hiring-guide-items', title: 'Before you hire', actions: [], filters: [],
       sections: [{
         id: 'hiring-guide-checklist', title: 'Ask and confirm', count: ITEMS.length,
-        items: ITEMS.map((item) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null })),
+        items: ITEMS.map((item, index) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null, countLabel: String(index + 1) })),
       }],
     }, boundary],
     suggestions: [],

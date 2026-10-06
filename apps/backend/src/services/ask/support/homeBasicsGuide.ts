@@ -61,7 +61,7 @@ export function buildHomeBasicsResult(focus: HomeBasicsFocus): AskOperationResul
       type: 'GROUPED_LIST', id: 'home-basics-items', title: guide.title, actions: [], filters: [],
       sections: [{
         id: `home-basics-${focus.toLowerCase()}`, title: guide.sectionTitle, count: guide.items.length,
-        items: guide.items.map((item) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null })),
+        items: guide.items.map((item, index) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null, countLabel: String(index + 1) })),
       }],
     }, boundary],
     suggestions: [],
