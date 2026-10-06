@@ -447,6 +447,29 @@ const ProgressBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3).default([]),
 });
 
+// A single task, habit or step presented as one conversational card: where it sits (breadcrumb), what it is, its key facts as chips, an
+// optional tip, what to do, short explanatory rows, and the next actions. Every string is the producer's own recorded content; the renderer
+// invents nothing (no steps, photos or advice of its own). A row may point at one of `actions` by id so its button sits in the row.
+const TaskGuideBlockSchema = z.object({
+  type: z.literal('TASK_GUIDE'), id: z.string(), title: z.string(), summary: z.string(),
+  eyebrow: z.array(z.string().trim().min(1).max(60)).max(3).default([]),
+  icon: z.enum(['HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF', 'OUTDOOR', 'SAFETY', 'APPLIANCE', 'HABIT', 'TASK']).default('TASK'),
+  chips: z.array(z.object({
+    label: z.string().trim().min(1).max(60),
+    kind: z.enum(['PRIORITY_HIGH', 'PRIORITY', 'TIME', 'COST', 'DIY', 'PRO', 'DATE', 'STATUS', 'TAG']).default('TAG'),
+  })).max(6).default([]),
+  tip: z.object({ title: z.string().trim().min(1).max(80), body: z.string().trim().min(1).max(400) }).nullable().optional(),
+  main: z.object({
+    title: z.string().trim().min(1).max(80), body: z.string().trim().min(1).max(800),
+    facts: z.array(z.object({ label: z.string().trim().min(1).max(60), value: z.string().trim().min(1).max(200) })).max(8).default([]),
+  }).nullable().optional(),
+  history: z.array(z.object({ label: z.string().trim().min(1).max(60), value: z.string().trim().min(1).max(60) })).max(5).default([]),
+  notes: z.array(z.object({
+    id: z.string(), title: z.string().trim().min(1).max(80), body: z.string().trim().min(1).max(500), actionId: z.string().trim().min(1).max(120).optional(),
+  })).max(4).default([]),
+  actions: z.array(AskActionSchema).max(6).default([]),
+});
+
 const ComparisonBlockSchema = z.object({
   type: z.literal('COMPARISON'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
   options: z.array(z.object({
@@ -650,6 +673,7 @@ const ErrorStateBlockSchema = z.object({ type: z.literal('ERROR_STATE'), id: z.s
 
 export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   SummaryBlockSchema,
+  TaskGuideBlockSchema,
   ProactiveInsightBlockSchema,
   GroupedListBlockSchema,
   TableBlockSchema,

@@ -1623,137 +1623,174 @@ function homeHabitsExecution() {
     ] };
 }
 
+// One seasonal task's walkthrough as a guide card (Appendix C.7): the real builder's output for the furnace-filter task, pasted so it cannot drift.
+function seasonalWalkthroughExecution() {
+  const base = maintenanceExecution();
+  return { ...base, executionId: 'execution-seasonal-walkthrough', question: 'Walk me through "Replace furnace filters monthly".', viewState: null, blocks: [
+      {
+        "type": "TASK_GUIDE",
+        "id": "seasonal-task-guide",
+        "title": "Replace furnace filters monthly",
+        "summary": "Dirty filters reduce efficiency and can cause furnace failure in extreme cold.",
+        "eyebrow": [
+          "Winter prep",
+          "Task 1 of 4"
+        ],
+        "icon": "HVAC",
+        "chips": [
+          {
+            "label": "High priority",
+            "kind": "PRIORITY_HIGH"
+          },
+          {
+            "label": "~15 minutes",
+            "kind": "TIME"
+          },
+          {
+            "label": "$15\u2013$40",
+            "kind": "COST"
+          },
+          {
+            "label": "DIY",
+            "kind": "DIY"
+          }
+        ],
+        "main": {
+          "title": "What to do",
+          "body": "Check and replace HVAC filters every month during peak heating season",
+          "facts": [
+            {
+              "label": "When",
+              "value": "Best done about 2 weeks before winter starts"
+            }
+          ]
+        },
+        "history": [],
+        "notes": [
+          {
+            "id": "why",
+            "title": "Why this is on your list",
+            "body": "Winter is the next season for your area, and this is one of the 4 general winter tasks for a moderate climate. High priority tasks like this one are listed first."
+          },
+          {
+            "id": "personalized",
+            "title": "How personalized is this?",
+            "body": "This is general guidance for your climate. It does not use anything recorded about your home yet, so it cannot account for your specific systems. It becomes more specific as your home record fills in.",
+            "actionId": "seasonal-update-home-details"
+          }
+        ],
+        "actions": [
+          {
+            "id": "seasonal-next-task",
+            "label": "Next winter task",
+            "interactionType": "START_WORKFLOW",
+            "message": "Walk me through \"Test GFCI outlets\".",
+            "operationId": "SEASONAL_HOME_CARE",
+            "entityType": "SEASONAL_TASK",
+            "entityId": "NEXT_SEASON:WINTER_GFCI_OUTLET_TEST",
+            "style": "PRIMARY"
+          },
+          {
+            "id": "seasonal-add-tasks",
+            "label": "Add these to my tasks",
+            "interactionType": "START_WORKFLOW",
+            "message": "Set up my winter checklist.",
+            "operationId": "SEASONAL_CHECKLIST_SETUP",
+            "entityType": "SEASONAL_PLAN",
+            "entityId": "WINTER:2026",
+            "style": "SECONDARY"
+          },
+          {
+            "id": "seasonal-back-to-plan",
+            "label": "Back to the winter tasks",
+            "interactionType": "START_WORKFLOW",
+            "message": "What should I do to get ready for next season?",
+            "operationId": "SEASONAL_HOME_CARE",
+            "style": "SECONDARY"
+          },
+          {
+            "id": "seasonal-update-home-details",
+            "label": "Update home details",
+            "interactionType": "START_WORKFLOW",
+            "message": "How complete is my home record?",
+            "operationId": "PROPERTY_SUMMARY",
+            "style": "SECONDARY"
+          }
+        ]
+      }
+    ] };
+}
+
 function homeHabitReviewExecution() {
   const base = maintenanceExecution();
   return { ...base, executionId: 'execution-home-habit-review', question: 'Review the home habit "Test Smoke and CO Detectors".', viewState: null, blocks: [
       {
-        "type": "SUMMARY",
+        "type": "TASK_GUIDE",
         "id": "home-habit-review-h1",
         "title": "Test Smoke and CO Detectors",
-        "body": "This is a monthly check worth adding to your routine.",
-        "tone": "DEFAULT",
-        "actions": []
-      },
-      {
-        "type": "GROUPED_LIST",
-        "filters": [],
-        "id": "home-habit-review-facts",
-        "title": "About this habit",
-        "actions": [],
-        "sections": [
+        "summary": "This is a monthly check worth adding to your routine.",
+        "eyebrow": [
+          "Home habits",
+          "Suggested"
+        ],
+        "icon": "SAFETY",
+        "chips": [
           {
-            "id": "habit-facts",
-            "title": "Details",
-            "count": 7,
-            "items": [
-              {
-                "id": "habit-fact-status",
-                "title": "Status",
-                "description": "Suggested",
-                "condition": null,
-                "meta": [],
-                "status": null,
-                "href": null
-              },
-              {
-                "id": "habit-fact-cadence",
-                "title": "How often",
-                "description": "Monthly",
-                "condition": null,
-                "meta": [],
-                "status": null,
-                "href": null
-              },
-              {
-                "id": "habit-fact-time",
-                "title": "Time it takes",
-                "description": "About 10 minutes",
-                "condition": null,
-                "meta": [],
-                "status": null,
-                "href": null
-              },
-              {
-                "id": "habit-fact-difficulty",
-                "title": "Difficulty",
-                "description": "easy",
-                "condition": null,
-                "meta": [],
-                "status": null,
-                "href": null
-              },
-              {
-                "id": "habit-fact-category",
-                "title": "Area",
-                "description": "safety",
-                "condition": null,
-                "meta": [],
-                "status": null,
-                "href": null
-              },
-              {
-                "id": "habit-fact-due",
-                "title": "Suggested for",
-                "description": "Aug 18, 2026",
-                "condition": null,
-                "meta": [],
-                "status": null,
-                "href": null
-              },
-              {
-                "id": "habit-fact-tip",
-                "title": "Tip",
-                "description": "Press and hold the test button.",
-                "condition": null,
-                "meta": [],
-                "status": null,
-                "href": null
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "type": "GROUPED_LIST",
-        "filters": [],
-        "id": "home-habit-review-history",
-        "title": "Recent activity",
-        "actions": [],
-        "sections": [
+            "label": "Monthly",
+            "kind": "TAG"
+          },
           {
-            "id": "habit-history",
-            "title": "Most recent first",
-            "count": 1,
-            "items": [
-              {
-                "id": "habit-history-a1",
-                "title": "snoozed",
-                "description": null,
-                "condition": null,
-                "meta": [
-                  "Aug 30, 2026"
-                ],
-                "status": null,
-                "href": null
-              }
-            ]
+            "label": "~10 minutes",
+            "kind": "TIME"
+          },
+          {
+            "label": "Easy",
+            "kind": "DIY"
+          },
+          {
+            "label": "Suggested",
+            "kind": "STATUS"
           }
-        ]
-      },
-      {
-        "type": "BOUNDARY",
-        "id": "home-habit-review-boundary",
-        "title": "About these habits",
-        "body": "Habits are suggested from what is recorded about this home. Nothing changes until you review and confirm an action.",
-        "severity": "INFO",
-        "suggestions": []
-      },
-      {
-        "type": "SUMMARY",
-        "id": "home-habit-review-next",
-        "title": "What would you like to do?",
-        "body": "Each of these only opens a confirmation.",
-        "tone": "DEFAULT",
+        ],
+        "tip": {
+          "title": "Before you start",
+          "body": "Press and hold the test button."
+        },
+        "main": {
+          "title": "What it involves",
+          "body": "Test each detector and confirm its status.",
+          "facts": [
+            {
+              "label": "Status",
+              "value": "Suggested"
+            },
+            {
+              "label": "How often",
+              "value": "Monthly"
+            },
+            {
+              "label": "Area",
+              "value": "safety"
+            },
+            {
+              "label": "Suggested for",
+              "value": "Aug 18, 2026"
+            }
+          ]
+        },
+        "history": [
+          {
+            "label": "Snoozed",
+            "value": "Aug 30, 2026"
+          }
+        ],
+        "notes": [
+          {
+            "id": "about",
+            "title": "About these habits",
+            "body": "Habits are suggested from what is recorded about this home. They are not an inspection, and nothing changes until you review and confirm an action."
+          }
+        ],
         "actions": [
           {
             "id": "habit-adopt",
@@ -1784,16 +1821,7 @@ function homeHabitReviewExecution() {
             "entityType": "HOME_HABIT",
             "entityId": "h1",
             "style": "SECONDARY"
-          }
-        ]
-      },
-      {
-        "type": "SUMMARY",
-        "id": "home-habit-review-more",
-        "title": "If this is not for you right now",
-        "body": "Skip it for now, or stop it being suggested. Either one only opens a confirmation.",
-        "tone": "DEFAULT",
-        "actions": [
+          },
           {
             "id": "habit-skip",
             "label": "Skip for now",
@@ -3319,6 +3347,12 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     }
     if (/what needs my attention now/i.test(body.message)) {
       const response = homeActionShelvesExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/^walk me through/i.test(body.message)) {
+      const response = seasonalWalkthroughExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

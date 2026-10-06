@@ -66,12 +66,12 @@ async function seasonalHomeCareResult(userId: string, propertyId: string, messag
   };
   // "Walk me through" a task: launched from the plan with the task's own entity id, which also carries which plan it belongs to.
   const task = launchContext?.entityType === SEASONAL_TASK_ENTITY_TYPE ? parseSeasonalTaskEntityId(launchContext.entityId) : null;
-  if (task) {
-    const walkthrough = buildSeasonalTaskWalkthrough({ ...base, focus: task.focus, taskKey: task.taskKey });
-    if (walkthrough) return walkthrough;
-  }
   const focus = task?.focus ?? seasonalHomeCareFocus(message);
   const setup = await seasonalSetupContext(userId, propertyId, property, seasonalPlanWindow(now, focus));
+  if (task) {
+    const walkthrough = buildSeasonalTaskWalkthrough({ ...base, focus: task.focus, taskKey: task.taskKey, setup });
+    if (walkthrough) return walkthrough;
+  }
   return buildSeasonalHomeCareResult({ ...base, focus, setup });
 }
 

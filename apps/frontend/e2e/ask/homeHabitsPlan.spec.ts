@@ -33,17 +33,17 @@ test('the habits list: numbered groups, a Review button per habit, facts that op
   expect(api.executionBodies[1].message).toBe('Review the home habit "Test Smoke and CO Detectors".');
 });
 
-test('a habit review: intro, facts, and two cards of next steps that each open a confirmation', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1500 });
+test('a habit review is one guide card whose actions each open a confirmation', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
   const api = await installAskApi(page);
   await ask(page, 'Review the home habit "Test Smoke and CO Detectors".');
-  const response = page.locator('#ask-execution-execution-home-habit-review');
-  await expect(response.locator('[data-seasonal-intro]')).toContainText('Test Smoke and CO Detectors');
-  await expect(response.locator('[data-fact-sheet="home-habit-review-facts"]')).toContainText('How often');
-  await expect(response.locator('[data-seasonal-next-steps]')).toHaveCount(2);
-  await expect(response.locator('[data-seasonal-next-steps] button')).toHaveCount(6);
+  const guide = page.locator('#ask-execution-execution-home-habit-review [data-task-guide]');
+  await expect(guide.getByRole('heading', { name: 'Test Smoke and CO Detectors' })).toBeVisible();
+  await expect(guide.getByRole('navigation', { name: 'Where this is' })).toContainText('Home habits');
+  await expect(guide.locator('[data-task-guide-tip]')).toContainText('Press and hold the test button.');
+  await expect(guide.locator('[data-task-guide-actions] button')).toHaveCount(6);
   await page.screenshot({ path: process.env.HABIT_REVIEW_SHOT ?? 'test-results/habit-review.png' });
-  await response.getByRole('button', { name: /Add to my routine/ }).click();
+  await guide.getByRole('button', { name: /Add to my routine/ }).click();
   await expect.poll(() => api.executionBodies.length).toBe(2);
   expect(api.executionBodies[1].message).toBe('Add this habit to my maintenance routine.');
 });

@@ -76,7 +76,16 @@ export interface AskBatchDecision { entityId: string; actionId: string }
 export interface AskDeckBatch { operationId: string; entityType: string; actionIds: string[]; message: string }
 export interface AskComparisonBadge { label: string; basis: string; policyCode: string }
 
+export interface AskTaskGuideChip { label: string; kind: 'PRIORITY_HIGH' | 'PRIORITY' | 'TIME' | 'COST' | 'DIY' | 'PRO' | 'DATE' | 'STATUS' | 'TAG' }
+
 export type AskPresentationBlock =
+  | {
+    type: 'TASK_GUIDE'; id: string; title: string; summary: string; eyebrow: string[];
+    icon: 'HVAC' | 'PLUMBING' | 'ELECTRICAL' | 'ROOF' | 'OUTDOOR' | 'SAFETY' | 'APPLIANCE' | 'HABIT' | 'TASK';
+    chips: AskTaskGuideChip[]; tip?: { title: string; body: string } | null;
+    main?: { title: string; body: string; facts: Array<{ label: string; value: string }> } | null;
+    history: Array<{ label: string; value: string }>; notes: Array<{ id: string; title: string; body: string; actionId?: string }>; actions: AskAction[];
+  }
   | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
   | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation }

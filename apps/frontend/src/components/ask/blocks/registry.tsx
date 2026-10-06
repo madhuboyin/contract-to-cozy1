@@ -41,12 +41,14 @@ import { OutcomeSummaryBlock, PriorityListBlock } from './PriorityAndOutcomeBloc
 import { TableBlock } from './TableBlock';
 import { LifespanBlock } from '../patterns/LifespanBlock';
 import { ProgressBlock } from '../patterns/ProgressBlock';
+import { TaskGuideBlock } from '../TaskGuideBlock';
 import { TimelineTrackBlock } from '../patterns/TimelineTrackBlock';
 import type { AskBlockRenderer, AskBlockRendererProps, AskBlockType } from './types';
 
 type AskBlockRendererRegistry = { [T in AskBlockType]: AskBlockRenderer<T> };
 
 export const ASK_BLOCK_RENDERERS: AskBlockRendererRegistry = {
+  TASK_GUIDE: TaskGuideBlock,
   SUMMARY: SummaryBlock,
   PROACTIVE_INSIGHT: ProactiveInsightBlock,
   GROUPED_LIST: GroupedListBlock,

@@ -102,7 +102,7 @@ function operationSpecificFirstBlock(operationId: AskOperationId, blocks: AskPre
   if (operationId === 'HVAC_DECISION_CONTINUE') return ['DECISION_PROGRESS', 'EMPTY_STATE'].includes(first.type);
   if (operationId === 'HVAC_DECISION_OUTCOME_VIEW') return ['OUTCOME_SUMMARY', 'EMPTY_STATE'].includes(first.type);
   if (operationId.endsWith('_BOUNDARY')) return first.type === 'BOUNDARY';
-  if (['WORKFLOW_PROGRESS', 'MONITOR', 'OUTCOME_SUMMARY', 'DECISION_PROGRESS', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE'].includes(first.type)) {
+  if (['WORKFLOW_PROGRESS', 'MONITOR', 'OUTCOME_SUMMARY', 'DECISION_PROGRESS', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE', 'TASK_GUIDE'].includes(first.type)) {
     return getAskOperationDefinition(operationId).allowedBlockTypes.includes(first.type);
   }
   return ['SUMMARY', 'EMPTY_STATE', 'ERROR_STATE', 'BOUNDARY'].includes(first.type);

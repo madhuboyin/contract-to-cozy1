@@ -33,6 +33,7 @@ function filterBlockActions(block: AskPresentationBlock, householdRole: Househol
     case 'EMPTY_STATE':
     case 'ERROR_STATE':
     case 'PROGRESS':
+    case 'TASK_GUIDE':
       return { ...block, actions: filterActions(block.actions, householdRole) } as AskPresentationBlock;
     case 'BOUNDARY':
       return { ...block, actions: filterActions(block.actions ?? [], householdRole) } as AskPresentationBlock;

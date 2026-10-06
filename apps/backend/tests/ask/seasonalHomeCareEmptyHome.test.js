@@ -6,7 +6,7 @@ require('ts-node/register');
 // Inventory 4d / D-O4: the seasonal home-care read, EXECUTED against an empty home. It is pure, so nothing is stubbed: the only inputs are a
 // zip code (a required property column), an optional saved region, a date, and the local catalog. Not registered as an operation yet.
 
-const { buildSeasonalHomeCareResult, deriveSeasonalClimateRegion, seasonalAssetFreeTasks } = require('../../src/services/ask/support/seasonalHomeCare.ts');
+const { buildSeasonalHomeCareResult, buildSeasonalTaskWalkthrough, deriveSeasonalClimateRegion, seasonalAssetFreeTasks } = require('../../src/services/ask/support/seasonalHomeCare.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 
 const DATES = { SPRING: new Date(2026, 3, 15), SUMMER: new Date(2026, 6, 15), FALL: new Date(2026, 9, 15), WINTER: new Date(2026, 0, 15) };
@@ -95,4 +95,25 @@ test('the next steps stay in Ask: no link anywhere, at most three actions, and U
   const update = next.actions.find((action) => action.id === 'seasonal-update-home-details');
   assert.deepEqual([update.operationId, update.message], ['PROPERTY_SUMMARY', 'How complete is my home record?']);
   assert.equal(JSON.stringify(result).includes('/dashboard/seasonal'), false);
+});
+
+test('a task walkthrough is one guide card built only from the template\'s own facts: chips, what to do, when, and no invented steps', () => {
+  const input = { zipCode: '08536', now: new Date(2026, 9, 5), focus: 'NEXT_SEASON', setup: { canSetUp: true, checklist: null } };
+  const guide = buildSeasonalTaskWalkthrough({ ...input, taskKey: 'WINTER_FURNACE_FILTER_CHANGE' }).blocks[0];
+  assert.equal(guide.type, 'TASK_GUIDE');
+  assert.equal(guide.title, 'Replace furnace filters monthly');
+  assert.deepEqual(guide.eyebrow, ['Winter prep', 'Task 1 of 4']);
+  assert.equal(guide.icon, 'HVAC');
+  assert.deepEqual(guide.chips.map((chip) => [chip.kind, chip.label]), [['PRIORITY_HIGH', 'High priority'], ['TIME', '~15 minutes'], ['COST', '$15\u2013$40'], ['DIY', 'DIY']]);
+  assert.equal(guide.summary, 'Dirty filters reduce efficiency and can cause furnace failure in extreme cold.');
+  assert.deepEqual(guide.main, { title: 'What to do', body: 'Check and replace HVAC filters every month during peak heating season', facts: [{ label: 'When', value: 'Best done about 2 weeks before winter starts' }] });
+  assert.equal(guide.tip ?? null, null, 'a template records no tip, so none is shown');
+  assert.deepEqual(guide.notes.map((note) => note.id), ['why', 'personalized']);
+  assert.equal(guide.notes[1].actionId, 'seasonal-update-home-details');
+  assert.deepEqual(guide.actions.map((action) => action.id), ['seasonal-next-task', 'seasonal-add-tasks', 'seasonal-back-to-plan', 'seasonal-update-home-details']);
+  assert.equal(guide.actions[0].label, 'Next winter task');
+  AskPresentationBlockSchema.parse(guide);
+  const last = buildSeasonalTaskWalkthrough({ ...input, taskKey: seasonalAssetFreeTasks('WINTER', 'MODERATE').at(-1).taskKey }).blocks[0];
+  assert.equal(last.actions.some((action) => action.id === 'seasonal-next-task'), false, 'the last task has no next');
+  assert.equal(buildSeasonalTaskWalkthrough({ ...input, taskKey: 'NOT_A_TASK' }), null);
 });

@@ -20,7 +20,7 @@ export type ClimateRegionSource = 'SAVED' | 'ZIP_PREFIX' | 'NATIONAL_DEFAULT';
 interface SeasonalTemplate {
   taskKey: string; season: Season; title: string; description: string; whyItMatters: string; priority: string;
   climateRegions: string[]; requiredAssetType: string | null; requiredAssetCheck: string | null; isDiyPossible: boolean;
-  typicalCostMin?: number | null; typicalCostMax?: number | null; estimatedHours?: number | null; timingOffsetDays?: number | null;
+  typicalCostMin?: number | null; typicalCostMax?: number | null; estimatedHours?: number | null; timingOffsetDays?: number | null; serviceCategory?: string | null;
 }
 
 const ZIP_PREFIX_REGION = (climateData as { zipPrefixMapping: Record<string, SeasonalClimateRegion> }).zipPrefixMapping;
@@ -219,7 +219,18 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
   };
 }
 
-/** One task's walkthrough, from the template's own recorded facts. Null when the task is not among this season's general tasks. */
+const GUIDE_ICONS: Record<string, 'HVAC' | 'PLUMBING' | 'ELECTRICAL' | 'ROOF' | 'OUTDOOR' | 'SAFETY' | 'APPLIANCE'> = {
+  HVAC: 'HVAC', PLUMBING: 'PLUMBING', ELECTRICAL: 'ELECTRICAL', ROOFING: 'ROOF', LANDSCAPING: 'OUTDOOR', EXTERIOR: 'OUTDOOR', POOL: 'OUTDOOR',
+  SAFETY: 'SAFETY', APPLIANCES: 'APPLIANCE',
+};
+
+const tildeTime = (hours: number) => (hours < 1 ? `~${Math.round(hours * 60)} minutes` : `~${hours % 1 === 0 ? hours : hours.toFixed(1)} ${hours === 1 ? 'hour' : 'hours'}`);
+
+/**
+ * One task's walkthrough as a single guide card, from the template's own recorded facts: what it is and why it matters, its key facts as
+ * chips, what to do and when, why it is suggested now, and how general this advice is. Nothing is inferred about the home and no steps are
+ * invented: a template records one description, so that is the "what to do". Null when the task is not among this season's general tasks.
+ */
 export function buildSeasonalTaskWalkthrough(input: SeasonalHomeCareInput & { taskKey: string }): AskOperationResult | null {
   const { season } = seasonalPlanWindow(input.now, input.focus);
   const { region } = deriveSeasonalClimateRegion(input.zipCode, input.savedClimateRegion);
@@ -228,28 +239,52 @@ export function buildSeasonalTaskWalkthrough(input: SeasonalHomeCareInput & { ta
   if (index < 0) return null;
   const task = shown[index];
   const following = shown[index + 1];
-  const facts = seasonalTaskFacts(task);
+  const seasonWord = SEASON_WORDS[season];
+  const low = task.typicalCostMin ?? 0;
+  const high = task.typicalCostMax ?? 0;
+  const chips = [
+    { label: PRIORITY_LABELS[task.priority] ?? 'Optional', kind: task.priority === 'CRITICAL' ? 'PRIORITY_HIGH' as const : 'PRIORITY' as const },
+    ...(task.estimatedHours ? [{ label: tildeTime(task.estimatedHours), kind: 'TIME' as const }] : []),
+    ...(high > 0 ? [{ label: low > 0 && low !== high ? `${money(low)}\u2013${money(high)}` : money(high), kind: 'COST' as const }] : []),
+    { label: task.isDiyPossible ? 'DIY' : 'Usually a pro', kind: task.isDiyPossible ? 'DIY' as const : 'PRO' as const },
+  ];
+  const setup = input.setup ?? null;
+  const planMessage = input.focus === 'NEXT_SEASON' ? SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE : SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE;
+  const { year } = seasonalPlanWindow(input.now, input.focus);
   const actions = [
     ...(following ? [{
-      id: 'seasonal-next-task', label: 'Next task', interactionType: 'START_WORKFLOW' as const, message: `Walk me through "${following.title}".`,
+      id: 'seasonal-next-task', label: `Next ${seasonWord} task`, interactionType: 'START_WORKFLOW' as const, message: `Walk me through "${following.title}".`,
       operationId: 'SEASONAL_HOME_CARE', entityType: SEASONAL_TASK_ENTITY_TYPE, entityId: seasonalTaskEntityId(input.focus, following.taskKey), style: 'PRIMARY' as const,
     }] : []),
+    ...(setup?.checklist
+      ? [showChecklistAction(season)]
+      : setup?.canSetUp
+        ? [{
+          id: 'seasonal-add-tasks', label: 'Add these to my tasks', interactionType: 'START_WORKFLOW' as const, message: seasonalSetupMessage(season),
+          operationId: 'SEASONAL_CHECKLIST_SETUP', entityType: SEASONAL_PLAN_ENTITY_TYPE, entityId: seasonalPlanEntityId(season, year), style: 'SECONDARY' as const,
+        }]
+        : []),
     {
-      id: 'seasonal-back-to-plan', label: `Back to the ${SEASON_WORDS[season]} tasks`, interactionType: 'START_WORKFLOW' as const,
-      message: input.focus === 'NEXT_SEASON' ? SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE : SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE,
+      id: 'seasonal-back-to-plan', label: `Back to the ${seasonWord} tasks`, interactionType: 'START_WORKFLOW' as const, message: planMessage,
       operationId: 'SEASONAL_HOME_CARE', style: 'SECONDARY' as const,
     },
+    updateHomeDetailsAction(),
   ];
+  const timing = task.timingOffsetDays != null ? timingLabel(task.timingOffsetDays, task.season) : null;
   return {
     status: 'ANSWERED', reasonCode: 'SEASONAL_TASK_WALKTHROUGH_READY',
-    blocks: [
-      { type: 'SUMMARY', id: 'seasonal-task-summary', title: task.title, body: `${task.whyItMatters} Task ${index + 1} of ${shown.length} for ${SEASON_WORDS[season]}.`, tone: task.priority === 'CRITICAL' ? 'CAUTION' : 'DEFAULT', actions },
-      {
-        type: 'GROUPED_LIST', id: 'seasonal-task-details', title: 'About this task', actions: [], filters: [],
-        sections: [{ id: 'seasonal-task-facts', title: PRIORITY_LABELS[task.priority] ?? 'Optional', count: facts.length, items: facts.map((fact, factIndex) => ({ id: `seasonal-fact-${factIndex}`, title: fact.label, description: fact.value, condition: null, meta: [], status: null, href: null })) }],
-      },
-      aboutBoundary(),
-    ],
+    blocks: [{
+      type: 'TASK_GUIDE', id: 'seasonal-task-guide', title: task.title, summary: task.whyItMatters,
+      eyebrow: [`${capitalize(seasonWord)} prep`, `Task ${index + 1} of ${shown.length}`],
+      icon: GUIDE_ICONS[task.serviceCategory ?? ''] ?? 'TASK', chips,
+      main: { title: 'What to do', body: task.description, facts: [...(timing ? [{ label: 'When', value: timing }] : [])] },
+      history: [],
+      notes: [
+        { id: 'why', title: 'Why this is on your list', body: `${capitalize(seasonWord)} is ${input.focus === 'NEXT_SEASON' ? 'the next' : 'the current'} season for your area, and this is one of the ${shown.length} general ${seasonWord} tasks for ${REGION_WORDS[region]}. ${PRIORITY_LABELS[task.priority] ?? 'Optional'} tasks like this one are listed ${task.priority === 'CRITICAL' ? 'first' : 'after the urgent ones'}.` },
+        { id: 'personalized', title: 'How personalized is this?', body: 'This is general guidance for your climate. It does not use anything recorded about your home yet, so it cannot account for your specific systems. It becomes more specific as your home record fills in.', actionId: 'seasonal-update-home-details' },
+      ],
+      actions,
+    }],
     suggestions: [],
   };
 }

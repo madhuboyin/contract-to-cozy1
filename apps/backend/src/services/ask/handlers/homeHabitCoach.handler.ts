@@ -221,6 +221,12 @@ function habitStatusLabel(habit: any, now: Date): string {
 
 // The inline review of one habit: why it was suggested, what it involves, what happened before, and the actions the
 // service will accept right now. Every action only opens a confirmation.
+const HABIT_ICONS: Record<string, 'HVAC' | 'PLUMBING' | 'ELECTRICAL' | 'ROOF' | 'OUTDOOR' | 'SAFETY' | 'APPLIANCE'> = {
+  HVAC: 'HVAC', PLUMBING: 'PLUMBING', ELECTRICAL: 'ELECTRICAL', ROOF: 'ROOF', EXTERIOR: 'OUTDOOR', SAFETY: 'SAFETY', APPLIANCE: 'APPLIANCE',
+};
+
+// The inline review of one habit as a single guide card (TASK_GUIDE): why it was suggested, its key facts as chips, the coach's tip, what it
+// involves, what happened before, and the actions the service will accept right now. Every action only opens a confirmation.
 export async function homeHabitReviewResult(userId: string, propertyId: string, habitId: string, now: Date = new Date()): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const habit = await loadHabit(propertyId, habitId);
@@ -232,57 +238,51 @@ export async function homeHabitReviewResult(userId: string, propertyId: string, 
   const asDate = (value: unknown) => (value ? new Date(value as any) : null);
   const due = habit.linkedMaintenanceTaskId ? asDate(habit.routineAdherence?.nextDueDate) : asDate(habit.dueAt);
   const lastDone = habit.linkedMaintenanceTaskId ? asDate(habit.routineAdherence?.lastCompletedDate) : asDate(habit.lastCompletedAt);
-  const fact = (id: string, label: string, value: string | null | undefined) => (value ? [{ id: `habit-fact-${id}`, title: label, description: value, condition: null, meta: [], status: null, href: null }] : []);
+  const reason = habit.reasonSummary || habit.descriptionOverride || template.description || template.shortDescription || 'The Home Habit Coach suggested this routine for your home.';
+  const status = habitStatusLabel(habit, now);
+  const dueText = due ? humanDate(due) : null;
+  const lastDoneText = lastDone ? humanDate(lastDone) : null;
   const facts = [
-    ...fact('status', 'Status', habitStatusLabel(habit, now)),
-    ...fact('cadence', 'How often', habit.reminderSchedule?.cadenceLabel),
-    ...fact('time', 'Time it takes', template.estimatedMinutes ? `About ${template.estimatedMinutes} minutes` : null),
-    ...fact('difficulty', 'Difficulty', template.difficulty ? readableCode(template.difficulty) : null),
-    ...fact('category', 'Area', template.category ? readableCode(template.category) : null),
-    ...fact('due', habit.linkedMaintenanceTaskId ? 'Next due' : 'Suggested for', due ? humanDate(due) : null),
-    ...fact('last', 'Last done', lastDone ? humanDate(lastDone) : null),
-    ...fact('tip', 'Tip', template.tipText),
+    { label: 'Status', value: status },
+    ...(habit.reminderSchedule?.cadenceLabel ? [{ label: 'How often', value: String(habit.reminderSchedule.cadenceLabel) }] : []),
+    ...(template.category ? [{ label: 'Area', value: readableCode(template.category) }] : []),
+    ...(dueText ? [{ label: habit.linkedMaintenanceTaskId ? 'Next due' : 'Suggested for', value: dueText }] : []),
+    ...(lastDoneText ? [{ label: 'Last done', value: lastDoneText }] : []),
+  ];
+  const chips = [
+    ...(habit.reminderSchedule?.cadenceLabel ? [{ label: String(habit.reminderSchedule.cadenceLabel), kind: 'TAG' as const }] : []),
+    ...(template.estimatedMinutes ? [{ label: `~${template.estimatedMinutes} minutes`, kind: 'TIME' as const }] : []),
+    ...(template.difficulty ? [{ label: readableCode(template.difficulty).replace(/^./, (letter) => letter.toUpperCase()), kind: 'DIY' as const }] : []),
+    { label: status, kind: 'STATUS' as const },
   ];
   const history = (habit.actions ?? []).slice(0, 5).map((entry: any) => ({
-    id: `habit-history-${entry.id}`, title: readableCode(String(entry.actionType)), description: entry.note || null, condition: null,
-    meta: [humanDate(new Date(entry.createdAt))].filter((value): value is string => Boolean(value)), status: null, href: null,
-  }));
-  const reason = habit.reasonSummary || habit.descriptionOverride || template.description || template.shortDescription || 'The Home Habit Coach suggested this routine for your home.';
+    label: readableCode(String(entry.actionType)).replace(/^./, (letter) => letter.toUpperCase()), value: humanDate(new Date(entry.createdAt)) ?? '',
+  })).filter((entry: { value: string }) => entry.value);
   const habitAction = (action: HabitAction, index: number) => ({
     id: `habit-${action.toLowerCase()}`, label: HABIT_ACTION_LABELS[action], interactionType: 'START_WORKFLOW' as const,
     message: HABIT_ACTION_MESSAGES[action], operationId: 'HOME_HABIT_UPDATE', entityType: HOME_HABIT_ENTITY_TYPE, entityId: habit.id,
     style: (index === 0 ? 'PRIMARY' : 'SECONDARY') as 'PRIMARY' | 'SECONDARY',
   });
-  // A block carries at most three actions (the response schema's cap), so the first three are the next steps and the rest, with the way
-  // back, sit in a second card, "If this is not for you right now".
-  const actions = [...allowed.map(habitAction), habitsBackAction()];
-  const fitsOneBlock = actions.length <= 3;
-  const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: `home-habit-review-${habit.id}`, title, body: reason, tone: 'DEFAULT', actions: [],
-  }];
-  if (facts.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'home-habit-review-facts', title: 'About this habit', actions: [], sections: [{ id: 'habit-facts', title: 'Details', count: facts.length, items: facts }] });
-  }
-  if (history.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'home-habit-review-history', title: 'Recent activity', actions: [], sections: [{ id: 'habit-history', title: 'Most recent first', count: history.length, items: history }] });
-  }
-  if (habit.linkedMaintenanceTaskId) {
-    blocks.push({ type: 'LIMITATION', id: 'home-habit-review-routine', title: 'Managed by your maintenance routine', body: 'This habit is a recurring maintenance task, so its schedule and completion are tracked there. Ask what maintenance is due to work with it.', severity: 'INFO' });
-  } else if (canChange && allowed.length === 0) {
-    blocks.push({ type: 'LIMITATION', id: 'home-habit-review-no-actions', title: 'Nothing to change here', body: 'This habit is not in a state Ask can change right now.', severity: 'INFO' });
-  } else if (!canChange) {
-    blocks.push({ type: 'LIMITATION', id: 'home-habit-review-role', title: 'View only', body: 'A contributor or owner can add this habit to the routine, mark it done, snooze it, or stop suggesting it.', severity: 'INFO' });
-  }
-  blocks.push(aboutHabitsBoundary('home-habit-review-boundary', 'Habits are suggested from what is recorded about this home. Nothing changes until you review and confirm an action.'));
-  blocks.push({
-    type: 'SUMMARY', id: 'home-habit-review-next', title: 'What would you like to do?',
-    body: allowed.length ? 'Each of these only opens a confirmation.' : 'You can go back to the list.', tone: 'DEFAULT', actions: fitsOneBlock ? actions : actions.slice(0, 3),
-  });
-  if (!fitsOneBlock) {
-    blocks.push({ type: 'SUMMARY', id: 'home-habit-review-more', title: 'If this is not for you right now', body: 'Skip it for now, or stop it being suggested. Either one only opens a confirmation.', tone: 'DEFAULT', actions: actions.slice(3) });
-  }
+  const notes = [
+    ...(habit.linkedMaintenanceTaskId
+      ? [{ id: 'routine', title: 'Managed by your maintenance routine', body: 'This habit is a recurring maintenance task, so its schedule and completion are tracked there. Ask what maintenance is due to work with it.' }]
+      : canChange && allowed.length === 0
+        ? [{ id: 'no-actions', title: 'Nothing to change here', body: 'This habit is not in a state Ask can change right now.' }]
+        : !canChange
+          ? [{ id: 'role', title: 'View only', body: 'A contributor or owner can add this habit to the routine, mark it done, snooze it, or stop suggesting it.' }]
+          : []),
+    { id: 'about', title: 'About these habits', body: 'Habits are suggested from what is recorded about this home. They are not an inspection, and nothing changes until you review and confirm an action.' },
+  ];
   return {
-    status: 'ANSWERED', reasonCode: 'HOME_HABIT_REVIEWED', contextVersion: homeHabitContextVersion(habit), blocks,
+    status: 'ANSWERED', reasonCode: 'HOME_HABIT_REVIEWED', contextVersion: homeHabitContextVersion(habit),
+    blocks: [{
+      type: 'TASK_GUIDE', id: `home-habit-review-${habit.id}`, title, summary: reason,
+      eyebrow: ['Home habits', status], icon: HABIT_ICONS[String(template.category)] ?? 'HABIT', chips,
+      tip: template.tipText ? { title: 'Before you start', body: String(template.tipText) } : null,
+      main: { title: 'What it involves', body: String(template.description || template.shortDescription || reason), facts },
+      history, notes,
+      actions: [...allowed.map(habitAction), habitsBackAction()],
+    }],
     suggestions: [],
   };
 }

@@ -81,26 +81,23 @@ describe('habits answers in the workspace', () => {
     expect(ask).toHaveBeenLastCalledWith('Review the home habit "Test Smoke and CO Detectors".', undefined, expect.objectContaining({ entityId: 'h1', sourceExecutionId: 'exec-habits' }));
   });
 
-  it('a habit review is an intro, its facts, and two cards of next steps; each action opens its confirmation', () => {
+  it('a habit review is one guide card; each action opens its confirmation', () => {
     const action = (id: string, label: string, message: string) => ({ id, label, interactionType: 'START_WORKFLOW', message, operationId: 'HOME_HABIT_UPDATE', entityType: 'HOME_HABIT', entityId: 'h1', style: 'SECONDARY' });
-    const blocks = [
-      { type: 'SUMMARY', id: 'home-habit-review-h1', title: 'Test Smoke and CO Detectors', body: 'Smoke detectors need a monthly test.', tone: 'DEFAULT', actions: [] },
-      { type: 'BOUNDARY', id: 'home-habit-review-boundary', title: 'About these habits', body: 'Nothing changes until you review and confirm an action.', severity: 'INFO', suggestions: [] },
-      { type: 'SUMMARY', id: 'home-habit-review-next', title: 'What would you like to do?', body: 'Each of these only opens a confirmation.', tone: 'DEFAULT', actions: [
+    const blocks = [{
+      type: 'TASK_GUIDE', id: 'home-habit-review-h1', title: 'Test Smoke and CO Detectors', summary: 'Smoke detectors need a monthly test.', eyebrow: ['Home habits', 'Suggested'], icon: 'SAFETY',
+      chips: [{ label: 'Monthly', kind: 'TAG' }, { label: '~10 minutes', kind: 'TIME' }], tip: { title: 'Before you start', body: 'Press and hold the test button.' },
+      main: { title: 'What it involves', body: 'Test each detector.', facts: [{ label: 'Status', value: 'Suggested' }] }, history: [],
+      notes: [{ id: 'about', title: 'About these habits', body: 'Nothing changes until you confirm.' }],
+      actions: [
         action('habit-adopt', 'Add to my routine', 'Add this habit to my maintenance routine.'), action('habit-complete', 'Mark done', 'Mark this habit done.'), action('habit-snooze', 'Snooze for a week', 'Snooze this habit for a week.'),
-      ] },
-      { type: 'SUMMARY', id: 'home-habit-review-more', title: 'If this is not for you right now', body: 'Skip it for now, or stop it being suggested.', tone: 'DEFAULT', actions: [
         action('habit-skip', 'Skip for now', 'Skip this habit for now.'), action('habit-dismiss', 'Stop suggesting', 'Stop suggesting this habit.'),
         { id: 'habits-back-to-list', label: 'Back to my habits', interactionType: 'START_WORKFLOW', message: 'Show my home habits', operationId: 'HOME_HABITS', style: 'SECONDARY' },
-      ] },
-    ] as unknown as AskPresentationBlock[];
+      ],
+    }] as unknown as AskPresentationBlock[];
     const { ask, view } = card(answer(blocks, 'exec-review'));
-    expect(view.container.querySelector('[data-seasonal-intro]')).toHaveTextContent('Test Smoke and CO Detectors');
-    expect(view.container.querySelectorAll('[data-seasonal-next-steps]')).toHaveLength(2);
-    expect(view.container.querySelectorAll('[data-seasonal-next-steps] button')).toHaveLength(6);
-    const cards = view.container.querySelectorAll('[data-seasonal-next-steps]');
-    expect(cards[0].querySelectorAll('button.bg-teal-700')).toHaveLength(1);
-    expect(cards[1].querySelectorAll('button.bg-teal-700')).toHaveLength(0);
+    expect(view.container.querySelectorAll('[data-task-guide]')).toHaveLength(1);
+    expect(view.container.querySelectorAll('[data-task-guide-actions] button')).toHaveLength(6);
+    expect(view.container.querySelector('[data-task-guide-tip]')).toHaveTextContent('Press and hold the test button.');
     fireEvent.click(screen.getByRole('button', { name: /Add to my routine/ }));
     expect(ask).toHaveBeenLastCalledWith('Add this habit to my maintenance routine.', undefined, expect.objectContaining({ operationId: 'HOME_HABIT_UPDATE', entityType: 'HOME_HABIT', entityId: 'h1', sourceExecutionId: 'exec-review' }));
     fireEvent.click(screen.getByRole('button', { name: /Back to my habits/ }));

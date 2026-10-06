@@ -58,3 +58,23 @@ test('on a phone the plan stays inside the screen and its buttons remain reachab
   await expect(response.locator('[data-seasonal-next-steps]').getByRole('button', { name: /Add these to my tasks/ })).toBeVisible();
   await page.screenshot({ path: process.env.SEASONAL_SHOT_MOBILE ?? 'test-results/seasonal-plan-mobile.png' });
 });
+
+test('a walkthrough is one guide card: breadcrumb, chips, what to do, rows, and actions that ask inside Ask', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByRole('button', { name: 'Essential only' }).click({ timeout: 2000 }).catch(() => undefined);
+  await page.getByPlaceholder(/^Ask anything about /).fill('Walk me through "Replace furnace filters monthly".');
+  await page.getByRole('button', { name: 'Send question' }).click();
+  const guide = page.locator('#ask-execution-execution-seasonal-walkthrough [data-task-guide]');
+  await expect(guide.getByRole('navigation', { name: 'Where this is' })).toContainText('Winter prep');
+  await expect(guide.getByRole('heading', { name: 'Replace furnace filters monthly' })).toBeVisible();
+  await expect(guide.getByRole('list', { name: 'Key facts' })).toContainText('~15 minutes');
+  await expect(guide.locator('[data-task-guide-main]')).toContainText('Check and replace HVAC filters');
+  await expect(guide.locator('[data-task-guide-note="personalized"]')).toBeVisible();
+  await expect(guide.locator('a')).toHaveCount(0);
+  await page.screenshot({ path: process.env.WALK_SHOT ?? 'test-results/seasonal-walkthrough.png' });
+  await guide.getByRole('button', { name: /Next winter task/ }).click();
+  await expect.poll(() => api.executionBodies.length).toBe(2);
+  expect(String(api.executionBodies[1].message)).toMatch(/^Walk me through "/);
+});

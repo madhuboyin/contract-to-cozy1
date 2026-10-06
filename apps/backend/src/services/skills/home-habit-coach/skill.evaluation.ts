@@ -58,7 +58,7 @@ export const HOME_HABIT_COACH_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
+  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY', 'TASK_GUIDE'],
   expectedCanonicalCalls: [{ id: 'home-habits.read', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {

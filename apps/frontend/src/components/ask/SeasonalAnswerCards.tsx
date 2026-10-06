@@ -11,15 +11,11 @@ type SummaryBlock = Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
 // summary as a bare headline; the seasonal answer is a short plan with up to three next steps and a season icon, so these two summaries
 // render as their own cards. Every action is the server's own inline action: nothing here links out.
 // Each is shared by the general answer (`seasonal-home-care-*`) and the home's own checklist answer (`seasonal-maintenance-*`).
-// The Home Habit Coach answers (`home-habits-*`, and one habit's review `home-habit-review-*`) use the same cards.
+// The Home Habit Coach list (`home-habits-*`) uses the same cards; one habit's review is a single guide card (see TaskGuideBlock).
 export const SEASONAL_INTRO_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-summary', 'seasonal-maintenance-summary', 'home-habits-summary']);
-export const SEASONAL_NEXT_STEPS_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-next', 'seasonal-maintenance-next', 'home-habits-next', 'home-habit-review-next', 'home-habit-review-more']);
-export const SEASONAL_ABOUT_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-boundary', 'home-habits-boundary', 'home-habit-review-boundary']);
-
-// A single habit's review headline has the habit's id in its block id (`home-habit-review-<id>`); the other `home-habit-review-*` ids are
-// separate cards, so they are excluded by name.
-const HABIT_REVIEW_OTHER_IDS: ReadonlySet<string> = new Set(['home-habit-review-facts', 'home-habit-review-history', 'home-habit-review-routine', 'home-habit-review-no-actions', 'home-habit-review-role', 'home-habit-review-boundary', 'home-habit-review-next', 'home-habit-review-more', 'home-habit-review-confirm']);
-export const isSeasonalIntroBlockId = (id: string): boolean => SEASONAL_INTRO_BLOCK_IDS.has(id) || (id.startsWith('home-habit-review-') && !HABIT_REVIEW_OTHER_IDS.has(id));
+export const SEASONAL_NEXT_STEPS_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-next', 'seasonal-maintenance-next', 'home-habits-next']);
+export const SEASONAL_ABOUT_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-boundary', 'home-habits-boundary']);
+export const isSeasonalIntroBlockId = (id: string): boolean => SEASONAL_INTRO_BLOCK_IDS.has(id);
 
 const SEASON_ICONS = [
   { word: 'winter', Icon: Snowflake, tone: 'bg-sky-50 text-sky-600' },
@@ -28,7 +24,7 @@ const SEASON_ICONS = [
   { word: 'fall', Icon: Leaf, tone: 'bg-orange-50 text-orange-600' },
 ] as const;
 
-const ACTION_ICONS: Record<string, typeof ListPlus> = {
+export const ACTION_ICONS: Record<string, typeof ListPlus> = {
   'seasonal-add-tasks': ListPlus,
   'seasonal-walkthrough': PlayCircle,
   'seasonal-show-checklist': ListChecks,
@@ -49,7 +45,7 @@ const ACTION_ICONS: Record<string, typeof ListPlus> = {
 
 export function SeasonalIntroCard({ block }: { block: SummaryBlock }) {
   const season = SEASON_ICONS.find(({ word }) => block.title.toLowerCase().includes(word));
-  const habit = block.id.startsWith('home-habit');
+  const habit = block.id.startsWith('home-habits');
   const Icon = season?.Icon ?? (habit ? Repeat : null);
   const tone = season?.tone ?? 'bg-teal-50 text-teal-700';
   return (
@@ -81,8 +77,8 @@ export function SeasonalAboutCard({ block }: { block: Extract<AskPresentationBlo
 export function SeasonalNextSteps({ block }: { block: SummaryBlock }) {
   const action = (candidate: AskAction, index: number) => {
     const Icon = ACTION_ICONS[candidate.id];
-    // The first is the recommended step; the rest are alternatives, so only it is filled. A card of "not right now" options recommends none.
-    return <ActionLink key={candidate.id} action={{ ...candidate, style: index === 0 && !block.id.endsWith('-more') ? 'PRIMARY' : 'SECONDARY' }} icon={Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : undefined} />;
+    // The first is the recommended step; the rest are alternatives, so only it is filled.
+    return <ActionLink key={candidate.id} action={{ ...candidate, style: index === 0 ? 'PRIMARY' : 'SECONDARY' }} icon={Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : undefined} />;
   };
   return (
     <section data-seasonal-next-steps="" aria-labelledby="seasonal-next-steps-heading" className="flex max-w-[800px] items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">

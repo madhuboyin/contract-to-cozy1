@@ -193,7 +193,8 @@ test('every seasonal next-step, walkthrough, setup and receipt action survives t
   assert.deepEqual(ids(validate('SEASONAL_HOME_CARE', existing)), ['seasonal-show-checklist', 'seasonal-walkthrough', 'seasonal-update-home-details']);
   const firstKey = plan.blocks[1].sections[0].items[0].id;
   const walk = buildSeasonalTaskWalkthrough({ ...input, taskKey: firstKey });
-  assert.deepEqual(ids(validate('SEASONAL_HOME_CARE', walk)), ['seasonal-next-task', 'seasonal-back-to-plan']);
+  assert.equal(walk.blocks[0].type, 'TASK_GUIDE');
+  assert.deepEqual(ids(validate('SEASONAL_HOME_CARE', walk)), ['seasonal-next-task', 'seasonal-add-tasks', 'seasonal-back-to-plan', 'seasonal-update-home-details']);
   const { result: receipt } = await confirm((await propose()).parameters);
   assert.deepEqual(ids(validate('SEASONAL_CHECKLIST_SETUP', receipt)), ['seasonal-show-checklist']);
   previewResult = { eligible: true, existingChecklistId: null, decisions: [], applicable: [], alreadyOnChecklist: [], toAdd: [] };

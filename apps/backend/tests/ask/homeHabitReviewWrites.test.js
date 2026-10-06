@@ -119,28 +119,29 @@ test('an unadopted suggestion is "suggested for" a date, never "overdue"', () =>
 
 // ───────────────────────────── the review ─────────────────────────────
 
-test('the review explains the habit and offers exactly the actions the service will accept', async () => {
+test('the review is one guide card that explains the habit and offers exactly the actions the service will accept', async () => {
   const result = await review();
   assert.equal(result.status, 'ANSWERED');
-  assert.equal(result.blocks[0].title, 'Test Smoke and CO Detectors');
-  assert.match(result.blocks[0].body, /monthly test/);
-  // The intro carries no actions; the next steps are a card of at most three (the response schema's cap) and the rest sit in a second card.
-  assert.deepEqual(result.blocks[0].actions, []);
-  const nextCard = result.blocks.find((block) => block.id === 'home-habit-review-next');
-  assert.deepEqual(nextCard.actions.map((action) => action.id), ['habit-adopt', 'habit-complete', 'habit-snooze']);
-  const more = result.blocks.find((block) => block.id === 'home-habit-review-more');
-  assert.deepEqual(more.actions.map((action) => action.id), ['habit-skip', 'habit-dismiss', 'habits-back-to-list']);
-  for (const action of [...nextCard.actions, ...more.actions].filter((candidate) => candidate.id !== 'habits-back-to-list')) {
+  assert.equal(result.blocks.length, 1);
+  const guide = result.blocks[0];
+  assert.equal(guide.type, 'TASK_GUIDE');
+  assert.equal(guide.title, 'Test Smoke and CO Detectors');
+  assert.match(guide.summary, /monthly test/);
+  assert.deepEqual(guide.eyebrow, ['Home habits', 'Suggested']);
+  assert.deepEqual(guide.chips.map((chip) => [chip.kind, chip.label]), [['TAG', 'Monthly'], ['TIME', '~10 minutes'], ['DIY', 'Easy'], ['STATUS', 'Suggested']]);
+  assert.deepEqual(guide.tip, { title: 'Before you start', body: 'Press and hold the test button.' });
+  assert.equal(guide.main.title, 'What it involves');
+  assert.deepEqual(guide.main.facts.map((fact) => [fact.label, fact.value]), [['Status', 'Suggested'], ['How often', 'Monthly'], ['Area', 'safety'], ['Suggested for', 'Sep 20, 2026']]);
+  assert.deepEqual(guide.history, [{ label: 'Snoozed', value: 'Aug 30, 2026' }]);
+  assert.deepEqual(guide.actions.map((action) => action.id), ['habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list']);
+  for (const action of guide.actions.filter((candidate) => candidate.id !== 'habits-back-to-list')) {
     assert.equal(action.operationId, 'HOME_HABIT_UPDATE');
     assert.equal(action.entityType, 'HOME_HABIT');
     assert.equal(action.entityId, 'h1');
     assert.equal(action.href, undefined);
     assert.ok(habitActionFromMessage(action.message), action.id);
   }
-  const facts = result.blocks.find((block) => block.id === 'home-habit-review-facts').sections[0].items.map((item) => [item.title, item.description]);
-  assert.deepEqual(facts, [['Status', 'Suggested'], ['How often', 'Monthly'], ['Time it takes', 'About 10 minutes'], ['Difficulty', 'easy'], ['Area', 'safety'], ['Suggested for', 'Sep 20, 2026'], ['Tip', 'Press and hold the test button.']]);
-  assert.equal(result.blocks.find((block) => block.id === 'home-habit-review-history').sections[0].items.length, 1);
-  for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
+  AskPresentationBlockSchema.parse(guide);
 });
 
 test('review actions follow the live status, and a habit in the routine offers none', () => {
@@ -155,16 +156,19 @@ test('review actions follow the live status, and a habit in the routine offers n
 
 test('a viewer sees the review but no actions; a missing habit is a boundary, not an error', async () => {
   role = 'VIEWER';
-  const viewer = await review();
-  assert.deepEqual(viewer.blocks.find((block) => block.id === 'home-habit-review-next').actions.map((action) => action.id), ['habits-back-to-list']);
-  assert.ok(viewer.blocks.some((block) => block.id === 'home-habit-review-role'));
+  const viewer = (await review()).blocks[0];
+  assert.deepEqual(viewer.actions.map((action) => action.id), ['habits-back-to-list']);
+  assert.ok(viewer.notes.some((note) => note.id === 'role'));
   role = 'CONTRIBUTOR';
   exists = false;
   const gone = await review();
   assert.equal(gone.reasonCode, 'HOME_HABIT_NOT_FOUND');
-  const routine = await (async () => { exists = true; live = baseHabit({ linkedMaintenanceTaskId: 't1', routineAdherence: { nextDueDate: '2026-10-01T00:00:00.000Z', lastCompletedDate: null } }); return review(); })();
-  assert.deepEqual(routine.blocks.find((block) => block.id === 'home-habit-review-next').actions.map((action) => action.id), ['habits-back-to-list']);
-  assert.ok(routine.blocks.some((block) => block.id === 'home-habit-review-routine'));
+  exists = true;
+  live = baseHabit({ linkedMaintenanceTaskId: 't1', routineAdherence: { nextDueDate: '2026-10-01T00:00:00.000Z', lastCompletedDate: null } });
+  const routine = (await review()).blocks[0];
+  assert.deepEqual(routine.actions.map((action) => action.id), ['habits-back-to-list']);
+  assert.ok(routine.notes.some((note) => note.id === 'routine'));
+  assert.equal(routine.main.facts.find((fact) => fact.label === 'Next due').value, 'Oct 1, 2026');
 });
 
 // ───────────────────────────── proposing ─────────────────────────────
@@ -269,7 +273,7 @@ test('the review actions, the receipt action and the empty-state link survive th
   }).result;
   const reviewed = validate('HOME_HABITS', await review());
   assert.deepEqual(reviewed.blocks.flatMap((block) => block.actions ?? []).map((action) => action.id), ['habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list']);
-  assert.ok(reviewed.blocks.some((block) => block.id === 'home-habit-review-boundary'), 'the review boundary must be allowlisted');
+  assert.equal(reviewed.blocks[0].type, 'TASK_GUIDE', 'the guide block must be allowed for the operation');
   const list = validate('HOME_HABITS', homeHabitsFromView({ habits: [baseHabit()], hasMore: false, nextCursor: null }, 'p1', NOW));
   assert.deepEqual(list.blocks.flatMap((block) => block.actions ?? []).map((action) => action.id), ['habits-review-first', 'habits-show-maintenance'], 'the list\'s next steps must be allowlisted');
   assert.ok(list.blocks.some((block) => block.id === 'home-habits-boundary'));

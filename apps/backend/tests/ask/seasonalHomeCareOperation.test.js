@@ -102,10 +102,11 @@ test('"Walk me through" a task launches this same operation with the task\'s ent
   assert.equal(walk.entityType, 'SEASONAL_TASK');
   const first = await run(OWNED, walk.message, { launchContext: { entityType: walk.entityType, entityId: walk.entityId, operationId: 'SEASONAL_HOME_CARE' } });
   assert.equal(first.reasonCode, 'SEASONAL_TASK_WALKTHROUGH_READY');
-  assert.match(first.blocks[0].body, /Task 1 of /);
+  assert.equal(first.blocks[0].type, 'TASK_GUIDE');
+  assert.match(first.blocks[0].eyebrow[1], /^Task 1 of /);
   const nextAction = first.blocks[0].actions.find((action) => action.id === 'seasonal-next-task');
   const second = await run(OWNED, nextAction.message, { launchContext: { entityType: nextAction.entityType, entityId: nextAction.entityId, operationId: 'SEASONAL_HOME_CARE' } });
-  assert.match(second.blocks[0].body, /Task 2 of /);
+  assert.match(second.blocks[0].eyebrow[1], /^Task 2 of /);
   const back = second.blocks[0].actions.find((action) => action.id === 'seasonal-back-to-plan');
   assert.equal(back.message, handlerModule.SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE, 'back returns to the same plan');
   const stale = await run(OWNED, 'x', { launchContext: { entityType: 'SEASONAL_TASK', entityId: 'NEXT_SEASON:NOT_A_REAL_TASK' } });
