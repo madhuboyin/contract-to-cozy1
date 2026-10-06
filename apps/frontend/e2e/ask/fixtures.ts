@@ -1633,8 +1633,7 @@ function seasonalWalkthroughExecution() {
         "title": "Replace furnace filters monthly",
         "summary": "Dirty filters reduce efficiency and can cause furnace failure in extreme cold.",
         "eyebrow": [
-          "Winter prep",
-          "Task 1 of 4"
+          "Winter prep"
         ],
         "icon": "HVAC",
         "chips": [
@@ -1682,13 +1681,13 @@ function seasonalWalkthroughExecution() {
         "actions": [
           {
             "id": "seasonal-next-task",
-            "label": "Next winter task",
+            "label": "Another winter task",
             "interactionType": "START_WORKFLOW",
             "message": "Walk me through \"Test GFCI outlets\".",
             "operationId": "SEASONAL_HOME_CARE",
             "entityType": "SEASONAL_TASK",
             "entityId": "NEXT_SEASON:WINTER_GFCI_OUTLET_TEST",
-            "style": "PRIMARY"
+            "style": "SECONDARY"
           },
           {
             "id": "seasonal-add-tasks",

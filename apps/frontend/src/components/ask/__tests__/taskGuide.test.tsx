@@ -66,6 +66,35 @@ describe('task guide card', () => {
     expect(ask).toHaveBeenLastCalledWith('How complete is my home record?', undefined, expect.objectContaining({ operationId: 'PROPERTY_SUMMARY' }));
   });
 
+  it('keeps each action\'s declared style: a guide with no PRIMARY action shows no filled button, and the first action is not promoted', () => {
+    const calm = guide({
+      eyebrow: ['Winter prep'],
+      actions: [
+        { id: 'seasonal-next-task', label: 'Another winter task', interactionType: 'START_WORKFLOW', message: 'Walk me through "Test GFCI outlets".', operationId: 'SEASONAL_HOME_CARE', style: 'SECONDARY' },
+        { id: 'seasonal-back-to-plan', label: 'Back to the winter tasks', interactionType: 'START_WORKFLOW', message: 'What home care should I do this season?', operationId: 'SEASONAL_HOME_CARE', style: 'SECONDARY' },
+      ],
+    });
+    const { view } = card(calm);
+    const footer = view.container.querySelector('[data-task-guide-actions]') as HTMLElement;
+    expect(within(footer).getAllByRole('button').map((button) => button.textContent)).toEqual(['Another winter task', 'Back to the winter tasks']);
+    expect(footer.querySelectorAll('button.bg-teal-700')).toHaveLength(0);
+    expect(within(view.container.querySelector('[data-task-guide]') as HTMLElement).getByRole('navigation', { name: 'Where this is' })).not.toHaveTextContent(/Task \d+ of \d+/);
+  });
+
+  it('a producer that declares a PRIMARY action still gets exactly one filled button, on that action', () => {
+    const declared = guide({
+      actions: [
+        { id: 'habit-complete', label: 'Mark done', interactionType: 'START_WORKFLOW', message: 'Mark this habit done.', operationId: 'HOME_HABIT_UPDATE', style: 'SECONDARY' },
+        { id: 'habit-adopt', label: 'Add to my routine', interactionType: 'START_WORKFLOW', message: 'Add this habit.', operationId: 'HOME_HABIT_UPDATE', style: 'PRIMARY' },
+      ],
+    });
+    const { view } = card(declared);
+    const footer = view.container.querySelector('[data-task-guide-actions]') as HTMLElement;
+    const filled = footer.querySelectorAll('button.bg-teal-700');
+    expect(filled).toHaveLength(1);
+    expect(filled[0]).toHaveTextContent('Add to my routine');
+  });
+
   it('shows a tip and recent activity only when the producer recorded them', () => {
     const { view } = card(guide({ tip: { title: 'Before you start', body: 'Press and hold the test button.' }, history: [{ label: 'Snoozed', value: 'Aug 30, 2026' }] }));
     expect(view.container.querySelector('[data-task-guide-tip]')).toHaveTextContent('Press and hold the test button.');

@@ -14,6 +14,48 @@ const renderBlock = (value: ListBlock) => render(
   <GroupedListBlock block={value} executionId="e" propertyId="home" onItemAction={jest.fn()} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />,
 );
 
+const sixItems = (id: string, initialVisibleCount?: number): ListBlock => ({
+  type: 'GROUPED_LIST', id, title: 'Checklist', actions: [], filters: [],
+  sections: [{
+    id: `${id}-section`, title: 'Most important first', count: 6, ...(initialVisibleCount ? { initialVisibleCount } : {}),
+    items: Array.from({ length: 6 }, (_, index) => ({ id: `item-${index + 1}`, title: `Item ${index + 1}`, description: 'Why it matters.', meta: [], countLabel: String(index + 1) })),
+  }],
+} as unknown as ListBlock);
+
+describe('a plan section whose producer declares an initial visible count', () => {
+  // The producer declares the boundary; the renderer only expands and collapses. Two different plan ids prove it is not tied to one block id.
+  it.each(['home-basics-items', 'hiring-guide-items'])('%s shows only the declared items first and reveals the rest with an accessible control', (id) => {
+    const { container } = renderBlock(sixItems(id, 3));
+    expect(container.querySelectorAll('[data-seasonal-task]')).toHaveLength(3);
+    expect(container.querySelector('[data-seasonal-task="item-4"]')).toBeNull();
+    const toggle = screen.getByRole('button', { name: 'Show 3 more' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', container.querySelector('ol')!.id);
+    fireEvent.click(toggle);
+    expect(container.querySelectorAll('[data-seasonal-task]')).toHaveLength(6);
+    const less = screen.getByRole('button', { name: 'Show fewer' });
+    expect(less).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(less);
+    expect(container.querySelectorAll('[data-seasonal-task]')).toHaveLength(3);
+  });
+
+  it('the control is a real button, so Enter and Space activate it through the browser default', () => {
+    renderBlock(sixItems('home-basics-items', 3));
+    const toggle = screen.getByRole('button', { name: 'Show 3 more' });
+    expect(toggle.tagName).toBe('BUTTON');
+    expect(toggle).toHaveAttribute('type', 'button');
+  });
+
+  it('without the field, or when it covers every item, all items show and there is no control', () => {
+    for (const count of [undefined, 6, 9]) {
+      const { container, unmount } = renderBlock(sixItems('home-basics-items', count));
+      expect(container.querySelectorAll('[data-seasonal-task]')).toHaveLength(6);
+      expect(screen.queryByRole('button', { name: /show (?:\d+ more|fewer)/i })).toBeNull();
+      unmount();
+    }
+  });
+});
+
 describe('checklist answers use the plan layout', () => {
   it.each(['hiring-guide-items', 'home-basics-items', 'renovation-readiness-items', 'tax-readiness-gaps'])('%s renders numbered plan cards', (id) => {
     const { container } = renderBlock(block(id, 'DEFAULT'));

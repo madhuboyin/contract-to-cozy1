@@ -88,6 +88,10 @@ The audit decides the actual edit set. Do not touch all listed files merely beca
 - Contextual continuations outrank unrelated discovery actions.
 - Stored executions, role policy, access loss, confirmation, idempotency, and reconciliation continue to behave as before.
 
+### 4.5 Status (October 6, 2026)
+
+Phase 1 is implemented and statically/component-tested; runtime, browser and layout behavior are unverified. See [`ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_1_AUDIT.md`](ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_1_AUDIT.md) §9 for files changed, before/after shapes, validation run and not run, and limitations. Notable outcomes: producer-declared `initialVisibleCount` gives true progressive disclosure; the furnace-filter guide declares no primary action because no current-task help capability exists; the gas emergency is an `EMERGENCY` boundary, which places the safety guide in safe-recovery suggestion mode by design. Next separately approved increment: Phase 2 inventory (audit §9.5).
+
 ## 5. Phase 2 — Reusable semantic composition
 
 After Phase 1, inventory every local special case introduced. If two or more producers need the same missing semantic field or ordering policy, propose the smallest additive contract. Candidate additions must specify producer ownership, schema validation, old-response fallback, skill-manifest impact, frontend rendering, accessibility, and history compatibility.

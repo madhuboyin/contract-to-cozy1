@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.184
+**Version:** 1.185
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.185 — conversational presentation Phase 1 implemented:** Implements Appendix C.11 delivery phase 1 for the three reference scenarios through existing contracts, plus one additive, optional grouped-list section field (`initialVisibleCount`, producer-declared disclosure boundary; the client only expands and collapses). `TASK_GUIDE` footer actions now keep their declared style, so a guide may legitimately have no primary action; the furnace-filter guide declares none. Home-safety basics adds a separate `EMERGENCY` gas boundary (which, by the existing safety policy, puts that response in safe-recovery suggestion mode) and conditional unknown-gas wording only: no canonical gas-service fact exists, so present/absent personalization and capture remain Phase 4. Verified by producer, trust-validator, finalizer and component tests; no browser run, so layout is unverified. See `docs/architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_1_AUDIT.md` §9.
 
 **Revision 1.184 — Phase 1 execution clarification:** Clarifies that the answer anatomy in Appendix C.11 is a default rather than an inflexible block order, distinguishes decision-driving support from a formal `EVIDENCE` block, and records that emergency guidance, clarification, balanced comparison, and confirmation can require a different hierarchy or no primary action. The focused implementation plan now requires a written audit before edits but permits evidence-supported Phase 1 implementation in the same task; no additional approval gate is implied unless the audit finds unresolved material ambiguity.
 
@@ -1500,7 +1502,7 @@ Reference: the product mock for "What should I do to get ready for next season?"
 - **Layout.** The block stays a `TABLE` (no new block type, so no registry or skill-manifest change). `AdaptiveTableBlock` renders ids in `FACT_GRID_TABLE_IDS` (`property-summary-facts`) as a grid of label-over-value tiles: three across from the `lg` breakpoint, two from `sm`, one on a phone, with no view switch and no record count. Any other table is unchanged.
 - **Status.** Backend `tsc --noEmit` clean; `propertySummaryOverview.test.js` 12/12 (5 new: order and labels, owner-only occupants through the real handler as owner and viewer, the missing line, the answer checker passing with it); new frontend `factGridTable.test.tsx` (2); all Ask jest 80 of 82 suites pass, the two failures (`displayPatterns`, `maintenanceShelves`) were failing before this change. Not verified in a browser, at 390 px width, or against a real backend; frontend `next build` not run.
 
-## Appendix C.11 — Conversational presentation policy (approved October 6, 2026; implementation pending by slice)
+## Appendix C.11 — Conversational presentation policy (approved October 6, 2026; delivery phase 1 implemented, phases 2–4 pending)
 
 ### C.11.1 Outcome and governing sequence
 

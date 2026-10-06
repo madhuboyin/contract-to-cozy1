@@ -74,7 +74,7 @@ test('a walkthrough is one guide card: breadcrumb, chips, what to do, rows, and 
   await expect(guide.locator('[data-task-guide-note="personalized"]')).toBeVisible();
   await expect(guide.locator('a')).toHaveCount(0);
   await page.screenshot({ path: process.env.WALK_SHOT ?? 'test-results/seasonal-walkthrough.png' });
-  await guide.getByRole('button', { name: /Next winter task/ }).click();
+  await guide.getByRole('button', { name: /Another winter task/ }).click();
   await expect.poll(() => api.executionBodies.length).toBe(2);
   expect(String(api.executionBodies[1].message)).toMatch(/^Walk me through "/);
 });

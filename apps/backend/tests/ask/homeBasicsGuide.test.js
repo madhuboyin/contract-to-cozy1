@@ -49,10 +49,11 @@ test('EXECUTED through the registered canonical call: both starter messages retu
   const monthly = await handler({ userId: 'u1', propertyId: 'p1', message: HOME_BASICS_MONTHLY_MESSAGE });
   for (const result of [safety, monthly]) {
     assert.equal(result.status, 'ANSWERED');
-    assert.deepEqual(result.blocks.map((b) => b.type), ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']);
+    assert.equal(result.blocks[0].type, 'SUMMARY');
+    assert.equal(result.blocks[1].type, 'GROUPED_LIST');
     for (const block of result.blocks) assert.doesNotThrow(() => AskPresentationBlockSchema.parse(block), block.id);
     assert.ok(result.blocks[1].sections[0].items.length >= 4);
-    assert.match(result.blocks[2].body, /not an assessment of your home/);
+    assert.match(result.blocks.find((b) => b.id === 'home-basics-boundary').body, /not an assessment of your home/);
   }
   assert.notDeepEqual(safety.blocks[1].sections[0].items.map((i) => i.id), monthly.blocks[1].sections[0].items.map((i) => i.id));
   assert.equal(homeBasicsFocus(HOME_BASICS_SAFETY_MESSAGE), 'SAFETY_BASICS');
@@ -66,7 +67,9 @@ test('the authored content makes no claim about the home and defers to manufactu
     assert.match(text, /manufacturer/i);
     assert.match(text, /not an assessment/i);
   }
-  assert.match(JSON.stringify(buildHomeBasicsResult('SAFETY_BASICS')), /smell gas, leave the home/);
+  const gas = buildHomeBasicsResult('SAFETY_BASICS').blocks.find((b) => b.id === 'home-basics-gas-emergency');
+  assert.equal(gas.severity, 'EMERGENCY');
+  assert.match(gas.body, /Leave the home right away/);
 });
 
 test('starters: two typed CURATED_STARTER candidates on one operation, outcomes registered, CURATED_STARTER-only grant, dismissible, registered with the finalizer', () => {

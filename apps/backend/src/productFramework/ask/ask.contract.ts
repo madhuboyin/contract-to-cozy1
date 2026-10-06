@@ -215,6 +215,9 @@ const GroupedListBlockSchema = z.object({
     // Server-owned window into the full collection. Omitted by legacy
     // producers; Maintenance uses it for stable inline pagination.
     offset: z.number().int().nonnegative().optional(),
+    // The producer's disclosure boundary: how many of this section's items are visible before "Show more". The client only
+    // implements the local expand/collapse; without it every item is shown. Additive: stored executions stay lossless.
+    initialVisibleCount: z.number().int().positive().optional(),
     items: z.array(GroupedListItemSchema).max(100),
   })).max(12),
   actions: z.array(AskActionSchema).max(3).default([]),

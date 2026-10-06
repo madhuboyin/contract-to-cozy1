@@ -102,7 +102,7 @@ test('a task walkthrough is one guide card built only from the template\'s own f
   const guide = buildSeasonalTaskWalkthrough({ ...input, taskKey: 'WINTER_FURNACE_FILTER_CHANGE' }).blocks[0];
   assert.equal(guide.type, 'TASK_GUIDE');
   assert.equal(guide.title, 'Replace furnace filters monthly');
-  assert.deepEqual(guide.eyebrow, ['Winter prep', 'Task 1 of 5']);
+  assert.deepEqual(guide.eyebrow, ['Winter prep'], 'where it sits, with no list-position or progress claim');
   assert.equal(guide.icon, 'HVAC');
   assert.deepEqual(guide.chips.map((chip) => [chip.kind, chip.label]), [['PRIORITY_HIGH', 'High priority'], ['TIME', '~15 minutes'], ['COST', '$15\u2013$40'], ['DIY', 'DIY']]);
   assert.equal(guide.summary, 'Dirty filters reduce efficiency and can cause furnace failure in extreme cold.');
@@ -111,7 +111,8 @@ test('a task walkthrough is one guide card built only from the template\'s own f
   assert.deepEqual(guide.notes.map((note) => note.id), ['why', 'personalized']);
   assert.equal(guide.notes[1].actionId, 'seasonal-update-home-details');
   assert.deepEqual(guide.actions.map((action) => action.id), ['seasonal-next-task', 'seasonal-add-tasks', 'seasonal-back-to-plan', 'seasonal-update-home-details']);
-  assert.equal(guide.actions[0].label, 'Next winter task');
+  assert.equal(guide.actions[0].label, 'Another winter task');
+  assert.deepEqual([...new Set(guide.actions.map((action) => action.style))], ['SECONDARY'], 'no plan-level step is styled as the guide\'s main action');
   AskPresentationBlockSchema.parse(guide);
   const last = buildSeasonalTaskWalkthrough({ ...input, taskKey: seasonalAssetFreeTasks('WINTER', 'MODERATE').at(-1).taskKey }).blocks[0];
   assert.equal(last.actions.some((action) => action.id === 'seasonal-next-task'), false, 'the last task has no next');

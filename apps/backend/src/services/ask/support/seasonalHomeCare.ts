@@ -6,7 +6,7 @@ import climateData from '../../../data/zipToClimateRegion.json';
 import seasonalTemplates from '../../../data/seasonalTaskTemplates.json';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
-import { resolveCurrentSeasonWindow, resolveUpcomingSeasonWindow, type Season } from '../../seasonal/seasonWindow';
+import { getSeasonStartDate, resolveCurrentSeasonWindow, resolveUpcomingSeasonWindow, type Season } from '../../seasonal/seasonWindow';
 
 /** The two stored starter messages. The launch's message, not a routing guess, selects this or next season (see the handler). */
 export const SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE = 'What home care should I do this season?';
@@ -113,19 +113,32 @@ function timingLabel(offsetDays: number, season: Season): string {
   return `Best done about ${span} into ${SEASON_WORDS[season]}`;
 }
 
+/**
+ * The template's timing, said honestly for today. The offset is relative to the season's start, so once that moment has passed ("about 2 weeks
+ * before winter starts" in the middle of winter) the label alone reads stale; it then keeps the template's fact and says now is the time.
+ * `when` is absent for callers that have no date, which keeps the plain label.
+ */
+function timingFact(task: SeasonalTemplate, when?: { now: Date; year: number }): string {
+  const label = timingLabel(task.timingOffsetDays ?? 0, task.season);
+  if (!when) return label;
+  const target = getSeasonStartDate(task.season, when.year);
+  target.setDate(target.getDate() + (task.timingOffsetDays ?? 0));
+  return when.now.getTime() > target.getTime() ? `${label}; if you have not yet, now is a good time` : label;
+}
+
 /** The facts the template itself records about a task, one per line, for the expandable "how to do it". Nothing is inferred about this home. */
-export function seasonalTaskFacts(task: SeasonalTemplate): Array<{ label: string; value: string }> {
+export function seasonalTaskFacts(task: SeasonalTemplate, when?: { now: Date; year: number }): Array<{ label: string; value: string }> {
   const facts: Array<{ label: string; value: string }> = [{ label: 'What to do', value: task.description }];
   if (task.estimatedHours) facts.push({ label: 'Time it takes', value: timeLabel(task.estimatedHours) });
   const low = task.typicalCostMin ?? 0;
   const high = task.typicalCostMax ?? 0;
   if (high > 0) facts.push({ label: 'Typical cost', value: low > 0 && low !== high ? `${money(low)}\u2013${money(high)}` : money(high) });
   facts.push({ label: 'Who does it', value: task.isDiyPossible ? 'You can usually do this yourself' : 'Usually done by a professional' });
-  if (task.timingOffsetDays != null) facts.push({ label: 'When', value: timingLabel(task.timingOffsetDays, task.season) });
+  if (task.timingOffsetDays != null) facts.push({ label: 'When', value: timingFact(task, when) });
   return facts;
 }
 
-const seasonalDetail = (task: SeasonalTemplate): string => seasonalTaskFacts(task).map((fact) => `${fact.label}: ${fact.value}`).join('\n');
+const seasonalDetail = (task: SeasonalTemplate, when?: { now: Date; year: number }): string => seasonalTaskFacts(task, when).map((fact) => `${fact.label}: ${fact.value}`).join('\n');
 
 const showChecklistAction = (season: Season, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({
   id: 'seasonal-show-checklist', label: `Show my ${SEASON_WORDS[season]} checklist`, interactionType: 'START_WORKFLOW' as const,
@@ -143,11 +156,19 @@ function regionNoteFor(region: SeasonalClimateRegion, source: ClimateRegionSourc
     : source === 'SAVED' ? ` This uses the climate region saved for this home (${REGION_WORDS[region]}).` : ` This is based on this home's zip code (${REGION_WORDS[region]}).`;
 }
 
+// How personal the answer is, said as context rather than a disclaimer: what it is based on, what it does not use, and what would change that.
+// The plan lists only templates that need no recorded asset, so nothing recorded about the home is used here; the home's own checklist is where
+// tasks for its recorded systems appear (the generator reads `requiredAssetType`).
 const aboutBoundary = (): AskPresentationBlock => ({
   type: 'BOUNDARY', id: 'seasonal-home-care-boundary', title: 'About this recommendation',
-  body: 'These are general seasonal tasks for the climate region, not an assessment of this home. They do not use anything recorded about your systems, so they become more specific as your home record fills in.',
+  body: 'This is general guidance for your climate, not an assessment of this home, and it does not use anything recorded about your systems. Once your home record lists them, your own seasonal checklist can add tasks specific to those systems.',
   severity: 'INFO', suggestions: [],
 });
+
+const quotedTitles = (tasks: SeasonalTemplate[]): string => {
+  const names = tasks.map((task) => `\u201c${task.title}\u201d`);
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+};
 
 export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOperationResult {
   const { season, year } = seasonalPlanWindow(input.now, input.focus);
@@ -166,17 +187,22 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
   const shown = tasks.slice(0, MAX_ITEMS);
   const soon = shown.filter((task) => task.priority === 'CRITICAL');
   const later = shown.filter((task) => task.priority !== 'CRITICAL');
-  const countSentence = `Here ${shown.length === 1 ? 'is 1 thing' : `are ${shown.length} things`} to focus on${tasks.length > shown.length ? ` (the top ${shown.length} of ${tasks.length})` : ''}.`;
-  const orderSentence = soon.length && later.length
-    ? ` I recommend doing the first ${soon.length} soon, and the other ${later.length} when you have time.`
-    : soon.length ? ` I recommend doing ${soon.length === 1 ? 'it' : 'all of them'} soon.` : ' None of these is urgent, so do them when you have time.';
+  // The judgment leads: what matters most, named (the producer's own priority tiers), then how to pace the rest. Climate and basis follow.
+  const when = input.focus === 'NEXT_SEASON' ? `before ${seasonWord}` : `this ${seasonWord}`;
+  const leading = soon.slice(0, 3);
+  const judgment = soon.length
+    ? `${soon.length === 1 ? 'The one thing that matters most' : `The ${soon.length} things that matter most`} ${when} ${soon.length === 1 ? 'is' : 'are'} ${quotedTitles(leading)}${soon.length > leading.length ? `, plus ${soon.length - leading.length} more` : ''}. Do ${soon.length === 1 ? 'that' : 'those'} soon${later.length ? `; the other ${later.length} can wait until you have time` : ''}.`
+    : `None of the ${shown.length === 1 ? 'one task' : `${shown.length} tasks`} ${when} is urgent, so do ${shown.length === 1 ? 'it' : 'them'} when you have time.`;
+  const truncated = tasks.length > shown.length ? ` I am showing the top ${shown.length} of ${tasks.length}.` : '';
+  const relation = input.focus === 'NEXT_SEASON' ? 'the next' : 'the current';
   let number = 0;
+  const timingContext = { now: input.now, year };
   const toItem = (task: SeasonalTemplate, urgent: boolean) => {
     number += 1;
     return {
       id: task.taskKey, title: task.title, description: task.whyItMatters, condition: null, entityType: SEASONAL_TASK_ENTITY_TYPE,
       meta: [PRIORITY_LABELS[task.priority] ?? 'Optional', task.isDiyPossible ? 'DIY' : 'Usually a pro'],
-      detail: seasonalDetail(task), tone: urgent ? 'CAUTION' as const : 'DEFAULT' as const, status: null, href: null, countLabel: String(number),
+      detail: seasonalDetail(task, timingContext), tone: urgent ? 'CAUTION' as const : 'DEFAULT' as const, status: null, href: null, countLabel: String(number),
     };
   };
   const sections = [
@@ -210,7 +236,7 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
   return {
     status: 'ANSWERED', reasonCode: 'SEASONAL_HOME_CARE_READY',
     blocks: [
-      { type: 'SUMMARY', id: 'seasonal-home-care-summary', title, body: `${capitalize(seasonWord)} is ${input.focus === 'NEXT_SEASON' ? 'the next' : 'the current'} season for your area.${regionNote} ${countSentence}${orderSentence}`, tone: 'DEFAULT', actions: [] },
+      { type: 'SUMMARY', id: 'seasonal-home-care-summary', title, body: `${judgment}${truncated} ${capitalize(seasonWord)} is ${relation} season for your area.${regionNote}`, tone: 'DEFAULT', actions: [] },
       { type: 'GROUPED_LIST', id: 'seasonal-home-care-tasks', title: `${capitalize(seasonWord)} tasks`, actions: [], filters: [], sections },
       aboutBoundary(),
       { type: 'SUMMARY', id: 'seasonal-home-care-next', title: 'What would you like to do next?', body: nextBody, tone: 'DEFAULT', actions: next },
@@ -232,7 +258,7 @@ const tildeTime = (hours: number) => (hours < 1 ? `~${Math.round(hours * 60)} mi
  * invented: a template records one description, so that is the "what to do". Null when the task is not among this season's general tasks.
  */
 export function buildSeasonalTaskWalkthrough(input: SeasonalHomeCareInput & { taskKey: string }): AskOperationResult | null {
-  const { season } = seasonalPlanWindow(input.now, input.focus);
+  const { season, year } = seasonalPlanWindow(input.now, input.focus);
   const { region } = deriveSeasonalClimateRegion(input.zipCode, input.savedClimateRegion);
   const shown = seasonalAssetFreeTasks(season, region).slice(0, MAX_ITEMS);
   const index = shown.findIndex((task) => task.taskKey === input.taskKey);
@@ -250,11 +276,12 @@ export function buildSeasonalTaskWalkthrough(input: SeasonalHomeCareInput & { ta
   ];
   const setup = input.setup ?? null;
   const planMessage = input.focus === 'NEXT_SEASON' ? SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE : SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE;
-  const { year } = seasonalPlanWindow(input.now, input.focus);
+  // No registered capability gives help with THIS task, and every action here continues the plan rather than the task, so the guide declares
+  // no primary action: a plan-level step styled as the main one would imply the task itself has a next step.
   const actions = [
     ...(following ? [{
-      id: 'seasonal-next-task', label: `Next ${seasonWord} task`, interactionType: 'START_WORKFLOW' as const, message: `Walk me through "${following.title}".`,
-      operationId: 'SEASONAL_HOME_CARE', entityType: SEASONAL_TASK_ENTITY_TYPE, entityId: seasonalTaskEntityId(input.focus, following.taskKey), style: 'PRIMARY' as const,
+      id: 'seasonal-next-task', label: `Another ${seasonWord} task`, interactionType: 'START_WORKFLOW' as const, message: `Walk me through "${following.title}".`,
+      operationId: 'SEASONAL_HOME_CARE', entityType: SEASONAL_TASK_ENTITY_TYPE, entityId: seasonalTaskEntityId(input.focus, following.taskKey), style: 'SECONDARY' as const,
     }] : []),
     ...(setup?.checklist
       ? [showChecklistAction(season)]
@@ -270,12 +297,12 @@ export function buildSeasonalTaskWalkthrough(input: SeasonalHomeCareInput & { ta
     },
     updateHomeDetailsAction(),
   ];
-  const timing = task.timingOffsetDays != null ? timingLabel(task.timingOffsetDays, task.season) : null;
+  const timing = task.timingOffsetDays != null ? timingFact(task, { now: input.now, year }) : null;
   return {
     status: 'ANSWERED', reasonCode: 'SEASONAL_TASK_WALKTHROUGH_READY',
     blocks: [{
       type: 'TASK_GUIDE', id: 'seasonal-task-guide', title: task.title, summary: task.whyItMatters,
-      eyebrow: [`${capitalize(seasonWord)} prep`, `Task ${index + 1} of ${shown.length}`],
+      eyebrow: [`${capitalize(seasonWord)} prep`],
       icon: GUIDE_ICONS[task.serviceCategory ?? ''] ?? 'TASK', chips,
       main: { title: 'What to do', body: task.description, facts: [...(timing ? [{ label: 'When', value: timing }] : [])] },
       history: [],

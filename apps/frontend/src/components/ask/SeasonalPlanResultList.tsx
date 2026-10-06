@@ -88,6 +88,13 @@ function PlanSection({ section, onItemAction, disabled }: { section: Section; on
   const urgent = section.items.some((item) => item.tone === 'CAUTION');
   const palette = urgent ? URGENT : CALM;
   const Icon = urgent ? Zap : Clock;
+  // The producer declares how many items show first (`initialVisibleCount`); this only expands and collapses the rest locally. Without the
+  // field, or when it covers every item, all items show and there is no control.
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+  const declared = section.initialVisibleCount;
+  const hiddenCount = declared && declared < section.items.length ? section.items.length - declared : 0;
+  const visibleItems = hiddenCount > 0 && !expanded ? section.items.slice(0, declared) : section.items;
   return (
     <section data-seasonal-section={section.id} aria-labelledby={`${section.id}-heading`} className={cn('rounded-2xl border p-4', palette.panel)}>
       <header className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -98,9 +105,16 @@ function PlanSection({ section, onItemAction, disabled }: { section: Section; on
         </h4>
         {section.caption && <p className="text-xs text-slate-600">{section.caption}</p>}
       </header>
-      <ol className="divide-y divide-slate-200/70">
-        {section.items.map((item) => <PlanTask key={item.id} item={item} urgent={urgent} onItemAction={onItemAction} disabled={disabled} />)}
+      <ol id={listId} className="divide-y divide-slate-200/70">
+        {visibleItems.map((item) => <PlanTask key={item.id} item={item} urgent={urgent} onItemAction={onItemAction} disabled={disabled} />)}
       </ol>
+      {hiddenCount > 0 && (
+        <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((value) => !value)}
+          className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-teal-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
+          {expanded ? 'Show fewer' : `Show ${hiddenCount} more`}
+          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', expanded && 'rotate-180')} aria-hidden="true" />
+        </button>
+      )}
     </section>
   );
 }

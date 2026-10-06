@@ -1,5 +1,5 @@
-// Exact-four curated starters (inventory D-O4/D-O16): PURE nominations, one function per starter source. Not registered in
-// SUGGESTED_NEXT_ACTION_PRODUCERS and not called by the finalizer, so nothing here is live; the activation step wires it. A starter is the
+// Exact-four curated starters (inventory D-O4/D-O16): PURE nominations, one function per starter source. Registered in
+// SUGGESTED_NEXT_ACTION_PRODUCERS (suggestedNextActionProducers.ts) and called by the finalizer, so these are live (activated in 252f1efd). A starter is the
 // last-resort fill: it declares its slot class, carries no entity, and reads no recorded data. The producer identity is the registered
 // nominations key (`STARTER_SEASONAL_PRODUCER_ID`), never a field on the candidate.
 import { SuggestedNextActionCandidateSchema, DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from './suggestedNextActionCandidate';

@@ -4,6 +4,7 @@
 // defers to the homeowner's own manufacturer instructions, local codes and utilities. Not registered as a message route.
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
+import { SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE } from './seasonalHomeCare';
 
 export type HomeBasicsFocus = 'SAFETY_BASICS' | 'MONTHLY_ROUTINE';
 
@@ -12,18 +13,19 @@ export const HOME_BASICS_SAFETY_MESSAGE = 'What home safety basics should I know
 export const HOME_BASICS_MONTHLY_MESSAGE = 'What should I check around my home each month?';
 
 interface BasicsItem { id: string; title: string; description: string }
-interface BasicsGuide { title: string; intro: string; sectionTitle: string; items: readonly BasicsItem[] }
+interface BasicsGuide { title: string; intro: string; sectionTitle: string; /** How many items show before "Show more"; the items after it are the lesser ones. Omitted: all show. */ initialVisibleCount?: number; items: readonly BasicsItem[] }
 
 const GUIDES: Readonly<Record<HomeBasicsFocus, BasicsGuide>> = {
   SAFETY_BASICS: {
     title: 'Home safety basics',
-    intro: 'A few things worth knowing about any home, whatever its size or age.',
-    sectionTitle: 'Know these first',
+    intro: 'Three things matter most if something goes wrong: working smoke and carbon monoxide alarms, knowing where your water shuts off, and knowing your electrical panel. The rest are worth doing next.',
+    sectionTitle: 'Most important first',
+    initialVisibleCount: 3,
     items: [
-      { id: 'water-shutoff', title: 'Find your main water shutoff', description: 'Know where it is and that it turns. If a pipe bursts, shutting it off quickly limits the damage.' },
-      { id: 'electrical-panel', title: 'Know your electrical panel', description: 'Find the panel, and check that the breakers are labeled so you can switch off one circuit in an emergency.' },
-      { id: 'gas-shutoff', title: 'Know about gas', description: 'If you have gas service, know where the shutoff is. If you ever smell gas, leave the home and call your gas utility or emergency number from outside.' },
-      { id: 'alarms', title: 'Smoke and carbon monoxide alarms', description: 'Have working alarms on every level and near sleeping areas, test them regularly, and replace them by the manufacturer\'s date.' },
+      { id: 'alarms', title: 'Smoke and carbon monoxide alarms', description: 'They are what wakes you in a fire. Have working alarms on every level and near sleeping areas, test them regularly, and replace them by the manufacturer\'s date.' },
+      { id: 'water-shutoff', title: 'Find your main water shutoff', description: 'A burst pipe can do thousands in damage in minutes. Know where the shutoff is and that it turns, so you can stop the water quickly.' },
+      { id: 'electrical-panel', title: 'Know your electrical panel', description: 'In an electrical emergency you need to cut power fast. Find the panel and check that the breakers are labeled so you can switch off one circuit.' },
+      { id: 'gas-shutoff', title: 'Know whether you have gas, and where it shuts off', description: 'If your home has gas service, find the shutoff (usually at the meter). Not sure whether you have gas? Look for a gas meter outside, a gas line to a range, water heater or furnace, or a gas bill from a utility; your utility or landlord can tell you.' },
       { id: 'extinguisher', title: 'Keep a fire extinguisher where you can reach it', description: 'Keep one near the kitchen, check that its gauge is in the green, and know how to use it.' },
       { id: 'emergency-contacts', title: 'Keep emergency numbers handy', description: 'Keep your utilities, a trusted plumber and electrician, and your insurer\'s claims line somewhere everyone in the household can find them.' },
     ],
@@ -46,11 +48,28 @@ export function homeBasicsFocus(message: string): HomeBasicsFocus {
   return /\bmonth(?:ly)?\b|\beach month\b|\bevery month\b/i.test(message) ? 'MONTHLY_ROUTINE' : 'SAFETY_BASICS';
 }
 
+/** The gas-leak instruction as its own emergency statement (FRD C.11.6/C.11.9), not a line inside a list item. Its title and text carry the severity. */
+const gasEmergencyBoundary = (): AskPresentationBlock => ({
+  type: 'BOUNDARY', id: 'home-basics-gas-emergency', title: 'If you smell gas',
+  body: 'Leave the home right away. Do not turn lights or appliances on or off, and do not use a phone inside. Call your gas utility or the emergency number from outside.',
+  severity: 'EMERGENCY', suggestions: [],
+});
+
+const nextSteps = (focus: HomeBasicsFocus): AskPresentationBlock => ({
+  type: 'SUMMARY', id: 'home-basics-next', title: 'What would you like to do next?', body: 'Both are general guides. Nothing here changes your home record.', tone: 'DEFAULT',
+  actions: [
+    focus === 'SAFETY_BASICS'
+      ? { id: 'home-basics-monthly-routine', label: 'A simple monthly routine', interactionType: 'START_WORKFLOW' as const, message: HOME_BASICS_MONTHLY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', style: 'SECONDARY' as const }
+      : { id: 'home-basics-safety-basics', label: 'Home safety basics', interactionType: 'START_WORKFLOW' as const, message: HOME_BASICS_SAFETY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', style: 'SECONDARY' as const },
+    { id: 'home-basics-seasonal-plan', label: 'Home care for this season', interactionType: 'START_WORKFLOW' as const, message: SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE, operationId: 'SEASONAL_HOME_CARE', style: 'SECONDARY' as const },
+  ],
+});
+
 export function buildHomeBasicsResult(focus: HomeBasicsFocus): AskOperationResult {
   const guide = GUIDES[focus];
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'home-basics-boundary', title: 'General guidance',
-    body: 'This is general guidance, not an assessment of your home. Follow your manufacturers\' instructions, local codes and your utilities\' advice, and call a licensed professional or emergency services when in doubt.',
+    body: 'This is general guidance, not an assessment of your home, and it does not use anything recorded about it. Follow your manufacturers\' instructions, local codes and your utilities\' advice, and call a licensed professional or emergency services when in doubt.',
     severity: 'INFO', suggestions: [],
   };
   return {
@@ -61,9 +80,12 @@ export function buildHomeBasicsResult(focus: HomeBasicsFocus): AskOperationResul
       type: 'GROUPED_LIST', id: 'home-basics-items', title: guide.title, actions: [], filters: [],
       sections: [{
         id: `home-basics-${focus.toLowerCase()}`, title: guide.sectionTitle, count: guide.items.length,
+        ...(guide.initialVisibleCount ? { initialVisibleCount: guide.initialVisibleCount } : {}),
         items: guide.items.map((item, index) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null, countLabel: String(index + 1) })),
       }],
-    }, boundary],
+    },
+    ...(focus === 'SAFETY_BASICS' ? [gasEmergencyBoundary()] : []),
+    nextSteps(focus), boundary],
     suggestions: [],
   };
 }

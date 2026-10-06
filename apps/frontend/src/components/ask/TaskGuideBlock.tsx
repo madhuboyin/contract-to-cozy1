@@ -9,7 +9,8 @@ import type { AskBlockRenderer } from './blocks/types';
 
 // One task or habit as a single conversational card (TASK_GUIDE): where it sits, what it is, its key facts as chips, an optional tip, what to
 // do, short explanatory rows and the next actions. It shows exactly what the producer recorded (no steps, photos or advice of its own), and
-// a row can carry one of the card's actions so its button sits beside the explanation instead of in the action row.
+// a row can carry one of the card's actions so its button sits beside the explanation instead of in the action row. Each action keeps the
+// style its producer declared; a guide whose only continuations are plan-level steps declares none PRIMARY and so shows no filled button.
 const ICONS = {
   HVAC: Fan, PLUMBING: Droplets, ELECTRICAL: Zap, ROOF: House, OUTDOOR: TreePine, SAFETY: ShieldCheck, APPLIANCE: Refrigerator, HABIT: Repeat, TASK: ClipboardList,
 } as const;
@@ -29,9 +30,9 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
   const inRows = new Set(block.notes.map((note) => note.actionId).filter((id): id is string => Boolean(id)));
   const byId = new Map(block.actions.map((action) => [action.id, action]));
   const footer = block.actions.filter((action) => !inRows.has(action.id));
-  const footerButton = (action: AskAction, index: number) => {
+  const footerButton = (action: AskAction) => {
     const ActionIcon = ACTION_ICONS[action.id];
-    return <ActionLink key={action.id} action={{ ...action, style: index === 0 ? 'PRIMARY' : 'SECONDARY' }} icon={ActionIcon ? <ActionIcon className="h-4 w-4" aria-hidden="true" /> : undefined} />;
+    return <ActionLink key={action.id} action={action} icon={ActionIcon ? <ActionIcon className="h-4 w-4" aria-hidden="true" /> : undefined} />;
   };
   return (
     <article data-task-guide={block.id} className="max-w-[800px] rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">

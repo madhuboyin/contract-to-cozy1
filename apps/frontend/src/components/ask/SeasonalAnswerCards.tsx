@@ -13,7 +13,7 @@ type SummaryBlock = Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
 // Each is shared by the general answer (`seasonal-home-care-*`) and the home's own checklist answer (`seasonal-maintenance-*`).
 // The Home Habit Coach list (`home-habits-*`) uses the same cards; one habit's review is a single guide card (see TaskGuideBlock).
 export const SEASONAL_INTRO_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-summary', 'seasonal-maintenance-summary', 'home-habits-summary']);
-export const SEASONAL_NEXT_STEPS_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-next', 'seasonal-maintenance-next', 'home-habits-next']);
+export const SEASONAL_NEXT_STEPS_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-next', 'seasonal-maintenance-next', 'home-habits-next', 'home-basics-next']);
 export const SEASONAL_ABOUT_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-boundary', 'home-habits-boundary']);
 export const isSeasonalIntroBlockId = (id: string): boolean => SEASONAL_INTRO_BLOCK_IDS.has(id);
 
@@ -27,6 +27,8 @@ const SEASON_ICONS = [
 export const ACTION_ICONS: Record<string, typeof ListPlus> = {
   'seasonal-add-tasks': ListPlus,
   'seasonal-walkthrough': PlayCircle,
+  'seasonal-next-task': PlayCircle,
+  'seasonal-back-to-plan': ArrowLeft,
   'seasonal-show-checklist': ListChecks,
   'seasonal-update-home-details': Home,
   'habit-adopt': ListPlus,
