@@ -6408,6 +6408,13 @@ export interface UpdateDiyProjectPayload {
 
 export type DiyTemplateStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'ACTIVE' | 'ARCHIVED';
 
+/** The template's published head: what homeowners currently see. `LEGACY_BACKFILL` was live before revisions existed and was not reviewed as this content. */
+export interface DiyLiveRevision {
+  revision: number;
+  provenance: 'GOVERNED' | 'LEGACY_BACKFILL';
+  publishedAt: string | null;
+}
+
 export interface AdminDiyTemplateSummary {
   id: string;
   slug: string;
@@ -6419,11 +6426,14 @@ export interface AdminDiyTemplateSummary {
   status: DiyTemplateStatus;
   featuredOrder?: number;
   stepCount: number;
+  /** Null when nothing is live. A template can be live in any status (for example a live template being edited as a draft). */
+  liveRevision?: DiyLiveRevision | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface AdminDiyTemplateDetail extends DiyTemplateDetail {
+  liveRevision?: DiyLiveRevision | null;
   slug: string;
   status: DiyTemplateStatus;
   permitRequirement: DiyPermitRequirement;

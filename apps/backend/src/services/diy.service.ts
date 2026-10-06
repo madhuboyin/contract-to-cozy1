@@ -7,7 +7,7 @@ import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
 import { logger } from '../lib/logger';
-import { checkRevisionIntegrity } from './diyTemplateRevision.service';
+import { buildRevisionContent, checkRevisionIntegrity, computeContentHash } from './diyTemplateRevision.service';
 import {
   PUBLISHED_REVISION_INCLUDE, publishedTemplateDetail, publishedTemplateSummary, revisionContent, stepSnapshotId,
 } from './diyPublishedTemplate';
@@ -27,6 +27,9 @@ function evalQuantityFormula(formula: string, _propertyData: Record<string, numb
     return 1;
   }
 }
+
+// What the admin screens show of a template's live (published head) revision: its number, whether it was reviewed or backfilled, and when it went live.
+const LIVE_REVISION_SELECT = { revision: true, provenance: true, publishedAt: true } as const;
 
 // Template fields that are not reviewed content: merchandising order and an AI prompt hint. Editing them never forces a new revision.
 const NON_CONTENT_TEMPLATE_FIELDS = new Set(['featuredOrder', 'geminiPromptHint']);
@@ -561,7 +564,7 @@ export class DiyService {
         ...(category && { category: category as any }),
         ...(search && { title: { contains: search, mode: 'insensitive' as any } }),
       },
-      include: { _count: { select: { steps: true } } },
+      include: { _count: { select: { steps: true } }, publishedRevision: { select: LIVE_REVISION_SELECT } },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
@@ -569,7 +572,7 @@ export class DiyService {
 
     const hasMore = templates.length > limit;
     if (hasMore) templates.pop();
-    const items = templates.map(({ _count, ...t }) => ({ ...t, stepCount: _count.steps }));
+    const items = templates.map(({ _count, publishedRevision, ...t }) => ({ ...t, stepCount: _count.steps, liveRevision: publishedRevision ?? null }));
     return { items, nextCursor: hasMore ? items[items.length - 1]?.id : undefined };
   }
 
@@ -580,10 +583,12 @@ export class DiyService {
         steps: { orderBy: { stepNumber: 'asc' } },
         materials: { orderBy: { sortOrder: 'asc' } },
         tools: { orderBy: { sortOrder: 'asc' } },
+        publishedRevision: { select: LIVE_REVISION_SELECT },
       },
     });
     if (!template) throw new APIError('Template not found', 404);
-    return template;
+    const { publishedRevision, ...rest } = template;
+    return { ...rest, liveRevision: publishedRevision ?? null };
   }
 
   async adminCreateTemplate(payload: any) {
@@ -618,33 +623,48 @@ export class DiyService {
     const touchesContent = Object.keys(content).length > 0 || steps !== undefined || materials !== undefined || tools !== undefined;
 
     return prisma.$transaction(async (tx) => {
-      if (touchesContent) {
+      // The admin form always sends the whole template, so a save that only changes featuredOrder still carries every content field. Compare what
+      // would be stored with what is stored: only a REAL content change is held to the frozen/diverge rules (and only then are child rows replaced).
+      const current = await tx.diyProjectTemplate.findUnique({
+        where: { id: templateId },
+        include: { steps: true, materials: true, tools: true },
+      });
+      if (!current) throw new APIError('Template not found', 404, 'TEMPLATE_NOT_FOUND');
+      const merged = {
+        ...current, ...content,
+        steps: steps !== undefined ? steps : current.steps,
+        materials: materials !== undefined ? materials : current.materials,
+        tools: tools !== undefined ? tools : current.tools,
+      };
+      const changesContent = touchesContent && computeContentHash(buildRevisionContent(merged)) !== computeContentHash(buildRevisionContent(current));
+
+      if (changesContent) {
         // Claim the row before changing anything: a DRAFT stays DRAFT (and the write takes the row, so a concurrent submit cannot slip between
         // this check and the edit); an ACTIVE template diverges to DRAFT with its approval mirror cleared. Anything else is frozen.
         const claimed = (await tx.diyProjectTemplate.updateMany({ where: { id: templateId, status: 'DRAFT' }, data: { status: 'DRAFT' } })).count
           || (await tx.diyProjectTemplate.updateMany({ where: { id: templateId, status: 'ACTIVE' }, data: { status: 'DRAFT', approvedBy: null, approvedAt: null } })).count;
         if (!claimed) {
-          const current = await tx.diyProjectTemplate.findUnique({ where: { id: templateId }, select: { status: true } });
-          if (!current) throw new APIError('Template not found', 404, 'TEMPLATE_NOT_FOUND');
+          const latest = await tx.diyProjectTemplate.findUnique({ where: { id: templateId }, select: { status: true } });
+          if (!latest) throw new APIError('Template not found', 404, 'TEMPLATE_NOT_FOUND');
           throw new APIError(
-            `This template is ${current.status} and its reviewed content cannot be edited. ${current.status === 'ARCHIVED' ? 'Revive it to draft first.' : 'Return it to draft first.'}`,
+            `This template is ${latest.status} and its reviewed content cannot be edited. ${latest.status === 'ARCHIVED' ? 'Revive it to draft first.' : 'Return it to draft first.'}`,
             409,
             'TEMPLATE_CONTENT_FROZEN',
-            { status: current.status },
+            { status: latest.status },
           );
         }
       }
-      const update = { ...content, ...nonContent };
+      const update = changesContent ? { ...content, ...nonContent } : nonContent;
       if (Object.keys(update).length) await tx.diyProjectTemplate.update({ where: { id: templateId }, data: update });
-      if (steps !== undefined) {
+      if (changesContent && steps !== undefined) {
         await tx.diyTemplateStep.deleteMany({ where: { templateId } });
         if (steps.length) await tx.diyTemplateStep.createMany({ data: steps.map((s: any) => ({ ...s, templateId })) });
       }
-      if (materials !== undefined) {
+      if (changesContent && materials !== undefined) {
         await tx.diyTemplateMaterial.deleteMany({ where: { templateId } });
         if (materials.length) await tx.diyTemplateMaterial.createMany({ data: materials.map((m: any) => ({ ...m, templateId })) });
       }
-      if (tools !== undefined) {
+      if (changesContent && tools !== undefined) {
         await tx.diyTemplateTool.deleteMany({ where: { templateId } });
         if (tools.length) await tx.diyTemplateTool.createMany({ data: tools.map((t: any) => ({ ...t, templateId })) });
       }

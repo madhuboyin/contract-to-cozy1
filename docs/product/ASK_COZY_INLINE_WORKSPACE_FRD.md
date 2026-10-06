@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.195
+**Version:** 1.196
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.196 — DIY template revisions, slice 1d (admin UI):** The DIY template admin screens now show which revision is live and whether it was reviewed or is a legacy backfill, offer Return to draft for an approved template and Unpublish or Archive for any template that has a live version, explain what saving will do in each state (a live template saves a draft while its published version stays live; review, approved and archived templates have frozen content and only featured order and the Gemini hint can be saved), and add Return to draft to the Pending Reviews approved queue. Also fixes a defect found while building it: a save that repeats the stored content (the admin form always sends everything) is no longer treated as a content change, so changing only featured order no longer refuses in review or approved and no longer pushes a live template to draft. Component-tested with mutation checks and a clean `next build`; no browser run. See `docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md` §15.
 
 **Revision 1.195 — DIY template revisions, slice 1c:** Homeowner DIY template reads (library list, featured, detail) and project creation now use a template's published head revision and ignore its editable working copy; filters, search and safety and permit checks use the revision's own fields, a withdrawn template disappears at once, and a project records the revision it copied. A governed revision whose content no longer matches its hash is refused; a legacy-backfill revision is accepted but is never treated as reviewed. The homeowner template detail no longer returns admin-only fields (it used to expose an admin's user id as `approvedBy`) and gains a `revision` number. Tested against a database-free fake with mutation checks; not exercised against Postgres. Templates live today have no head until the slice 1e backfill runs, so this code must not be deployed before it. See `docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md` §14.
 

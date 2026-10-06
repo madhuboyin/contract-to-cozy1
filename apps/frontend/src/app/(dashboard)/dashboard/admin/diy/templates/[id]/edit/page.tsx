@@ -7,6 +7,7 @@ import { api } from '@/lib/api/client';
 import type { AdminDiyTemplateDetail } from '@/types';
 import TemplateForm from '@/components/features/diy/admin/TemplateForm';
 import StatusBadge from '@/components/features/diy/admin/StatusBadge';
+import LiveRevisionBadge from '@/components/features/diy/admin/LiveRevisionBadge';
 
 export default function EditDiyTemplatePage() {
   const { isAdmin } = useAuth();
@@ -59,6 +60,7 @@ export default function EditDiyTemplatePage() {
         <span className="text-neutral-300">/</span>
         <h1 className="text-xl font-bold text-neutral-900 flex-1 truncate">{template.title}</h1>
         <StatusBadge status={template.status} />
+        <LiveRevisionBadge liveRevision={template.liveRevision} status={template.status} />
       </div>
       <TemplateForm templateId={templateId} initial={template} />
     </div>

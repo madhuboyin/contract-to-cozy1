@@ -58,9 +58,15 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     if (!template) return null;
     const { steps, materials, tools, ...row } = structuredClone(template);
     if (select) return pickKeys(row, select);
-    const withRevision = include?.publishedRevision ? { ...row, publishedRevision: state.revisions.find((revision) => revision.id === template.publishedRevisionId) ? structuredClone(state.revisions.find((revision) => revision.id === template.publishedRevisionId)) : null } : row;
-    if (!include?.publishedRevision) delete withRevision.publishedRevision;
-    return include ? { ...withRevision, steps: include.steps ? steps : undefined, materials: include.materials ? materials : undefined, tools: include.tools ? tools : undefined } : withRevision;
+    const head = state.revisions.find((revision) => revision.id === template.publishedRevisionId);
+    const out = { ...row };
+    delete out.publishedRevision;
+    if (include?.publishedRevision) {
+      const spec = include.publishedRevision;
+      out.publishedRevision = head ? (spec && typeof spec === 'object' && spec.select ? pickKeys(structuredClone(head), spec.select) : structuredClone(head)) : null;
+    }
+    if (include?._count) out._count = Object.fromEntries(Object.keys(include._count.select).map((key) => [key, (template[key] ?? []).length]));
+    return include ? { ...out, steps: include.steps ? steps : undefined, materials: include.materials ? materials : undefined, tools: include.tools ? tools : undefined } : out;
   };
   const projectChildren = (name) => ({
     async createMany({ data }) {

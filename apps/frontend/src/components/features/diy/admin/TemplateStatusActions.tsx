@@ -9,29 +9,13 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { transitionDiyTemplate, LifecycleAction } from '@/lib/api/adminContentGovernance';
 import type { AdminDiyTemplateSummary, DiyTemplateStatus } from '@/types';
+import { actionsForTemplate } from './templateAdminActions';
 
 interface Props {
   template: AdminDiyTemplateSummary;
   onStatusChange: (id: string, status: DiyTemplateStatus) => void;
   onDuplicate: (newId: string) => void;
 }
-
-const ACTIONS_FOR_STATUS: Record<string, { action: LifecycleAction; label: string; tone: string }[]> = {
-  DRAFT: [{ action: 'SUBMIT_FOR_REVIEW', label: 'Submit for review', tone: 'text-green-700 hover:bg-green-50' }],
-  REVIEW: [
-    { action: 'APPROVE', label: 'Approve', tone: 'text-green-700 hover:bg-green-50' },
-    { action: 'RETURN_TO_DRAFT', label: 'Return to draft', tone: 'hover:bg-neutral-50' },
-  ],
-  APPROVED: [
-    { action: 'PUBLISH', label: 'Publish', tone: 'text-green-700 hover:bg-green-50' },
-    { action: 'ARCHIVE', label: 'Archive', tone: 'text-yellow-700 hover:bg-yellow-50' },
-  ],
-  ACTIVE: [
-    { action: 'UNPUBLISH', label: 'Unpublish', tone: 'hover:bg-neutral-50' },
-    { action: 'ARCHIVE', label: 'Archive', tone: 'text-yellow-700 hover:bg-yellow-50' },
-  ],
-  ARCHIVED: [{ action: 'REVIVE_TO_DRAFT', label: 'Revive to draft', tone: 'text-green-700 hover:bg-green-50' }],
-};
 
 export default function TemplateStatusActions({ template, onStatusChange, onDuplicate }: Props) {
   const [open, setOpen] = useState(false);
@@ -113,7 +97,7 @@ export default function TemplateStatusActions({ template, onStatusChange, onDupl
     }
   }
 
-  const actions = ACTIONS_FOR_STATUS[template.status] ?? [];
+  const actions = actionsForTemplate(template.status, template.liveRevision);
 
   return (
     <div ref={ref} className="relative">

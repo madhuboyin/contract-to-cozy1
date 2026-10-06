@@ -267,3 +267,64 @@ test('a legacy ACTIVE template with no head can still be unpublished or archived
   const archive = harness([tpl({ status: 'ACTIVE', approvedBy: 'old' })]);
   assert.equal((await archive.act('t1', 'ARCHIVE')).status, 'ARCHIVED');
 });
+
+// ---- slice 1d: what the admin screens see, and saves that change nothing reviewed ---------------------------------------------------------------
+
+// The admin form always sends the whole template; this builds that payload from a stored template, as TemplateForm does.
+const formPayload = (row, overrides = {}) => ({
+  title: row.title, shortDescription: row.shortDescription, longDescription: row.longDescription ?? undefined, category: row.category,
+  difficultyLevel: row.difficultyLevel, requiredSkillLevel: row.requiredSkillLevel, safetyLevel: row.safetyLevel, permitRequirement: row.permitRequirement,
+  estimatedMinutes: row.estimatedMinutes, tags: row.tags,
+  steps: row.steps.map(({ id, templateId, ...step }, index) => ({ ...step, stepNumber: index + 1 })),
+  materials: row.materials.map(({ id, templateId, ...material }) => material),
+  tools: row.tools.map(({ id, templateId, ...tool }) => tool),
+  ...overrides,
+});
+
+test('a save that repeats the stored content only changes non-content fields: a live template stays live, ACTIVE and untouched (child rows keep their ids)', async () => {
+  const h = harness([tpl()]); await live(h);
+  const before = h.state.templates.get('t1');
+  const stepIds = before.steps.map((step) => step.id);
+  const head = before.publishedRevisionId;
+  await h.diyService.adminUpdateTemplate('t1', formPayload(before, { featuredOrder: 4, geminiPromptHint: 'hint' }));
+  const row = h.state.templates.get('t1');
+  assert.deepEqual([row.status, row.approvedBy, row.publishedRevisionId, row.featuredOrder, row.geminiPromptHint], ['ACTIVE', 'reviewer', head, 4, 'hint']);
+  assert.deepEqual(row.steps.map((step) => step.id), stepIds, 'the content rows were not deleted and recreated');
+});
+
+test('frozen templates accept a save that changes only non-content fields, and still refuse a real content change', async () => {
+  for (const status of ['REVIEW', 'APPROVED']) {
+    const h = harness([tpl({ status })]);
+    const row = h.state.templates.get('t1');
+    await h.diyService.adminUpdateTemplate('t1', formPayload(row, { featuredOrder: 2 }));
+    assert.deepEqual([h.state.templates.get('t1').featuredOrder, h.state.templates.get('t1').status], [2, status], status);
+    await rejectsWith(h.diyService.adminUpdateTemplate('t1', formPayload(row, { title: 'Real change' })), 'TEMPLATE_CONTENT_FROZEN');
+  }
+});
+
+test('a real content change in a full-form save still saves a draft of a live template', async () => {
+  const h = harness([tpl()]); await live(h);
+  const row = h.state.templates.get('t1');
+  await h.diyService.adminUpdateTemplate('t1', formPayload(row, { steps: [...formPayload(row).steps, { stepNumber: 2, title: 'Added', description: 'new', isOptional: false }] }));
+  assert.equal(h.state.templates.get('t1').status, 'DRAFT');
+  assert.equal(h.state.templates.get('t1').steps.length, 2);
+  assert.ok(h.state.templates.get('t1').publishedRevisionId, 'still live');
+});
+
+test('admin list and detail show the live revision (number, provenance, publish time) and never the nested relation', async () => {
+  const h = harness([tpl({ id: 'live', slug: 'a', title: 'Live one' }), tpl({ id: 'plain', slug: 'b', title: 'Plain draft' })]);
+  await live(h, 'live');
+  const { items } = await h.diyService.adminListTemplates({});
+  const byId = Object.fromEntries(items.map((item) => [item.id, item]));
+  assert.deepEqual([byId.live.liveRevision.revision, byId.live.liveRevision.provenance, byId.plain.liveRevision], [1, 'GOVERNED', null]);
+  assert.ok(byId.live.liveRevision.publishedAt);
+  assert.equal(byId.live.stepCount, 1);
+  assert.equal('publishedRevision' in byId.live, false);
+
+  await h.diyService.adminUpdateTemplate('live', { title: 'Draft title' });
+  const detail = await h.diyService.adminGetTemplate('live');
+  assert.deepEqual([detail.status, detail.title, detail.liveRevision.revision], ['DRAFT', 'Draft title', 1], 'the detail is the working copy and says what is live');
+  assert.equal('publishedRevision' in detail, false);
+  assert.equal((await h.diyService.adminGetTemplate('plain')).liveRevision, null);
+  await assert.rejects(h.diyService.adminGetTemplate('missing'), (error) => error.statusCode === 404);
+});

@@ -1,7 +1,7 @@
 # DIY Template Revisions — Step 1 Implementation Plan (immutable published content)
 
 **Date:** October 6, 2026
-**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Slices 1a (§12), 1b (§13) and 1c (§14) are implemented; 1d-1e are not started. **Do not deploy this code to production before the slice 1e backfill exists and has been run (§6): without it the homeowner library is empty.** The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
+**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Slices 1a (§12), 1b (§13), 1c (§14) and 1d (§15) are implemented; 1e is not started. **Do not deploy this code to production before the slice 1e backfill exists and has been run (§6): without it the homeowner library is empty.** The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 1; decision **O2-A** (approved October 6, 2026)
 **Why this comes first:** until published content is provably the content that was reviewed, no Ask surface may call a DIY guide "author-reviewed" (design D1).
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20. Labels: **[Code-traced]** read, not run; nothing here was executed. No service, database or browser was run, and **production template contents are unknown** (the repository seeds none).
@@ -138,7 +138,7 @@ The widened `UNPUBLISH` and `ARCHIVE` matter: a published template whose working
 | 1a | Schema edits and the revision service with tests (1-2, 9). **Done, see §12** |
 | 1b | Transaction-safe transitions and the edit semantics (tests 3-6). **Done, see §13** |
 | 1c | Homeowner reads and `createProject` on revisions (tests 7-8). **Done, see §14** |
-| 1d | Admin UI changes with component tests |
+| 1d | Admin UI changes with component tests. **Done, see §15** |
 | 1e | Backfill SQL, verification query, startup warning, rollout notes; then the exact `prisma db push` and `prisma generate` commands for you to run |
 
 Each slice is reported with what was run and not run, and none is committed or pushed without your instruction.
@@ -264,3 +264,34 @@ Not wired into anything yet: the governance transitions, the admin PUT, the home
 **Not run:** Postgres. In particular the relation filter (`publishedRevision: { is: ... }`), ordering by a relation field, and cursor paging over it are exercised by the fake, not by Prisma against a real database; they are standard Prisma forms but must be confirmed in the slice 1e scratch-database run. The frontend was not touched or run.
 
 **Release constraint.** With 1b and 1c the guarantee is now in the code, but **templates that are live today have no head until the slice 1e backfill is run**, so deploying this code first would show homeowners an empty library and block every template project. The code is safe on `main`; deploying it is not safe until 1e.
+
+## 15. Slice 1d record (October 6, 2026)
+
+**A defect found while building this slice (fixed in the backend).** `TemplateForm` always sends the whole template, so a save that only changed `featuredOrder` still carried every content field. With the 1b edit rules that would have refused the save in review or approved and pushed a live template to draft. `adminUpdateTemplate` now compares the content that would be stored with the content that is stored (the revision content hash) and applies the frozen and divergence rules, and replaces the child rows, **only for a real content change**. A save that repeats the stored content changes only non-content fields, in any status, and leaves a live template live with its rows untouched.
+
+**Changed**
+
+- Backend: `adminListTemplates` and `adminGetTemplate` return `liveRevision` (`revision`, `provenance`, `publishedAt`, or null) and no longer return the nested relation.
+- `AdminDiyTemplateSummary` and `AdminDiyTemplateDetail` carry `liveRevision`.
+- New `LiveRevisionBadge`: "Live: revision N · reviewed", "Live: revision N · legacy, not re-reviewed" (amber), and a red "Live: no published revision" for an `ACTIVE` template that has none (the state before the backfill runs). Shown next to the status badge in the templates table and on the edit page.
+- New `templateAdminActions.actionsForTemplate`, used by the row menu: a reviewer can **Return to draft** an approved template, and a template with a live head always offers **Unpublish** (and **Archive**) whatever its draft's status.
+- New `TemplateStateNotice` above the edit form: `ACTIVE` ("Saving creates a new draft. The live version (revision N) stays published until you publish the new one."), a draft with a live version ("This draft is not live until it is reviewed and published."), review and approved (content frozen, how to return it to draft, link to Pending Reviews), archived (revive first).
+- `TemplateForm`: in review, approved and archived the reviewed fields (core, difficulty and safety, time and cost, tags, steps, materials, tools) are in disabled fieldsets; featured order and the Gemini hint stay editable and a save sends **only those two fields**.
+- The templates list reloads after any lifecycle action (the live revision can change while the status does not).
+- Pending Reviews: the DIY "awaiting publish" queue gains **Return to draft**, which also gives a way out for a template that was approved before revisions existed (its publish is refused with "return it to draft and submit it again").
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| Backend lifecycle tests, now 24 (4 new: no-op save keeps a live template live with rows untouched, frozen states accept a non-content save, a real change still diverges, admin list and detail show the live revision) | pass | Executed |
+| Backend mutation checks: any save carrying content counts as a content change (2 tests fail), list drops `liveRevision` (1), detail leaks the nested relation (1) | each caught | Executed |
+| Frontend component tests (14): action matrix, row menu, badge, table, edit form in review, approved, archived, active, draft-with-live, draft and new | 14 pass | Component-tested |
+| Frontend mutation checks: frozen states not locked (3 fail), locked save sends all content (3), approved cannot be returned (2), live draft cannot be unpublished (2) | each caught | Component-tested |
+| `next build` | compiled and type-checked | Static |
+| Frontend `jest` on `src/components/features`, `src/lib/property`, `src/app` | 260 pass, 1 fail: `propertyContextForm.test.ts`, the same source-text check on unrelated property create and edit pages that fails without this work | Component-tested |
+| Backend typecheck; all DIY, governance and revision suites with Ask DIY and startup registry | clean; 110 pass, 0 fail | Executed |
+
+**Not run:** a browser, so the look of the badges, notice and disabled form is unverified. The Pending Reviews page change is one added action in an array (type-checked, no page-level test). Which admin may perform which action is unchanged and still enforced by the server per endpoint; the menu lists every lifecycle action valid for the state, so an admin without the capability sees the server's refusal. Postgres was not run (see §12-14).
+
+**Remaining before release: slice 1e** (the backfill SQL and verification query, the startup warning, a scratch-database dry run, and the exact commands for the owner).

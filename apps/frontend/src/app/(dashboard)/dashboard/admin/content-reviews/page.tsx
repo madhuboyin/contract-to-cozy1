@@ -254,7 +254,7 @@ export default function AdminContentReviewsPage() {
             title="DIY templates — awaiting publish"
             emptyText="No approved DIY templates are waiting to be published."
             items={queuesQ.data.diyApprovedQueue}
-            actions={['PUBLISH', 'ARCHIVE']}
+            actions={['PUBLISH', 'RETURN_TO_DRAFT', 'ARCHIVE']}
             sublabel={(item) => `/${item.slug} · updated ${fmtDate(item.updatedAt)}`}
             itemBadge={(item) =>
               item.safetyLevel === 'HIGH' ? (

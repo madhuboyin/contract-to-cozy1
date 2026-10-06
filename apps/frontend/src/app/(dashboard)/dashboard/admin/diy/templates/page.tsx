@@ -62,6 +62,8 @@ export default function AdminDiyTemplatesPage() {
 
   function handleStatusChange(id: string, status: DiyTemplateStatus) {
     setTemplates((prev) => prev.map((t) => t.id === id ? { ...t, status } : t));
+    // The live revision can change without the status changing (unpublish, archive of a live draft), so reload the rows.
+    void load();
   }
 
   function handleDuplicate(_newId: string) {

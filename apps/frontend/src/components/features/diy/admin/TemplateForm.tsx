@@ -18,6 +18,7 @@ import StepEditor from './StepEditor';
 import MaterialEditor from './MaterialEditor';
 import ToolEditor from './ToolEditor';
 import { formatMinutes } from '../DiyUtils';
+import TemplateStateNotice, { isContentFrozen } from './TemplateStateNotice';
 
 interface Props {
   templateId?: string;
@@ -101,6 +102,8 @@ const selectCls = "w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm
 export default function TemplateForm({ templateId, initial }: Props) {
   const router = useRouter();
   const isEdit = !!templateId;
+  // Reviewed content is frozen in review, approved and archived (the server refuses edits). Only featured order and the Gemini hint stay editable.
+  const contentLocked = isEdit && isContentFrozen(initial?.status);
 
   const [title, setTitle] = useState(initial?.title ?? '');
   const [slugManual, setSlugManual] = useState(!!initial?.slug);
@@ -187,7 +190,9 @@ export default function TemplateForm({ templateId, initial }: Props) {
     try {
       const payload = buildPayload();
       if (isEdit) {
-        await api.adminUpdateDiyTemplate(templateId!, payload);
+        await api.adminUpdateDiyTemplate(templateId!, contentLocked
+          ? { featuredOrder: payload.featuredOrder, geminiPromptHint: payload.geminiPromptHint }
+          : payload);
       } else {
         await api.adminCreateDiyTemplate(payload);
       }
@@ -207,7 +212,10 @@ export default function TemplateForm({ templateId, initial }: Props) {
         </div>
       )}
 
+      {isEdit && initial && <TemplateStateNotice status={initial.status} liveRevision={initial.liveRevision} />}
+
       {/* Section 1: Core Details */}
+      <fieldset disabled={contentLocked} className="m-0 min-w-0 border-0 p-0" data-content-fields="">
       <div className="mb-8">
         {sectionTitle('Core Details')}
         <div className="space-y-4">
@@ -324,10 +332,13 @@ export default function TemplateForm({ templateId, initial }: Props) {
         </div>
       </div>
 
+      </fieldset>
+
       {/* Section 4: Discovery */}
       <div className="mb-8">
         {sectionTitle('Discovery')}
         <div className="space-y-4">
+          <fieldset disabled={contentLocked} className="m-0 min-w-0 border-0 p-0">
           <Field label="Tags" help="Used for search. Press Enter or comma to add.">
             <div className="flex flex-wrap gap-1 rounded-lg border border-neutral-200 px-3 py-2 min-h-[42px] focus-within:border-blue-500">
               {tags.map((t) => (
@@ -350,6 +361,7 @@ export default function TemplateForm({ templateId, initial }: Props) {
               />
             </div>
           </Field>
+          </fieldset>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Featured Order" help="Integer. If set, appears in featured strip sorted ascending.">
               <input
@@ -375,6 +387,7 @@ export default function TemplateForm({ templateId, initial }: Props) {
         </div>
       </div>
 
+      <fieldset disabled={contentLocked} className="m-0 min-w-0 border-0 p-0" data-content-fields="">
       {/* Section 5: Steps */}
       <div className="mb-8">
         {sectionTitle(`Steps (${steps.length})`)}
@@ -392,6 +405,7 @@ export default function TemplateForm({ templateId, initial }: Props) {
         {sectionTitle(`Tools (${tools.length})`)}
         <ToolEditor tools={tools} onChange={setTools} />
       </div>
+      </fieldset>
 
       {/* Sticky save bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-200 bg-white px-4 py-3 flex items-center justify-between gap-3 shadow-lg">

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { AdminDiyTemplateSummary, DiyTemplateStatus, DiyProjectCategory } from '@/types';
 import { CATEGORY_LABELS, DIFFICULTY_LABELS, DIFFICULTY_COLOR, SKILL_LABELS } from '../DiyUtils';
 import StatusBadge from './StatusBadge';
+import LiveRevisionBadge from './LiveRevisionBadge';
 import TemplateStatusActions from './TemplateStatusActions';
 
 interface Props {
@@ -51,7 +52,12 @@ export default function AdminTemplateTable({ templates, onStatusChange, onDuplic
               </td>
               <td className="px-4 py-3 text-neutral-600">{SKILL_LABELS[t.requiredSkillLevel]}</td>
               <td className="px-4 py-3 text-neutral-600">{t.stepCount}</td>
-              <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
+              <td className="px-4 py-3">
+                <div className="flex flex-col items-start gap-1">
+                  <StatusBadge status={t.status} />
+                  <LiveRevisionBadge liveRevision={t.liveRevision} status={t.status} />
+                </div>
+              </td>
               <td className="px-4 py-3 text-center">
                 {t.featuredOrder != null ? (
                   <span title={`Featured #${t.featuredOrder}`} className="text-yellow-500">★</span>
