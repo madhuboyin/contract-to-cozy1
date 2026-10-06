@@ -55,6 +55,8 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'HOME_EVENT_RADAR_MARK_DONE',
   // Home Habit Coach review actions: add to routine, mark done, snooze, skip, stop suggesting (all confirmation-gated).
   'HOME_HABIT_UPDATE',
+  // Seasonal home care: set up the home's checklist for a season and add its tasks to Maintenance (owner-only, confirmation-gated).
+  'SEASONAL_CHECKLIST_SETUP',
   'HOME_EVENT_RADAR_FEEDBACK',
   // Home Event Radar task create-or-link and notification settings (FRD v1.41).
   'HOME_EVENT_RADAR_TASK',
@@ -170,6 +172,9 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   HOME_EVENT_RADAR_MARK_DONE: command('HOME_EVENT_RADAR_MARK_DONE', 'HOME_EVENT_RADAR_MARK_DONE', 'home-event-radar.mark-done', 'CONTRIBUTOR', 'PROPERTY_RADAR_STATE', ['REOPEN'], { title: 'Event not marked done', body: 'The event and this property\'s radar risk were not changed.', suggestion: 'Show my home event radar feed' }),
   // REOPEN: a skipped, completed or dismissed habit can be reopened on the Home Habit Coach page; Ask offers no reopen.
   HOME_HABIT_UPDATE: command('HOME_HABIT_UPDATE', 'HOME_HABIT_UPDATE', 'home-habits.update', 'CONTRIBUTOR', 'PROPERTY_HABIT', ['REOPEN'], { title: 'Habit not changed', body: 'The habit and your maintenance routine were not changed.', suggestion: 'Show my home habits' }),
+  // REVERSE: an added task can be removed from Maintenance, or the checklist dismissed, on the Seasonal Checklist page (its remove and dismiss
+  // services); Ask only sets the checklist up.
+  SEASONAL_CHECKLIST_SETUP: command('SEASONAL_CHECKLIST_SETUP', 'SEASONAL_CHECKLIST_SETUP', 'seasonal.checklist-setup', 'OWNER', 'SEASONAL_CHECKLIST', ['REVERSE'], { title: 'Checklist not set up', body: 'No seasonal checklist or maintenance task was created.', suggestion: 'Show my seasonal checklist' }),
   // EDIT: the created or linked task is corrected in Maintenance. There is no unlink (the traditional page has none).
   HOME_EVENT_RADAR_TASK: command('HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_TASK', 'home-event-radar.task', 'CONTRIBUTOR', 'PROPERTY_RADAR_TASK_LINK', ['EDIT'], { title: 'Nothing planned', body: 'No maintenance task was added or linked.', suggestion: 'Show my home event radar feed' }),
   HOME_EVENT_RADAR_PREFERENCES: command('HOME_EVENT_RADAR_PREFERENCES', 'HOME_EVENT_RADAR_PREFERENCES', 'home-event-radar.preferences', 'CONTRIBUTOR', 'PROPERTY_RADAR_NOTIFICATION_PREFERENCE', ['EDIT'], { title: 'Settings not saved', body: 'Your Home Event Radar notification settings were not changed.', suggestion: 'Show my home event radar feed' }),

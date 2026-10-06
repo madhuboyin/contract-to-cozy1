@@ -64,6 +64,90 @@ export class SeasonalChecklistService {
   }
 
   /**
+   * The templates a property's seasonal checklist would contain for a season: active, in the climate region, not excluded, and
+   * APPLICABLE against Property Context. Shared by generation and the read-only preview so the two can never disagree.
+   */
+  private static async evaluateApplicableTemplates(
+    propertyId: string,
+    season: Season,
+    userId: string,
+    climateSettings: { climateRegion: ClimateRegion; excludedTaskKeys: string[] },
+  ) {
+    // Get matching task templates
+    const templates = await prisma.seasonalTaskTemplate.findMany({
+      where: {
+        season,
+        isActive: true,
+        climateRegions: {
+          has: climateSettings.climateRegion,
+        },
+        taskKey: {
+          notIn: climateSettings.excludedTaskKeys,
+        },
+      },
+      orderBy: [
+        { priority: 'asc' }, // CRITICAL first
+        { title: 'asc' },
+      ],
+    });
+
+    const propertyContext = await getPropertyContext(
+      propertyId,
+      { userId },
+      { scopes: ['LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'] },
+    );
+    const decisions = templates.map((template) => ({
+      template,
+      decision: evaluateSeasonalTemplateApplicability(propertyContext, template),
+    }));
+    const filteredTemplates = decisions
+      .filter(({ decision }) => decision.status === 'APPLICABLE')
+      .map(({ template }) => template);
+    const skippedByStatus = decisions.reduce<Record<string, number>>((counts, { decision }) => {
+      counts[decision.status] = (counts[decision.status] ?? 0) + 1;
+      return counts;
+    }, {});
+    logger.info(
+      { propertyId, season, templateCount: templates.length, includedCount: filteredTemplates.length, skippedByStatus },
+      'Seasonal templates evaluated against Property Context',
+    );
+    return { templates, decisions, filteredTemplates, skippedByStatus };
+  }
+
+  /**
+   * Read-only: what generateSeasonalChecklist would do for this season, without writing a checklist, an item or a task. Used by
+   * Ask to show the homeowner what "set up my checklist" will add before they confirm.
+   */
+  static async previewSeasonalChecklist(propertyId: string, season: Season, year: number, userId: string) {
+    const property = await this.assertPropertyOwnership(propertyId, userId);
+    if (!supportsOwnershipCare({
+      entryPath: property.onboarding?.entryPath,
+      ownershipState: property.onboarding?.ownershipState,
+    })) {
+      return { eligible: false as const, reason: 'NOT_OWNERSHIP_CARE' as const };
+    }
+    const climateSettings = await ClimateZoneService.getOrCreateClimateSettings(propertyId);
+    if (!climateSettings.autoGenerateChecklists) {
+      return { eligible: false as const, reason: 'AUTO_GENERATE_OFF' as const };
+    }
+    const existing = await prisma.seasonalChecklist.findUnique({
+      where: { propertyId_season_year: { propertyId, season, year } },
+      select: { id: true, items: { select: { seasonalTaskTemplateId: true } } },
+    });
+    const { templates, decisions, filteredTemplates } = await this.evaluateApplicableTemplates(propertyId, season, userId, climateSettings);
+    const existingTemplateIds = new Set(existing?.items.map((item) => item.seasonalTaskTemplateId) ?? []);
+    return {
+      eligible: true as const,
+      existingChecklistId: existing?.id ?? null,
+      templates,
+      decisions,
+      applicable: filteredTemplates,
+      alreadyOnChecklist: filteredTemplates.filter((template) => existingTemplateIds.has(template.id)),
+      toAdd: filteredTemplates.filter((template) => !existingTemplateIds.has(template.id)),
+    };
+  }
+
+  /**
    * Generate seasonal checklist for a property
    */
   static async generateSeasonalChecklist(
@@ -112,44 +196,7 @@ export class SeasonalChecklistService {
     const seasonStartDate = ClimateZoneService.getSeasonStartDate(season, year);
     const seasonEndDate = ClimateZoneService.getSeasonEndDate(season, year);
 
-    // Get matching task templates
-    const templates = await prisma.seasonalTaskTemplate.findMany({
-      where: {
-        season,
-        isActive: true,
-        climateRegions: {
-          has: climateSettings.climateRegion,
-        },
-        taskKey: {
-          notIn: climateSettings.excludedTaskKeys,
-        },
-      },
-      orderBy: [
-        { priority: 'asc' }, // CRITICAL first
-        { title: 'asc' },
-      ],
-    });
-
-    const propertyContext = await getPropertyContext(
-      propertyId,
-      { userId },
-      { scopes: ['LOCATION', 'STRUCTURE', 'EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'SAFETY', 'MAINTENANCE'] },
-    );
-    const decisions = templates.map((template) => ({
-      template,
-      decision: evaluateSeasonalTemplateApplicability(propertyContext, template),
-    }));
-    const filteredTemplates = decisions
-      .filter(({ decision }) => decision.status === 'APPLICABLE')
-      .map(({ template }) => template);
-    const skippedByStatus = decisions.reduce<Record<string, number>>((counts, { decision }) => {
-      counts[decision.status] = (counts[decision.status] ?? 0) + 1;
-      return counts;
-    }, {});
-    logger.info(
-      { propertyId, season, year, templateCount: templates.length, includedCount: filteredTemplates.length, skippedByStatus },
-      'Seasonal templates evaluated against Property Context',
-    );
+    const { filteredTemplates } = await this.evaluateApplicableTemplates(propertyId, season, userId, climateSettings);
 
     // Do not manufacture an empty checklist. UNKNOWN context remains a
     // setup opportunity on Home until enough facts exist to evaluate tasks.

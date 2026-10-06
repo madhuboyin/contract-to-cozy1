@@ -1243,6 +1243,159 @@ function homeActionShelvesExecution() {
   };
 }
 
+// The seasonal home-care answer to "What should I do to get ready for next season?" (Appendix C.4). The blocks are the real builder's output
+// (buildSeasonalHomeCareResult for a New Jersey zip, next season, an owner with no winter checklist yet), pasted so the fixture cannot drift.
+function seasonalPlanExecution() {
+  const base = maintenanceExecution();
+  return {
+    ...base, executionId: 'execution-seasonal-plan', question: 'What should I do to get ready for next season?', viewState: null,
+    blocks: [
+      {
+        "type": "SUMMARY",
+        "id": "seasonal-home-care-summary",
+        "title": "Getting ready for winter",
+        "body": "Winter is the next season for your area. This is based on this home's zip code (a moderate climate). Here are 4 things to focus on. I recommend doing the first 2 soon, and the other 2 when you have time.",
+        "tone": "DEFAULT",
+        "actions": []
+      },
+      {
+        "type": "GROUPED_LIST",
+        "id": "seasonal-home-care-tasks",
+        "title": "Winter tasks",
+        "actions": [],
+        "filters": [],
+        "sections": [
+          {
+            "id": "seasonal-soon",
+            "title": "Do these soon",
+            "caption": "Helps prevent costly issues and keeps your home safe and efficient.",
+            "count": 2,
+            "items": [
+              {
+                "id": "WINTER_FURNACE_FILTER_CHANGE",
+                "title": "Replace furnace filters monthly",
+                "description": "Dirty filters reduce efficiency and can cause furnace failure in extreme cold.",
+                "condition": null,
+                "entityType": "SEASONAL_TASK",
+                "meta": [
+                  "High priority",
+                  "DIY"
+                ],
+                "detail": "What to do: Check and replace HVAC filters every month during peak heating season\nTime it takes: About 15 minutes\nTypical cost: $15\u2013$40\nWho does it: You can usually do this yourself\nWhen: Best done about 2 weeks before winter starts",
+                "tone": "CAUTION",
+                "status": null,
+                "href": null,
+                "countLabel": "1"
+              },
+              {
+                "id": "WINTER_GFCI_OUTLET_TEST",
+                "title": "Test GFCI outlets",
+                "description": "Prevents electrical shock. Critical safety measure that takes 5 minutes.",
+                "condition": null,
+                "entityType": "SEASONAL_TASK",
+                "meta": [
+                  "High priority",
+                  "DIY"
+                ],
+                "detail": "What to do: Test all GFCI outlets in bathrooms, kitchen, garage, and outdoors\nTime it takes: About 30 minutes\nWho does it: You can usually do this yourself\nWhen: Best done about 2 weeks before winter starts",
+                "tone": "CAUTION",
+                "status": null,
+                "href": null,
+                "countLabel": "2"
+              }
+            ]
+          },
+          {
+            "id": "seasonal-wait",
+            "title": "Can wait",
+            "caption": "Useful checks to keep your home in good shape.",
+            "count": 2,
+            "items": [
+              {
+                "id": "WINTER_HUMIDITY_CHECK",
+                "title": "Check and adjust humidity levels (30-50%)",
+                "description": "Low humidity damages wood floors and furniture. High humidity causes mold.",
+                "condition": null,
+                "entityType": "SEASONAL_TASK",
+                "meta": [
+                  "Recommended",
+                  "DIY"
+                ],
+                "detail": "What to do: Monitor indoor humidity and adjust humidifier/dehumidifier as needed\nTime it takes: About 1 hour\nTypical cost: $50\u2013$200\nWho does it: You can usually do this yourself\nWhen: Best done about 2 weeks before winter starts",
+                "tone": "DEFAULT",
+                "status": null,
+                "href": null,
+                "countLabel": "3"
+              },
+              {
+                "id": "WINTER_SINK_LEAK_CHECK",
+                "title": "Check for leaks under sinks",
+                "description": "Small leaks can cause major water damage and mold. Easy to catch early.",
+                "condition": null,
+                "entityType": "SEASONAL_TASK",
+                "meta": [
+                  "Recommended",
+                  "DIY"
+                ],
+                "detail": "What to do: Inspect under-sink plumbing for leaks and corrosion\nTime it takes: About 30 minutes\nWho does it: You can usually do this yourself\nWhen: Best done about 2 weeks before winter starts",
+                "tone": "DEFAULT",
+                "status": null,
+                "href": null,
+                "countLabel": "4"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "BOUNDARY",
+        "id": "seasonal-home-care-boundary",
+        "title": "About this recommendation",
+        "body": "These are general seasonal tasks for the climate region, not an assessment of this home. They do not use anything recorded about your systems, so they become more specific as your home record fills in.",
+        "severity": "INFO",
+        "suggestions": []
+      },
+      {
+        "type": "SUMMARY",
+        "id": "seasonal-home-care-next",
+        "title": "What would you like to do next?",
+        "body": "Adding tasks sets up your winter checklist for this home. You will review exactly what it adds before anything changes.",
+        "tone": "DEFAULT",
+        "actions": [
+          {
+            "id": "seasonal-add-tasks",
+            "label": "Add these to my tasks",
+            "interactionType": "START_WORKFLOW",
+            "message": "Set up my winter checklist.",
+            "operationId": "SEASONAL_CHECKLIST_SETUP",
+            "entityType": "SEASONAL_PLAN",
+            "entityId": "WINTER:2026",
+            "style": "PRIMARY"
+          },
+          {
+            "id": "seasonal-walkthrough",
+            "label": "Walk me through the first task",
+            "interactionType": "START_WORKFLOW",
+            "message": "Walk me through \"Replace furnace filters monthly\".",
+            "operationId": "SEASONAL_HOME_CARE",
+            "entityType": "SEASONAL_TASK",
+            "entityId": "NEXT_SEASON:WINTER_FURNACE_FILTER_CHANGE",
+            "style": "SECONDARY"
+          },
+          {
+            "id": "seasonal-update-home-details",
+            "label": "Update home details",
+            "interactionType": "START_WORKFLOW",
+            "message": "How complete is my home record?",
+            "operationId": "PROPERTY_SUMMARY",
+            "style": "SECONDARY"
+          }
+        ]
+      }
+    ],
+  };
+}
+
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.83): the seasonal checklist answer with its tasks as read-only priority shelves.
 function seasonalShelvesExecution() {
   const base = maintenanceExecution();
@@ -2190,6 +2343,8 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     decisions: options.noDecision
       ? { state: 'NO_DECISIONS', items: [], href: `/dashboard/ask?propertyId=${propertyId}` }
       : { state: 'AVAILABLE', items: [{ decisionThreadId: 'decision-1', title: 'Repair or replace the refrigerator', lifecycleStatus: 'IN_PROGRESS', contextStatus: 'CURRENT', verdict: null, confidenceLabel: 'MEDIUM', subject: { kind: 'INVENTORY_ITEM', id: 'refrigerator-1', label: 'Refrigerator' }, updatedAt: '2026-08-12T12:00:00.000Z' }], href: `/dashboard/ask?propertyId=${propertyId}` },
+    // The landing reads this section; the fixture predated it, so every spec that loaded the landing hit the error boundary.
+    homeContinuity: { state: 'AVAILABLE', decisions: [], activeMajorMoment: null },
     landingSpotlight: { kind: 'ATTENTION', entityId: options.heatAttention ? 'heat-action-1' : options.duplicateRefrigerator ? 'refrigerator-action-1' : 'action-1' },
     capabilityGroups: [
       { id: 'UNDERSTAND', label: 'Understand your home', description: 'Turn home records into a clear, useful picture.', capabilityIds: ['property-brief'], prompts: [{ id: 'understand-summary', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'Give me a summary of my home record.' }] },
@@ -2627,6 +2782,12 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     }
     if (/what needs my attention now/i.test(body.message)) {
       const response = homeActionShelvesExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/get ready for next season/i.test(body.message)) {
+      const response = seasonalPlanExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ComponentProps, createContext, useContext } from 'react';
+import { ComponentProps, createContext, ReactNode, useContext } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskAction } from '@/features/ask/types';
@@ -57,7 +57,8 @@ export function AskContextLink({ href, onClick, ...props }: Omit<ComponentProps<
   }} />;
 }
 
-export function ActionLink({ action }: { action: AskAction }) {
+// `icon` replaces the trailing arrow with a leading icon, for a row of next-step buttons that each name a different kind of step.
+export function ActionLink({ action, icon }: { action: AskAction; icon?: ReactNode }) {
   const workflowControls = useContext(AskBlockActionContext);
   const className = cn(
     'inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50',
@@ -73,7 +74,7 @@ export function ActionLink({ action }: { action: AskAction }) {
         className={className}
         title={supported ? undefined : 'This inline action is not available.'}
       >
-        {action.label}<ArrowRight className="h-4 w-4" />
+        {icon}{action.label}{!icon && <ArrowRight className="h-4 w-4" />}
       </button>
     );
   }
@@ -83,7 +84,7 @@ export function ActionLink({ action }: { action: AskAction }) {
       href={action.href}
       className={className}
     >
-      {action.label}<ArrowRight className="h-4 w-4" />
+      {icon}{action.label}{!icon && <ArrowRight className="h-4 w-4" />}
     </AskContextLink>
   );
 }

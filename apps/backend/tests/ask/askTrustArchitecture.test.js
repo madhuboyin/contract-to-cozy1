@@ -81,6 +81,8 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'HOME_EVENT_RADAR_PREFERENCES',
     // Home Habit Coach review actions: reached only from the declared actions on a habit's inline review.
     'HOME_HABIT_UPDATE',
+    // Seasonal checklist setup: reached only from the declared Add these to my tasks action on the seasonal answer.
+    'SEASONAL_CHECKLIST_SETUP',
   ]));
   const candidates = retrieveAskOperationCandidates("I'm thinking about selling next year", { topK: 100 });
   assert.equal(candidates.some((candidate) => internalOperations.includes(candidate.operationId)), false);

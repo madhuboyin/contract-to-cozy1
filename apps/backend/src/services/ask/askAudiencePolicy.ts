@@ -113,6 +113,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('HOME_EVENT_RADAR_STATE', ALL_MODES),
   definePolicy('HOME_EVENT_RADAR_MARK_DONE', ALL_MODES),
   definePolicy('HOME_HABIT_UPDATE', ALL_MODES),
+  definePolicy('SEASONAL_CHECKLIST_SETUP', ALL_MODES),
   definePolicy('HOME_EVENT_RADAR_FEEDBACK', ALL_MODES),
   definePolicy('HOME_EVENT_RADAR_TASK', ALL_MODES),
   definePolicy('HOME_EVENT_RADAR_PREFERENCES', ALL_MODES),

@@ -65,6 +65,7 @@ export interface AskGroupedListItem {
   floorLevel?: number | null;
   countLabel?: string | null;
   badgeLabel?: string | null;
+  detail?: string | null;
 }
 export type AskGroupedListPresentation =
   | { pattern: 'SHELVES' }
@@ -78,7 +79,7 @@ export interface AskComparisonBadge { label: string; basis: string; policyCode: 
 export type AskPresentationBlock =
   | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
-  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; sections: Array<{ id: string; title: string; count: number; offset?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation }
+  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation }
   | { type: 'TABLE'; id: string; title: string; description?: string | null; preferredPresentation?: 'AUTO' | 'TABLE' | 'CARDS'; columns: Array<{ key: string; label: string }>; rows: Array<{ id: string; values: Record<string, string> }>; totalCount?: number; actions: AskAction[] }
   | { type: 'CAPABILITY_LIST'; id: string; title: string; description?: string | null; capabilities: Array<{ id: string; label: string; description: string; expectedOutput: string; href: string; inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: string; message: string } | null; inlineBoundary: string; readiness: 'READY' | 'NEEDS_PROPERTY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE' | 'AVAILABLE'; readinessLabel: string | null; readinessReasons: string[]; releaseStage: 'ACTIVE' | 'BETA' }> }
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null; claim?: { targetBlockId: string; targetItemId: string | null; text: string } | null }> }

@@ -47,7 +47,6 @@ test('the repair-or-replace picker declares the operation each item sentence rou
 test('every in-Ask next-step action survives the answer-trust validator for the operation that emits it', () => {
   const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
   const { getAskOperationDefinition } = require('../../src/services/ask/askOperationRegistry.ts');
-  const { buildSeasonalHomeCareResult } = require('../../src/services/ask/support/seasonalHomeCare.ts');
   const view = inventoryViewItemAction('Water heater');
   const add = inventoryAddItemAction();
   const cases = [
@@ -61,11 +60,7 @@ test('every in-Ask next-step action survives the answer-trust validator for the 
     ['HVAC_DECISION_START', 'EMPTY_STATE', view, 'NOT_APPLICABLE'],
     ['CAPITAL_RESERVE_PLAN', 'SUMMARY', add, 'READY_WITH_LIMITATIONS'],
   ];
-  const seasonal = buildSeasonalHomeCareResult({ zipCode: '08536', now: new Date('2026-10-05T12:00:00Z'), focus: 'NEXT_SEASON' });
-  const seasonalAction = seasonal.blocks[0].actions[0];
-  cases.push(['SEASONAL_HOME_CARE', 'SUMMARY', seasonalAction, 'ANSWERED']);
-  assert.equal(seasonalAction.href, undefined, 'the seasonal CTA must stay in Ask');
-  assert.equal(resolveAskOperation(seasonalAction.message).operationId, seasonalAction.operationId);
+  // The seasonal answer's next steps (and their allowlist) are covered in seasonalChecklistSetup.test.js.
 
   for (const [operationId, type, action, status] of cases) {
     const definition = getAskOperationDefinition(operationId);

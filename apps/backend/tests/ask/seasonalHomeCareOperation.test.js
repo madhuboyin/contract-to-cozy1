@@ -51,10 +51,17 @@ test('the focus comes from the stored starter message: the two constants select 
   assert.equal(handlerModule.seasonalHomeCareFocus('anything else'), 'THIS_SEASON');
 });
 
-const run = async (property, message) => {
-  const original = prisma.property.findUnique;
+const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+
+// The handler also asks who the caller is and whether this season's checklist exists, only to choose the next steps.
+const run = async (property, message, { role = 'OWNER', checklist = null, launchContext } = {}) => {
+  const original = { property: prisma.property.findUnique, checklist: prisma.seasonalChecklist.findUnique, access: propertyAccess.resolvePropertyAccess };
   prisma.property.findUnique = async () => property;
-  try { return await captured['seasonal.home-care']({ userId: 'u1', propertyId: 'p1', message }); } finally { prisma.property.findUnique = original; }
+  prisma.seasonalChecklist.findUnique = async () => checklist;
+  propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'p1' });
+  try { return await captured['seasonal.home-care']({ userId: 'u1', propertyId: 'p1', message, launchContext }); } finally {
+    prisma.property.findUnique = original.property; prisma.seasonalChecklist.findUnique = original.checklist; propertyAccess.resolvePropertyAccess = original.access;
+  }
 };
 
 test('EXECUTED through the registered canonical call: an empty-home property (zip only) answers both starter messages with content', async () => {
@@ -62,7 +69,7 @@ test('EXECUTED through the registered canonical call: an empty-home property (zi
   for (const message of [handlerModule.SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE, handlerModule.SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE]) {
     const result = await run({ zipCode: '78701', climateSetting: null }, message);
     assert.equal(result.status, 'ANSWERED', message);
-    assert.deepEqual(result.blocks.map((b) => b.type), ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']);
+    assert.deepEqual(result.blocks.map((b) => b.type), ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'SUMMARY']);
   }
 });
 
@@ -72,4 +79,35 @@ test('a saved climate region wins over the zip, a tropical home gets content in 
   const missing = await run(null, handlerModule.SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE);
   assert.equal(missing.status, 'UNAVAILABLE');
   assert.equal(missing.reasonCode, 'SEASONAL_HOME_CARE_PROPERTY_NOT_FOUND');
+});
+
+const OWNED = { zipCode: '78701', climateSetting: null, onboarding: { entryPath: 'EXISTING_HOME_OWNER', ownershipState: 'OWNER' } };
+const nextActions = (result) => result.blocks.find((block) => block.id === 'seasonal-home-care-next').actions.map((action) => action.id);
+
+test('the offered next steps follow who the caller is and whether this season\'s checklist exists', async () => {
+  const next = handlerModule.SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE;
+  assert.deepEqual(nextActions(await run(OWNED, next)), ['seasonal-add-tasks', 'seasonal-walkthrough', 'seasonal-update-home-details']);
+  assert.deepEqual(nextActions(await run(OWNED, next, { role: 'CONTRIBUTOR' })), ['seasonal-walkthrough', 'seasonal-update-home-details'], 'only the owner may set it up');
+  assert.deepEqual(nextActions(await run({ ...OWNED, climateSetting: { climateRegion: 'COLD', autoGenerateChecklists: false } }, next)), ['seasonal-walkthrough', 'seasonal-update-home-details'], 'automatic checklists off');
+  assert.deepEqual(nextActions(await run({ ...OWNED, onboarding: { entryPath: 'EXPLORATION', ownershipState: 'SHOPPING' } }, next)), ['seasonal-walkthrough', 'seasonal-update-home-details'], 'not an owned home');
+  const existing = await run(OWNED, next, { checklist: { totalTasks: 6, tasksAdded: 5 } });
+  assert.deepEqual(nextActions(existing), ['seasonal-show-checklist', 'seasonal-walkthrough', 'seasonal-update-home-details']);
+  assert.match(existing.blocks.find((block) => block.id === 'seasonal-home-care-next').body, /already set up with 6 tasks, 5 in Maintenance/);
+});
+
+test('"Walk me through" a task launches this same operation with the task\'s entity and returns that task, then the next, then back', async () => {
+  const plan = await run(OWNED, handlerModule.SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE);
+  const walk = plan.blocks.find((block) => block.id === 'seasonal-home-care-next').actions.find((action) => action.id === 'seasonal-walkthrough');
+  assert.equal(walk.operationId, 'SEASONAL_HOME_CARE');
+  assert.equal(walk.entityType, 'SEASONAL_TASK');
+  const first = await run(OWNED, walk.message, { launchContext: { entityType: walk.entityType, entityId: walk.entityId, operationId: 'SEASONAL_HOME_CARE' } });
+  assert.equal(first.reasonCode, 'SEASONAL_TASK_WALKTHROUGH_READY');
+  assert.match(first.blocks[0].body, /Task 1 of /);
+  const nextAction = first.blocks[0].actions.find((action) => action.id === 'seasonal-next-task');
+  const second = await run(OWNED, nextAction.message, { launchContext: { entityType: nextAction.entityType, entityId: nextAction.entityId, operationId: 'SEASONAL_HOME_CARE' } });
+  assert.match(second.blocks[0].body, /Task 2 of /);
+  const back = second.blocks[0].actions.find((action) => action.id === 'seasonal-back-to-plan');
+  assert.equal(back.message, handlerModule.SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE, 'back returns to the same plan');
+  const stale = await run(OWNED, 'x', { launchContext: { entityType: 'SEASONAL_TASK', entityId: 'NEXT_SEASON:NOT_A_REAL_TASK' } });
+  assert.equal(stale.reasonCode, 'SEASONAL_HOME_CARE_READY', 'an unknown task falls back to the plan');
 });

@@ -4,6 +4,7 @@ import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatib
 import { timelinePoint } from '@/features/ask/displayPatterns';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
+import { SEASONAL_ABOUT_BLOCK_ID, SEASONAL_INTRO_BLOCK_ID, SEASONAL_NEXT_STEPS_BLOCK_ID, SeasonalAboutCard, SeasonalIntroCard, SeasonalNextSteps } from '../SeasonalAnswerCards';
 import { useCalmAnswer, useCalmChrome, useCalmReceiptContinuation } from './calmContext';
 import type { AskBlockRenderer } from './types';
 
@@ -40,6 +41,9 @@ function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: '
 
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
+  // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
+  if (block.id === SEASONAL_INTRO_BLOCK_ID) return <SeasonalIntroCard block={block} />;
+  if (block.id === SEASONAL_NEXT_STEPS_BLOCK_ID) return <SeasonalNextSteps block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(
@@ -92,6 +96,7 @@ export const ProactiveInsightBlock: AskBlockRenderer<'PROACTIVE_INSIGHT'> = ({ b
 // their warning treatment because the homeowner may need to act on them.
 export const BoundaryBlock: AskBlockRenderer<'BOUNDARY'> = ({ block }) => {
   const calm = useCalmChrome();
+  if (block.id === SEASONAL_ABOUT_BLOCK_ID && block.severity === 'INFO') return <SeasonalAboutCard block={block} />;
   if (calm && block.severity === 'INFO' && block.suggestions.length === 0 && !block.actions?.length) {
     return <p data-calm-footnote="" className="text-xs leading-5 text-slate-500"><span className="font-medium text-slate-600">{block.title}.</span> {block.body}</p>;
   }

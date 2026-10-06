@@ -37,7 +37,7 @@ test('a tropical home in fall (and "next season" asked in summer) gets a real an
   for (const [now, focus] of [[DATES.FALL, 'THIS_SEASON'], [DATES.SUMMER, 'NEXT_SEASON']]) {
     const result = buildSeasonalHomeCareResult({ zipCode: '33101', savedClimateRegion: 'TROPICAL', now, focus });
     assert.equal(result.status, 'ANSWERED');
-    assert.ok(result.blocks[1].sections[0].items.length >= 2);
+    assert.ok(result.blocks[1].sections.flatMap((section) => section.items).length >= 2);
   }
 });
 
@@ -52,10 +52,11 @@ test('EXECUTED: an empty-home answer (zip only) is ANSWERED with a summary, a ta
     for (const date of Object.values(DATES)) {
       const result = buildSeasonalHomeCareResult({ zipCode: '78701', now: date, focus });
       assert.equal(result.status, 'ANSWERED', `${focus} ${date.toISOString()}`);
-      assert.deepEqual(result.blocks.map((b) => b.type), ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']);
+      assert.deepEqual(result.blocks.map((b) => b.type), ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'SUMMARY']);
       for (const block of result.blocks) assert.doesNotThrow(() => AskPresentationBlockSchema.parse(block), block.id);
       const list = result.blocks[1];
-      assert.ok(list.sections[0].items.length >= 1 && list.sections[0].items.length <= 8);
+      const shown = list.sections.flatMap((section) => section.items);
+      assert.ok(shown.length >= 1 && shown.length <= 8);
     }
   }
 });
@@ -66,7 +67,8 @@ test('THIS_SEASON and NEXT_SEASON are different answers (distinct starters), and
   const next = buildSeasonalHomeCareResult({ zipCode: '78701', now, focus: 'NEXT_SEASON' });
   assert.match(here.blocks[0].title, /fall/);
   assert.match(next.blocks[0].title, /winter/);
-  assert.notDeepEqual(here.blocks[1].sections[0].items.map((i) => i.id), next.blocks[1].sections[0].items.map((i) => i.id));
+  const ids = (result) => result.blocks[1].sections.flatMap((section) => section.items).map((i) => i.id);
+  assert.notDeepEqual(ids(here), ids(next));
 });
 
 test('an unmapped zip is answered with the national default and SAYS so; a mapped zip does not claim a default', () => {
@@ -80,10 +82,17 @@ test('an unmapped zip is answered with the national default and SAYS so; a mappe
 test('the answer never claims to assess the home: the boundary says general guidance and nothing recorded is read', () => {
   const result = buildSeasonalHomeCareResult({ zipCode: '78701', now: DATES.SPRING, focus: 'THIS_SEASON' });
   assert.match(result.blocks[2].body, /not an assessment of this home/);
-  // The checklist opens inside Ask (the maintenance read over the home's own generated checklist), not the desktop page.
-  const action = result.blocks[0].actions[0];
-  assert.equal(action.href, undefined);
-  assert.equal(action.interactionType, 'START_WORKFLOW');
-  assert.equal(action.operationId, 'MAINTENANCE_STATUS');
-  assert.match(action.message, /spring checklist/i);
+  assert.equal(result.blocks[2].title, 'About this recommendation');
+});
+
+test('the next steps stay in Ask: no link anywhere, at most three actions, and Update home details goes to the home-record check', () => {
+  const result = buildSeasonalHomeCareResult({ zipCode: '78701', now: DATES.SPRING, focus: 'THIS_SEASON' });
+  const next = result.blocks[3];
+  assert.equal(next.title, 'What would you like to do next?');
+  assert.ok(next.actions.length >= 1 && next.actions.length <= 3);
+  assert.deepEqual(next.actions.map((action) => action.id), ['seasonal-walkthrough', 'seasonal-update-home-details'], 'with no setup context there is no write and no checklist claim');
+  for (const block of result.blocks) for (const action of block.actions ?? []) assert.equal(action.href, undefined, action.id);
+  const update = next.actions.find((action) => action.id === 'seasonal-update-home-details');
+  assert.deepEqual([update.operationId, update.message], ['PROPERTY_SUMMARY', 'How complete is my home record?']);
+  assert.equal(JSON.stringify(result).includes('/dashboard/seasonal'), false);
 });

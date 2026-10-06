@@ -64,6 +64,7 @@ import './handlers/propertyBrief.handler';
 import './handlers/homeTimeline.handler';
 import './handlers/materialSpecs.handler';
 import './handlers/seasonalHomeCare.handler';
+import './handlers/seasonalChecklistSetup.handler';
 import './handlers/homeBasics.handler';
 import './handlers/hiringGuide.handler';
 import './handlers/applianceOracleBudget.handler';

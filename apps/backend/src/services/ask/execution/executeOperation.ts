@@ -706,6 +706,8 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   OPERATIONAL_WORK_UPDATE: ['HOME_ACTIONS'],
   // A habit's status (and, on adoption, the maintenance task it links) is what the habits list and maintenance status show.
   HOME_HABIT_UPDATE: ['HOME_HABITS', 'MAINTENANCE_STATUS'],
+  // Setting up a season's checklist changes what the seasonal answer offers (it becomes "already set up") and what maintenance shows.
+  SEASONAL_CHECKLIST_SETUP: ['SEASONAL_HOME_CARE', 'MAINTENANCE_STATUS'],
   // Creating a task changes the same BUYER_PLAN_STATUS/BUYER_DEADLINES
   // membership/counts BUYER_TASK_UPDATE/BUYER_TASK_COMPLETE already declare.
   BUYER_TASK_CREATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],

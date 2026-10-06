@@ -246,6 +246,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   HIRING_GUIDE: 'Before hiring a contractor, check licensing and insurance, get itemized written estimates, ask for references, and put the scope and payments in a signed contract.',
   HOME_BASICS_GUIDE: 'Home safety basics include knowing where your main water shutoff is, having working smoke and carbon monoxide alarms, and keeping emergency numbers handy.',
   SEASONAL_HOME_CARE: 'This fall, general tasks for your climate include clearing gutters, testing the smoke and carbon monoxide detectors, and checking the storm windows.',
+  SEASONAL_CHECKLIST_SETUP: 'Your winter checklist is set up and its tasks are added to your maintenance list after confirmation.',
   GUIDANCE_JOURNEY_CONTINUE: 'The water heater journey is on its second of four steps, and the next step is to compare replacement quotes.',
   GUIDANCE_STEP_SKIP: 'The selected step of the guided journey is skipped after confirmation, when its policy allows it.',
   GUIDANCE_JOURNEY_DISMISS: 'The selected guided journey is dismissed after confirmation and leaves your list.',

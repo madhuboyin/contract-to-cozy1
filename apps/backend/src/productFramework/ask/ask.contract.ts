@@ -161,6 +161,8 @@ const GroupedListItemSchema = z.object({
   floorLevel: z.number().int().min(-5).max(200).nullable().optional(),
   countLabel: z.string().trim().min(1).max(60).nullable().optional(),
   badgeLabel: z.string().trim().min(1).max(60).nullable().optional(),
+  // Longer text revealed on demand (a seasonal task's "how to do it"). Additive: a renderer that does not know it ignores it.
+  detail: z.string().trim().min(1).max(1200).nullable().optional(),
 });
 
 // IW-PRES-022: the server declares which shared pattern a grouped list uses. The client uses it only when the
@@ -207,6 +209,8 @@ const GroupedListBlockSchema = z.object({
   sections: z.array(z.object({
     id: z.string(),
     title: z.string(),
+    // One line under the section title (why the group matters). Additive, like the item fields above.
+    caption: z.string().trim().min(1).max(200).nullable().optional(),
     count: z.number().int().nonnegative(),
     // Server-owned window into the full collection. Omitted by legacy
     // producers; Maintenance uses it for stable inline pagination.

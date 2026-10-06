@@ -74,6 +74,9 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   // Deliberately skill-less, the same precedent as RECALL_MATCH_UPDATE above (the home-habit-coach skill stays a READ skill); it must stay in
   // this list or the boot-time governance check fails.
   'HOME_HABIT_UPDATE',
+  // Seasonal checklist setup (owner-only, confirmation-gated, declared-action only): skill-less like SEASONAL_HOME_CARE, which launches it.
+  // It must stay in this list or the boot-time governance check fails.
+  'SEASONAL_CHECKLIST_SETUP',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like SEASONAL_HOME_CARE.
   'HOME_BASICS_GUIDE',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like the two above.

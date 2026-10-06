@@ -115,6 +115,7 @@ export function captureFallbackHref(operationId: string | null, propertyId: stri
     case 'ROOM_RENAME':
     case 'ROOM_CREATE': return `${base}/rooms`;
     case 'HOME_HABIT_UPDATE': return `${base}/tools/home-habit-coach`;
+    case 'SEASONAL_CHECKLIST_SETUP': return '/dashboard/seasonal';
     case 'CAPITAL_RESERVE_PLAN': return `${base}/tools/capital-timeline`;
     case 'PROPERTY_TAX_APPEAL_READINESS': return `${base}/tools/property-tax`;
     case 'QUOTE_COMPARISON_REVIEW': return `${base}/tools/quote-comparison`;
