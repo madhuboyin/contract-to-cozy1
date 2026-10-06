@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.186
+**Version:** 1.187
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.187 — conversational presentation R3 content increment:** Uses the existing `initialVisibleCount` field for two more producers. The hiring guide is reordered by importance (licensing and insurance, itemized written estimates, signed contract lead; references, permits, warranty/subcontractors follow) with the rest behind "Show 3 more", and offers no continuation because no registered capability can be launched from it with correct targeting. Renovation readiness collapses only "Other open items" (initial five); blocking items always show. The monthly routine stays fully visible. The renovation checklist's 20-items-delivered cap versus its reported count is unchanged and remains open. See `docs/architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_2_INVENTORY.md` §9.
 
 **Revision 1.186 — conversational presentation Phase 2 closed with no new contract:** The Phase 2 inventory found no second-producer need for a new response field beyond Phase 1's `initialVisibleCount`. Two corrections shipped through existing contracts: seasonal next-steps cards now honor each action's declared `style` (so a card whose producer declares no primary action shows no filled button; workflow receipts remain a separate positional-style exception), and the winter plan and the home's recorded seasonal checklist share a seasonal-specific lead sentence that names the leading tasks instead of saying "the first N" (never quoting an internal-key-like title). Hiring-guide, monthly-routine and renovation disclosure decisions are recorded and not implemented. See `docs/architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_2_INVENTORY.md`.
 

@@ -1,7 +1,7 @@
 # Ask Cozy — Conversational Presentation, Phase 2 Inventory
 
 **Date:** October 6, 2026
-**Status:** Inventory complete and reviewed (October 6, 2026). Revision 2 incorporates the review: R1 and the narrowed seasonal wording fix are implemented (§8); R3 is a recorded product decision, not implemented; R4 is a recorded decision. Phase 2 closes with **no new contract**.
+**Status:** Inventory complete and reviewed (October 6, 2026). Revision 2 incorporates the review: R1 and the narrowed seasonal wording fix are implemented (§8); R3 was implemented as a separate content increment (§9); R4 is a recorded decision. Phase 2 closes with **no new contract**.
 **Plan:** [`ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md`](ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md) §5
 **Inputs:** [Phase 1 audit](ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_1_AUDIT.md) §9.5 (shipped as `11233b57`), FRD v1.185 Appendix C.11
 **Method:** `AUDIT_METHODOLOGY.md`. Labels: **[Executed]** ran and observed, **[Code-traced]** read not run, **[Inferred]** extrapolated (none is relied on). Searches are scoped to the directories named; "none found" means none found there.
@@ -42,7 +42,7 @@ So **the need exists in at least two more producers**, which justifies keeping t
 - They **cannot be merged by changing one line.** `reconcileResultView` forces `visibleCounts[section.id]` to at least 5 for every section (`resultViewState.ts:94`) and the hydrator accepts only 5–100 (`:37`). A declared count of 3 would be raised to 5 by reconciliation. Unifying them is a view-state design change, not an adoption.
 - Decision recommended: leave plan-layout disclosure local and record it (R4).
 
-Decisions recorded for the adoption candidates (review, October 6, 2026; **not implemented**, a separately approved content increment):
+Decisions recorded for the adoption candidates (review, October 6, 2026; implemented in §9):
 
 - **Hiring guide.** Its six items are authored in an order, not ranked by importance, so setting `initialVisibleCount: 3` alone would imply a priority nobody chose. Disclosure requires **reordering** the lead set first. Recommended lead three: (1) check licensing and insurance, (2) get itemized written estimates, (3) put scope, price, schedule, payment and changes in a signed contract. That moves the contract/payment item up; references, permits and warranty/subcontractor checks sit under "Show 3 more". A continuation is added only if it launches a registered, relevant capability with correct targeting (for example quote comparison); otherwise no continuation is acceptable.
 - **Monthly routine.** Stays fully visible and does **not** use `initialVisibleCount`: five short, equally relevant checks performed as one routine; hiding two would imply a priority the producer does not own.
@@ -134,7 +134,7 @@ Other places that rebuild `GROUPED_LIST` sections: `askResultSynthesis.service.t
 | --- | --- | --- |
 | **R1** | `SeasonalNextSteps` honors each action's declared `style` (PRIMARY, SECONDARY, QUIET pass through; a card with no primary action is valid). `CalmReceipt` stays a separate positional-style exception | **Approved and implemented** (§8) |
 | **R2** (narrowed) | A seasonal-specific pure lead helper shared by the winter plan and the recorded seasonal checklist, naming the leading tasks. Home Habit Coach unchanged. No generic helper | **Approved as narrowed and implemented** (§8) |
-| **R3** | Hiring guide: reorder the lead three, then `initialVisibleCount: 3`; continuation only if it launches a registered relevant capability. Monthly routine: no disclosure. Renovation: "Other open items" only, initial five; the 20-delivered truncation is separate | **Decided, not implemented**; a separately approved content increment |
+| **R3** | Hiring guide: reorder the lead three, then `initialVisibleCount: 3`; continuation only if it launches a registered relevant capability. Monthly routine: no disclosure. Renovation: "Other open items" only, initial five; the 20-delivered truncation is separate | **Approved and implemented** as the R3 content increment (§9) |
 | **R4** | Plan-layout disclosure stays local; persisted `ResultView.visibleCounts` assumes a floor of five and record-list behavior, and unifying would need hydration-validation and reconciliation changes, a precedence rule between producer defaults and saved user state, old view-state checks, and a persistence-scope decision (per result, session or execution), with no demonstrated homeowner problem | **Approved** (record only) |
 
 Phase 2 closes with **no new contract**: after R1 and the narrowed seasonal wording fix, no schema change beyond Phase 1's `initialVisibleCount` is required.
@@ -179,3 +179,28 @@ Absolute-language grep over this document (`never|always|none|zero|nothing|fully
 | Frontend `next build` | compiled successfully | Static |
 
 **Not run:** Playwright, browser, services, database. Pixel-level appearance of the unfilled next-steps cards is unverified.
+
+## 9. R3 content increment (October 6, 2026)
+
+**Changed**
+
+- `support/hiringGuide.ts`: items reordered by importance to the approved lead three (`license-insurance`, `written-estimates`, `contract-payment`), then `references`, `permits`, `warranty-subs`; the section declares `initialVisibleCount: 3` and is titled "Most important first"; the summary says which three checks matter most. Item ids and descriptions are unchanged, so the starter, stored executions and tests keyed by id are unaffected.
+- `handlers/capitalPlanning.handler.ts`: the renovation readiness "Other open items" section declares `initialVisibleCount: 5`; "Blocking" declares none and always shows in full.
+- Monthly routine: **no change** (already fully visible, five items; asserted by a test so a future edit does not add a boundary by accident).
+- Tests: hiring guide order, boundary, summary and no-continuation; renovation boundary on the non-blocking group only; the delivery-cap behavior documented by a test; monthly routine fully visible; a frontend case that collapses only the declaring section and a third plan id (`renovation-readiness-items`) for the generic disclosure.
+
+**Hiring-guide continuation: none.** The decision allowed a continuation only if it launches a registered, relevant capability with correct targeting. The candidates do not qualify [Code-traced, `askOperationRegistry.ts`]: `QUOTE_COMPARISON_REVIEW` requires a `QUOTE` target entity (`askEntityResolution.ts:37`) and has a material-decision safety class, and `QUOTE_COMPARISON_CREATE` is a contributor-floor write, which a viewer-floor read-only guide must not offer. A guide with no continuation of its own is the accepted outcome; response-level starters are unchanged.
+
+**Still open, deliberately not changed:** the renovation producer delivers at most 20 items per group while `count` can be larger; "Show N more" reveals only delivered items and nothing tells the homeowner more exist. A test pins the current behavior (count 30, 20 delivered). It needs honest truncation copy or paging as its own change.
+
+**Validation run**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| Backend `node --test`: renovation, hiring guide, home basics, trust architecture, exact-four, startup registry, interaction coverage matrix, checklist layout | 89 pass, 0 fail | Executed |
+| Backend `node --test`: hiring guide, checklist layout, renovation ring, Phase 1 suites | 26 pass, 0 fail | Executed |
+| Backend `npm run typecheck` | clean | Executed |
+| Frontend `jest src/components/ask src/features/ask` | 580 pass, 5 fail: the same `maintenanceShelves` (4) and `displayPatterns` (1) failures as without this work | Component-tested |
+| Frontend `next build` | not re-run: no frontend source changed in this increment (tests only); last build was after the R1 change | n/a |
+
+**Not run:** Playwright, browser, services, database. How the collapsed renovation group reads at narrow width is unverified.

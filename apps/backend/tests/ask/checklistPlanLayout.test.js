@@ -64,3 +64,29 @@ test('renovation readiness: blocking items are the urgent group, numbering runs 
   assert.deepEqual(other.meta, ['Open']);
   assert.equal(other.detail, undefined, 'no facts recorded, so nothing opens');
 });
+
+// Conversational presentation R3: only the non-blocking group collapses; blocking items always show; the delivery cap is a separate matter.
+test('renovation readiness: "Other open items" declares an initial visible count of five and "Blocking" declares none', async () => {
+  items = [item('b1'), item('b2'), ...Array.from({ length: 8 }, (_, index) => item(`o${index + 1}`, { isBlocking: false }))];
+  const block = list(await capabilityInvoke('RENOVATION_PERMIT_READINESS', { userId: 'u1', propertyId: 'p1', message: 'Is my kitchen remodel ready to start?' }), 'renovation-readiness-items');
+  AskPresentationBlockSchema.parse(block);
+  const [blocking, other] = block.sections;
+  assert.equal(blocking.initialVisibleCount, undefined);
+  assert.equal(other.initialVisibleCount, 5);
+  assert.deepEqual([blocking.items.length, other.items.length], [2, 8]);
+});
+
+test('renovation readiness: the disclosure field does not touch the 20-item delivery cap, so a group larger than that still reports its real count', async () => {
+  items = Array.from({ length: 30 }, (_, index) => item(`o${index + 1}`, { isBlocking: false }));
+  const block = list(await capabilityInvoke('RENOVATION_PERMIT_READINESS', { userId: 'u1', propertyId: 'p1', message: 'Is my kitchen remodel ready to start?' }), 'renovation-readiness-items');
+  const [other] = block.sections;
+  assert.equal(other.count, 30);
+  assert.equal(other.items.length, 20, 'at most 20 are delivered; "Show more" can only reveal these (the truncation is a separate, open issue)');
+  assert.equal(other.initialVisibleCount, 5);
+});
+
+test('monthly routine: five equally relevant checks stay fully visible (no disclosure boundary)', () => {
+  const [section] = list(buildHomeBasicsResult('MONTHLY_ROUTINE'), 'home-basics-items').sections;
+  assert.equal(section.items.length, 5);
+  assert.equal(section.initialVisibleCount, undefined);
+});

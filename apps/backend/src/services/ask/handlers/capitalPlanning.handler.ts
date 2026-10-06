@@ -256,7 +256,9 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
     const otherItems = open.filter((item) => !item.isBlocking).slice(0, 20).map((item) => renovationItem(item, false));
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'renovation-readiness-items', title: 'Readiness checklist', description: 'Blocking state is owned by the canonical renovation scope, requirement, compliance, quote, schedule, and evidence records.', sections: [
       { id: 'blocking', title: 'Blocking', caption: 'These stop the work from starting until they are satisfied or acknowledged.', count: blockers.length, items: blockingItems },
-      { id: 'other-open', title: 'Other open items', count: Math.max(0, open.length - blockers.length), items: otherItems },
+      // Only the non-blocking group is collapsed (initialVisibleCount, local expand/collapse): blocking items always show in full. The count above
+      // the delivered items is unchanged and is NOT resolved by this: at most 20 items are delivered per group, so "Show more" never reaches the rest.
+      { id: 'other-open', title: 'Other open items', count: Math.max(0, open.length - blockers.length), initialVisibleCount: 5, items: otherItems },
     ].filter((section) => section.count > 0), actions: [] });
   }
   blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });

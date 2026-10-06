@@ -64,3 +64,20 @@ test('starter: ONE typed CURATED_STARTER candidate (a single strong outcome), re
   assert.deepEqual([...exactFour.PRODUCER_SLOT_GRANTS[STARTER_HIRING_GUIDE_PRODUCER_ID].allowed], ['CURATED_STARTER']);
   assert.deepEqual(exactFour.dismissalReasonsFor('HIRING_GUIDE', 'REVIEW_HIRING_CHECKLIST'), ['NOT_NOW', 'NOT_RELEVANT']);
 });
+
+
+// Conversational presentation R3 (owner-approved lead set, October 6, 2026).
+test('hiring guide: ordered by importance with the approved lead three, the rest behind a producer-declared boundary, and no invented continuation', () => {
+  const result = buildHiringGuideResult();
+  const [section] = result.blocks.find((block) => block.id === 'hiring-guide-items').sections;
+  assert.deepEqual(section.items.map((item) => item.id), ['license-insurance', 'written-estimates', 'contract-payment', 'references', 'permits', 'warranty-subs']);
+  assert.equal(section.initialVisibleCount, 3);
+  assert.equal(section.count, 6);
+  assert.deepEqual(section.items.map((item) => item.countLabel), ['1', '2', '3', '4', '5', '6']);
+  assert.match(result.blocks[0].body, /^Three checks matter most before you hire: licensing and insurance, itemized written estimates, and a signed contract\./);
+  for (const block of result.blocks) assert.doesNotThrow(() => AskPresentationBlockSchema.parse(block), block.id);
+  // No registered capability can be launched from here with correct targeting (quote review needs a QUOTE entity; quote creation is a
+  // contributor write), so the guide offers no continuation of its own rather than an invented one.
+  assert.equal(result.blocks.some((block) => (block.actions ?? []).length > 0), false);
+  assert.equal(result.captureRequests ?? undefined, undefined);
+});

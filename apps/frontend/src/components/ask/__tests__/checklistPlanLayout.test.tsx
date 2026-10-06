@@ -24,7 +24,7 @@ const sixItems = (id: string, initialVisibleCount?: number): ListBlock => ({
 
 describe('a plan section whose producer declares an initial visible count', () => {
   // The producer declares the boundary; the renderer only expands and collapses. Two different plan ids prove it is not tied to one block id.
-  it.each(['home-basics-items', 'hiring-guide-items'])('%s shows only the declared items first and reveals the rest with an accessible control', (id) => {
+  it.each(['home-basics-items', 'hiring-guide-items', 'renovation-readiness-items'])('%s shows only the declared items first and reveals the rest with an accessible control', (id) => {
     const { container } = renderBlock(sixItems(id, 3));
     expect(container.querySelectorAll('[data-seasonal-task]')).toHaveLength(3);
     expect(container.querySelector('[data-seasonal-task="item-4"]')).toBeNull();
@@ -37,6 +37,21 @@ describe('a plan section whose producer declares an initial visible count', () =
     expect(less).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(less);
     expect(container.querySelectorAll('[data-seasonal-task]')).toHaveLength(3);
+  });
+
+  it('collapses only the section that declares a count: a sibling section without the field shows every item', () => {
+    const value = {
+      type: 'GROUPED_LIST', id: 'renovation-readiness-items', title: 'Readiness checklist', actions: [], filters: [],
+      sections: [
+        { id: 'blocking', title: 'Blocking', count: 2, items: ['b1', 'b2'].map((id, index) => ({ id, title: id, description: null, meta: [], countLabel: String(index + 1), tone: 'CAUTION' })) },
+        { id: 'other-open', title: 'Other open items', count: 8, initialVisibleCount: 5, items: Array.from({ length: 8 }, (_, index) => ({ id: `o${index + 1}`, title: `o${index + 1}`, description: null, meta: [], countLabel: String(index + 3), tone: 'DEFAULT' })) },
+      ],
+    } as unknown as ListBlock;
+    const { container } = renderBlock(value);
+    expect(container.querySelectorAll('[data-seasonal-section="blocking"] [data-seasonal-task]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-seasonal-section="other-open"] [data-seasonal-task]')).toHaveLength(5);
+    expect(screen.getAllByRole('button', { name: /show (?:\d+ more|fewer)/i })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Show 3 more' })).toBeInTheDocument();
   });
 
   it('the control is a real button, so Enter and Space activate it through the browser default', () => {
