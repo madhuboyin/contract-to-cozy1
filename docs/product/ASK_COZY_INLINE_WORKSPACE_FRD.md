@@ -1451,6 +1451,12 @@ Reference: the product mock for "What should I do to get ready for next season?"
 - **Still open.** Completing, snoozing and dismissing a checklist item still has no Ask operation (a task linked to Maintenance is completed there); this answer is read-only, as before.
 - **Status.** `askSeasonalMaintenance.test.js` (14), the e2e fixture regenerated from the real builder, the two seasonal e2e specs rewritten, and the acceptance fixture's shell routes moved into `installAskApi` so the Ask e2e specs load. Not verified against a real backend.
 
+## Appendix C.6 — Home Habits in the plan layout (October 5, 2026)
+
+- **List.** `HOME_HABITS` now uses the layout of Appendix C.4: an intro with an icon, **Start with these** (habits past their suggested date), **Up next**, **In your maintenance routine** and **Snoozed**, numbered across groups. Each card shows cadence, difficulty, time and date chips, its own **Review** button (the inline review, `CONVERSATION_CONTINUE`) and a separate toggle that opens its facts. A next-steps card offers **Review the first habit** and **Show my maintenance tasks**. The raw suggestion strings are gone; the empty state still carries its one page link.
+- **Review.** One habit is an intro, a compact fact sheet (details, recent activity), the disclosure card, and two next-step cards (the first three actions, then "If this is not for you right now" with skip, stop suggesting and back, none filled). The fact sheet (`FactSheetResultList`) replaces the generic grouped list, which rendered every fact as its own large card and buried the actions; the seasonal task details use it too.
+- **Status.** `homeHabitsPlan.test.tsx`, updated habit backend tests, the Playwright spec `homeHabitsPlan.spec.ts` against fixtures generated from the real handler. Not verified against a real backend.
+
 ## Appendix D — Capability-card audit scope and implementation sequence
 
 The source inventory is `ALL_TOOL_CAPABILITY_DEFINITIONS` in the canonical registry, not the two cards in the reported screenshot. The groups below total 48 registered capabilities as of September 19, 2026. These IDs define the exhaustive **audit population**, not a claim that each capability is shown simultaneously or that each full workflow has been independently verified. `quote-comparison` is workflow-only and must be reviewed at its applicable Ask entry point; the other 47 remain subject to actual availability/readiness policy. A `CATALOG_ONLY` recommendation mode does not waive inline requirements when its card is rendered in Ask.

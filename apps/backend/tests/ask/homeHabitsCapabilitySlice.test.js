@@ -80,22 +80,31 @@ test('habits keep the coach\'s ranked order, split into up next, in your routine
   assert.equal(result.blocks[0].title, '3 habits to work on, 1 past their suggested date');
   assert.match(result.blocks[0].body, /1 already in your maintenance routine; 1 snoozed/);
   const list = result.blocks.find((block) => block.id === 'home-habits-items');
+  // Habits past their suggested date lead; the rest follow in the coach's order, then the routine and snoozed ones.
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.id)]), [
-    ['Up next', ['due', 'next', 'woke']],
+    ['Start with these', ['due']],
+    ['Up next', ['next', 'woke']],
     ['In your maintenance routine', ['routine']],
     ['Snoozed', ['snoozed']],
   ]);
+  assert.deepEqual(list.sections.flatMap((section) => section.items.map((row) => row.countLabel)), ['1', '2', '3', '4', '5'], 'numbered across groups');
+  assert.equal(list.sections[0].items[0].tone, 'CAUTION');
   const [due] = list.sections[0].items;
   assert.equal(due.title, 'Habit due');
   assert.equal(due.description, 'Why due');
-  assert.deepEqual(due.meta, ['Monthly', 'hvac', 'About 10 min', 'easy', 'Suggested for Sep 20, 2026']);
+  assert.deepEqual(due.meta, ['Monthly', 'easy', 'About 10 min', 'Suggested for Sep 20, 2026']);
+  assert.doesNotMatch(due.detail, /Why it was suggested/, 'the reason is already on the card');
+  assert.match(due.detail, /How often: Monthly/);
   // The review opens inside Ask (see homeHabitReviewWrites.test.js); a row never links to the desktop page.
   assert.equal(due.href, undefined);
-  const [routine] = list.sections[1].items;
+  const [routine] = list.sections[2].items;
   assert.equal(routine.status, 'IN_ROUTINE');
   assert.ok(routine.meta.includes('Next due Oct 1, 2026'), routine.meta.join('|'));
-  assert.ok(routine.meta.some((entry) => entry.startsWith('Last done ')), routine.meta.join('|'));
-  assert.ok(list.sections[2].items[0].meta.includes('Snoozed until Oct 5, 2026'));
+  assert.match(routine.detail, /Last done: Sep 1, 2026/);
+  assert.ok(list.sections[3].items[0].meta.includes('Snoozed until Oct 5, 2026'));
+  const next = result.blocks.find((block) => block.id === 'home-habits-next');
+  assert.deepEqual(next.actions.map((action) => [action.id, action.operationId, action.entityId ?? null]), [['habits-review-first', 'HOME_HABITS', 'due'], ['habits-show-maintenance', 'MAINTENANCE_STATUS', null]]);
+  assert.equal(JSON.stringify(result).includes('/tools/home-habit-coach'), false);
 });
 
 test('more habits than shown are disclosed; an empty coach is not an all-clear', () => {

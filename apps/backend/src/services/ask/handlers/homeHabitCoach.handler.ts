@@ -74,6 +74,18 @@ export const homeHabitContextVersion = (habit: any): string => createHash('sha25
   habit.updatedAt ? new Date(habit.updatedAt).toISOString() : '',
 ].join(':')).digest('hex');
 
+const showMaintenanceAction = () => ({
+  id: 'habits-show-maintenance', label: 'Show my maintenance tasks', interactionType: 'START_WORKFLOW' as const,
+  message: 'What maintenance tasks are coming due?', operationId: 'MAINTENANCE_STATUS', style: 'SECONDARY' as const,
+});
+
+const aboutHabitsBoundary = (id: string, body: string): AskPresentationBlock => ({
+  type: 'BOUNDARY', id, title: 'About these habits', body, severity: 'INFO', suggestions: [],
+});
+
+// The habits list in the plan layout shared with the seasonal answers (see SeasonalPlanResultList): habits whose suggested date has passed
+// first, then the rest in the coach's ranked order, then the routine and snoozed ones; numbered across groups, each opening to its facts
+// and to its inline review. Nothing links to the desktop page except the empty state, where generating habits is the only way forward.
 export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now: Date = new Date()): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-habit-coach`;
   const habits: any[] = view.habits ?? [];
@@ -82,9 +94,13 @@ export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now
   const adopted = habits.filter((habit) => habit.linkedMaintenanceTaskId);
   const snoozed = habits.filter((habit) => !habit.linkedMaintenanceTaskId && snoozedNow(habit));
   const upNext = habits.filter((habit) => !habit.linkedMaintenanceTaskId && !snoozedNow(habit));
-  const pastSuggested = upNext.filter((habit) => (asDate(habit.dueAt)?.getTime() ?? Infinity) < now.getTime()).length;
+  const isPast = (habit: any) => (asDate(habit.dueAt)?.getTime() ?? Infinity) < now.getTime();
+  const start = upNext.filter(isPast);
+  const later = upNext.filter((habit) => !isPast(habit));
   const title = (habit: any) => habit.titleOverride || habit.habitTemplate?.title || 'Home habit';
-  const row = (habit: any) => {
+  let number = 0;
+  const row = (habit: any, urgent: boolean) => {
+    number += 1;
     const template = habit.habitTemplate ?? {};
     const due = habit.linkedMaintenanceTaskId ? asDate(habit.routineAdherence?.nextDueDate) : asDate(habit.dueAt);
     // A routine task really is overdue. A suggestion the homeowner never took on is only past the date it was suggested for.
@@ -93,20 +109,31 @@ export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now
         ? `${due.getTime() < now.getTime() ? 'Overdue since' : 'Next due'} ${humanDate(due)}`
         : `Suggested for ${humanDate(due)}`
       : null;
+    const lastDone = habit.routineAdherence?.lastCompletedDate ? `Last done ${humanDate(asDate(habit.routineAdherence.lastCompletedDate))}` : null;
+    const snoozeLabel = snoozedNow(habit) && habit.snoozedUntil ? `Snoozed until ${humanDate(asDate(habit.snoozedUntil))}` : null;
     return {
       id: habit.id,
       title: title(habit),
       description: habit.reasonSummary || habit.descriptionOverride || template.shortDescription || null,
+      condition: null,
       entityType: HOME_HABIT_ENTITY_TYPE,
+      countLabel: String(number),
+      tone: urgent ? 'CAUTION' as const : 'DEFAULT' as const,
       meta: [
         ...(habit.reminderSchedule?.cadenceLabel ? [habit.reminderSchedule.cadenceLabel] : []),
-        ...(template.category ? [readableCode(template.category)] : []),
-        ...(template.estimatedMinutes ? [`About ${template.estimatedMinutes} min`] : []),
         ...(template.difficulty ? [readableCode(template.difficulty)] : []),
-        ...(dueLabel ? [dueLabel] : []),
-        ...(snoozedNow(habit) && habit.snoozedUntil ? [`Snoozed until ${humanDate(asDate(habit.snoozedUntil))}`] : []),
-        ...(habit.routineAdherence?.lastCompletedDate ? [`Last done ${humanDate(asDate(habit.routineAdherence.lastCompletedDate))}`] : []),
+        ...(template.estimatedMinutes ? [`About ${template.estimatedMinutes} min`] : []),
+        ...[snoozeLabel ?? dueLabel].filter((value): value is string => Boolean(value)),
       ],
+      // What the card opens to, one "Label: value" per line (the same facts the inline review lists; the reason is already on the card).
+      detail: [
+        ['How often', habit.reminderSchedule?.cadenceLabel],
+        ['Time it takes', template.estimatedMinutes ? `About ${template.estimatedMinutes} minutes` : null],
+        ['Area', template.category ? readableCode(template.category) : null],
+        [habit.linkedMaintenanceTaskId ? 'Next due' : 'Suggested for', due ? humanDate(due) : null],
+        ['Last done', lastDone ? lastDone.replace('Last done ', '') : null],
+        ['Tip', template.tipText],
+      ].filter(([, value]) => Boolean(value)).map(([label, value]) => `${label}: ${value}`).join('\n') || null,
       status: habit.linkedMaintenanceTaskId ? 'IN_ROUTINE' : String(habit.status),
       // The review opens inside Ask; the page has no per-habit link, so a row never navigates away.
       actions: [{
@@ -115,18 +142,25 @@ export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now
       }],
     };
   };
+  const group = (id: string, groupTitle: string, caption: string, records: any[], urgent = false) => records.length
+    ? [{ id, title: groupTitle, caption, count: records.length, items: records.map((habit) => row(habit, urgent)) }]
+    : [];
   const sections = [
-    { id: 'home-habits-up-next', title: 'Up next', rows: upNext },
-    { id: 'home-habits-routine', title: 'In your maintenance routine', rows: adopted },
-    { id: 'home-habits-snoozed', title: 'Snoozed', rows: snoozed },
-  ].filter((section) => section.rows.length).map((section) => ({ id: section.id, title: section.title, count: section.rows.length, items: section.rows.map(row) }));
+    ...group('home-habits-start', 'Start with these', 'Their suggested date has already passed.', start, true),
+    ...group('home-habits-up-next', 'Up next', 'In the order the coach ranks them, each with why it was suggested.', later),
+    ...group('home-habits-routine', 'In your maintenance routine', 'Tracked as recurring maintenance tasks.', adopted),
+    ...group('home-habits-snoozed', 'Snoozed', 'They come back on their own when the snooze ends.', snoozed),
+  ];
+  const focusSentence = upNext.length
+    ? ` Here ${upNext.length === 1 ? 'is 1 habit' : `are ${upNext.length} habits`} to work on${start.length ? `, ${start.length} past their suggested date, so I would start there` : ''}.`
+    : '';
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'home-habits-summary',
     title: habits.length
-      ? `${upNext.length} habit${upNext.length === 1 ? '' : 's'} to work on${pastSuggested ? `, ${pastSuggested} past their suggested date` : ''}`
+      ? `${upNext.length} habit${upNext.length === 1 ? '' : 's'} to work on${start.length ? `, ${start.length} past their suggested date` : ''}`
       : 'No home habits are suggested yet',
     body: habits.length
-      ? `Ranked by the Home Habit Coach for this home${adopted.length ? `; ${adopted.length} already in your maintenance routine` : ''}${snoozed.length ? `; ${snoozed.length} snoozed` : ''}. Choose Review on a habit to see why it was suggested and what you can do with it.`
+      ? `Ranked by the Home Habit Coach for this home${adopted.length ? `; ${adopted.length} already in your maintenance routine` : ''}${snoozed.length ? `; ${snoozed.length} snoozed` : ''}.${focusSentence} Choose Review on a habit to see why it was suggested and what you can do with it.`
       : 'The Home Habit Coach suggests small routines from your home\'s systems, age, climate and season. Open it to generate suggestions; this does not mean nothing needs care.',
     tone: 'DEFAULT',
     // Generating habits is not an Ask action, so only the empty state needs the page; with habits listed it would only repeat them.
@@ -138,16 +172,22 @@ export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now
   if (sections.length) {
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'home-habits-items', title: 'Your home habits', description: 'In the order the coach ranks them, each with why it was suggested.', sections, actions: [] });
   }
-  blocks.push({
-    type: 'BOUNDARY', id: 'home-habits-boundary', title: 'Suggested routines, not an inspection',
-    body: 'Habits are suggested from what is recorded about this home. They are not a full maintenance schedule, and they cannot see wear, leaks or damage.',
-    severity: 'INFO', suggestions: [],
-  });
+  blocks.push(aboutHabitsBoundary('home-habits-boundary', 'Habits are suggested from what is recorded about this home. They are not a full maintenance schedule, and they cannot see wear, leaks or damage.'));
+  const first = (start[0] ?? later[0]) as any;
+  if (first) {
+    blocks.push({
+      type: 'SUMMARY', id: 'home-habits-next', title: 'What would you like to do next?', body: 'Open a habit to add it to your routine, mark it done, or snooze it. Nothing changes until you confirm.', tone: 'DEFAULT',
+      actions: [{
+        id: 'habits-review-first', label: 'Review the first habit', interactionType: 'START_WORKFLOW', message: `Review the home habit "${title(first)}".`,
+        operationId: 'HOME_HABITS', entityType: HOME_HABIT_ENTITY_TYPE, entityId: first.id, style: 'PRIMARY',
+      }, showMaintenanceAction()],
+    });
+  }
   return {
     status: view.hasMore ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: habits.length ? (pastSuggested ? 'HOME_HABITS_OVERDUE' : 'HOME_HABITS_REVIEWED') : 'HOME_HABITS_EMPTY',
+    reasonCode: habits.length ? (start.length ? 'HOME_HABITS_OVERDUE' : 'HOME_HABITS_REVIEWED') : 'HOME_HABITS_EMPTY',
     blocks,
-    suggestions: ['What maintenance is due?', 'Show my status board'],
+    suggestions: [],
   };
 }
 
@@ -213,13 +253,12 @@ export async function homeHabitReviewResult(userId: string, propertyId: string, 
     message: HABIT_ACTION_MESSAGES[action], operationId: 'HOME_HABIT_UPDATE', entityType: HOME_HABIT_ENTITY_TYPE, entityId: habit.id,
     style: (index === 0 ? 'PRIMARY' : 'SECONDARY') as 'PRIMARY' | 'SECONDARY',
   });
-  // A block carries at most three actions (the response schema's cap), so the first three sit under the habit and the
-  // rest, with the way back, under "If this is not for you right now".
+  // A block carries at most three actions (the response schema's cap), so the first three are the next steps and the rest, with the way
+  // back, sit in a second card, "If this is not for you right now".
   const actions = [...allowed.map(habitAction), habitsBackAction()];
   const fitsOneBlock = actions.length <= 3;
   const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: `home-habit-review-${habit.id}`, title, body: reason, tone: 'DEFAULT',
-    actions: fitsOneBlock ? actions : actions.slice(0, 3),
+    type: 'SUMMARY', id: `home-habit-review-${habit.id}`, title, body: reason, tone: 'DEFAULT', actions: [],
   }];
   if (facts.length) {
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'home-habit-review-facts', title: 'About this habit', actions: [], sections: [{ id: 'habit-facts', title: 'Details', count: facts.length, items: facts }] });
@@ -234,14 +273,14 @@ export async function homeHabitReviewResult(userId: string, propertyId: string, 
   } else if (!canChange) {
     blocks.push({ type: 'LIMITATION', id: 'home-habit-review-role', title: 'View only', body: 'A contributor or owner can add this habit to the routine, mark it done, snooze it, or stop suggesting it.', severity: 'INFO' });
   }
+  blocks.push(aboutHabitsBoundary('home-habit-review-boundary', 'Habits are suggested from what is recorded about this home. Nothing changes until you review and confirm an action.'));
+  blocks.push({
+    type: 'SUMMARY', id: 'home-habit-review-next', title: 'What would you like to do?',
+    body: allowed.length ? 'Each of these only opens a confirmation.' : 'You can go back to the list.', tone: 'DEFAULT', actions: fitsOneBlock ? actions : actions.slice(0, 3),
+  });
   if (!fitsOneBlock) {
     blocks.push({ type: 'SUMMARY', id: 'home-habit-review-more', title: 'If this is not for you right now', body: 'Skip it for now, or stop it being suggested. Either one only opens a confirmation.', tone: 'DEFAULT', actions: actions.slice(3) });
   }
-  blocks.push({
-    type: 'BOUNDARY', id: 'home-habit-review-boundary', title: 'Suggested routine, not an inspection',
-    body: 'Habits are suggested from what is recorded about this home. Nothing changes until you review and confirm an action.',
-    severity: 'INFO', suggestions: [],
-  });
   return {
     status: 'ANSWERED', reasonCode: 'HOME_HABIT_REVIEWED', contextVersion: homeHabitContextVersion(habit), blocks,
     suggestions: [],

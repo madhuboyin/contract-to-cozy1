@@ -124,7 +124,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PAST_HAZARD_EXPOSURE: new Set(['open-home-risk-replay']),
   HOME_STATUS_BOARD: new Set(['open-status-board']),
   // The review's declared actions (each opens a confirmation) and its way back to the list.
-  HOME_HABITS: new Set(['open-home-habit-coach', 'habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list']),
+  HOME_HABITS: new Set(['open-home-habit-coach', 'habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list', 'habits-review-first', 'habits-show-maintenance']),
   HOME_HABIT_UPDATE: new Set(['habits-back-to-list']),
   HOME_DIGITAL_WILL: new Set(['open-home-digital-will']),
   PLANT_CARE_OUTLOOK: new Set(['open-plant-advisor']),

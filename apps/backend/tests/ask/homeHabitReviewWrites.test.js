@@ -124,11 +124,13 @@ test('the review explains the habit and offers exactly the actions the service w
   assert.equal(result.status, 'ANSWERED');
   assert.equal(result.blocks[0].title, 'Test Smoke and CO Detectors');
   assert.match(result.blocks[0].body, /monthly test/);
-  // A block carries at most three actions, so the rest sit in a second block.
-  assert.deepEqual(result.blocks[0].actions.map((action) => action.id), ['habit-adopt', 'habit-complete', 'habit-snooze']);
+  // The intro carries no actions; the next steps are a card of at most three (the response schema's cap) and the rest sit in a second card.
+  assert.deepEqual(result.blocks[0].actions, []);
+  const nextCard = result.blocks.find((block) => block.id === 'home-habit-review-next');
+  assert.deepEqual(nextCard.actions.map((action) => action.id), ['habit-adopt', 'habit-complete', 'habit-snooze']);
   const more = result.blocks.find((block) => block.id === 'home-habit-review-more');
   assert.deepEqual(more.actions.map((action) => action.id), ['habit-skip', 'habit-dismiss', 'habits-back-to-list']);
-  for (const action of [...result.blocks[0].actions, ...more.actions].filter((candidate) => candidate.id !== 'habits-back-to-list')) {
+  for (const action of [...nextCard.actions, ...more.actions].filter((candidate) => candidate.id !== 'habits-back-to-list')) {
     assert.equal(action.operationId, 'HOME_HABIT_UPDATE');
     assert.equal(action.entityType, 'HOME_HABIT');
     assert.equal(action.entityId, 'h1');
@@ -154,14 +156,14 @@ test('review actions follow the live status, and a habit in the routine offers n
 test('a viewer sees the review but no actions; a missing habit is a boundary, not an error', async () => {
   role = 'VIEWER';
   const viewer = await review();
-  assert.deepEqual(viewer.blocks[0].actions.map((action) => action.id), ['habits-back-to-list']);
+  assert.deepEqual(viewer.blocks.find((block) => block.id === 'home-habit-review-next').actions.map((action) => action.id), ['habits-back-to-list']);
   assert.ok(viewer.blocks.some((block) => block.id === 'home-habit-review-role'));
   role = 'CONTRIBUTOR';
   exists = false;
   const gone = await review();
   assert.equal(gone.reasonCode, 'HOME_HABIT_NOT_FOUND');
   const routine = await (async () => { exists = true; live = baseHabit({ linkedMaintenanceTaskId: 't1', routineAdherence: { nextDueDate: '2026-10-01T00:00:00.000Z', lastCompletedDate: null } }); return review(); })();
-  assert.deepEqual(routine.blocks[0].actions.map((action) => action.id), ['habits-back-to-list']);
+  assert.deepEqual(routine.blocks.find((block) => block.id === 'home-habit-review-next').actions.map((action) => action.id), ['habits-back-to-list']);
   assert.ok(routine.blocks.some((block) => block.id === 'home-habit-review-routine'));
 });
 
@@ -268,6 +270,9 @@ test('the review actions, the receipt action and the empty-state link survive th
   const reviewed = validate('HOME_HABITS', await review());
   assert.deepEqual(reviewed.blocks.flatMap((block) => block.actions ?? []).map((action) => action.id), ['habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list']);
   assert.ok(reviewed.blocks.some((block) => block.id === 'home-habit-review-boundary'), 'the review boundary must be allowlisted');
+  const list = validate('HOME_HABITS', homeHabitsFromView({ habits: [baseHabit()], hasMore: false, nextCursor: null }, 'p1', NOW));
+  assert.deepEqual(list.blocks.flatMap((block) => block.actions ?? []).map((action) => action.id), ['habits-review-first', 'habits-show-maintenance'], 'the list\'s next steps must be allowlisted');
+  assert.ok(list.blocks.some((block) => block.id === 'home-habits-boundary'));
   const empty = validate('HOME_HABITS', homeHabitsFromView({ habits: [], hasMore: false, nextCursor: null }, 'p1', NOW));
   assert.deepEqual(empty.blocks[0].actions.map((action) => action.id), ['open-home-habit-coach']);
   const { result: receipt } = await confirm(await proposed('ADOPT'));

@@ -1396,6 +1396,437 @@ function seasonalPlanExecution() {
   };
 }
 
+// The Home Habit Coach list and one habit's review in the plan layout (Appendix C.6). Blocks are the real handler's output (homeHabitsFromView
+// and homeHabitReviewResult for five habits), pasted so the fixtures cannot drift.
+function homeHabitsExecution() {
+  const base = maintenanceExecution();
+  return { ...base, executionId: 'execution-home-habits', question: 'Show my home habits', viewState: null, blocks: [
+      {
+        "type": "SUMMARY",
+        "id": "home-habits-summary",
+        "title": "3 habits to work on, 2 past their suggested date",
+        "body": "Ranked by the Home Habit Coach for this home; 1 already in your maintenance routine; 1 snoozed. Here are 3 habits to work on, 2 past their suggested date, so I would start there. Choose Review on a habit to see why it was suggested and what you can do with it.",
+        "tone": "DEFAULT",
+        "actions": []
+      },
+      {
+        "type": "GROUPED_LIST",
+        "filters": [],
+        "id": "home-habits-items",
+        "title": "Your home habits",
+        "description": "In the order the coach ranks them, each with why it was suggested.",
+        "sections": [
+          {
+            "id": "home-habits-start",
+            "title": "Start with these",
+            "caption": "Their suggested date has already passed.",
+            "count": 2,
+            "items": [
+              {
+                "id": "h1",
+                "title": "Test Smoke and CO Detectors",
+                "description": "This is a monthly check worth adding to your routine.",
+                "condition": null,
+                "entityType": "HOME_HABIT",
+                "countLabel": "1",
+                "tone": "CAUTION",
+                "meta": [
+                  "Monthly",
+                  "easy",
+                  "About 10 min",
+                  "Suggested for Aug 18, 2026"
+                ],
+                "detail": "How often: Monthly\nTime it takes: About 10 minutes\nArea: safety\nSuggested for: Aug 18, 2026\nTip: Press and hold the test button.",
+                "status": "ACTIVE",
+                "actions": [
+                  {
+                    "id": "habit-review-h1",
+                    "label": "Review",
+                    "message": "Review the home habit \"Test Smoke and CO Detectors\".",
+                    "style": "SECONDARY",
+                    "interactionType": "CONVERSATION_CONTINUE",
+                    "operationId": "HOME_HABITS"
+                  }
+                ]
+              },
+              {
+                "id": "h2",
+                "title": "Check Under-Sink Connections for Leaks",
+                "description": "This is a monthly check worth adding to your routine.",
+                "condition": null,
+                "entityType": "HOME_HABIT",
+                "countLabel": "2",
+                "tone": "CAUTION",
+                "meta": [
+                  "Monthly",
+                  "easy",
+                  "About 10 min",
+                  "Suggested for Aug 18, 2026"
+                ],
+                "detail": "How often: Monthly\nTime it takes: About 10 minutes\nArea: plumbing\nSuggested for: Aug 18, 2026\nTip: Press and hold the test button.",
+                "status": "ACTIVE",
+                "actions": [
+                  {
+                    "id": "habit-review-h2",
+                    "label": "Review",
+                    "message": "Review the home habit \"Check Under-Sink Connections for Leaks\".",
+                    "style": "SECONDARY",
+                    "interactionType": "CONVERSATION_CONTINUE",
+                    "operationId": "HOME_HABITS"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "home-habits-up-next",
+            "title": "Up next",
+            "caption": "In the order the coach ranks them, each with why it was suggested.",
+            "count": 1,
+            "items": [
+              {
+                "id": "h3",
+                "title": "Inspect Dishwasher Door Seal",
+                "description": "This is a monthly check worth adding to your routine.",
+                "condition": null,
+                "entityType": "HOME_HABIT",
+                "countLabel": "3",
+                "tone": "DEFAULT",
+                "meta": [
+                  "Monthly",
+                  "easy",
+                  "About 5 min"
+                ],
+                "detail": "How often: Monthly\nTime it takes: About 5 minutes\nArea: appliance\nTip: Press and hold the test button.",
+                "status": "ACTIVE",
+                "actions": [
+                  {
+                    "id": "habit-review-h3",
+                    "label": "Review",
+                    "message": "Review the home habit \"Inspect Dishwasher Door Seal\".",
+                    "style": "SECONDARY",
+                    "interactionType": "CONVERSATION_CONTINUE",
+                    "operationId": "HOME_HABITS"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "home-habits-routine",
+            "title": "In your maintenance routine",
+            "caption": "Tracked as recurring maintenance tasks.",
+            "count": 1,
+            "items": [
+              {
+                "id": "h4",
+                "title": "Replace HVAC Air Filter",
+                "description": "This is a monthly check worth adding to your routine.",
+                "condition": null,
+                "entityType": "HOME_HABIT",
+                "countLabel": "4",
+                "tone": "DEFAULT",
+                "meta": [
+                  "Monthly",
+                  "easy",
+                  "About 10 min",
+                  "Next due Oct 1, 2026"
+                ],
+                "detail": "How often: Monthly\nTime it takes: About 10 minutes\nArea: safety\nNext due: Oct 1, 2026\nLast done: Sep 1, 2026\nTip: Press and hold the test button.",
+                "status": "IN_ROUTINE",
+                "actions": [
+                  {
+                    "id": "habit-review-h4",
+                    "label": "Review",
+                    "message": "Review the home habit \"Replace HVAC Air Filter\".",
+                    "style": "SECONDARY",
+                    "interactionType": "CONVERSATION_CONTINUE",
+                    "operationId": "HOME_HABITS"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "home-habits-snoozed",
+            "title": "Snoozed",
+            "caption": "They come back on their own when the snooze ends.",
+            "count": 1,
+            "items": [
+              {
+                "id": "h5",
+                "title": "Clean Refrigerator Coils",
+                "description": "This is a monthly check worth adding to your routine.",
+                "condition": null,
+                "entityType": "HOME_HABIT",
+                "countLabel": "5",
+                "tone": "DEFAULT",
+                "meta": [
+                  "Monthly",
+                  "easy",
+                  "About 10 min",
+                  "Snoozed until Oct 5, 2026"
+                ],
+                "detail": "How often: Monthly\nTime it takes: About 10 minutes\nArea: safety\nTip: Press and hold the test button.",
+                "status": "SNOOZED",
+                "actions": [
+                  {
+                    "id": "habit-review-h5",
+                    "label": "Review",
+                    "message": "Review the home habit \"Clean Refrigerator Coils\".",
+                    "style": "SECONDARY",
+                    "interactionType": "CONVERSATION_CONTINUE",
+                    "operationId": "HOME_HABITS"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "actions": []
+      },
+      {
+        "type": "BOUNDARY",
+        "id": "home-habits-boundary",
+        "title": "About these habits",
+        "body": "Habits are suggested from what is recorded about this home. They are not a full maintenance schedule, and they cannot see wear, leaks or damage.",
+        "severity": "INFO",
+        "suggestions": []
+      },
+      {
+        "type": "SUMMARY",
+        "id": "home-habits-next",
+        "title": "What would you like to do next?",
+        "body": "Open a habit to add it to your routine, mark it done, or snooze it. Nothing changes until you confirm.",
+        "tone": "DEFAULT",
+        "actions": [
+          {
+            "id": "habits-review-first",
+            "label": "Review the first habit",
+            "interactionType": "START_WORKFLOW",
+            "message": "Review the home habit \"Test Smoke and CO Detectors\".",
+            "operationId": "HOME_HABITS",
+            "entityType": "HOME_HABIT",
+            "entityId": "h1",
+            "style": "PRIMARY"
+          },
+          {
+            "id": "habits-show-maintenance",
+            "label": "Show my maintenance tasks",
+            "interactionType": "START_WORKFLOW",
+            "message": "What maintenance tasks are coming due?",
+            "operationId": "MAINTENANCE_STATUS",
+            "style": "SECONDARY"
+          }
+        ]
+      }
+    ] };
+}
+
+function homeHabitReviewExecution() {
+  const base = maintenanceExecution();
+  return { ...base, executionId: 'execution-home-habit-review', question: 'Review the home habit "Test Smoke and CO Detectors".', viewState: null, blocks: [
+      {
+        "type": "SUMMARY",
+        "id": "home-habit-review-h1",
+        "title": "Test Smoke and CO Detectors",
+        "body": "This is a monthly check worth adding to your routine.",
+        "tone": "DEFAULT",
+        "actions": []
+      },
+      {
+        "type": "GROUPED_LIST",
+        "filters": [],
+        "id": "home-habit-review-facts",
+        "title": "About this habit",
+        "actions": [],
+        "sections": [
+          {
+            "id": "habit-facts",
+            "title": "Details",
+            "count": 7,
+            "items": [
+              {
+                "id": "habit-fact-status",
+                "title": "Status",
+                "description": "Suggested",
+                "condition": null,
+                "meta": [],
+                "status": null,
+                "href": null
+              },
+              {
+                "id": "habit-fact-cadence",
+                "title": "How often",
+                "description": "Monthly",
+                "condition": null,
+                "meta": [],
+                "status": null,
+                "href": null
+              },
+              {
+                "id": "habit-fact-time",
+                "title": "Time it takes",
+                "description": "About 10 minutes",
+                "condition": null,
+                "meta": [],
+                "status": null,
+                "href": null
+              },
+              {
+                "id": "habit-fact-difficulty",
+                "title": "Difficulty",
+                "description": "easy",
+                "condition": null,
+                "meta": [],
+                "status": null,
+                "href": null
+              },
+              {
+                "id": "habit-fact-category",
+                "title": "Area",
+                "description": "safety",
+                "condition": null,
+                "meta": [],
+                "status": null,
+                "href": null
+              },
+              {
+                "id": "habit-fact-due",
+                "title": "Suggested for",
+                "description": "Aug 18, 2026",
+                "condition": null,
+                "meta": [],
+                "status": null,
+                "href": null
+              },
+              {
+                "id": "habit-fact-tip",
+                "title": "Tip",
+                "description": "Press and hold the test button.",
+                "condition": null,
+                "meta": [],
+                "status": null,
+                "href": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "GROUPED_LIST",
+        "filters": [],
+        "id": "home-habit-review-history",
+        "title": "Recent activity",
+        "actions": [],
+        "sections": [
+          {
+            "id": "habit-history",
+            "title": "Most recent first",
+            "count": 1,
+            "items": [
+              {
+                "id": "habit-history-a1",
+                "title": "snoozed",
+                "description": null,
+                "condition": null,
+                "meta": [
+                  "Aug 30, 2026"
+                ],
+                "status": null,
+                "href": null
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "BOUNDARY",
+        "id": "home-habit-review-boundary",
+        "title": "About these habits",
+        "body": "Habits are suggested from what is recorded about this home. Nothing changes until you review and confirm an action.",
+        "severity": "INFO",
+        "suggestions": []
+      },
+      {
+        "type": "SUMMARY",
+        "id": "home-habit-review-next",
+        "title": "What would you like to do?",
+        "body": "Each of these only opens a confirmation.",
+        "tone": "DEFAULT",
+        "actions": [
+          {
+            "id": "habit-adopt",
+            "label": "Add to my routine",
+            "interactionType": "START_WORKFLOW",
+            "message": "Add this habit to my maintenance routine.",
+            "operationId": "HOME_HABIT_UPDATE",
+            "entityType": "HOME_HABIT",
+            "entityId": "h1",
+            "style": "PRIMARY"
+          },
+          {
+            "id": "habit-complete",
+            "label": "Mark done",
+            "interactionType": "START_WORKFLOW",
+            "message": "Mark this habit done.",
+            "operationId": "HOME_HABIT_UPDATE",
+            "entityType": "HOME_HABIT",
+            "entityId": "h1",
+            "style": "SECONDARY"
+          },
+          {
+            "id": "habit-snooze",
+            "label": "Snooze for a week",
+            "interactionType": "START_WORKFLOW",
+            "message": "Snooze this habit for a week.",
+            "operationId": "HOME_HABIT_UPDATE",
+            "entityType": "HOME_HABIT",
+            "entityId": "h1",
+            "style": "SECONDARY"
+          }
+        ]
+      },
+      {
+        "type": "SUMMARY",
+        "id": "home-habit-review-more",
+        "title": "If this is not for you right now",
+        "body": "Skip it for now, or stop it being suggested. Either one only opens a confirmation.",
+        "tone": "DEFAULT",
+        "actions": [
+          {
+            "id": "habit-skip",
+            "label": "Skip for now",
+            "interactionType": "START_WORKFLOW",
+            "message": "Skip this habit for now.",
+            "operationId": "HOME_HABIT_UPDATE",
+            "entityType": "HOME_HABIT",
+            "entityId": "h1",
+            "style": "SECONDARY"
+          },
+          {
+            "id": "habit-dismiss",
+            "label": "Stop suggesting",
+            "interactionType": "START_WORKFLOW",
+            "message": "Stop suggesting this habit.",
+            "operationId": "HOME_HABIT_UPDATE",
+            "entityType": "HOME_HABIT",
+            "entityId": "h1",
+            "style": "SECONDARY"
+          },
+          {
+            "id": "habits-back-to-list",
+            "label": "Back to my habits",
+            "interactionType": "START_WORKFLOW",
+            "message": "Show my home habits",
+            "operationId": "HOME_HABITS",
+            "style": "SECONDARY"
+          }
+        ]
+      }
+    ] };
+}
+
 // The home's own seasonal checklist answer (FRD v1.83 shelves, converted to the plan layout in Appendix C.5).
 function seasonalShelvesExecution() {
   const base = maintenanceExecution();
@@ -2888,6 +3319,18 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     }
     if (/what needs my attention now/i.test(body.message)) {
       const response = homeActionShelvesExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/^review the home habit/i.test(body.message)) {
+      const response = homeHabitReviewExecution();
+      if (body.sessionId) response.sessionId = body.sessionId;
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
+    if (/show my home habits/i.test(body.message)) {
+      const response = homeHabitsExecution();
       if (body.sessionId) response.sessionId = body.sessionId;
       await fulfill(route, { success: true, data: response }, 201);
       return;
