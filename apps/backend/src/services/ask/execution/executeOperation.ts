@@ -704,6 +704,8 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   // its state in the HOME_ACTIONS feed that surfaces it -- confirmed by this
   // handler's own suggested follow-up ("What needs my attention next?").
   OPERATIONAL_WORK_UPDATE: ['HOME_ACTIONS'],
+  // A habit's status (and, on adoption, the maintenance task it links) is what the habits list and maintenance status show.
+  HOME_HABIT_UPDATE: ['HOME_HABITS', 'MAINTENANCE_STATUS'],
   // Creating a task changes the same BUYER_PLAN_STATUS/BUYER_DEADLINES
   // membership/counts BUYER_TASK_UPDATE/BUYER_TASK_COMPLETE already declare.
   BUYER_TASK_CREATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],

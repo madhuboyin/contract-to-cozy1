@@ -352,6 +352,11 @@ const TEMPLATES = [
   },
 ] as const;
 
+// Differently-keyed twins that an older reference-data-bootstrap.pgadmin.sql carried for habits already in this catalog.
+// A database seeded from both showed the same habit twice, so they stay retired (rows are kept: property habits reference
+// them). The habits already created from them are cleaned up by prisma/habit-catalog-dedupe.pgadmin.sql.
+const RETIRED_TEMPLATE_KEYS = ['safety_smoke_co_test', 'exterior_gutter_visual_check', 'general_monthly_home_walkthrough'];
+
 export async function seedHabitTemplates(prisma: PrismaClient): Promise<void> {
   console.log('🌱 Seeding HabitTemplate catalog...');
 
@@ -383,6 +388,8 @@ export async function seedHabitTemplates(prisma: PrismaClient): Promise<void> {
       },
     });
   }
+
+  await prisma.habitTemplate.updateMany({ where: { key: { in: RETIRED_TEMPLATE_KEYS }, isActive: true }, data: { isActive: false } });
 
   console.log(`✅ Upserted ${TEMPLATES.length} HabitTemplate records.`);
 }

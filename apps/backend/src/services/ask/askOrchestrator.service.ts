@@ -49,6 +49,7 @@ import './handlers/refinance.handler';
 import './handlers/homeRecordWrites.handler';
 import './handlers/sellHoldRent.handler';
 import './handlers/inventory.handler';
+import './handlers/inventoryAskActions';
 import './handlers/savingsOwnership.handler';
 import './handlers/coverage.handler';
 import './handlers/claims.handler';

@@ -269,6 +269,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   HOME_EVENT_VISIBILITY: 'Who can see the timeline event is reviewed and then changed after your confirmation.',
   HOME_EVENT_RADAR_STATE: 'The selected monitored event is saved for you only; nobody else in the household sees the change.',
   HOME_EVENT_RADAR_MARK_DONE: 'The selected monitored event is marked done after confirmation, and the property radar risk is rechecked.',
+  HOME_HABIT_UPDATE: 'The selected home habit is added to your maintenance routine, marked done, snoozed, skipped, or dismissed after confirmation.',
   HOME_EVENT_RADAR_FEEDBACK: 'Your feedback that the selected monitored event is not relevant is recorded after confirmation.',
   HOME_EVENT_RADAR_TASK: 'A maintenance task for the selected radar action is added to your list after confirmation.',
   HOME_EVENT_RADAR_PREFERENCES: 'Your Home Event Radar notification settings are saved after confirmation.',

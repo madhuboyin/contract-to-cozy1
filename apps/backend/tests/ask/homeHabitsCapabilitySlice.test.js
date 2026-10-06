@@ -77,7 +77,7 @@ test('habits keep the coach\'s ranked order, split into up next, in your routine
   const result = homeHabitsFromView(view(), 'p1', NOW);
   assert.equal(result.status, 'ANSWERED');
   assert.equal(result.reasonCode, 'HOME_HABITS_OVERDUE');
-  assert.equal(result.blocks[0].title, '3 habits to work on, 1 overdue');
+  assert.equal(result.blocks[0].title, '3 habits to work on, 1 past their suggested date');
   assert.match(result.blocks[0].body, /1 already in your maintenance routine; 1 snoozed/);
   const list = result.blocks.find((block) => block.id === 'home-habits-items');
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.id)]), [
@@ -88,8 +88,9 @@ test('habits keep the coach\'s ranked order, split into up next, in your routine
   const [due] = list.sections[0].items;
   assert.equal(due.title, 'Habit due');
   assert.equal(due.description, 'Why due');
-  assert.deepEqual(due.meta, ['Monthly', 'hvac', 'About 10 min', 'easy', 'Overdue since Sep 20, 2026']);
-  assert.equal(due.href, PAGE);
+  assert.deepEqual(due.meta, ['Monthly', 'hvac', 'About 10 min', 'easy', 'Suggested for Sep 20, 2026']);
+  // The review opens inside Ask (see homeHabitReviewWrites.test.js); a row never links to the desktop page.
+  assert.equal(due.href, undefined);
   const [routine] = list.sections[1].items;
   assert.equal(routine.status, 'IN_ROUTINE');
   assert.ok(routine.meta.includes('Next due Oct 1, 2026'), routine.meta.join('|'));
@@ -108,12 +109,15 @@ test('more habits than shown are disclosed; an empty coach is not an all-clear',
   assert.equal(empty.blocks.some((block) => block.type === 'GROUPED_LIST'), false);
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and the empty-state page link the whitelist', () => {
   const raw = homeHabitsFromView(view({ hasMore: true }), 'p1', NOW);
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-habits.read', operationId: 'HOME_HABITS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home habits', operationId: 'HOME_HABITS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'HOME_HABITS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  // With habits listed the summary carries no page link; only the empty state does, and that link stays allowlisted.
+  assert.deepEqual(result.blocks[0].actions, []);
+  const emptyLink = homeHabitsFromView(view({ habits: [] }), 'p1', NOW).blocks[0].actions[0];
+  assert.equal(isAskActionApplicable({ action: emptyLink, operationId: 'HOME_HABITS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
 });
 
 test('habit phrasing routes here; maintenance due, next actions and the status board do not', () => {

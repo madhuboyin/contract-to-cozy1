@@ -4,8 +4,10 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 
 // ASK_COZY_INLINE_WORKSPACE_FRD v1.53, capability-card audit (Appendix D): the fifth new operation for a capability
 // the audit found with no Ask operation. Reads HomeHabitCoachService.listActiveHabits, the same call the Home Habit
-// Coach page's route (GET /properties/:id/home-habits) makes. A pure read that never generates habits; adopt, complete,
-// snooze, skip, dismiss and generate are a follow-up.
+// Coach page's route (GET /properties/:id/home-habits) makes. A pure read that never generates habits. Each habit opens an
+// inline review (the same operation, launched with entityType HOME_HABIT); adopt, complete, snooze, skip and dismiss are
+// HOME_HABIT_UPDATE, a skill-less confirmation-gated command (the RECALL_MATCH_UPDATE precedent), so this skill stays READ.
+// Generating habits remains on the Home Habit Coach page.
 export const HOME_HABIT_COACH_SKILL = Object.freeze({
   id: 'home-habit-coach',
   version: '1.0.0',

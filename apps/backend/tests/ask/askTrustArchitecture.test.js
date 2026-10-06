@@ -79,6 +79,8 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     // Home Event Radar task create-or-link and notification settings (FRD v1.41).
     'HOME_EVENT_RADAR_TASK',
     'HOME_EVENT_RADAR_PREFERENCES',
+    // Home Habit Coach review actions: reached only from the declared actions on a habit's inline review.
+    'HOME_HABIT_UPDATE',
   ]));
   const candidates = retrieveAskOperationCandidates("I'm thinking about selling next year", { topK: 100 });
   assert.equal(candidates.some((candidate) => internalOperations.includes(candidate.operationId)), false);

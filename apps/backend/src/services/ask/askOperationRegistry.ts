@@ -105,6 +105,8 @@ export type AskOperationId =
   | 'PAST_HAZARD_EXPOSURE'
   | 'HOME_STATUS_BOARD'
   | 'HOME_HABITS'
+  // Habit review actions: add to routine, mark done, snooze, skip, stop suggesting. Declared-action only (see ASK_INTERNAL_OPERATION_IDS).
+  | 'HOME_HABIT_UPDATE'
   | 'HOME_DIGITAL_WILL'
   | 'PLANT_CARE_OUTLOOK'
   | 'NEGOTIATION_SHIELD_CASES'
@@ -297,6 +299,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // Reached only by the declared actions on a Home Event Radar event's inline detail.
   'HOME_EVENT_RADAR_STATE',
   'HOME_EVENT_RADAR_MARK_DONE',
+  // Reached only by the declared actions on a habit's inline review (HOME_HABITS with launchContext.entityType HOME_HABIT).
+  'HOME_HABIT_UPDATE',
   'HOME_EVENT_RADAR_FEEDBACK',
   // Reached only by "Plan this action" on an event's recommended action, and "Notification settings" on the feed.
   'HOME_EVENT_RADAR_TASK',
@@ -510,6 +514,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   PLANT_CARE_OUTLOOK: definition('PLANT_CARE_OUTLOOK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'plant-advisor.care-outlook', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_DIGITAL_WILL: definition('HOME_DIGITAL_WILL', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-digital-will.read', ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_HABITS: definition('HOME_HABITS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-habits.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  HOME_HABIT_UPDATE: definition('HOME_HABIT_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-habits.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   HOME_STATUS_BOARD: definition('HOME_STATUS_BOARD', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'status-board.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PAST_HAZARD_EXPOSURE: definition('PAST_HAZARD_EXPOSURE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-risk-replay.exposure', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   NEIGHBORHOOD_CHANGE_FEED: definition('NEIGHBORHOOD_CHANGE_FEED', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'neighborhood-change.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
