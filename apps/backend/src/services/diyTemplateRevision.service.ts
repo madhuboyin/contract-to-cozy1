@@ -137,6 +137,34 @@ const isUniqueViolation = (error: unknown) => Boolean(error && typeof error === 
 /** A candidate is open until it is returned, published or retired. */
 const OPEN_CANDIDATE = { returnedAt: null, publishedAt: null, retiredAt: null };
 
+/** The template's open candidate (submitted, not yet returned, published or retired), if any. */
+export async function findOpenCandidate(db: RevisionDb, templateId: string) {
+  return db.diyTemplateRevision.findFirst({ where: { templateId, ...OPEN_CANDIDATE } });
+}
+
+/**
+ * The revision a PUBLISH should promote: the open candidate when it is approved, otherwise the most recent governed, approved revision that was
+ * unpublished (so an unpublished template can be republished without a new review; publishRevision still requires its content to equal the working copy).
+ */
+export async function findPublishableRevision(db: RevisionDb, templateId: string) {
+  const candidate = await findOpenCandidate(db, templateId);
+  if (candidate?.approvedAt) return candidate;
+  if (candidate) return null;
+  return db.diyTemplateRevision.findFirst({
+    where: { templateId, provenance: 'GOVERNED', retiredReason: 'UNPUBLISHED', returnedAt: null, approvedAt: { not: null } },
+    orderBy: { revision: 'desc' },
+  });
+}
+
+/** Closes the open candidate without publishing it (archive); it stays as history with the reason. Null when nothing was open. */
+export async function retireOpenCandidate(db: RevisionDb, input: { templateId: string; reason: Exclude<DiyRevisionRetiredReason, 'SUPERSEDED' | 'UNPUBLISHED'>; now?: Date }) {
+  const candidate = await findOpenCandidate(db, input.templateId);
+  if (!candidate) return null;
+  const retired = await db.diyTemplateRevision.updateMany({ where: { id: candidate.id, ...OPEN_CANDIDATE }, data: { retiredAt: input.now ?? new Date(), retiredReason: input.reason } });
+  if (retired.count === 0) throw new DiyTemplateRevisionError('REVISION_STATE_CONFLICT', 'The revision changed while it was being closed. Reload and try again.');
+  return { retiredRevisionId: candidate.id };
+}
+
 /**
  * Snapshots the template's working copy as the next revision (the one submitted for review). At most one candidate is open per template. The
  * revision number is allocated here; two concurrent submissions collide on the (templateId, revision) unique key and the loser gets
@@ -198,8 +226,12 @@ export async function publishRevision(db: RevisionDb, input: { templateId: strin
   const now = input.now ?? new Date();
   const revision = await db.diyTemplateRevision.findFirst({ where: { id: input.revisionId, templateId: input.templateId } });
   if (!revision) throw new DiyTemplateRevisionError('REVISION_NOT_FOUND', 'That revision does not belong to this template.');
-  if (revision.provenance !== 'GOVERNED' || !revision.approvedAt || !revision.approvedBy || revision.returnedAt || revision.publishedAt || revision.retiredAt) {
-    throw new DiyTemplateRevisionError('REVISION_NOT_APPROVED', 'Only an approved, open, governed revision can be published.');
+  // Publishable: governed, approved, never returned, and either still an open candidate or one that was published and then UNPUBLISHED (not
+  // superseded or archived, which close a revision for good).
+  const republish = Boolean(revision.publishedAt && revision.retiredAt && revision.retiredReason === 'UNPUBLISHED');
+  const open = !revision.publishedAt && !revision.retiredAt;
+  if (revision.provenance !== 'GOVERNED' || !revision.approvedAt || !revision.approvedBy || revision.returnedAt || !(open || republish)) {
+    throw new DiyTemplateRevisionError('REVISION_NOT_APPROVED', 'Only an approved, governed revision that is awaiting publication or was unpublished can be published.');
   }
   if (checkRevisionIntegrity(revision) !== 'VERIFIED') {
     throw new DiyTemplateRevisionError('INTEGRITY_FAILED', 'The stored content of this revision does not match its recorded hash.');
@@ -222,10 +254,15 @@ export async function publishRevision(db: RevisionDb, input: { templateId: strin
     });
     if (retired.count === 0) throw new DiyTemplateRevisionError('REVISION_STATE_CONFLICT', 'The current published revision changed while publishing. Reload and try again.');
   }
-  const published = await db.diyTemplateRevision.updateMany({
-    where: { id: revision.id, ...OPEN_CANDIDATE },
-    data: { publishedBy: input.actorId, publishedAt: now },
-  });
+  const published = republish
+    ? await db.diyTemplateRevision.updateMany({
+      where: { id: revision.id, retiredReason: 'UNPUBLISHED', returnedAt: null },
+      data: { retiredAt: null, retiredReason: null, publishedBy: input.actorId, publishedAt: now },
+    })
+    : await db.diyTemplateRevision.updateMany({
+      where: { id: revision.id, ...OPEN_CANDIDATE },
+      data: { publishedBy: input.actorId, publishedAt: now },
+    });
   if (published.count === 0) throw new DiyTemplateRevisionError('REVISION_STATE_CONFLICT', 'This revision is no longer open for publication.');
   const head = await db.diyProjectTemplate.updateMany({
     where: { id: input.templateId, publishedRevisionId: previousHeadId },

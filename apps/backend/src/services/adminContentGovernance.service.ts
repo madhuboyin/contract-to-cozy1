@@ -16,6 +16,10 @@ import { DiyTemplateStatus, KnowledgeArticleStatus, Prisma } from '@prisma/clien
 import { prisma } from '../lib/prisma';
 import { recordAdminAction } from './adminAudit.service';
 import { AdminCapability } from '../config/adminCapabilities';
+import {
+  approveRevision, createCandidateRevision, DiyTemplateRevisionError, findOpenCandidate, findPublishableRevision, publishRevision, retireHead,
+  retireOpenCandidate, returnRevision, type RevisionErrorCode,
+} from './diyTemplateRevision.service';
 
 export class AdminContentGovernanceError extends Error {
   code: string;
@@ -107,28 +111,68 @@ export async function transitionKnowledgeArticle(input: TransitionInput, ctx: Ac
 
 // ─── DIY template lifecycle ───────────────────────────────────────────────────
 //
-// Same editorial workflow as knowledge articles, with two DIY specifics:
-// ACTIVE is the published state (public DIY reads filter on it), and
-// HIGH-safety templates get stronger approval — the publisher must be a
-// different admin than the approver (FRD §10.6: "High-safety DIY content
-// receives stronger approval"). approvedBy/approvedAt carry that
-// attribution and are cleared whenever the template returns to DRAFT.
+// Same editorial workflow as knowledge articles, with DIY specifics (docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md):
+//  - The template row is the editable working copy; a hashed, immutable REVISION is created at submit-for-review, approved against that exact
+//    content, and promoted to the template's published head at publish (services/diyTemplateRevision.service.ts, the only writer of revisions).
+//  - `status` describes the working copy's next revision; a template is LIVE when it has a published head, which can be true in any status (a
+//    live template being edited as a draft keeps its head published). UNPUBLISH and ARCHIVE therefore work from any status that has a head, so a
+//    live template can always be withdrawn at once.
+//  - HIGH-safety templates get stronger approval: the publisher must be a different admin than the revision's approver (FRD §10.6).
+//    approvedBy/approvedAt on the template mirror the open candidate's approval for the queue and admin UI and are cleared on return to draft.
+//  - Every transition is ONE transaction that first claims the template with a conditional write on the expected status, so two simultaneous
+//    actions cannot both succeed and a failure part-way leaves nothing half-applied.
 
-const DIY_TRANSITIONS: Record<AuthorAction | ReviewDecision | PublishAction, { from: DiyTemplateStatus[]; to: DiyTemplateStatus; capability: AdminCapability }> = {
-  SUBMIT_FOR_REVIEW: { from: ['DRAFT'], to: 'REVIEW', capability: 'CONTENT_AUTHOR' },
-  REVIVE_TO_DRAFT: { from: ['ARCHIVED'], to: 'DRAFT', capability: 'CONTENT_AUTHOR' },
-  APPROVE: { from: ['REVIEW'], to: 'APPROVED', capability: 'CONTENT_REVIEW' },
-  RETURN_TO_DRAFT: { from: ['REVIEW'], to: 'DRAFT', capability: 'CONTENT_REVIEW' },
-  PUBLISH: { from: ['APPROVED'], to: 'ACTIVE', capability: 'CONTENT_PUBLISH' },
-  UNPUBLISH: { from: ['ACTIVE'], to: 'APPROVED', capability: 'CONTENT_PUBLISH' },
-  ARCHIVE: { from: ['ACTIVE', 'APPROVED'], to: 'ARCHIVED', capability: 'CONTENT_PUBLISH' },
+type DiyRule = { from: DiyTemplateStatus; to: DiyTemplateStatus; requireHead?: boolean };
+type DiyAction = AuthorAction | ReviewDecision | PublishAction;
+
+const DIY_TRANSITIONS: Record<DiyAction, { rules: DiyRule[]; capability: AdminCapability }> = {
+  SUBMIT_FOR_REVIEW: { rules: [{ from: 'DRAFT', to: 'REVIEW' }], capability: 'CONTENT_AUTHOR' },
+  REVIVE_TO_DRAFT: { rules: [{ from: 'ARCHIVED', to: 'DRAFT' }], capability: 'CONTENT_AUTHOR' },
+  APPROVE: { rules: [{ from: 'REVIEW', to: 'APPROVED' }], capability: 'CONTENT_REVIEW' },
+  RETURN_TO_DRAFT: { rules: [{ from: 'REVIEW', to: 'DRAFT' }, { from: 'APPROVED', to: 'DRAFT' }], capability: 'CONTENT_REVIEW' },
+  PUBLISH: { rules: [{ from: 'APPROVED', to: 'ACTIVE' }], capability: 'CONTENT_PUBLISH' },
+  // ACTIVE becomes APPROVED as before; any other status with a live head keeps its status while the head is withdrawn.
+  UNPUBLISH: {
+    rules: [
+      { from: 'ACTIVE', to: 'APPROVED' },
+      { from: 'APPROVED', to: 'APPROVED', requireHead: true }, { from: 'REVIEW', to: 'REVIEW', requireHead: true }, { from: 'DRAFT', to: 'DRAFT', requireHead: true },
+    ],
+    capability: 'CONTENT_PUBLISH',
+  },
+  ARCHIVE: {
+    rules: [
+      { from: 'ACTIVE', to: 'ARCHIVED' }, { from: 'APPROVED', to: 'ARCHIVED' },
+      { from: 'REVIEW', to: 'ARCHIVED', requireHead: true }, { from: 'DRAFT', to: 'ARCHIVED', requireHead: true },
+    ],
+    capability: 'CONTENT_PUBLISH',
+  },
 };
 
 export interface DiyTransitionInput {
   templateId: string;
   actorId: string;
-  action: AuthorAction | ReviewDecision | PublishAction;
+  action: DiyAction;
   reason: string;
+}
+
+const REVISION_ERROR_TO_GOVERNANCE: Record<RevisionErrorCode, string> = {
+  TEMPLATE_NOT_FOUND: 'TEMPLATE_NOT_FOUND',
+  REVISION_NOT_FOUND: 'REVISION_REQUIRED',
+  REVISION_CONFLICT: 'REVISION_CONFLICT',
+  REVISION_STATE_CONFLICT: 'REVISION_CONFLICT',
+  REVISION_NOT_APPROVED: 'REVISION_NOT_APPROVED',
+  INTEGRITY_FAILED: 'INTEGRITY_FAILED',
+  WORKING_COPY_CHANGED: 'WORKING_COPY_CHANGED',
+  HIGH_SAFETY_SEPARATION_REQUIRED: 'HIGH_SAFETY_SEPARATION_REQUIRED',
+};
+
+async function withRevisionErrors<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof DiyTemplateRevisionError) throw new AdminContentGovernanceError(REVISION_ERROR_TO_GOVERNANCE[error.code], error.message);
+    throw error;
+  }
 }
 
 export async function transitionDiyTemplate(input: DiyTransitionInput, ctx: ActionContext = {}) {
@@ -137,39 +181,77 @@ export async function transitionDiyTemplate(input: DiyTransitionInput, ctx: Acti
     throw new AdminContentGovernanceError('INVALID_ACTION', `"${input.action}" is not a lifecycle action.`);
   }
 
-  const template = await prisma.diyProjectTemplate.findUnique({
-    where: { id: input.templateId },
-    select: { id: true, slug: true, title: true, status: true, safetyLevel: true, approvedBy: true },
-  });
-  if (!template) {
-    throw new AdminContentGovernanceError('TEMPLATE_NOT_FOUND', `No DIY template with id "${input.templateId}".`);
-  }
+  const outcome = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    // 1. Claim: a conditional write on the expected status (and, for withdrawals, on a live head). A concurrent action holds the row until it
+    //    commits and then fails this check, so only one of two simultaneous transitions can succeed.
+    let matched: DiyRule | null = null;
+    for (const rule of spec.rules) {
+      const claimed = await tx.diyProjectTemplate.updateMany({
+        where: { id: input.templateId, status: rule.from, ...(rule.requireHead ? { publishedRevisionId: { not: null } } : {}) },
+        data: {
+          status: rule.to,
+          ...(input.action === 'APPROVE' ? { approvedBy: input.actorId, approvedAt: now } : {}),
+          ...(rule.to === 'DRAFT' ? { approvedBy: null, approvedAt: null } : {}),
+        },
+      });
+      if (claimed.count === 1) { matched = rule; break; }
+    }
+    if (!matched) {
+      const current = await tx.diyProjectTemplate.findUnique({ where: { id: input.templateId }, select: { status: true } });
+      if (!current) throw new AdminContentGovernanceError('TEMPLATE_NOT_FOUND', `No DIY template with id "${input.templateId}".`);
+      throw new AdminContentGovernanceError('INVALID_TRANSITION', `Cannot ${input.action} a ${current.status} template.`);
+    }
 
-  if (!spec.from.includes(template.status)) {
-    throw new AdminContentGovernanceError(
-      'INVALID_TRANSITION',
-      `Cannot ${input.action} a ${template.status} template.`
-    );
-  }
+    // 2. Revision work, in the same transaction: any failure here rolls the claim back too.
+    let revisionNumber: number | null = null;
+    let publishedRevisionId: string | null = null;
+    await withRevisionErrors(async () => {
+      switch (input.action) {
+        case 'SUBMIT_FOR_REVIEW': {
+          revisionNumber = (await createCandidateRevision(tx, { templateId: input.templateId, actorId: input.actorId, now })).revision;
+          break;
+        }
+        case 'APPROVE': {
+          const candidate = await findOpenCandidate(tx, input.templateId);
+          if (!candidate) {
+            throw new AdminContentGovernanceError('REVISION_REQUIRED', 'No revision is awaiting review for this template (it was sent for review before revisions existed). Return it to draft and submit it again.');
+          }
+          await approveRevision(tx, { revisionId: candidate.id, actorId: input.actorId, now });
+          revisionNumber = candidate.revision;
+          break;
+        }
+        case 'RETURN_TO_DRAFT': {
+          const candidate = await findOpenCandidate(tx, input.templateId);
+          if (candidate) { await returnRevision(tx, { revisionId: candidate.id, now }); revisionNumber = candidate.revision; }
+          break;
+        }
+        case 'PUBLISH': {
+          const revision = await findPublishableRevision(tx, input.templateId);
+          if (!revision) {
+            throw new AdminContentGovernanceError('REVISION_REQUIRED', 'No approved revision is available to publish (it was approved before revisions existed). Return it to draft and submit it again for review.');
+          }
+          const published = await publishRevision(tx, { templateId: input.templateId, revisionId: revision.id, actorId: input.actorId, now });
+          publishedRevisionId = published.publishedRevisionId;
+          revisionNumber = revision.revision;
+          break;
+        }
+        case 'UNPUBLISH': {
+          await retireHead(tx, { templateId: input.templateId, reason: 'UNPUBLISHED', now });
+          break;
+        }
+        case 'ARCHIVE': {
+          await retireHead(tx, { templateId: input.templateId, reason: 'ARCHIVED', now });
+          await retireOpenCandidate(tx, { templateId: input.templateId, reason: 'ARCHIVED', now });
+          break;
+        }
+        default:
+          break;
+      }
+    });
 
-  if (
-    input.action === 'PUBLISH' &&
-    template.safetyLevel === 'HIGH' &&
-    template.approvedBy === input.actorId
-  ) {
-    throw new AdminContentGovernanceError(
-      'HIGH_SAFETY_SEPARATION_REQUIRED',
-      'HIGH-safety templates must be published by a different administrator than the one who approved them.'
-    );
-  }
-
-  await prisma.diyProjectTemplate.update({
-    where: { id: input.templateId },
-    data: {
-      status: spec.to,
-      ...(input.action === 'APPROVE' ? { approvedBy: input.actorId, approvedAt: new Date() } : {}),
-      ...(spec.to === 'DRAFT' ? { approvedBy: null, approvedAt: null } : {}),
-    },
+    const template = await tx.diyProjectTemplate.findUnique({ where: { id: input.templateId }, select: { slug: true, safetyLevel: true } });
+    return { previousStatus: matched.from, status: matched.to, revisionNumber, publishedRevisionId, slug: template?.slug ?? null, safetyLevel: template?.safetyLevel ?? null };
   });
 
   await recordAdminAction({
@@ -180,13 +262,13 @@ export async function transitionDiyTemplate(input: DiyTransitionInput, ctx: Acti
     capability: spec.capability,
     reason: input.reason,
     disposition: input.action,
-    oldValues: { status: template.status } as Prisma.InputJsonValue,
-    newValues: { status: spec.to } as Prisma.InputJsonValue,
-    relatedRefs: { slug: template.slug, safetyLevel: template.safetyLevel },
+    oldValues: { status: outcome.previousStatus } as Prisma.InputJsonValue,
+    newValues: { status: outcome.status, revision: outcome.revisionNumber } as Prisma.InputJsonValue,
+    relatedRefs: { slug: outcome.slug, safetyLevel: outcome.safetyLevel },
     req: ctx.req,
   });
 
-  return { previousStatus: template.status, status: spec.to, action: input.action };
+  return { previousStatus: outcome.previousStatus, status: outcome.status, action: input.action };
 }
 
 // ─── Editorial queues ─────────────────────────────────────────────────────────

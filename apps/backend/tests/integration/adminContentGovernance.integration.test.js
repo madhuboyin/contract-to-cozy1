@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
+const { makeDiyDb } = require('../helpers/diyTemplateFake.js');
+
 function createHarness(overrides = {}) {
   const state = {
     articles: [
@@ -13,36 +15,22 @@ function createHarness(overrides = {}) {
     templates: [
       { id: 'diy-1', slug: 'fix-faucet', title: 'Fix a leaky faucet', status: 'DRAFT', safetyLevel: 'LOW', approvedBy: null, approvedAt: null, updatedAt: new Date('2026-07-01') },
       { id: 'diy-2', slug: 'gas-line', title: 'Gas line check', status: 'REVIEW', safetyLevel: 'HIGH', approvedBy: null, approvedAt: null, updatedAt: new Date('2026-06-15') },
+      { id: 'diy-3', slug: 'gas-shutoff', title: 'Gas shutoff check', status: 'DRAFT', safetyLevel: 'HIGH', approvedBy: null, approvedAt: null, updatedAt: new Date('2026-06-20') },
     ],
     auditLogs: [],
     ...overrides,
   };
 
+  const diy = makeDiyDb(state.templates);
+  state.templates = diy.state.templates; // a Map keyed by template id
   const prisma = {
-    diyProjectTemplate: {
-      findUnique: async ({ where, select }) => {
-        const t = state.templates.find((x) => x.id === where.id);
-        if (!t) return null;
-        if (!select) return { ...t };
-        const out = {};
-        for (const key of Object.keys(select)) out[key] = t[key];
-        return out;
-      },
-      findMany: async ({ where, select }) =>
-        state.templates
-          .filter((t) => t.status === where.status)
-          .map((t) => {
-            const out = {};
-            for (const key of Object.keys(select)) out[key] = t[key];
-            return out;
-          }),
-      update: async ({ where, data }) => {
-        const index = state.templates.findIndex((t) => t.id === where.id);
-        state.templates[index] = { ...state.templates[index], ...data };
-        return { ...state.templates[index] };
-      },
-      count: async ({ where }) => state.templates.filter((t) => t.status === where.status).length,
-    },
+    // DIY templates and their revisions run on the shared fake (tests/helpers/diyTemplateFake.js): transactions, conditional writes, revisions.
+    diyProjectTemplate: diy.diyProjectTemplate,
+    diyTemplateRevision: diy.diyTemplateRevision,
+    diyTemplateStep: diy.diyTemplateStep,
+    diyTemplateMaterial: diy.diyTemplateMaterial,
+    diyTemplateTool: diy.diyTemplateTool,
+    $transaction: (work) => diy.$transaction(work),
     knowledgeArticle: {
       findUnique: async ({ where, select }) => {
         const a = state.articles.find((x) => x.id === where.id);
@@ -92,6 +80,7 @@ function createHarness(overrides = {}) {
   for (const relativePath of [
     '../../src/services/adminAudit.service.ts',
     '../../src/services/adminContentGovernance.service.ts',
+    '../../src/services/diyTemplateRevision.service.ts',
   ]) {
     delete require.cache[require.resolve(relativePath)];
   }
@@ -181,7 +170,7 @@ test('DIY lifecycle: submit → approve records attribution → publish → unpu
   await governanceService.transitionDiyTemplate({ templateId: 'diy-1', actorId: 'author-1', action: 'SUBMIT_FOR_REVIEW', reason: 'ready' });
   const approved = await governanceService.transitionDiyTemplate({ templateId: 'diy-1', actorId: 'reviewer-1', action: 'APPROVE', reason: 'looks safe' });
   assert.equal(approved.status, 'APPROVED');
-  assert.equal(state.templates[0].approvedBy, 'reviewer-1');
+  assert.equal(state.templates.get('diy-1').approvedBy, 'reviewer-1');
 
   const published = await governanceService.transitionDiyTemplate({ templateId: 'diy-1', actorId: 'publisher-1', action: 'PUBLISH', reason: 'go live' });
   assert.equal(published.status, 'ACTIVE');
@@ -189,7 +178,7 @@ test('DIY lifecycle: submit → approve records attribution → publish → unpu
   await governanceService.transitionDiyTemplate({ templateId: 'diy-1', actorId: 'publisher-1', action: 'ARCHIVE', reason: 'seasonal' });
   const revived = await governanceService.transitionDiyTemplate({ templateId: 'diy-1', actorId: 'author-1', action: 'REVIVE_TO_DRAFT', reason: 'refresh' });
   assert.equal(revived.status, 'DRAFT');
-  assert.equal(state.templates[0].approvedBy, null, 'returning to draft clears approval attribution');
+  assert.equal(state.templates.get('diy-1').approvedBy, null, 'returning to draft clears approval attribution');
 
   const audit = state.auditLogs.at(-1);
   assert.equal(audit.action, 'ADMIN_DIY_LIFECYCLE');
@@ -199,15 +188,16 @@ test('DIY lifecycle: submit → approve records attribution → publish → unpu
 test('HIGH-safety DIY templates require a different publisher than the approver', async () => {
   const { governanceService, state } = createHarness();
 
-  await governanceService.transitionDiyTemplate({ templateId: 'diy-2', actorId: 'reviewer-1', action: 'APPROVE', reason: 'checked by licensed pro' });
-  assert.equal(state.templates[1].approvedBy, 'reviewer-1');
+  await governanceService.transitionDiyTemplate({ templateId: 'diy-3', actorId: 'author-1', action: 'SUBMIT_FOR_REVIEW', reason: 'ready' });
+  await governanceService.transitionDiyTemplate({ templateId: 'diy-3', actorId: 'reviewer-1', action: 'APPROVE', reason: 'checked by licensed pro' });
+  assert.equal(state.templates.get('diy-3').approvedBy, 'reviewer-1');
 
   await assert.rejects(
-    () => governanceService.transitionDiyTemplate({ templateId: 'diy-2', actorId: 'reviewer-1', action: 'PUBLISH', reason: 'ship it' }),
+    () => governanceService.transitionDiyTemplate({ templateId: 'diy-3', actorId: 'reviewer-1', action: 'PUBLISH', reason: 'ship it' }),
     (err) => err.code === 'HIGH_SAFETY_SEPARATION_REQUIRED'
   );
 
-  const published = await governanceService.transitionDiyTemplate({ templateId: 'diy-2', actorId: 'publisher-2', action: 'PUBLISH', reason: 'second admin publish' });
+  const published = await governanceService.transitionDiyTemplate({ templateId: 'diy-3', actorId: 'publisher-2', action: 'PUBLISH', reason: 'second admin publish' });
   assert.equal(published.status, 'ACTIVE');
 });
 

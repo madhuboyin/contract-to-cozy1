@@ -16,6 +16,12 @@ const CLIENT_ERROR_CODES = new Set([
   'INVALID_ACTION',
   'INVALID_TRANSITION',
   'HIGH_SAFETY_SEPARATION_REQUIRED',
+  // DIY template revisions (docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md)
+  'REVISION_REQUIRED',
+  'REVISION_CONFLICT',
+  'REVISION_NOT_APPROVED',
+  'INTEGRITY_FAILED',
+  'WORKING_COPY_CHANGED',
 ]);
 
 function handleClientError(err: unknown, res: Response): boolean {

@@ -16,50 +16,8 @@ const {
 } = service;
 
 const NOW = new Date('2026-10-06T12:00:00.000Z');
-const matches = (record, where = {}) => Object.entries(where).every(([key, value]) => (value === null ? record[key] == null : record[key] === value));
-
-function makeDb(templates, hooks = {}) {
-  const state = { templates: new Map(templates.map((template) => [template.id, structuredClone(template)])), revisions: [], writes: [] };
-  let nextId = 1;
-  const withChildren = (template) => template && ({ ...structuredClone(template) });
-  const db = {
-    state,
-    diyProjectTemplate: {
-      async findUnique({ where }) { return withChildren(state.templates.get(where.id)); },
-      async updateMany({ where, data }) {
-        state.writes.push({ model: 'template', op: 'updateMany', where, data });
-        if (hooks.beforeTemplateUpdate) { await hooks.beforeTemplateUpdate(state); }
-        const rows = [...state.templates.values()].filter((row) => matches(row, where));
-        rows.forEach((row) => Object.assign(row, data));
-        return { count: rows.length };
-      },
-    },
-    diyTemplateRevision: {
-      async findFirst({ where, orderBy }) {
-        let rows = state.revisions.filter((row) => matches(row, where));
-        if (orderBy?.revision === 'desc') rows = [...rows].sort((a, b) => b.revision - a.revision);
-        return rows[0] ? structuredClone(rows[0]) : null;
-      },
-      async create({ data }) {
-        if (hooks.barrier) await hooks.barrier();
-        if (state.revisions.some((row) => row.templateId === data.templateId && row.revision === data.revision)) {
-          const error = new Error('Unique constraint failed'); error.code = 'P2002'; throw error;
-        }
-        const row = { id: `rev-${nextId++}`, provenance: 'GOVERNED', approvedBy: null, approvedAt: null, publishedBy: null, publishedAt: null, returnedAt: null, retiredAt: null, retiredReason: null, ...structuredClone(data) };
-        state.revisions.push(row);
-        state.writes.push({ model: 'revision', op: 'create', data: Object.keys(data) });
-        return structuredClone(row);
-      },
-      async updateMany({ where, data }) {
-        state.writes.push({ model: 'revision', op: 'updateMany', where, dataKeys: Object.keys(data) });
-        const rows = state.revisions.filter((row) => matches(row, where));
-        rows.forEach((row) => Object.assign(row, data));
-        return { count: rows.length };
-      },
-    },
-  };
-  return db;
-}
+const { makeDiyDb } = require('../helpers/diyTemplateFake.js');
+const makeDb = (templates, hooks) => makeDiyDb(templates, hooks);
 
 const template = (overrides = {}) => ({
   id: 't1', slug: 'replace-furnace-filter', title: 'Replace a furnace filter', shortDescription: 'Swap the filter.', longDescription: 'Longer text.',
@@ -253,6 +211,67 @@ test('withdrawing retires the head with its reason and clears the pointer; nothi
   assert.equal(db.state.templates.get('t1').publishedRevisionId, null);
   assert.equal(await retireHead(db, { templateId: 't1', reason: 'UNPUBLISHED' }), null, 'a second withdrawal finds nothing live');
   await rejectsWith(retireHead(db, { templateId: 'missing', reason: 'UNPUBLISHED' }), 'TEMPLATE_NOT_FOUND');
+});
+
+// ---- finders, republish and closing a candidate (slice 1b) ----------------------------------------------------------------------------------------
+
+test('findOpenCandidate returns only the open candidate; findPublishableRevision prefers an approved candidate and falls back to an unpublished approved revision', async () => {
+  const db = fresh();
+  assert.equal(await service.findOpenCandidate(db, 't1'), null);
+  assert.equal(await service.findPublishableRevision(db, 't1'), null);
+  const candidate = await submit(db);
+  assert.equal((await service.findOpenCandidate(db, 't1')).id, candidate.id);
+  assert.equal(await service.findPublishableRevision(db, 't1'), null, 'an unapproved candidate is not publishable');
+  await approveRevision(db, { revisionId: candidate.id, actorId: 'r' });
+  assert.equal((await service.findPublishableRevision(db, 't1')).id, candidate.id);
+  await publish(db, candidate);
+  assert.equal(await service.findOpenCandidate(db, 't1'), null, 'a published revision is no longer a candidate');
+  assert.equal(await service.findPublishableRevision(db, 't1'), null, 'the live head is not something to publish again');
+  await retireHead(db, { templateId: 't1', reason: 'UNPUBLISHED', now: NOW });
+  assert.equal((await service.findPublishableRevision(db, 't1')).id, candidate.id, 'an unpublished approved revision can be republished');
+});
+
+test('a newer unapproved candidate hides an older unpublished revision, and superseded, archived or returned revisions are never publishable', async () => {
+  const db = fresh();
+  const first = await approved(db); await publish(db, first);
+  await retireHead(db, { templateId: 't1', reason: 'UNPUBLISHED' });
+  db.state.templates.get('t1').title = 'v2';
+  const second = await submit(db);
+  assert.equal(await service.findPublishableRevision(db, 't1'), null, 'the open unapproved candidate wins, so nothing is publishable yet');
+  await returnRevision(db, { revisionId: second.id });
+  assert.equal((await service.findPublishableRevision(db, 't1')).id, first.id);
+  db.state.revisions[0].retiredReason = 'ARCHIVED';
+  assert.equal(await service.findPublishableRevision(db, 't1'), null, 'archived is closed for good');
+  db.state.revisions[0].retiredReason = 'SUPERSEDED';
+  assert.equal(await service.findPublishableRevision(db, 't1'), null, 'superseded is closed for good');
+});
+
+test('republishing an unpublished revision clears its retirement, records the new publisher, and still requires the working copy to be unchanged', async () => {
+  const db = fresh();
+  const revision = await approved(db); await publish(db, revision);
+  await retireHead(db, { templateId: 't1', reason: 'UNPUBLISHED', now: NOW });
+  const later = new Date('2026-10-07T12:00:00.000Z');
+  await publishRevision(db, { templateId: 't1', revisionId: revision.id, actorId: 'publisher-2', now: later });
+  const stored = db.state.revisions[0];
+  assert.deepEqual([stored.retiredAt, stored.retiredReason, stored.publishedBy, stored.publishedAt], [null, null, 'publisher-2', later]);
+  assert.equal(db.state.templates.get('t1').publishedRevisionId, revision.id);
+
+  await retireHead(db, { templateId: 't1', reason: 'UNPUBLISHED' });
+  db.state.templates.get('t1').title = 'edited while unpublished';
+  await rejectsWith(publishRevision(db, { templateId: 't1', revisionId: revision.id, actorId: 'p' }), 'WORKING_COPY_CHANGED');
+  db.state.revisions[0].retiredReason = 'ARCHIVED';
+  db.state.templates.get('t1').title = 'Replace a furnace filter';
+  await rejectsWith(publishRevision(db, { templateId: 't1', revisionId: revision.id, actorId: 'p' }), 'REVISION_NOT_APPROVED');
+});
+
+test('retireOpenCandidate closes an open candidate with its reason and reports nothing when none is open', async () => {
+  const db = fresh();
+  assert.equal(await service.retireOpenCandidate(db, { templateId: 't1', reason: 'ARCHIVED' }), null);
+  const candidate = await submit(db);
+  assert.deepEqual(await service.retireOpenCandidate(db, { templateId: 't1', reason: 'ARCHIVED', now: NOW }), { retiredRevisionId: candidate.id });
+  assert.deepEqual([db.state.revisions[0].retiredReason, db.state.revisions[0].retiredAt], ['ARCHIVED', NOW]);
+  assert.equal(await service.findOpenCandidate(db, 't1'), null);
+  assert.equal((await submit(db)).revision, 2, 'a closed candidate no longer blocks a new submission');
 });
 
 // ---- immutability --------------------------------------------------------------------------------------------------------------------------------

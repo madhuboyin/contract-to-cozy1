@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.193
+**Version:** 1.194
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.194 — DIY template revisions, slice 1b:** DIY template lifecycle transitions are now single transactions that claim the template with a conditional write on the expected status and create, approve, return, publish or withdraw an immutable revision in the same transaction; reviewed content is frozen (`REVIEW`, `APPROVED` and `ARCHIVED` refuse content edits with `TEMPLATE_CONTENT_FROZEN`), editing a live template saves a draft while the published head stays unchanged, a live template can be unpublished or archived from any status, and HIGH-safety publishing uses the revision's approver. Templates already in review or approved before revisions existed must be returned to draft and resubmitted. Homeowner reads and project creation still use the live row until slice 1c, so 1b and 1c are to be released together. Tested against a database-free fake with mutation checks; not exercised against Postgres. See `docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md` §13.
 
 **Revision 1.193 — DIY template revisions, slice 1a:** Adds the schema for immutable published DIY template revisions (`DiyTemplateRevision`, a published-head pointer on the template, a revision pointer on the project) and the revision service that creates, approves, returns, publishes and withdraws them with a content hash and conditional writes; it is the only writer of revisions and has no content update. Not yet wired into governance, admin edits, homeowner reads or project creation, so nothing a homeowner or admin sees changes. Unit-tested against a database-free fake with mutation checks; not exercised against Postgres, and the schema is not applied anywhere. This is groundwork for being able to call a DIY guide author-reviewed. See `docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md` §12.
 

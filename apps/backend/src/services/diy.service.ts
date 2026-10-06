@@ -23,6 +23,9 @@ function evalQuantityFormula(formula: string, _propertyData: Record<string, numb
   }
 }
 
+// Template fields that are not reviewed content: merchandising order and an AI prompt hint. Editing them never forces a new revision.
+const NON_CONTENT_TEMPLATE_FIELDS = new Set(['featuredOrder', 'geminiPromptHint']);
+
 export class DiyService {
   // ── Skill Profile ─────────────────────────────────────────────────────────────
   async getSkillProfile(userId: string) {
@@ -593,10 +596,40 @@ export class DiyService {
     });
   }
 
+  /**
+   * Edits a template's WORKING COPY (docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md). Reviewed content is frozen:
+   *  - DRAFT: updated in place, as before.
+   *  - ACTIVE: updated, and the template atomically becomes DRAFT with its approval cleared; the published head is untouched, so homeowners keep
+   *    seeing the reviewed revision until a new one is published.
+   *  - REVIEW, APPROVED, ARCHIVED: refused (TEMPLATE_CONTENT_FROZEN); return it to draft first.
+   * `featuredOrder` and `geminiPromptHint` are not reviewed content: they change in any status and never force a new revision.
+   */
   async adminUpdateTemplate(templateId: string, payload: any) {
     const { steps, materials, tools, ...core } = payload;
+    const nonContent: Record<string, unknown> = {};
+    const content: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(core)) (NON_CONTENT_TEMPLATE_FIELDS.has(key) ? nonContent : content)[key] = value;
+    const touchesContent = Object.keys(content).length > 0 || steps !== undefined || materials !== undefined || tools !== undefined;
+
     return prisma.$transaction(async (tx) => {
-      if (core && Object.keys(core).length) await tx.diyProjectTemplate.update({ where: { id: templateId }, data: core });
+      if (touchesContent) {
+        // Claim the row before changing anything: a DRAFT stays DRAFT (and the write takes the row, so a concurrent submit cannot slip between
+        // this check and the edit); an ACTIVE template diverges to DRAFT with its approval mirror cleared. Anything else is frozen.
+        const claimed = (await tx.diyProjectTemplate.updateMany({ where: { id: templateId, status: 'DRAFT' }, data: { status: 'DRAFT' } })).count
+          || (await tx.diyProjectTemplate.updateMany({ where: { id: templateId, status: 'ACTIVE' }, data: { status: 'DRAFT', approvedBy: null, approvedAt: null } })).count;
+        if (!claimed) {
+          const current = await tx.diyProjectTemplate.findUnique({ where: { id: templateId }, select: { status: true } });
+          if (!current) throw new APIError('Template not found', 404, 'TEMPLATE_NOT_FOUND');
+          throw new APIError(
+            `This template is ${current.status} and its reviewed content cannot be edited. ${current.status === 'ARCHIVED' ? 'Revive it to draft first.' : 'Return it to draft first.'}`,
+            409,
+            'TEMPLATE_CONTENT_FROZEN',
+            { status: current.status },
+          );
+        }
+      }
+      const update = { ...content, ...nonContent };
+      if (Object.keys(update).length) await tx.diyProjectTemplate.update({ where: { id: templateId }, data: update });
       if (steps !== undefined) {
         await tx.diyTemplateStep.deleteMany({ where: { templateId } });
         if (steps.length) await tx.diyTemplateStep.createMany({ data: steps.map((s: any) => ({ ...s, templateId })) });

@@ -1,7 +1,7 @@
 # DIY Template Revisions — Step 1 Implementation Plan (immutable published content)
 
 **Date:** October 6, 2026
-**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Slice 1a is implemented (§12); slices 1b-1e are not started. The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
+**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Slices 1a (§12) and 1b (§13) are implemented; 1c-1e are not started. The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 1; decision **O2-A** (approved October 6, 2026)
 **Why this comes first:** until published content is provably the content that was reviewed, no Ask surface may call a DIY guide "author-reviewed" (design D1).
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20. Labels: **[Code-traced]** read, not run; nothing here was executed. No service, database or browser was run, and **production template contents are unknown** (the repository seeds none).
@@ -136,7 +136,7 @@ The widened `UNPUBLISH` and `ARCHIVE` matter: a published template whose working
 | Slice | Deliverable |
 | --- | --- |
 | 1a | Schema edits and the revision service with tests (1-2, 9). **Done, see §12** |
-| 1b | Transaction-safe transitions and the edit semantics (tests 3-6) |
+| 1b | Transaction-safe transitions and the edit semantics (tests 3-6). **Done, see §13** |
 | 1c | Homeowner reads and `createProject` on revisions (tests 7-8) |
 | 1d | Admin UI changes with component tests |
 | 1e | Backfill SQL, verification query, startup warning, rollout notes; then the exact `prisma db push` and `prisma generate` commands for you to run |
@@ -209,3 +209,28 @@ Not wired into anything yet: the governance transitions, the admin PUT, the home
 **Not run:** any database, `prisma db push`, or the real Prisma client against Postgres. The fake enforces the unique key and evaluates the same `where` equality the service uses, but it is not Postgres: real behavior of the P2002 mapping, null equality in `updateMany`, and transaction isolation is **not exercised** until a scratch-database run in slice 1e.
 
 **Owner action:** none is required now. The schema change is additive and safe to apply at any time, but it is **required before slice 1b is deployed**. When you want it: `npx prisma db push` in `apps/backend`, then `npx prisma generate` in `apps/backend` and `apps/workers`. I ran `prisma generate` locally (no database) only so the service typechecks.
+
+## 13. Slice 1b record (October 6, 2026)
+
+**Changed**
+
+- `adminContentGovernance.service.ts` `transitionDiyTemplate` rewritten per §3.4: one transaction that first **claims** the template with a conditional write on the expected status (a concurrent action waits for the row, then fails the check), then does the revision work in the same transaction (`SUBMIT_FOR_REVIEW` creates the candidate, `APPROVE` approves it, `RETURN_TO_DRAFT` closes it, `PUBLISH` promotes it, `UNPUBLISH` and `ARCHIVE` retire the head), so a failure rolls the claim back too. `RETURN_TO_DRAFT` is allowed from `APPROVED`. `UNPUBLISH` and `ARCHIVE` work from any status that has a live head. HIGH-safety separation uses the **revision's** approver. The audit record carries the revision number. Revision errors map to client error codes (`REVISION_REQUIRED`, `REVISION_CONFLICT`, `REVISION_NOT_APPROVED`, `INTEGRITY_FAILED`, `WORKING_COPY_CHANGED`), added to the controller's client-error set.
+- `diy.service.ts` `adminUpdateTemplate` per §3.4: `DRAFT` edits in place; `ACTIVE` edits atomically become `DRAFT` with approval cleared and the head untouched; `REVIEW`, `APPROVED` and `ARCHIVED` are refused with `409 TEMPLATE_CONTENT_FROZEN`; `featuredOrder` and `geminiPromptHint` change in any status. The claim and the content writes are one transaction.
+- `diyTemplateRevision.service.ts`: three additions the transitions needed: `findOpenCandidate`, `findPublishableRevision`, `retireOpenCandidate`, and republishing of an unpublished revision.
+- Tests: `tests/helpers/diyTemplateFake.js` (shared transaction-aware fake), `tests/unit/diyTemplateLifecycle.test.js` (new, 20 tests), 4 more revision-service tests (22 in total), and the existing governance integration test moved onto the shared fake (its DIY cases now go through submit, so they exercise the revision path).
+
+**Two things the plan did not spell out, decided while implementing (please confirm)**
+
+1. **Unpublish then publish again.** The plan said `UNPUBLISH` takes an `ACTIVE` template to `APPROVED` "as today", but a published revision is no longer an open candidate, so `PUBLISH` from that `APPROVED` would have had nothing to promote. Rule adopted: an approved, governed revision that was **unpublished** (not superseded or archived) can be **republished without a new review**, and the working copy must still equal it (it is frozen in `APPROVED`, so it does). Republishing clears the retirement and records the new publisher and time; the first publication time is not kept on the revision (the admin audit log keeps every action). A revision that was superseded or archived is closed for good; reviving an archived template needs a new review.
+2. **Templates that were already in `REVIEW` or `APPROVED` before revisions exist have no candidate revision.** `APPROVE` on such a template is refused with `REVISION_REQUIRED` ("return it to draft and submit it again"), and `PUBLISH` on an `APPROVED` one is refused the same way, because no one approved this content as a snapshot. `RETURN_TO_DRAFT` works, so these templates are recoverable by an admin in two clicks. A legacy `ACTIVE` template with no head can still be unpublished or archived. This adds a step to the rollout (§6): **before deploying 1b, list templates in `REVIEW` or `APPROVED`**; they will need to be returned and resubmitted, or have finished review first. The slice 1e verification query will include them.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| New and updated tests: lifecycle (20), revision service (22), governance integration (8) | 50 pass, 0 fail | Executed |
+| Mutation checks: claim ignores the expected status (4 tests fail); frozen check skipped (3); `ACTIVE` edit does not diverge (4); `UNPUBLISH` of a draft needs no head (1); `ARCHIVE` forgets the open candidate (1); non-content fields forced to re-review (1) | each caught; restored code passes 50 of 50 | Executed |
+| Backend `npm run typecheck` | clean | Executed |
+| Neighbors (DIY role floor, DIY capability, AI guide, hire-required boundary, Ask DIY projects, startup registry) with the above | 92 pass in total, 0 fail | Executed |
+
+**Not run:** Postgres, so real row-lock timing, `READ COMMITTED` re-evaluation of the conditional claim, and the Prisma error mapping are modeled by the fake, not exercised (a scratch-database run is part of slice 1e). The admin UI still lets an editor click save in a frozen state and show the 409 as an error; the read-only handling is slice 1d. Homeowner reads and `createProject` still read the live row (slice 1c), so **until 1c ships, a live template that an admin edits as a draft still shows the edited content to homeowners**; the head pointer is maintained but not yet read. Deploying 1b without 1c therefore does not yet deliver the guarantee; 1b and 1c should be released together.
