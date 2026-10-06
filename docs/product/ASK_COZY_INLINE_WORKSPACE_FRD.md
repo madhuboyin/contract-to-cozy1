@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.190
+**Version:** 1.191
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.191 — DIY pages stop offering write controls to household viewers:** Follow-up to the P0 role floor. The DIY project page, template page, DIY hub and the property DIY tool page hide the project, step, complete, stop and AI-guide controls for a household viewer and show a view-only notice; the rule is `householdRole !== 'VIEWER'` and the server remains the authority. A failed "stop this project" no longer navigates away as if it had worked, and a failed step update shows its error. Component tests (3 of the 9 page tests fail against the old project page) and a clean `next build`; no browser run. See `docs/architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md` §12.1.
 
 **Revision 1.190 — DIY mutation role floor (design prerequisite P0):** The DIY page's property-scoped write routes (create project, patch project, patch step, complete, abandon, generate AI guide) now require the CONTRIBUTOR household role; previously they enforced property access only, so a household viewer could mutate projects through the API. Reads and the decision scorer are unchanged. A route-level test, including a guard that any future non-read DIY route must refuse a viewer, covers it; it was verified to fail against the old routes. The DIY pages still show write controls to viewers (a frontend follow-up). See `docs/architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md` §12.
 

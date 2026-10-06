@@ -280,4 +280,26 @@ P0 was implemented on its own, independent of the design approval, because it fi
 
 **Not run:** the real HTTP stack, a database, or a browser. The handler chains ran with a stubbed access lookup, not Express.
 
-**Known consequence, not fixed here.** The DIY pages still show their controls to viewers [Code-traced]. A viewer's step update is awaited without a catch (an unhandled rejection), a viewer's "Stop this project" swallows the 403 (`.catch(() => null)`) and then navigates away as if it worked, and the complete sheet reports an error. Hiding or disabling these controls for viewers, using the property's `householdRole`, is a separate frontend change.
+**Known consequence, fixed in the frontend follow-up below.** After P0 the DIY pages still showed their controls to viewers [Code-traced]: a viewer's step update was awaited without a catch (an unhandled rejection), and a viewer's "Stop this project" swallowed the 403 (`.catch(() => null)`) and then navigated away as if it had worked.
+
+### 12.1 Frontend follow-up: viewer controls (October 6, 2026)
+
+**Rule.** `householdRole` is on a property only for household members (the owner's own properties carry none), so `canWrite = householdRole !== 'VIEWER'`. The server's role floor stays the authority; the client only stops offering controls a viewer cannot use. While the properties list is loading, write controls stay hidden (no flash for a viewer); if the list cannot be loaded or the property is not in it, the server decides (not treated as a viewer).
+
+**Changed (frontend only)**
+
+- New `lib/property/propertyWriteAccess.ts` (pure rule), `lib/property/usePropertyWriteAccess.ts` (reads the cached properties list through the existing `['userProperties']` query) and `components/features/diy/ViewOnlyNotice.tsx`.
+- Project page: a viewer sees the steps, safety notes and recorded notes read-only, with a notice, and no "Mark done", "Start step", "Skip", note box, "Complete Project" or "I'll hire a pro instead". `ProjectStepList` gained a `readOnly` prop.
+- Template page: the button reads "View only" and is disabled for a viewer, with the notice. DIY hub and the property DIY tool page: no "Describe your project" generator (and no "Start Project" for a pending guide) for a viewer, with the notice.
+- **Error handling (all roles).** A failed "stop this project" now stays on the page and shows the error instead of navigating away; a failed step update shows the error instead of an unhandled rejection; the hub's create-from-guide shows a toast on failure.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| New tests: access rule (3), read-only step list (2), project, template and hub pages for viewer and contributor, plus the two error fixes (9) | 14 pass | Component-tested |
+| Page tests against the original project page (negative control) | 3 fail (viewer controls, failed stop, failed step update), 6 pass | Component-tested |
+| `next build` | compiled and type-checked (it first caught a real type error: `APIResponse` is a union with an error shape, now narrowed) | Static |
+| `jest` on `src/lib/property`, `src/components/features`, `src/app` | 246 pass, 1 fail: `propertyContextForm.test.ts` (a source-text check on the unrelated property create/edit pages; those files are untouched) | Component-tested |
+
+**Not run:** a browser, so layout and the notice's appearance are unverified. Not covered by a test: the property DIY tool page's viewer branch (built and type-checked only), and the complete sheet, which is reachable only through the now-hidden button.

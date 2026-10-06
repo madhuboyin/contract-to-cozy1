@@ -9,9 +9,11 @@ interface Props {
   steps: DiyProjectStep[];
   onUpdateStep: (stepId: string, status: DiyStepStatus, notes?: string) => Promise<void>;
   disabled?: boolean;
+  /** A household viewer follows along: steps and notes are shown, but no control that changes the project is rendered. */
+  readOnly?: boolean;
 }
 
-export default function ProjectStepList({ steps, onUpdateStep, disabled }: Props) {
+export default function ProjectStepList({ steps, onUpdateStep, disabled, readOnly }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(steps[0]?.id ?? null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [noteValues, setNoteValues] = useState<Record<string, string>>({});
@@ -75,6 +77,9 @@ export default function ProjectStepList({ steps, onUpdateStep, disabled }: Props
                 )}
 
                 {/* Notes */}
+                {readOnly ? (
+                  step.notes ? <p className="whitespace-pre-wrap rounded-xl border bg-neutral-50 px-3 py-2 text-sm text-neutral-700">{step.notes}</p> : null
+                ) : (
                 <textarea
                   rows={2}
                   placeholder="Add a note…"
@@ -83,9 +88,10 @@ export default function ProjectStepList({ steps, onUpdateStep, disabled }: Props
                   className="w-full resize-none rounded-xl border bg-transparent px-3 py-2 text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--mobile-brand-strong))]"
                   disabled={disabled || isDone}
                 />
+                )}
 
                 {/* Actions */}
-                {!isDone && !isSkipped && (
+                {!readOnly && !isDone && !isSkipped && (
                   <div className="flex gap-2">
                     {step.status === 'PENDING' && (
                       <button

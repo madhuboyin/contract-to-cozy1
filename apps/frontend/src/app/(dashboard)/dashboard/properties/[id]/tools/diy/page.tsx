@@ -9,6 +9,8 @@ import SkillProfileCard from '@/components/features/diy/SkillProfileCard';
 import TemplateCard from '@/components/features/diy/TemplateCard';
 import AiGuideSheet from '@/components/features/diy/AiGuideSheet';
 import { STATUS_LABELS, STATUS_COLOR } from '@/components/features/diy/DiyUtils';
+import ViewOnlyNotice from '@/components/features/diy/ViewOnlyNotice';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { track } from '@/lib/analytics/events';
 import { toast } from '@/components/ui/use-toast';
 import { useToolLaunchContext } from '@/features/tools/ToolLaunchContextBoundary';
@@ -21,6 +23,7 @@ export default function PropertyDiyToolPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const propertyId = params.id;
+  const { canWrite, isViewer } = usePropertyWriteAccess(propertyId);
   const launchContext = useToolLaunchContext();
   const sourcePayload = diyProjectSourcePayload(launchContext?.resolved);
   const contextualPrompt = diyPromptFromLaunchContext(launchContext?.resolved);
@@ -99,6 +102,8 @@ export default function PropertyDiyToolPage() {
         <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">Step-by-step guides for projects you can do yourself</p>
       </div>
 
+      {isViewer && <ViewOnlyNotice />}
+
       {skillProfile ? (
         <SkillProfileCard profile={skillProfile} />
       ) : (
@@ -153,15 +158,17 @@ export default function PropertyDiyToolPage() {
         </div>
       </section>
 
-      <button
-        type="button"
-        onClick={() => setShowAiSheet(true)}
-        className="w-full rounded-2xl border-2 border-dashed border-neutral-200 py-4 text-sm font-medium text-[hsl(var(--mobile-text-secondary))]"
-      >
-        Don&apos;t see your project? Describe it →
-      </button>
+      {canWrite && (
+        <button
+          type="button"
+          onClick={() => setShowAiSheet(true)}
+          className="w-full rounded-2xl border-2 border-dashed border-neutral-200 py-4 text-sm font-medium text-[hsl(var(--mobile-text-secondary))]"
+        >
+          Don&apos;t see your project? Describe it →
+        </button>
+      )}
 
-      {showAiSheet && (
+      {showAiSheet && canWrite && (
         <AiGuideSheet
           propertyId={propertyId}
           initialPrompt={contextualPrompt}

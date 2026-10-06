@@ -8,12 +8,16 @@ import type { DiySkillProfile, DiyProjectSummary, DiyTemplateSummary, DiyAiGuide
 import SkillProfileCard from '@/components/features/diy/SkillProfileCard';
 import TemplateCard from '@/components/features/diy/TemplateCard';
 import AiGuideSheet from '@/components/features/diy/AiGuideSheet';
+import ViewOnlyNotice from '@/components/features/diy/ViewOnlyNotice';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
+import { toast } from '@/components/ui/use-toast';
 import { STATUS_LABELS, STATUS_COLOR } from '@/components/features/diy/DiyUtils';
 
 export default function DiyHubPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const propertyId = searchParams.get('propertyId') ?? '';
+  const { canWrite, isViewer } = usePropertyWriteAccess(propertyId);
 
   const [skillProfile, setSkillProfile] = useState<DiySkillProfile | null>(null);
   const [activeProjects, setActiveProjects] = useState<DiyProjectSummary[]>([]);
@@ -88,17 +92,23 @@ export default function DiyHubPage() {
         </Link>
       )}
 
+      {isViewer && <ViewOnlyNotice />}
+
       {/* Pending AI Guide */}
-      {pendingGuide && propertyId && (
+      {pendingGuide && propertyId && canWrite && (
         <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
           <p className="text-sm font-semibold text-green-800">Your AI guide is ready!</p>
           <p className="text-xs text-green-700 mt-0.5">{pendingGuide.generatedTitle}</p>
           <button
             type="button"
             onClick={async () => {
-              const project = await api.createDiyProject(propertyId, { aiGuideId: pendingGuide.id });
-              router.push(`/dashboard/diy/projects/${project.id}?propertyId=${propertyId}`);
-              setPendingGuide(null);
+              try {
+                const project = await api.createDiyProject(propertyId, { aiGuideId: pendingGuide.id });
+                router.push(`/dashboard/diy/projects/${project.id}?propertyId=${propertyId}`);
+                setPendingGuide(null);
+              } catch (err: any) {
+                toast({ title: 'Could not start project', description: err?.message || 'Please try again.', variant: 'destructive' });
+              }
             }}
             className="mt-3 rounded-xl bg-green-700 px-4 py-2 text-sm font-medium text-white"
           >
@@ -162,7 +172,7 @@ export default function DiyHubPage() {
       </section>
 
       {/* AI Custom Guide */}
-      {propertyId && (
+      {propertyId && canWrite && (
         <button
           type="button"
           onClick={() => setShowAiSheet(true)}
@@ -205,7 +215,7 @@ export default function DiyHubPage() {
         </section>
       )}
 
-      {showAiSheet && propertyId && (
+      {showAiSheet && propertyId && canWrite && (
         <AiGuideSheet
           propertyId={propertyId}
           onGuideStarted={handleGuideStarted}

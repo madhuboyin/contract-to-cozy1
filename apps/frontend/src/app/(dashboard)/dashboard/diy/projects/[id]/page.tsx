@@ -9,6 +9,8 @@ import ProjectStepList from '@/components/features/diy/ProjectStepList';
 import MaterialsChecklist from '@/components/features/diy/MaterialsChecklist';
 import ToolsList from '@/components/features/diy/ToolsList';
 import ProjectCompleteSheet from '@/components/features/diy/ProjectCompleteSheet';
+import ViewOnlyNotice from '@/components/features/diy/ViewOnlyNotice';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { STATUS_LABELS, STATUS_COLOR, CATEGORY_EMOJI } from '@/components/features/diy/DiyUtils';
 
 export default function ProjectTrackerPage() {
@@ -16,6 +18,7 @@ export default function ProjectTrackerPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const propertyId = searchParams.get('propertyId') ?? '';
+  const { canWrite, isViewer } = usePropertyWriteAccess(propertyId);
 
   const [project, setProject] = useState<DiyProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,16 +37,28 @@ export default function ProjectTrackerPage() {
 
   async function handleStepUpdate(stepId: string, status: DiyStepStatus, notes?: string) {
     if (!propertyId || !project) return;
-    await api.updateDiyProjectStep(propertyId, project.id, stepId, { status, notes });
-    await load();
+    setError(null);
+    try {
+      await api.updateDiyProjectStep(propertyId, project.id, stepId, { status, notes });
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not update this step. Please try again.');
+    }
   }
 
   async function handleAbandon() {
     if (!propertyId || !project) return;
     if (!confirm('Stop this project?')) return;
     setAbandoning(true);
-    await api.abandonDiyProject(propertyId, project.id, { hireOut: false }).catch(() => null);
-    router.push(`/dashboard/diy?propertyId=${propertyId}`);
+    setError(null);
+    try {
+      await api.abandonDiyProject(propertyId, project.id, { hireOut: false });
+      router.push(`/dashboard/diy?propertyId=${propertyId}`);
+    } catch (err: any) {
+      // The project is unchanged, so stay here and say so rather than leaving as if it had been stopped.
+      setError(err?.message ?? 'Could not stop this project. Please try again.');
+      setAbandoning(false);
+    }
   }
 
   if (loading) {
@@ -124,10 +139,12 @@ export default function ProjectTrackerPage() {
       {/* Steps */}
       <section>
         <p className="mb-2 text-sm font-semibold">Steps</p>
+        {isViewer && <ViewOnlyNotice className="mb-2" />}
         <ProjectStepList
           steps={project.steps}
           onUpdateStep={handleStepUpdate}
           disabled={isFinished}
+          readOnly={!canWrite}
         />
       </section>
 
@@ -148,7 +165,7 @@ export default function ProjectTrackerPage() {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {/* Fixed bottom actions */}
-      {!isFinished && (
+      {!isFinished && canWrite && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 space-y-2">
           {allDone && (
             <button
@@ -179,7 +196,7 @@ export default function ProjectTrackerPage() {
         </div>
       )}
 
-      {showComplete && propertyId && (
+      {showComplete && propertyId && canWrite && (
         <ProjectCompleteSheet
           propertyId={propertyId}
           projectId={project.id}

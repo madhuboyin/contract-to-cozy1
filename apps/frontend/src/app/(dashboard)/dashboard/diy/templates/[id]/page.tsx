@@ -7,6 +7,8 @@ import { api } from '@/lib/api/client';
 import type { DiyTemplateDetail, DiyDecisionResult } from '@/types';
 import DiyDecisionCard from '@/components/features/diy/DiyDecisionCard';
 import SafetyWarningBanner from '@/components/features/diy/SafetyWarningBanner';
+import ViewOnlyNotice from '@/components/features/diy/ViewOnlyNotice';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { DIFFICULTY_LABELS, DIFFICULTY_COLOR, CATEGORY_EMOJI, formatMinutes, formatCentsRange } from '@/components/features/diy/DiyUtils';
 
 export default function TemplateDetailPage() {
@@ -15,6 +17,7 @@ export default function TemplateDetailPage() {
   const router = useRouter();
   const propertyId = searchParams.get('propertyId') ?? '';
   const maintenanceTaskId = searchParams.get('maintenanceTaskId') ?? undefined;
+  const { canWrite, isViewer } = usePropertyWriteAccess(propertyId);
 
   const [template, setTemplate] = useState<DiyTemplateDetail | null>(null);
   const [decision, setDecision] = useState<DiyDecisionResult | null>(null);
@@ -168,6 +171,8 @@ export default function TemplateDetailPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      {isViewer && <ViewOnlyNotice />}
+
       {/* Fixed bottom CTA */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex gap-3">
         <Link
@@ -179,10 +184,10 @@ export default function TemplateDetailPage() {
         <button
           type="button"
           onClick={handleStart}
-          disabled={!canStart || starting || !propertyId}
+          disabled={!canStart || starting || !propertyId || !canWrite}
           className="flex-1 rounded-xl bg-[hsl(var(--mobile-brand-strong))] py-3 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {starting ? 'Starting…' : canStart ? 'Start Project' : 'Hire Required'}
+          {isViewer ? 'View only' : starting ? 'Starting…' : canStart ? 'Start Project' : 'Hire Required'}
         </button>
       </div>
     </div>
