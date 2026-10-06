@@ -14,6 +14,7 @@ import { USER_ADD_ORIGIN } from '../conversationalUnderstanding/conversationalCa
 import { APIError } from '../../../middleware/error.middleware';
 import { homeEventFollowUpCandidates, homeEventsServiceForCapture } from '../handlers/homeRecordWrites.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
+import { inventoryViewItemAction } from './inventoryAskActions';
 import { captureEventResult } from '../askHandlerSupport';
 
 async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
@@ -426,9 +427,7 @@ async function confirmEvidenceRecordLink(ctx: ConfirmCapabilityContext, targetTy
     throw Object.assign(new Error('That document is already filed under another record, or is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   }
   const document = await prisma.document.findFirst({ where: { id: documentId, propertyId: execution.propertyId }, select: { id: true, name: true } });
-  const href = targetType === 'INVENTORY_ITEM'
-    ? `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inventory?openItemId=${encodeURIComponent(targetId)}`
-    : '/dashboard/warranties';
+  const href = '/dashboard/warranties';
   const where = targetType === 'INVENTORY_ITEM' ? 'inventory item' : 'warranty';
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'EVIDENCE_ATTACHED',
@@ -437,7 +436,7 @@ async function confirmEvidenceRecordLink(ctx: ConfirmCapabilityContext, targetTy
       body: `${document?.name ?? 'The document'} is now filed with this ${where}.`, actions: [],
     }, {
       type: 'SUMMARY', id: `evidence-attached-open-${documentId}`, title: 'Open the record', tone: 'DEFAULT', body: 'See the document with the record it now belongs to.',
-      actions: [{ id: 'open-attached-record', label: targetType === 'INVENTORY_ITEM' ? 'Open home inventory' : 'Open Warranties', href, style: 'SECONDARY' }],
+      actions: [targetType === 'INVENTORY_ITEM' ? inventoryViewItemAction(title, 'SECONDARY') : { id: 'open-attached-record', label: 'Open Warranties', href, style: 'SECONDARY' as const }],
     }],
     confirmation: null, suggestions: [],
   };

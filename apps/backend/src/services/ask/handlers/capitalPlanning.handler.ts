@@ -10,6 +10,7 @@ import { evaluateFeatureContext } from '../../../modules/propertyContext/applica
 import { getFinancialContextDecisions } from '../../financialContext/context';
 import { homeReserveFundService } from '../../homeReserveFund.service';
 import { humanDate, money } from '../askFormatting';
+import { inventoryAddItemAction } from './inventoryAskActions';
 import { askCaptureRequest, capabilityResult, ensurePropertyAccess, isCapitalTimelineAnalysisStale, parseCapitalTimelineHorizonRequest } from '../askHandlerSupport';
 import { HomeCapitalTimelineService } from '../../homeCapitalTimeline.service';
 import { propertyTaxAppealReadinessService } from '../../propertyTax/propertyTaxAppealReadiness.service';
@@ -116,7 +117,7 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
   const lineItems: any[] = await homeReserveFundService.listLineItems(propertyId, { status: 'ACTIVE' });
   if (!analysis || !Array.isArray(analysis.items) || analysis.items.length === 0) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'CAPITAL_PLAN_INVENTORY_REQUIRED', contextVersion: capitalContext.contextVersion, parameters: { phase5CaptureFeature: captureFeature }, captureRequests,
-    blocks: [{ type: 'SUMMARY', id: 'capital-plan-empty', title: 'Add at least one major appliance or system to build a capital plan', body: 'A reserve target without recorded systems would be a generic guess. Add the roof, HVAC, water heater, appliances, or other capital items and Ask will calculate a property-specific timeline.', tone: 'CAUTION', actions: [{ id: 'open-inventory', label: 'Add home systems', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'capital-plan-empty', title: 'Add at least one major appliance or system to build a capital plan', body: 'A reserve target without recorded systems would be a generic guess. Add the roof, HVAC, water heater, appliances, or other capital items and Ask will calculate a property-specific timeline.', tone: 'CAUTION', actions: [{ ...inventoryAddItemAction(), label: 'Add home systems' }] }],
     suggestions: ['Show my home inventory'],
   };
   const items: any[] = analysis.items;

@@ -25,6 +25,7 @@ import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, capture
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, WARRANTY_CORRECTION_FIELDS, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from '../handlers/homeRecordWrites.handler';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
 import { homeEventFollowUpCandidates } from '../handlers/homeRecordWrites.handler';
+import { inventoryViewItemAction } from './inventoryAskActions';
 import { INVENTORY_CORRECTION_FIELDS, INVENTORY_CORRECTION_NO_ROOM_VALUE, INVENTORY_NO_ROOM_VALUE, INVENTORY_ROOM_LINK_FIELD, inventoryCategoryLabel, inventoryCorrectionBlocker, inventoryCorrectionConfirmation, inventoryCreateBlocker, inventoryCreateRooms, inventoryFieldCurrent, inventoryFieldDisplay, inventoryFieldNormalized, inventoryFieldPatch, inventoryFieldValueError, inventoryItemContextVersion, inventoryMissingDetailCandidates, inventoryRoomLinkOptions, inventoryService, roomAddItemCandidates } from '../handlers/inventory.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { recordDocumentPromotionOutcome, recordOperationalWorkOutcome } from '../../decisionPlatform/outcomeObservationService';
@@ -300,7 +301,7 @@ async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promi
       type: 'WORKFLOW_PROGRESS', id: `inventory-corrected-${item.id}`, title: 'Inventory record updated', status: 'COMPLETED',
       description: 'The canonical inventory record was updated and dependent analyses were marked for refresh.',
       details: [{ label: 'Item', value: item.name }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : inventoryFieldDisplay(field, previous, dynamicOptions) }, { label: 'New value', value: inventoryFieldDisplay(field, normalized, dynamicOptions) }],
-      actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/inventory?tab=items`, style: 'PRIMARY' }],
+      actions: [inventoryViewItemAction(item.name)],
     }],
     suggestions: ['Show my home inventory'],
     // After a correction, offer the details this same item is still missing (the field just corrected is no longer missing).
@@ -632,9 +633,9 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
     status: 'COMPLETED', reasonCode: 'INVENTORY_ITEM_CREATED',
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `inventory-created-${itemId}`, title: alreadyAdded ? 'Item already added' : 'Item added', status: 'COMPLETED',
-      description: 'The item is now part of your home record and dependent coverage analysis was marked for refresh. Ask can correct its dates, condition, costs and notes from the inventory list.',
+      description: 'The item is now part of your home record and dependent coverage analysis was marked for refresh. Ask can correct its dates, condition, costs and notes.',
       details: [{ label: 'Item name', value: input.name }, { label: 'Category', value: inventoryCategoryLabel(input.category) }, { label: 'Room', value: input.roomId === INVENTORY_NO_ROOM_VALUE ? 'No room (whole-home)' : rooms.find((room) => room.id === input.roomId)?.name ?? 'Recorded room' }, ...(input.brand ? [{ label: 'Brand', value: input.brand }] : []), ...(input.model ? [{ label: 'Model', value: input.model }] : [])],
-      actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`, style: 'PRIMARY' }],
+      actions: [inventoryViewItemAction(input.name)],
     }],
     // The item the homeowner just created is the exact target of the next details to add; typed candidates name it, so a chip can never
     // be re-read as a different item. The plain suggestion is only the fallback when the record is already complete.

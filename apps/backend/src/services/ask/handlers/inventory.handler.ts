@@ -15,6 +15,7 @@ import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../../inventory.serv
 import { type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, homeEventCorrectionItemActions, INVENTORY_CATEGORY_VALUES, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, isValidDateEditInput, MAX_RESULT_ITEMS } from '../askHandlerSupport';
+import { INVENTORY_ADD_MESSAGE, inventoryAddItemAction } from './inventoryAskActions';
 import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../askInventoryIntent';
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
@@ -203,7 +204,7 @@ async function inventoryLookupResult(
         type: 'SUMMARY', id: 'inventory-empty', title: 'No inventory items are recorded for this home yet',
         body: 'An empty Living Home Record does not mean the home has no appliances or systems. Add or scan items before Ask can provide item-specific details or history.',
         tone: 'CAUTION',
-        actions: [{ id: 'add-inventory', label: 'Add inventory items', href: `${inventoryHref}&action=add-item&source=ask`, style: 'PRIMARY' }],
+        actions: [{ ...inventoryAddItemAction(), label: 'Add inventory items' }],
       }],
       suggestions: ['Open home inventory'],
     };
@@ -934,7 +935,8 @@ registerCapabilityHandler('inventory.item-correct', async (envelope) => inventor
 // INVENTORY_ITEM_CORRECT. Confirming writes through inventoryService.createItem -- the same writer the Inventory page
 // uses, including its water-heater, room-required and one-per-major-appliance rules -- and repeats the three
 // stale-analysis markers the traditional POST controller calls.
-export const INVENTORY_ADD_MESSAGE = 'Add an item to my home inventory.';
+
+export { INVENTORY_ADD_MESSAGE, inventoryAddItemAction };
 
 export const INVENTORY_CREATE_CAPTURE_KEY = 'INVENTORY_ITEM_CREATE_INPUTS';
 
@@ -988,7 +990,6 @@ export function inventoryCreateSeedFromMessage(message: string, rooms: Array<{ i
   };
 }
 
-export const inventoryAddItemAction = () => ({ id: 'add-inventory-item', label: 'Add an item', interactionType: 'START_WORKFLOW' as const, message: INVENTORY_ADD_MESSAGE, operationId: 'INVENTORY_ITEM_CREATE', style: 'PRIMARY' as const });
 
 export async function inventoryCreateRooms(propertyId: string): Promise<Array<{ id: string; name: string }>> {
   return prisma.inventoryRoom.findMany({ where: { propertyId }, select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 50 });

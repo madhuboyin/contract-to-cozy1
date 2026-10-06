@@ -10,7 +10,7 @@ import { type AskCaptureRequest, type AskPresentationBlock, type CreateAskExecut
 import { askModelDurationSeconds, askRemoteGenerationCharactersTotal, askRemoteGenerationTotal } from '../../../lib/metrics';
 import { PropertyMaintenanceTaskService } from '../../PropertyMaintenanceTask.service';
 import { answerGroundedAsk } from '../../groundedAsk.service';
-import { type AskOperationResult } from '../askOperationRegistry';
+import { resolveAskOperation, type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import type { CapabilityInvocationEnvelope } from '../capabilityInvocation.contract';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
@@ -21,6 +21,7 @@ import { humanDate, money } from '../askFormatting';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { buildMaintenanceImportanceResult } from '../support/maintenanceImportance';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HOME_CHANGE_SUMMARY_WINDOW_DAYS, HOME_DEADLINE_DEFAULT_LEAD_DAYS, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, MaintenanceCompletionWorkflowInput, RadarEnvelopeQuerySuppliedInput } from '../askHandlerSupport';
+import { inventoryAddItemAction, inventoryShowAllAction } from './inventoryAskActions';
 import { warrantyContextVersion } from '../suggestedActions/domainVersions';
 import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
 import { EVENT_ADD_MESSAGE, EVIDENCE_ATTACH_TARGET_TYPES, type EvidenceAttachTargetType, eventAddResult, evidenceAttachResult, WARRANTY_ADD_MESSAGE, warrantyAddResult } from '../handlers/homeRecordWrites.handler';
@@ -198,7 +199,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
         type: 'SUMMARY', id: 'repair-replace-no-item', title: 'Choose a recorded appliance or home system first',
         body: `I could not resolve this request to one canonical inventory item. Ask will not manufacture a repair/replace calculation without the item’s condition, lifecycle, cost, and repair history.${allItems.length ? ` This home has ${allItems.length} recorded item${allItems.length === 1 ? '' : 's'}.` : ''}`,
         tone: 'CAUTION',
-        actions: [{ id: 'open-inventory', label: allItems.length ? 'Choose from inventory' : 'Add an inventory item', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }],
+        actions: [allItems.length ? inventoryShowAllAction() : { ...inventoryAddItemAction(), label: 'Add an inventory item' }],
       }],
       suggestions: allItems.slice(0, 3).map((item) => `Should I repair or replace ${item.name}?`),
     };
@@ -213,7 +214,8 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
         description: 'Use the item’s exact name, room, brand, or model. Ask will not combine separate systems into one verdict.',
         sections: [{ id: 'matches', title: 'Possible matches', count: items.length, items: items.map((item) => ({
           id: item.id, title: item.name, description: [item.brand, item.model].filter(Boolean).join(' ') || null, status: item.condition, meta: [item.category.toLowerCase().replace(/_/g, ' ')],
-          href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?openItemId=${encodeURIComponent(item.id)}`,
+          entityType: 'INVENTORY_ITEM',
+          actions: [repairReplaceItemAction(item)],
         })) }], actions: [],
       }],
       suggestions: items.slice(0, 3).map((item) => `Should I repair or replace ${item.name}?`),
@@ -740,6 +742,13 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
 // lives in its own file, calling registerCapabilityHandler directly from
 // there) -- never a new branch in dispatchOperationAdapterResult below,
 // which no longer branches on operationId at all.
+// The declared operation is authoritative for a row action, and the same sentence routes HVAC-type items to the HVAC
+// decision flow rather than generic repair/replace, so declare whatever the message itself resolves to.
+function repairReplaceItemAction(item: { id: string; name: string }) {
+  const message = `Should I repair or replace ${item.name}?`;
+  return { id: `repair-replace-${item.id}`, label: 'Analyze this item', message, style: 'PRIMARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: resolveAskOperation(message).operationId };
+}
+
 registerCapabilityHandler('boundary.emergency', async () => emergencyResult());
 
 registerCapabilityHandler('boundary.unsafe-restricted', async () => unsafeRestrictedResult());

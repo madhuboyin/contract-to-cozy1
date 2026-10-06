@@ -9,6 +9,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { getHomeActionFeed } from '../../homeActions.service';
 import { AgentRuntimeAuthorizationError, AgentRuntimeCasConflictError, AgentRuntimeDisabledError, AgentRuntimeStateError, invokeAgentRuntime } from '../../agents/agentRuntime.service';
 import type { AgentRunStatusProjection, HvacSpecialistHomeActionOrigin } from '../../agents/agentRuntime.contract';
+import { inventoryAddItemAction, inventoryViewItemAction } from './inventoryAskActions';
 import { askContextFingerprint, durableFreeTextClarification, ensurePropertyAccess, formatOutcomeCents, outcomeSummaryBlock } from '../askHandlerSupport';
 import * as decisionThreadService from '../../decisionPlatform/decisionThreadService';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
@@ -96,7 +97,7 @@ export async function hvacDecisionStartResult(userId: string, propertyId: string
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
       ...durableFreeTextClarification('HVAC_DECISION_START', 'No HVAC system is recorded on this property yet. What HVAC system should Ask track?'),
-      blocks: [{ type: 'SUMMARY', id: 'hvac-decision-no-item', title: 'No HVAC system recorded', body: 'Add the HVAC system to the home record first, then ask again.', tone: 'CAUTION', actions: [{ id: 'open-inventory', label: 'Add HVAC system', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'hvac-decision-no-item', title: 'No HVAC system recorded', body: 'Add the HVAC system to the home record first, then ask again.', tone: 'CAUTION', actions: [{ ...inventoryAddItemAction(), label: 'Add HVAC system' }] }],
       suggestions: [],
     };
   }
@@ -216,7 +217,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
   if (selection.kind === 'NONE') {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
-      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-decision-none', title: 'No active decision for this system yet', body: `Ask has not started a repair-or-replace decision for ${item.name}.`, actions: [{ id: 'open-inventory', label: 'Open inventory', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'EMPTY_STATE', id: 'hvac-decision-none', title: 'No active decision for this system yet', body: `Ask has not started a repair-or-replace decision for ${item.name}.`, actions: [inventoryViewItemAction(item.name)] }],
       suggestions: [`Should I repair or replace my ${item.name}?`],
     };
   }
