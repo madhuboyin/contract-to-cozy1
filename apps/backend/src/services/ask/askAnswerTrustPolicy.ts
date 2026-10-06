@@ -81,7 +81,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
 };
 
 const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<string>>>> = {
-  MAINTENANCE_STATUS: new Set(['open-maintenance', 'open-seasonal', 'create-maintenance', 'open-maintenance-setup', 'add-purchase-date']),
+  MAINTENANCE_STATUS: new Set(['open-maintenance', 'create-maintenance', 'open-maintenance-setup', 'add-purchase-date', 'seasonal-retry', 'seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance']),
   MAINTENANCE_TASK_CREATE: new Set(['open-maintenance', 'open-task']),
   MAINTENANCE_TASK_COMPLETE: new Set(['open-maintenance', 'open-task']),
   MAINTENANCE_TASK_UPDATE: new Set(['open-maintenance', 'open-task']),

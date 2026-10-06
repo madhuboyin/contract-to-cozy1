@@ -21,6 +21,7 @@ export function matchesMaintenanceStatusAnswerContract(result: AskOperationResul
     'maintenance-record-boundary',
     'seasonal-maintenance-summary',
     'seasonal-maintenance-items',
+    'seasonal-maintenance-next',
     'seasonal-context-unavailable',
     'related-capabilities',
     // Found verifying the interaction dispatcher (browser session,

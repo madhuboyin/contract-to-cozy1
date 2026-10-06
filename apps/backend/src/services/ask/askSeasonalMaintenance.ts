@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { seasonalTaskFacts, seasonalTemplateByKey } from './support/seasonalHomeCare';
 import type { AskOperationResult } from './askOperationRegistry';
 import type {
   SeasonalChecklistContext,
@@ -116,6 +117,11 @@ const PRIORITY_SHELVES = [
   { id: 'priority-optional', priority: 'OPTIONAL', title: 'Optional' },
 ] as const;
 
+const PRIORITY_LABELS = { CRITICAL: 'High priority', RECOMMENDED: 'Recommended', OPTIONAL: 'Optional' } as const;
+
+// The same plan layout as the general seasonal answer (see support/seasonalHomeCare.ts and SeasonalPlanResultList): what to do soon,
+// what can wait, then the other states, numbered across groups, each task opening to a short how-to. Nothing links to the desktop
+// seasonal page: the views switch inside Ask and the task detail is the item's own facts.
 export function buildSeasonalMaintenanceResult(input: {
   message: string;
   propertyId: string;
@@ -126,17 +132,16 @@ export function buildSeasonalMaintenanceResult(input: {
 }): AskOperationResult | null {
   const intent = parseSeasonalMaintenanceIntent(input.message);
   if (!intent.requested) return null;
-  const seasonalHref = `/dashboard/seasonal?propertyId=${encodeURIComponent(input.propertyId)}&from=ask`;
   if (!input.contextAvailable || !input.context) {
     return {
       status: 'READY_WITH_LIMITATIONS',
       reasonCode: 'SEASONAL_CHECKLIST_CONTEXT_UNAVAILABLE',
       blocks: [{
         type: 'SUMMARY', id: 'seasonal-context-unavailable', title: 'Seasonal tasks are temporarily unavailable',
-        body: 'Ask could not load the selected home’s seasonal checklist, so it cannot determine the current task count. Open Seasonal Care to review the current list.',
-        tone: 'CAUTION', actions: [{ id: 'open-seasonal', label: 'Open Seasonal Care', href: seasonalHref, style: 'PRIMARY' }],
+        body: 'Ask could not load the selected home’s seasonal checklist, so it cannot determine the current task count. Try again in a moment.',
+        tone: 'CAUTION', actions: [{ id: 'seasonal-retry', label: 'Try again', interactionType: 'START_WORKFLOW', message: input.message, operationId: 'MAINTENANCE_STATUS', style: 'PRIMARY' }],
       }],
-      suggestions: ['Try this seasonal question again'],
+      suggestions: [],
     };
   }
 
@@ -159,77 +164,103 @@ export function buildSeasonalMaintenanceResult(input: {
   const explicitLabel = intent.seasons.length === 1
     ? titleCase(intent.seasons[0])
     : checklists.length === 1 ? titleCase(checklists[0].season) : 'Seasonal';
+  const word = explicitLabel.toLowerCase();
   const viewLabel = intent.view === 'COMPLETED' ? 'completed' : intent.view === 'DISMISSED' ? 'dismissed' : intent.view === 'ALL' ? 'recorded' : 'pending';
   const title = matches.length
     ? intent.view === 'OPEN'
-      ? `${matches.length} ${explicitLabel.toLowerCase()} task${matches.length === 1 ? ' needs' : 's need'} attention`
-      : `${matches.length} ${explicitLabel.toLowerCase()} task${matches.length === 1 ? '' : 's'} ${viewLabel}`
-    : `No ${intent.view === 'OPEN' ? 'pending ' : intent.view === 'ALL' ? '' : `${viewLabel} `}${explicitLabel.toLowerCase()} tasks were found`;
+      ? `${matches.length} ${word} task${matches.length === 1 ? ' needs' : 's need'} attention`
+      : `${matches.length} ${word} task${matches.length === 1 ? '' : 's'} ${viewLabel}`
+    : `No ${intent.view === 'OPEN' ? 'pending ' : intent.view === 'ALL' ? '' : `${viewLabel} `}${word} tasks were found`;
   const checklistLabel = checklists.length === 1
     ? `${titleCase(checklists[0].season)} ${checklists[0].year} checklist`
     : 'selected seasonal checklists';
   const linkedCount = matches.filter(({ item }) => item.maintenanceTask).length;
+  const isUrgent = ({ item }: { item: SeasonalChecklistContextItem }) => item.priority === 'CRITICAL' && effectiveStatus(item) === 'PENDING';
+  const soonCount = matches.filter(isUrgent).length;
+  const laterCount = matches.length - soonCount;
+  const focusSentence = intent.view === 'OPEN' && matches.length
+    ? ` Here ${matches.length === 1 ? 'is 1 thing' : `are ${matches.length} things`} to focus on.${soonCount && laterCount ? ` I recommend doing the first ${soonCount} soon, and the other ${laterCount} when you have time.` : soonCount ? ` I recommend doing ${soonCount === 1 ? 'it' : 'all of them'} soon.` : ' None of these is urgent, so do them when you have time.'}`
+    : '';
   const summaryBody = matches.length
-    ? `These tasks come from the ${checklistLabel}.${linkedCount ? ` ${linkedCount} ${linkedCount === 1 ? 'is' : 'are'} also linked to the canonical Maintenance record and shown only once.` : ''}`
+    ? `These tasks come from the ${checklistLabel}.${linkedCount ? ` ${linkedCount} ${linkedCount === 1 ? 'is' : 'are'} also linked to the canonical Maintenance record and shown only once.` : ''}${focusSentence}`
     : checklists.length
       ? `The ${checklistLabel} is recorded, but it contains no tasks matching this status.`
       : `No matching seasonal checklist is recorded for this home. Ask did not substitute an empty Maintenance search.`;
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'seasonal-maintenance-summary', title, body: summaryBody,
-    tone: matches.some(({ item }) => item.priority === 'CRITICAL') ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-seasonal', label: checklists.length === 1 ? `Open ${titleCase(checklists[0].season)} checklist` : 'Open Seasonal Care', href: seasonalHref, style: 'PRIMARY' }],
+    tone: matches.some(({ item }) => item.priority === 'CRITICAL') ? 'CAUTION' : 'DEFAULT', actions: [],
   }];
   if (matches.length) {
+    let number = 0;
     const toItem = (checklist: SeasonalChecklistContextChecklist, item: SeasonalChecklistContextItem) => {
+      number += 1;
       const status = effectiveStatus(item);
+      const template = seasonalTemplateByKey(item.taskKey);
+      const shelf = seasonalShelfFacts({
+        priority: item.priority, status, recommendedDate: item.recommendedDate, snoozedUntil: item.snoozedUntil,
+        formatDate: (value) => formatDate(value, input.propertyTimezone),
+      });
+      const statusFacts: Array<{ label: string; value: string }> = [
+        { label: 'What to do', value: template?.description ?? item.description ?? item.title },
+        { label: 'Timing', value: shelf.timingLabel },
+        { label: 'Status', value: status === 'PENDING' ? 'Pending' : titleCase(status) },
+        ...(item.maintenanceTask ? [{ label: 'In Maintenance', value: `Yes, ${titleCase(item.maintenanceTask.status.replace(/_/g, ' '))}` }] : []),
+        ...(template ? seasonalTaskFacts(template).filter((fact) => fact.label !== 'What to do' && fact.label !== 'When') : []),
+      ];
       return {
         id: item.id,
         title: item.title,
-        description: item.description ?? undefined,
-        status,
+        description: template?.whyItMatters ?? item.description ?? null,
+        condition: null,
+        entityType: 'SEASONAL_ITEM',
         meta: [
-          `${titleCase(item.priority)} priority`,
-          item.recommendedDate ? `Recommended ${formatDate(item.recommendedDate, input.propertyTimezone)}` : null,
-          status === 'SNOOZED' && item.snoozedUntil ? `Snoozed until ${formatDate(item.snoozedUntil, input.propertyTimezone)}` : null,
-          item.maintenanceTask ? 'Linked to Maintenance' : 'Seasonal checklist',
+          PRIORITY_LABELS[item.priority],
+          status === 'SNOOZED' && item.snoozedUntil ? `Snoozed until ${formatDate(item.snoozedUntil, input.propertyTimezone)}` : status === 'COMPLETED' ? 'Completed' : status === 'DISMISSED' ? 'Dismissed' : item.recommendedDate ? `Recommended ${formatDate(item.recommendedDate, input.propertyTimezone)}` : null,
+          item.maintenanceTask ? 'In Maintenance' : null,
         ].filter((value): value is string => Boolean(value)),
-        href: `${seasonalHref}&checklistId=${encodeURIComponent(checklist.id)}&itemId=${encodeURIComponent(item.id)}`,
-        actions: [],
-        ...seasonalShelfFacts({
-          priority: item.priority, status, recommendedDate: item.recommendedDate, snoozedUntil: item.snoozedUntil,
-          formatDate: (value) => formatDate(value, input.propertyTimezone),
-        }),
+        detail: statusFacts.map((fact) => `${fact.label}: ${fact.value}`).join('\n'),
+        tone: isUrgent({ item }) ? 'CAUTION' as const : 'DEFAULT' as const,
+        status, href: null, countLabel: String(number),
       };
     };
-    // One checklist: shelves by priority (the order the tasks are already sorted in). Several: one shelf per season
-    // and year, so tasks from different checklists are never merged.
+    const group = (id: string, groupTitle: string, caption: string, records: typeof matches) => records.length
+      ? [{ id, title: groupTitle, caption, count: records.length, items: records.map(({ checklist, item }) => toItem(checklist, item)) }]
+      : [];
+    const statusOf = (match: (typeof matches)[number]) => effectiveStatus(match.item);
+    // One checklist: the plan's own groups. Several: one group per season and year, so tasks from different checklists are never merged.
     const sections = checklists.length === 1
-      ? PRIORITY_SHELVES.map((shelf) => {
-        const records = matches.filter(({ item }) => item.priority === shelf.priority);
-        return { id: shelf.id, title: shelf.title, count: records.length, items: records.map(({ checklist, item }) => toItem(checklist, item)) };
-      }).filter((section) => section.count > 0)
-      : checklists.map((checklist) => {
-        const records = matches.filter((match) => match.checklist.id === checklist.id);
-        return { id: checklist.id, title: `${titleCase(checklist.season)} ${checklist.year}`, count: records.length, items: records.map(({ checklist: owner, item }) => toItem(owner, item)) };
-      }).filter((section) => section.count > 0);
+      ? [
+        ...group('seasonal-soon', 'Do these soon', 'Helps prevent costly issues and keeps your home safe and efficient.', matches.filter(isUrgent)),
+        ...group('seasonal-wait', 'Can wait', 'Useful checks to keep your home in good shape.', matches.filter((match) => !isUrgent(match) && ['PENDING', 'SNOOZED'].includes(statusOf(match)))),
+        ...group('seasonal-completed', 'Completed', 'Done and recorded.', matches.filter((match) => statusOf(match) === 'COMPLETED')),
+        ...group('seasonal-dismissed', 'Dismissed', 'Set aside for this season.', matches.filter((match) => statusOf(match) === 'DISMISSED')),
+      ]
+      : checklists.flatMap((checklist) => group(checklist.id, `${titleCase(checklist.season)} ${checklist.year}`, 'From this seasonal checklist.', matches.filter((match) => match.checklist.id === checklist.id)));
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'seasonal-maintenance-items', title: `${explicitLabel} checklist`,
-      // IW-PRES-014 / IW-PRES-022: the seasonal checklist renders as shelves (FRD v1.83); the cards are read-only.
-      presentation: { pattern: 'SHELVES' },
       description: 'Checklist status is used first; a linked canonical Maintenance completion takes precedence when the two sources differ.',
       sections, actions: [],
     });
   }
+  const action = (id: string, label: string, message: string) => ({
+    id, label, interactionType: 'START_WORKFLOW' as const, message, operationId: 'MAINTENANCE_STATUS', style: 'SECONDARY' as const,
+  });
+  const pending = action('seasonal-show-pending', `Show pending ${word} tasks`, `What ${word} tasks are pending?`);
+  const completed = action('seasonal-show-completed', `Show completed ${word} tasks`, `Show completed ${word} tasks`);
+  const dismissed = action('seasonal-show-dismissed', `Show dismissed ${word} tasks`, `Show dismissed ${word} tasks`);
+  const maintenance = action('seasonal-show-maintenance', 'Show my maintenance tasks', 'What maintenance tasks are coming due?');
+  // The first is the recommended step (rendered filled); the view the homeowner is already on is never offered.
+  const nextActions = intent.view === 'OPEN' ? [{ ...completed, style: 'PRIMARY' as const }, dismissed, maintenance]
+    : intent.view === 'COMPLETED' ? [{ ...pending, style: 'PRIMARY' as const }, dismissed, maintenance]
+      : intent.view === 'DISMISSED' ? [{ ...pending, style: 'PRIMARY' as const }, completed, maintenance]
+        : [{ ...pending, style: 'PRIMARY' as const }, completed, maintenance];
+  blocks.push({
+    type: 'SUMMARY', id: 'seasonal-maintenance-next', title: 'What would you like to do next?',
+    body: 'Switch the view, or see everything due in Maintenance.', tone: 'DEFAULT', actions: nextActions,
+  });
   const contextVersion = createHash('sha256').update(JSON.stringify(checklists.map((checklist) => ({
     id: checklist.id, status: checklist.status, updatedAt: checklist.updatedAt,
     items: checklist.items.map((item) => ({ id: item.id, status: item.status, maintenanceStatus: item.maintenanceTask?.status, updatedAt: item.updatedAt })),
   })))).digest('hex');
-  return {
-    status: 'ANSWERED',
-    contextVersion,
-    blocks,
-    suggestions: intent.view === 'OPEN'
-      ? [`Show completed ${explicitLabel.toLowerCase()} tasks`, `Show dismissed ${explicitLabel.toLowerCase()} tasks`]
-      : [`What ${explicitLabel.toLowerCase()} tasks are pending?`],
-  };
+  return { status: 'ANSWERED', contextVersion, blocks, suggestions: [] };
 }

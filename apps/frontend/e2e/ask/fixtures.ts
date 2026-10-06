@@ -1396,28 +1396,128 @@ function seasonalPlanExecution() {
   };
 }
 
-// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.83): the seasonal checklist answer with its tasks as read-only priority shelves.
+// The home's own seasonal checklist answer (FRD v1.83 shelves, converted to the plan layout in Appendix C.5).
 function seasonalShelvesExecution() {
   const base = maintenanceExecution();
-  const seasonalHref = `/dashboard/seasonal?propertyId=${propertyId}&from=ask`;
-  const task = (id: string, title: string, description: string, priority: string, timingLabel: string, tone: 'DEFAULT' | 'CAUTION') => ({
-    id, title, description, meta: [`${priority} priority`, timingLabel, 'Seasonal checklist'], status: 'PENDING', actions: [],
-    href: `${seasonalHref}&checklistId=summer-2026&itemId=${id}`, timingLabel, tone,
-  });
+  // The existing-checklist answer in the plan layout. The blocks are the real builder's output (buildSeasonalMaintenanceResult for a
+  // Summer 2026 checklist with two critical tasks and one optional), pasted so the fixture cannot drift. Named "shelves" for history.
   return {
     ...base, executionId: 'execution-seasonal-shelves', question: 'What seasonal tasks are pending?', viewState: null,
     blocks: [
-      { type: 'SUMMARY', id: 'seasonal-maintenance-summary', title: '3 summer tasks need attention', body: 'These tasks come from the Summer 2026 checklist.', tone: 'CAUTION',
-        actions: [{ id: 'open-seasonal', label: 'Open Summer checklist', href: seasonalHref, style: 'PRIMARY' }] },
-      { type: 'GROUPED_LIST', filters: [], id: 'seasonal-maintenance-items', title: 'Summer checklist', presentation: { pattern: 'SHELVES' },
-        description: 'Checklist status is used first; a linked canonical Maintenance completion takes precedence when the two sources differ.',
-        sections: [
-          { id: 'priority-critical', title: 'Critical', count: 2, items: [
-            task('season-ac', 'Service air conditioner', 'Prepare the cooling system for sustained heat.', 'Critical', 'Recommended Aug 20, 2026', 'CAUTION'),
-            task('season-drain', 'Inspect exterior drainage', 'Check that water runs away from the foundation.', 'Critical', 'Recommended Aug 25, 2026', 'CAUTION'),
-          ] },
-          { id: 'priority-optional', title: 'Optional', count: 1, items: [task('season-vent', 'Clean dryer vent', 'Lint buildup is a fire risk.', 'Optional', 'No recommended date', 'DEFAULT')] },
-        ], actions: [] },
+      {
+        "type": "SUMMARY",
+        "id": "seasonal-maintenance-summary",
+        "title": "3 summer tasks need attention",
+        "body": "These tasks come from the Summer 2026 checklist. Here are 3 things to focus on. I recommend doing the first 2 soon, and the other 1 when you have time.",
+        "tone": "CAUTION",
+        "actions": []
+      },
+      {
+        "type": "GROUPED_LIST",
+        "filters": [],
+        "id": "seasonal-maintenance-items",
+        "title": "Summer checklist",
+        "description": "Checklist status is used first; a linked canonical Maintenance completion takes precedence when the two sources differ.",
+        "sections": [
+          {
+            "id": "seasonal-soon",
+            "title": "Do these soon",
+            "caption": "Helps prevent costly issues and keeps your home safe and efficient.",
+            "count": 2,
+            "items": [
+              {
+                "id": "season-ac",
+                "title": "Service air conditioner",
+                "description": "Prepare the cooling system for sustained heat.",
+                "condition": null,
+                "entityType": "SEASONAL_ITEM",
+                "meta": [
+                  "High priority",
+                  "Recommended Aug 19, 2026"
+                ],
+                "detail": "What to do: Prepare the cooling system for sustained heat.\nTiming: Recommended Aug 19, 2026\nStatus: Pending",
+                "tone": "CAUTION",
+                "status": "PENDING",
+                "href": null,
+                "countLabel": "1"
+              },
+              {
+                "id": "season-drain",
+                "title": "Inspect exterior drainage",
+                "description": "Check that water runs away from the foundation.",
+                "condition": null,
+                "entityType": "SEASONAL_ITEM",
+                "meta": [
+                  "High priority",
+                  "Recommended Aug 24, 2026"
+                ],
+                "detail": "What to do: Check that water runs away from the foundation.\nTiming: Recommended Aug 24, 2026\nStatus: Pending",
+                "tone": "CAUTION",
+                "status": "PENDING",
+                "href": null,
+                "countLabel": "2"
+              }
+            ]
+          },
+          {
+            "id": "seasonal-wait",
+            "title": "Can wait",
+            "caption": "Useful checks to keep your home in good shape.",
+            "count": 1,
+            "items": [
+              {
+                "id": "season-vent",
+                "title": "Clean dryer vent",
+                "description": "Lint buildup is a fire risk.",
+                "condition": null,
+                "entityType": "SEASONAL_ITEM",
+                "meta": [
+                  "Optional"
+                ],
+                "detail": "What to do: Lint buildup is a fire risk.\nTiming: No recommended date\nStatus: Pending",
+                "tone": "DEFAULT",
+                "status": "PENDING",
+                "href": null,
+                "countLabel": "3"
+              }
+            ]
+          }
+        ],
+        "actions": []
+      },
+      {
+        "type": "SUMMARY",
+        "id": "seasonal-maintenance-next",
+        "title": "What would you like to do next?",
+        "body": "Switch the view, or see everything due in Maintenance.",
+        "tone": "DEFAULT",
+        "actions": [
+          {
+            "id": "seasonal-show-completed",
+            "label": "Show completed summer tasks",
+            "interactionType": "START_WORKFLOW",
+            "message": "Show completed summer tasks",
+            "operationId": "MAINTENANCE_STATUS",
+            "style": "PRIMARY"
+          },
+          {
+            "id": "seasonal-show-dismissed",
+            "label": "Show dismissed summer tasks",
+            "interactionType": "START_WORKFLOW",
+            "message": "Show dismissed summer tasks",
+            "operationId": "MAINTENANCE_STATUS",
+            "style": "SECONDARY"
+          },
+          {
+            "id": "seasonal-show-maintenance",
+            "label": "Show my maintenance tasks",
+            "interactionType": "START_WORKFLOW",
+            "message": "What maintenance tasks are coming due?",
+            "operationId": "MAINTENANCE_STATUS",
+            "style": "SECONDARY"
+          }
+        ]
+      }
     ],
   };
 }
@@ -2130,6 +2230,12 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
   let captureAttempts = 0;
   let pendingDismissed = false;
   await page.route(`${apiOrigin}/api/csrf-token`, (route) => fulfill(route, { csrfToken: 'ask-acceptance-csrf' }));
+  // Calls the shell makes at load that this fixture predated (current user, pending work, recent sessions, refresh state); unanswered, the
+  // page showed its error boundary. A spec can still override any of them with its own route.
+  await page.route(`${apiOrigin}/api/auth/me`, (route) => fulfill(route, { success: true, data: { id: 'user-fixture', email: 'owner@example.com', firstName: 'Test', lastName: 'Owner', role: 'HOMEOWNER', emailVerified: true, status: 'ACTIVE' } }));
+  await page.route(`${apiOrigin}/api/ask/pending**`, (route) => fulfill(route, { success: true, data: { items: [] } }));
+  await page.route(`${apiOrigin}/api/ask/sessions/recent**`, (route) => fulfill(route, { success: true, data: { sessions: [], nextCursor: null } }));
+  await page.route(`${apiOrigin}/api/properties/${propertyId}/intelligence-refresh-state**`, (route) => fulfill(route, { success: true, data: { state: 'CURRENT', capabilities: [] } }));
   await page.route(`${apiOrigin}/api/properties*`, (route) => fulfill(route, { success: true, data: { properties: [{ id: propertyId, name: 'Acceptance Home', addressLine1: '1 Cozy Way', city: 'Boston', state: 'MA', zipCode: '02108' }] } }));
   await page.route(`${apiOrigin}/api/maintenance-tasks/maintenance-task-1`, (route) => options.maintenanceDetailAccessLost
     ? fulfill(route, { success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'Access to this home changed.' } }, 403)

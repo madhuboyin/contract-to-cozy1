@@ -1,25 +1,23 @@
 import { expect, test } from '@playwright/test';
-import { askApiOrigin, fulfillAskRoute, installAskApi, installAskContext, propertyId } from './fixtures';
+import { installAskApi, installAskContext, propertyId } from './fixtures';
 
 // The seasonal home-care answer in the calm shell (the default): an intro with a season icon, "Do these soon" and "Can wait" as numbered
 // cards that open to a how-to, and next steps that ask inside the conversation. Nothing on it links to the desktop seasonal page.
 test.beforeEach(async ({ context }) => installAskContext(context, { calm: 'default' }));
 
-test('the seasonal plan: soon / can wait cards, a how-to that opens, and three in-Ask next steps', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1500 });
-  const api = await installAskApi(page);
-  // installAskApi predates a few calls the shell now makes at load (current user, pending work, recent sessions, refresh state); without
-  // answers the shell shows its error boundary, so this spec supplies them.
-  await page.route(`${askApiOrigin}/api/auth/me`, (route) => fulfillAskRoute(route, { success: true, data: { id: 'user-fixture', email: 'owner@example.com', firstName: 'Test', lastName: 'Owner', role: 'HOMEOWNER', emailVerified: true, status: 'ACTIVE' } }));
-  await page.route(`${askApiOrigin}/api/ask/pending**`, (route) => fulfillAskRoute(route, { success: true, data: { items: [] } }));
-  await page.route(`${askApiOrigin}/api/ask/sessions/recent**`, (route) => fulfillAskRoute(route, { success: true, data: { sessions: [], nextCursor: null } }));
-  await page.route(`${askApiOrigin}/api/properties/${propertyId}/intelligence-refresh-state**`, (route) => fulfillAskRoute(route, { success: true, data: { state: 'CURRENT', capabilities: [] } }));
+async function askForNextSeason(page: import('@playwright/test').Page) {
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   await page.getByRole('button', { name: 'Essential only' }).click({ timeout: 2000 }).catch(() => undefined);
   await page.getByPlaceholder(/^Ask anything about /).fill('What should I do to get ready for next season?');
   await page.getByRole('button', { name: 'Send question' }).click();
+  return page.locator('#ask-execution-execution-seasonal-plan');
+}
 
-  const response = page.locator('#ask-execution-execution-seasonal-plan');
+test('the seasonal plan: soon / can wait cards, a how-to that opens, and three in-Ask next steps', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  const api = await installAskApi(page);
+  const response = await askForNextSeason(page);
+
   await expect(response.locator('[data-seasonal-intro]')).toContainText('Getting ready for winter');
   await expect(response.locator('[data-seasonal-intro] svg')).toBeVisible();
   const soon = response.locator('[data-seasonal-section="seasonal-soon"]');
@@ -51,15 +49,7 @@ test('the seasonal plan: soon / can wait cards, a how-to that opens, and three i
 test('on a phone the plan stays inside the screen and its buttons remain reachable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 1400 });
   await installAskApi(page);
-  await page.route(`${askApiOrigin}/api/auth/me`, (route) => fulfillAskRoute(route, { success: true, data: { id: 'user-fixture', email: 'owner@example.com', firstName: 'Test', lastName: 'Owner', role: 'HOMEOWNER', emailVerified: true, status: 'ACTIVE' } }));
-  await page.route(`${askApiOrigin}/api/ask/pending**`, (route) => fulfillAskRoute(route, { success: true, data: { items: [] } }));
-  await page.route(`${askApiOrigin}/api/ask/sessions/recent**`, (route) => fulfillAskRoute(route, { success: true, data: { sessions: [], nextCursor: null } }));
-  await page.route(`${askApiOrigin}/api/properties/${propertyId}/intelligence-refresh-state**`, (route) => fulfillAskRoute(route, { success: true, data: { state: 'CURRENT', capabilities: [] } }));
-  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
-  await page.getByRole('button', { name: 'Essential only' }).click({ timeout: 2000 }).catch(() => undefined);
-  await page.getByPlaceholder(/^Ask anything about /).fill('What should I do to get ready for next season?');
-  await page.getByRole('button', { name: 'Send question' }).click();
-  const response = page.locator('#ask-execution-execution-seasonal-plan');
+  const response = await askForNextSeason(page);
   await expect(response.locator('[data-seasonal-section="seasonal-soon"]')).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);

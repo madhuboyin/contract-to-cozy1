@@ -37,6 +37,11 @@ export function deriveSeasonalClimateRegion(zipCode: string | null | undefined, 
   return mapped ? { region: mapped, source: 'ZIP_PREFIX' } : { region: 'MODERATE', source: 'NATIONAL_DEFAULT' };
 }
 
+/** The catalog's own template for a checklist item's task key, when it has one (the existing-checklist answer enriches items with it). */
+export function seasonalTemplateByKey(taskKey: string): SeasonalTemplate | undefined {
+  return (seasonalTemplates as unknown as SeasonalTemplate[]).find((template) => template.taskKey === taskKey);
+}
+
 /** Asset-free templates for a season and region, most important first. Asset-gated templates are excluded: they depend on recorded data. */
 export function seasonalAssetFreeTasks(season: Season, region: SeasonalClimateRegion): SeasonalTemplate[] {
   return (seasonalTemplates as unknown as SeasonalTemplate[])

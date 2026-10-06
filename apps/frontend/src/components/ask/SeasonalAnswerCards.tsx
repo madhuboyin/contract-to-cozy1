@@ -10,8 +10,9 @@ type SummaryBlock = Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
 // The seasonal home-care answer's intro and next steps (block ids below). The calm shell keeps one action per summary and shows a
 // summary as a bare headline; the seasonal answer is a short plan with up to three next steps and a season icon, so these two summaries
 // render as their own cards. Every action is the server's own inline action: nothing here links out.
-export const SEASONAL_INTRO_BLOCK_ID = 'seasonal-home-care-summary';
-export const SEASONAL_NEXT_STEPS_BLOCK_ID = 'seasonal-home-care-next';
+// Each is shared by the general answer (`seasonal-home-care-*`) and the home's own checklist answer (`seasonal-maintenance-*`).
+export const SEASONAL_INTRO_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-summary', 'seasonal-maintenance-summary']);
+export const SEASONAL_NEXT_STEPS_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-next', 'seasonal-maintenance-next']);
 export const SEASONAL_ABOUT_BLOCK_ID = 'seasonal-home-care-boundary';
 
 const SEASON_ICONS = [
@@ -26,6 +27,10 @@ const ACTION_ICONS: Record<string, typeof ListPlus> = {
   'seasonal-walkthrough': PlayCircle,
   'seasonal-show-checklist': ListChecks,
   'seasonal-update-home-details': Home,
+  'seasonal-show-pending': ListChecks,
+  'seasonal-show-completed': ListChecks,
+  'seasonal-show-dismissed': ListChecks,
+  'seasonal-show-maintenance': ListChecks,
 };
 
 export function SeasonalIntroCard({ block }: { block: SummaryBlock }) {

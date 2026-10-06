@@ -70,11 +70,18 @@ test('pending summer questions return actual checklist items instead of an empty
   ] })] });
   assert.equal(response.status, 'ANSWERED');
   assert.equal(response.blocks[0].title, '2 summer tasks need attention');
-  // One checklist renders as priority shelves (FRD v1.83), still in priority order.
+  // One checklist renders as the plan layout (do these soon / can wait), still in priority order.
   assert.deepEqual(response.blocks[1].sections.flatMap((section) => section.items.map((entry) => entry.title)), [
     'Service air conditioner', 'Inspect exterior drainage',
   ]);
-  assert.match(response.blocks[0].actions[0].href, /dashboard\/seasonal/);
+  // Nothing links to the desktop seasonal page: the views switch inside Ask.
+  assert.equal(JSON.stringify(response).includes('/dashboard/seasonal'), false);
+  assert.deepEqual(response.blocks[0].actions, []);
+  const next = response.blocks.find((block) => block.id === 'seasonal-maintenance-next');
+  assert.deepEqual(next.actions.map((action) => [action.id, action.operationId]), [
+    ['seasonal-show-completed', 'MAINTENANCE_STATUS'], ['seasonal-show-dismissed', 'MAINTENANCE_STATUS'], ['seasonal-show-maintenance', 'MAINTENANCE_STATUS'],
+  ]);
+  for (const action of next.actions) assert.equal(action.href, undefined, action.id);
 });
 
 test('seasonal maintenance navigation survives answer-trust validation', () => {
@@ -89,7 +96,8 @@ test('seasonal maintenance navigation survives answer-trust validation', () => {
     ),
   });
   assert.equal(checked.trust.outcome, 'PASS');
-  assert.equal(checked.result.blocks[0].actions[0].id, 'open-seasonal');
+  // The next steps are allowlisted for MAINTENANCE_STATUS, so none is silently removed.
+  assert.deepEqual(checked.result.blocks.find((block) => block.id === 'seasonal-maintenance-next').actions.map((action) => action.id), ['seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance']);
 });
 
 test('an explicit season selects the latest matching year and deduplicates linked canonical tasks', () => {
@@ -144,17 +152,17 @@ test('shelf facts: only an open critical task is a caution; timing is the recomm
   assert.deepEqual(seasonalShelfFacts({ ...base, recommendedDate: null }), { tone: 'CAUTION', timingLabel: 'No recommended date' });
 });
 
-test('one checklist declares shelves by priority with card facts, no item actions, and leaves out empty priorities', () => {
+test('one checklist groups tasks into do-these-soon and can-wait with card facts, and leaves out empty groups', () => {
   const response = result('what seasonal tasks are pending', { checklists: [checklist({ items: [
     item({ id: 'a', title: 'Service air conditioner' }),
     item({ id: 'b', title: 'Clean dryer vent', priority: 'OPTIONAL', recommendedDate: null }),
   ] })] });
   const list = response.blocks[1];
-  assert.deepEqual(list.presentation, { pattern: 'SHELVES' });
-  assert.deepEqual(list.sections.map((section) => [section.id, section.title, section.count]), [['priority-critical', 'Critical', 1], ['priority-optional', 'Optional', 1]]);
-  assert.deepEqual([list.sections[0].items[0].tone, list.sections[0].items[0].timingLabel], ['CAUTION', 'Recommended Aug 19, 2026']);
-  assert.equal(list.sections[1].items[0].timingLabel, 'No recommended date');
-  assert.ok(list.sections.every((section) => section.items.every((entry) => entry.actions.length === 0)));
+  assert.deepEqual(list.sections.map((section) => [section.id, section.title, section.count]), [['seasonal-soon', 'Do these soon', 1], ['seasonal-wait', 'Can wait', 1]]);
+  assert.equal(list.sections[0].items[0].tone, 'CAUTION');
+  assert.deepEqual(list.sections.flatMap((section) => section.items.map((entry) => entry.countLabel)), ['1', '2'], 'numbered across groups');
+  assert.match(list.sections[0].items[0].detail, /Timing: Recommended Aug 19, 2026/);
+  assert.match(list.sections[1].items[0].detail, /Timing: No recommended date/);
   const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
   AskPresentationBlockSchema.parse(list);
 });
@@ -165,10 +173,10 @@ test('several checklists keep one shelf per season and year, never merging tasks
     checklist({ id: 'fall-2026', season: 'FALL', seasonStartDate: new Date('2026-09-22T00:00:00Z'), seasonEndDate: new Date('2026-12-21T00:00:00Z'), items: [item({ id: 'f', title: 'Clean gutters', priority: 'RECOMMENDED' })] }),
   ] });
   assert.deepEqual(response.blocks[1].sections.map((section) => section.title), ['Summer 2026', 'Fall 2026']);
-  assert.deepEqual(response.blocks[1].presentation, { pattern: 'SHELVES' });
+  assert.equal(response.blocks[1].presentation, undefined);
 });
 
-test('the full answer checker, with answer relevance on, keeps the shelves answer even with a code-like task title', () => {
+test('the full answer checker, with answer relevance on, keeps the plan answer even with a code-like task title', () => {
   const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
   const response = result('what seasonal tasks are pending', { checklists: [checklist({ items: [item({ id: 'c', title: 'HVAC_FILTER_CHANGE' })] })] });
   const checked = validateAskAnswerTrustPipeline({
@@ -176,4 +184,46 @@ test('the full answer checker, with answer relevance on, keeps the shelves answe
     result: attachAskAuthoritativeSourceEvidence(response, [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')]),
   });
   assert.equal(checked.result.status, 'ANSWERED', JSON.stringify(checked.semantic));
+});
+
+test('the unavailable state offers a retry inside Ask instead of a link to the desktop seasonal page', () => {
+  const response = result('what seasonal tasks are pending', null, false);
+  assert.equal(JSON.stringify(response).includes('/dashboard/seasonal'), false);
+  const [retry] = response.blocks[0].actions;
+  assert.deepEqual([retry.id, retry.operationId, retry.message, retry.href], ['seasonal-retry', 'MAINTENANCE_STATUS', 'what seasonal tasks are pending', undefined]);
+});
+
+test('a task whose key is in the seasonal catalog gets its reason and facts; one that is not still shows its own description', () => {
+  const response = result('what winter tasks are pending', { checklists: [checklist({ season: 'WINTER', id: 'winter-2026', seasonStartDate: new Date('2026-12-21T00:00:00Z'), seasonEndDate: new Date('2027-03-19T00:00:00Z'), items: [
+    item({ id: 'f', taskKey: 'WINTER_FURNACE_FILTER_CHANGE', title: 'Replace furnace filters monthly', description: 'Check and replace HVAC filters every month during peak heating season' }),
+    item({ id: 'x', taskKey: 'CUSTOM_TASK', title: 'Custom task', description: 'Do the custom thing.', priority: 'OPTIONAL' }),
+  ] })] });
+  const [known, custom] = response.blocks[1].sections.flatMap((section) => section.items);
+  assert.equal(known.description, 'Dirty filters reduce efficiency and can cause furnace failure in extreme cold.');
+  assert.match(known.detail, /Time it takes: About 15 minutes/);
+  assert.match(known.detail, /Who does it: You can usually do this yourself/);
+  assert.equal(custom.description, 'Do the custom thing.');
+  assert.match(custom.detail, /What to do: Do the custom thing\./);
+  assert.doesNotMatch(custom.detail, /Time it takes/);
+});
+
+test('each view offers the other views, never the one it is on, and every offered message routes to the maintenance read', () => {
+  const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+  const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  const context = { checklists: [checklist({ items: [item({ id: 'a' }), item({ id: 'c', status: 'COMPLETED', title: 'Done task' }), item({ id: 'd', status: 'DISMISSED', title: 'Set-aside task', priority: 'OPTIONAL' })] })] };
+  const expected = {
+    'what summer tasks are pending': ['seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance'],
+    'Show completed summer tasks': ['seasonal-show-pending', 'seasonal-show-dismissed', 'seasonal-show-maintenance'],
+    'Show dismissed summer tasks': ['seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-maintenance'],
+    'Show all summer tasks': ['seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-maintenance'],
+  };
+  for (const [message, ids] of Object.entries(expected)) {
+    const response = result(message, context);
+    const next = response.blocks.find((block) => block.id === 'seasonal-maintenance-next');
+    assert.deepEqual(next.actions.map((action) => action.id), ids, message);
+    for (const action of next.actions) assert.equal(resolveAskOperation(action.message).operationId, 'MAINTENANCE_STATUS', action.message);
+    for (const block of response.blocks) AskPresentationBlockSchema.parse(block);
+  }
+  const all = result('Show all summer tasks', context).blocks[1].sections.map((section) => section.id);
+  assert.deepEqual(all, ['seasonal-soon', 'seasonal-completed', 'seasonal-dismissed']);
 });

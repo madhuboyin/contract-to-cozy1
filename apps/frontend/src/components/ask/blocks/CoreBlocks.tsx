@@ -4,7 +4,7 @@ import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatib
 import { timelinePoint } from '@/features/ask/displayPatterns';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
-import { SEASONAL_ABOUT_BLOCK_ID, SEASONAL_INTRO_BLOCK_ID, SEASONAL_NEXT_STEPS_BLOCK_ID, SeasonalAboutCard, SeasonalIntroCard, SeasonalNextSteps } from '../SeasonalAnswerCards';
+import { SEASONAL_ABOUT_BLOCK_ID, SEASONAL_INTRO_BLOCK_IDS, SEASONAL_NEXT_STEPS_BLOCK_IDS, SeasonalAboutCard, SeasonalIntroCard, SeasonalNextSteps } from '../SeasonalAnswerCards';
 import { useCalmAnswer, useCalmChrome, useCalmReceiptContinuation } from './calmContext';
 import type { AskBlockRenderer } from './types';
 
@@ -42,8 +42,8 @@ function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: '
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
-  if (block.id === SEASONAL_INTRO_BLOCK_ID) return <SeasonalIntroCard block={block} />;
-  if (block.id === SEASONAL_NEXT_STEPS_BLOCK_ID) return <SeasonalNextSteps block={block} />;
+  if (SEASONAL_INTRO_BLOCK_IDS.has(block.id)) return <SeasonalIntroCard block={block} />;
+  if (SEASONAL_NEXT_STEPS_BLOCK_IDS.has(block.id)) return <SeasonalNextSteps block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(

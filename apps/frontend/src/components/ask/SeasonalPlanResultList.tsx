@@ -8,11 +8,12 @@ import type { AskGroupedListItem, AskPresentationBlock } from '@/features/ask/ty
 type GroupedListBlock = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Section = GroupedListBlock['sections'][number];
 
-// The seasonal home-care answer (block id `seasonal-home-care-tasks`): what to do soon and what can wait, as numbered cards that open to
+// The seasonal home-care answer (block ids in SEASONAL_PLAN_BLOCK_IDS): what to do soon and what can wait, as numbered cards that open to
 // a short "how to do it". The facts come from the task template itself (item.detail, one "Label: value" per line); nothing here is
 // inferred about the home. Read-only: the next steps (set up the checklist, walk me through, update home details) are the answer's own
 // actions, so these cards never navigate.
-export const SEASONAL_PLAN_BLOCK_ID = 'seasonal-home-care-tasks';
+// Also the home's own checklist answer (`seasonal-maintenance-items`), which uses the same groups and cards.
+export const SEASONAL_PLAN_BLOCK_IDS: ReadonlySet<string> = new Set(['seasonal-home-care-tasks', 'seasonal-maintenance-items']);
 
 const URGENT = { panel: 'border-rose-100 bg-rose-50/60', icon: 'text-rose-600', badge: 'bg-rose-100 text-rose-700', chip: 'bg-rose-100 text-rose-700' };
 const CALM = { panel: 'border-sky-100 bg-sky-50/60', icon: 'text-sky-700', badge: 'bg-sky-100 text-sky-700', chip: 'bg-sky-100 text-sky-800' };

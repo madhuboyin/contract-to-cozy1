@@ -2174,7 +2174,7 @@ test('on a phone, home action shelves stay inside the screen and a card opens as
   await expect(sheet).toBeHidden();
 });
 
-test('seasonal checklist tasks show as priority shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {
+test('the home\'s seasonal checklist shows do-these-soon and can-wait groups whose tasks open to their facts, and offers other views inside Ask', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -2182,26 +2182,21 @@ test('seasonal checklist tasks show as priority shelves whose cards open a read-
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-seasonal-shelves');
-  await expect(response.getByRole('list', { name: 'Critical, 2 items' }).getByRole('listitem')).toHaveCount(2);
-  await expect(response.getByRole('list', { name: 'Optional, 1 item' })).toBeVisible();
-  const card = response.getByRole('button', { name: /Service air conditioner/ });
-  await expect(card).toContainText('Recommended Aug 20, 2026');
-  await card.click();
-  const drawer = page.getByRole('dialog', { name: 'Service air conditioner' });
-  await expect(drawer.getByText('Prepare the cooling system for sustained heat.')).toBeVisible();
-  await expect(drawer.getByRole('link', { name: 'Open record' })).toHaveAttribute('href', /dashboard\/seasonal/);
-  await expect(drawer.getByRole('button')).toHaveCount(1);
-  const box = await drawer.boundingBox();
-  expect(box && box.x + box.width).toBeGreaterThan(1430);
-  await page.keyboard.press('Escape');
-  await expect(drawer).toBeHidden();
-
-  await response.getByRole('button', { name: 'List', exact: true }).click();
-  await expect(response.getByRole('link', { name: 'Service air conditioner' })).toBeVisible();
-  await expect.poll(() => api.executionBodies.length).toBe(1);
+  await expect(response.locator('[data-seasonal-section="seasonal-soon"] [data-seasonal-task]')).toHaveCount(2);
+  await expect(response.locator('[data-seasonal-section="seasonal-wait"] [data-seasonal-task]')).toHaveCount(1);
+  const card = response.locator('[data-seasonal-task="season-ac"]');
+  await expect(card).toContainText('Service air conditioner');
+  await expect(card).toContainText('Recommended Aug 19, 2026');
+  await card.getByRole('button', { name: /How to do it|What to know/ }).click();
+  await expect(card.locator('[data-seasonal-task-detail]')).toContainText('Prepare the cooling system for sustained heat.');
+  // Nothing links to the desktop seasonal page; the views switch inside the conversation.
+  await expect(response.locator('a[href*="/dashboard/seasonal"]')).toHaveCount(0);
+  await response.locator('[data-seasonal-next-steps]').getByRole('button', { name: /Show completed summer tasks/ }).click();
+  await expect.poll(() => api.executionBodies.length).toBe(2);
+  expect(api.executionBodies[1].message).toBe('Show completed summer tasks');
 });
 
-test('on a phone, seasonal shelves stay inside the screen and a task opens as a bottom sheet', async ({ page }) => {
+test('on a phone, the seasonal checklist stays inside the screen and a task opens in place', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -2209,15 +2204,11 @@ test('on a phone, seasonal shelves stay inside the screen and a task opens as a 
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.locator('#ask-execution-execution-seasonal-shelves');
-  await expect(response.getByRole('list', { name: 'Critical, 2 items' })).toBeVisible();
+  await expect(response.locator('[data-seasonal-section="seasonal-soon"]')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await response.getByRole('button', { name: /Clean dryer vent/ }).click();
-  const sheet = page.getByRole('dialog', { name: 'Clean dryer vent' });
-  await expect(sheet.getByText('Lint buildup is a fire risk.')).toBeVisible();
-  const box = await sheet.boundingBox();
-  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
-  await sheet.getByRole('button', { name: 'Close details' }).click();
-  await expect(sheet).toBeHidden();
+  const vent = response.locator('[data-seasonal-task="season-vent"]');
+  await vent.getByRole('button', { name: /How to do it|What to know/ }).click();
+  await expect(vent.locator('[data-seasonal-task-detail]')).toContainText('Lint buildup is a fire risk.');
 });
 
 test('the status board shows appliances and systems as condition shelves whose cards open a read-only detail in a side drawer', async ({ page }) => {

@@ -22,7 +22,7 @@ import { BuyerTaskResultList } from '../BuyerTaskResultList';
 import { RadarEventResultList } from '../RadarEventResultList';
 import { ReserveAllocationResultList } from '../ReserveAllocationResultList';
 import { RoomResultList } from '../RoomResultList';
-import { SEASONAL_PLAN_BLOCK_ID, SeasonalPlanResultList } from '../SeasonalPlanResultList';
+import { SEASONAL_PLAN_BLOCK_IDS, SeasonalPlanResultList } from '../SeasonalPlanResultList';
 import { WarrantyResultList } from '../WarrantyResultList';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
@@ -323,7 +323,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       onChooseLayout={declaresMap && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
   }
   // The seasonal home-care plan is a read-only, numbered "do soon / can wait" list in both layouts; its next steps are the answer's own actions.
-  if (props.block.id === SEASONAL_PLAN_BLOCK_ID) return <SeasonalPlanResultList block={props.block} />;
+  if (SEASONAL_PLAN_BLOCK_IDS.has(props.block.id)) return <SeasonalPlanResultList block={props.block} />;
   if (props.block.id === 'inspection-findings') {
     const { block, propertyId, itemActionsDisabled, onItemAction, onAccessLost, onBatchItemAction } = props;
     const declaresDeck = block.presentation?.pattern === 'DECK';
