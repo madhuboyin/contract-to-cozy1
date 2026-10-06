@@ -6,6 +6,11 @@ import { diyCompletionService } from './diyCompletion.service';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
+import { logger } from '../lib/logger';
+import { checkRevisionIntegrity } from './diyTemplateRevision.service';
+import {
+  PUBLISHED_REVISION_INCLUDE, publishedTemplateDetail, publishedTemplateSummary, revisionContent, stepSnapshotId,
+} from './diyPublishedTemplate';
 
 const SKILL_RANK: Record<DiySkillLevel, number> = { BEGINNER: 0, INTERMEDIATE: 1, ADVANCED: 2 };
 
@@ -59,52 +64,54 @@ export class DiyService {
       ? (Array.isArray(difficulty) ? difficulty : [difficulty]) as any[]
       : undefined;
 
+    // Homeowners see the PUBLISHED HEAD REVISION of a template (never its working copy). "Live" means the template has a head; safety, permit,
+    // category, difficulty, skill and search all filter on the revision's own columns, so a draft edit cannot change what is listed.
     const where: Prisma.DiyProjectTemplateWhereInput = {
-      status: 'ACTIVE',
-      safetyLevel: 'LOW',
-      permitRequirement: { in: ['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'] },
-      ...(categories?.length && { category: { in: categories } }),
-      ...(difficulties?.length && { difficultyLevel: { in: difficulties } }),
-      ...(maxSkillLevel && {
-        requiredSkillLevel: {
-          in: (['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] as DiySkillLevel[]).filter(
-            (s) => SKILL_RANK[s] <= SKILL_RANK[maxSkillLevel],
-          ),
+      publishedRevisionId: { not: null },
+      publishedRevision: {
+        is: {
+          safetyLevel: 'LOW',
+          permitRequirement: { in: ['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'] },
+          ...(categories?.length && { category: { in: categories } }),
+          ...(difficulties?.length && { difficultyLevel: { in: difficulties } }),
+          ...(maxSkillLevel && {
+            requiredSkillLevel: {
+              in: (['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] as DiySkillLevel[]).filter(
+                (s) => SKILL_RANK[s] <= SKILL_RANK[maxSkillLevel],
+              ),
+            },
+          }),
+          ...(search && {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' } },
+              { tags: { has: search } },
+            ],
+          }),
         },
-      }),
-      ...(search && {
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { tags: { has: search } },
-        ],
-      }),
+      },
     };
 
     const candidates = await prisma.diyProjectTemplate.findMany({
       where,
-      orderBy: { title: 'asc' },
+      orderBy: { publishedRevision: { title: 'asc' } },
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
-      select: {
-        id: true, slug: true, title: true, shortDescription: true,
-        category: true, difficultyLevel: true, requiredSkillLevel: true,
-        safetyLevel: true, permitRequirement: true, estimatedMinutes: true,
-        estimatedMaterialCostMinCents: true, estimatedMaterialCostMaxCents: true,
-        professionalCostMinCents: true, professionalCostMaxCents: true,
-        tags: true, featuredOrder: true,
-      },
+      include: PUBLISHED_REVISION_INCLUDE,
     });
 
     const hasMore = candidates.length > limit;
     const pageCandidates = candidates.slice(0, limit);
-    const templates = pageCandidates.filter((template) =>
-      evaluateDiyEligibility({
-        title: template.title,
-        summary: template.shortDescription,
-        category: template.category,
-        safetyLevel: template.safetyLevel,
-        permitRequirement: template.permitRequirement,
-      }).eligible);
+    const templates = pageCandidates
+      .filter((template) => template.publishedRevision)
+      .map((template) => publishedTemplateSummary(template, template.publishedRevision!))
+      .filter((template) =>
+        evaluateDiyEligibility({
+          title: template.title,
+          summary: template.shortDescription,
+          category: template.category,
+          safetyLevel: template.safetyLevel,
+          permitRequirement: template.permitRequirement,
+        }).eligible);
     return {
       items: templates,
       nextCursor: hasMore ? pageCandidates[pageCandidates.length - 1]?.id : undefined,
@@ -114,47 +121,41 @@ export class DiyService {
   async getFeaturedTemplates() {
     const templates = await prisma.diyProjectTemplate.findMany({
       where: {
-        status: 'ACTIVE',
-        safetyLevel: 'LOW',
-        permitRequirement: { in: ['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'] },
+        publishedRevisionId: { not: null },
         featuredOrder: { not: null },
+        publishedRevision: {
+          is: { safetyLevel: 'LOW', permitRequirement: { in: ['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'] } },
+        },
       },
       orderBy: { featuredOrder: 'asc' },
-      select: {
-        id: true, slug: true, title: true, shortDescription: true,
-        category: true, difficultyLevel: true, requiredSkillLevel: true,
-        safetyLevel: true, permitRequirement: true, estimatedMinutes: true,
-        estimatedMaterialCostMinCents: true, estimatedMaterialCostMaxCents: true,
-        professionalCostMinCents: true, professionalCostMaxCents: true,
-        tags: true, featuredOrder: true,
-      },
+      include: PUBLISHED_REVISION_INCLUDE,
     });
-    return templates.filter((template) =>
-      evaluateDiyEligibility({
-        title: template.title,
-        summary: template.shortDescription,
-        category: template.category,
-        safetyLevel: template.safetyLevel,
-        permitRequirement: template.permitRequirement,
-      }).eligible);
+    return templates
+      .filter((template) => template.publishedRevision)
+      .map((template) => publishedTemplateSummary(template, template.publishedRevision!))
+      .filter((template) =>
+        evaluateDiyEligibility({
+          title: template.title,
+          summary: template.shortDescription,
+          category: template.category,
+          safetyLevel: template.safetyLevel,
+          permitRequirement: template.permitRequirement,
+        }).eligible);
   }
 
   async getTemplateDetail(templateId: string) {
     const template = await prisma.diyProjectTemplate.findFirst({
-      where: { id: templateId, status: 'ACTIVE' },
-      include: {
-        steps: { orderBy: { stepNumber: 'asc' } },
-        materials: { orderBy: { sortOrder: 'asc' } },
-        tools: { orderBy: { sortOrder: 'asc' } },
-      },
+      where: { id: templateId, publishedRevisionId: { not: null } },
+      include: PUBLISHED_REVISION_INCLUDE,
     });
-    if (!template) throw new APIError('Template not found', 404);
+    if (!template?.publishedRevision) throw new APIError('Template not found', 404);
+    const detail = publishedTemplateDetail(template, template.publishedRevision);
     const eligibility = evaluateDiyEligibility({
-      title: template.title,
-      summary: template.shortDescription,
-      category: template.category,
-      safetyLevel: template.safetyLevel,
-      permitRequirement: template.permitRequirement,
+      title: detail.title,
+      summary: detail.shortDescription,
+      category: detail.category,
+      safetyLevel: detail.safetyLevel,
+      permitRequirement: detail.permitRequirement,
     });
     if (!eligibility.eligible) {
       throw new APIError(
@@ -164,10 +165,9 @@ export class DiyService {
         { eligibility },
       );
     }
-    return template;
+    return detail;
   }
 
-  // ── Projects ──────────────────────────────────────────────────────────────────
   async createProject(
     propertyId: string,
     userId: string,
@@ -187,21 +187,25 @@ export class DiyService {
     const ownedTools: string[] = Array.isArray(skillProfile?.toolsOwnedJson) ? skillProfile.toolsOwnedJson as string[] : [];
 
     if (templateId) {
+      // A project copies the template's PUBLISHED HEAD REVISION, never its working copy, and records which revision it copied.
       const template = await prisma.diyProjectTemplate.findFirst({
-        where: { id: templateId, status: 'ACTIVE' },
-        include: {
-          steps: { orderBy: { stepNumber: 'asc' } },
-          materials: { orderBy: { sortOrder: 'asc' } },
-          tools: { orderBy: { sortOrder: 'asc' } },
-        },
+        where: { id: templateId, publishedRevisionId: { not: null } },
+        include: PUBLISHED_REVISION_INCLUDE,
       });
-      if (!template) throw new APIError('Template not found', 404);
+      const revision = template?.publishedRevision;
+      if (!template || !revision) throw new APIError('Template not found', 404);
+      // A governed revision must still match its hash. A legacy-backfill revision carries no hash and makes no integrity claim; it is accepted
+      // so templates that were live before revisions existed keep working, but it is never presented as reviewed (it is not guideable in Ask).
+      if (checkRevisionIntegrity(revision) === 'MISMATCH') {
+        logger.error({ templateId, revisionId: revision.id }, '[DIY] published template revision failed its integrity check; refusing to start a project from it');
+        throw new APIError('This template is temporarily unavailable.', 409, 'DIY_TEMPLATE_UNAVAILABLE');
+      }
       const eligibility = evaluateDiyEligibility({
-        title: template.title,
-        summary: template.shortDescription,
-        category: template.category,
-        safetyLevel: template.safetyLevel,
-        permitRequirement: template.permitRequirement,
+        title: revision.title,
+        summary: revision.shortDescription,
+        category: revision.category,
+        safetyLevel: revision.safetyLevel,
+        permitRequirement: revision.permitRequirement,
         verdict: payload.decisionVerdict,
       });
       if (!eligibility.eligible) {
@@ -217,7 +221,7 @@ export class DiyService {
         { userId },
         { scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] },
       );
-      const applicability = evaluateDiyApplicability(context, template.category);
+      const applicability = evaluateDiyApplicability(context, revision.category);
       if (applicability.status !== 'APPLICABLE') {
         throw new APIError(
           'This DIY project is not applicable to the selected property.',
@@ -226,6 +230,7 @@ export class DiyService {
           { applicability },
         );
       }
+      const content = revisionContent(revision);
 
       return prisma.$transaction(async (tx) => {
         const project = await tx.diyProject.create({
@@ -233,9 +238,10 @@ export class DiyService {
             propertyId,
             userId,
             templateId,
-            title: template.title,
-            description: template.shortDescription,
-            category: template.category,
+            templateRevisionId: revision.id,
+            title: revision.title,
+            description: revision.shortDescription,
+            category: revision.category,
             status: 'PLANNING',
             decisionVerdict: payload.decisionVerdict ?? null,
             decisionScoreJson: payload.decisionScoreJson ?? undefined,
@@ -246,9 +252,9 @@ export class DiyService {
         });
 
         await tx.diyProjectStep.createMany({
-          data: template.steps.map((s) => ({
+          data: content.steps.map((s: any) => ({
             projectId: project.id,
-            templateStepId: s.id,
+            templateStepId: stepSnapshotId(revision.id, Number(s.stepNumber)),
             stepNumber: s.stepNumber,
             title: s.title,
             description: s.description,
@@ -261,7 +267,7 @@ export class DiyService {
         });
 
         await tx.diyProjectMaterial.createMany({
-          data: template.materials.map((m) => {
+          data: content.materials.map((m: any) => {
             const quantity = evalQuantityFormula(m.quantityFormula, {});
             return {
               projectId: project.id,
@@ -278,7 +284,7 @@ export class DiyService {
         });
 
         await tx.diyProjectTool.createMany({
-          data: template.tools.map((t) => ({
+          data: content.tools.map((t: any) => ({
             projectId: project.id,
             name: t.name,
             canonicalId: t.canonicalId,

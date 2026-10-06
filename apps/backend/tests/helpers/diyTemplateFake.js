@@ -3,10 +3,19 @@
 // conditional updateMany counts, and TRANSACTIONS that serialize like row locks under READ COMMITTED (a second transaction waits for the first to
 // commit, then re-evaluates its conditional writes against the committed state) and roll everything back on a throw. It records every write.
 
+const isOperator = (value) => value !== null && typeof value === 'object' && !(value instanceof Date) && !Array.isArray(value);
+
+// Supports the Prisma where forms the DIY code uses: equality, null, in, not, contains (case-insensitive), has, is / isNot (to-one relations), OR, AND.
 const matches = (record, where = {}) => Object.entries(where).every(([key, value]) => {
-  if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+  if (key === 'OR') return value.some((clause) => matches(record, clause));
+  if (key === 'AND') return value.every((clause) => matches(record, clause));
+  if (isOperator(value)) {
+    if ('is' in value) return record[key] != null && matches(record[key], value.is);
+    if ('isNot' in value) return value.isNot === null ? record[key] != null : !(record[key] != null && matches(record[key], value.isNot));
     if ('in' in value) return value.in.includes(record[key]);
     if ('not' in value) return value.not === null ? record[key] != null : record[key] !== value.not;
+    if ('contains' in value) return String(record[key] ?? '').toLowerCase().includes(String(value.contains).toLowerCase());
+    if ('has' in value) return Array.isArray(record[key]) && record[key].includes(value.has);
   }
   return value === null ? record[key] == null : record[key] === value;
 });
@@ -14,7 +23,7 @@ const matches = (record, where = {}) => Object.entries(where).every(([key, value
 const pickKeys = (record, select) => Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, record[key]]));
 
 function makeDiyDb(templateSeeds = [], hooks = {}) {
-  const state = { templates: new Map(), revisions: [], writes: [] };
+  const state = { templates: new Map(), revisions: [], writes: [], projects: [] };
   for (const seed of templateSeeds) {
     state.templates.set(seed.id, structuredClone({
       status: 'DRAFT', approvedBy: null, approvedAt: null, publishedRevisionId: null, featuredOrder: null, geminiPromptHint: null,
@@ -24,12 +33,43 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
   let revisionSeq = 1; let childSeq = 1;
   const fail = (name) => { if (hooks.fail && hooks.fail(name)) throw new Error(`injected failure at ${name}`); };
 
+  // A template with its published head attached, so relation filters, orderings and includes can be evaluated.
+  const joined = (template) => ({ ...template, publishedRevision: state.revisions.find((row) => row.id === template.publishedRevisionId) ?? null });
+  const valueAt = (record, pathOrObject) => {
+    const [key, rest] = Object.entries(pathOrObject)[0];
+    return typeof rest === 'string' ? record?.[key] : valueAt(record?.[key], rest);
+  };
+  const directionOf = (orderBy) => { const [, rest] = Object.entries(orderBy)[0]; return typeof rest === 'string' ? rest : directionOf(rest); };
+  const queryTemplates = ({ where, orderBy, take, cursor, skip, select, include } = {}) => {
+    let rows = [...state.templates.values()].map(joined).filter((row) => matches(row, where));
+    if (orderBy) {
+      const dir = directionOf(orderBy) === 'desc' ? -1 : 1;
+      rows = [...rows].sort((a, b) => {
+        const x = valueAt(a, orderBy); const y = valueAt(b, orderBy);
+        return x === y ? 0 : (x == null ? 1 : y == null ? -1 : (x < y ? -1 : 1) * dir);
+      });
+    }
+    if (cursor) { const at = rows.findIndex((row) => row.id === cursor.id); rows = rows.slice(at < 0 ? 0 : at + (skip ?? 0)); }
+    if (take !== undefined) rows = rows.slice(0, take);
+    return rows.map((row) => (select ? pickKeys(structuredClone(row), select) : templateView(row, { include })));
+  };
+
   const templateView = (template, { select, include } = {}) => {
     if (!template) return null;
     const { steps, materials, tools, ...row } = structuredClone(template);
     if (select) return pickKeys(row, select);
-    return include ? { ...row, steps: include.steps ? steps : undefined, materials: include.materials ? materials : undefined, tools: include.tools ? tools : undefined } : row;
+    const withRevision = include?.publishedRevision ? { ...row, publishedRevision: state.revisions.find((revision) => revision.id === template.publishedRevisionId) ? structuredClone(state.revisions.find((revision) => revision.id === template.publishedRevisionId)) : null } : row;
+    if (!include?.publishedRevision) delete withRevision.publishedRevision;
+    return include ? { ...withRevision, steps: include.steps ? steps : undefined, materials: include.materials ? materials : undefined, tools: include.tools ? tools : undefined } : withRevision;
   };
+  const projectChildren = (name) => ({
+    async createMany({ data }) {
+      fail(`project.${name}.createMany`);
+      const project = state.projects.find((row) => row.id === data[0]?.projectId);
+      if (project) data.forEach((row) => project[name].push({ id: `${name}-${childSeq++}`, ...structuredClone(row) }));
+      return { count: data.length };
+    },
+  });
   const children = (name) => ({
     async deleteMany({ where }) { fail(`${name}.deleteMany`); const t = state.templates.get(where.templateId); const count = t[name].length; t[name] = []; return { count }; },
     async createMany({ data }) {
@@ -44,10 +84,9 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     state,
     diyProjectTemplate: {
       async findUnique({ where, select, include }) { return templateView(state.templates.get(where.id), { select, include }); },
-      async findMany({ where, select }) {
-        return [...state.templates.values()].filter((row) => matches(row, where)).map((row) => (select ? pickKeys(structuredClone(row), select) : templateView(row)));
-      },
-      async count({ where }) { return [...state.templates.values()].filter((row) => matches(row, where)).length; },
+      async findMany(args) { return queryTemplates(args); },
+      async findFirst(args) { return queryTemplates({ ...args, take: 1 })[0] ?? null; },
+      async count({ where }) { return [...state.templates.values()].map(joined).filter((row) => matches(row, where)).length; },
       async update({ where, data }) {
         fail('template.update');
         const row = state.templates.get(where.id);
@@ -68,6 +107,20 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     diyTemplateStep: children('steps'),
     diyTemplateMaterial: children('materials'),
     diyTemplateTool: children('tools'),
+    diySkillProfile: { async findUnique() { return hooks.skillProfile ?? null; } },
+    diyProject: {
+      async create({ data }) {
+        fail('project.create');
+        const project = { id: `project-${state.projects.length + 1}`, steps: [], materials: [], tools: [], aiGuide: null, ...structuredClone(data) };
+        state.projects.push(project);
+        state.writes.push({ model: 'project', op: 'create', data: structuredClone(data) });
+        return structuredClone(project);
+      },
+      async findFirst({ where }) { const row = state.projects.find((project) => matches(project, where)); return row ? structuredClone(row) : null; },
+    },
+    diyProjectStep: projectChildren('steps'),
+    diyProjectMaterial: projectChildren('materials'),
+    diyProjectTool: projectChildren('tools'),
     diyTemplateRevision: {
       async findFirst({ where, orderBy, select }) {
         let rows = state.revisions.filter((row) => matches(row, where));

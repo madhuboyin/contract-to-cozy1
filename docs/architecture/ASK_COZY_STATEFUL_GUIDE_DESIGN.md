@@ -335,7 +335,7 @@ The owner approved decisions **O2 through O13 at the recommended defaults in §1
 | Step | Work | Status |
 | --- | --- | --- |
 | 0 | P0 role floor and viewer controls | **Done** (`78a2726a`, `c96da723`) |
-| 1 | P1: immutable template revisions (O2-A): schema, publish creates a revision, `createProject` snapshots from it, admin edits operate on the draft; tests including "an approved revision cannot change" | **Plan approved (R1-R10 at defaults); slices 1a (schema and revision service) and 1b (transactional lifecycle and edit semantics) done, 1c-1e not started:** [`ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md`](ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md) |
+| 1 | P1: immutable template revisions (O2-A): schema, publish creates a revision, `createProject` snapshots from it, admin edits operate on the draft; tests including "an approved revision cannot change" | **Plan approved (R1-R10 at defaults); slices 1a (schema and revision service), 1b (transactional lifecycle and edit semantics) and 1c (homeowner reads and project creation on the published revision) done, 1d-1e not started:** [`ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md`](ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md) |
 | 2 | P2/P3: attribution columns, `DiyProjectStep.updatedAt`, actor-aware and version-checked step and project transitions in the shared service, `updateStep` atomic, completion invariant (O11) | Not started |
 | 3 | P4: completion effects through the `DomainEvent` outbox, governed maintenance completion with the actor, no incident change (O13), recovery command | Not started |
 | 4 | P5: maintenance-to-DIY reconciliation (O12) | Not started |

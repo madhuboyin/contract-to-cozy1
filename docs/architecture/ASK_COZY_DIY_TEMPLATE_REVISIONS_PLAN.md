@@ -1,7 +1,7 @@
 # DIY Template Revisions — Step 1 Implementation Plan (immutable published content)
 
 **Date:** October 6, 2026
-**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Slices 1a (§12) and 1b (§13) are implemented; 1c-1e are not started. The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
+**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Slices 1a (§12), 1b (§13) and 1c (§14) are implemented; 1d-1e are not started. **Do not deploy this code to production before the slice 1e backfill exists and has been run (§6): without it the homeowner library is empty.** The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 1; decision **O2-A** (approved October 6, 2026)
 **Why this comes first:** until published content is provably the content that was reviewed, no Ask surface may call a DIY guide "author-reviewed" (design D1).
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20. Labels: **[Code-traced]** read, not run; nothing here was executed. No service, database or browser was run, and **production template contents are unknown** (the repository seeds none).
@@ -137,7 +137,7 @@ The widened `UNPUBLISH` and `ARCHIVE` matter: a published template whose working
 | --- | --- |
 | 1a | Schema edits and the revision service with tests (1-2, 9). **Done, see §12** |
 | 1b | Transaction-safe transitions and the edit semantics (tests 3-6). **Done, see §13** |
-| 1c | Homeowner reads and `createProject` on revisions (tests 7-8) |
+| 1c | Homeowner reads and `createProject` on revisions (tests 7-8). **Done, see §14** |
 | 1d | Admin UI changes with component tests |
 | 1e | Backfill SQL, verification query, startup warning, rollout notes; then the exact `prisma db push` and `prisma generate` commands for you to run |
 
@@ -234,3 +234,33 @@ Not wired into anything yet: the governance transitions, the admin PUT, the home
 | Neighbors (DIY role floor, DIY capability, AI guide, hire-required boundary, Ask DIY projects, startup registry) with the above | 92 pass in total, 0 fail | Executed |
 
 **Not run:** Postgres, so real row-lock timing, `READ COMMITTED` re-evaluation of the conditional claim, and the Prisma error mapping are modeled by the fake, not exercised (a scratch-database run is part of slice 1e). The admin UI still lets an editor click save in a frozen state and show the 409 as an error; the read-only handling is slice 1d. Homeowner reads and `createProject` still read the live row (slice 1c), so **until 1c ships, a live template that an admin edits as a draft still shows the edited content to homeowners**; the head pointer is maintained but not yet read. Deploying 1b without 1c therefore does not yet deliver the guarantee; 1b and 1c should be released together.
+
+## 14. Slice 1c record (October 6, 2026)
+
+**Changed**
+
+- New `apps/backend/src/services/diyPublishedTemplate.ts`: the mappers that turn a template and its published head revision into the homeowner response (summary and detail), plus the synthetic ids for steps, materials and tools (`<revisionId>:step:<n>`, `:material:<i>`, `:tool:<i>`).
+- `diy.service.ts`: `listTemplates`, `getFeaturedTemplates` and `getTemplateDetail` read the **published head** and filter, search and sort on the **revision's** columns (`publishedRevision: { is: ... }`, ordered by the revision's title, paged by template id as before); featured order still comes from the template row. A template is live only when it has a head.
+- `diy.service.ts` `createProject` (template branch): requires a head; refuses a **governed** revision whose stored content does not match its hash (`409 DIY_TEMPLATE_UNAVAILABLE`, logged) and accepts a **legacy-backfill** revision with no hash (decision R3); runs the eligibility policy on the **revision's** safety, permit and category; copies steps, materials and tools from the revision snapshot; records `DiyProject.templateRevisionId`; `templateStepId` is the synthetic step id.
+- Tests: new `tests/unit/diyPublishedTemplateReads.test.js` (14 tests); the shared fake gained nested relation filters, `contains`, `has`, ordering by a relation, cursor paging and project creation.
+
+**Deliberate response-shape tightening (please confirm).** The homeowner template **detail** used to return the whole template row, which included the admin fields `approvedBy` (an admin's user id), `approvedAt`, `status`, `geminiPromptHint` and timestamps. No homeowner page reads them (searched the DIY pages and `TemplateCard`). The detail now returns the fields the pages use, plus an additive `revision` number; list items keep the same fields as before. Children carry synthetic ids instead of database ids (the pages use the ids only as React keys).
+
+**Behavior notes**
+
+- A homeowner now sees what was **published**, not what an admin is editing: editing a live template, even changing its category or safety level, changes nothing homeowners see or can start until a new revision is approved and published. Withdrawing the head removes the template from the list, featured and detail at once.
+- The query-level safety and permit filters now keep a not-listable head from taking a slot in a page (a test covers it); the eligibility policy is still applied after the query as before.
+- A project started from a legacy-backfill revision records `templateRevisionId`, and the revision's `provenance` says `LEGACY_BACKFILL`, so Ask can treat it as not reviewed.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| New reads and `createProject` tests | 14 pass, 0 fail | Executed |
+| Mutation checks: list ignores the head's safety (caught by the new paging test); `createProject` eligibility reads the working copy (1 test); integrity check removed (1); summary reads the working copy's title (3); project does not record the revision (2); detail leaks admin fields (1) | each caught. A seventh, dropping the head requirement from the list query, is an **equivalent mutant**: the relation filter already requires a head, so behavior is unchanged | Executed |
+| Backend `npm run typecheck` | clean | Executed |
+| All DIY, governance and revision suites together, plus the Ask DIY and startup-registry tests | 106 pass, 0 fail | Executed |
+
+**Not run:** Postgres. In particular the relation filter (`publishedRevision: { is: ... }`), ordering by a relation field, and cursor paging over it are exercised by the fake, not by Prisma against a real database; they are standard Prisma forms but must be confirmed in the slice 1e scratch-database run. The frontend was not touched or run.
+
+**Release constraint.** With 1b and 1c the guarantee is now in the code, but **templates that are live today have no head until the slice 1e backfill is run**, so deploying this code first would show homeowners an empty library and block every template project. The code is safe on `main`; deploying it is not safe until 1e.

@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.194
+**Version:** 1.195
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.195 — DIY template revisions, slice 1c:** Homeowner DIY template reads (library list, featured, detail) and project creation now use a template's published head revision and ignore its editable working copy; filters, search and safety and permit checks use the revision's own fields, a withdrawn template disappears at once, and a project records the revision it copied. A governed revision whose content no longer matches its hash is refused; a legacy-backfill revision is accepted but is never treated as reviewed. The homeowner template detail no longer returns admin-only fields (it used to expose an admin's user id as `approvedBy`) and gains a `revision` number. Tested against a database-free fake with mutation checks; not exercised against Postgres. Templates live today have no head until the slice 1e backfill runs, so this code must not be deployed before it. See `docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md` §14.
 
 **Revision 1.194 — DIY template revisions, slice 1b:** DIY template lifecycle transitions are now single transactions that claim the template with a conditional write on the expected status and create, approve, return, publish or withdraw an immutable revision in the same transaction; reviewed content is frozen (`REVIEW`, `APPROVED` and `ARCHIVED` refuse content edits with `TEMPLATE_CONTENT_FROZEN`), editing a live template saves a draft while the published head stays unchanged, a live template can be unpublished or archived from any status, and HIGH-safety publishing uses the revision's approver. Templates already in review or approved before revisions existed must be returned to draft and resubmitted. Homeowner reads and project creation still use the live row until slice 1c, so 1b and 1c are to be released together. Tested against a database-free fake with mutation checks; not exercised against Postgres. See `docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md` §13.
 
