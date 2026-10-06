@@ -6350,6 +6350,15 @@ export interface DiyCompletionEffects {
   canRecover: boolean;
 }
 
+/** What is known about the maintenance task a DIY project is linked to. `null` when there is nothing to say. */
+export interface DiyTaskLink {
+  state: 'UPDATING' | 'NEEDS_REVIEW' | 'NEEDS_ATTENTION' | 'CLOSED_BY_TASK';
+  /** Fixed copy from the server; never a raw error. */
+  summary: string;
+  /** True only for a dead-lettered update from the linked task. */
+  canRecover: boolean;
+}
+
 export interface DiyProjectDetail extends DiyProjectSummary {
   /** The version complete and abandon must be based on. It changes whenever any step changes. */
   updatedAt: string;
@@ -6359,6 +6368,7 @@ export interface DiyProjectDetail extends DiyProjectSummary {
   inventoryItemId?: string;
   homeEventId?: string;
   completionEffects?: DiyCompletionEffects | null;
+  taskLink?: DiyTaskLink | null;
   notesJson: { text: string; createdAt: string }[];
   photoUrls: string[];
   actualMinutes?: number;

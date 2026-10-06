@@ -45,6 +45,7 @@ const MUTATIONS = [
   ['post', `${PREFIX}/projects/:projectId/complete`],
   ['post', `${PREFIX}/projects/:projectId/abandon`],
   ['post', `${PREFIX}/projects/:projectId/completion-effects/retry`],
+  ['post', `${PREFIX}/projects/:projectId/task-reconciliation/retry`],
   ['post', `${PREFIX}/ai-guide`],
 ];
 

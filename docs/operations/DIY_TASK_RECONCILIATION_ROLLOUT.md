@@ -1,6 +1,6 @@
 # DIY reverse reconciliation: rollout (step 4 of the stateful GUIDE)
 
-Plan: `docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md` (§5 is the order, §6 the slices). **Slice 4a (schema, the atomic request, the worker handler and the project transitions) is built and verified locally; 4b (disclosure, recovery, page) and 4c (the real-Postgres acceptance and the read-only queries) are not done. Nothing here has been applied to any database or deployed.** This file exists now because the backend's fatal start-up message points to it; 4c completes it.
+Plan: `docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md` (§5 is the order, §6 the slices). **Slices 4a (schema, the atomic request, the worker handler and the project transitions) and 4b (disclosure, recovery, page) are built and verified locally; 4c (the real-Postgres acceptance and the read-only queries) is not done. Nothing here has been applied to any database or deployed.** This file exists now because the backend's fatal start-up message points to it; 4c completes it.
 
 ## The order (one release train, sequential; the same rules as step 3)
 
@@ -16,7 +16,7 @@ Plan: `docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md` (§5 is the o
 | Misorder | Result |
 | --- | --- |
 | Backend before `prisma db push` | The backend fails its start-up check and does not serve. |
-| Backend before the new worker is running | Task completions succeed; their reconciliation events wait, retry, and dead-letter after 8 attempts (hours). Once 4b ships, the page shows "Some updates from your linked task could not be applied" with a **Finish updating** button. Until then, reset the event rows. |
+| Backend before the new worker is running | Task completions succeed; their reconciliation events wait, retry, and dead-letter after 8 attempts (hours). The page shows "Some updates from your linked task could not be applied" with a **Finish updating** button. |
 | Frontend before the backend | No harm: the page shows what the project read gives it. |
 
 ## Behavior to expect (so none of it is a surprise)

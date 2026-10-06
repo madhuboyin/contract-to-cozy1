@@ -5789,6 +5789,13 @@ class APIClient {
     return res.data;
   }
 
+  /** Re-queues the updates from a project's linked task when they were dead-lettered. Anything else is a no-op (`reset: false`). */
+  async retryDiyTaskReconciliation(propertyId: string, projectId: string): Promise<{ reset: boolean; taskLink: import('@/types').DiyTaskLink | null }> {
+    const res = await this.post<{ reset: boolean; taskLink: import('@/types').DiyTaskLink | null }>(`/api/properties/${propertyId}/diy/projects/${projectId}/task-reconciliation/retry`, {});
+    if (!res.data) throw new APIError('Failed to re-queue the linked task updates', 500);
+    return res.data;
+  }
+
   /** Re-queues the completion records of a project whose update was dead-lettered. Anything else is a no-op (`reset: false`). */
   async retryDiyCompletionEffects(propertyId: string, projectId: string): Promise<{ reset: boolean; completionEffects: import('@/types').DiyCompletionEffects | null }> {
     const res = await this.post<{ reset: boolean; completionEffects: import('@/types').DiyCompletionEffects | null }>(`/api/properties/${propertyId}/diy/projects/${projectId}/completion-effects/retry`, {});

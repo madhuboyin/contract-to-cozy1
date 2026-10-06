@@ -180,6 +180,13 @@ export async function retryCompletionEffects(req: Request, res: Response, next: 
   } catch (err) { next(err); }
 }
 
+export async function retryTaskReconciliation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await diyService.retryTaskReconciliation(req.params.projectId, req.params.propertyId, req.user!.userId);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
 export async function abandonProject(req: Request, res: Response, next: NextFunction) {
   try {
     const hireOut = req.body.hireOut ?? false;

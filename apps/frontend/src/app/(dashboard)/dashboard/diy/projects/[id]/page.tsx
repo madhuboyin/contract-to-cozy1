@@ -30,6 +30,7 @@ export default function ProjectTrackerPage() {
   const [abandoning, setAbandoning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
+  const [recoveringLink, setRecoveringLink] = useState(false);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -42,14 +43,15 @@ export default function ProjectTrackerPage() {
 
   // While the records that follow a completion are still being written, look again every so often (bounded, and with no promise of when). The read
   // never changes anything; it only shows what the worker has done.
-  const effectsState = project?.completionEffects?.state;
+  // The same goes for updates that follow from the linked maintenance task (UPDATING).
+  const waiting = project?.completionEffects?.state === 'RECORDING' || project?.taskLink?.state === 'UPDATING';
   const [polls, setPolls] = useState(0);
   useEffect(() => {
-    if (effectsState !== 'RECORDING') { if (polls !== 0) setPolls(0); return; }
+    if (!waiting) { if (polls !== 0) setPolls(0); return; }
     if (polls >= MAX_EFFECT_POLLS) return;
     const timer = setTimeout(() => { setPolls((count) => count + 1); void load(); }, EFFECT_POLL_MS);
     return () => clearTimeout(timer);
-  }, [effectsState, polls, load]);
+  }, [waiting, polls, load]);
 
   // A failed write: a stale or closed project is reloaded and explained; anything else shows the server's own message.
   async function handleWriteError(err: any, fallback: string) {
@@ -86,6 +88,21 @@ export default function ProjectTrackerPage() {
       setError(err?.message ?? 'Could not re-queue the records. Please try again.');
     } finally {
       setRecovering(false);
+    }
+  }
+
+  // Re-queues a dead-lettered update from the linked task. Only offered for that state; the server refuses anything else as a no-op.
+  async function handleRecoverTaskLink() {
+    if (!propertyId || !project) return;
+    setRecoveringLink(true);
+    setError(null);
+    try {
+      await api.retryDiyTaskReconciliation(propertyId, project.id);
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not re-queue the updates. Please try again.');
+    } finally {
+      setRecoveringLink(false);
     }
   }
 
@@ -178,6 +195,27 @@ export default function ProjectTrackerPage() {
                 <li key={i}>{warning}</li>
               ))}
             </ul>
+          )}
+        </div>
+      )}
+
+      {project.taskLink && (
+        <div
+          data-task-link={project.taskLink.state}
+          role="status"
+          aria-live="polite"
+          className={`rounded-xl border p-4 ${project.taskLink.state === 'NEEDS_ATTENTION' || project.taskLink.state === 'NEEDS_REVIEW' ? 'border-amber-200 bg-amber-50' : 'border-neutral-200 bg-neutral-50'}`}
+        >
+          <p className="text-sm text-neutral-700">{project.taskLink.summary}</p>
+          {project.taskLink.canRecover && canWrite && (
+            <button
+              type="button"
+              onClick={handleRecoverTaskLink}
+              disabled={recoveringLink}
+              className="mt-2 rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-800 disabled:opacity-50"
+            >
+              {recoveringLink ? 'Working…' : 'Finish updating'}
+            </button>
           )}
         </div>
       )}
