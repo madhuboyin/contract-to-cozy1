@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.187
+**Version:** 1.188
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.188 — stateful GUIDE design gate written (not approved):** Adds `docs/architecture/ASK_COZY_STATEFUL_GUIDE_DESIGN.md`, which resolves the eight C.11.8 decisions without a new stepper store: guide only template-sourced DIY projects (AI-generated guides excluded), keep progress as the existing canonical `DiyProjectStep` state, treat completion as self-reported with optional attached evidence, make help read-only child turns, and require three existing DIY completion defects to be fixed first. No requirement in C.11.8 is relaxed, and nothing is implemented. The design asks nine owner decisions (O1-O9), including reversing the v1.58 decision that stepping through DIY projects stays on the page.
 
 **Revision 1.187 — conversational presentation R3 content increment:** Uses the existing `initialVisibleCount` field for two more producers. The hiring guide is reordered by importance (licensing and insurance, itemized written estimates, signed contract lead; references, permits, warranty/subcontractors follow) with the rest behind "Show 3 more", and offers no continuation because no registered capability can be launched from it with correct targeting. Renovation readiness collapses only "Other open items" (initial five); blocking items always show. The monthly routine stays fully visible. The renovation checklist's 20-items-delivered cap versus its reported count is unchanged and remains open. See `docs/architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_PHASE_2_INVENTORY.md` §9.
 

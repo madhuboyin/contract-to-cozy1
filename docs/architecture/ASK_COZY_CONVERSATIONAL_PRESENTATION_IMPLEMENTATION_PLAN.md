@@ -104,6 +104,10 @@ Before implementation, produce and approve a focused design answering all decisi
 
 Likely affected areas may include the response contract, execution/session continuation, a step-content catalog, and frontend guide controls. No database change is assumed. If existing execution state cannot meet cross-session requirements, document the evidence and proposed schema change; per repository policy, update Prisma and contracts but do not create migration scripts.
 
+### 6.1 Status (October 6, 2026)
+
+The design gate is written: [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md). It resolves all eight FRD C.11.8 decisions (D1-D8) by building on the existing DIY step workflow and the shipped guided-journey continuation pattern rather than a new stepper store, lists five prerequisites (P1-P5; P2-P4 fix existing DIY completion behavior) and six delivery slices, and asks nine decisions (O1-O9). **Awaiting approval; nothing is implemented and no schema is changed.**
+
 ## 7. Phase 4 — ASSESS and safety knowledge capture
 
 Define an assessment-turn contract that asks one material question, records conversation-only state separately from canonical facts, and routes any durable fact through existing governed capture and confirmation. Start with one safety question whose answer demonstrably changes guidance. Conditional safety recommendations must use canonical Property Context and distinguish present, absent, unknown, conflicted, and stale when those states are supported.
