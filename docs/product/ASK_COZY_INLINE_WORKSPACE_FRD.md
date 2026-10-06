@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.199
+**Version:** 1.200
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.200 — DIY step and project transitions, slice 2c (Postgres run and rollout):** the transitions were run against a real throwaway Postgres: token round trip, concurrent writers, completion racing a reopen, an abandon and itself, the completion rule, the ledger and attribution (13 checks, with negative controls on the service). Nothing needed fixing. Added a read-only query listing open projects the new completion rule will ask to finish optional steps, and a rollout runbook (schema push, deploy together, manual checks). Step 2 is complete; applying it is the owner's. Not run: production data, a browser, the Raspberry Pi. See `docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md` §14 and `docs/operations/DIY_STEP_TRANSITIONS_ROLLOUT.md`.
 
 **Revision 1.199 — DIY step and project transitions, slice 2b (routes, validators, page):** the step, complete and abandon requests now require a version token and the project page sends it. A stale or closed project reloads with a plain explanation; a finished or skipped step can be reopened; Skip is offered only for an optional step without a safety note; Complete Project appears only when every required step is done and every optional step is done or skipped, with a hint while optional steps remain. Component tests with mutation checks, typecheck and `next build` pass; not run in a browser or against Postgres. 2a and 2b must ship together. See `docs/architecture/ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md` §13.
 

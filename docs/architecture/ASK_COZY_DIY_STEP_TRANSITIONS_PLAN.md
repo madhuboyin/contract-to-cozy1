@@ -218,3 +218,24 @@ The owner approved **S2-1 through S2-9 at the recommended defaults**:
 | Wider frontend run (`src/components/features src/lib src/app`) | 450 pass, 10 fail in 5 suites that this slice does not touch (`propertyContextForm`, `contracts` (CTA), `buyerProfileCapture`, `toolDiscoveryEvents`, and the file-upload test in `client.test.ts`); my `client.ts` change is limited to the three DIY methods | Executed; failures not investigated |
 
 **Not run:** a browser, and a real backend. Slice 2a and 2b ship together; Postgres race behavior is slice 2c.
+
+## 14. Slice 2c record (October 6, 2026)
+
+**Built.** A guarded real-Postgres run (`apps/backend/tests/scratch/diyStepTransitions.scratch.js`, 13 checks), a read-only in-flight query (`apps/backend/prisma/diy-step-transitions-inflight.pgadmin.sql`), and the rollout runbook (`docs/operations/DIY_STEP_TRANSITIONS_ROLLOUT.md`). No service change was needed: the run found nothing to fix.
+
+**Validation (all on a scratch Postgres 15 with the 2a schema; nothing touched your data)**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| Token round trip through `timestamp(3)` and JSON; version strictly increasing across consecutive writes; stale and missing tokens; no ledger row for a refused write | pass | Executed |
+| Same step by two people at once (one applies, one ledger row, attribution matches the ledger); different steps at once (both succeed); 4 concurrent writers (all succeed); 10 (all succeeded, none refused) | pass | Executed |
+| Completion twice at once (one wins, effects ran once, attributed to the recorded person); completion vs reopen, 40 jittered rounds (completion won 26, reopen 14; never a completed project with an open step); completion vs abandon, 10 rounds (exactly one terminal state) | pass | Executed |
+| Refused completion rolls back its claim, so the caller's token stays valid; a full life in order with attribution; first activity starts the project; any step change makes an earlier project token stale | pass | Executed |
+| Negative controls on the service: claim lock removed (5 checks fail); completion rule dropped (2); retry loop cut to one attempt (2); claim writes the old version back (2) | each caught; service restored | Executed |
+| In-flight query run on the scratch database against seeded open, required-open and finished projects | returns the expected rows only | Executed |
+
+**Findings.** (1) A first mutant of the claim ("update without a version") survived because Prisma sets `updatedAt` itself when the data omits it; a sharper mutant exposed that no check tied a step change to the project token, so a test was added. (2) Clock-only versions are not caught on a real database (writes are never within a millisecond); the 2a frozen-clock unit test covers that. (3) The race tests passed first time with completion winning 20 of 20, which showed they were not exercising both orders; jitter was added and both orders now occur.
+
+**Not run:** your data, a browser, the Raspberry Pi, the completion side effects against Postgres (step 3), and sizes beyond 10 concurrent writers.
+
+**Step 2 is complete once 2a, 2b and 2c are pushed;** the rollout steps are yours (`DIY_STEP_TRANSITIONS_ROLLOUT.md`).
