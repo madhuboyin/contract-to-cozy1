@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.207
+**Version:** 1.208
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.208 — DIY reverse reconciliation, step 4 plan (draft):** a plan for making a DIY project follow its linked maintenance task when the task is completed somewhere else: an atomic request written with the task's completion, a worker that applies the approved rules (a pro-completed task hires the project out, a DIY-completed task completes it or closes it by the linked task, an unknown mode changes nothing), and a read-only disclosure for everything it cannot do. The reading found that only one completion path records who did the work, so most completions will be disclosed rather than applied, and that two raw writers complete tasks without any hook; the plan names both. Twelve decisions (S4-1 to S4-12) await approval; nothing is built. See `docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md`.
 
 **Revision 1.207 — DIY completion outbox, slice 3c (real worker job against real Postgres):** the whole completion path was run for real on a throwaway Postgres: the completion's outbox row, the actual worker job claiming it, the home event, and the governed maintenance completion (recurring roll-forward, seasonal item and counter, radar request) with the incident untouched; duplicate delivery, a partial failure and its retry, a dead letter and its recovery, two workers racing, lease reclaim, a handler overlapping its own retry, a task on another property (dead-lettered before anything is created), a deleted task, and the actor leaving the household afterwards. Thirteen checks passed repeatedly, with and without the production worker stubs, and five negative controls were caught. The Docker and Raspberry Pi images, Redis and the poller, and a crash between a task's status write and its side effects were not run. Step 3 is complete as code; applying it follows `docs/operations/DIY_COMPLETION_OUTBOX_ROLLOUT.md`. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` §15.
 
