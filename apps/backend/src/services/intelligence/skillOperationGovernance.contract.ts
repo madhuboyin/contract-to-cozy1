@@ -70,6 +70,10 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   // Exact-four starter source (inventory D-O4/D-O16): a non-routable, launch-only, data-independent read. Deliberately skill-less, the
   // same precedent as RECALL_REVIEW above; it must stay in this list or the boot-time governance check fails.
   'SEASONAL_HOME_CARE',
+  // Home Habit Coach review actions (add to routine, mark done, snooze, skip, dismiss): confirmation-gated, non-routable, declared-action only.
+  // Deliberately skill-less, the same precedent as RECALL_MATCH_UPDATE above (the home-habit-coach skill stays a READ skill); it must stay in
+  // this list or the boot-time governance check fails.
+  'HOME_HABIT_UPDATE',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like SEASONAL_HOME_CARE.
   'HOME_BASICS_GUIDE',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like the two above.
