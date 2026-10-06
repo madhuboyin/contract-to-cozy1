@@ -162,6 +162,14 @@ test('createProject copies the published head, not the working copy, and records
   assert.deepEqual([project.tools[0].name, project.tools[0].userToolAction], ['Roller', 'ALREADY_OWNED']);
 });
 
+test('createProject returns the project it just created: the detail is read through the transaction, where the new row is visible', async () => {
+  const h = harness([tpl()]); await goLive(h);
+  const project = await start(h); // would throw "Project not found" if the detail were read outside the still-open transaction
+  assert.equal(project.title, 'Paint a room');
+  assert.equal(h.state.projects.length, 1);
+  assert.equal(h.state.uncommittedProjects.size, 0, 'committed when the transaction finished');
+});
+
 test('createProject refuses a template without a published head', async () => {
   for (const status of ['DRAFT', 'REVIEW', 'APPROVED', 'ARCHIVED', 'ACTIVE']) {
     const h = harness([tpl({ status })]);

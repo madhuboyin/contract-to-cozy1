@@ -299,7 +299,7 @@ export class DiyService {
           })),
         });
 
-        return this.getProjectDetail(project.id, propertyId);
+        return this.getProjectDetail(project.id, propertyId, tx);
       });
     }
 
@@ -408,7 +408,7 @@ export class DiyService {
           });
         }
 
-        return this.getProjectDetail(project.id, propertyId);
+        return this.getProjectDetail(project.id, propertyId, tx);
       });
     }
 
@@ -455,8 +455,10 @@ export class DiyService {
     return { items, nextCursor: hasMore ? items[items.length - 1]?.id : undefined };
   }
 
-  async getProjectDetail(projectId: string, propertyId: string) {
-    const project = await prisma.diyProject.findFirst({
+  // `db` is the transaction client when the project was created inside a transaction: a row inserted there is not visible to the global client
+  // until the transaction commits, so reading it back through the global client made createProject fail with "Project not found" and roll back.
+  async getProjectDetail(projectId: string, propertyId: string, db: Pick<Prisma.TransactionClient, 'diyProject'> = prisma) {
+    const project = await db.diyProject.findFirst({
       where: { id: projectId, propertyId },
       include: {
         steps: { orderBy: { stepNumber: 'asc' } },

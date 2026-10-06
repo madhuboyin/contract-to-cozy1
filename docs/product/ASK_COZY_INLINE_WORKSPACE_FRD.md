@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.196
+**Version:** 1.197
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.197 — DIY template revisions, slice 1e (rollout) and a project-creation fix:** Adds the one-time hand-run backfill (live templates become legacy revisions that are never treated as reviewed), a read-only verification file, a start-up warning that never blocks or writes, and a rollout runbook with a binding order (schema, backfill and verification, then deploy), because the homeowner DIY library is empty if the new code runs before the backfill. The whole revision stack was run against a throwaway Postgres 15 (18 checks, all passing), which also found and fixed a defect the earlier fakes could not show: starting a DIY project, from a template or an AI guide, read the new project back outside its own transaction and failed with "Project not found". Not run against any development or production database; production-sized performance and the Pi deployment were not exercised. See `docs/operations/DIY_TEMPLATE_REVISIONS_ROLLOUT.md` and the plan §16.
 
 **Revision 1.196 — DIY template revisions, slice 1d (admin UI):** The DIY template admin screens now show which revision is live and whether it was reviewed or is a legacy backfill, offer Return to draft for an approved template and Unpublish or Archive for any template that has a live version, explain what saving will do in each state (a live template saves a draft while its published version stays live; review, approved and archived templates have frozen content and only featured order and the Gemini hint can be saved), and add Return to draft to the Pending Reviews approved queue. Also fixes a defect found while building it: a save that repeats the stored content (the admin form always sends everything) is no longer treated as a content change, so changing only featured order no longer refuses in review or approved and no longer pushes a live template to draft. Component-tested with mutation checks and a clean `next build`; no browser run. See `docs/architecture/ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md` §15.
 

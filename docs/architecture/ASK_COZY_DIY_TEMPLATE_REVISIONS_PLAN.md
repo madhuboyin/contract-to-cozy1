@@ -1,7 +1,7 @@
 # DIY Template Revisions — Step 1 Implementation Plan (immutable published content)
 
 **Date:** October 6, 2026
-**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** Slices 1a (§12), 1b (§13), 1c (§14) and 1d (§15) are implemented; 1e is not started. **Do not deploy this code to production before the slice 1e backfill exists and has been run (§6): without it the homeowner library is empty.** The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
+**Status:** **Approved October 6, 2026: R1-R10 at the recommended defaults (§11).** All slices (1a-1e) are implemented (§12-§16). **Do not deploy this code before the backfill has been run, in the order in [`DIY_TEMPLATE_REVISIONS_ROLLOUT.md`](../operations/DIY_TEMPLATE_REVISIONS_ROLLOUT.md): without it the homeowner library is empty.** The owner runs the schema push, the backfill and the verification; none of it has been run against a development or production database. The schema edit exists in `prisma/schema.prisma` but has **not** been applied to any database.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 1; decision **O2-A** (approved October 6, 2026)
 **Why this comes first:** until published content is provably the content that was reviewed, no Ask surface may call a DIY guide "author-reviewed" (design D1).
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20. Labels: **[Code-traced]** read, not run; nothing here was executed. No service, database or browser was run, and **production template contents are unknown** (the repository seeds none).
@@ -139,7 +139,7 @@ The widened `UNPUBLISH` and `ARCHIVE` matter: a published template whose working
 | 1b | Transaction-safe transitions and the edit semantics (tests 3-6). **Done, see §13** |
 | 1c | Homeowner reads and `createProject` on revisions (tests 7-8). **Done, see §14** |
 | 1d | Admin UI changes with component tests. **Done, see §15** |
-| 1e | Backfill SQL, verification query, startup warning, rollout notes; then the exact `prisma db push` and `prisma generate` commands for you to run |
+| 1e | Backfill SQL, verification query, startup warning, rollout notes; then the exact `prisma db push` and `prisma generate` commands for you to run. **Done, see §16** |
 
 Each slice is reported with what was run and not run, and none is committed or pushed without your instruction.
 
@@ -295,3 +295,26 @@ Not wired into anything yet: the governance transitions, the admin PUT, the home
 **Not run:** a browser, so the look of the badges, notice and disabled form is unverified. The Pending Reviews page change is one added action in an array (type-checked, no page-level test). Which admin may perform which action is unchanged and still enforced by the server per endpoint; the menu lists every lifecycle action valid for the state, so an admin without the capability sees the server's refusal. Postgres was not run (see §12-14).
 
 **Remaining before release: slice 1e** (the backfill SQL and verification query, the startup warning, a scratch-database dry run, and the exact commands for the owner).
+
+## 16. Slice 1e record (October 6, 2026)
+
+**Delivered**
+
+- `apps/backend/prisma/diy-template-revisions-backfill.pgadmin.sql`: hand-run, one transaction, idempotent. Inserts revision 1 (`LEGACY_BACKFILL`, null hash, approval copied for the record, deterministic id `legacy-<templateId>-1`) for every `ACTIVE` template with no head and no revision, then sets the head. It never changes template content or status and does not touch `DRAFT`, `REVIEW`, `APPROVED` or `ARCHIVED` templates.
+- `apps/backend/prisma/diy-template-revisions-verify.pgadmin.sql`: read-only checks (live without head, broken head, snapshot mismatch, templates that must be returned and resubmitted, information).
+- `apps/backend/src/services/diyTemplateRevisionStartupCheck.ts`, called when the server starts: **warns, never blocks or writes**, about `ACTIVE` templates without a head and about `REVIEW` or `APPROVED` templates with no open revision.
+- `docs/operations/DIY_TEMPLATE_REVISIONS_ROLLOUT.md`: the binding order, the exact commands, expected results, rollback, and how to repeat the scratch run.
+- `apps/backend/tests/scratch/diyTemplateRevisions.scratch.js`: the real-Postgres run (not part of `npm test`), with hard guards against any non-scratch database.
+
+**The real-Postgres run found a defect that the fakes could not (fixed).** `createProject` created the project inside `prisma.$transaction` and then read it back with `getProjectDetail` through the **global** client. On real Postgres a row inserted in an open transaction is invisible to another connection until commit, so the read returned nothing and the method threw "Project not found", rolling the project back. I reproduced the mechanism on the scratch database (`inside: true, outside: false`), confirmed the same line exists in both branches (template and AI guide) before any of my slices, and fixed it by reading through the transaction client (`getProjectDetail(..., db)`). The shared fake now models that isolation, and a unit test fails without the fix. I have not observed production, so whether project creation was failing there is not established; if it was, it will start working after this deploys.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| Real-Postgres scratch run (Postgres 15, full schema generated by `prisma migrate diff`, 18 checks) | 18 pass: outage reproduced before the backfill; backfill correct and idempotent; verification clean afterwards; library filters, search, ordering, cursor paging, featured order on real Postgres; project creation from a legacy revision and from an AI guide; hash round trip through `jsonb`; review and approved templates refused then recovered; edit, withdraw, republish; simultaneous approvals and submissions (real row locking); real unique-key collision mapped to `REVISION_CONFLICT`; tampering detected | Executed (scratch database) |
+| First scratch run, before the fix | 4 of 17 failed: three from the `createProject` defect, one from a mistake in my test (it counted the legacy revision's copied approval) | Executed |
+| Start-up check unit tests (5) and the new transaction-visibility test | pass; the transaction test fails without the fix | Executed |
+| Backend `npm run typecheck`; DIY, governance, revision, Ask DIY and startup-registry suites | clean; see the final run recorded below | Executed |
+
+**Limits.** The scratch copy of the schema replaces two PostGIS `geography` columns in unrelated tables with text and omits their two spatial indexes (PostGIS was not available locally). The database is empty apart from seeded rows, so **performance on production-sized data was not measured**. The audit writer and property applicability are stubbed. No browser, no Pi deployment, and no run against your development or production database.

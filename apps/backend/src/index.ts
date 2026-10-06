@@ -212,6 +212,7 @@ import { validateDecisionFamilyAdapterRegistry } from './services/decisionPlatfo
 import { validateDecisionThreadTransitionContract } from './services/decisionPlatform/decisionThreadTransitions';
 import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/homeIntelligenceGraph';
 import { validateIntelligenceRegistries } from './services/intelligence';
+import { warnAboutDiyTemplateRevisionState } from './services/diyTemplateRevisionStartupCheck';
 import { validateEnvelopeRegistry } from './services/intelligenceEnvelope';
 import {
   assertAgentDeploymentReadiness,
@@ -765,6 +766,8 @@ async function startServer(): Promise<void> {
   logger.info(`🔗 API URL: http://localhost:${PORT}`);
   logger.info(`✅ Health check: http://localhost:${PORT}/api/health`);
   logger.info(`📚 API Docs: http://localhost:${PORT}/api/docs`);
+  // Warn (never block) if the DIY template revision backfill has not been run; see docs/operations/DIY_TEMPLATE_REVISIONS_ROLLOUT.md.
+  void warnAboutDiyTemplateRevisionState();
   if (isEmailVerificationDisabled()) {
     logger.warn(
       { configKey: APP_CONFIG_KEYS.disableEmailVerification },

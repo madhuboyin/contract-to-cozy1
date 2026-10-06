@@ -23,7 +23,7 @@ const matches = (record, where = {}) => Object.entries(where).every(([key, value
 const pickKeys = (record, select) => Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, record[key]]));
 
 function makeDiyDb(templateSeeds = [], hooks = {}) {
-  const state = { templates: new Map(), revisions: [], writes: [], projects: [] };
+  const state = { templates: new Map(), revisions: [], writes: [], projects: [], uncommittedProjects: new Set(), txDepth: 0 };
   for (const seed of templateSeeds) {
     state.templates.set(seed.id, structuredClone({
       status: 'DRAFT', approvedBy: null, approvedAt: null, publishedRevisionId: null, featuredOrder: null, geminiPromptHint: null,
@@ -68,6 +68,24 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     if (include?._count) out._count = Object.fromEntries(Object.keys(include._count.select).map((key) => [key, (template[key] ?? []).length]));
     return include ? { ...out, steps: include.steps ? steps : undefined, materials: include.materials ? materials : undefined, tools: include.tools ? tools : undefined } : out;
   };
+  // A project row created inside an open transaction is visible through the transaction client only, never through the global client, until the
+  // transaction commits (what Postgres does under READ COMMITTED). `seesUncommitted` is true for the transaction client.
+  function projectDelegate(seesUncommitted) {
+    return {
+      async create({ data }) {
+        fail('project.create');
+        const project = { id: `project-${state.projects.length + 1}`, steps: [], materials: [], tools: [], aiGuide: null, ...structuredClone(data) };
+        state.projects.push(project);
+        if (state.txDepth > 0) state.uncommittedProjects.add(project.id);
+        state.writes.push({ model: 'project', op: 'create', data: structuredClone(data) });
+        return structuredClone(project);
+      },
+      async findFirst({ where }) {
+        const row = state.projects.find((project) => matches(project, where) && (seesUncommitted || !state.uncommittedProjects.has(project.id)));
+        return row ? structuredClone(row) : null;
+      },
+    };
+  }
   const projectChildren = (name) => ({
     async createMany({ data }) {
       fail(`project.${name}.createMany`);
@@ -114,16 +132,7 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     diyTemplateMaterial: children('materials'),
     diyTemplateTool: children('tools'),
     diySkillProfile: { async findUnique() { return hooks.skillProfile ?? null; } },
-    diyProject: {
-      async create({ data }) {
-        fail('project.create');
-        const project = { id: `project-${state.projects.length + 1}`, steps: [], materials: [], tools: [], aiGuide: null, ...structuredClone(data) };
-        state.projects.push(project);
-        state.writes.push({ model: 'project', op: 'create', data: structuredClone(data) });
-        return structuredClone(project);
-      },
-      async findFirst({ where }) { const row = state.projects.find((project) => matches(project, where)); return row ? structuredClone(row) : null; },
-    },
+    diyProject: projectDelegate(false),
     diyProjectStep: projectChildren('steps'),
     diyProjectMaterial: projectChildren('materials'),
     diyProjectTool: projectChildren('tools'),
@@ -161,14 +170,21 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
       const previous = db.__tail;
       let release; db.__tail = new Promise((resolve) => { release = resolve; });
       await previous;
-      const snapshot = structuredClone({ templates: [...state.templates], revisions: state.revisions });
+      const snapshot = structuredClone({ templates: [...state.templates], revisions: state.revisions, projects: state.projects });
+      const tx = { ...db, diyProject: projectDelegate(true) };
+      state.txDepth += 1;
       try {
-        return await work(db);
+        const result = await work(tx);
+        state.uncommittedProjects.clear(); // commit
+        return result;
       } catch (error) {
         state.templates = new Map(snapshot.templates);
         state.revisions = snapshot.revisions;
+        state.projects = snapshot.projects;
+        state.uncommittedProjects.clear();
         throw error;
       } finally {
+        state.txDepth -= 1;
         release();
       }
     },
