@@ -1,7 +1,7 @@
 # DIY Reverse Reconciliation (Maintenance Task to DIY Project) — Step 4 Implementation Plan
 
 **Date:** October 6, 2026
-**Status:** **Draft, awaiting approval of S4-1 to S4-12 (§10).** Nothing in this plan is built. It needs schema changes (two enum values on existing enums, one new enum, one nullable column, one index), applied by you with `prisma db push`.
+**Status:** **Revision 2, after external review (October 6, 2026).** The review explicitly approved S4-2 and approved S4-1 to S4-12 subject to three corrections (the occurrence id, the deleted-task outcome, per-project outcomes) and one wording change, all incorporated here (§11 maps them). Awaiting your word to commit and start 4a. Nothing in this plan is built. It needs schema changes (two enum values on existing enums, one new enum, one nullable column, one index), applied by you with `prisma db push`.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 4 (P5; decision O12, approved October 6, 2026), D4, E8, review finding 8, methodology items 15, 17, 18, 19, 20
 **Follows:** [`ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md`](ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md) (step 3, pushed; its rollout is yours). This plan reuses its outbox, worker handler boundary, authority policy, disclosure and recovery patterns.
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20 and the section 7 adversarial pass (§8). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed; the findings are from reading and searching the code.
@@ -32,43 +32,55 @@
 
 ### 3.1 The request: atomic with the task's completion, only when it can matter
 
-In both governed writers (`completeTaskCore` and `updateTask`), the compare-and-swap that moves a task to `COMPLETED` and the request below happen in **one transaction**: after the write succeeds and only on a real transition into `COMPLETED`, an **indexed** lookup finds open DIY projects linked to the task (`maintenanceTaskId`, status `PLANNING` or `IN_PROGRESS`). If there are none, nothing more happens (the common case: one cheap indexed read). If there are, a `DomainEvent` of type `DIY_TASK_COMPLETED_RECONCILE` is inserted in the same transaction: key `diy-task-reconcile:<taskId>:<lastCompletedDate ISO>` (a recurring task completes once per cycle, so each cycle can reconcile its own project), `propertyId`, and a payload that **snapshots what the completion said**: task id, property id, the completing user, `completedAt`, `fulfillmentMode` (or null), and the completion key (or null). In the same transaction the completing user's access is verified with the read-only transaction-capable check from step 3, so the worker can rely on durable, authorized intent (the same policy as step 3 §3.6) and use the user only for attribution. A failed insert rolls the task completion back (S4-5 weighs this).
+In both governed writers (`completeTaskCore` and `updateTask`), the transition into `COMPLETED` and the request below happen in **one transaction**, in this order:
 
-### 3.2 The handler: durable state decides, per project
+1. An **indexed** lookup finds the open DIY projects linked to the task (`maintenanceTaskId`, status `PLANNING` or `IN_PROGRESS`), capped at 25 (§3.2 explains the cap). **If there are none, nothing more happens** (the common case: one cheap indexed read).
+2. If there are some, a **unique reconciliation occurrence id** (a UUID) is generated **inside the transaction** and merged into the task's `completionMetadata` as `reconciliationOccurrenceId` **in the same compare-and-swap write** that completes the task. It is deliberately not derived from `lastCompletedDate` or any caller-supplied value: a caller can send the same completion date for several cycles of a recurring task, and a date-derived key would make a legitimate later completion collide with the earlier event and roll the whole task completion back.
+3. After the write succeeds (a lost compare-and-swap writes nothing and emits nothing), a `DomainEvent` of type `DIY_TASK_COMPLETED_RECONCILE` is inserted: key `diy-task-reconcile:<taskId>:<occurrenceId>`, `propertyId`, and a payload that **snapshots what the completion said**: task id, property id, occurrence id, the completing user, `completedAt`, `fulfillmentMode` (or null), the completion key (or null), and the **ids of the open projects found in step 1**.
+
+The occurrence id stored on the task is also the **pointer** that disclosure (§3.3) and recovery (§3.4) follow from a project to its exact event: project, to its task, to `completionMetadata.reconciliationOccurrenceId`, to the event key. (For a recurring task it names the latest occurrence, which is the one a person is looking at.) In the same transaction the completing user's access is verified with the read-only transaction-capable check from step 3, so the worker can rely on durable, authorized intent (the same policy as step 3 §3.6) and use the user only for attribution. A failed insert rolls the task completion back (S4-5 weighs this).
+
+### 3.2 The handler: durable state decides, per snapshotted project, with persisted outcomes
 
 A pure handler with injected dependencies (the step 3 boundary), run by the worker:
 
-1. **Preflight, before any write:** the snapshot is well formed; the task exists and is still `COMPLETED` (if it was reopened meanwhile, outcome `TASK_NO_LONGER_COMPLETED` for the whole event, nothing applied); its property matches the snapshot (otherwise a **terminal** integrity failure, dead-lettered at once).
-2. **Find the open linked projects** (indexed). For **each project independently** (one project's failure does not stop the others; the event fails at the end if any failed, and a retry only touches projects that are still open):
+1. **Preflight, before any write:** the snapshot is well formed. The task is then read:
+   - **The task no longer exists** (deleted after the event was written; `DiyProject.maintenanceTaskId` is an unconstrained string, so the projects still point at it): the event ends with the typed **terminal skip** `TASK_DELETED`. It is a normal, final end (the event is `PROCESSED`, not retried and not dead-lettered), **no project is changed**, and the link is not hidden: the disclosure shows `NEEDS_REVIEW` (§3.3).
+   - **The task is no longer `COMPLETED`** (reopened meanwhile): outcome `TASK_NO_LONGER_COMPLETED` for the whole event, nothing applied.
+   - **The task's property differs from the snapshot's:** a **terminal** integrity failure, dead-lettered at once.
+2. **For each project id in the snapshot** (the ids found when the request was written; at most 25, and any open project beyond the cap is simply not snapshotted and is covered by the disclosure, not silently dropped), independently, **skipping any project that already has a final outcome recorded on the event**. One project's failure does not stop the others; the event fails at the end if any project failed, and a retry or a recovery touches only the projects without a final outcome:
 
-| Snapshot mode | Project open, and… | Action | Ledger | Home event |
-| --- | --- | --- | --- | --- |
-| `PROVIDER` | any steps | `HIRED_OUT`, steps untouched, basis `LINKED_TASK` | `PROJECT_HIRED_OUT` | none |
-| `DIY` | the completion rule holds (required steps completed, optional completed or skipped) | the **normal project completion** (basis `STEPS`), including its own outbox event, so the home event is recorded and the task effect finds the task already done | `PROJECT_COMPLETED` | yes (via step 3's event) |
-| `DIY` | required steps still open | **Reconciled closure**: `COMPLETED`, basis `LINKED_TASK`, steps left as they were, `completedByUserId` the completing user | new `PROJECT_CLOSED_BY_LINKED_TASK` | none |
-| none or unknown | any | **no transition** (outcome `NEEDS_REVIEW`); the project stays open and the page discloses it (§3.3) | none | none |
+| Snapshot mode | Project open, and… | Action | Ledger | Home event | Outcome recorded |
+| --- | --- | --- | --- | --- | --- |
+| `PROVIDER` | any steps | `HIRED_OUT`, steps untouched, basis `LINKED_TASK` | `PROJECT_HIRED_OUT` | none | `HIRED_OUT` |
+| `DIY` | the completion rule holds (required steps completed, optional completed or skipped) | the **normal project completion** (basis `STEPS`), including its own outbox event, so the home event is recorded and the task effect finds the task already done | `PROJECT_COMPLETED` | yes (via step 3's event) | `COMPLETED` |
+| `DIY` | required steps still open | **Reconciled closure**: `COMPLETED`, basis `LINKED_TASK`, steps left as they were, `completedByUserId` the completing user | new `PROJECT_CLOSED_BY_LINKED_TASK` | none | `CLOSED_BY_LINKED_TASK` |
+| none or unknown | any | **no transition** | none | none | `NEEDS_REVIEW` |
+| any | the project is no longer open (finished or stopped by the person first) | nothing | none | none | `ALREADY_CLOSED` |
 
-3. A project that is no longer open when the handler reaches it (the person finished or stopped it first) is `ALREADY_CLOSED`, not a failure. Every transition goes through the step 2 claim, so it serializes with the person's own writes and bumps the version (a stale page gets `DIY_STALE` on its next write, as intended). The actor on the ledger and on `completedByUserId` is the user who completed the task.
+3. **Per-project outcomes are persisted, bounded, on the event.** After each project the handler records its outcome in the event's own payload as `projectOutcomes: { <projectId>: <outcome> }`, at most one entry per snapshotted project (so at most 25). `HIRED_OUT`, `COMPLETED`, `CLOSED_BY_LINKED_TASK`, `NEEDS_REVIEW` and `ALREADY_CLOSED` are **final** and are never revisited; a project whose attempt failed has no final entry (it may carry `FAILED`, which is not final). The retry of a failed event and the recovery of a dead-lettered one therefore re-attempt **only** the failed and not-yet-attempted projects. A project that is `NEEDS_REVIEW` stays so: nothing about it changes by retrying.
+4. Every transition goes through the step 2 claim, so it serializes with the person's own writes and bumps the version (a stale page gets `DIY_STALE` on its next write, as intended). The actor on the ledger and on `completedByUserId` is the user who completed the task.
 
 The home event is deliberately not created for the two linked-task closures: the task's own completion is the record, and a home event saying a project was completed by the homeowner when its steps were not done would claim more than is known (S4-3).
 
 ### 3.3 Disclosure (read-only), from durable state
 
-The project read gains `taskLink`, derived from the project, its linked task and the reconcile event, with fixed copy, and **never writes**:
+The project read gains `taskLink`, derived from the project, its linked task, and the reconcile event reached through the task's `reconciliationOccurrenceId`, with fixed copy, and **never writes**:
 
 | Situation | `taskLink` state | What the page says |
 | --- | --- | --- |
-| No linked task, or the task is not completed | none | nothing |
-| Project open, task completed, a reconcile event pending, processing or retrying | `UPDATING` | "Your linked task was completed. Updating this project." |
-| Project open, task completed, the event processed with `NEEDS_REVIEW`, **or no event exists** (a completion by a path this step does not hook, or before this release) | `NEEDS_REVIEW` | "Your linked task was marked complete, but not from this project, and we can't tell whether you did the work or hired someone, so this project is still open. Finish it, or stop it if a pro did the work." |
-| Project open, task completed, the event dead-lettered | `NEEDS_ATTENTION`, with recovery | "Some updates from your linked task could not be applied." and **Finish updating** |
-| Project closed with basis `LINKED_TASK` | `CLOSED_BY_TASK` | "Closed because your linked task was completed." (DIY, steps not all done) or "Closed because a pro completed your linked task." (hired out) |
+| No linked task id, or the task is not completed | none | nothing |
+| Project open, task completed, its event pending, processing or retrying | `UPDATING` | "Your linked task was completed. Updating this project." |
+| Project open, task completed, and the project's recorded outcome is `NEEDS_REVIEW`, **or no event exists** (a completion by a path this step does not hook, or before this release) | `NEEDS_REVIEW` | "Your linked task was marked complete, but not from this project, and we can't tell whether you did the work or hired someone, so this project is still open. Review the project and confirm whether you completed the work or hired a professional." |
+| Project open and its linked task **no longer exists** (the lookup returned nothing, or the event ended `TASK_DELETED`) | `NEEDS_REVIEW` | "The task this project was linked to no longer exists, so we can't tell whether the work was done. Review the project and confirm whether you completed the work or hired a professional." |
+| Project open, the event dead-lettered with this project not yet resolved | `NEEDS_ATTENTION`, with recovery | "Some updates from your linked task could not be applied." and **Finish updating** |
+| Project closed with basis `LINKED_TASK` | `CLOSED_BY_TASK` | "Closed because your linked task was completed." (`DIY`, steps not all done) or "Closed because a pro completed your linked task." (hired out) |
 
-Because the `NEEDS_REVIEW` state is computed from the task's current status, it also covers completions by the two raw writers (R3), by pre-release completions, and by anything this plan does not hook, without a sweep and without a write.
+The missing-task case is shown, not hidden, precisely because `maintenanceTaskId` is not a foreign key: a failed lookup is information, not a reason to say nothing. Because `NEEDS_REVIEW` is computed from the task's current state, it also covers completions by the two raw writers (R3), by pre-release completions, and by anything this plan does not hook, without a sweep and without a write. The wording avoids telling the person to recreate a missing classification by hand ("finish it, or stop it"); it asks them to review and confirm, which is also where the S4-2 follow-up (a person-confirmed close, or the mode on ordinary completion) would attach.
 
 ### 3.4 Recovery: dead letters only
 
-The same rules as step 3 §3.5: a service method (CONTRIBUTOR, checked in the service as well as the route) that resets **the same event row** from `DEAD_LETTER` to `PENDING`, conditional on status and version, recording `recovery: { count, lastBy, lastAt }` in the payload, a no-op for every other state. Route `POST /properties/:propertyId/diy/projects/:projectId/task-reconciliation/retry`. The event is found by key through the project's task; there is no new column.
+The same rules as step 3 §3.5: a service method (CONTRIBUTOR, checked in the service as well as the route) that resets **the same event row** from `DEAD_LETTER` to `PENDING`, conditional on status and version, recording `recovery: { count, lastBy, lastAt }` in the payload (alongside, never replacing, the snapshot and `projectOutcomes`), a no-op for every other state. Route `POST /properties/:propertyId/diy/projects/:projectId/task-reconciliation/retry`. The event is found through the project's task and its stored `reconciliationOccurrenceId`; there is no new column. Because the handler skips projects with a final outcome (§3.2), recovery re-drives **only** the projects that failed or were never attempted.
 
 ### 3.5 Creation-time validation (R2)
 
@@ -82,6 +94,8 @@ The same rules as step 3 §3.5: a service method (CONTRIBUTOR, checked in the se
 - **No incident or verified-evidence effect** (O13).
 
 ## 4. Schema (all `prisma db push`, no migration scripts)
+
+(The occurrence id lives in the existing `completionMetadata` JSON on the task and the outcomes in the existing event payload, so neither needs a column.)
 
 1. `DomainEventType`: add `DIY_TASK_COMPLETED_RECONCILE`.
 2. New enum `DiyCompletionBasis { STEPS LINKED_TASK }` and `DiyProject.completionBasis DiyCompletionBasis?` (null for projects closed before this release or never closed; set to `STEPS` by the normal completion from now on; set to `LINKED_TASK` for both linked-task closures, including `HIRED_OUT`, so the page can tell "you stopped this" from "your task closed this").
@@ -112,18 +126,20 @@ All additive; no data is rewritten. After the push, regenerate the Prisma client
 
 | Check | Kind (when run) |
 | --- | --- |
-| The request is written in the same transaction as the task's `COMPLETED` write, only on a real transition into completed and only when an open linked project exists; a failing insert rolls the task completion back; a task with no linked project writes no event | Test, fake and Postgres |
+| The request is written in the same transaction as the task's `COMPLETED` write, only on a real transition into completed and only when an open linked project exists; a failing insert rolls the task completion back; a task with no linked project writes no event and no occurrence id | Test, fake and Postgres |
+| **Recurring task, same completion date supplied for two cycles:** each completion gets its own occurrence id and its own event, the second does not collide or roll back, and `completionMetadata` points at the latest; a lost compare-and-swap emits nothing | Test, fake and Postgres |
 | Each rule of the table: `PROVIDER` hires out with steps untouched and no home event; `DIY` with the rule holding completes normally (basis `STEPS`, outbox event, task effect `ALREADY_DONE`); `DIY` with steps open closes with basis `LINKED_TASK`, steps untouched, no home event; unknown mode changes nothing and reports `NEEDS_REVIEW` | Test |
 | Several open projects linked to one task are each handled; one failing does not stop the others, and the retry touches only those still open | Test |
 | A project already closed (by the person, concurrently) is `ALREADY_CLOSED`; the person's stale page then gets `DIY_STALE`; a transition and a person's write on the same project serialize | Test, fake and Postgres |
-| Task reopened before the worker runs: nothing applied; task on another property: terminal dead letter before any write; duplicate delivery changes nothing | Test, fake and Postgres |
+| Task reopened before the worker runs: nothing applied; **task deleted after the event was written: `TASK_DELETED`, the event processed (not retried, not dead-lettered), no project changed, and the disclosure shows `NEEDS_REVIEW`**; task on another property: terminal dead letter before any write; duplicate delivery changes nothing | Test, fake and Postgres |
+| **Per-project outcomes:** one event over several projects records a bounded outcome per snapshotted id; a failing project leaves the others' outcomes final; the retry and the recovery re-attempt only failed and never-attempted projects, never one already `HIRED_OUT`, `COMPLETED`, `CLOSED_BY_LINKED_TASK`, `NEEDS_REVIEW` or `ALREADY_CLOSED`; recovery keeps the snapshot and the outcomes; more than 25 linked open projects snapshot 25 and disclose the rest | Test, fake and Postgres |
 | The actor leaving the household after the task completion does not strand the reconciliation; the access check in the maintenance transaction refuses a viewer exactly as `updateTaskStatus` does | Test |
-| Disclosure: every row of §3.3, including "task completed, no event" and the closed-by-task copy; the read performs no write (a spy) | Test |
+| Disclosure: every row of §3.3, including "task completed, no event", the deleted-task row and the closed-by-task copy, with the review-and-confirm wording; the read performs no write (a spy) | Test |
 | Recovery: dead letters only, the same row once, payload metadata, viewers refused; the route floor | Test |
 | `createProject` rejects a task that does not exist or is on another property and accepts one on the same property, including an already-completed one | Test |
 | The start-up check fails for either missing enum value; the exhaustive dispatch test includes the new type; the handler loads under the seven production stubs | Worker gate |
 | The existing maintenance, Ask maintenance, Home Action completion and seasonal suites still pass with the transaction wrapper | Executed in 4a |
-| Mutation checks: request emitted outside the transaction; emitted for a non-transition; mode inferred when unknown; steps changed by a linked-task closure; home event created for a linked-task closure; the open-project filter dropped; the task-still-completed check dropped; preflight after a write | Executed in 4a |
+| Mutation checks: request emitted outside the transaction; emitted for a non-transition; occurrence id derived from the completion date; mode inferred when unknown; steps changed by a linked-task closure; home event created for a linked-task closure; the open-project filter dropped; the task-still-completed check dropped; a deleted task treated as retryable or as success-with-changes; outcomes not persisted or final outcomes revisited on retry; preflight after a write | Executed in 4a |
 | Real Postgres through the real job and real governed maintenance completion (recurring task, seasonal item, several projects) | 4c |
 
 ## 8. Adversarial pass (methodology section 7) [Code-traced; the answers to be tested]
@@ -134,9 +150,11 @@ All additive; no data is rewritten. After the push, regenerate the Prisma client
 - **Transaction wrapper on a heavily used service (risk).** The compare-and-swap moves into a transaction. The side effects stay after it, exactly as today, so nothing slower or longer runs inside the transaction; existing suites and a real-Postgres run must show the status, counters and seasonal behavior unchanged.
 - **Reconciliation racing the person.** Both go through the project claim; whichever commits first wins and the other sees a closed project (`ALREADY_CLOSED`, or `DIY_PROJECT_CLOSED` for the person).
 - **A loop between the two reconciliations (R6).** Step 3's handler completing the task triggers the reverse request only for other open projects on that task; the originating project is already closed. No cycle.
-- **Recurring tasks.** The key includes the completion date, so each cycle reconciles its own open project; a project linked to a recurring task that completes on schedule while the project is still in progress will, with mode `DIY` and steps open, be closed by the task's routine completion. That is the specified `LINKED_TASK` behavior, but it is surprising enough to be named here and in S4-4.
+- **Recurring tasks (S4-4, a prominently tested case).** Each completion gets its own generated occurrence id, so each cycle reconciles its own open project and a caller repeating a completion date cannot collide. A project linked to a recurring task that completes on schedule while the project is still in progress will, with mode `DIY` and steps open, be closed by the task's routine completion. That is the already-decided O12 behavior; it is named here, tested explicitly, and will be documented in the rollout notes because it is surprising.
+- **A deleted task.** `maintenanceTaskId` is not a foreign key, so deletion leaves a dangling id. The event ends with a typed terminal skip and the projects stay open and disclosed; neither the handler nor the page treats "not found" as "nothing to say".
+- **Partial success over several projects.** Persisted per-project outcomes make a retry or a recovery safe: finals are never redone, and a project that was already hired out cannot be completed by a later retry.
 - **A project created for an already-completed task** is allowed (S3.5) and shows `NEEDS_REVIEW`; it is never auto-closed because no completion event follows.
-- **Overclaim check (methodology item 9).** "Covers every completion path" would be false; the disclosure covers them, the automatic transition does not, and §3.3 says which is which.
+- **Overclaim check (methodology item 9).** "Covers every completion path" would be false; the disclosure covers them, the automatic transition does not, and §3.3 says which is which. "Recovery retries only what failed" depends on the outcomes being written after each project; a crash between a project's transition and its outcome write is safe only because every transition is idempotent by project state (an already-closed project reports `ALREADY_CLOSED`), and a test pins that.
 
 ## 9. Risks
 
@@ -149,15 +167,29 @@ All additive; no data is rewritten. After the push, regenerate the Prisma client
 
 | # | Decision | Recommendation |
 | --- | --- | --- |
-| **S4-1** | Hook the two governed writers atomically; do not hook the two raw writers; cover them by disclosure; flag the raw writers to you as a separate inconsistency | Yes |
-| **S4-2** | Apply O12 exactly as approved (no inference). Accept that most completions today carry no mode and will disclose `NEEDS_REVIEW`. **Follow-up, not built:** an explicit person-confirmed "my linked task is done: close this project" with its own basis (it is not "finish early": the person states the task is the evidence), or adding the mode choice to the ordinary task completion; your call after seeing real counts | Apply as approved; decide the follow-up after the 4c queries |
+| **S4-1** | Hook the two governed writers atomically; do not hook the two raw writers (they supply no mode anyway); cover them by disclosure; **track the two raw writers as a named follow-up** (they also bypass the seasonal sync and counters) | Approved at review |
+| **S4-2** | **Explicitly approved at review.** Apply O12 exactly as approved (no inference: never infer `DIY` or `PROVIDER`). Accept that most completions today carry no mode and will disclose `NEEDS_REVIEW`. **Follow-up, not built:** decide between a person-confirmed "close this project" (its own basis; not "finish early", since the person states the task is the evidence) and adding the mode to ordinary task completion, using the 4c counts | Approved; decide the follow-up after the 4c queries |
 | **S4-3** | A linked-task closure (`HIRED_OUT` or `LINKED_TASK`) creates no home event; `DIY` with the rule holding goes through the normal completion and its home event | Yes |
 | **S4-4** | A routine completion of a recurring task closes a linked in-progress project when the mode is `DIY` and steps are open | Yes, as specified in O12; named so it is a decision |
-| **S4-5** | The request is written in the same transaction as the task's completion, so a failed insert fails the completion (atomic, item 15); alternative: best-effort after commit, which can lose the intent | Atomic |
+| **S4-5** | The request is written in the same transaction as the task's completion, so a failed insert fails the completion (atomic, item 15), **keyed by a unique occurrence id generated in the transaction and stored in the task's `completionMetadata`**, never by a date; alternative: best-effort after commit, which can lose the intent | Atomic, approved at review |
 | **S4-6** | Authority: the completing user's access is verified inside that transaction; the worker relies on the durable intent and uses the user for attribution; the handler checks integrity only | As step 3 |
 | **S4-7** | Schema: the four changes in §4; `completionBasis` is `LINKED_TASK` for both linked-task closures | Yes |
-| **S4-8** | Disclosure states and copy of §3.3, read-only, including "completed, no event" as `NEEDS_REVIEW` | Yes |
-| **S4-9** | Recovery for dead letters only, same row once, metadata in the payload, a route per §3.4 | Yes |
+| **S4-8** | Disclosure states and copy of §3.3, read-only, including "completed, no event" and a missing linked task as `NEEDS_REVIEW`, with the review-and-confirm wording | Yes |
+| **S4-9** | Recovery for dead letters only, same row once, metadata in the payload, a route per §3.4; it re-drives only projects without a final outcome | Yes |
 | **S4-10** | `createProject` validates the linked task (exists, same property); already-completed tasks allowed; no re-validation of older projects | Yes |
 | **S4-11** | No reopening of a project when its task changes later; no sweep and no backfill; a read-only query lists open projects whose task was already completed | Yes |
 | **S4-12** | Rollout as §5, with the start-up check extended to both enum values; 4c before the producer when a scratch database exists, otherwise the gap recorded | Yes |
+| **S4-13** | *(added at review)* **Deleted linked task:** a typed terminal skip `TASK_DELETED` (event processed, projects unchanged, `NEEDS_REVIEW` disclosed) | Yes |
+| **S4-14** | *(added at review)* **Per-project outcomes** persisted on the event, bounded to the snapshotted ids (cap 25); final outcomes are never revisited; retry and recovery touch only failed or never-attempted projects | Yes |
+
+## 11. How this revision answers the review
+
+| Review point | Where |
+| --- | --- |
+| 1. Unique occurrence id, not `lastCompletedDate`; stored in `completionMetadata`; the pointer for disclosure and recovery | §3.1, §3.3, §3.4, S4-5, §7 |
+| 2. Deleted task: typed terminal skip, projects unchanged, `NEEDS_REVIEW` shown | §3.2, §3.3, S4-13 |
+| 3. Persisted bounded per-project outcomes; recovery retries only failed or open projects | §3.2, §3.4, S4-14, §7 |
+| S4-1 raw writers as a named follow-up | S4-1 |
+| S4-2 explicitly approved; no inference; decide the follow-up from the 4c counts | S4-2 |
+| S4-4 recurring-task case prominently tested and documented | §8, §7 |
+| Unknown-mode wording | §3.3 |

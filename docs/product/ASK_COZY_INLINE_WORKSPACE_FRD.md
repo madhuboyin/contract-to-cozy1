@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.208
+**Version:** 1.209
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.209 — DIY reverse reconciliation plan, revision 2 (draft):** after review the plan keys each task completion's reconciliation request by a unique id generated inside the transaction and stored on the task (never by the completion date, which a caller can repeat), ends a deleted linked task as a typed skip that leaves projects unchanged and discloses "review", records a bounded outcome per project on the event so a retry or recovery only redoes what failed, and asks the person to "review the project and confirm whether you completed the work or hired a professional" instead of telling them to finish or stop it. The no-inference rule for an unknown completion mode was explicitly approved. Nothing is built. See `docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md`.
 
 **Revision 1.208 — DIY reverse reconciliation, step 4 plan (draft):** a plan for making a DIY project follow its linked maintenance task when the task is completed somewhere else: an atomic request written with the task's completion, a worker that applies the approved rules (a pro-completed task hires the project out, a DIY-completed task completes it or closes it by the linked task, an unknown mode changes nothing), and a read-only disclosure for everything it cannot do. The reading found that only one completion path records who did the work, so most completions will be disclosed rather than applied, and that two raw writers complete tasks without any hook; the plan names both. Twelve decisions (S4-1 to S4-12) await approval; nothing is built. See `docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md`.
 
