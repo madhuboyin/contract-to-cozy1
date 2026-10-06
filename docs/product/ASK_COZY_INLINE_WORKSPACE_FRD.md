@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.205
+**Version:** 1.206
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.206 — DIY completion outbox, slice 3b (disclosure, recovery, page):** a completed project now says what is happening to its follow-on records: "Recording your completion" (including while an automatic retry is under way, with no promised time), "Completion recorded", "Some records could not be updated" with a **Finish recording** button for people who can edit, or, for projects completed before tracking existed, "not verified here". Only a dead-lettered update can be re-queued; the same row is reset once, with who, when and how many times recorded on it. The read is proven not to write. The completion response no longer carries a home event id, the page polls a bounded number of times while recording, and an incident-linked completion says the incident was not changed. Tested with backend and page tests, mutation checks on both sides, a real-Postgres run and `next build`; not run in a browser. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` §14.
 
 **Revision 1.205 — DIY completion outbox, slice 3a (backend and worker):** completing a DIY project now verifies the actor's access inside its own transaction and writes one outbox event with a snapshot of what was completed; a worker handler creates the home event and completes the linked maintenance task through the governed path (the maintenance write is split so the public method still checks access), after a preflight that dead-letters a task on another property before anything is created. The inline effects and the raw incident writes are removed, so a DIY completion no longer resolves incidents. The backend refuses to start if the database lacks the new event type. Tested with handler, transaction, worker-gate and production-stub checks, a built-worker smoke test and a real-Postgres run, with mutation checks. The page and the recovery route are slice 3b, so this must not ship alone. A new exhaustive dispatch test found a pre-existing unhandled event type, `FOLLOW_UP_DUE` (claim follow-ups), left unchanged for a product decision. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` §13.
 

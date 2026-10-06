@@ -5,6 +5,7 @@ import { APIError } from '../middleware/error.middleware';
 import { DomainEventsService } from './domainEvents/domainEvents.service';
 import { hasPropertyRoleWithin } from './propertyAccess.service';
 import { DIY_COMPLETION_EVENT_KEY } from './diy/diyCompletionEffects';
+import { describeCompletionEffects } from './diy/completionEffectsStatus';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
@@ -484,6 +485,49 @@ export class DiyService {
     });
     if (!project) throw new APIError('Project not found', 404);
     return project;
+  }
+
+  /** The project plus what is known about the records that follow its completion. READ-ONLY: it never writes, retries or repairs anything. */
+  async getProjectWithCompletionEffects(projectId: string, propertyId: string) {
+    const project = await this.getProjectDetail(projectId, propertyId);
+    const event = project.status === 'COMPLETED'
+      ? await prisma.domainEvent.findUnique({ where: { idempotencyKey: DIY_COMPLETION_EVENT_KEY(projectId) }, select: { status: true } })
+      : null;
+    return { ...project, completionEffects: describeCompletionEffects(project.status, event?.status ?? null) };
+  }
+
+  /**
+   * Re-queues the completion effects of a project whose outbox event was DEAD-LETTERED (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md
+   * section 3.5). Only a dead letter qualifies: an event that is still retrying is never reset (that would hide its retry count and could postpone
+   * dead-lettering indefinitely), and a pending, processing or processed one is left alone. It resets the SAME row, conditional on its status and
+   * version so two requests reset it once, and records who and when (and how many times) in the event's own payload. It never runs an effect: the
+   * worker is the only trigger.
+   */
+  async retryCompletionEffects(projectId: string, propertyId: string, actorUserId: string) {
+    if (!(await hasPropertyRoleWithin(prisma, actorUserId, propertyId, 'CONTRIBUTOR'))) {
+      throw new APIError('You do not have access to change this project.', 403, 'DIY_ACCESS_REVOKED');
+    }
+    const project = await prisma.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { id: true, status: true } });
+    if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+
+    const key = DIY_COMPLETION_EVENT_KEY(projectId);
+    const event = project.status === 'COMPLETED' ? await prisma.domainEvent.findUnique({ where: { idempotencyKey: key } }) : null;
+    let reset = false;
+    if (event && event.status === 'DEAD_LETTER') {
+      const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload) ? (event.payload as Record<string, any>) : {};
+      const count = Number(payload.recovery?.count ?? 0) + 1;
+      const written = await prisma.domainEvent.updateMany({
+        where: { id: event.id, status: 'DEAD_LETTER', updatedAt: event.updatedAt },
+        data: {
+          status: 'PENDING', attempts: 0, availableAt: new Date(), lastError: null, processingStartedAt: null, leaseExpiresAt: null, processedAt: null,
+          payload: { ...payload, recovery: { count, lastBy: actorUserId, lastAt: new Date().toISOString() } },
+        },
+      });
+      reset = written.count === 1;
+      if (reset) logger.info({ projectId, eventId: event.id, actorUserId, recoveryCount: count }, '[DIY] completion effects re-queued from a dead letter');
+    }
+    const current = project.status === 'COMPLETED' ? await prisma.domainEvent.findUnique({ where: { idempotencyKey: key }, select: { status: true } }) : null;
+    return { reset, completionEffects: describeCompletionEffects(project.status, current?.status ?? null) };
   }
 
   async updateProject(projectId: string, propertyId: string, patch: { notesJson?: any; photoUrls?: string[] }) {

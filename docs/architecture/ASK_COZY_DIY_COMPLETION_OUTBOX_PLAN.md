@@ -1,7 +1,7 @@
 # DIY Completion Effects Through the Outbox — Step 3 Implementation Plan
 
 **Date:** October 6, 2026 (revision 3, after two external reviews the same day)
-**Status:** **Revision 3, approved for implementation (October 6, 2026): S3-1 to S3-5, S3-7 to S3-9 and S3-11 as written; S3-6 and S3-10 as corrected in this revision (§3.6, §4).** Slice 3a-0 (measurement) is done (§12) and slice 3a (backend and worker) is built and verified locally (§13). 3b and 3c are not started. One schema change (an enum value), applied by you.
+**Status:** **Revision 3, approved for implementation (October 6, 2026): S3-1 to S3-5, S3-7 to S3-9 and S3-11 as written; S3-6 and S3-10 as corrected in this revision (§3.6, §4).** Slice 3a-0 (measurement) is done (§12) slice 3a (backend and worker) is pushed (§13), and slice 3b (disclosure, recovery, page) is built and verified locally (§14). 3c is not started. One schema change (an enum value), applied by you.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 3 (P4; decisions O3 and O13, approved October 6, 2026), D8, E6, E7, E17, E18
 **Follows:** [`ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md`](ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md) (step 2, pushed; its rollout is yours)
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20, plus its section 7 adversarial pass (§8). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -259,3 +259,22 @@ No product code was changed. Two throwaway scripts (in the scratchpad, not commi
 4. The worker's generated Prisma client was stale (so the local worker gate must regenerate it first); `lint:notification-boundary` fails on three unrelated job files that predate this work.
 
 **Not run:** the Docker image build itself, the worker against a database, the governed maintenance side effects through the worker (seasonal sync, recurring roll-forward), the lease-reclaim and duplicate-delivery runs (3c), and any browser. 3a is not safe to deploy alone: the page still reads `homeEventId` from the completion response (now always null) until 3b.
+
+## 14. Slice 3b record: disclosure, recovery and the page (October 6, 2026)
+
+**Built.** Backend: a pure `describeCompletionEffects` (fixed copy; retrying `FAILED` is "recording", only a dead letter offers recovery, a completed project with no outbox row is legacy-unknown); `getProjectWithCompletionEffects` (the project read now carries `completionEffects`; **read-only**); `retryCompletionEffects` (CONTRIBUTOR, checked in the service as well as the route; resets the **same row** only from `DEAD_LETTER`, conditional on status and version, attempts to zero, and records `recovery: { count, lastBy, lastAt }` in the event's own payload); the route `POST /properties/:propertyId/diy/projects/:projectId/completion-effects/retry`; the completion response is now `{ homeEventId, effects: 'RECORDING' }`. Frontend: types, client (`retryDiyCompletionEffects`, the new completion response), the sheet no longer expects a home event id, and the project page shows the recording, recorded, needs-attention (with "Finish recording" for people who can write) and legacy states, polls a bounded number of times while recording (every 10 seconds, at most 12 times, no promised time), keeps the home-event link, and says an incident-linked completion did not change the incident.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| Backend disclosure and recovery tests on the shared fake: the state mapping; every outbox state disclosed with a spy proving the read writes nothing and never shows `lastError`; recovery resets only a dead letter (same row, attempts zero, snapshot kept, actor, time and count recorded); every other state untouched, with no conditional write even attempted; two simultaneous recoveries reset once; a second recovery increments the count; a viewer, a stranger and another property's project refused; the route floor and the response | 8 pass; the route-floor suite now lists the new route (17 pass) | Executed |
+| Backend mutation checks: recovery also resets `FAILED`; recovery write not conditional on status; `FAILED` shown as needs attention; legacy shown as recorded; recovery drops its metadata; the read writes; recovery without an access check | 7 of 7 caught; originals restored | Executed |
+| Frontend page tests: recording (no action, no time promised); needs attention with the action, which re-queues and reloads; a viewer sees the message but not the action; a failed recovery shows its error; recorded with a home event; legacy copy; open project shows nothing; incident note present and absent; the sheet saves, reloads and shows "recording" with the project version sent; polling while recording, stopping once recorded, and bounded at 13 reads | 12 pass (35 across the DIY page, sheet and list suites) | Executed |
+| Frontend mutation checks: action offered while recording; action offered to viewers; polling unbounded; incident note removed; polling continues after recorded | 5 of 5 caught | Executed |
+| Real Postgres (scratch 15): every outbox state disclosed with the event row's version unchanged by the read; recovery on a real `timestamp(3)` version resets once under two simultaneous requests, leaves every other state untouched, keeps the snapshot, never adds a row, refuses a stranger | 18 pass in the step script | Executed |
+| Backend `tsc`; `next build`; the DIY, maintenance-split and incident-reconciliation suites; the wider frontend run | clean; compiled; 175 pass; 462 pass, with the same 5 unrelated suites (10 tests) failing as before | Executed |
+
+**A defect found while testing.** The first polling effect re-armed only when the project object changed identity, so a reload that returned an equal project would silently stop the polling; it now uses an explicit counter.
+
+**Not run:** a browser; the worker end to end against the page (3c); the recovery against a live dead letter. **3a and 3b are now complete as code; the release train in `DIY_COMPLETION_OUTBOX_ROLLOUT.md` still applies, and the real-Postgres acceptance through the actual job (3c) is still open.**

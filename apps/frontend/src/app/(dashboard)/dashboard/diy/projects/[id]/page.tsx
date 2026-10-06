@@ -14,6 +14,9 @@ import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { CLOSED_MESSAGE, STALE_MESSAGE, diyErrorCode, openStepsForCompletion } from '@/lib/diy/diyProjectRules';
 import { STATUS_LABELS, STATUS_COLOR, CATEGORY_EMOJI } from '@/components/features/diy/DiyUtils';
 
+const EFFECT_POLL_MS = 10_000;
+const MAX_EFFECT_POLLS = 12;
+
 export default function ProjectTrackerPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -26,6 +29,7 @@ export default function ProjectTrackerPage() {
   const [showComplete, setShowComplete] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -35,6 +39,17 @@ export default function ProjectTrackerPage() {
   }, [propertyId, params.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // While the records that follow a completion are still being written, look again every so often (bounded, and with no promise of when). The read
+  // never changes anything; it only shows what the worker has done.
+  const effectsState = project?.completionEffects?.state;
+  const [polls, setPolls] = useState(0);
+  useEffect(() => {
+    if (effectsState !== 'RECORDING') { if (polls !== 0) setPolls(0); return; }
+    if (polls >= MAX_EFFECT_POLLS) return;
+    const timer = setTimeout(() => { setPolls((count) => count + 1); void load(); }, EFFECT_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [effectsState, polls, load]);
 
   // A failed write: a stale or closed project is reloaded and explained; anything else shows the server's own message.
   async function handleWriteError(err: any, fallback: string) {
@@ -56,6 +71,21 @@ export default function ProjectTrackerPage() {
       await load();
     } catch (err: any) {
       await handleWriteError(err, 'Could not update this step. Please try again.');
+    }
+  }
+
+  // Re-queues a dead-lettered completion update. Only offered for that state; the server refuses anything else as a no-op.
+  async function handleRecover() {
+    if (!propertyId || !project) return;
+    setRecovering(true);
+    setError(null);
+    try {
+      await api.retryDiyCompletionEffects(propertyId, project.id);
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not re-queue the records. Please try again.');
+    } finally {
+      setRecovering(false);
     }
   }
 
@@ -215,6 +245,33 @@ export default function ProjectTrackerPage() {
             View Home Timeline →
           </Link>
         </div>
+      )}
+
+      {project.status === 'COMPLETED' && project.completionEffects && !(project.completionEffects.state === 'RECORDED' && project.homeEventId) && (
+        <div
+          data-completion-effects={project.completionEffects.state}
+          role="status"
+          aria-live="polite"
+          className={`rounded-xl border p-4 ${project.completionEffects.state === 'NEEDS_ATTENTION' ? 'border-amber-200 bg-amber-50' : 'border-neutral-200 bg-neutral-50'}`}
+        >
+          <p className="text-sm text-neutral-700">{project.completionEffects.summary}</p>
+          {project.completionEffects.canRecover && canWrite && (
+            <button
+              type="button"
+              onClick={handleRecover}
+              disabled={recovering}
+              className="mt-2 rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-800 disabled:opacity-50"
+            >
+              {recovering ? 'Working…' : 'Finish recording'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {project.status === 'COMPLETED' && project.incidentId && (
+        <p data-incident-note className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+          Completing this project did not change the linked incident. Update the incident from the incident itself.
+        </p>
       )}
 
       {showComplete && propertyId && canWrite && (

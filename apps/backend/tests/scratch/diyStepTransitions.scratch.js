@@ -296,3 +296,48 @@ test('a real database failure after the outbox insert rolls back the project com
   assert.deepEqual([after.status, after.completedByUserId, after.updatedAt.getTime()], ['IN_PROGRESS', null, before.updatedAt.getTime()]);
   assert.equal(await prisma.domainEvent.count({ where: { idempotencyKey: `diy-project-completed:${id}` } }), 0, 'no outbox row survives a rolled-back completion');
 });
+
+// ---- slice 3b: disclosure and recovery on real Postgres ---------------------------------------------------------------------------------------------
+
+const outboxRow = (id) => prisma.domainEvent.findUnique({ where: { idempotencyKey: `diy-project-completed:${id}` } });
+const setOutbox = (id, status, extra = '') => prisma.$executeRawUnsafe(`UPDATE domain_events SET status = '${status}'::"DomainEventStatus", attempts = 8 ${extra} WHERE "idempotencyKey" = 'diy-project-completed:${id}'`);
+
+test('the project read discloses every outbox state, writes nothing, and a legacy completed project says so', async () => {
+  const id = await makeProject(['COMPLETED']);
+  await complete(id, iso((await project(id)).updatedAt), 'u1');
+  const view = async () => (await diyService.getProjectWithCompletionEffects(id, 'prop1')).completionEffects;
+  for (const [status, state, canRecover] of [['PENDING', 'RECORDING', false], ['PROCESSING', 'RECORDING', false], ['FAILED', 'RECORDING', false], ['DEAD_LETTER', 'NEEDS_ATTENTION', true], ['PROCESSED', 'RECORDED', false]]) {
+    await setOutbox(id, status);
+    const before = await outboxRow(id);
+    const shown = await view();
+    assert.deepEqual([shown.state, shown.canRecover], [state, canRecover], status);
+    const after = await outboxRow(id);
+    assert.equal(after.updatedAt.getTime(), before.updatedAt.getTime(), `${status}: a read did not write the event`);
+  }
+  const legacy = await makeProject(['COMPLETED'], 'COMPLETED');
+  assert.equal((await diyService.getProjectWithCompletionEffects(legacy, 'prop1')).completionEffects.state, 'LEGACY_UNKNOWN');
+  assert.equal((await diyService.getProjectWithCompletionEffects(await makeProject(['PENDING']), 'prop1')).completionEffects, null);
+});
+
+test('recovery: only a dead letter is re-queued (the same row, once, with the actor and count in the payload); a retrying or processed event is untouched', async () => {
+  const id = await makeProject(['COMPLETED']);
+  await complete(id, iso((await project(id)).updatedAt), 'u1');
+  for (const status of ['PENDING', 'PROCESSING', 'FAILED', 'PROCESSED']) {
+    await setOutbox(id, status);
+    const before = await outboxRow(id);
+    const result = await diyService.retryCompletionEffects(id, 'prop1', 'u2');
+    assert.equal(result.reset, false, status);
+    const after = await outboxRow(id);
+    assert.deepEqual([after.status, after.attempts, after.updatedAt.getTime()], [status, 8, before.updatedAt.getTime()], `${status} untouched`);
+  }
+  await setOutbox(id, 'DEAD_LETTER', `, "lastError" = 'MAINTENANCE:UNEXPECTED: boom'`);
+  const results = await Promise.all([diyService.retryCompletionEffects(id, 'prop1', 'u1'), diyService.retryCompletionEffects(id, 'prop1', 'u2')]);
+  assert.equal(results.filter((result) => result.reset).length, 1, 'two simultaneous requests reset it once');
+  const row = await outboxRow(id);
+  assert.deepEqual([row.status, row.attempts, row.lastError, row.leaseExpiresAt], ['PENDING', 0, null, null]);
+  assert.equal(row.payload.recovery.count, 1);
+  assert.ok(['u1', 'u2'].includes(row.payload.recovery.lastBy));
+  assert.equal(row.payload.projectId, id, 'the snapshot survived the reset');
+  assert.equal(await prisma.domainEvent.count({ where: { idempotencyKey: `diy-project-completed:${id}` } }), 1, 'never a second row');
+  await assert.rejects(diyService.retryCompletionEffects(id, 'prop1', 'u4'), (error) => error.code === 'DIY_ACCESS_REVOKED');
+});

@@ -6341,6 +6341,15 @@ export interface DiyProjectTool {
   buyEstimatePriceCents?: number;
 }
 
+/** What is known about the records that follow a DIY completion (home event, linked maintenance task). `null` while the project is not completed. */
+export interface DiyCompletionEffects {
+  state: 'RECORDING' | 'RECORDED' | 'NEEDS_ATTENTION' | 'LEGACY_UNKNOWN';
+  /** Fixed copy from the server; never a raw error. */
+  summary: string;
+  /** True only for a dead-lettered event: the person may ask for it to be re-queued. */
+  canRecover: boolean;
+}
+
 export interface DiyProjectDetail extends DiyProjectSummary {
   /** The version complete and abandon must be based on. It changes whenever any step changes. */
   updatedAt: string;
@@ -6349,6 +6358,7 @@ export interface DiyProjectDetail extends DiyProjectSummary {
   incidentId?: string;
   inventoryItemId?: string;
   homeEventId?: string;
+  completionEffects?: DiyCompletionEffects | null;
   notesJson: { text: string; createdAt: string }[];
   photoUrls: string[];
   actualMinutes?: number;

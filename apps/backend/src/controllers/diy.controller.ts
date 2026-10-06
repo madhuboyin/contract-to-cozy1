@@ -132,7 +132,7 @@ export async function listProjects(req: Request, res: Response, next: NextFuncti
 
 export async function getProject(req: Request, res: Response, next: NextFunction) {
   try {
-    const project = await diyService.getProjectDetail(req.params.projectId, req.params.propertyId);
+    const project = await diyService.getProjectWithCompletionEffects(req.params.projectId, req.params.propertyId);
     res.json({ success: true, data: { project } });
   } catch (err) { next(err); }
 }
@@ -168,7 +168,15 @@ export async function completeProject(req: Request, res: Response, next: NextFun
       metadataJson: { actionType: 'complete_project' },
     });
 
-    res.json({ success: true, data: { homeEventId: project.homeEventId } });
+    // The home event and any linked maintenance task are recorded by a worker after this returns (the outbox), so there is no home event id yet.
+    res.json({ success: true, data: { homeEventId: project.homeEventId ?? null, effects: 'RECORDING' } });
+  } catch (err) { next(err); }
+}
+
+export async function retryCompletionEffects(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await diyService.retryCompletionEffects(req.params.projectId, req.params.propertyId, req.user!.userId);
+    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 }
 

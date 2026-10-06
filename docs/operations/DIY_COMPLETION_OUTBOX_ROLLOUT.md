@@ -1,6 +1,6 @@
 # DIY completion outbox: rollout (step 3 of the stateful GUIDE)
 
-Plan: `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` (§4 is the order, §6 the gates). **Slice 3a (backend and worker) is built and verified locally (uncommitted when this was written); slice 3b (disclosure, recovery route, page) and 3c (the full real-Postgres acceptance and this runbook's completion) are not done. Nothing here has been applied to any database or deployed.** This file exists now because the backend's fatal start-up message points to it; 3c extends it.
+Plan: `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` (§4 is the order, §6 the gates). **Slice 3a (backend and worker) is pushed; slice 3b (disclosure, recovery route, page) is built and verified locally; 3c (the full real-Postgres acceptance through the real job, and this runbook's completion) is not done. Nothing here has been applied to any database or deployed.** This file exists now because the backend's fatal start-up message points to it; 3c extends it.
 
 ## The order (one release train, sequential)
 
@@ -21,9 +21,28 @@ Plan: `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` (§4 is the ord
 | Misorder | Result |
 | --- | --- |
 | Backend before `prisma db push` | The backend fails its start-up check and does not serve; nothing is half-done. |
-| Backend before the new worker is running | Completions succeed; their outbox events wait, retry, and dead-letter after 8 attempts (hours). Recoverable once recovery ships (3b); until then, re-queue by resetting the event rows. |
+| Backend before the new worker is running | Completions succeed; their outbox events wait, retry, and dead-letter after 8 attempts (hours). The page then shows "Some records could not be updated" with a **Finish recording** button, which re-queues the dead letter once a worker is running. |
 | Frontend before the backend | The old page shows the home-event link only after a reload; no data harm. |
 
 ## Known pre-existing gap found while building the gate (not caused by this step)
 
 `FOLLOW_UP_DUE` is an event type `claimFollowUpDue.poller.ts` emits for every due claim, but `processDomainEvents.job.ts` has no handler for it, so each such event fails, retries, and dead-letters after 8 attempts. The new dispatch test lists it as a known gap (`KNOWN_UNHANDLED`) so the gate stays exhaustive without hiding it. Whether claim follow-ups should notify someone is a product decision; nothing was changed. To see the effect in production: `SELECT status, count(*) FROM domain_events WHERE type = 'FOLLOW_UP_DUE' GROUP BY status;` (read-only).
+
+## Looking at completions in production (read-only)
+
+```sql
+-- How completion effects are doing, by state (PENDING/PROCESSING/FAILED are still in progress; DEAD_LETTER needs a person to press "Finish recording").
+SELECT status, count(*), min("createdAt") AS oldest FROM domain_events WHERE type = 'DIY_PROJECT_COMPLETED' GROUP BY status ORDER BY status;
+
+-- Dead letters, with the reason and whether anyone has already tried recovery (payload.recovery).
+SELECT "idempotencyKey", "propertyId", attempts, "lastError", payload -> 'recovery' AS recovery, "updatedAt"
+FROM domain_events WHERE type = 'DIY_PROJECT_COMPLETED' AND status = 'DEAD_LETTER' ORDER BY "updatedAt" DESC;
+```
+
+## Checks after deploy (manual, in a browser; none of these has been run)
+
+- Complete a project: the sheet closes and the page shows "Recording your completion." (no time promised); after the worker's next cycle the home timeline link appears.
+- Complete a project linked to a maintenance task: the task shows completed and any seasonal item follows.
+- A project linked to an incident: the note says the incident was not changed, and the incident itself is untouched.
+- Open a project completed before this release: it says completion was recorded before effect tracking was added and offers no action.
+- If a dead letter appears, press **Finish recording** as a household contributor; a viewer should not see the button.

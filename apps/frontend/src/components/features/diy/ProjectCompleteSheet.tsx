@@ -9,7 +9,8 @@ interface Props {
   projectId: string;
   /** The project's version (`updatedAt`) this completion is based on. */
   expectedUpdatedAt: string;
-  onCompleted: (homeEventId: string) => void;
+  /** The completion is saved. The home event and any linked task are recorded afterwards, so there is no id to hand back. */
+  onCompleted: () => void;
   /** The project changed under this sheet (a stale version, or steps that are no longer all done): the page reloads it and closes the sheet. */
   onOutOfDate: (message: string) => void;
   onClose: () => void;
@@ -27,13 +28,13 @@ export default function ProjectCompleteSheet({ propertyId, projectId, expectedUp
     setLoading(true);
     setError(null);
     try {
-      const result = await api.completeDiyProject(propertyId, projectId, {
+      await api.completeDiyProject(propertyId, projectId, {
         expectedUpdatedAt,
         actualMinutes: minutes ? parseInt(minutes) : undefined,
         actualMaterialCostCents: costDollars ? Math.round(parseFloat(costDollars) * 100) : undefined,
         notes: notes || undefined,
       });
-      onCompleted(result.homeEventId);
+      onCompleted();
     } catch (err: any) {
       const code = diyErrorCode(err);
       // Someone changed the project (or reopened a step) while this sheet was open: refresh it rather than keep a sheet that can no longer succeed.

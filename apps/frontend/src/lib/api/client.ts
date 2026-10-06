@@ -5782,9 +5782,17 @@ class APIClient {
     return { step: res.data.step, alreadyApplied: Boolean(res.data.alreadyApplied) };
   }
 
-  async completeDiyProject(propertyId: string, projectId: string, payload: { expectedUpdatedAt: string; actualMinutes?: number; actualMaterialCostCents?: number; notes?: string }): Promise<{ homeEventId: string }> {
-    const res = await this.post<{ homeEventId: string }>(`/api/properties/${propertyId}/diy/projects/${projectId}/complete`, payload);
+  async completeDiyProject(propertyId: string, projectId: string, payload: { expectedUpdatedAt: string; actualMinutes?: number; actualMaterialCostCents?: number; notes?: string }): Promise<{ homeEventId: string | null; effects: 'RECORDING' }> {
+    // The home event and any linked maintenance task are recorded by a worker after this returns, so `homeEventId` is normally null here.
+    const res = await this.post<{ homeEventId: string | null; effects: 'RECORDING' }>(`/api/properties/${propertyId}/diy/projects/${projectId}/complete`, payload);
     if (!res.data) throw new APIError('Failed to complete project', 500);
+    return res.data;
+  }
+
+  /** Re-queues the completion records of a project whose update was dead-lettered. Anything else is a no-op (`reset: false`). */
+  async retryDiyCompletionEffects(propertyId: string, projectId: string): Promise<{ reset: boolean; completionEffects: import('@/types').DiyCompletionEffects | null }> {
+    const res = await this.post<{ reset: boolean; completionEffects: import('@/types').DiyCompletionEffects | null }>(`/api/properties/${propertyId}/diy/projects/${projectId}/completion-effects/retry`, {});
+    if (!res.data) throw new APIError('Failed to re-queue the completion records', 500);
     return res.data;
   }
 

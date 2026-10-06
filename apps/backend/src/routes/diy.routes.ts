@@ -21,6 +21,7 @@ import {
   updateProject,
   updateStep,
   completeProject,
+  retryCompletionEffects,
   abandonProject,
   generateAiGuide,
   getAiGuide,
@@ -71,6 +72,7 @@ router.get('/properties/:propertyId/diy/projects/:projectId', propertyAuthMiddle
 router.patch('/properties/:propertyId/diy/projects/:projectId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(UpdateProjectSchema), updateProject);
 router.patch('/properties/:propertyId/diy/projects/:projectId/steps/:stepId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(UpdateStepSchema), updateStep);
 router.post('/properties/:propertyId/diy/projects/:projectId/complete', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(CompleteProjectSchema), completeProject);
+router.post('/properties/:propertyId/diy/projects/:projectId/completion-effects/retry', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), retryCompletionEffects);
 router.post('/properties/:propertyId/diy/projects/:projectId/abandon', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), validateBody(AbandonProjectSchema), abandonProject);
 
 // ── AI Guide ──────────────────────────────────────────────────────────────────

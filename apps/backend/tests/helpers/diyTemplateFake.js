@@ -150,11 +150,18 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
   const propertyDelegate = { async findFirst() { return null; } };
   // The outbox: unique idempotencyKey (P2002), recorded in `state.domainEvents`, rolled back with the transaction.
   const domainEventDelegate = {
-    async findUnique({ where }) { const row = state.domainEvents.find((event) => event.idempotencyKey === where.idempotencyKey); return row ? structuredClone(row) : null; },
+    async findUnique({ where, select }) { const row = state.domainEvents.find((event) => event.idempotencyKey === where.idempotencyKey); return row ? (select ? pickKeys(structuredClone(row), select) : structuredClone(row)) : null; },
+    async updateMany({ where, data }) {
+      state.writes.push({ model: 'domainEvent', op: 'updateMany', where, dataKeys: Object.keys(data) });
+      fail('domainEvent.updateMany');
+      const rows = state.domainEvents.filter((event) => matches(event, where));
+      rows.forEach((row) => Object.assign(row, structuredClone(data), { updatedAt: new Date(Math.max(Date.now(), (row.updatedAt?.getTime() ?? 0) + 1)) }));
+      return { count: rows.length };
+    },
     async create({ data }) {
       fail('domainEvent.create');
       if (data.idempotencyKey && state.domainEvents.some((event) => event.idempotencyKey === data.idempotencyKey)) { const error = new Error('Unique constraint failed'); error.code = 'P2002'; throw error; }
-      const row = { id: `domain-event-${state.domainEvents.length + 1}`, status: 'PENDING', attempts: 0, ...structuredClone(data) };
+      const row = { id: `domain-event-${state.domainEvents.length + 1}`, status: 'PENDING', attempts: 0, updatedAt: stamp(), ...structuredClone(data) };
       state.domainEvents.push(row);
       return structuredClone(row);
     },
