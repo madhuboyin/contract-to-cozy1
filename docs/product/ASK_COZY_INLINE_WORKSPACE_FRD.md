@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.206
+**Version:** 1.207
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.207 — DIY completion outbox, slice 3c (real worker job against real Postgres):** the whole completion path was run for real on a throwaway Postgres: the completion's outbox row, the actual worker job claiming it, the home event, and the governed maintenance completion (recurring roll-forward, seasonal item and counter, radar request) with the incident untouched; duplicate delivery, a partial failure and its retry, a dead letter and its recovery, two workers racing, lease reclaim, a handler overlapping its own retry, a task on another property (dead-lettered before anything is created), a deleted task, and the actor leaving the household afterwards. Thirteen checks passed repeatedly, with and without the production worker stubs, and five negative controls were caught. The Docker and Raspberry Pi images, Redis and the poller, and a crash between a task's status write and its side effects were not run. Step 3 is complete as code; applying it follows `docs/operations/DIY_COMPLETION_OUTBOX_ROLLOUT.md`. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` §15.
 
 **Revision 1.206 — DIY completion outbox, slice 3b (disclosure, recovery, page):** a completed project now says what is happening to its follow-on records: "Recording your completion" (including while an automatic retry is under way, with no promised time), "Completion recorded", "Some records could not be updated" with a **Finish recording** button for people who can edit, or, for projects completed before tracking existed, "not verified here". Only a dead-lettered update can be re-queued; the same row is reset once, with who, when and how many times recorded on it. The read is proven not to write. The completion response no longer carries a home event id, the page polls a bounded number of times while recording, and an incident-linked completion says the incident was not changed. Tested with backend and page tests, mutation checks on both sides, a real-Postgres run and `next build`; not run in a browser. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` §14.
 

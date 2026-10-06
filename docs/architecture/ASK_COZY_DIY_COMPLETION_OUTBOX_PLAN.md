@@ -1,7 +1,7 @@
 # DIY Completion Effects Through the Outbox — Step 3 Implementation Plan
 
 **Date:** October 6, 2026 (revision 3, after two external reviews the same day)
-**Status:** **Revision 3, approved for implementation (October 6, 2026): S3-1 to S3-5, S3-7 to S3-9 and S3-11 as written; S3-6 and S3-10 as corrected in this revision (§3.6, §4).** Slice 3a-0 (measurement) is done (§12) slice 3a (backend and worker) is pushed (§13), and slice 3b (disclosure, recovery, page) is built and verified locally (§14). 3c is not started. One schema change (an enum value), applied by you.
+**Status:** **Revision 3, approved for implementation (October 6, 2026): S3-1 to S3-5, S3-7 to S3-9 and S3-11 as written; S3-6 and S3-10 as corrected in this revision (§3.6, §4).** Slice 3a-0 (measurement) is done (§12) slice 3a (backend and worker) is pushed (§13), slice 3b (disclosure, recovery, page) is pushed (§14), and slice 3c (the real-Postgres run through the actual worker job, and the runbook) is built and run locally (§15). The rollout itself is yours. One schema change (an enum value), applied by you.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 3 (P4; decisions O3 and O13, approved October 6, 2026), D8, E6, E7, E17, E18
 **Follows:** [`ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md`](ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md) (step 2, pushed; its rollout is yours)
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20, plus its section 7 adversarial pass (§8). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -278,3 +278,31 @@ No product code was changed. Two throwaway scripts (in the scratchpad, not commi
 **A defect found while testing.** The first polling effect re-armed only when the project object changed identity, so a reload that returned an equal project would silently stop the polling; it now uses an explicit counter.
 
 **Not run:** a browser; the worker end to end against the page (3c); the recovery against a live dead letter. **3a and 3b are now complete as code; the release train in `DIY_COMPLETION_OUTBOX_ROLLOUT.md` still applies, and the real-Postgres acceptance through the actual job (3c) is still open.**
+
+## 15. Slice 3c record: the real worker job against real Postgres (October 6, 2026)
+
+**Built.** `apps/workers/tests/scratch/diyCompletionOutbox.scratch.js` (13 checks, guarded like the earlier scratch scripts: a local URL whose database name contains "scratch", never port 5433). It runs the **real** completion service, the **real** `processDomainEventsJob` with its default dependencies, the real handler and adapters, the real home event service and the real governed maintenance completion against an empty throwaway Postgres 15 with the current schema. `WORKER_STUBS=1` re-runs it with the seven backend modules the production image replaces with stubs, which answers the question left open in §12 F4.
+
+**Validation (scratch Postgres 15, `scratch_c2c_3c`; nothing touched your data)**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| **Happy path:** the completion writes one `PENDING` outbox row and nothing inline; the real job processes it; the home event exists with the actor, type and key and is linked to the project; the task is `COMPLETED` through the governed path (completion key, `recordedByUserId`, `fulfillmentMode: DIY`, actual cost), its **recurring due date rolled forward**, its **seasonal item completed and checklist counter incremented**, and a **radar reconciliation request** emitted; the linked **incident is untouched** (still `ACTIVE`, no `resolvedAt`) | pass | Executed |
+| **Duplicate delivery:** the same event delivered again: outcome `ALREADY_DONE` for both effects, one home event, no second roll-forward, no second counter bump | pass | Executed |
+| **Partial failure:** the home event insert refused (a database trigger) after the task completed: event `FAILED` with backoff and a `HOME_EVENT` message; the retry creates the home event and completes nothing twice | pass | Executed |
+| **Dead letter and recovery:** a persistent failure walks the real backoff to `DEAD_LETTER` at 8 attempts; recovery re-queues the same row (count 1, actor recorded); the next run processes it and the page state becomes recorded | pass | Executed |
+| **Two workers racing** for one event: one claims, the other finds it taken; one home event; `attempts` is 1 | pass | Executed |
+| **Lease:** an expired lease is reclaimed and processed (attempts 2); an unexpired lease is not touched | pass | Executed |
+| **A handler overlapping its own retry** (two concurrent runs of the real handler): one home event, the task completed once, the seasonal counter moved once, a third run converges to `ALREADY_DONE` | pass | Executed |
+| **Integrity and edges:** a task on another property dead-letters on the first attempt with **no home event created**; a deleted task is a typed skip with the home event still created; no linked task is `NOT_LINKED` and a non-improvement category is a `MAINTENANCE` event; a task someone else already completed is left alone with its due date and the seasonal counter unchanged; the actor removed from the household after completion does not strand the effects, and the home event is still attributed to them | pass | Executed |
+| Stability: 8 runs without stubs and 8 with the production stubs, plus the first runs | 13 of 13 each, no errors logged | Executed |
+| **Under the production stubs** (error middleware, audit, notification, gemini, job queue, analytics schemas, property service): the whole path above, including seasonal sync, radar request, the adherence signal and the work item sync | pass; nothing on this path depended on a stubbed module | Executed |
+| Negative controls on the real database: the already-completed short circuit removed (5 checks fail); the home event created without lookup or key (11); the job's claim made non-atomic (1: with keyed effects the second worker still adds nothing, so only the claim count shows it, which is defense in depth); preflight moved after the home event (6); the handler stopping at its first failure (1) | each caught; originals restored | Executed |
+
+**Test defects found and fixed along the way (not product defects).** Raw `now()` in a non-UTC session wrote local time into UTC `timestamp(3)` columns, so an "unexpired" lease was already expired; an `availableAt` reset to the database's `now()` could round up past the job's clock and make a redelivered event miss its run (the intermittent failure, found by repeating the stubbed run six times); a test that called the handler directly left its outbox row open for the next test; scratch ids that were not UUIDs made the analytics emitter log an error.
+
+**Answers to earlier open questions.** §12 F4 (transitive calls into stubbed modules): none of the stubs affected the completion path as exercised. §8 stale-handler (item 19): the keyed effects and the claim held under real concurrency. §2 C9 / §13 finding 3 (side effects after the compare-and-swap): not exercised here, because no crash was injected between the status write and its side effects.
+
+**Not run:** the Docker image build and the Raspberry Pi (ARM) image; Redis and BullMQ (the job was invoked directly, not by the 30-second poller); the radar reconciliation request being consumed; a crash between the maintenance status write and its side effects; production-sized data; a browser; paths this run did not use (a task whose `actionKey` is a project follow-up, other maintenance sources).
+
+**Step 3 is complete as code and as local verification. The rollout steps are yours (`docs/operations/DIY_COMPLETION_OUTBOX_ROLLOUT.md`), and §4's rule holds: the enum, then the worker, then this acceptance where a scratch database exists, then the backend.**

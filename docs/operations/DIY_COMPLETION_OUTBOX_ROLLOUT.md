@@ -1,6 +1,6 @@
 # DIY completion outbox: rollout (step 3 of the stateful GUIDE)
 
-Plan: `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` (§4 is the order, §6 the gates). **Slice 3a (backend and worker) is pushed; slice 3b (disclosure, recovery route, page) is built and verified locally; 3c (the full real-Postgres acceptance through the real job, and this runbook's completion) is not done. Nothing here has been applied to any database or deployed.** This file exists now because the backend's fatal start-up message points to it; 3c extends it.
+Plan: `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` (§4 is the order, §6 the gates). **Slices 3a (backend and worker) and 3b (disclosure, recovery route, page) are pushed; 3c (the real-Postgres acceptance through the real job, and this runbook) is built and was run locally. Nothing here has been applied to any database or deployed.** This file exists now because the backend's fatal start-up message points to it; 3c extends it.
 
 ## The order (one release train, sequential)
 
@@ -12,7 +12,7 @@ Plan: `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` (§4 is the ord
    (cd apps/workers && npm run smoke:built-worker)
    ```
 3. **Deploy and restart the worker image** (`kubectl rollout restart`; a `:latest` tag does not restart by itself). Confirm it booted.
-4. **Real-Postgres acceptance (3c)** against a scratch database, before the backend producer is enabled, when one is available. If none is, record that atomicity, leasing and duplicate-delivery behavior are unverified against Postgres at go-live; do not describe a later run as validating an already-safe rollout.
+4. **Real-Postgres acceptance (3c)** against a scratch database, before the backend producer is enabled, when one is available (how: the section below). If none is, record that atomicity, leasing and duplicate-delivery behavior are unverified against Postgres at go-live; do not describe a later run as validating an already-safe rollout.
 5. **Deploy and restart the backend.** It **refuses to start** (and so never becomes ready) if the database enum lacks `DIY_PROJECT_COMPLETED`; the message names step 1.
 6. **Deploy the frontend** (slice 3b).
 
@@ -46,3 +46,27 @@ FROM domain_events WHERE type = 'DIY_PROJECT_COMPLETED' AND status = 'DEAD_LETTE
 - A project linked to an incident: the note says the incident was not changed, and the incident itself is untouched.
 - Open a project completed before this release: it says completion was recorded before effect tracking was added and offers no action.
 - If a dead letter appears, press **Finish recording** as a household contributor; a viewer should not see the button.
+
+## Running the real-Postgres acceptance (3c)
+
+It runs the real completion service, the real `processDomainEventsJob`, the real handler and the real governed maintenance completion against a **throwaway** Postgres, 13 checks. It refuses any database whose name does not contain `scratch`, any non-local URL and port 5433, and it truncates the tables it seeds.
+
+```bash
+# 1. A scratch cluster (macOS: TCP only, the socket path is too long) and a database with the CURRENT schema. Postgres 15 here; the schema has two PostGIS
+#    columns in unrelated tables, which the scratch copy turns into text and drops their two spatial indexes (see DIY_TEMPLATE_REVISIONS_ROLLOUT.md).
+PGBIN=/usr/local/opt/postgresql@15/bin; D=<some scratch dir>
+$PGBIN/initdb -D $D/data -U scratch --auth=trust
+$PGBIN/pg_ctl -D $D/data -o "-p 54391 -c listen_addresses=127.0.0.1 -c unix_socket_directories=''" -l $D/pg.log -w start
+$PGBIN/createdb -h 127.0.0.1 -p 54391 -U scratch scratch_c2c_3c
+(cd apps/backend && npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > $D/ddl.sql)
+sed -e 's/geography(Point, 4326)/TEXT/; s/geography(Geometry, 4326)/TEXT/' -e '/USING GIST ("locationPoint")/d' -e '/USING GIST ("geometry")/d' $D/ddl.sql > $D/ddl.scratch.sql
+$PGBIN/psql -h 127.0.0.1 -p 54391 -U scratch -d scratch_c2c_3c -v ON_ERROR_STOP=1 -q -f $D/ddl.scratch.sql
+
+# 2. From apps/workers (regenerate the worker's Prisma client first: npm run prisma:generate), without and then with the production stubs applied.
+export SCRATCH_DATABASE_URL=postgresql://scratch@127.0.0.1:54391/scratch_c2c_3c
+node --require ts-node/register --require tsconfig-paths/register --test tests/scratch/diyCompletionOutbox.scratch.js
+WORKER_STUBS=1 node --require ts-node/register --require tsconfig-paths/register --test tests/scratch/diyCompletionOutbox.scratch.js
+$PGBIN/pg_ctl -D $D/data stop
+```
+
+**What it did not cover** (so do not read a pass as more than this): the Docker image build and the Raspberry Pi image; Redis and the 30-second poller (the job is invoked directly); a crash between the maintenance status write and its side effects; production-sized data; any browser.
