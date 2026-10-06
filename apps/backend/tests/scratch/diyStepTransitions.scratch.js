@@ -28,9 +28,6 @@ const stub = (relative, exports) => { const resolved = require.resolve(relative)
 stub('../../src/services/adminAudit.service.ts', { recordAdminAction: async () => undefined });
 stub('../../src/modules/propertyContext/index.ts', { getPropertyContext: async () => ({}) });
 stub('../../src/services/diy/applicabilityPolicy.ts', { evaluateDiyApplicability: () => ({ status: 'APPLICABLE' }) });
-// The completion effects (maintenance, incident, home event) are not under test; count how often and for whom they run.
-const completions = [];
-stub('../../src/services/diyCompletion.service.ts', { diyCompletionService: { onComplete: async (project, actor) => { completions.push({ id: project.id, actor }); } } });
 
 const { prisma } = require('../../src/lib/prisma.ts');
 const { diyService } = require('../../src/services/diy.service.ts');
@@ -64,10 +61,12 @@ const abandon = (id, token, actor = 'u1') => diyService.abandonProject(id, 'prop
 test.before(async () => {
   const [{ db, port }] = await prisma.$queryRawUnsafe('select current_database() as db, inet_server_port() as port');
   assert.equal(db, DB_NAME, 'connected to the scratch database'); assert.equal(Number(port), Number(DB_PORT), 'on the scratch port');
-  await prisma.$executeRawUnsafe('TRUNCATE diy_project_events, diy_project_steps, diy_projects, properties, homeowner_profiles, users RESTART IDENTITY CASCADE');
+  await prisma.$executeRawUnsafe('TRUNCATE household_members, domain_events, diy_project_events, diy_project_steps, diy_projects, properties, homeowner_profiles, users RESTART IDENTITY CASCADE');
   await prisma.$executeRawUnsafe(`INSERT INTO users ("id","email","firstName","lastName","passwordHash","updatedAt") VALUES ('u1','scratch@example.test','S','C','x', now()), ('u2','scratch2@example.test','T','D','x', now())`);
   await prisma.$executeRawUnsafe(`INSERT INTO homeowner_profiles ("id","userId","updatedAt") VALUES ('hp1','u1', now())`);
   await prisma.$executeRawUnsafe(`INSERT INTO properties ("id","homeownerProfileId","address","city","state","zipCode","updatedAt") VALUES ('prop1','hp1','1 Test St','Testville','NJ','08536', now())`);
+  // u1 owns the property through the homeowner profile (the pre-household path: no membership row); u2 is a household contributor. Completion checks access inside its transaction.
+  await prisma.$executeRawUnsafe(`INSERT INTO household_members ("id","propertyId","userId","role","updatedAt") VALUES ('hm2','prop1','u2','CONTRIBUTOR', now())`);
 });
 test.after(async () => { await prisma.$disconnect(); });
 
@@ -148,17 +147,18 @@ test('retry loop under contention: 4 writers on different steps all succeed; 10 
 
 // ---- the completion rule under race ---------------------------------------------------------------------------------------------------------------
 
-test('completing twice at once: one wins, the other is closed or stale, one ledger row, the completion effects run once', async () => {
+test('completing twice at once: one wins, the other is closed or stale, one ledger row, one outbox row', async () => {
   const id = await makeProject(['COMPLETED', { status: 'SKIPPED', isOptional: true }]);
   const token = iso((await project(id)).updatedAt);
-  completions.length = 0;
   const results = await Promise.all([settle(complete(id, token, 'u1')), settle(complete(id, token, 'u2'))]);
   results.forEach((r) => assertClean(r));
   assert.equal(results.filter((r) => r.ok).length, 1);
   assert.ok(['DIY_STALE', 'DIY_PROJECT_CLOSED'].includes(results.find((r) => !r.ok).code));
   assert.equal((await events(id)).filter((e) => e.type === 'PROJECT_COMPLETED').length, 1);
-  assert.equal(completions.filter((c) => c.id === id).length, 1, 'effects ran once');
-  assert.equal(completions.find((c) => c.id === id).actor, (await project(id)).completedByUserId, 'effects attributed to the person recorded as completing it');
+  // The effects are now an outbox row written in the completion transaction (slice 3a): exactly one, attributed to the person recorded as completing it.
+  const outbox = await prisma.domainEvent.findMany({ where: { idempotencyKey: `diy-project-completed:${id}` } });
+  assert.equal(outbox.length, 1, 'one outbox row');
+  assert.equal(outbox[0].userId, (await project(id)).completedByUserId, 'attributed to the person recorded as completing it');
 });
 
 test('completion racing a reopen of the last required step (40 jittered rounds): never a COMPLETED project with an open required step', async () => {
@@ -246,4 +246,53 @@ test('any step change invalidates a project token taken earlier: completing from
   assert.equal((await settle(complete(id, stalePage))).code, 'DIY_STALE');
   assert.equal((await settle(abandon(id, stalePage))).code, 'DIY_STALE');
   assert.equal((await project(id)).status, 'IN_PROGRESS');
+});
+
+// ---- slice 3a: the outbox row and the in-transaction access check, on real Postgres ----------------------------------------------------------------
+
+test('completion writes one outbox row atomically with a snapshot; a viewer and a non-member are refused with nothing written', async () => {
+  await prisma.$executeRawUnsafe(`INSERT INTO users ("id","email","firstName","lastName","passwordHash","updatedAt") VALUES ('u3','scratch3@example.test','V','W','x', now()), ('u4','scratch4@example.test','X','Y','x', now()) ON CONFLICT DO NOTHING`);
+  await prisma.$executeRawUnsafe(`INSERT INTO household_members ("id","propertyId","userId","role","updatedAt") VALUES ('hm3','prop1','u3','VIEWER', now()) ON CONFLICT DO NOTHING`);
+  const id = await makeProject(['COMPLETED']);
+  await prisma.diyProject.update({ where: { id }, data: { maintenanceTaskId: 'task-77', title: 'Seal the deck', category: 'EXTERIOR' } });
+  const token = iso((await project(id)).updatedAt);
+  for (const actor of ['u3', 'u4']) {
+    const refused = await settle(complete(id, token, actor));
+    assert.equal(refused.code, 'DIY_ACCESS_REVOKED', actor);
+  }
+  assert.equal((await project(id)).status, 'IN_PROGRESS');
+  assert.equal(await prisma.domainEvent.count({ where: { idempotencyKey: `diy-project-completed:${id}` } }), 0);
+  assert.equal((await project(id)).updatedAt.getTime(), new Date(token).getTime(), 'the refusal wrote nothing, not even the claim');
+
+  await complete(id, token, 'u2');
+  const [row] = await prisma.domainEvent.findMany({ where: { idempotencyKey: `diy-project-completed:${id}` } });
+  assert.deepEqual([row.type, row.status, row.attempts, row.propertyId, row.userId], ['DIY_PROJECT_COMPLETED', 'PENDING', 0, 'prop1', 'u2']);
+  assert.deepEqual({ ...row.payload, completedAt: typeof row.payload.completedAt }, { projectId: id, propertyId: 'prop1', actorUserId: 'u2', completedAt: 'string', title: 'Seal the deck', category: 'EXTERIOR', actualMinutes: null, actualMaterialCostCents: null, maintenanceTaskId: 'task-77' });
+});
+
+test('the outbox key is the idempotency boundary: a row already holding the key is reused, never duplicated (one row per project)', async () => {
+  const id = await makeProject(['COMPLETED']);
+  await prisma.$executeRawUnsafe(`INSERT INTO domain_events ("id","type","status","idempotencyKey","payload","updatedAt") VALUES ('squatter-${id}','DIY_PROJECT_COMPLETED','PENDING','diy-project-completed:${id}','{}', now())`);
+  // DomainEventsService.emit returns the existing row for a known key, so the completion succeeds without a second row. A project completes once, so this
+  // can only happen through corruption; the handler would then dead-letter the empty payload as SNAPSHOT_INVALID rather than act on it.
+  const result = await settle(complete(id, iso((await project(id)).updatedAt), 'u1'));
+  assert.equal(result.ok, true);
+  assert.equal(await prisma.domainEvent.count({ where: { idempotencyKey: `diy-project-completed:${id}` } }), 1);
+});
+
+test('a real database failure after the outbox insert rolls back the project completion, the ledger row and the outbox row together', async () => {
+  const id = await makeProject(['COMPLETED']);
+  const before = await project(id);
+  // Make the LAST write of the transaction (the ledger row's actor is a plain string, so use a violation we control): a trigger that raises on a
+  // PROJECT_COMPLETED ledger insert for this project.
+  await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION scratch_fail_ledger() RETURNS trigger AS $$ BEGIN IF NEW."projectId" = '${id}' AND NEW."type" = 'PROJECT_COMPLETED' THEN RAISE EXCEPTION 'scratch: ledger insert refused'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER scratch_fail_ledger_trg BEFORE INSERT ON diy_project_events FOR EACH ROW EXECUTE FUNCTION scratch_fail_ledger()`);
+  try {
+    await assert.rejects(complete(id, iso(before.updatedAt), 'u1'), /ledger insert refused/);
+  } finally {
+    await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS scratch_fail_ledger_trg ON diy_project_events');
+  }
+  const after = await project(id);
+  assert.deepEqual([after.status, after.completedByUserId, after.updatedAt.getTime()], ['IN_PROGRESS', null, before.updatedAt.getTime()]);
+  assert.equal(await prisma.domainEvent.count({ where: { idempotencyKey: `diy-project-completed:${id}` } }), 0, 'no outbox row survives a rolled-back completion');
 });

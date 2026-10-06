@@ -30,7 +30,6 @@ const stub = (relative, exports) => { const resolved = require.resolve(relative)
 stub('../../src/services/adminAudit.service.ts', { recordAdminAction: async () => undefined });
 stub('../../src/modules/propertyContext/index.ts', { getPropertyContext: async () => ({}) });
 stub('../../src/services/diy/applicabilityPolicy.ts', { evaluateDiyApplicability: () => ({ status: 'APPLICABLE' }) });
-stub('../../src/services/diyCompletion.service.ts', { diyCompletionService: { onComplete: async () => {} } });
 
 const { prisma } = require('../../src/lib/prisma.ts');
 const governance = require('../../src/services/adminContentGovernance.service.ts');

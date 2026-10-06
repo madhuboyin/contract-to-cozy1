@@ -1,7 +1,7 @@
 # DIY Completion Effects Through the Outbox — Step 3 Implementation Plan
 
 **Date:** October 6, 2026 (revision 3, after two external reviews the same day)
-**Status:** **Revision 3, approved for implementation (October 6, 2026): S3-1 to S3-5, S3-7 to S3-9 and S3-11 as written; S3-6 and S3-10 as corrected in this revision (§3.6, §4).** Slice 3a-0 (measurement, no behavior change) is done (§12) and proposes the final handler boundary for your confirmation. Nothing else is built. One schema change (an enum value), applied by you.
+**Status:** **Revision 3, approved for implementation (October 6, 2026): S3-1 to S3-5, S3-7 to S3-9 and S3-11 as written; S3-6 and S3-10 as corrected in this revision (§3.6, §4).** Slice 3a-0 (measurement) is done (§12) and slice 3a (backend and worker) is built and verified locally (§13). 3b and 3c are not started. One schema change (an enum value), applied by you.
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 3 (P4; decisions O3 and O13, approved October 6, 2026), D8, E6, E7, E17, E18
 **Follows:** [`ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md`](ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md) (step 2, pushed; its rollout is yours)
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20, plus its section 7 adversarial pass (§8). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -232,3 +232,30 @@ No product code was changed. Two throwaway scripts (in the scratchpad, not commi
 5. **Stubs (F4):** the 3c run, and a new unit-level check in 3a, load the handler's adapters **with the same seven stubs applied** (as the scratch script does with `require.cache`), so a completion that depends on a stubbed module is caught before the image is built, not in production. The transitive-call question is answered by that run, not by this trace.
 
 **Not done here:** the Docker image build, a boot of the built `dist`, and any database. The closure scripts can be committed as a worker tool if you want the measurement repeatable.
+
+## 13. Slice 3a record: backend and worker (October 6, 2026)
+
+**Built.** The enum value `DIY_PROJECT_COMPLETED` (not applied to any database); `completeProject` now verifies the actor's CONTRIBUTOR access **inside its transaction** (a new read-only, transaction-capable `hasPropertyRoleWithin`, which does not write the membership row `resolvePropertyAccess` can create), and writes the outbox row in the same transaction with a snapshot (project, property, actor, completed-at, title, category, minutes, cost, linked task); the inline `DiyCompletionService` and its raw maintenance and incident writes are **deleted**; the pure handler `diyCompletionEffects.ts` (preflight, typed outcomes, every effect attempted after preflight, retry-safe), the adapters module wiring the home event service and the maintenance core, and `TerminalDomainEventError` plus a job change that dead-letters it at once; the maintenance status write split into the public `updateTaskStatus` (access check first) and a **private** `completeTaskCore`, reachable for DIY completion only through `completeMaintenanceTaskForDiyOutbox`; a fatal start-up check in `startServer()` before `listen`; the job's dispatch case. The controller response and the page are slice 3b.
+
+**Validation**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| Handler tests: both effects with actor and keys; event type by category; no linked task; cross-property terminal before any home event; deleted task skip; already-completed task; home event ok then maintenance fails (retry creates no second home event); maintenance ok then home event fails (no second completion, so no second roll-forward); a failing effect does not stop the other; both race outcomes after the pre-read; malformed snapshots terminal | 15 pass (with boundary and start-up tests) | Executed |
+| Completion transaction on the shared fake: one outbox row with the key, scope, actor and snapshot; a failing insert rolls the completion back; a revoked member and a viewer are refused with nothing written; losing access after commit does not matter | pass | Executed |
+| Maintenance split: `updateTaskStatus` still refuses a viewer and writes nothing; the internal export skips the second check but keeps the compare-and-swap and idempotent replay | 4 pass | Executed |
+| Worker gate: exhaustive dispatch over every `DomainEventType`; DIY event reaches the injected handler and stores its outcome; retryable errors back off; terminal errors dead-letter at once, recognized by flag; adapters load and run under the seven production stubs | 7 pass (5 dispatch, 2 stubs) | Executed |
+| Production-style build: `npm run build` for the backend, the stub overrides, `tsc --project tsconfig.docker.json`, `tsc-alias`; the built job imports under a `@worker-shared` link, the stubs are in effect, and the default DIY handler path dead-letters a malformed event (`npm run smoke:built-worker`, now a repeatable script) | pass (913 modules loaded in about 0.6 s) | Executed |
+| Backend and worker `tsc`; `lint:worker-import-boundary` | clean; PASS (142 files) | Executed |
+| Real Postgres (scratch 15, the 2a-era schema plus the enum value): the whole step 2 script (13) and the template revisions script (18) still pass after the service change; three new checks (16 total): the outbox row and snapshot on a real database, a viewer and a non-member refused with **not even the claim written**, one row per key, and a forced database failure on the last write rolling back the completion, the ledger row and the outbox row together | 34 pass | Executed |
+| Mutation checks: outbox insert failure swallowed (1 fails); access check removed (2); cross-property treated as a skip (1); post-race re-read removed (2); stop at the first failure (2); home event created before preflight (5); `updateTaskStatus` without its access check (1); terminal detection removed (2); dispatch case removed (1) | each caught; originals restored (a first attempt at the outbox mutant broke compilation and was redone as a type-safe one) | Executed |
+| Wider runs: DIY, Ask DIY and incident-reconciliation suites; the worker unit suite | 172 pass; worker 634 of 638, the 4 failures in risk-calculation mocks, a Dockerfile text assertion and two date-based fund tests, none in code this slice touches (not compared against a clean checkout) | Executed |
+
+**Findings**
+
+1. **`FOLLOW_UP_DUE` has no handler** though `claimFollowUpDue.poller.ts` emits it for every due claim: each event dead-letters after 8 attempts. Found by the new exhaustive test; **not changed** (a product decision); listed in the test as a known gap and in the runbook.
+2. **The scratch seed needed a household member** once access is checked in the transaction: the real database refused the second actor until one was seeded, which is the check working. A pre-household owner (no membership row) is accepted without a row being written.
+3. **A pre-existing completion limitation, unchanged:** the governed maintenance completion writes the status with a compare-and-swap and then runs side effects; a crash between them means a retry replays by key and does not re-run the side effects. The handler cannot see that.
+4. The worker's generated Prisma client was stale (so the local worker gate must regenerate it first); `lint:notification-boundary` fails on three unrelated job files that predate this work.
+
+**Not run:** the Docker image build itself, the worker against a database, the governed maintenance side effects through the worker (seasonal sync, recurring roll-forward), the lease-reclaim and duplicate-delivery runs (3c), and any browser. 3a is not safe to deploy alone: the page still reads `homeEventId` from the completion response (now always null) until 3b.

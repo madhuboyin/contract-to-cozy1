@@ -17,7 +17,6 @@ function harness(seeds, hooks) {
   stub('../../src/lib/logger.ts', { logger: { info() {}, warn() {}, error() {} }, auditLog() {}, redactEmail: (value) => value });
   stub('../../src/modules/propertyContext/index.ts', { getPropertyContext: async () => ({}) });
   stub('../../src/services/diy/applicabilityPolicy.ts', { evaluateDiyApplicability: () => ({ status: 'APPLICABLE' }) });
-  stub('../../src/services/diyCompletion.service.ts', { diyCompletionService: { onComplete: async () => {} } });
   for (const relative of ['../../src/services/diyTemplateRevision.service.ts', '../../src/services/diyPublishedTemplate.ts', '../../src/services/diy.service.ts']) delete require.cache[require.resolve(relative)];
   const revisions = require('../../src/services/diyTemplateRevision.service.ts');
   const { diyService } = require('../../src/services/diy.service.ts');

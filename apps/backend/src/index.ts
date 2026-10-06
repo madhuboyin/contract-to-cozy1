@@ -213,6 +213,7 @@ import { validateDecisionThreadTransitionContract } from './services/decisionPla
 import { validateHomeIntelligenceGraphEdges } from './services/decisionPlatform/homeIntelligenceGraph';
 import { validateIntelligenceRegistries } from './services/intelligence';
 import { warnAboutDiyTemplateRevisionState } from './services/diyTemplateRevisionStartupCheck';
+import { assertDiyCompletionEventTypeAvailable } from './services/diyCompletionStartupCheck';
 import { validateEnvelopeRegistry } from './services/intelligenceEnvelope';
 import {
   assertAgentDeploymentReadiness,
@@ -759,6 +760,9 @@ async function startServer(): Promise<void> {
   if (readinessIssues.length) {
     throw new Error(`FATAL: Agent deployment readiness failed: ${readinessIssues.join('; ')}`);
   }
+
+  // Fatal, not a warning: DIY completion writes an outbox event type that must exist in the database enum (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md section 4).
+  await assertDiyCompletionEventTypeAvailable();
 
   app.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);

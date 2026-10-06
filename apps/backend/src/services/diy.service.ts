@@ -2,7 +2,9 @@
 import { Prisma, DiyProjectStatus, DiyProjectCategory, DiyTemplateStatus, DiySkillLevel } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
-import { diyCompletionService } from './diyCompletion.service';
+import { DomainEventsService } from './domainEvents/domainEvents.service';
+import { hasPropertyRoleWithin } from './propertyAccess.service';
+import { DIY_COMPLETION_EVENT_KEY } from './diy/diyCompletionEffects';
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
@@ -598,7 +600,12 @@ export class DiyService {
     ctx: { actorUserId: string; expectedUpdatedAt?: unknown },
   ) {
     const expected = this.parseVersionToken(ctx.expectedUpdatedAt);
-    const updated = await prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx) => {
+      // Authorization of record: decided here, inside the transaction that writes the completion and its outbox row, not only by the route middleware
+      // that ran before it (so a revocation in between is refused). The worker later relies on this and uses the actor only for attribution.
+      if (!(await hasPropertyRoleWithin(tx, ctx.actorUserId, propertyId, 'CONTRIBUTOR'))) {
+        throw new APIError('You no longer have access to complete this project.', 403, 'DIY_ACCESS_REVOKED');
+      }
       await this.claimOpenProject(tx, projectId, propertyId, expected);
       // The rule is checked against the steps as they are NOW, in this transaction, with the project row held: no step can change underneath it.
       const steps = await tx.diyProjectStep.findMany({
@@ -633,13 +640,28 @@ export class DiyService {
       await tx.diyProjectEvent.create({
         data: { projectId, actorUserId: ctx.actorUserId, type: 'PROJECT_COMPLETED', fromStatus: project.status, toStatus: 'COMPLETED' },
       });
+      // The outbox row, in the SAME transaction: a snapshot of what was completed. If this insert fails the whole completion rolls back, so there is
+      // never a completed project without its record. A worker creates the home event and completes the linked maintenance task from this payload
+      // (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md). Incidents are not touched (decision O13).
+      await DomainEventsService.emit({
+        type: 'DIY_PROJECT_COMPLETED',
+        propertyId,
+        userId: ctx.actorUserId,
+        idempotencyKey: DIY_COMPLETION_EVENT_KEY(projectId),
+        payload: {
+          projectId,
+          propertyId,
+          actorUserId: ctx.actorUserId,
+          completedAt: now.toISOString(),
+          title: project.title,
+          category: project.category,
+          actualMinutes: payload.actualMinutes ?? null,
+          actualMaterialCostCents: payload.actualMaterialCostCents ?? null,
+          maintenanceTaskId: project.maintenanceTaskId ?? null,
+        },
+      }, tx);
       return completed;
     });
-
-    // Side effects after commit, as before (the durable outbox and the governed maintenance and incident writes are step 3), now attributed to the
-    // person who completed the project.
-    await diyCompletionService.onComplete(updated, ctx.actorUserId);
-    return (await prisma.diyProject.findUnique({ where: { id: projectId } })) ?? updated;
   }
 
   async abandonProject(

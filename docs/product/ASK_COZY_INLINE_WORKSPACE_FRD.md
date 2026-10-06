@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.204
+**Version:** 1.205
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.205 — DIY completion outbox, slice 3a (backend and worker):** completing a DIY project now verifies the actor's access inside its own transaction and writes one outbox event with a snapshot of what was completed; a worker handler creates the home event and completes the linked maintenance task through the governed path (the maintenance write is split so the public method still checks access), after a preflight that dead-letters a task on another property before anything is created. The inline effects and the raw incident writes are removed, so a DIY completion no longer resolves incidents. The backend refuses to start if the database lacks the new event type. Tested with handler, transaction, worker-gate and production-stub checks, a built-worker smoke test and a real-Postgres run, with mutation checks. The page and the recovery route are slice 3b, so this must not ship alone. A new exhaustive dispatch test found a pre-existing unhandled event type, `FOLLOW_UP_DUE` (claim follow-ups), left unchanged for a product decision. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` §13.
 
 **Revision 1.204 — DIY completion outbox, slice 3a-0 (measurements):** no product code changed. The worker already loads both services the completion effects need (confirmed by a static closure and by loading the worker), so no new module graph enters it; the real risks found are that the production worker image replaces seven backend modules with stubs (five of which the maintenance service reaches), that no test checks every event type has a handler, and that the existing access check cannot run inside a transaction and performs a write. The plan now proposes a pure handler with injected dependencies plus an adapters module, a transaction-capable read-only access check, a fatal enum check before the server listens, and a stubbed-module check. See `docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md` §12.
 

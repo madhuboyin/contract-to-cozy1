@@ -9,16 +9,13 @@ require('ts-node/register');
 const { makeDiyDb } = require('../helpers/diyTemplateFake.js');
 const { evaluateStepTransition, openStepsForCompletion } = require('../../src/services/diy/stepTransitions.ts');
 
-const completions = [];
 function harness(hooks) {
   const db = makeDiyDb([], hooks);
-  completions.length = 0;
   const stub = (relative, exports) => { const resolved = require.resolve(relative); require.cache[resolved] = { id: resolved, filename: resolved, loaded: true, exports }; };
   stub('../../src/lib/prisma.ts', { prisma: db });
   stub('../../src/lib/logger.ts', { logger: { info() {}, warn() {}, error() {} }, auditLog() {}, redactEmail: (value) => value });
   stub('../../src/modules/propertyContext/index.ts', { getPropertyContext: async () => ({}) });
   stub('../../src/services/diy/applicabilityPolicy.ts', { evaluateDiyApplicability: () => ({ status: 'APPLICABLE' }) });
-  stub('../../src/services/diyCompletion.service.ts', { diyCompletionService: { onComplete: async (project, actor) => { completions.push({ projectId: project.id, actor }); } } });
   delete require.cache[require.resolve('../../src/services/diy.service.ts')];
   const { diyService } = require('../../src/services/diy.service.ts');
   return { db, state: db.state, diyService };
@@ -28,7 +25,7 @@ const T0 = new Date('2026-10-06T12:00:00.000Z');
 const step = (id, stepNumber, extra = {}) => ({ id, stepNumber, title: `Step ${stepNumber}`, description: 'Do it.', isOptional: false, status: 'PENDING', notes: null, completedAt: null, completedByUserId: null, safetyNote: null, updatedAt: new Date(T0.getTime() + stepNumber), ...extra });
 function seedProject(h, overrides = {}) {
   h.state.projects.push({
-    id: 'p1', propertyId: 'prop-1', userId: 'creator', status: 'PLANNING', startedAt: null, completedAt: null, completedByUserId: null, notesJson: null, updatedAt: T0, materials: [], tools: [], aiGuide: null,
+    id: 'p1', propertyId: 'prop-1', userId: 'creator', title: 'Paint a room', category: 'PAINTING', maintenanceTaskId: null, status: 'PLANNING', startedAt: null, completedAt: null, completedByUserId: null, notesJson: null, updatedAt: T0, materials: [], tools: [], aiGuide: null,
     steps: [step('s1', 1, { safetyNote: 'Turn the power off first.' }), step('s2', 2), step('s3', 3, { isOptional: true }), step('s4', 4, { isOptional: true, safetyNote: 'Wear gloves.' })],
     ...overrides,
   });
@@ -157,7 +154,7 @@ test('a project cannot complete with a required step open or an optional step un
   const h = harness(); seedProject(h);
   await move(h, 's1', 'COMPLETED'); await move(h, 's2', 'COMPLETED');
   await assert.rejects(finish(h), (error) => error.statusCode === 409 && error.code === 'DIY_PROJECT_STEPS_INCOMPLETE' && error.details.openSteps.map((row) => row.id).join() === 's3,s4');
-  assert.deepEqual([project(h).status, completions.length], ['IN_PROGRESS', 0]);
+  assert.deepEqual([project(h).status, h.state.domainEvents.length], ['IN_PROGRESS', 0]);
   await move(h, 's3', 'SKIPPED');
   await assert.rejects(finish(h), (error) => error.details.openSteps.map((row) => row.id).join() === 's4');
   await move(h, 's2', 'IN_PROGRESS');
@@ -170,10 +167,10 @@ test('completing a fully resolved project records the actor, the ledger and the 
   const done = await finish(h, 'dana', { actualMinutes: 90, notes: 'All good.' });
   assert.deepEqual([done.status, done.completedByUserId, done.actualMinutes], ['COMPLETED', 'dana', 90]);
   assert.deepEqual(done.notesJson.map((note) => note.text), ['All good.']);
-  assert.deepEqual(completions, [{ projectId: 'p1', actor: 'dana' }], 'the effects are attributed to the actor, not the creator');
+  assert.deepEqual(h.state.domainEvents.map((event) => [event.type, event.userId, event.payload.actorUserId]), [['DIY_PROJECT_COMPLETED', 'dana', 'dana']], 'the outbox row is attributed to the actor, not the creator');
   assert.deepEqual(h.state.events.at(-1), { ...h.state.events.at(-1), type: 'PROJECT_COMPLETED', actorUserId: 'dana', fromStatus: 'IN_PROGRESS', toStatus: 'COMPLETED' });
   await rejectsWith(finish(h, 'dana'), 'DIY_PROJECT_CLOSED');
-  assert.equal(completions.length, 1, 'no second set of effects');
+  assert.equal(h.state.domainEvents.length, 1, 'no second outbox row');
 });
 
 test('a project with no steps can be completed; a stale project token cannot', async () => {
@@ -221,7 +218,47 @@ test('a failure while completing leaves the project open and writes no completio
   const h = harness({ fail: (name) => armed && name === 'event.create' }); seedProject(h); await resolveAll(h);
   armed = true;
   await assert.rejects(finish(h), /injected failure/);
-  assert.deepEqual([project(h).status, project(h).completedByUserId, completions.length], ['IN_PROGRESS', null, 0]);
+  assert.deepEqual([project(h).status, project(h).completedByUserId, h.state.domainEvents.length], ['IN_PROGRESS', null, 0]);
+});
+
+test('completion writes ONE outbox row in the same transaction: key, scope, actor and a snapshot of what was completed', async () => {
+  const h = harness(); seedProject(h, { maintenanceTaskId: 'task-9' }); await resolveAll(h);
+  await finish(h, 'dana', { actualMinutes: 45, actualMaterialCostCents: 1234 });
+  assert.equal(h.state.domainEvents.length, 1);
+  const [event] = h.state.domainEvents;
+  assert.deepEqual([event.type, event.idempotencyKey, event.propertyId, event.userId, event.status], ['DIY_PROJECT_COMPLETED', 'diy-project-completed:p1', 'prop-1', 'dana', 'PENDING']);
+  assert.deepEqual({ ...event.payload, completedAt: typeof event.payload.completedAt }, {
+    projectId: 'p1', propertyId: 'prop-1', actorUserId: 'dana', completedAt: 'string', title: 'Paint a room', category: 'PAINTING', actualMinutes: 45, actualMaterialCostCents: 1234, maintenanceTaskId: 'task-9',
+  });
+  assert.equal(project(h).homeEventId ?? null, null, 'no inline effect: nothing created the home event or touched the task');
+  assert.equal(h.state.writes.filter((write) => write.model !== 'project' && write.model !== 'step').length, 0, 'no maintenance or incident write from completion');
+});
+
+test('a failing outbox insert rolls the whole completion back: the project stays open, with no ledger row and no outbox row', async () => {
+  let armed = false;
+  const h = harness({ fail: (name) => armed && name === 'domainEvent.create' }); seedProject(h); await resolveAll(h);
+  const ledgerBefore = h.state.events.length; armed = true;
+  await assert.rejects(finish(h), /injected failure at domainEvent.create/);
+  assert.deepEqual([project(h).status, project(h).completedByUserId, h.state.events.length === ledgerBefore, h.state.domainEvents.length], ['IN_PROGRESS', null, true, 0]);
+});
+
+test('access is verified INSIDE the completion transaction: a revoked member or a viewer is refused and nothing is written', async () => {
+  for (const role of [null, 'VIEWER']) {
+    const h = harness({ role: (user) => (user === 'mallory' ? role : 'CONTRIBUTOR') }); seedProject(h); await resolveAll(h);
+    const before = JSON.stringify(project(h));
+    await assert.rejects(finish(h, 'mallory'), (error) => error.statusCode === 403 && error.code === 'DIY_ACCESS_REVOKED');
+    assert.equal(JSON.stringify(project(h)), before, `${role}: the project is untouched`);
+    assert.equal(h.state.domainEvents.length, 0);
+  }
+});
+
+test('the actor losing access AFTER the commit does not matter: the outbox row already carries the authorized intent', async () => {
+  let revoked = false;
+  const h = harness({ role: (user) => (revoked && user === 'dana' ? null : 'CONTRIBUTOR') }); seedProject(h); await resolveAll(h);
+  await finish(h, 'dana'); revoked = true;
+  assert.equal(h.state.domainEvents[0].payload.actorUserId, 'dana');
+  await rejectsWith(finish(h, 'dana'), 'DIY_ACCESS_REVOKED'); // a NEW mutation is refused; the committed one is untouched
+  assert.equal(project(h).status, 'COMPLETED');
 });
 
 // ---- concurrency --------------------------------------------------------------------------------------------------------------------------------

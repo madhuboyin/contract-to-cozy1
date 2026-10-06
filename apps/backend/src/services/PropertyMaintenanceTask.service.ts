@@ -1146,6 +1146,31 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       // Verify access (CONTRIBUTOR+ required to mutate tasks)
       await this.getTask(userId, taskId, 'CONTRIBUTOR');
 
+      return this.completeTaskCore(userId, taskId, status, actualCost, outcomeHealth, completionIdempotencyKey, completionDetails);
+    }
+
+    /**
+     * The status write itself (idempotency replay, compare-and-swap, completion details, side effects), WITHOUT the access check. Private on purpose:
+     * `updateTaskStatus` calls it after its CONTRIBUTOR check, and the only other caller is `completeMaintenanceTaskForDiyOutbox` below, whose
+     * authorization was verified inside the DIY completion transaction that wrote the outbox row (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md
+     * section 3.6). A test pins that nothing else imports that function.
+     */
+    private static async completeTaskCore(
+      userId: string,
+      taskId: string,
+      status: MaintenanceTaskStatus,
+      actualCost?: number,
+      outcomeHealth?: 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED',
+      completionIdempotencyKey?: string,
+      completionDetails?: {
+        completedAt?: Date;
+        fulfillmentMode?: 'DIY' | 'PROVIDER';
+        providerName?: string | null;
+        notes?: string | null;
+        followUpNeeded?: boolean;
+        photoDocumentIds?: string[];
+      },
+    ): Promise<PropertyMaintenanceTask> {
       // Get current task state before update (need to check previous status)
       const task = await prisma.propertyMaintenanceTask.findUnique({
         where: { id: taskId },
@@ -1552,3 +1577,12 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       }
     }
   }
+
+/**
+ * INTERNAL. Completes a maintenance task for the DIY completion outbox handler without a second access check: the actor's access was verified inside the
+ * transaction that completed the project and wrote the outbox row, and the handler checks the task belongs to that property. Do not import this anywhere
+ * else; `tests/unit/diyCompletionEffects.test.js` fails if anything but the DIY completion adapters does.
+ */
+export const completeMaintenanceTaskForDiyOutbox = (
+  ...args: Parameters<typeof PropertyMaintenanceTaskService.updateTaskStatus>
+): Promise<PropertyMaintenanceTask> => PropertyMaintenanceTaskService['completeTaskCore'](...args);

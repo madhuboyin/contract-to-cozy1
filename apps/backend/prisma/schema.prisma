@@ -9533,6 +9533,9 @@ enum DomainEventType {
   // DomainEvent. See conversationalCapture.ts's requestCaptureNotification/
   // processCaptureNotificationEvent.
   ASK_CAPTURE_NOTIFICATION_REQUESTED
+  // DIY project completion (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md). Written in the same transaction as the project's COMPLETED
+  // write; a worker handler creates the home event and completes the linked maintenance task from the payload snapshot.
+  DIY_PROJECT_COMPLETED
 }
 
 enum DomainEventStatus {

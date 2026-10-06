@@ -25,7 +25,7 @@ const matches = (record, where = {}) => Object.entries(where).every(([key, value
 const pickKeys = (record, select) => Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, record[key]]));
 
 function makeDiyDb(templateSeeds = [], hooks = {}) {
-  const state = { templates: new Map(), revisions: [], writes: [], projects: [], events: [], uncommittedProjects: new Set(), txDepth: 0 };
+  const state = { templates: new Map(), revisions: [], writes: [], projects: [], events: [], domainEvents: [], uncommittedProjects: new Set(), txDepth: 0 };
   for (const seed of templateSeeds) {
     state.templates.set(seed.id, structuredClone({
       status: 'DRAFT', approvedBy: null, approvedAt: null, publishedRevisionId: null, featuredOrder: null, geminiPromptHint: null,
@@ -142,6 +142,23 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
       return structuredClone(row);
     },
   };
+  // Household access: `hooks.role(userId, propertyId)` returns 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' or null (no access). Default: everyone is a CONTRIBUTOR.
+  const roleOf = (userId, propertyId) => (hooks.role ? hooks.role(userId, propertyId) : 'CONTRIBUTOR');
+  const householdMemberDelegate = {
+    async findUnique({ where }) { const role = roleOf(where.propertyId_userId.userId, where.propertyId_userId.propertyId); return role ? { role } : null; },
+  };
+  const propertyDelegate = { async findFirst() { return null; } };
+  // The outbox: unique idempotencyKey (P2002), recorded in `state.domainEvents`, rolled back with the transaction.
+  const domainEventDelegate = {
+    async findUnique({ where }) { const row = state.domainEvents.find((event) => event.idempotencyKey === where.idempotencyKey); return row ? structuredClone(row) : null; },
+    async create({ data }) {
+      fail('domainEvent.create');
+      if (data.idempotencyKey && state.domainEvents.some((event) => event.idempotencyKey === data.idempotencyKey)) { const error = new Error('Unique constraint failed'); error.code = 'P2002'; throw error; }
+      const row = { id: `domain-event-${state.domainEvents.length + 1}`, status: 'PENDING', attempts: 0, ...structuredClone(data) };
+      state.domainEvents.push(row);
+      return structuredClone(row);
+    },
+  };
   const projectChildren = (name) => ({
     async createMany({ data }) {
       fail(`project.${name}.createMany`);
@@ -191,6 +208,9 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     diyProject: projectDelegate(false),
     diyProjectStep: projectStepDelegate,
     diyProjectEvent: projectEventDelegate,
+    householdMember: householdMemberDelegate,
+    property: propertyDelegate,
+    domainEvent: domainEventDelegate,
     diyProjectMaterial: projectChildren('materials'),
     diyProjectTool: projectChildren('tools'),
     diyTemplateRevision: {
@@ -227,7 +247,7 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
       const previous = db.__tail;
       let release; db.__tail = new Promise((resolve) => { release = resolve; });
       await previous;
-      const snapshot = structuredClone({ templates: [...state.templates], revisions: state.revisions, projects: state.projects, events: state.events });
+      const snapshot = structuredClone({ templates: [...state.templates], revisions: state.revisions, projects: state.projects, events: state.events, domainEvents: state.domainEvents });
       const tx = { ...db, diyProject: projectDelegate(true) };
       state.txDepth += 1;
       try {
@@ -239,6 +259,7 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
         state.revisions = snapshot.revisions;
         state.projects = snapshot.projects;
         state.events = snapshot.events;
+        state.domainEvents = snapshot.domainEvents;
         state.uncommittedProjects.clear();
         throw error;
       } finally {

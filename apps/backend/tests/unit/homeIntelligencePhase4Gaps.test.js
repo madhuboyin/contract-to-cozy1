@@ -30,7 +30,8 @@ const propertySaleCaseService = read('../../src/services/propertySaleCase.servic
 const incidentReconciliation = read('../../src/services/incidents/incidentWorkReconciliation.service.ts');
 const incidentService = read('../../src/services/incidents/incident.service.ts');
 const weatherPreparationService = read('../../src/services/environment/weatherPreparation.service.ts');
-const diyCompletionService = read('../../src/services/diyCompletion.service.ts');
+const diyCompletionEffects = read('../../src/services/diy/diyCompletionEffects.ts');
+const diyCompletionAdapters = read('../../src/services/diy/diyCompletionEffectsAdapters.ts');
 const domainReopenDispatch = read('../../src/modules/homeOperations/infrastructure/domainReopenDispatch.ts');
 const transitionWorkItemUsecase = read('../../src/modules/homeOperations/application/transitionWorkItem.usecase.ts');
 const bookingReconciliation = read('../../src/services/bookingWorkReconciliation.service.ts');
@@ -202,7 +203,8 @@ test('incident work reconciliation closes on genuine resolution vs. no-longer-re
   assert.match(incidentService, /await syncIncidentWorkItem\(oldIncident\.id/);
   assert.match(incidentService, /await syncIncidentWorkItem\(incidentId, userId\);/);
   assert.match(weatherPreparationService, /await syncIncidentWorkItem\(preparationId\);/);
-  assert.match(diyCompletionService, /await syncIncidentWorkItem\(project\.incidentId, project\.userId\);/);
+  // Decision O13 (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md): a self-reported DIY completion no longer resolves an incident or syncs its work item.
+  assert.doesNotMatch(diyCompletionEffects + diyCompletionAdapters, /syncIncidentWorkItem|incident\.(update|updateMany)/);
 });
 
 test('reopening a work item reopens its linked domain records inside the same transaction, so a failure rolls the whole transition back', () => {

@@ -24,6 +24,8 @@ import {
 import {
   processRadarNotificationMaterializeEvent,
 } from '@worker-shared/modules/homeEventRadar/services/radarNotificationMaterializationReconciliation.service';
+import { processDiyProjectCompletedEventWithDefaults } from '@worker-shared/services/diy/diyCompletionEffectsAdapters';
+import { isTerminalDomainEventError } from '@worker-shared/services/domainEvents/terminalDomainEventError';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER';
 // Ask Cozy Stage 3, Phase 2 (implementation plan §4.4/§8; FRD §17).
@@ -50,6 +52,7 @@ export interface ProcessDomainEventsDeps {
   radarNotificationMaterialize?: typeof processRadarNotificationMaterializeEvent;
   goalCandidateAttach?: typeof processGoalCandidateAttachEvent;
   captureNotification?: typeof processCaptureNotificationEvent;
+  diyProjectCompleted?: typeof processDiyProjectCompletedEventWithDefaults;
 }
 
 const defaultDeps: ProcessDomainEventsDeps = {
@@ -64,6 +67,7 @@ const defaultDeps: ProcessDomainEventsDeps = {
   radarNotificationMaterialize: processRadarNotificationMaterializeEvent,
   goalCandidateAttach: processGoalCandidateAttachEvent,
   captureNotification: processCaptureNotificationEvent,
+  diyProjectCompleted: processDiyProjectCompletedEventWithDefaults,
 };
 
 function computeBackoffMinutes(attempts: number) {
@@ -525,6 +529,11 @@ export async function processDomainEventsJob(
         case 'ASK_CAPTURE_NOTIFICATION_REQUESTED':
           await handleCaptureNotification(ev, deps);
           break;
+        case 'DIY_PROJECT_COMPLETED':
+          // Home event and linked maintenance completion (docs/architecture/ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md). Throws a terminal error for an
+          // integrity failure (dead-lettered at once) and a plain error for a retryable failure.
+          processingOutcome = await (deps.diyProjectCompleted ?? processDiyProjectCompletedEventWithDefaults)({ id: ev.id, payload: ev.payload });
+          break;
         default:
           throw new Error(`Unhandled DomainEvent type: ${type}`);
       }
@@ -571,8 +580,9 @@ export async function processDomainEventsJob(
     } catch (err: any) {
       const msg = err?.message ? String(err.message) : 'Unknown error';
       const nextAttempts = (ev.attempts ?? 0) + 1;
+      // A terminal error (an integrity failure no retry can fix) dead-letters at once instead of consuming the remaining attempts.
       const terminalStatus: DomainEventStatus =
-        nextAttempts >= MAX_DOMAIN_EVENT_ATTEMPTS ? 'DEAD_LETTER' : 'FAILED';
+        isTerminalDomainEventError(err) || nextAttempts >= MAX_DOMAIN_EVENT_ATTEMPTS ? 'DEAD_LETTER' : 'FAILED';
       const availableAt = terminalStatus === 'FAILED'
         ? new Date(Date.now() + computeBackoffMinutes(nextAttempts) * 60_000)
         : new Date();

@@ -14,7 +14,8 @@
     "test:home-event-radar:acceptance": "node --require ts-node/register --require tsconfig-paths/register --test tests/acceptance/homeEventRadarWeather.acceptance.test.js",
     "lint:notification-boundary": "node scripts/check-notification-boundary.js",
     "lint:worker-import-boundary": "node scripts/check-worker-import-boundary.js",
-    "postinstall": "npm run prisma:generate"
+    "postinstall": "npm run prisma:generate",
+    "smoke:built-worker": "node scripts/smoke-built-worker.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.962.0",

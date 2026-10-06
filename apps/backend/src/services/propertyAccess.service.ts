@@ -75,3 +75,23 @@ export async function resolvePropertyAccess(
 
   return null;
 }
+
+/**
+ * Read-only, transaction-capable check that `userId` holds at least `minRole` on the property. Unlike `resolvePropertyAccess` it accepts any client
+ * (including a transaction) and NEVER writes: a pre-household owner with no membership row is accepted by the ownership check without one being created.
+ * Used where an authorization must be decided inside the transaction that depends on it (DIY project completion).
+ */
+export async function hasPropertyRoleWithin(
+  db: Pick<typeof prisma, 'householdMember' | 'property'>,
+  userId: string,
+  propertyId: string,
+  minRole: HouseholdRole,
+): Promise<boolean> {
+  const member = await db.householdMember.findUnique({
+    where: { propertyId_userId: { propertyId, userId } },
+    select: { role: true },
+  });
+  if (member) return ROLE_RANK[member.role] >= ROLE_RANK[minRole];
+  const owned = await db.property.findFirst({ where: { id: propertyId, homeownerProfile: { userId } }, select: { id: true } });
+  return Boolean(owned) && ROLE_RANK.OWNER >= ROLE_RANK[minRole];
+}
