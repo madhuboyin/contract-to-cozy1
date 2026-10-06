@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.181
+**Version:** 1.183
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.183 — conversational presentation policy:** Adds Appendix C.11 as the governing policy for answer-first conversational composition. The policy treats ANSWER, RECOMMEND, GUIDE, ASSESS, EXPLAIN, COMPARE, and ACT as semantic composition modes rather than seven new renderer types; assigns judgment and safety semantics to the server while leaving only lossless responsive presentation to the client; narrows IW-PRES-008 so a view switch appears only when alternatives are genuinely useful; and separates refinements to the existing `TASK_GUIDE` from a later, explicitly designed stateful walkthrough capability. No implementation or schema change is implied by this revision.
 
 ## 1. Purpose and authority
 
@@ -36,6 +38,8 @@ Read this FRD with:
 - [Ask Cozy — Message-First FRD](ASK_COZY_MESSAGE_FIRST_FRD.md);
 - [Ask Cozy — Target Product & Architecture](../architecture/ASK_COZY_TARGET_PRODUCT_AND_ARCHITECTURE.md); and
 - [Ask Cozy — Incremental Implementation Plan](../architecture/ASK_COZY_INCREMENTAL_IMPLEMENTATION_PLAN.md).
+
+Appendix C.11 is executed through the focused [Ask Cozy — Conversational Presentation Implementation Plan](../architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md). That plan does not replace the broader Stage 3 implementation history.
 
 This document is a governing addendum. Where the documents differ, the following precedence applies:
 
@@ -379,6 +383,8 @@ The presentation decision is a product contract, not an unconstrained model styl
 **IW-PRES-007 — Table fitness.** Use a table only when column comparison materially improves comprehension. Tables require meaningful headers, sensible default columns, sort/filter support where applicable, disclosed row count and truncation, and a responsive alternative that does not reduce the data to unlabeled values.
 
 **IW-PRES-008 — View choice.** When more than one mode is genuinely useful, Ask Cozy may offer a concise view switch such as “Cards” / “Table” / “List.” The homeowner's choice persists for that result and may be remembered as a non-sensitive display preference. Changing the view must not issue a new conversational request or duplicate the result.
+
+**IW-PRES-008A — Conversational default and control suppression.** The semantic default must be usable without asking the homeowner to choose a renderer. Do not show Auto/List/Cards/Table controls when an alternative adds no meaningful scanning, comparison, accessibility, or inspection value. In particular, a direct answer, focused recommendation, compact task guide, fact grid, or ordinary explanation must not expose a renderer switch merely because the underlying block has more than one registered renderer. Preserve a concise lossless switch for genuinely useful alternatives such as comparison cards versus a comparison table, a timeline versus a chronological list, or a dense record collection whose list and table views serve distinct jobs. This requirement narrows when IW-PRES-008 is applied; it does not remove the homeowner's useful display choices.
 
 **IW-PRES-009 — Responsive adaptation.** The same semantic result may render differently by available width. A desktop comparison strip may become stacked or swipeable cards on mobile; a desktop table may become labeled record cards or a column-focused comparison. Adaptation must not hide a required action, comparison dimension, disclosure, or failure state.
 
@@ -1491,6 +1497,104 @@ Reference: the product mock for "What should I do to get ready for next season?"
 - **Gaps.** No empty tiles and no "Not recorded" values. One plain sentence is appended to the table description when bedrooms, bathrooms or occupancy are unrecorded (`propertyOverviewMissingLine`: "Not recorded yet: bedrooms, bathrooms."). It names only those three, since a missing cooling or roof type can be true of the home.
 - **Layout.** The block stays a `TABLE` (no new block type, so no registry or skill-manifest change). `AdaptiveTableBlock` renders ids in `FACT_GRID_TABLE_IDS` (`property-summary-facts`) as a grid of label-over-value tiles: three across from the `lg` breakpoint, two from `sm`, one on a phone, with no view switch and no record count. Any other table is unchanged.
 - **Status.** Backend `tsc --noEmit` clean; `propertySummaryOverview.test.js` 12/12 (5 new: order and labels, owner-only occupants through the real handler as owner and viewer, the missing line, the answer checker passing with it); new frontend `factGridTable.test.tsx` (2); all Ask jest 80 of 82 suites pass, the two failures (`displayPatterns`, `maintenanceShelves`) were failing before this change. Not verified in a browser, at 390 px width, or against a real backend; frontend `next build` not run.
+
+## Appendix C.11 — Conversational presentation policy (approved October 6, 2026; implementation pending by slice)
+
+### C.11.1 Outcome and governing sequence
+
+Ask Cozy must read as an intelligent homeowner advisor using structured UI only where structure improves comprehension or action. The governing sequence is:
+
+```text
+Conversation → Judgment → Evidence → Action → Continuation
+```
+
+It must not routinely become `Conversation → generic component → navigation`. A structured result must still read as an answer from Cozy. In the first meaningful viewport, the homeowner should normally understand the direct answer or judgment, what matters most, and the safest useful next step.
+
+### C.11.2 Semantic composition modes
+
+The following terms classify the job a response is doing. They are not, by themselves, new persisted response enums, presentation-block types, renderer families, or permission to bypass the existing operation, block, action, confirmation, or history contracts.
+
+| Mode | Required conversational behavior | Expected reuse |
+| --- | --- | --- |
+| **ANSWER** | Answer the question first, then provide only the explanation and evidence needed to support it. | `SUMMARY`, optional evidence/boundary, contextual continuation |
+| **RECOMMEND** | State Cozy's judgment, group or order choices by meaningful priority, explain the leading priority, disclose personalization, and offer a justified next step. | `SUMMARY`, `PRIORITY_LIST` or `GROUPED_LIST`, disclosure/boundary, declared actions |
+| **GUIDE** | Help with one task in the current turn. A guide must not masquerade as a stepper when only a single recorded instruction exists. | Existing `TASK_GUIDE`; a later stateful guide contract only after C.11.8 decisions |
+| **ASSESS** | Ask at most one currently high-value question whose answer materially changes guidance, risk interpretation, readiness, or useful home context. | Clarification/capture plus existing confirmation mechanisms |
+| **EXPLAIN** | Give a plain-language explanation, why it matters, optional deeper evidence, and a relevant continuation. | `SUMMARY`, `WHY_NOW`, evidence/boundary |
+| **COMPARE** | Emphasize meaningful differences, tradeoffs, and a governed recommendation when evidence permits one. | Existing comparison blocks and lossless table/card choices |
+| **ACT** | Prepare, review, confirm, execute, and reconcile a registered operation without presenting a recommendation as a completed write. | Existing typed actions, capture, confirmation, receipt, and reconciliation paths |
+
+An operation may compose more than one mode over successive turns. Implementations should first compose existing registered blocks. A new block or persisted mode is justified only when the existing contract cannot express required semantics losslessly and the history/fallback behavior is defined.
+
+### C.11.3 Ownership boundary
+
+**IW-CONV-PRES-001 — Server-owned judgment.** The operation/producer owns the direct answer, semantic mode when one must be declared, ordering, priority groups and reasons, safety classification, recommendation basis, personalization disclosure, limitations, and available actions. The client must not infer business priority, urgency, safety, confidence, or home-specific judgment from prose, titles, block ids, colors, item counts, or incidental order.
+
+**IW-CONV-PRES-002 — Client-owned lossless presentation.** The client owns registered rendering, responsive transformation, local expansion/collapse, focus and keyboard behavior, and useful lossless view preference. These changes must not create an Ask execution, change business meaning, or mutate canonical data.
+
+**IW-CONV-PRES-003 — Historical integrity.** Persisted executions retain their original conversational response. Local presentation state and current underlying record state remain distinct. Reopening history may disclose that live data changed or offer refresh/reconciliation, but must not silently rewrite the original answer into a materially different one.
+
+### C.11.4 Answer anatomy, density, and cards
+
+The default response order is: direct answer; Cozy judgment or priority; decision-driving detail; one visually dominant continuation when justified; compact personalization/trust disclosure; progressively disclosed evidence and secondary detail. Safety instructions, clarifications, balanced comparisons, and confirmation choices may legitimately have no single primary action.
+
+Cards represent objects, entities, bounded actions, or meaningful interactive units—for example a quote, contractor, policy, appointment, property, document, maintenance event, workflow, or comparison option. Ordinary sentences and individual attributes such as time, cost, priority, and DIY suitability do not each receive a card. Compact metadata should read together, for example `High priority · about 15 min · $15–$40 · DIY`.
+
+Broad answers must not render every available attribute merely because it exists. Secondary recommendations, evidence, assumptions, provenance, and procedural detail use disclosure controls such as Why, How, Show details, or Show remaining items. Disclosure controls are UI state unless their action genuinely requires another conversational execution.
+
+### C.11.5 Recommendations and continuation
+
+**IW-CONV-PRES-004 — Visible judgment.** A recommendation explains what matters most. Priority groups use domain-appropriate labels such as Do now, Do soon, Can wait, or Optional, and include a concise reason where the producer has a governed basis. A frontend renderer never invents the grouping or rationale.
+
+**IW-CONV-PRES-005 — Recommendation is not commitment.** A recommended task, reminder, fact, appointment, or other action is not persisted until the homeowner invokes the registered operation and completes every existing authorization and confirmation requirement. Presentation must keep proposed and committed states visibly distinct.
+
+**IW-CONV-PRES-006 — Contextual continuation.** Response-level follow-ups continue the current intent before generic discovery suggestions. Global starters may return when no meaningful continuation exists, the work is complete, or the homeowner starts a new conversation. The server-governed Suggested Next Action policy remains authoritative for eligibility and deduplication.
+
+### C.11.6 Personalization, confidence, and safety
+
+The response distinguishes recorded home facts, homeowner-confirmed facts, inferred context, location/climate context, general guidance, and unknown information in conversational language. It must not imply home-specific assessment from general catalog or climate guidance. Raw internal confidence scores, ranking diagnostics, or debug provenance are not homeowner-facing by default.
+
+Confidence-like concepts remain separate: extraction confidence, evidence quality, recommendation certainty, personalization completeness, freshness, and confirmation state are not interchangeable. Producers translate them into governed homeowner-facing statements such as “based on your recorded gas service,” “general guidance for your climate,” or “this date needs verification.”
+
+Routine safety advice and emergency instructions require different semantics and treatment. Existing `BOUNDARY` severity remains the reusable mechanism. Emergency instructions must be prominent, calm, accessible without color, and must not be buried inside an ordinary recommendation card. Conditional guidance—such as natural-gas checks—must respect known absence, known presence, and unknown status as three distinct states.
+
+### C.11.7 Assessment and knowledge capture
+
+ASSESS asks one high-value question at a time only when its answer changes current guidance or materially improves future home context. It must not turn a broad question into a questionnaire. A response used only to continue the current assessment remains conversation state; it does not become a canonical fact automatically.
+
+Observed, inferred, homeowner-confirmed, proposed, and persisted states remain distinct. A material home-record write uses the existing governed capture/writer, authorization, confirmation, idempotency, provenance, freshness, and reconciliation path. No assessment renderer or guide may create a shadow home record or silently persist an inference.
+
+### C.11.8 Stateful GUIDE is a separately gated capability
+
+The existing `TASK_GUIDE` is a focused conversational presentation of recorded task or habit content. It is not a stateful walkthrough, and it must not display invented steps when the source supplies only one instruction. A true step-by-step GUIDE is not approved for implementation until its design resolves:
+
+1. the canonical, author-reviewed source and versioning of steps, safety instructions, help branches, and optional media;
+2. whether progress is execution-local, session-local, cross-session, or canonical domain workflow state;
+3. pause, resume, previous, skip, abandonment, stale-source, and completion semantics;
+4. whether completion affects a guide only, a maintenance task, a seasonal item, or another canonical record;
+5. the proof policy for physical completion and the rule that homeowner wording alone must not falsely certify work;
+6. how contextual help creates child conversation turns without advancing the step;
+7. how facts discovered during the guide enter the existing proposal/confirmation path; and
+8. history, access-loss, role, idempotency, reconciliation, mobile, and accessibility behavior.
+
+Until those decisions are approved, improve `TASK_GUIDE` density, wording, action priority, and personalization transparency without adding simulated step state.
+
+### C.11.9 Reference-scenario requirements
+
+**Winter preparation.** Reuse the existing seasonal builder and plan layout. Lead with the season/climate judgment, show the governed Do soon/Can wait grouping, progressively disclose task facts, explain how personalized the recommendation is, and offer contextual actions. Do not create tasks until setup is explicitly confirmed.
+
+**Furnace-filter guidance.** In the near-term slice, render the best recorded instruction as one compact `TASK_GUIDE`; remove any premature “next unrelated task” emphasis and prioritize help for the current task. A numbered multi-step walkthrough belongs only to the separately approved capability in C.11.8.
+
+**Home-safety basics.** Lead with the few items that matter most and explain why. Reveal remaining items progressively. A later ASSESS slice may ask one conditional readiness question, but a conversational answer must not silently become a recorded safety fact. Known gas absence removes gas-specific recommendations; unknown status produces conditional language and an optional clarification. Emergency gas guidance uses an `EMERGENCY` boundary.
+
+### C.11.10 Delivery phases and acceptance
+
+1. **Presentation consistency:** audit the three reference scenarios against the current builders; refine answer/judgment ordering, density, disclosures, contextual actions, and inappropriate view controls using existing contracts.
+2. **Reusable semantic composition:** add the smallest producer-side policy or fields necessary where current blocks cannot express the required semantics; do not add seven renderer systems.
+3. **Stateful GUIDE:** proceed only after C.11.8 is decided and documented.
+4. **ASSESS and safety capture:** add the one-question flow and confirmed knowledge capture after conversation-only versus canonical state is explicit.
+
+For each implemented slice, tests must establish semantic producer output, no automatic persistence, contextual actions, authorization/confirmation preservation, stored-execution compatibility, stale/unknown behavior, role visibility, access-loss behavior, keyboard and screen-reader semantics, reduced motion where applicable, and desktop/mobile layout. Runtime/browser behavior is reported as unverified when no environment exists; static inspection is not execution proof.
 
 ## Appendix D — Capability-card audit scope and implementation sequence
 

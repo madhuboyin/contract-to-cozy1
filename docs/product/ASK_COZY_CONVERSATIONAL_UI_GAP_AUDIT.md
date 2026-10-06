@@ -1,7 +1,7 @@
 # Ask Cozy Conversational UI — Prototype-to-Implementation Gap Audit
 
 **Date:** September 26, 2026  
-**Updated:** October 4, 2026; clarification-safe Suggested Next Actions synchronized with Ask Redo FRD v1.11
+**Updated:** October 6, 2026; conversational presentation policy synchronized with Inline Workspace FRD v1.183
 **Status:** Living implementation audit; original findings are retained where useful and superseded behavior is identified explicitly
 **Scope:** Ask Cozy conversational UI only; this is not a review of ContractToCozy's broader feature set  
 **Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
@@ -20,6 +20,8 @@ The recommended next implementation is a maintenance-first vertical slice that c
 **September 28 retry-continuity synchronization:** failed and retryable-unavailable answers now expose one execution-level retry. The browser sends the failed execution id plus an idempotency key; the server re-authorizes and replays the persisted question, property, resolved operation, and stable launch target against current records, then records and persists successor lineage. Retry labels are not conversational suggestions, and previously saved labels such as “Ask this question again” are filtered from the follow-up row when a retry action is present. This closes the duplicate-retry and literal-label submission defect described by IW-CALM-004/006; it does not relax confirmation or consequential-action safeguards.
 
 **October 4 Suggested Next Actions synchronization:** the desired end state is not a constrained chatbot. The composer remains unrestricted and any homeowner-entered text continues through normal routing. The product gap is that app-authored next actions are split among free-text suggestions, typed item actions, block actions, receipts, Skill handoffs, capability recommendations, platform recovery states, and landing starters. These sources do not yet share one contract, eligibility pass, ranking, provenance model, or deduplication policy. The recommended increment is a typed, server-governed `SuggestedNextAction` model that makes the highest-confidence next steps prominent enough to reduce formulation effort without removing the free-form escape hatch.
+
+**October 6 conversational-presentation synchronization:** the three reported experiences—winter recommendations, furnace-filter guidance, and home-safety basics—are not evidence that Ask needs a replacement renderer architecture. The current tree already contains priority-grouped seasonal plans, progressive task detail, a registered `TASK_GUIDE`, typed action dispatch, safety boundaries, and persisted lossless view state. The remaining gap is consistency of answer composition and, for a true step-by-step guide, a separately designed workflow capability. Inline Workspace FRD Appendix C.11 now governs this work. ANSWER/RECOMMEND/GUIDE/ASSESS/EXPLAIN/COMPARE/ACT are semantic composition modes, not seven new block types. The near-term implementation boundary is presentation consistency with existing contracts; stateful GUIDE and knowledge-capturing ASSESS remain gated on explicit state, completion, proof, history, and persistence decisions.
 
 ## 2. Classification summary
 

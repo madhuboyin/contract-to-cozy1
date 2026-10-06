@@ -1,0 +1,120 @@
+# Ask Cozy — Conversational Presentation Implementation Plan
+
+**Date:** October 6, 2026
+
+**Type:** Focused phased plan; no implementation or schema change in this document
+
+**Product authority:** `docs/product/ASK_COZY_INLINE_WORKSPACE_FRD.md`, especially Appendix C.11
+
+**Audit context:** `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` and `docs/architecture/ASK_COZY_CONVERSATIONAL_ARCHITECTURE_AUDIT.md`
+
+## 1. Objective and boundary
+
+Make Ask Cozy consistently present an answer, judgment, evidence, action, and contextual continuation without replacing its response contract, operation registry, domain intelligence, action infrastructure, or canonical data models.
+
+The first delivery is a presentation-consistency slice. It does not create a stateful walkthrough engine, silently capture facts, add a database, introduce seven renderer families, or make recommendation priority a client heuristic.
+
+## 2. Verified reusable baseline
+
+- The backend response contract already provides typed presentation blocks, suggestions/typed next actions, confirmation, capture, child executions, evidence, boundaries, and execution history.
+- The frontend has an exhaustive block registry with safe unsupported fallback.
+- Seasonal home care already produces a summary, Do soon/Can wait grouped list, personalization boundary, and contextual actions.
+- `SeasonalPlanResultList` already supports compact metadata and progressive task detail.
+- `TASK_GUIDE` already presents one recorded task or habit as a focused guide.
+- `interactionDispatch.ts` already separates conversation continuation, mutation, filtering, refresh, and visibly unsupported interactions.
+- `BOUNDARY` already distinguishes INFO, CAUTION, and EMERGENCY.
+- Adaptive presentation already separates semantic server declarations from lossless client layout choices, although some switches remain too broadly exposed.
+
+## 3. Root causes to verify in Phase 1
+
+1. Producers and response sequences do not consistently lead with the answer or judgment even when the correct information exists.
+2. Generic grouped-list/table renderers sometimes give ordinary attributes too much visual weight.
+3. View controls are exposed from renderer capability rather than from demonstrated homeowner utility in every case.
+4. Response-level continuation can compete with generic discovery suggestions or unrelated next-task actions.
+5. `TASK_GUIDE` is sometimes interpreted as a walkthrough although its source contract contains no authored steps or progress state.
+6. Personalization and “general guidance” disclosures can read as system disclaimers rather than useful conversational context.
+
+Each cause must be confirmed against the current producer and rendered reference fixture before editing; a screenshot alone is not proof of the producing path.
+
+## 4. Phase 1 — Presentation consistency
+
+### 4.1 Audit artifacts
+
+For winter preparation, furnace-filter guidance, and home-safety basics, record:
+
+- routed operation and handler;
+- exact response blocks and their order;
+- semantic source of priority, safety, personalization, and actions;
+- renderer selected at desktop and narrow width;
+- local-only versus conversational versus durable actions;
+- generic suggestions that survive downstream suppression/deduplication;
+- current focused tests and fixture coverage.
+
+### 4.2 Minimal implementation rules
+
+- Prefer changes in the existing producer/builder when the missing behavior is judgment, ordering, grouping, disclosure, or action selection.
+- Prefer changes in a shared renderer only when the same semantic contract is already correct and the defect is visual hierarchy, density, accessibility, or local disclosure.
+- Reuse `SUMMARY`, `GROUPED_LIST`, `PRIORITY_LIST`, `TASK_GUIDE`, `BOUNDARY`, and existing typed actions before adding a block.
+- Suppress view controls for focused answers whose alternative view adds no meaningful utility; retain useful comparison, timeline, and dense-record choices.
+- Never derive urgency, priority, safety, personalization, or a recommendation in the browser.
+- Preserve old execution parsing and the safe registered fallback.
+
+### 4.3 Expected first files to inspect, not a predetermined change list
+
+- `apps/backend/src/services/ask/support/seasonalHomeCare.ts`
+- the home-basics/safety producer located by the Phase 1 trace
+- `apps/backend/src/productFramework/ask/ask.contract.ts`
+- `apps/frontend/src/components/ask/SeasonalPlanResultList.tsx`
+- `apps/frontend/src/components/ask/TaskGuideBlock.tsx`
+- `apps/frontend/src/components/ask/AdaptiveTableBlock.tsx`
+- `apps/frontend/src/components/ask/blocks/GroupedListBlock.tsx`
+- `apps/frontend/src/features/ask/adaptivePresentation.ts`
+- the response-level suggested-action composition in `ExecutionCard`/workspace support
+
+The audit decides the actual edit set. Do not touch all listed files merely because they are listed.
+
+### 4.4 Acceptance
+
+- Winter preparation leads with a climate/season judgment, visibly prioritizes the governed tasks, progressively discloses detail, truthfully states personalization, and does not persist tasks before confirmation.
+- Furnace-filter guidance is one compact current-task guide. It does not claim multi-step state and does not make an unrelated next task the dominant action.
+- Home-safety basics leads with the few most important items, reveals the remainder progressively, handles gas present/absent/unknown honestly, and gives emergency instructions their existing semantic boundary.
+- Auto/List/Cards/Table controls are absent from focused answers where they add no utility and remain available for explicitly justified lossless alternatives.
+- Contextual continuations outrank unrelated discovery actions.
+- Stored executions, role policy, access loss, confirmation, idempotency, and reconciliation continue to behave as before.
+
+## 5. Phase 2 — Reusable semantic composition
+
+After Phase 1, inventory every local special case introduced. If two or more producers need the same missing semantic field or ordering policy, propose the smallest additive contract. Candidate additions must specify producer ownership, schema validation, old-response fallback, skill-manifest impact, frontend rendering, accessibility, and history compatibility.
+
+Do not add a persisted `responseIntent` or seven block types solely to mirror the policy vocabulary. Add one only if producers or clients otherwise cannot express or validate behavior without string/block-id inference.
+
+## 6. Phase 3 — Stateful GUIDE design gate
+
+Before implementation, produce and approve a focused design answering all decisions in FRD C.11.8. The design must identify the canonical step source and authoring governance, state lifetime, versioning, completion/proof policy, pause/resume/skip behavior, relationship to maintenance and seasonal records, child-turn behavior for help, capture/confirmation integration, and history/access-loss semantics.
+
+Likely affected areas may include the response contract, execution/session continuation, a step-content catalog, and frontend guide controls. No database change is assumed. If existing execution state cannot meet cross-session requirements, document the evidence and proposed schema change; per repository policy, update Prisma and contracts but do not create migration scripts.
+
+## 7. Phase 4 — ASSESS and safety knowledge capture
+
+Define an assessment-turn contract that asks one material question, records conversation-only state separately from canonical facts, and routes any durable fact through existing governed capture and confirmation. Start with one safety question whose answer demonstrably changes guidance. Conditional safety recommendations must use canonical Property Context and distinguish present, absent, unknown, conflicted, and stale when those states are supported.
+
+## 8. Validation strategy
+
+Use requirements review, Graphify/code-path tracing, contract inspection, and focused environment-independent tests. Add producer tests before renderer snapshots when judgment semantics change. Add component tests for hierarchy, disclosure, keyboard behavior, ARIA state, focus, non-color urgency, and narrow width. Run existing lightweight typecheck/build or focused tests only when dependencies are already available. Do not start services, databases, Docker, or browser infrastructure solely for this work; report runtime behavior as unverified when appropriate.
+
+After every code phase: correct findings from lightweight validation, update affected product/audit documentation, and run `graphify update .` as the final repository-maintenance step.
+
+## 9. Principal regression risks
+
+- Changing generic grouped-list behavior can damage record collections with real per-item actions.
+- Removing all view switches would violate IW-PRES-008 for comparisons, timelines, and dense records.
+- Reordering blocks can separate actions from the evidence or identity they govern.
+- Treating generic climate guidance as home-specific creates false personalization.
+- Treating a guide interaction as completion can falsely certify physical work.
+- Reusing capture UI without its canonical writer can create conversation-only shadow data.
+- Refreshing historical answers from live data can rewrite the meaning of the original conversation.
+- New block types require contract, registry, manifest, fallback, stored-response, and startup-validator coverage.
+
+## 10. Deliverable after each phase
+
+Report current-architecture findings, confirmed root causes, reused contracts/components, exact files changed, before/after response shape for the three reference scenarios, tests and static checks actually run, checks not run, remaining limitations, and the next separately approved increment.
