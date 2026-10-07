@@ -1,8 +1,9 @@
 'use client';
 
-import { CalendarDays, ChevronRight, CircleDot, ClipboardList, Clock, DollarSign, Droplets, Fan, HardHat, Home, House, Info, Lightbulb, Refrigerator, Repeat, ShieldCheck, TreePine, Wrench, Zap } from 'lucide-react';
+import { useId, useState } from 'react';
+import { CalendarDays, CheckCircle2, ChevronRight, Circle, CircleDot, ClipboardList, Clock, DollarSign, Droplets, Fan, HardHat, Home, House, Info, Lightbulb, MinusCircle, Refrigerator, Repeat, ShieldCheck, TreePine, Wrench, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { AskAction, AskTaskGuideChip } from '@/features/ask/types';
+import type { AskAction, AskTaskGuideChip, AskTaskGuideOutlineEntry } from '@/features/ask/types';
 import { ActionLink } from './blocks/context';
 import { ACTION_ICONS } from './SeasonalAnswerCards';
 import type { AskBlockRenderer } from './blocks/types';
@@ -25,11 +26,30 @@ const chipTone = (kind: AskTaskGuideChip['kind']) => (kind === 'PRIORITY_HIGH'
 
 const NOTE_ICONS: Record<string, typeof Info> = { personalized: Home, about: Home };
 
+// A stepped guide (an `outline` is present; plan docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md): each step's state is said in WORDS (never by colour or
+// an icon alone), the current step is marked `aria-current="step"`, and nothing here is computed: the label, the counts and every state are the producer's own.
+const OUTLINE_STATE: Record<AskTaskGuideOutlineEntry['state'], { text: string; icon: typeof Info; tone: string }> = {
+  DONE: { text: 'Done', icon: CheckCircle2, tone: 'text-emerald-700' },
+  SKIPPED: { text: 'Skipped', icon: MinusCircle, tone: 'text-slate-600' },
+  CURRENT: { text: 'You are here', icon: CircleDot, tone: 'text-teal-800' },
+  UPCOMING: { text: 'Not started', icon: Circle, tone: 'text-slate-500' },
+};
+
+/** The snapshot time as a short local time, or nothing when the producer's value is not a time (no guessing). */
+function snapshotTime(asOf: string): string | null {
+  const date = new Date(asOf);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
   const Icon = ICONS[block.icon] ?? ClipboardList;
   const inRows = new Set(block.notes.map((note) => note.actionId).filter((id): id is string => Boolean(id)));
   const byId = new Map(block.actions.map((action) => [action.id, action]));
   const footer = block.actions.filter((action) => !inRows.has(action.id));
+  const guideMode = Array.isArray(block.outline);
+  const [tipOpen, setTipOpen] = useState(false);
+  const tipPanelId = useId();
+  const asOf = block.progress ? snapshotTime(block.progress.asOf) : null;
   const footerButton = (action: AskAction) => {
     const ActionIcon = ACTION_ICONS[action.id];
     return <ActionLink key={action.id} action={action} icon={ActionIcon ? <ActionIcon className="h-4 w-4" aria-hidden="true" /> : undefined} />;
@@ -63,7 +83,14 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
       </header>
 
       <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-        {block.tip && (
+        {block.progress && (
+          <p data-task-guide-progress="" className="text-sm font-semibold text-slate-900">
+            {block.progress.label}
+            {asOf && <span className="ml-2 font-normal text-slate-500">As of {asOf}</span>}
+          </p>
+        )}
+
+        {block.tip && !guideMode && (
           <section data-task-guide-tip="" className="flex items-start gap-3 rounded-xl bg-sky-50/70 p-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-sky-600" aria-hidden="true"><Lightbulb className="h-4 w-4" /></span>
             <div className="min-w-0"><h4 className="text-sm font-semibold text-slate-950">{block.tip.title}</h4><p className="mt-0.5 text-sm leading-5 text-slate-600">{block.tip.body}</p></div>
@@ -81,6 +108,45 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
                 ))}
               </dl>
             )}
+          </section>
+        )}
+
+        {guideMode && block.tip && (
+          <section data-task-guide-tip="" className="rounded-xl bg-sky-50/70 p-3">
+            <button
+              type="button" aria-expanded={tipOpen} aria-controls={tipPanelId} onClick={() => setTipOpen((open) => !open)}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-sky-800 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-700"
+            >
+              <Lightbulb className="h-4 w-4" aria-hidden="true" />{tipOpen ? 'Hide tip' : 'Show tip'}
+            </button>
+            <div id={tipPanelId} hidden={!tipOpen} className="mt-2">
+              <h4 className="text-sm font-semibold text-slate-950">{block.tip.title}</h4>
+              <p className="mt-0.5 text-sm leading-5 text-slate-600">{block.tip.body}</p>
+            </div>
+          </section>
+        )}
+
+        {guideMode && block.outline && block.outline.length > 0 && (
+          <section data-task-guide-outline-section="" className="rounded-xl bg-slate-50 p-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">All steps</h4>
+            <ol data-task-guide-outline="" aria-label="Steps in this project" className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {block.outline.map((entry, index) => {
+                const state = OUTLINE_STATE[entry.state];
+                const StateIcon = state.icon;
+                return (
+                  <li
+                    key={entry.stepId} data-step-state={entry.state} aria-current={entry.state === 'CURRENT' ? 'step' : undefined}
+                    className={cn('flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm', entry.state === 'CURRENT' ? 'bg-white ring-1 ring-teal-600' : '')}
+                  >
+                    <StateIcon className={cn('mt-0.5 h-4 w-4 shrink-0', state.tone)} aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="text-slate-900">{index + 1}. {entry.title}</span>
+                      <span className="ml-2 text-xs font-semibold text-slate-600">{state.text}{entry.optional ? ' · Optional' : ''}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
           </section>
         )}
 

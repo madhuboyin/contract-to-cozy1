@@ -76,6 +76,8 @@ export interface AskBatchDecision { entityId: string; actionId: string }
 export interface AskDeckBatch { operationId: string; entityType: string; actionIds: string[]; message: string }
 export interface AskComparisonBadge { label: string; basis: string; policyCode: string }
 
+export type AskTaskGuideProgress = { current: number; total: number; completed: number; skipped: number; label: string; asOf: string };
+export type AskTaskGuideOutlineEntry = { stepId: string; title: string; state: 'DONE' | 'SKIPPED' | 'CURRENT' | 'UPCOMING'; optional: boolean };
 export interface AskTaskGuideChip { label: string; kind: 'PRIORITY_HIGH' | 'PRIORITY' | 'TIME' | 'COST' | 'DIY' | 'PRO' | 'DATE' | 'STATUS' | 'TAG' }
 
 export type AskPresentationBlock =
@@ -85,6 +87,10 @@ export type AskPresentationBlock =
     chips: AskTaskGuideChip[]; tip?: { title: string; body: string } | null;
     main?: { title: string; body: string; facts: Array<{ label: string; value: string }> } | null;
     history: Array<{ label: string; value: string }>; notes: Array<{ id: string; title: string; body: string; actionId?: string }>; actions: AskAction[];
+    /** A RENDERED SNAPSHOT of where the person is in a stepped guide (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md). Display only: the block owns no progress. */
+    progress?: AskTaskGuideProgress;
+    /** One entry per step, in order. Presence of an outline is what makes a TASK_GUIDE a stepped guide ("guide mode"). */
+    outline?: AskTaskGuideOutlineEntry[];
   }
   | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
