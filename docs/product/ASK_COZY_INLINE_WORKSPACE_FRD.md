@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.221
+**Version:** 1.222
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.222 — DIY project commands, step 7 plan (draft):** a plan for letting a household member who can edit the property, from the project guide in Ask, look back at a finished step (read only) and reopen it, finish the project once every step is resolved, stop it or hand it off to a professional, and ask for the records that follow a completion to be recorded again when they failed. Each is confirmation-gated, uses the same service the project page uses and is the person's own report. Stopping, handing off and finishing cannot be undone anywhere in the product, so the plan puts the stop and hand-off actions behind a separate read-only view, states the irreversibility, and asks the owner to decide whether Ask should be stricter than the page about who may use them. Tracing found that the page's stop endpoint does not check the person's access inside its own transaction, and that the recovery endpoints check it outside any transaction; the plan fixes both for the page as well. Fourteen decisions (S7-1 to S7-14) await approval; nothing is built, no schema change is needed, and the work stays unreachable for real projects until a first template is published (O7).
 
 **Revision 1.221 — DIY step commands, 6c written:** an owner-run script for a throwaway Postgres (real handlers and service; what a command writes measured by database triggers; the in-transaction role and policy checks against real rows; the share locks with real concurrent transactions; two concurrent confirmations), eight read-only queries (what Ask would offer, out-of-order progress, and invariants such as a finished step without a ledger row or actor) and a rollout note. It also records that the shared step update now refuses a viewer or a removed member with a 403 for the project page too. Written and load-checked only: none of the database assertions or queries has been run, and the lock behavior is unproven on real Postgres.
 
