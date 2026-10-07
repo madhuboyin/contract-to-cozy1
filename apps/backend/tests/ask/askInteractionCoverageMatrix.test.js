@@ -25,7 +25,7 @@ test('every one of the 86 Ask operations has a coverage-matrix entry with no reg
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(operationIds.length, 123);
+  assert.equal(operationIds.length, 124);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -134,7 +134,7 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'HOME_TIMELINE_EVENTS',
   'MATERIAL_SPECS_LIST',
   'PROPERTY_BRIEFS_LIST',
-  'GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE', 'SEASONAL_HOME_CARE', 'HOME_BASICS_GUIDE', 'HIRING_GUIDE', 'GUIDANCE_STEP_SKIP', 'GUIDANCE_JOURNEY_DISMISS',
+  'GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE', 'DIY_PROJECT_GUIDE', 'SEASONAL_HOME_CARE', 'HOME_BASICS_GUIDE', 'HIRING_GUIDE', 'GUIDANCE_STEP_SKIP', 'GUIDANCE_JOURNEY_DISMISS',
   'HOA_COMPLIANCE_STATUS',
   'PRICE_FINALIZATIONS_LIST',
   'DO_NOTHING_SIMULATION',
@@ -153,7 +153,7 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 123);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 124);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
@@ -164,7 +164,8 @@ test('Stage 2 fields are TRACED with real notes only for operations actually tra
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
   // + GUIDANCE_JOURNEY_CONTINUE (guided journey continuation Phase 1), GUIDANCE_STEP_SKIP and GUIDANCE_JOURNEY_DISMISS (Phase 3).
-  assert.equal(operationIds.length, 123);
+  // + DIY_PROJECT_GUIDE (step 5 of the stateful GUIDE: a read-only, launch-only walk through one DIY project).
+  assert.equal(operationIds.length, 124);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

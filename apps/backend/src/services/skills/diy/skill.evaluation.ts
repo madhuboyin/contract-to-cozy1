@@ -16,6 +16,7 @@ export const DIY_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   operationCases: [
     { operationId: 'DIY_PROJECTS', expectedAdapter: { id: 'diy.projects', version: '1.0' } },
+    { operationId: 'DIY_PROJECT_GUIDE', expectedAdapter: { id: 'diy.project-guide', version: '1.0' } },
   ],
   ambiguityCases: [
     {
@@ -26,6 +27,7 @@ export const DIY_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   policyCases: [
     { consumer: 'ASK', operationId: 'DIY_PROJECTS', allowed: true },
+    { consumer: 'ASK', operationId: 'DIY_PROJECT_GUIDE', allowed: true },
   ],
   contextCases: [
     { state: 'KNOWN', expectedBehavior: 'READY' },
@@ -53,13 +55,13 @@ export const DIY_SKILL_EVALUATION = deepFreezeSkillPackage({
       expectedBehavior: 'DEGRADED_OR_UNAVAILABLE',
     },
   ],
-  expectedAdapters: [{ id: 'diy.projects', version: '1.0' }],
+  expectedAdapters: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }],
   prohibitedAdapters: ['inventory.lookup', 'intelligence-envelope.query'],
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
-  expectedCanonicalCalls: [{ id: 'diy.projects', version: '1.0' }],
+  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'TASK_GUIDE', 'EMPTY_STATE', 'BOUNDARY'],
+  expectedCanonicalCalls: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {
     message: 'Show my DIY projects',

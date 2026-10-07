@@ -19,10 +19,11 @@ Review this home's active DIY projects in planning or in progress, with how many
 ## Operations
 
 - `DIY_PROJECTS`
+- `DIY_PROJECT_GUIDE` (reached only by a launch context naming one project, from a row on the DIY projects list; never by message; read-only)
 
 ## Consumers
 
-- ASK: DIY_PROJECTS
+- ASK: DIY_PROJECTS, DIY_PROJECT_GUIDE
 
 ## Canonical ownership and boundaries
 

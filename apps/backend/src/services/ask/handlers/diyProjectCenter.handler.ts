@@ -77,6 +77,15 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
         ],
         status: DIY_STATUS_LABELS[item.status] ?? readableCode(item.status),
         href: `/dashboard/diy/projects/${encodeURIComponent(item.id)}?propertyId=${encodeURIComponent(propertyId)}`,
+        // DIY project guide (ASK_COZY_DIY_PROJECT_GUIDE_PLAN): only a project started from a reviewed template version can be guided, so only it offers the
+        // action. The guide itself re-checks everything and refuses with a page link, so this is a courtesy, not the gate. The item id is the project id.
+        ...(item.templateId && !item.aiGuideId && item.templateRevisionId ? {
+          entityType: 'DIY_PROJECT',
+          actions: [{
+            id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const,
+            interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE',
+          }],
+        } : {}),
       })),
     }],
     actions: [],

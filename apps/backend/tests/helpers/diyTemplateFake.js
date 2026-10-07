@@ -224,6 +224,7 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     diyProjectMaterial: projectChildren('materials'),
     diyProjectTool: projectChildren('tools'),
     diyTemplateRevision: {
+      async findUnique({ where }) { const row = state.revisions.find((revision) => revision.id === where.id); return row ? structuredClone(row) : null; },
       async findFirst({ where, orderBy, select }) {
         let rows = state.revisions.filter((row) => matches(row, where));
         if (orderBy?.revision === 'desc') rows = [...rows].sort((a, b) => b.revision - a.revision);

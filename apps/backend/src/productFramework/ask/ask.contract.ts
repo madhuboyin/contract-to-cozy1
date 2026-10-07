@@ -471,6 +471,19 @@ const TaskGuideBlockSchema = z.object({
     id: z.string(), title: z.string().trim().min(1).max(80), body: z.string().trim().min(1).max(500), actionId: z.string().trim().min(1).max(120).optional(),
   })).max(4).default([]),
   actions: z.array(AskActionSchema).max(6).default([]),
+  // docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md (decision O1): a RENDERED SNAPSHOT of where the person is in a stepped guide, for display only. The block
+  // never owns progress and no action trusts these fields: every command re-reads canonical state. Both are optional, so a block without them is exactly the
+  // block that existed before and every stored execution parses unchanged. `current` is the one-based position of the current step in the sorted outline (not a raw
+  // step number); `completed` counts only COMPLETED steps and `skipped` counts SKIPPED ones separately (a skipped step is never "done").
+  progress: z.object({
+    current: z.number().int().min(1).max(40), total: z.number().int().min(1).max(40),
+    completed: z.number().int().min(0).max(40), skipped: z.number().int().min(0).max(40),
+    label: z.string().trim().min(1).max(120), asOf: z.string().trim().min(1).max(40),
+  }).optional(),
+  outline: z.array(z.object({
+    stepId: z.string().trim().min(1).max(160), title: z.string().trim().min(1).max(160),
+    state: z.enum(['DONE', 'SKIPPED', 'CURRENT', 'UPCOMING']), optional: z.boolean().default(false),
+  })).max(40).optional(),
 });
 
 const ComparisonBlockSchema = z.object({

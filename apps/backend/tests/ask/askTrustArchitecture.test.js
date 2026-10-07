@@ -66,6 +66,8 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'HOME_EVENT_VISIBILITY',
     // Home Event Radar writes (FRD v1.40): reached only from the declared actions on a monitored event.
     'GUIDANCE_JOURNEY_CONTINUE',
+    // DIY project guide (step 5 of the stateful GUIDE): reached only by the row action on a DIY_PROJECTS row.
+    'DIY_PROJECT_GUIDE',
     // Seasonal home care (exact-four starter source): launch-only; seasonal questions route to MAINTENANCE_STATUS.
     'SEASONAL_HOME_CARE',
     'HOME_BASICS_GUIDE',

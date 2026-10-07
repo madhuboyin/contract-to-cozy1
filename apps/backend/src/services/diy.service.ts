@@ -15,7 +15,7 @@ import { logger } from '../lib/logger';
 import { evaluateStepTransition, openStepsForCompletion, type DiyStepStatusValue } from './diy/stepTransitions';
 import { buildRevisionContent, checkRevisionIntegrity, computeContentHash } from './diyTemplateRevision.service';
 import {
-  PUBLISHED_REVISION_INCLUDE, publishedTemplateDetail, publishedTemplateSummary, revisionContent, stepSnapshotId,
+  PUBLISHED_REVISION_INCLUDE, eligibilityInputFromRevision, publishedTemplateDetail, publishedTemplateSummary, revisionContent, stepSnapshotId,
 } from './diyPublishedTemplate';
 
 const SKILL_RANK: Record<DiySkillLevel, number> = { BEGINNER: 0, INTERMEDIATE: 1, ADVANCED: 2 };
@@ -223,14 +223,7 @@ export class DiyService {
         logger.error({ templateId, revisionId: revision.id }, '[DIY] published template revision failed its integrity check; refusing to start a project from it');
         throw new APIError('This template is temporarily unavailable.', 409, 'DIY_TEMPLATE_UNAVAILABLE');
       }
-      const eligibility = evaluateDiyEligibility({
-        title: revision.title,
-        summary: revision.shortDescription,
-        category: revision.category,
-        safetyLevel: revision.safetyLevel,
-        permitRequirement: revision.permitRequirement,
-        verdict: payload.decisionVerdict,
-      });
+      const eligibility = evaluateDiyEligibility(eligibilityInputFromRevision(revision, payload.decisionVerdict));
       if (!eligibility.eligible) {
         throw new APIError(
           'Only reviewed, low-risk, non-regulated work can be started as a DIY project.',
@@ -467,6 +460,9 @@ export class DiyService {
       requiredStepCount: p.steps.filter((s) => !s.isOptional).length,
       completedStepCount: p.steps.filter((s) => !s.isOptional && s.status === 'COMPLETED').length,
       templateId: p.templateId,
+      // Additive: whether the project was started from a reviewed template version (the Ask project guide offers its row action only for those).
+      aiGuideId: p.aiGuideId,
+      templateRevisionId: p.templateRevisionId,
       startedAt: p.startedAt?.toISOString(),
       completedAt: p.completedAt?.toISOString(),
       createdAt: p.createdAt.toISOString(),
@@ -495,6 +491,28 @@ export class DiyService {
     });
     if (!project) throw new APIError('Project not found', 404);
     return project;
+  }
+
+  /**
+   * Everything the Ask project guide needs, read-only and scoped to the property: the project with its steps in authored order, the template revision it
+   * recorded (the full row, which the integrity check hashes), and the template's current published head. Returns null when the project is not in this
+   * property. It writes nothing (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md section 3.5).
+   */
+  async getProjectGuideSource(projectId: string, propertyId: string) {
+    const project = await prisma.diyProject.findFirst({
+      where: { id: projectId, propertyId },
+      select: {
+        id: true, title: true, status: true, category: true, templateId: true, aiGuideId: true, templateRevisionId: true, completionBasis: true,
+        steps: {
+          orderBy: { stepNumber: 'asc' },
+          select: { id: true, stepNumber: true, templateStepId: true, title: true, description: true, estimatedMinutes: true, isOptional: true, safetyNote: true, tipNote: true, status: true },
+        },
+      },
+    });
+    if (!project) return null;
+    const revision = project.templateRevisionId ? await prisma.diyTemplateRevision.findUnique({ where: { id: project.templateRevisionId } }) : null;
+    const head = project.templateId ? await prisma.diyProjectTemplate.findUnique({ where: { id: project.templateId }, select: { publishedRevisionId: true } }) : null;
+    return { project, revision, head };
   }
 
   /**

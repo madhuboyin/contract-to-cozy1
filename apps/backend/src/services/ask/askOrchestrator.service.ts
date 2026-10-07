@@ -74,6 +74,7 @@ import './handlers/priceFinalization.handler';
 import './handlers/negotiationShield.handler';
 import './handlers/homeUpgradePlanner.handler';
 import './handlers/diyProjectCenter.handler';
+import './handlers/diyProjectGuide.handler';
 import './handlers/projectTracker.handler';
 import './handlers/servicePriceRadar.handler';
 import './handlers/aroundYourHome.handler';
@@ -89,6 +90,7 @@ export { capitalTimelineBlock, renovationReadinessProgress } from './handlers/ca
 export { claimConflictDescription, CLAIM_TYPE_PATTERNS, ClaimFileWorkflowInputSchema, claimFileResult, incidentContinuationFromRecords, CLAIM_TRANSITION_ACTIONS, claimItemActions } from './handlers/claims.handler';
 export { coverageComparisonStrip } from './handlers/coverage.handler';
 export { DIY_ACTIVE_STATUSES, diyProjectsFromView } from './handlers/diyProjectCenter.handler';
+export { diyProjectGuideResult } from './handlers/diyProjectGuide.handler';
 export { doNothingSimulationFromView } from './handlers/doNothingSimulator.handler';
 export { guidanceJourneysFromView, guidanceJourneyContinuation, guidanceGuardTargetForStep, guidanceStepContextVersion, guidanceJourneyDismissContextVersion, GUIDANCE_STEP_SKIP_MESSAGE, GUIDANCE_JOURNEY_DISMISS_MESSAGE } from './handlers/guidanceOverview.handler';
 export { hoaComplianceFromView } from './handlers/hoaCompliance.handler';

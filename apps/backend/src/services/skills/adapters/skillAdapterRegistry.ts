@@ -66,6 +66,7 @@ const DEFINITIONS = [
   adapter('negotiation-shield.cases', 'Negotiation Shield cases (NegotiationShieldService)', 'NEGOTIATION_SHIELD_CASES'),
   adapter('home-digital-twin.scenarios', 'Home Upgrade Planner scenarios (HomeDigitalTwinScenarioService)', 'HOME_UPGRADE_SCENARIOS'),
   adapter('diy.projects', 'DIY Project Center projects (DiyService)', 'DIY_PROJECTS'),
+  adapter('diy.project-guide', 'DIY project guide (DiyService, read-only)', 'DIY_PROJECT_GUIDE'),
   adapter('project-tracker.projects', 'Project Tracker projects (projectTracker.service)', 'PROJECT_TRACKER_PROJECTS'),
   adapter('service-price-radar.checks', 'Service Price Radar checks (ServicePriceRadarService)', 'SERVICE_PRICE_CHECKS'),
   adapter('home-timeline.events', 'Home Timeline events (HomeEventsService)', 'HOME_TIMELINE_EVENTS'),

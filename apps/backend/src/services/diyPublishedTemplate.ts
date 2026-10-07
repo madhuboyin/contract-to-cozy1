@@ -4,7 +4,7 @@
 // never the editable working copy. Response shapes are those the DIY pages already consume, with the template's own id as `id`. Steps, materials and
 // tools come from the revision's stored snapshot and get stable synthetic ids (they have no rows of their own). Admin-only fields on the template row
 // (approvedBy, approvedAt, status, geminiPromptHint, timestamps) are not part of a homeowner response.
-import type { DiyTemplateRevision, DiyProjectTemplate } from '@prisma/client';
+import type { DiyTemplateRevision, DiyProjectTemplate, DiyDecisionVerdict } from '@prisma/client';
 import type { RevisionContentJson } from './diyTemplateRevision.service';
 
 export type PublishedTemplate = DiyProjectTemplate & { publishedRevision: DiyTemplateRevision | null };
@@ -50,5 +50,23 @@ export function publishedTemplateDetail(template: Pick<DiyProjectTemplate, 'id' 
     steps: content.steps.map((step) => ({ id: stepSnapshotId(revision.id, Number(step.stepNumber)), ...step })),
     materials: content.materials.map((material, index) => ({ id: materialSnapshotId(revision.id, index), ...material })),
     tools: content.tools.map((tool, index) => ({ id: toolSnapshotId(revision.id, index), ...tool })),
+  };
+}
+
+/**
+ * The ONE mapping from a stored template revision to what the eligibility policy judges ("reviewed, low-risk, non-regulated work"). Project creation and the
+ * Ask project guide both call it, so the two can never disagree about what a revision's content is (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md, S5-9).
+ */
+export function eligibilityInputFromRevision(
+  revision: Pick<DiyTemplateRevision, 'title' | 'shortDescription' | 'category' | 'safetyLevel' | 'permitRequirement'>,
+  verdict?: DiyDecisionVerdict | null,
+) {
+  return {
+    title: revision.title,
+    summary: revision.shortDescription,
+    category: revision.category,
+    safetyLevel: revision.safetyLevel,
+    permitRequirement: revision.permitRequirement,
+    ...(verdict !== undefined ? { verdict } : {}),
   };
 }

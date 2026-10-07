@@ -112,6 +112,8 @@ export type AskOperationId =
   | 'NEGOTIATION_SHIELD_CASES'
   | 'HOME_UPGRADE_SCENARIOS'
   | 'DIY_PROJECTS'
+  // DIY project guide (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md): a read-only, launch-only walk through ONE DIY project, reached from the row action on DIY_PROJECTS.
+  | 'DIY_PROJECT_GUIDE'
   | 'PROJECT_TRACKER_PROJECTS'
   | 'SERVICE_PRICE_CHECKS'
   | 'HOME_TIMELINE_EVENTS'
@@ -311,6 +313,9 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // context naming one journey (a Home Action or a journey list item). Not retrievable by message: it would compete with
   // GUIDANCE_JOURNEYS_LIST for "where am I in my guided journey?".
   'GUIDANCE_JOURNEY_CONTINUE',
+  // DIY project guide (ASK_COZY_DIY_PROJECT_GUIDE_PLAN): reached only by the declared row action on a DIY_PROJECTS row (launchContext.entityType DIY_PROJECT).
+  // Not retrievable by message: it would compete with DIY_PROJECTS for "which DIY projects am I in the middle of?".
+  'DIY_PROJECT_GUIDE',
   // Seasonal home care (exact-four starter source, inventory D-O4/D-O16): a pure, data-independent read of the general tasks for this
   // home's climate region and season. Reached only by a stored starter's typed launch; not retrievable by message, because seasonal
   // questions already route to MAINTENANCE_STATUS over the homeowner's generated checklist and this must not compete with it.
@@ -514,6 +519,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   SERVICE_PRICE_CHECKS: definition('SERVICE_PRICE_CHECKS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'service-price-radar.checks', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PROJECT_TRACKER_PROJECTS: definition('PROJECT_TRACKER_PROJECTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'project-tracker.projects', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   DIY_PROJECTS: definition('DIY_PROJECTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'diy.projects', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  // Read-only step-by-step guide to one reviewed DIY project; reads diyService.getProjectGuideSource and writes nothing.
+  DIY_PROJECT_GUIDE: definition('DIY_PROJECT_GUIDE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'diy.project-guide', ['SUMMARY', 'TASK_GUIDE', 'EMPTY_STATE', 'BOUNDARY']),
   HOME_UPGRADE_SCENARIOS: definition('HOME_UPGRADE_SCENARIOS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-digital-twin.scenarios', ['SUMMARY', 'GROUPED_LIST', 'COMPARISON', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASES: definition('NEGOTIATION_SHIELD_CASES', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'negotiation-shield.cases', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PLANT_CARE_OUTLOOK: definition('PLANT_CARE_OUTLOOK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'plant-advisor.care-outlook', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),

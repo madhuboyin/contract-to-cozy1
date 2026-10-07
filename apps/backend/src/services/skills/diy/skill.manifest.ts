@@ -13,19 +13,25 @@ export const DIY_SKILL = Object.freeze({
   displayName: 'DIY Project Center',
   description: "Review this home's active DIY projects in planning or in progress, with how many required steps are done.",
   homeownerJobs: ['STAY_AHEAD'],
-  supportedGoals: ['review-diy-projects'],
+  supportedGoals: ['review-diy-projects', 'follow-diy-project-guide'],
   aliases: ['diy project center', 'diy projects', 'do it yourself projects'],
   operations: [{
     operationId: 'DIY_PROJECTS',
     version: '1.0',
     requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
     optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
+  }, {
+    // Step 5 of the stateful GUIDE: one project's guide, reached only by a launch context. Read-only; the move to write effects belongs to step 6.
+    operationId: 'DIY_PROJECT_GUIDE',
+    version: '1.0',
+    requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+    optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   }],
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
-  allowedAdapters: [{ id: 'diy.projects', version: '1.0' }],
+  allowedAdapters: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }],
   allowedExternalConnectors: [],
-  consumerPolicy: [{ consumer: 'ASK', operations: ['DIY_PROJECTS'] }],
+  consumerPolicy: [{ consumer: 'ASK', operations: ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE'] }],
   autonomyLevel: 1,
   riskPolicy: {
     effects: ['READ'],
@@ -34,11 +40,12 @@ export const DIY_SKILL = Object.freeze({
     reversibility: 'REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'TASK_GUIDE', 'EMPTY_STATE', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },
     { type: 'OPERATION_CONTRACT', id: 'DIY_PROJECTS', version: '1.0', required: true },
+    { type: 'OPERATION_CONTRACT', id: 'DIY_PROJECT_GUIDE', version: '1.0', required: true },
   ],
   contextBudget: {
     maxFacts: 50,

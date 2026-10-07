@@ -49,6 +49,7 @@ export const ASK_DIRECT_MUTATION_OPERATION_IDS: ReadonlySet<AskOperationId> = ne
 // READ_RESULT (not INTERNAL_CAPTURE, which is for capture commands).
 export const ASK_LAUNCH_ONLY_READ_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<AskOperationId>([
   'GUIDANCE_JOURNEY_CONTINUE',
+  'DIY_PROJECT_GUIDE',
   'SEASONAL_HOME_CARE',
   'HOME_BASICS_GUIDE',
   'HIRING_GUIDE',
@@ -1421,6 +1422,21 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     idempotency: { status: 'TRACED', notes: 'Pure read (listProjects is a findMany).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
     handoff: { status: 'TRACED', notes: 'Each row deep-links to /dashboard/properties/:id/projects/:projectId, the page\'s own project link.' },
+  },
+  DIY_PROJECT_GUIDE: {
+    track: 'Records and capture',
+    rollClass: 'READ_RESULT',
+    canonicalOwner: 'diy.project-guide',
+    roleFloor: 'VIEWER',
+    messageRoutable: false,
+    confirmationCapable: false,
+    correctionModes: [],
+    note: 'DIY project guide, step 5 of the stateful GUIDE (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md). A READ-ONLY, launch-only walk through ONE DIY project, reached only by the declared row action on a DIY_PROJECTS row (launchContext.entityType DIY_PROJECT, entityId the project id); never by message. Reads diyService.getProjectGuideSource and derives the current step, progress and outline from canonical state on every open and refresh; it owns no progress and writes nothing. It guides only a project whose steps are exactly those of an approved, hash-verified, eligible template revision (strict one-to-one, ordered, field-by-field match); otherwise it refuses with a typed reason and a page link. A withdrawn or superseded revision is disclosed.',
+    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- TASK_GUIDE with the additive progress (in words) and outline (state text, aria-current on the current step), a CAUTION BOUNDARY with the step safety note immediately before it, EMPTY_STATE for a refusal or an unknown project, SUMMARY when every step is resolved or the project is finished, and the scope BOUNDARY. Every action is a page link; there is no step-advancing action in this step.' },
+    freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request. progress carries asOf and is a display snapshot only.' },
+    idempotency: { status: 'TRACED', notes: 'Pure read; a spy over every write method proves it writes nothing in every branch.' },
+    reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
+    handoff: { status: 'TRACED', notes: 'Links to /dashboard/diy/projects/:id?propertyId= for the exact project, the page\'s own project link.' },
   },
   DIY_PROJECTS: {
     track: 'Records and capture',
