@@ -20,11 +20,14 @@ Review this home's active DIY projects in planning or in progress, with how many
 
 - `DIY_PROJECTS`
 - `DIY_PROJECT_GUIDE` (reached only by a launch context naming one project, from a row on the DIY projects list; never by message; read-only)
+- `DIY_STEP_UPDATE` (confirmed, CONTRIBUTOR floor; reached only by the declared Mark this step done and Skip this step actions on the project guide card, for the current step only; records the person's own report and verifies nothing)
 
 ## Consumers
 
-- ASK: DIY_PROJECTS, DIY_PROJECT_GUIDE
+- ASK: DIY_PROJECTS, DIY_PROJECT_GUIDE, DIY_STEP_UPDATE
 
 ## Canonical ownership and boundaries
+
+The only write is `DIY_STEP_UPDATE`, limited to projects that pass the reviewed-guide gate; reopening, completing or abandoning a project, notes and photos stay on the project page. Authorization and the current-step rule are enforced inside the service transaction, not only before it.
 
 Operations remain owned by their registered canonical services and may be reached only through the adapters declared in the machine manifest. Context access is limited to declared providers. Peer Skill execution is prohibited; handoffs return to Ask for normal routing and authorization.

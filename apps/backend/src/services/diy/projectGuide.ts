@@ -53,10 +53,12 @@ export const GUIDE_CORRECTED_COPY = 'A corrected version of this guide is availa
 type StepRow = {
   id: string; stepNumber: number; templateStepId: string | null; title: string; description: string; estimatedMinutes: number | null;
   isOptional: boolean; safetyNote: string | null; tipNote: string | null; status: string;
+  /** Present when the source was read for a step command (the version token and the context version use it). */
+  updatedAt?: Date | string | null;
 };
 export type GuideProject = {
   id: string; title: string; status: string; category: string; templateId: string | null; aiGuideId: string | null; templateRevisionId: string | null;
-  completionBasis: string | null; steps: StepRow[];
+  completionBasis: string | null; steps: StepRow[]; updatedAt?: Date | string | null;
 };
 /** A full revision row, as stored (the integrity check hashes it). */
 export type GuideRevision = Record<string, any> & { id: string; provenance: string; contentJson: any; retiredAt: Date | null; retiredReason: string | null };
@@ -122,6 +124,17 @@ export function evaluateProjectGuide(source: GuideSource): GuideEvaluation {
 // ---- the answer ------------------------------------------------------------------------------------------------------------------------------------
 
 export const DIY_GUIDE_ACTION_ID = 'open-diy-project';
+
+// Step 6 (docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md): the declared actions that advance the CURRENT step. The exact canned message selects the action;
+// typed wording never writes. The ids are allow-listed for DIY_PROJECT_GUIDE in askAnswerTrustPolicy.
+export const DIY_STEP_ENTITY_TYPE = 'DIY_STEP';
+export const DIY_STEP_COMPLETE_MESSAGE = 'Mark this step done.';
+export const DIY_STEP_SKIP_MESSAGE = 'Skip this step.';
+export const DIY_STEP_ACTIONS = {
+  COMPLETE: { id: 'diy-step-complete', message: DIY_STEP_COMPLETE_MESSAGE, target: 'COMPLETED' as const },
+  SKIP: { id: 'diy-step-skip', message: DIY_STEP_SKIP_MESSAGE, target: 'SKIPPED' as const },
+};
+export type DiyStepActionKey = keyof typeof DIY_STEP_ACTIONS;
 export const DIY_GUIDE_BOUNDARY_IDS = ['diy-step-safety', 'diy-guide-withdrawn', 'diy-guide-corrected', 'diy-project-guide-boundary'] as const;
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -185,7 +198,7 @@ export function projectNotFoundBlocks(propertyId: string): AskPresentationBlock[
 }
 
 /** The guide for a project that passed the gate: disclosures, the current step's safety note, the guide block, and the scope boundary. */
-export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>; propertyId: string; asOf: Date }): AskPresentationBlock[] {
+export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>; propertyId: string; asOf: Date; canAdvance?: boolean }): AskPresentationBlock[] {
   const { source, evaluation, propertyId, asOf } = input;
   const { project } = source;
   const href = projectPageHref(propertyId, project.id);
@@ -215,6 +228,16 @@ export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation
   if (step.safetyNote && step.safetyNote.trim()) {
     blocks.push({ type: 'BOUNDARY', id: 'diy-step-safety', title: 'Safety for this step', body: step.safetyNote, severity: 'CAUTION', suggestions: [] });
   }
+  // The advancing actions: only for a person who can edit, only on a guide that is not withdrawn, and only when the safety note (if any) is the block directly above.
+  const safetyShown = !(step.safetyNote && step.safetyNote.trim()) || blocks[blocks.length - 1]?.id === 'diy-step-safety';
+  const advance = Boolean(input.canAdvance) && evaluation.sourceState !== 'WITHDRAWN' && safetyShown;
+  const stepAction = (key: DiyStepActionKey, label: string, style: 'PRIMARY' | 'QUIET') => ({
+    id: DIY_STEP_ACTIONS[key].id, label, interactionType: 'START_WORKFLOW' as const, message: DIY_STEP_ACTIONS[key].message, operationId: 'DIY_STEP_UPDATE',
+    entityType: DIY_STEP_ENTITY_TYPE, entityId: step.id, actionId: key, style,
+  });
+  const advancing = advance
+    ? [stepAction('COMPLETE', 'Mark this step done', 'PRIMARY'), ...(step.isOptional && !(step.safetyNote && step.safetyNote.trim()) ? [stepAction('SKIP', 'Skip this step', 'QUIET')] : [])]
+    : [];
 
   const facts: Array<{ label: string; value: string }> = [{ label: 'This step', value: step.isOptional ? 'Optional' : 'Required' }];
   if (step.estimatedMinutes) facts.unshift({ label: 'Estimated time', value: `About ${step.estimatedMinutes} min` });
@@ -233,13 +256,13 @@ export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation
     eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide'],
     icon: GUIDE_ICONS[project.category] ?? 'TASK',
     chips, tip, main: { title: mainTitle, body: mainBody, facts }, history: [], notes,
-    actions: [openAction(href)],
+    actions: [...advancing, openAction(href)],
     progress, outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
   } as AskPresentationBlock);
 
   blocks.push({
     type: 'BOUNDARY', id: 'diy-project-guide-boundary', title: 'Only for reviewed low-risk projects',
-    body: 'This guide covers reviewed, low-risk projects. Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials such as asbestos, lead paint or mold are not covered. You mark steps done on the project page.',
+    body: 'This guide covers reviewed, low-risk projects. Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials such as asbestos, lead paint or mold are not covered. ' + (advance ? 'You can mark the current step done or skip it here, or use the project page.' : 'You mark steps done on the project page.'),
     severity: 'INFO', suggestions: [],
   });
   return blocks;

@@ -152,6 +152,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('HOME_UPGRADE_SCENARIOS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('DIY_PROJECTS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('DIY_PROJECT_GUIDE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('DIY_STEP_UPDATE', ALL_MODES),
   definePolicy('PROJECT_TRACKER_PROJECTS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('SERVICE_PRICE_CHECKS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_TIMELINE_EVENTS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),

@@ -26,7 +26,8 @@ test('every one of the 42 confirmation-required Ask commands resolves to a regis
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
   // + HOME_HABIT_UPDATE (Home Habit Coach review actions).
   // + SEASONAL_CHECKLIST_SETUP (Add these to my tasks on the seasonal answer).
-  assert.equal(commandIds.length, 47);
+  // + DIY_STEP_UPDATE (DIY step command, step 6 of the stateful GUIDE).
+  assert.equal(commandIds.length, 48);
   assert.deepEqual(validateConfirmCapabilityHandlerRegistry(), []);
 });
 

@@ -69,7 +69,12 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
               ))}
             </nav>
           )}
-          <h3 className="mt-0.5 text-xl font-semibold leading-snug text-slate-950 sm:text-2xl">{block.title}</h3>
+          {/* In a stepped guide the heading is where focus lands when the guide refreshes in place after a confirmed step command (ExecutionCard looks for the marker);
+              it is programmatically focusable only, never a tab stop. */}
+          <h3
+            className="mt-0.5 text-xl font-semibold leading-snug text-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 sm:text-2xl"
+            {...(guideMode ? { 'data-task-guide-heading': '', tabIndex: -1 } : {})}
+          >{block.title}</h3>
           <p className="mt-1 text-sm leading-6 text-slate-700">{block.summary}</p>
           {block.chips.length > 0 && (
             <ul className="mt-3 flex flex-wrap gap-2" aria-label="Key facts">
@@ -84,7 +89,8 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
 
       <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
         {block.progress && (
-          <p data-task-guide-progress="" className="text-sm font-semibold text-slate-900">
+          // A polite live status in a stepped guide, so a screen reader hears the new position when the guide refreshes after a step command; it says nothing on first render.
+          <p data-task-guide-progress="" {...(guideMode ? { role: 'status' } : {})} className="text-sm font-semibold text-slate-900">
             {block.progress.label}
             {asOf && <span className="ml-2 font-normal text-slate-500">As of {asOf}</span>}
           </p>

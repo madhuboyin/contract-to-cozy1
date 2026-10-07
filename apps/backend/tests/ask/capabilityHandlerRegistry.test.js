@@ -34,7 +34,7 @@ test('every one of the 86 Ask operations resolves to a registered capability han
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
   // + HOME_HABIT_UPDATE (Home Habit Coach review actions).
   // + SEASONAL_CHECKLIST_SETUP (Add these to my tasks on the seasonal answer).
-  assert.equal(operationIds.length, 124); // + DIY_PROJECT_GUIDE
+  assert.equal(operationIds.length, 125); // + DIY_PROJECT_GUIDE, + DIY_STEP_UPDATE (step 6 of the stateful GUIDE)
   assert.deepEqual(validateCapabilityHandlerRegistry(), []);
 });
 

@@ -237,7 +237,9 @@ export function ExecutionCard({
   useEffect(() => {
     if (!isJustUpdated || !resultSettled) return;
     // The calm shell moves focus to the answer's own heading, not to its first button, so no control shows a focus ring on arrival.
-    const target = calmChrome ? headingRef.current : bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? headingRef.current;
+    // A stepped guide that just refreshed (or opened) puts focus on the guide's own heading, so the new step is read before its buttons; every other answer is unchanged.
+    const guideHeading = bodyRef.current?.querySelector<HTMLElement>('[data-task-guide-heading]');
+    const target = guideHeading ?? (calmChrome ? headingRef.current : bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? headingRef.current);
     target?.focus({ preventScroll: true });
     // Re-runs only when this execution's own settled content actually
     // changes (a real status/result transition), not on every unrelated

@@ -1,15 +1,18 @@
 // DIY project guide (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md, step 5 of the stateful GUIDE): a READ-ONLY, launch-only walk through one DIY project,
 // reached only from the declared row action on a DIY_PROJECTS row (launchContext.entityType 'DIY_PROJECT', entityId the project id), never by message. Same
 // shape as GUIDANCE_JOURNEY_CONTINUE: the entity type is a literal the handler checks, and an id that is not in this property answers "couldn't find".
-// It reads canonical state on every open and refresh, owns no progress, and writes nothing.
+// It reads canonical state on every open and refresh, owns no progress, and writes nothing. Step 6 adds the declared step actions to the card for a contributor or owner;
+// the write itself is DIY_STEP_UPDATE (diyStepUpdate.handler.ts).
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { type CapabilityInvocationEnvelope } from '../capabilityInvocation.contract';
 import { diyService } from '../../diy.service';
 import { logger } from '../../../lib/logger';
+import { HouseholdRole } from '@prisma/client';
 import { buildProjectGuideBlocks, evaluateProjectGuide, projectNotFoundBlocks, refusalBlocks, type GuideSource } from '../../diy/projectGuide';
 
-export async function diyProjectGuideResult(propertyId: string, launchContext?: CapabilityInvocationEnvelope['launchContext'], now: Date = new Date()): Promise<AskOperationResult> {
+/** `canEdit` is whether the person asking may change the project (a contributor or owner); only then does the guide card carry the step actions (plan section 3.1). Default false. */
+export async function diyProjectGuideResult(propertyId: string, launchContext?: CapabilityInvocationEnvelope['launchContext'], now: Date = new Date(), canEdit = false): Promise<AskOperationResult> {
   const projectId = launchContext?.entityType === 'DIY_PROJECT' ? launchContext.entityId : null;
   const source = projectId ? await diyService.getProjectGuideSource(projectId, propertyId) : null;
   // Not in this property (another property's project, a deleted one, a missing id): the same answer, and nothing about whether it exists elsewhere.
@@ -25,9 +28,15 @@ export async function diyProjectGuideResult(propertyId: string, launchContext?: 
   }
   return {
     status: 'ANSWERED', reasonCode: 'DIY_PROJECT_GUIDE_READY',
-    blocks: buildProjectGuideBlocks({ source: source as unknown as GuideSource, evaluation, propertyId, asOf: now }),
+    blocks: buildProjectGuideBlocks({ source: source as unknown as GuideSource, evaluation, propertyId, asOf: now, canAdvance: canEdit }),
     suggestions: [],
   };
 }
 
-registerCapabilityHandler('diy.project-guide', async (envelope) => diyProjectGuideResult(envelope.propertyId!, envelope.launchContext));
+// The role is read per request, so a viewer's answer never carries a step action (the emit-time gate; the audience filter is a second layer only).
+registerCapabilityHandler('diy.project-guide', async (envelope) => {
+  // Loaded on use, so the pure result function above stays importable (and testable) without the whole Ask support module graph.
+  const { ensurePropertyAccess } = await import('../askHandlerSupport');
+  const access = await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return diyProjectGuideResult(envelope.propertyId!, envelope.launchContext, new Date(), access.role !== HouseholdRole.VIEWER);
+});

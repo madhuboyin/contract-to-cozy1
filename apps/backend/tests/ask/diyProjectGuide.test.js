@@ -357,7 +357,8 @@ test('the operation is launch-only and read-only in the registry, the skill, the
   assert.equal(isAskMessageRoutableOperation('DIY_PROJECT_GUIDE'), false);
   assert.deepEqual([def.family, def.propertyRoleFloor, def.allowedBlockTypes], ['RECORD_QUERY', 'VIEWER', ['SUMMARY', 'TASK_GUIDE', 'EMPTY_STATE', 'BOUNDARY']]);
   const { DIY_SKILL } = require('../../src/services/skills/diy/skill.manifest.ts');
-  assert.deepEqual([DIY_SKILL.autonomyLevel, DIY_SKILL.riskPolicy.effects], [1, ['READ']], 'the skill stays read-only in this step');
+  // Step 6 moved the SKILL to write effects (DIY_STEP_UPDATE); this operation itself stays a launch-only read.
+  assert.deepEqual([DIY_SKILL.autonomyLevel, DIY_SKILL.riskPolicy.effects], [2, ['READ', 'WRITE']], 'the skill now carries the step command');
   assert.ok(DIY_SKILL.allowedResultBlocks.includes('TASK_GUIDE'));
   const { ASK_LAUNCH_ONLY_READ_OPERATION_IDS } = require('../../src/services/ask/askInteractionCoverageMatrix.ts');
   assert.ok(ASK_LAUNCH_ONLY_READ_OPERATION_IDS.has('DIY_PROJECT_GUIDE'));

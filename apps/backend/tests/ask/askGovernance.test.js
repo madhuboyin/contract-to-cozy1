@@ -41,7 +41,7 @@ test('every Ask operation has a complete governed definition', () => {
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
   // + GUIDANCE_STEP_SKIP and GUIDANCE_JOURNEY_DISMISS (guided journey continuation Phase 3).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 124); // + DIY_PROJECT_GUIDE (step 5 of the stateful GUIDE)
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 125); // + DIY_PROJECT_GUIDE (step 5 of the stateful GUIDE), + DIY_STEP_UPDATE (step 6)
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -63,7 +63,8 @@ test('every material Ask command has governed confirmation, authorization, cance
   // + HOME_EVENT_RADAR_MARK_DONE/FEEDBACK (FRD v1.40; HOME_EVENT_RADAR_STATE is a direct write, not a command).
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 47);
+  // + DIY_STEP_UPDATE (DIY step command, step 6 of the stateful GUIDE).
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 48);
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);

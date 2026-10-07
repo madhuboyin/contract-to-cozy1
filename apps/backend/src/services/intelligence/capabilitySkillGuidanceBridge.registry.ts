@@ -62,7 +62,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'plant-advisor': ['PLANT_CARE_OUTLOOK'],
   'negotiation-shield': ['NEGOTIATION_SHIELD_CASES'],
   'home-digital-twin': ['HOME_UPGRADE_SCENARIOS'],
-  diy: ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE'],
+  diy: ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE', 'DIY_STEP_UPDATE'],
   'project-tracker': ['PROJECT_TRACKER_PROJECTS'],
   'service-price-radar': ['SERVICE_PRICE_CHECKS'],
   'home-timeline': ['HOME_TIMELINE_EVENTS'],

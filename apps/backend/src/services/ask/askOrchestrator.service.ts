@@ -75,6 +75,7 @@ import './handlers/negotiationShield.handler';
 import './handlers/homeUpgradePlanner.handler';
 import './handlers/diyProjectCenter.handler';
 import './handlers/diyProjectGuide.handler';
+import './handlers/diyStepUpdate.handler';
 import './handlers/projectTracker.handler';
 import './handlers/servicePriceRadar.handler';
 import './handlers/aroundYourHome.handler';

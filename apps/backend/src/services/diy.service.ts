@@ -13,7 +13,8 @@ import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
 import { logger } from '../lib/logger';
 import { evaluateStepTransition, openStepsForCompletion, type DiyStepStatusValue } from './diy/stepTransitions';
-import { buildRevisionContent, checkRevisionIntegrity, computeContentHash } from './diyTemplateRevision.service';
+import { evaluateAskStepPolicy } from './diy/askStepPolicy';
+import { buildRevisionContent, checkRevisionIntegrity, computeContentHash, shareLockGovernanceRows } from './diyTemplateRevision.service';
 import {
   PUBLISHED_REVISION_INCLUDE, eligibilityInputFromRevision, publishedTemplateDetail, publishedTemplateSummary, revisionContent, stepSnapshotId,
 } from './diyPublishedTemplate';
@@ -499,19 +500,38 @@ export class DiyService {
    * property. It writes nothing (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md section 3.5).
    */
   async getProjectGuideSource(projectId: string, propertyId: string) {
-    const project = await prisma.diyProject.findFirst({
+    return this.readGuideSource(prisma, projectId, propertyId, false);
+  }
+
+  /** The guide source of the project a step belongs to, scoped to the property (null when the step is not in this property). Read-only. */
+  async getProjectGuideSourceForStep(stepId: string, propertyId: string) {
+    const row = await prisma.diyProjectStep.findFirst({ where: { id: stepId, project: { propertyId } }, select: { projectId: true } });
+    return row ? this.readGuideSource(prisma, row.projectId, propertyId, false) : null;
+  }
+
+  /**
+   * The same read on any client. With `lockGovernance` (inside a transaction) it first takes a SHARE lock on the revision row and the template row, in the
+   * order the governance writers update them (revision, then template), so a withdrawal or supersession cannot commit between this read and the caller's
+   * commit. The caller must be inside a transaction when it passes `lockGovernance`.
+   */
+  private async readGuideSource(db: Prisma.TransactionClient | typeof prisma, projectId: string, propertyId: string, lockGovernance: boolean) {
+    const project = await db.diyProject.findFirst({
       where: { id: projectId, propertyId },
       select: {
-        id: true, title: true, status: true, category: true, templateId: true, aiGuideId: true, templateRevisionId: true, completionBasis: true,
+        id: true, title: true, status: true, category: true, templateId: true, aiGuideId: true, templateRevisionId: true, completionBasis: true, updatedAt: true,
         steps: {
           orderBy: { stepNumber: 'asc' },
-          select: { id: true, stepNumber: true, templateStepId: true, title: true, description: true, estimatedMinutes: true, isOptional: true, safetyNote: true, tipNote: true, status: true },
+          select: { id: true, stepNumber: true, templateStepId: true, title: true, description: true, estimatedMinutes: true, isOptional: true, safetyNote: true, tipNote: true, status: true, updatedAt: true },
         },
       },
     });
     if (!project) return null;
-    const revision = project.templateRevisionId ? await prisma.diyTemplateRevision.findUnique({ where: { id: project.templateRevisionId } }) : null;
-    const head = project.templateId ? await prisma.diyProjectTemplate.findUnique({ where: { id: project.templateId }, select: { publishedRevisionId: true } }) : null;
+    project.steps = [...project.steps].sort((a, b) => a.stepNumber - b.stepNumber);
+    if (lockGovernance) {
+      await shareLockGovernanceRows(db as Prisma.TransactionClient, { revisionId: project.templateRevisionId, templateId: project.templateId });
+    }
+    const revision = project.templateRevisionId ? await db.diyTemplateRevision.findUnique({ where: { id: project.templateRevisionId } }) : null;
+    const head = project.templateId ? await db.diyProjectTemplate.findUnique({ where: { id: project.templateId }, select: { publishedRevisionId: true } }) : null;
     return { project, revision, head };
   }
 
@@ -654,10 +674,15 @@ export class DiyService {
     propertyId: string,
     stepId: string,
     patch: { status: DiyStepStatusValue; notes?: string },
-    ctx: { actorUserId: string; expectedUpdatedAt?: unknown },
+    ctx: { actorUserId: string; expectedUpdatedAt?: unknown; requireCurrentGuideStep?: boolean },
   ) {
     const expected = this.parseVersionToken(ctx.expectedUpdatedAt);
     return prisma.$transaction(async (tx) => {
+      // Authorization is decided inside the transaction that depends on it, before anything else (an idempotent "already" included): a revocation
+      // between the caller's own checks and this write must not be honored.
+      if (!(await hasPropertyRoleWithin(tx, ctx.actorUserId, propertyId, 'CONTRIBUTOR'))) {
+        throw new APIError('You do not have access to change this project.', 403, 'DIY_ACCESS_REVOKED');
+      }
       const findStep = () => tx.diyProjectStep.findFirst({ where: { id: stepId, projectId, project: { propertyId } } });
       const wantsNotes = (step: { notes: string | null; status: DiyStepStatusValue }) =>
         patch.notes !== undefined && patch.notes !== (step.notes ?? '') && (step.status === 'PENDING' || step.status === 'IN_PROGRESS');
@@ -673,6 +698,15 @@ export class DiyService {
       if (step.status === patch.status && !wantsNotes(step as any)) return { step, alreadyApplied: true };
       if (step.updatedAt.getTime() !== expected.getTime()) {
         throw new APIError('This step changed while you were working. Reload and try again.', 409, 'DIY_STALE', { status: step.status, updatedAt: step.updatedAt.toISOString() });
+      }
+
+      // Ask's narrower rules, evaluated against the snapshot read inside this transaction after the project row is held (the transition table below
+      // still performs the actual transition).
+      if (ctx.requireCurrentGuideStep) {
+        const source = await this.readGuideSource(tx, projectId, propertyId, true);
+        if (!source) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+        const policy = evaluateAskStepPolicy(source as any, stepId, patch.status);
+        if (!policy.ok) throw new APIError(policy.message, 409, policy.code, { reason: policy.reason });
       }
 
       const notesOnly = step.status === patch.status;

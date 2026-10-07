@@ -5,7 +5,9 @@ import type { AskOperationResult } from './askOperationRegistry';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
 
-const MUTATION_ACTION_PATTERN = /^(?:add|archive|cancel|change|complete|confirm|create|delete|disable|edit|enable|forget|invite|mark|monitor|notify|recalculate|record|remove|report|reschedule|run|save|schedule|send|set|start|submit|unlink|update|upload)\b/i;
+// A second layer only (defense in depth): producers must not emit a mutation action to a viewer, and every write re-checks the role itself (for a DIY step, inside the service
+// transaction). `skip` and `reopen` were missing before the DIY step commands (docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md section 3.6).
+const MUTATION_ACTION_PATTERN = /^(?:add|archive|cancel|change|complete|confirm|create|delete|disable|edit|enable|forget|invite|mark|monitor|notify|recalculate|record|remove|reopen|report|reschedule|run|save|schedule|send|set|skip|start|submit|unlink|update|upload)\b/i;
 const MUTATION_SUGGESTION_PATTERN = /^(?:(?:can|could|would) you |please |help me |i want to )?(?:add|archive|cancel|change|complete|confirm|create|delete|disable|edit|enable|forget|invite|mark|monitor|notify|recalculate|record|remove|report|reschedule|run|save|schedule|send|set|start|submit|unlink|update|upload)\b/i;
 const OWNER_ONLY_ACTION_PATTERN = /^(?:invite|manage household|add member|remove member|change owner|update shared profile)\b/i;
 

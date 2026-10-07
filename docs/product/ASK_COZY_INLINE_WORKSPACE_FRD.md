@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.219
+**Version:** 1.220
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.220 — DIY step commands, 6a/6b built (uncommitted):** from the DIY project guide in Ask, a contributor or owner can mark the current step done, or skip it when it is optional and has no safety note, after a confirmation; the receipt says it is the person's own report and nothing is verified. The shared step update now checks the person's edit access inside its own transaction for every caller (the project page too), and Ask's narrower rules (guide not withdrawn, this is still the first unfinished step, skip allowed) are re-checked inside that transaction after the project is locked, with the template's governance rows share-locked; the earlier checks and the confirmation's change detector (now covering every step, the project version and the guide's governance state) are early answers only. The `diy` skill moves from read-only to write effects for projects that pass the reviewed-guide gate (superseding the FRD v1.58 note). The audience filter now also hides skip and reopen actions from viewers, as defense in depth only. Focus lands on the guide heading when the guide refreshes in place, and the position is a polite status. Verified by tests against a database-free fake and jest only: not run on real Postgres or in a browser, and unreachable for real projects until a first template is published (O7).
 
 **Revision 1.219 — DIY step commands, step 6 plan approved with corrections:** the plan now requires that the canonical step update verify the person's edit access inside the same transaction that changes the step (for the project page as well as Ask), that Ask's narrower rules (project open, guide still reviewed and not withdrawn, this is still the first unfinished step, skipping still allowed) are re-checked inside that transaction rather than only before it, and that the confirmation's change detector covers every step, the project version and the guide's governance state. The earlier checks remain as early, friendly answers only. Tracing also recorded how the guide's declared actions, the confirmation and the registries fit. Nothing is built; the step stays unreachable for real projects until a first template is published (O7).
 

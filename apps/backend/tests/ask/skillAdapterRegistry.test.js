@@ -26,7 +26,8 @@ test('every represented Skill operation resolves to one registered immutable ada
   // + home-event-radar.task/preferences (FRD v1.41).
   // + guidance-overview.continue (guided journey continuation Phase 1), .step-skip and .journey-dismiss (Phase 3, MUTATION_PREPARATION).
   // + diy.project-guide (DIY project guide, step 5 of the stateful GUIDE).
-  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 107);
+  // + diy.step-update (DIY step command, step 6 of the stateful GUIDE).
+  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 108);
   for (const skill of Object.values(SKILL_DEFINITIONS)) {
     for (const operation of skill.operations) {
       const reference = skill.allowedAdapters.find((candidate) => candidate.id === getSkillAdapterForOperation(operation.operationId).id);

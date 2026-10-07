@@ -64,6 +64,8 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   // Guided journey continuation Phase 3: skip a step, dismiss a journey (both confirmation-gated).
   'GUIDANCE_STEP_SKIP',
   'GUIDANCE_JOURNEY_DISMISS',
+  // DIY step command (ASK_COZY_DIY_STEP_COMMANDS_PLAN): mark the current step of a guided project done, or skip it (confirmation-gated).
+  'DIY_STEP_UPDATE',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -181,6 +183,8 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   // REOPEN: a skipped step can be reopened on the Guidance Overview page (SKIPPED to PENDING); Ask does not offer that yet.
   GUIDANCE_STEP_SKIP: command('GUIDANCE_STEP_SKIP', 'GUIDANCE_STEP_SKIP', 'guidance-overview.step-skip', 'CONTRIBUTOR', 'GUIDANCE_JOURNEY_STEP', ['REOPEN'], { title: 'Step not skipped', body: 'The guided journey step was not changed.', suggestion: 'Show my guided journeys' }),
   GUIDANCE_JOURNEY_DISMISS: command('GUIDANCE_JOURNEY_DISMISS', 'GUIDANCE_JOURNEY_DISMISS', 'guidance-overview.journey-dismiss', 'CONTRIBUTOR', 'GUIDANCE_JOURNEY', [], { title: 'Journey not dismissed', body: 'The guided journey was not changed.', suggestion: 'Show my guided journeys' }),
+  // REOPEN: a step marked done or skipped can be reopened on the project page; Ask offers no reopen yet (a later step), so this declares the correction path only.
+  DIY_STEP_UPDATE: command('DIY_STEP_UPDATE', 'DIY_STEP_UPDATE', 'diy.step-update', 'CONTRIBUTOR', 'DIY_PROJECT_STEP', ['REOPEN'], { title: 'Step not changed', body: 'The DIY project step was not changed.', suggestion: 'Show my DIY projects' }),
   HOME_EVENT_RADAR_FEEDBACK: command('HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_FEEDBACK', 'home-event-radar.feedback', 'CONTRIBUTOR', 'PROPERTY_RADAR_FEEDBACK', ['EDIT'], { title: 'Feedback not sent', body: 'No feedback was recorded for this event.', suggestion: 'Show my home event radar feed' }),
 });
 

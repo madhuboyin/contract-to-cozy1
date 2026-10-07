@@ -230,6 +230,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PLANT_CARE_OUTLOOK: "Yes, with heat in this week's forecast, check the soil of your house plants more often; the fern needs it soon.",
   NEGOTIATION_SHIELD_CASES: 'Two of your negotiation reviews are open: the roof quote review was analyzed last week and the premium increase review is still a draft.',
   HOME_UPGRADE_SCENARIOS: 'Of your saved upgrade options, repairing the water heater costs about $400–$700 upfront, while replacing it with a heat pump model costs $2,800–$4,200 and pays back in about 6 years.',
+  DIY_STEP_UPDATE: 'You marked the step to tape the trim as done; this is your own report and nothing else about the project changed.',
   DIY_PROJECT_GUIDE: 'You are on the second of five steps of the hallway repaint, the step is to tape the trim, and one step is done.',
   DIY_PROJECTS: 'Two of your DIY projects still have steps left: repainting the hallway is 3 of 5 steps done and re-caulking the tub is still in planning.',
   PROJECT_TRACKER_PROJECTS: 'Two contractor projects are still open: the kitchen remodel with Apex Builders is in progress with $12,000 of $40,000 remaining, and the roof replacement is still in planning.',

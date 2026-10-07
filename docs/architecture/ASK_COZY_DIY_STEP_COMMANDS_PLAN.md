@@ -1,7 +1,7 @@
 # `DIY_STEP_UPDATE`: Marking a Step Done or Skipping It From Ask — Step 6 Implementation Plan
 
 **Date:** October 6, 2026
-**Status:** **Approved with three corrections, now incorporated (§3.2, §3.9, §10): S6-1 to S6-4 and S6-6 to S6-12 approved; S6-5 approved with transaction-bound authorization and the atomic Ask policy guard.** The 6-0 trace is recorded in §12. Nothing is built. **It needs no schema change.**
+**Status:** **Approved with three corrections, now incorporated (§3.2, §3.9, §10): S6-1 to S6-4 and S6-6 to S6-12 approved; S6-5 approved with transaction-bound authorization and the atomic Ask policy guard.** The 6-0 trace is recorded in §12; **6a (backend) and the 6b frontend change are built and recorded in §13, uncommitted; 6c is not started.** **It needs no schema change.**
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 6 (sequencing row "2": decisions O3, O8, O10, O11), D3 (current step, skip rules), D5 (self-reported, never verified), D7 (no notes from Ask), D8 (authorization, concurrency, impact refresh)
 **Follows:** steps 1 to 5, all pushed: revisions, transitions, completion outbox, reverse reconciliation and the read-only project guide ([`…PROJECT_GUIDE_PLAN`](ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md) is the direct predecessor: this step adds the first write to it).
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20 and the section 7 adversarial pass (§8); the project's Ask write-command rules (non-retrievable, read the traditional controller for hidden effects, declared-action-only starts guarded against `ASK_REFRESH`, allow-listed action ids, startup validators). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -83,7 +83,12 @@ The structure stays: the step's safety note is a caution block **immediately bef
 
 ### 3.8 The frontend
 
-When the same guide card updates in place (a refresh after a confirmed command) and the current position changes, **focus moves to the card's heading** (made programmatically focusable) and the progress sentence, which becomes a polite live status, announces the new position. Nothing moves on first render, on a refresh that changes nothing, or on opening the tip. Reduced motion needs nothing (no animation).
+**Corrected during 6b after reading `ExecutionCard`:** the answer card already moves focus when an execution is just updated and settled (ACCESS-003: the answer heading in the calm shell, otherwise the first focusable control). A second focus effect inside the guide card would be overridden by that one (child effects run before the parent's), so 6b does not add one. It does two smaller things instead:
+
+- **Focus lands on the guide's own heading.** In a stepped guide (an `outline` is present) the card heading carries a `data-task-guide-heading` marker and `tabIndex={-1}` (focusable by script, never a tab stop); `ExecutionCard`'s existing effect prefers that marker when it is present, so the new step is read before its buttons. Every other answer, and a task guide without an outline (the seasonal guide), is unchanged. The effect still re-runs only when the execution's status or `updatedAt` changes, so opening the tip, or any unrelated re-render, moves nothing.
+- **The position is announced.** In a stepped guide the progress sentence is a polite status (`role="status"`), so a screen reader hears the new position when the card refreshes in place. It says nothing on first render.
+
+Reduced motion needs nothing (no animation). **Real-browser focus and screen-reader behavior are unverified**; jest in jsdom checks the DOM contract only.
 
 ### 3.9 The service changes: authorization and Ask's narrower policy inside the transaction
 
@@ -187,3 +192,25 @@ No schema push, no worker. Deploy the backend, then the frontend. The `diy` skil
 | T7 | Withdrawal and supersession are written by `diyTemplateRevision.service.ts` onto the revision row and the template head. Project writers claim only the project row. The existing precedent and the page path perform no in-transaction role check for step updates. | Basis for W10, W11 and §3.9. Open for 6a-0: whether a share lock on the revision and head rows is practical (table names and the writer's locking behavior are not yet read). |
 
 Everything above is **code-traced, not executed.**
+
+## 13. Record of 6a (backend) and 6b (frontend)
+
+**6a-0 result.** A share lock on the revision and template rows is practical: the governance writers (`diyTemplateRevision.service.ts`) update `diy_template_revisions` then `diy_project_templates` with plain row updates, so a `SELECT ... FOR SHARE` in the same order, inside the step transaction, makes a concurrent withdrawal or supersession wait for it. The lock lives in the revision service (`shareLockGovernanceRows`), because a repository guard requires that service to be the only source file naming that table. **The lock statements are checked against the fake only (recorded, in order); real locking behavior is for 6c on real Postgres and is unexecuted.**
+
+**What was built** (all **[Executed]** as tests unless stated):
+- `services/diy/askStepPolicy.ts` (pure): `currentStepOf`, `guideSnapshot`/`guideContextVersion` (the canonical snapshot of §3.2.1), `evaluateAskStepPolicy` (guide gate, not withdrawn, first unfinished step, skip rule, only COMPLETED/SKIPPED offered).
+- `diyService.updateStep`: the in-transaction CONTRIBUTOR check as the first statement for every caller (before the idempotent early return; `DIY_ACCESS_REVOKED`), and the optional `requireCurrentGuideStep` policy evaluated after the project row is claimed, on a guide source read with the transaction client and share-locked governance rows (`DIY_GUIDE_NOT_CURRENT`, `DIY_STEP_NOT_CURRENT`, `DIY_STEP_TRANSITION_NOT_ALLOWED`). The transition table still performs the transition; the page passes no policy. New reads `readGuideSource` (any client) and `getProjectGuideSourceForStep`.
+- `ask/handlers/diyStepUpdate.handler.ts`: propose (declared action, canned message, action id agreement, `ASK_REFRESH` guard, viewer, step lookup, "already", the policy, a confirmation with the repeated safety note) and confirm (role, early context-version check, `updateStep` with the actor, the **proposed** step token and the policy, service refusals mapped to confirmation conflict codes, receipt, impact refresh).
+- The guide card (`buildProjectGuideBlocks`, `canAdvance`): Mark done for the current step, Skip only for an optional step with no safety note, only for a contributor or owner, never on a withdrawn guide, only when the safety block is directly above. The registered guide handler reads the role per request.
+- The registry chain (operation, non-routable list, domain command with `REOPEN` declared, trust boundaries and action ids, audience policy, five semantic maps, certification corpus, coverage matrix, adapter registry, capability bridge, impact map) and the `diy` skill (autonomy 2, READ+WRITE, MATERIAL, PARTIALLY_REVERSIBLE, WORKFLOW_PROGRESS, evaluation, SKILL.md). The audience filter's verb list gained `skip` and `reopen` (defense in depth only).
+- Frontend (6b, jest only): the guide heading is the focus target of the existing just-updated focus behavior (**plan §3.8 was corrected: no second focus effect**), the progress sentence is a polite status in a stepped guide, and nothing else changes.
+
+**Verification [Executed unless noted].**
+- New tests: `tests/unit/diyAskStepPolicy.test.js` (12), `tests/ask/diyStepUpdate.test.js` (18), `src/components/ask/__tests__/diyStepActions.test.tsx` (9). Updated expectations: operation count 125, adapters 108, domain commands 48, the diy skill's stance in the step 5 test, and the matrix and allow-list test lists.
+- **Mutation checks: 22 backend mutants, 21 killed, 1 survives by design** (M22: the guard "emit actions only if the safety block is directly above" cannot be violated by the current builder, which always emits the block first; the adjacency test on the final sequence is the real control). M11 (live token instead of the proposed one) first SURVIVED, exposed a gap, got its own test, and is now killed. Frontend: 6 mutants (one invalid, redone), all killed after adding a "same execution re-rendered" test that exposed that focus-on-every-render had survived.
+- Suites: `npm run test:ask:chunked` 1903 of 1910 pass; the 6 failures are in the same six files proven failing on clean HEAD in earlier steps (askGovernance routing, askImportGraphGuardrails, askRawSuggestionProducers (inventory and recordConfirm handlers, not mine), askRoutingCalibration, healthGapCapture, skillEvaluationRegistry); the earlier record counted 7 tests, this run shows 6, **not re-proved on a clean worktree this time**. `tests/unit/diy*.test.js` 197 of 197 after moving the lock (one guard failed first and led to that move). Backend and workers `tsc` clean. Frontend `next build` succeeds; `src/components/ask` jest shows only the 5 known failures (`maintenanceShelves` 4, `displayPatterns` 1).
+- **Not run:** real Postgres (the share locks, the transaction ordering, `FOR SHARE` waits), a browser (focus, screen reader), the built-worker smoke, the full frontend and worker suites.
+
+**Honest limits.** Nothing here is reachable for a real project until a first template is published (O7). The in-transaction checks are proved against a serialized fake, not against concurrent Postgres transactions. The DIY skill's enable flag is unchanged; its start-up validators passed in tests, not at a real boot.
+
+**Remaining:** 6c (owner-run Postgres script, read-only queries, runbook), then FRD and design-doc closure for the step.

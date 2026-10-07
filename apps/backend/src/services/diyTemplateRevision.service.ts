@@ -283,3 +283,13 @@ export async function retireHead(db: RevisionDb, input: { templateId: string; re
   if (retired.count === 0 || cleared.count === 0) throw new DiyTemplateRevisionError('REVISION_STATE_CONFLICT', 'The published revision changed while it was being withdrawn. Reload and try again.');
   return { retiredRevisionId: headId };
 }
+
+/**
+ * A SHARE lock on a revision row and its template row, in the order the governance writers update them (revision, then template), so a withdrawal or supersession
+ * cannot commit between a transaction's read of the guide source and its own commit. It reads and writes nothing else. Must run inside a transaction
+ * (docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md section 3.9). Kept here because this service owns these rows.
+ */
+export async function shareLockGovernanceRows(tx: Prisma.TransactionClient, ids: { revisionId: string | null; templateId: string | null }): Promise<void> {
+  if (ids.revisionId) await tx.$queryRaw`SELECT id FROM diy_template_revisions WHERE id = ${ids.revisionId} FOR SHARE`;
+  if (ids.templateId) await tx.$queryRaw`SELECT id FROM diy_project_templates WHERE id = ${ids.templateId} FOR SHARE`;
+}

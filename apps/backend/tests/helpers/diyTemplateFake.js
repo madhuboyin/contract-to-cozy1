@@ -253,6 +253,8 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
         return { count: rows.length };
       },
     },
+    // Row share locks (FOR SHARE) are recorded, not simulated: `state.locks` holds the table and id each one named.
+    async $queryRaw(strings, ...values) { state.locks = state.locks ?? []; state.locks.push({ sql: strings.join('?').replace(/\s+/g, ' ').trim(), values }); return []; },
     // Serialized like row locks, all-or-nothing like a transaction.
     async $transaction(work) {
       const previous = db.__tail;
