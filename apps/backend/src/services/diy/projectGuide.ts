@@ -19,36 +19,36 @@ export type GuideRefusalReason =
 export const GUIDE_REFUSAL_COPY: Record<Exclude<GuideRefusalReason, 'PROJECT_FINISHED'>, { title: string; body: string }> = {
   AI_GUIDE_PROJECT: {
     title: "I can't guide this project here",
-    body: "This project's steps were written by an AI guide and haven't been reviewed, so I can't walk you through them. They're on the project page.",
+    body: "This project's steps were written by an AI guide and haven't been reviewed, so I can't walk you through them. They aren't shown here.",
   },
   NOT_TEMPLATE_PROJECT: {
     title: "I can't guide this project here",
-    body: "This project wasn't started from a reviewed guide, so I can't walk you through it. Its steps are on the project page.",
+    body: "This project wasn't started from a reviewed guide, so I can't walk you through it.",
   },
   NO_REVISION: {
     title: "I can't guide this project here",
-    body: "This project was started before its guide could be checked against a reviewed version, so I can't guide it here. The steps are on the project page.",
+    body: "This project was started before its guide could be checked against a reviewed version, so I can't guide it here.",
   },
   NOT_REVIEWED: {
     title: "I can't guide this project here",
-    body: "This project was started before its guide could be checked against a reviewed version, so I can't guide it here. The steps are on the project page.",
+    body: "This project was started before its guide could be checked against a reviewed version, so I can't guide it here.",
   },
-  REVISION_INTEGRITY: { title: 'This guide is temporarily unavailable', body: 'This guide is temporarily unavailable. The steps are on the project page.' },
+  REVISION_INTEGRITY: { title: 'This guide is temporarily unavailable', body: 'This guide is temporarily unavailable. Try again later.' },
   NOT_ELIGIBLE: {
     title: "This kind of work isn't covered here",
-    body: "This kind of work isn't covered by guided DIY help. The project page has what you recorded.",
+    body: "This kind of work isn't covered by guided DIY help.",
   },
   TOO_MANY_STEPS: {
     title: 'This project has more steps than I can show here',
-    body: 'This project has more steps than I can show here. Open it on the project page.',
+    body: 'This project has more steps than I can show here.',
   },
   STEPS_NOT_FROM_REVISION: {
     title: "I can't confirm these steps",
-    body: "I can't confirm these steps match the reviewed guide, so I won't walk you through them. They're on the project page.",
+    body: "I can't confirm these steps match the reviewed guide, so I won't walk you through them.",
   },
 };
 
-export const GUIDE_WITHDRAWN_COPY = 'This guide has been withdrawn. You can keep reading the steps you started with, but check the project page before you rely on them.';
+export const GUIDE_WITHDRAWN_COPY = 'This guide has been withdrawn. You can keep reading the steps you started with, but do not rely on them without checking them first.';
 export const GUIDE_CORRECTED_COPY = 'A corrected version of this guide is available. This project keeps the steps it started with.';
 
 type StepRow = {
@@ -124,7 +124,6 @@ export function evaluateProjectGuide(source: GuideSource): GuideEvaluation {
 
 // ---- the answer ------------------------------------------------------------------------------------------------------------------------------------
 
-export const DIY_GUIDE_ACTION_ID = 'open-diy-project';
 
 // Step 6 (docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md): the declared actions that advance the CURRENT step. The exact canned message selects the action;
 // typed wording never writes. The ids are allow-listed for DIY_PROJECT_GUIDE in askAnswerTrustPolicy.
@@ -203,39 +202,30 @@ export function resolvedProgress(steps: Array<Pick<StepRow, 'status'>>, asOf: Da
   return { current: Math.max(1, total), total: Math.max(1, total), completed, skipped, label: `All ${total} ${total === 1 ? 'step' : 'steps'} resolved, ${completed} done${skipped > 0 ? `, ${skipped} skipped` : ''}`, asOf: asOf.toISOString() };
 }
 
-export function projectPageHref(propertyId: string, projectId: string) {
-  return `/dashboard/diy/projects/${encodeURIComponent(projectId)}?propertyId=${encodeURIComponent(propertyId)}`;
-}
-export const diyListHref = (propertyId: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/diy`;
-
-const openAction = (href: string) => ({ id: DIY_GUIDE_ACTION_ID, label: 'Open this project', href, style: 'PRIMARY' as const });
-
-/** The refusal answer: a fixed explanation and the page link, never a partial guide. */
-export function refusalBlocks(reason: GuideRefusalReason, source: GuideSource | null, propertyId: string, projectId: string): AskPresentationBlock[] {
-  const href = projectPageHref(propertyId, projectId);
+/** The refusal answer: a fixed explanation, never a partial guide and never a link out of Ask (Ask is self-sufficient). */
+export function refusalBlocks(reason: GuideRefusalReason, source: GuideSource | null, _propertyId: string, _projectId: string): AskPresentationBlock[] {
   if (reason === 'PROJECT_FINISHED' && source) {
     const { status, completionBasis } = source.project;
     const body = completionBasis === 'LINKED_TASK' && status === 'HIRED_OUT' ? TASK_LINK_COPY.CLOSED_HIRED_OUT
       : completionBasis === 'LINKED_TASK' ? TASK_LINK_COPY.CLOSED_COMPLETED
         : status === 'COMPLETED' ? 'This project is finished.' : status === 'HIRED_OUT' ? 'This project was hired out.' : 'This project was stopped.';
-    return [{ type: 'SUMMARY', id: 'diy-guide-finished', title: source.project.title, body, tone: 'DEFAULT', actions: [openAction(href)] }];
+    return [{ type: 'SUMMARY', id: 'diy-guide-finished', title: source.project.title, body, tone: 'DEFAULT', actions: [] }];
   }
   const copy = GUIDE_REFUSAL_COPY[reason as Exclude<GuideRefusalReason, 'PROJECT_FINISHED'>];
-  return [{ type: 'EMPTY_STATE', id: 'diy-guide-unavailable', title: copy.title, body: copy.body, actions: [openAction(href)] }];
+  return [{ type: 'EMPTY_STATE', id: 'diy-guide-unavailable', title: copy.title, body: copy.body, actions: [] }];
 }
 
-export function projectNotFoundBlocks(propertyId: string): AskPresentationBlock[] {
+export function projectNotFoundBlocks(_propertyId: string): AskPresentationBlock[] {
   return [{
     type: 'EMPTY_STATE', id: 'diy-guide-not-found', title: "I couldn't find that project",
-    body: "I couldn't find that project. Your active DIY projects are in the DIY Project Center.",
-    actions: [{ id: DIY_GUIDE_ACTION_ID, label: 'Open DIY Project Center', href: diyListHref(propertyId), style: 'PRIMARY' as const }],
+    body: "I couldn't find that project. Ask me to show your DIY projects to see the active ones.", actions: [],
   }];
 }
 
-/** The stale-source disclosure of a guide that passed the gate (withdrawn: caution with the page link; superseded: informational). Empty for a current one. */
-function sourceDisclosure(evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>, href: string): AskPresentationBlock[] {
+/** The stale-source disclosure of a guide that passed the gate (withdrawn: caution; superseded: informational). Empty for a current one. */
+function sourceDisclosure(evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>): AskPresentationBlock[] {
   if (evaluation.sourceState === 'WITHDRAWN') {
-    return [{ type: 'BOUNDARY', id: 'diy-guide-withdrawn', title: 'This guide has been withdrawn', body: GUIDE_WITHDRAWN_COPY, severity: 'CAUTION', suggestions: [], actions: [openAction(href)] }];
+    return [{ type: 'BOUNDARY', id: 'diy-guide-withdrawn', title: 'This guide has been withdrawn', body: GUIDE_WITHDRAWN_COPY, severity: 'CAUTION', suggestions: [] }];
   }
   if (evaluation.sourceState === 'SUPERSEDED') {
     return [{ type: 'BOUNDARY', id: 'diy-guide-corrected', title: 'A corrected version is available', body: GUIDE_CORRECTED_COPY, severity: 'INFO', suggestions: [] }];
@@ -272,10 +262,9 @@ export function buildProjectGuideBlocks(input: {
 }): AskPresentationBlock[] {
   const { source, evaluation, propertyId, asOf } = input;
   const { project } = source;
-  const href = projectPageHref(propertyId, project.id);
   const blocks: AskPresentationBlock[] = [];
 
-  blocks.push(...sourceDisclosure(evaluation, href));
+  blocks.push(...sourceDisclosure(evaluation));
   // A linked task whose reconciliation failed (only possible while the project is open). Placed BEFORE the step's safety note, which must stay directly above the card.
   if (input.taskLink?.canRecover) {
     blocks.push({
@@ -293,12 +282,11 @@ export function buildProjectGuideBlocks(input: {
     blocks.push({
       type: 'TASK_GUIDE', id: 'diy-project-guide', title: clip(project.title, 160, { truncated: false }), summary: resolvedProgress(project.steps, asOf).label,
       eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide'], icon: GUIDE_ICONS[project.category] ?? 'TASK', chips: [], tip: null,
-      main: { title: 'Every step is resolved', body: canFinish ? 'You can finish the project here, or on the project page.' : 'Finish the project on the project page.', facts: [] },
+      main: { title: 'Every step is resolved', body: canFinish ? 'You can finish the project here.' : evaluation.sourceState === 'WITHDRAWN' ? 'This guide has been withdrawn, so the project cannot be finished from it.' : 'A contributor or owner of this home can finish the project.', facts: [] },
       history: [], notes: [],
       actions: [
         ...(canFinish ? [projectAction(DIY_PROJECT_FINISH, 'DIY_PROJECT_COMPLETE', project.id, 'PRIMARY')] : []),
         ...(last ? [viewAction({ ...DIY_VIEW_ACTIONS.REVIEW_LAST }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: last.id, actionId: DIY_VIEW_ACTION_ID })] : []),
-        openAction(href),
       ],
       progress: resolvedProgress(project.steps, asOf), outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
     } as AskPresentationBlock);
@@ -335,7 +323,7 @@ export function buildProjectGuideBlocks(input: {
   const tip = step.tipNote && step.tipNote.trim() ? { title: 'Tip', body: clip(step.tipNote, 400, flags) } : null;
   const mainBody = clip(step.description, 800, flags);
   const mainTitle = clip(step.title, 80, flags);
-  const notes = flags.truncated ? [{ id: 'diy-guide-truncated', title: 'Longer on the page', body: 'Part of this step is shortened here. The full step is on the project page.' }] : [];
+  const notes = flags.truncated ? [{ id: 'diy-guide-truncated', title: 'Shortened here', body: 'Part of this step is shortened here.' }] : [];
 
   blocks.push({
     type: 'TASK_GUIDE', id: 'diy-project-guide', title: clip(project.title, 160, flags), summary: progress.label,
@@ -343,11 +331,11 @@ export function buildProjectGuideBlocks(input: {
     icon: GUIDE_ICONS[project.category] ?? 'TASK',
     chips, tip, main: { title: mainTitle, body: mainBody, facts }, history: [], notes,
     actions: [...advancing, ...(previous ? [viewAction({ ...DIY_VIEW_ACTIONS.PREVIOUS }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: previous.id, actionId: DIY_VIEW_ACTION_ID })] : []),
-      ...(input.canAdvance ? [viewAction(DIY_PROJECT_MORE, { entityType: DIY_PROJECT_ENTITY_TYPE, entityId: project.id, actionId: DIY_PROJECT_MORE.actionId }, 'QUIET')] : []), openAction(href)],
+      ...(input.canAdvance ? [viewAction(DIY_PROJECT_MORE, { entityType: DIY_PROJECT_ENTITY_TYPE, entityId: project.id, actionId: DIY_PROJECT_MORE.actionId }, 'QUIET')] : [])],
     progress, outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
   } as AskPresentationBlock);
 
-  blocks.push(scopeBoundary(advance ? 'You can mark the current step done or skip it here, or use the project page.' : 'You mark steps done on the project page.'));
+  blocks.push(scopeBoundary(advance ? 'You can mark the current step done or skip it here.' : evaluation.sourceState === 'WITHDRAWN' ? 'This guide has been withdrawn, so steps cannot be changed from it.' : 'A contributor or owner of this home can mark steps done.'));
   return blocks;
 }
 
@@ -368,10 +356,9 @@ export function buildPreviousStepBlocks(input: {
   const step = ordered[viewedIndex];
   const current = currentStepOf(ordered);
   const currentIndex = current ? ordered.findIndex((row) => row.id === current.id) : -1;
-  const href = projectPageHref(propertyId, project.id);
   const flags = { truncated: false };
 
-  const blocks: AskPresentationBlock[] = [...sourceDisclosure(evaluation, href)];
+  const blocks: AskPresentationBlock[] = [...sourceDisclosure(evaluation)];
   const hasNote = Boolean(step.safetyNote && step.safetyNote.trim());
   if (hasNote) blocks.push({ type: 'BOUNDARY', id: 'diy-step-safety', title: 'Safety for this step', body: step.safetyNote as string, severity: 'CAUTION', suggestions: [] });
   const safetyShown = !hasNote || blocks[blocks.length - 1]?.id === 'diy-step-safety';
@@ -401,12 +388,12 @@ export function buildPreviousStepBlocks(input: {
     eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide', 'Earlier step'],
     icon: GUIDE_ICONS[project.category] ?? 'TASK',
     chips, tip, main: { title: clip(step.title, 80, flags), body: clip(step.description, 800, flags), facts: [{ label: 'This step', value: step.isOptional ? 'Optional' : 'Required' }] },
-    history: [], notes: flags.truncated ? [{ id: 'diy-guide-truncated', title: 'Longer on the page', body: 'Part of this step is shortened here. The full step is on the project page.' }] : [],
-    actions: [...(canReopen ? [reopen] : []), ...(previous ? [viewAction({ ...DIY_VIEW_ACTIONS.PREVIOUS }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: previous.id, actionId: DIY_VIEW_ACTION_ID })] : []), back, openAction(href)],
+    history: [], notes: flags.truncated ? [{ id: 'diy-guide-truncated', title: 'Shortened here', body: 'Part of this step is shortened here.' }] : [],
+    actions: [...(canReopen ? [reopen] : []), ...(previous ? [viewAction({ ...DIY_VIEW_ACTIONS.PREVIOUS }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: previous.id, actionId: DIY_VIEW_ACTION_ID })] : []), back],
     progress: { current: viewedIndex + 1, total: ordered.length, completed, skipped, label, asOf: asOf.toISOString() },
     outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
   } as AskPresentationBlock);
-  blocks.push(scopeBoundary(canReopen ? 'You can reopen this step here, or use the project page.' : 'You change steps on the project page.'));
+  blocks.push(scopeBoundary(canReopen ? 'You can reopen this step here.' : evaluation.sourceState === 'WITHDRAWN' ? 'This guide has been withdrawn, so steps cannot be changed from it.' : 'A contributor or owner of this home can change steps.'));
   return blocks;
 }
 
@@ -417,13 +404,12 @@ export function buildPreviousStepBlocks(input: {
 export function buildProjectOptionsBlocks(input: { source: GuideSource; evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>; propertyId: string; asOf: Date; canEdit: boolean }): AskPresentationBlock[] {
   const { source, evaluation, propertyId, asOf } = input;
   const { project } = source;
-  const href = projectPageHref(propertyId, project.id);
   const back = viewAction({ id: 'diy-step-back', label: 'Back to the guide', message: DIY_VIEW_ACTIONS.BACK.message }, { entityType: DIY_PROJECT_ENTITY_TYPE, entityId: project.id });
   const { currentIndex, progress, outline } = projectGuideProgress(project.steps, asOf);
   const shown = currentIndex >= 0 && progress ? progress : resolvedProgress(project.steps, asOf);
   // A TASK_GUIDE card, NOT a SUMMARY: the calm shell shows only a SUMMARY's first action, which would hide Hand off and Back.
   return [
-    ...sourceDisclosure(evaluation, href),
+    ...sourceDisclosure(evaluation),
     {
       type: 'TASK_GUIDE', id: 'diy-project-guide', title: clip(project.title, 160, { truncated: false }), summary: 'Stop or hand off this project',
       eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide', 'Stop or hand off'], icon: GUIDE_ICONS[project.category] ?? 'TASK', chips: [], tip: null,
@@ -453,7 +439,6 @@ export function buildFinishedProjectBlocks(input: {
 }): AskPresentationBlock[] {
   const { source, propertyId, asOf } = input;
   const { project } = source;
-  const href = projectPageHref(propertyId, project.id);
   const ordered = [...project.steps].sort((a, b) => a.stepNumber - b.stepNumber);
   const completed = ordered.filter((step) => step.status === 'COMPLETED').length;
   const skipped = ordered.filter((step) => step.status === 'SKIPPED').length;
@@ -463,9 +448,9 @@ export function buildFinishedProjectBlocks(input: {
   return [{
     type: 'TASK_GUIDE', id: 'diy-project-guide', title: clip(project.title, 160, { truncated: false }), summary: label,
     eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Finished'], icon: GUIDE_ICONS[project.category] ?? 'TASK', chips: [], tip: null,
-    main: { title: 'This project is finished', body: `${status} You can still add time, cost and notes on the project page.`, facts: [] },
+    main: { title: 'This project is finished', body: status, facts: [] },
     history: [], notes: [],
-    actions: [...(canRecord ? [recoverAction(DIY_RECOVER_ACTIONS.COMPLETION_EFFECTS, project.id)] : []), openAction(href)],
+    actions: [...(canRecord ? [recoverAction(DIY_RECOVER_ACTIONS.COMPLETION_EFFECTS, project.id)] : [])],
     progress: { current: Math.max(1, ordered.length), total: Math.max(1, ordered.length), completed, skipped, label, asOf: asOf.toISOString() },
     outline: ordered.map((step) => ({ stepId: step.id, title: clip(step.title, 160, { truncated: false }), optional: step.isOptional, state: (step.status === 'COMPLETED' ? 'DONE' : step.status === 'SKIPPED' ? 'SKIPPED' : 'UPCOMING') as 'DONE' | 'SKIPPED' | 'UPCOMING' })),
   } as AskPresentationBlock];

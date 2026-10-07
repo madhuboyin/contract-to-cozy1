@@ -18,7 +18,6 @@ const { getSkillForOperation } = require('../../src/services/skills/skillRegistr
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 const { diyService } = require('../../src/services/diy.service.ts');
 
-const PAGE = '/dashboard/properties/p1/tools/diy';
 const originals = { prisma: prismaModule.prisma, list: diyService.listProjects };
 let calls;
 
@@ -83,27 +82,27 @@ test('projects are summarized and listed with the page\'s labels, step progress 
     ['Re-caulk the tub', 'Planning', ['Plumbing', '0/4 steps', 'DIY Recommended']],
     ['Swap the bathroom fan', 'Planning', ['Electrical', '0/6 steps', 'Hire Recommended']],
   ]);
-  assert.equal(list.sections[0].items[0].href, '/dashboard/diy/projects/hall?propertyId=p1');
+  assert.equal(list.sections[0].items[0].href, undefined, 'Ask is self-sufficient: no row links out to the desktop page');
   assert.equal(result.blocks.some((block) => block.id === 'diy-limit'), false);
-  assert.equal(result.blocks[0].actions[0].href, PAGE);
+  assert.deepEqual(result.blocks[0].actions, [], 'no link out to the DIY Project Center');
 });
 
 test('a second page is disclosed; no active projects is not an all-clear', () => {
   const more = diyProjectsFromView(view({ nextCursor: 'fan' }), 'p1');
   assert.equal(more.blocks[0].title, '3+ active DIY projects');
-  assert.equal(more.blocks.find((block) => block.id === 'diy-limit').body, 'You have more active DIY projects than this. The rest are in the DIY Project Center.');
+  assert.equal(more.blocks.find((block) => block.id === 'diy-limit').body, 'You have more active DIY projects than this. Ask about one of them by name to see more.');
   const none = diyProjectsFromView({ items: [] }, 'p1');
   assert.equal(none.reasonCode, 'DIY_NO_ACTIVE_PROJECTS');
   assert.equal(none.blocks[0].title, 'No DIY projects in progress');
   assert.match(none.blocks.at(-1).body, /Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials/);
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and the browse action the whitelist', () => {
   const raw = diyProjectsFromView(view({ nextCursor: 'fan' }), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'diy.projects', operationId: 'DIY_PROJECTS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my DIY projects', operationId: 'DIY_PROJECTS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'DIY_PROJECTS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: diyProjectsFromView({ items: [] }, 'p1').blocks[0].actions[0], operationId: 'DIY_PROJECTS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
 });
 
 test('DIY-project phrasing routes here; the DIY-or-hire question and starting a project are not claimed by the pattern', () => {

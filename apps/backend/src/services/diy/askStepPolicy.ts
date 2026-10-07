@@ -47,8 +47,8 @@ export type AskStepPolicyDecision =
 /** The project-level rule for finishing from Ask (COMPLETE_PROJECT): the guide is reviewed, intact and not withdrawn. Whether every step is resolved is the service's own check. */
 export function evaluateAskProjectPolicy(source: GuideSource, _policy: 'COMPLETE_PROJECT'): AskStepPolicyDecision {
   const evaluation = evaluateProjectGuide(source);
-  if (evaluation.kind === 'REFUSED') return { ok: false, code: 'DIY_GUIDE_NOT_CURRENT', message: 'This project can no longer be guided here. Use the project page.', reason: evaluation.reason };
-  if (evaluation.sourceState === 'WITHDRAWN') return { ok: false, code: 'DIY_GUIDE_NOT_CURRENT', message: 'This guide has been withdrawn. Use the project page.', reason: 'WITHDRAWN' };
+  if (evaluation.kind === 'REFUSED') return { ok: false, code: 'DIY_GUIDE_NOT_CURRENT', message: 'This project can no longer be guided here.', reason: evaluation.reason };
+  if (evaluation.sourceState === 'WITHDRAWN') return { ok: false, code: 'DIY_GUIDE_NOT_CURRENT', message: 'This guide has been withdrawn.', reason: 'WITHDRAWN' };
   return { ok: true };
 }
 
@@ -62,8 +62,8 @@ export function evaluateAskStepPolicy(source: GuideSource, stepId: string, targe
   const offered = policy === 'REOPEN_FINISHED_STEP' ? target === 'IN_PROGRESS' : target === 'COMPLETED' || target === 'SKIPPED';
   if (!offered) return refuse('DIY_STEP_TRANSITION_NOT_ALLOWED', policy === 'REOPEN_FINISHED_STEP' ? 'Ask only reopens a finished step.' : 'Ask only marks a step done or skips it.', 'TARGET_NOT_OFFERED');
   const evaluation = evaluateProjectGuide(source);
-  if (evaluation.kind === 'REFUSED') return refuse('DIY_GUIDE_NOT_CURRENT', 'This project can no longer be guided here. Use the project page.', evaluation.reason);
-  if (evaluation.sourceState === 'WITHDRAWN') return refuse('DIY_GUIDE_NOT_CURRENT', 'This guide has been withdrawn. Use the project page.', 'WITHDRAWN');
+  if (evaluation.kind === 'REFUSED') return refuse('DIY_GUIDE_NOT_CURRENT', 'This project can no longer be guided here.', evaluation.reason);
+  if (evaluation.sourceState === 'WITHDRAWN') return refuse('DIY_GUIDE_NOT_CURRENT', 'This guide has been withdrawn.', 'WITHDRAWN');
   if (policy === 'REOPEN_FINISHED_STEP') {
     const step = source.project.steps.find((row) => row.id === stepId);
     if (!step || !TERMINAL.has(step.status)) return refuse('DIY_STEP_NOT_REOPENABLE', 'This step is not finished, so there is nothing to reopen. Look at the guide again.', 'NOT_FINISHED');

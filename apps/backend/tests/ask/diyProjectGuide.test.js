@@ -70,7 +70,7 @@ test('each refusal reason with its fixed copy; only a project WITH an aiGuideId 
   assert.equal(refused({ revision: revisionRow({ contentHash: null }) }).reason, 'REVISION_INTEGRITY', 'a governed revision with no hash is never usable');
   assert.match(guide.GUIDE_REFUSAL_COPY.AI_GUIDE_PROJECT.body, /written by an AI guide/);
   assert.doesNotMatch(guide.GUIDE_REFUSAL_COPY.NOT_TEMPLATE_PROJECT.body, /AI/, 'the generic copy claims nothing about who wrote the steps');
-  for (const copy of Object.values(guide.GUIDE_REFUSAL_COPY)) assert.match(copy.body, /project page|temporarily unavailable/);
+  for (const copy of Object.values(guide.GUIDE_REFUSAL_COPY)) assert.doesNotMatch(`${copy.title} ${copy.body}`, /project page|DIY Project Center|\/dashboard/i, 'Ask is self-sufficient: refusal copy never sends people to the desktop UI');
 });
 
 test('ineligible content is refused: high safety, a permit, and each excluded kind of work', () => {
@@ -178,7 +178,7 @@ test('the guide: every block parses against the real contract; the safety note i
   assert.equal(taskGuide.progress.label, 'Step 1 of 4, 0 done');
   assert.deepEqual(taskGuide.outline.map((e) => [e.title, e.state, e.optional]), [['Tape the trim', 'CURRENT', false], ['Cut in the edges', 'UPCOMING', false], ['Roll the walls', 'UPCOMING', false], ['Touch up', 'UPCOMING', true]]);
   assert.deepEqual([taskGuide.main.title, taskGuide.tip.body], ['Tape the trim', 'Press the tape edge down firmly.']);
-  assert.deepEqual(taskGuide.actions.map((a) => [a.id, a.href]), [['open-diy-project', '/dashboard/diy/projects/p1?propertyId=prop-1']]);
+  assert.deepEqual(taskGuide.actions, [], 'no link out to the desktop page');
   assert.ok(taskGuide.actions.every((a) => !a.interactionType), 'no step-advancing or workflow action in this step');
 });
 
@@ -198,11 +198,11 @@ test('a withdrawn guide keeps its snapshot readable behind a caution boundary; a
   for (const blocks of [withdrawn, superseded]) for (const block of blocks) AskPresentationBlockSchema.parse(block);
 });
 
-test('every step resolved while the project is open: a summary pointing at the page, no guide block', () => {
+test('every step resolved while the project is open: no guide block and no link out', () => {
   const resolved = guideBlocks({ steps: stepsFor(revisionRow(), { 1: 'COMPLETED', 3: 'COMPLETED', 7: 'COMPLETED', 9: 'SKIPPED' }) });
   // Step 7B: the resolved state is a TASK_GUIDE card (the calm shell shows only a SUMMARY's first action, which would hide the Review last step action).
   assert.deepEqual(resolved.map((b) => b.type), ['TASK_GUIDE']);
-  assert.match(resolved[0].main.body, /Finish the project on the project page\./);
+  assert.match(resolved[0].main.body, /A contributor or owner of this home can finish the project\./);
   assert.match(resolved[0].progress.label, /^All 4 steps resolved/);
 });
 
@@ -212,15 +212,16 @@ test('over-long step text is shortened to the contract limits and says so, never
   for (const block of blocks) AskPresentationBlockSchema.parse(block);
   const g = blocks.find((b) => b.type === 'TASK_GUIDE');
   assert.equal(g.main.body.length, 800); assert.ok(g.main.body.endsWith('…'));
-  assert.deepEqual(g.notes.map((n) => n.title), ['Longer on the page']);
+  assert.deepEqual(g.notes.map((n) => n.title), ['Shortened here']);
 });
 
-test('refusal and not-found answers parse, carry the page link, and the finished summary says how the project ended', () => {
+test('refusal and not-found answers parse, carry no link out, and the finished summary says how the project ended', () => {
   const reasons = ['AI_GUIDE_PROJECT', 'NOT_TEMPLATE_PROJECT', 'NO_REVISION', 'NOT_REVIEWED', 'REVISION_INTEGRITY', 'NOT_ELIGIBLE', 'TOO_MANY_STEPS', 'STEPS_NOT_FROM_REVISION'];
   for (const reason of reasons) {
     const blocks = guide.refusalBlocks(reason, source(), 'prop-1', 'p1');
     for (const block of blocks) AskPresentationBlockSchema.parse(block);
-    assert.equal(blocks[0].actions[0].href, '/dashboard/diy/projects/p1?propertyId=prop-1', reason);
+    assert.deepEqual(blocks[0].actions, [], reason);
+    assert.doesNotMatch(JSON.stringify(blocks), /\/dashboard\//, reason);
   }
   const finished = (status, completionBasis) => guide.refusalBlocks('PROJECT_FINISHED', source({ project: { status, completionBasis } }), 'prop-1', 'p1')[0].body;
   assert.equal(finished('COMPLETED', null), 'This project is finished.');
@@ -229,17 +230,18 @@ test('refusal and not-found answers parse, carry the page link, and the finished
   assert.equal(finished('ABANDONED', null), 'This project was stopped.');
   const notFound = guide.projectNotFoundBlocks('prop-1');
   AskPresentationBlockSchema.parse(notFound[0]);
-  assert.equal(notFound[0].actions[0].href, '/dashboard/properties/prop-1/tools/diy');
+  assert.deepEqual(notFound[0].actions, []);
+  assert.doesNotMatch(JSON.stringify(notFound), /DIY Project Center|\/dashboard\//);
 });
 
-test('TRUST PIPELINE: the final, validated sequence keeps the caution boundary immediately before the guide and keeps the guide and its page action', () => {
+test('TRUST PIPELINE: the final, validated sequence keeps the caution boundary immediately before the guide and keeps the guide', () => {
   const guideResult = withEvidence('DIY_PROJECT_GUIDE', { status: 'ANSWERED', reasonCode: 'DIY_PROJECT_GUIDE_READY', blocks: guideBlocks(), suggestions: [] });
   const { result, trust } = validateAskAnswerTrust({ question: 'Guide me through this project.', operationId: 'DIY_PROJECT_GUIDE', result: guideResult, propertyId: 'prop-1' });
   const types = result.blocks.map((b) => b.type);
   const at = types.indexOf('TASK_GUIDE');
   assert.ok(at > 0, 'the guide survived validation');
   assert.deepEqual([result.blocks[at - 1].type, result.blocks[at - 1].id, result.blocks[at - 1].severity], ['BOUNDARY', 'diy-step-safety', 'CAUTION'], 'adjacency holds in the FINAL sequence');
-  assert.deepEqual(result.blocks[at].actions.map((a) => a.id), ['open-diy-project'], 'the page action survived the action allow-list');
+  assert.deepEqual(result.blocks[at].actions.map((a) => a.id), [], 'no page action is offered, so none can survive the allow-list');
   assert.equal(result.blocks[at].progress.label, 'Step 1 of 4, 0 done');
   assert.ok(trust.outcome !== 'BLOCK', JSON.stringify(trust));
   for (const [name, blocks] of [['withdrawn', guideBlocks({ revision: revisionRow({ retiredAt: NOW, retiredReason: 'UNPUBLISHED' }), head: { publishedRevisionId: null } })], ['superseded', guideBlocks({ head: { publishedRevisionId: 'rev-2' } })]]) {
@@ -247,7 +249,7 @@ test('TRUST PIPELINE: the final, validated sequence keeps the caution boundary i
     assert.deepEqual(validated.blocks.map((b) => b.id), blocks.map((b) => b.id), `${name}: no boundary or action was stripped`);
   }
   const refusal = validateAskAnswerTrust({ question: 'Guide me through this project.', operationId: 'DIY_PROJECT_GUIDE', result: withEvidence('DIY_PROJECT_GUIDE', { status: 'ANSWERED', reasonCode: 'DIY_GUIDE_AI_GUIDE_PROJECT', blocks: guide.refusalBlocks('AI_GUIDE_PROJECT', source(), 'prop-1', 'p1'), suggestions: [] }), propertyId: 'prop-1' }).result;
-  assert.equal(refusal.blocks[0].actions[0].id, 'open-diy-project', 'the refusal keeps its page link');
+  assert.deepEqual(refusal.blocks[0].actions, [], 'the refusal offers no link out');
 });
 
 test('a TASK_GUIDE without the new fields (every existing producer, every stored execution) parses unchanged and adds no keys', () => {

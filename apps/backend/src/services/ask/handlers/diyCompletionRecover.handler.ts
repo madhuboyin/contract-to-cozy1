@@ -14,7 +14,7 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { diyService } from '../../diy.service';
-import { DIY_PROJECT_ENTITY_TYPE, DIY_RECOVER_ACTIONS, projectPageHref } from '../../diy/projectGuide';
+import { DIY_PROJECT_ENTITY_TYPE, DIY_RECOVER_ACTIONS } from '../../diy/projectGuide';
 
 const BOUNDARY_ID = 'diy-recover-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -66,7 +66,7 @@ export async function diyCompletionRecoverResult(userId: string, propertyId: str
   const contextVersion = contextOf(decl.kind, effects);
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const what = decl.kind === 'COMPLETION_EFFECTS' ? 'the records that follow your completion' : 'the update of your linked maintenance task';
-  const description = `Some of ${what} could not be updated. This asks Cozy to try again in the background. It does not change the project, and it cannot tell you whether the retry worked: check the project page afterwards.`;
+  const description = `Some of ${what} could not be updated. This asks Cozy to try again in the background. It does not change the project, and it cannot tell you whether the retry worked: ask me to show this project again afterwards to see its status.`;
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'DIY_COMPLETION_RECOVER_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
@@ -98,15 +98,14 @@ async function confirmDiyCompletionRecover(ctx: ConfirmCapabilityContext): Promi
   const effects = await diyService.readProjectEffects(projectId, execution.propertyId);
   if (!effects) throw writeError('This project is no longer available.', 'ASK_CONTEXT_VERSION_CONFLICT');
 
-  const link = { id: 'open-diy-project', label: 'Open this project', href: projectPageHref(execution.propertyId, projectId), style: 'SECONDARY' as const };
   const queuedReceipt = (already: boolean): AskOperationResult => ({
     status: 'COMPLETED', reasonCode: already ? 'DIY_RECOVER_ALREADY_QUEUED' : 'DIY_RECOVER_QUEUED',
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: 'diy-recover-receipt', title: already ? 'Already queued' : 'Queued again', status: 'COMPLETED',
       description: already
         ? 'The request was already queued, so nothing was changed. The records update in the background.'
-        : 'I asked Cozy to try again. The records update in the background, and this answer does not know yet whether it worked. Check the project page afterwards.',
-      details: [{ label: 'Request', value: kind === 'COMPLETION_EFFECTS' ? 'Record my completion' : 'Update my linked task' }], actions: [link],
+        : 'I asked Cozy to try again. The records update in the background, and this answer does not know yet whether it worked. Ask me to show this project again afterwards to see its status.',
+      details: [{ label: 'Request', value: kind === 'COMPLETION_EFFECTS' ? 'Record my completion' : 'Update my linked task' }], actions: [],
     }],
     suggestions: SUGGESTIONS,
   });

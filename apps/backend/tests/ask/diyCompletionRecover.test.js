@@ -114,7 +114,7 @@ test('the finished view says in words what is known about the records, for each 
     assert.match(cardOf(result).main.body, new RegExp(text.replace(/\./g, '\\.')), status);
     assert.equal(actionsOf(result).some((a) => a.id === 'diy-record-again'), offered, `${status}: recovery offered only for a dead letter`);
     assert.equal(actionsOf(await guide(false)).some((a) => a.id === 'diy-record-again'), false, `${status}: never to a viewer`);
-    assert.ok(actionsOf(result).some((a) => a.id === 'open-diy-project'));
+    assert.ok(actionsOf(result).every((a) => a.id !== 'open-diy-project'), 'no link out to the desktop page');
   }
   install(); completionEvent('DEAD_LETTER');
   assert.deepEqual(actionsOf(await guide()).find((a) => a.id === 'diy-record-again'), { id: 'diy-record-again', label: 'Record my completion again', interactionType: 'START_WORKFLOW', message: 'Record my completion again.', operationId: 'DIY_COMPLETION_RECOVER', entityType: 'DIY_PROJECT', entityId: 'p1', actionId: 'COMPLETION_EFFECTS', style: 'SECONDARY' });

@@ -106,7 +106,7 @@ test('FINISH is offered in the all-resolved summary to a person who can edit, on
   resolveAll();
   const summary = await guide();
   assert.deepEqual(finishOf(summary), { id: 'diy-project-finish', label: 'Finish this project', interactionType: 'START_WORKFLOW', message: 'Finish this project.', operationId: 'DIY_PROJECT_COMPLETE', entityType: 'DIY_PROJECT', entityId: 'p1', actionId: 'COMPLETE', style: 'PRIMARY' });
-  assert.deepEqual(cardOf(summary).actions.map((a) => a.id), ['diy-project-finish', 'diy-review-last-step', 'open-diy-project']);
+  assert.deepEqual(cardOf(summary).actions.map((a) => a.id), ['diy-project-finish', 'diy-review-last-step']);
   assert.equal(summary.blocks.some((b) => b.type === 'SUMMARY'), false, 'never a SUMMARY: the calm shell would show only its first action');
   assert.equal(finishOf(await guide(guideLaunch, false)), undefined, 'a viewer');
   db.state.templates.get('t1').publishedRevisionId = null;
@@ -257,7 +257,7 @@ test('finish confirm: the project is COMPLETED as the actor with one ledger row 
   assert.equal(tracked.length, 1);
   assert.deepEqual([tracked[0].userId, tracked[0].metadataJson], ['u1', { actionType: 'complete_project', source: 'ask' }]);
   assert.deepEqual([...new Set(db.state.writes.map((w) => w.model))].sort(), ['project'], 'the project row is the only model written directly; the outbox row is checked above');
-  assert.equal(validate('DIY_PROJECT_COMPLETE', result, 'OWNER').blocks[0].actions[0].id, 'open-diy-project');
+  assert.deepEqual(validate('DIY_PROJECT_COMPLETE', result, 'OWNER').blocks[0].actions.map((a) => a.id), [], 'the receipt offers no link out to the desktop page');
   // The guide afterwards is the finished-project view (7C), with no step, finish, stop or hand-off action.
   const after = await guide();
   assert.equal(after.reasonCode, 'DIY_PROJECT_FINISHED_VIEW');

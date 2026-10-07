@@ -17,7 +17,7 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } f
 import { logger } from '../../../lib/logger';
 import { currentStepOf, evaluateAskProjectPolicy, guideContextVersion } from '../../diy/askStepPolicy';
 import { describeCompletionEffects } from '../../diy/completionEffectsStatus';
-import { DIY_PROJECT_ENTITY_TYPE, DIY_PROJECT_FINISH, DIY_PROJECT_STOP_ACTIONS, projectPageHref, type GuideSource } from '../../diy/projectGuide';
+import { DIY_PROJECT_ENTITY_TYPE, DIY_PROJECT_FINISH, DIY_PROJECT_STOP_ACTIONS, type GuideSource } from '../../diy/projectGuide';
 
 const BOUNDARY_ID = 'diy-project-command-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -27,7 +27,6 @@ const boundary = (title: string, body: string, status: 'BLOCKED' | 'NOT_APPLICAB
   status, reasonCode, blocks: [{ type: 'BOUNDARY', id: BOUNDARY_ID, title, body, severity: 'INFO', suggestions: SUGGESTIONS }], suggestions: SUGGESTIONS,
 });
 const writeError = (message: string, code: string) => Object.assign(new Error(message), { code });
-const openLink = (propertyId: string, projectId: string) => ({ id: 'open-diy-project', label: 'Open this project', href: projectPageHref(propertyId, projectId), style: 'SECONDARY' as const });
 
 type Launch = CreateAskExecutionRequest['launchContext'] | undefined;
 
@@ -104,7 +103,7 @@ export async function diyProjectCompleteResult(userId: string, propertyId: strin
   if (source.project.status === 'COMPLETED') return alreadyFinished(source.project.title);
   if (!OPEN.includes(source.project.status)) return boundary('This project is already closed', 'A stopped or handed-off project cannot be finished here. Nothing was changed.', 'NOT_APPLICABLE', 'DIY_PROJECT_CLOSED');
   const policy = evaluateAskProjectPolicy(source, 'COMPLETE_PROJECT');
-  if (!policy.ok) return boundary('This guide cannot be used here any more', 'It was withdrawn or can no longer be checked against its reviewed version. Finish the project on the project page. Nothing was changed.', 'BLOCKED', 'DIY_PROJECT_GUIDE_NOT_CURRENT');
+  if (!policy.ok) return boundary('This guide cannot be used here any more', 'It was withdrawn or can no longer be checked against its reviewed version. Nothing was changed.', 'BLOCKED', 'DIY_PROJECT_GUIDE_NOT_CURRENT');
   if (currentStepOf(source.project.steps)) return boundary('Some steps are still open', 'Finish or skip the remaining steps first. Nothing was changed.', 'NOT_APPLICABLE', 'DIY_PROJECT_STEPS_INCOMPLETE');
 
   const linked = await diyService.getLinkedTaskState(propertyId, source.project.maintenanceTaskId ?? null);
@@ -176,9 +175,8 @@ async function confirmDiyProjectComplete(ctx: ConfirmCapabilityContext): Promise
     status: 'COMPLETED', reasonCode: 'DIY_PROJECT_COMPLETED',
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: 'diy-project-complete-receipt', title: 'Finished by you', status: 'COMPLETED',
-      description: `${effects?.summary ?? 'Recording your completion.'} This is recorded as your report; Cozy doesn't check the work. Time, cost and notes can be added on the project page.`,
-      details: [{ label: 'Project', value: source.project.title }, { label: 'Records', value: 'Being queued; this can take a little while' }],
-      actions: [openLink(execution.propertyId, projectId)],
+      description: `${effects?.summary ?? 'Recording your completion.'} This is recorded as your report; Cozy doesn't check the work.`,
+      details: [{ label: 'Project', value: source.project.title }, { label: 'Records', value: 'Being queued; this can take a little while' }], actions: [],
     }],
     suggestions: SUGGESTIONS,
   };
@@ -286,7 +284,7 @@ async function confirmDiyProjectAbandon(ctx: ConfirmCapabilityContext): Promise<
       description: outcome === 'HIRED_OUT'
         ? 'The project is marked as handed off. Nobody was booked or contacted, and nothing else was changed.'
         : 'The project is marked as stopped. Nothing else was changed.',
-      details: [{ label: 'Project', value: source.project.title }], actions: [openLink(execution.propertyId, projectId)],
+      details: [{ label: 'Project', value: source.project.title }], actions: [],
     }],
     suggestions: SUGGESTIONS,
   };

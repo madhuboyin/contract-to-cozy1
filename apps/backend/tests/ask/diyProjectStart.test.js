@@ -128,12 +128,13 @@ test('browse is the STRICT projection: a legacy-backfill, hash-mismatched, retir
   for (const block of empty.blocks) AskPresentationBlockSchema.parse(block);
 });
 
-test('browse marks a template that already has an open project, links to it and offers no second start; a closed project does not', async () => {
+test('browse marks a template that already has an open project, offers the in-Ask guide for it (never a page link) and no second start; a closed project does not', async () => {
   db.state.projects.push({ id: 'p1', propertyId: 'prop-1', templateId: 't1', status: 'IN_PROGRESS', steps: [], materials: [], tools: [] });
   const [row] = rowsOf(await browse());
   assert.equal(row.status, 'Already started');
-  assert.equal(row.actions, undefined);
-  assert.match(row.href, /projects\/p1/);
+  assert.deepEqual(row.actions.map((a) => [a.id, a.operationId]), [['guide-diy-project', 'DIY_PROJECT_GUIDE']], 'only the guide, never a second start');
+  assert.equal(row.href, undefined, 'no link out to the desktop page');
+  assert.equal(row.id, 'p1');
   db.state.projects[0].status = 'COMPLETED';
   assert.equal(rowsOf(await browse())[0].status ?? null, null);
 });
@@ -251,7 +252,7 @@ test('the receipt and the "already started" receipt keep their guide action thro
   const parameters = await proposed();
   const started = await confirm(parameters);
   const trusted = validate('DIY_PROJECT_START', started.result, 'OWNER');
-  assert.deepEqual(trusted.blocks[0].actions.map((a) => a.id), ['diy-start-guide', 'open-diy-project']);
+  assert.deepEqual(trusted.blocks[0].actions.map((a) => a.id), ['diy-start-guide']);
   const again = await confirm(parameters);
-  assert.deepEqual(validate('DIY_PROJECT_START', again.result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-start-guide', 'open-diy-project']);
+  assert.deepEqual(validate('DIY_PROJECT_START', again.result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-start-guide']);
 });

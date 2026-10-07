@@ -24,8 +24,6 @@ const DIY_CATEGORY_LABELS: Record<string, string> = {
 const DIY_VERDICT_LABELS: Record<string, string> = { DIY_RECOMMENDED: 'DIY Recommended', BORDERLINE: 'Borderline', HIRE_RECOMMENDED: 'Hire Recommended', HIRE_REQUIRED: 'Hire Required' };
 
 export function diyProjectsFromView(view: DiyProjectListView, propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/diy`;
-  const openAction = { id: 'open-diy', label: 'Open DIY Project Center', href: pageHref, style: 'PRIMARY' as const };
   // Step 8: the declared launch of the read-only browse of reviewed templates this home can start (viewers may browse; only a contributor or owner is offered Start inside it).
   const browseAction = {
     id: DIY_TEMPLATE_BROWSE_ACTION.id, label: DIY_TEMPLATE_BROWSE_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: DIY_TEMPLATE_BROWSE_ACTION.message,
@@ -43,8 +41,8 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
       status: 'ANSWERED', reasonCode: 'DIY_NO_ACTIVE_PROJECTS',
       blocks: [{
         type: 'SUMMARY', id: 'diy-summary', title: 'No DIY projects in progress',
-        body: 'You have no DIY projects in planning or in progress. See the reviewed low-risk projects you can start, or open the DIY Project Center.',
-        tone: 'DEFAULT', actions: [browseAction, { ...openAction, style: 'SECONDARY' as const }],
+        body: 'You have no DIY projects in planning or in progress. See the reviewed low-risk projects you can start.',
+        tone: 'DEFAULT', actions: [{ ...browseAction, style: 'PRIMARY' as const }],
       }, boundary],
       suggestions: ['What maintenance is due?'],
     };
@@ -60,16 +58,16 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
       hireFlagged ? `${hireFlagged} ${hireFlagged === 1 ? 'was' : 'were'} assessed as better hired out.` : null,
     ].filter(Boolean).join(' '),
     tone: hireFlagged ? 'CAUTION' : 'DEFAULT',
-    actions: [openAction],
+    actions: [],
   }];
   if (view.nextCursor) {
     blocks.push({
       type: 'LIMITATION', id: 'diy-limit', title: `Showing the ${items.length} most recently started projects`,
-      body: 'You have more active DIY projects than this. The rest are in the DIY Project Center.', severity: 'INFO',
+      body: 'You have more active DIY projects than this. Ask about one of them by name to see more.', severity: 'INFO',
     });
   }
   blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'diy-projects', title: 'Active DIY projects', description: 'Newest first, as on the page. Open a project for its steps.',
+    type: 'GROUPED_LIST', filters: [], id: 'diy-projects', title: 'Active DIY projects', description: 'Newest first.',
     sections: [{
       id: 'diy-active', title: 'Active projects', count: items.length,
       items: items.map((item) => ({
@@ -82,7 +80,6 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
           ...(item.decisionVerdict ? [DIY_VERDICT_LABELS[item.decisionVerdict] ?? readableCode(item.decisionVerdict)] : []),
         ],
         status: DIY_STATUS_LABELS[item.status] ?? readableCode(item.status),
-        href: `/dashboard/diy/projects/${encodeURIComponent(item.id)}?propertyId=${encodeURIComponent(propertyId)}`,
         // DIY project guide (ASK_COZY_DIY_PROJECT_GUIDE_PLAN): only a project started from a reviewed template version can be guided, so only it offers the
         // action. The guide itself re-checks everything and refuses with a page link, so this is a courtesy, not the gate. The item id is the project id.
         ...(item.templateId && !item.aiGuideId && item.templateRevisionId ? {

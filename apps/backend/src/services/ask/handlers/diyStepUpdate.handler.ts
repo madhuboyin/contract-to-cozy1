@@ -13,7 +13,7 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { diyService } from '../../diy.service';
 import { evaluateAskStepPolicy, guideContextVersion, currentStepOf, type AskStepPolicyName } from '../../diy/askStepPolicy';
-import { DIY_STEP_ACTIONS, DIY_STEP_ENTITY_TYPE, projectPageHref, type DiyStepActionKey, type GuideSource } from '../../diy/projectGuide';
+import { DIY_STEP_ACTIONS, DIY_STEP_ENTITY_TYPE, type DiyStepActionKey, type GuideSource } from '../../diy/projectGuide';
 
 const BOUNDARY_ID = 'diy-step-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -43,7 +43,7 @@ function refusalFor(decision: Extract<ReturnType<typeof evaluateAskStepPolicy>, 
     return boundary('This step cannot be changed here', 'Ask only marks a step done, skips it, or reopens a finished one. Nothing was changed.', 'BLOCKED', 'DIY_STEP_NOT_OFFERED');
   }
   if (decision.reason === 'PROJECT_FINISHED') return boundary('This project is finished', 'A finished project cannot be changed here. Nothing was changed.', 'NOT_APPLICABLE', 'DIY_STEP_PROJECT_FINISHED');
-  return boundary('This guide cannot be used here any more', 'It was withdrawn or can no longer be checked against its reviewed version. Use the project page. Nothing was changed.', 'BLOCKED', 'DIY_STEP_GUIDE_NOT_CURRENT');
+  return boundary('This guide cannot be used here any more', 'It was withdrawn or can no longer be checked against its reviewed version. Nothing was changed.', 'BLOCKED', 'DIY_STEP_GUIDE_NOT_CURRENT');
 }
 
 type StepTarget = 'COMPLETED' | 'SKIPPED' | 'IN_PROGRESS';
@@ -174,10 +174,9 @@ async function confirmDiyStepUpdate(ctx: ConfirmCapabilityContext): Promise<Conf
     blocks.push({
       type: 'WORKFLOW_PROGRESS', id: 'diy-step-update-receipt', title: TARGET_COPY[target].doneTitle, status: 'COMPLETED',
       description: allResolved && target !== 'IN_PROGRESS'
-        ? `${TARGET_COPY[target].doneNote} Every step is resolved. Finish the project on the project page.`
+        ? `${TARGET_COPY[target].doneNote} Every step is resolved.`
         : TARGET_COPY[target].doneNote,
-      details: [{ label: 'Step', value: step.title }, { label: 'Project', value: projectTitle }],
-      actions: [{ id: 'open-diy-project', label: 'Open this project', href: projectPageHref(execution.propertyId, projectId), style: 'SECONDARY' }],
+      details: [{ label: 'Step', value: step.title }, { label: 'Project', value: projectTitle }], actions: [],
     });
   }
   const result: AskOperationResult = { status: 'COMPLETED', reasonCode: alreadyApplied ? TARGET_COPY[target].alreadyCode : TARGET_COPY[target].doneCode, blocks, suggestions: SUGGESTIONS };
