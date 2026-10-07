@@ -1,7 +1,7 @@
 # `DIY_STEP_UPDATE`: Marking a Step Done or Skipping It From Ask — Step 6 Implementation Plan
 
 **Date:** October 6, 2026
-**Status:** **Draft, awaiting approval of S6-1 to S6-12 (§10).** Nothing in this plan is built. **It needs no schema change.**
+**Status:** **Approved with three corrections, now incorporated (§3.2, §3.9, §10): S6-1 to S6-4 and S6-6 to S6-12 approved; S6-5 approved with transaction-bound authorization and the atomic Ask policy guard.** The 6-0 trace is recorded in §12. Nothing is built. **It needs no schema change.**
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 6 (sequencing row "2": decisions O3, O8, O10, O11), D3 (current step, skip rules), D5 (self-reported, never verified), D7 (no notes from Ask), D8 (authorization, concurrency, impact refresh)
 **Follows:** steps 1 to 5, all pushed: revisions, transitions, completion outbox, reverse reconciliation and the read-only project guide ([`…PROJECT_GUIDE_PLAN`](ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md) is the direct predecessor: this step adds the first write to it).
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20 and the section 7 adversarial pass (§8); the project's Ask write-command rules (non-retrievable, read the traditional controller for hidden effects, declared-action-only starts guarded against `ASK_REFRESH`, allow-listed action ids, startup validators). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -26,6 +26,8 @@
 | W6 | **The viewer filter is pattern-based and has a hole for this step.** A block-level action is hidden from a `VIEWER` only if its id or label starts with one of a fixed list of mutation verbs (`add`, `complete`, `mark`, `set`, `update`, ...). **`skip` is not in the list**, so "Skip this step" would not be hidden from a viewer by the filter. The guided-journey skip action has the same latent gap; it is covered there only because the producer emits it only for contributors. | Code-traced |
 | W7 | A block-level action that looks like a mutation also needs the household role established by the audience policy, and its id must be in the operation's allow-list (`OPERATION_ACTION_IDS`), or the trust pipeline strips it silently. `START_WORKFLOW` actions on a `TASK_GUIDE` carry `message`, `operationId`, `entityType` and `entityId` (the seasonal guide already does this). | Code-traced |
 | W8 | The step-5 guide handler has no user in hand (`diyProjectGuideResult(propertyId, launchContext)`), so it cannot yet tell who may act. Its envelope does carry the user, and `ensurePropertyAccess(userId, propertyId)` returns the role (the journey continuation uses exactly this). | Code-traced |
+| W10 | **`updateStep` has no transaction-bound role check.** It claims the project row, checks the step token and applies the transition table, but authorization happens before it (route middleware on the page, the propose and confirm handlers in Ask). Project completion and the outbox adapters already check `hasPropertyRoleWithin(tx, ...)` inside their transactions (`DIY_ACCESS_REVOKED`); the step path does not. A revocation between the check and the write is therefore possible for every caller, page included. | Code-traced |
+| W11 | **Claiming the project row does not serialize against template governance or against the page.** `claimOpenProject` serializes writers of the project row. Withdrawal and supersession write the template revision row and the template head (`diyTemplateRevision.service.ts`), not the project row, and a page update to a different step is only ordered by the project claim. So "the guide is still guideable" and "this is still the first non-terminal step" checked before the transaction can change before it. | Code-traced |
 | W9 | **Nothing in this step can run for a real project yet** (G9, O7). | Code-traced |
 
 ## 3. Target behavior
@@ -43,9 +45,21 @@ Viewers see the guide exactly as in step 5, with no such action (it is not emitt
 
 `DIY_STEP_UPDATE` follows the `GUIDANCE_STEP_SKIP` pattern: non-routable, family `COMMAND`, floor `CONTRIBUTOR`, reached only by its declared actions.
 
-**Propose** (the handler): refuses unless the launch context is `entityType 'DIY_STEP'`, `operationId 'DIY_STEP_UPDATE'`, `surface` is not `ASK_REFRESH`, and the **message equals one of the two canned messages exactly** (so typed wording never writes, and a refresh never proposes). It then checks, each with a fixed refusal and nothing written: the user is a contributor or owner; the step exists in this property; the project is open; **the project still passes the guide gate** (strict step match included) and is not withdrawn; **the step is still the current step** (a stale card for an earlier step is refused as "this step has moved on"); and, for skip, the step is optional and has no safety note. A step already in the target status returns an **"already" receipt** with no confirmation. Otherwise it returns a confirmation: the step and project as fields, **the step's safety note repeated as a field when it has one**, a consequence line, a `contextVersion` hash (step id, status, version, project status) and the step's version token in the parameters.
+**Propose** (the handler): refuses unless the launch context is `entityType 'DIY_STEP'`, `operationId 'DIY_STEP_UPDATE'`, `surface` is not `ASK_REFRESH`, and the **message equals one of the two canned messages exactly** (so typed wording never writes, and a refresh never proposes). It then checks, each with a fixed refusal and nothing written: the user is a contributor or owner; the step exists in this property; the project is open; **the project still passes the guide gate** (strict step match included) and is not withdrawn; **the step is still the current step** (a stale card for an earlier step is refused as "this step has moved on"); and, for skip, the step is optional and has no safety note. A step already in the target status returns an **"already" receipt** with no confirmation. Otherwise it returns a confirmation: the step and project as fields, **the step's safety note repeated as a field when it has one**, a consequence line, a `contextVersion` built from the canonical guide snapshot (§3.2.1) and the step's version token in the parameters.
 
-**Confirm** (the confirm capability handler): re-checks access and the guide gate, re-reads the step, rejects a changed `contextVersion` (unless the step is already in the target status), and calls `diyService.updateStep` with the **actor, the target status and the step's version token** captured at propose time. The service stays the final authority: its refusals (`DIY_STALE`, `DIY_PROJECT_CLOSED`, `DIY_STEP_TRANSITION_NOT_ALLOWED`) are mapped to the confirmation conflict codes with plain copy. It then refreshes the source guide and the project list (§3.5).
+**Confirm** (the confirm capability handler): re-checks access and the guide gate, re-reads the guide snapshot, rejects a changed `contextVersion` (an early, friendly stale answer; unless the step is already in the target status), and calls `diyService.updateStep` with the **actor, the target status, the step's version token and the Ask policy `requireCurrentGuideStep`** (§3.9). **The checks before the call are advisory; the transaction inside the service is the final authority** on role, guideability and currency. Its refusals (`DIY_STALE`, `DIY_PROJECT_CLOSED`, `DIY_STEP_TRANSITION_NOT_ALLOWED`) are mapped to the confirmation conflict codes with plain copy. It then refreshes the source guide and the project list (§3.5).
+
+### 3.2.1 The context version
+
+`contextVersion` is a sha256 over a deterministic serialization of the **canonical guide snapshot**, built by one pure function used by both propose and confirm, never a subset assembled in the handler:
+
+- project id, status and `updatedAt`;
+- the current step's identity (its id and step number, or "none");
+- the current step's status and `updatedAt`;
+- a **steps fingerprint**: the ordered list of `(stepId, status, updatedAt)` for every step, so a change to any other step changes the version;
+- the revision's id, `contentHash`, retirement state and reason, and the template's **current head identity** (`publishedRevisionId`), so a withdrawal, supersession or correction changes the version.
+
+It exists to give an early, plain "this changed, look again" answer. It does not authorize or guard the write.
 
 ### 3.3 The receipt (D5)
 
@@ -71,6 +85,19 @@ The structure stays: the step's safety note is a caution block **immediately bef
 
 When the same guide card updates in place (a refresh after a confirmed command) and the current position changes, **focus moves to the card's heading** (made programmatically focusable) and the progress sentence, which becomes a polite live status, announces the new position. Nothing moves on first render, on a refresh that changes nothing, or on opening the tip. Reduced motion needs nothing (no animation).
 
+### 3.9 The service changes: authorization and Ask's narrower policy inside the transaction
+
+`diyService.updateStep` is extended (this is the canonical service, so the page benefits from the first change too):
+
+1. **Transaction-bound authorization, for every caller.** The first statement inside the transaction is `hasPropertyRoleWithin(tx, actorUserId, propertyId, 'CONTRIBUTOR')`, refusing with `DIY_ACCESS_REVOKED` (403), **before the idempotent early return** (a revoked person gets no receipt). This is the same helper and error that completion and the outbox adapters already use.
+2. **An optional Ask policy `requireCurrentGuideStep`** on the context. When set, inside the same transaction and **after the project row is claimed**, the service re-reads the guide source with the transaction client and requires: the project is open (the claim already requires it); the project passes the step 5 gate (`evaluateProjectGuide`, strict step match included) and its source state is not WITHDRAWN (`DIY_GUIDE_NOT_CURRENT`, 409); **the target step is the first non-terminal step** by authored order (`DIY_STEP_NOT_CURRENT`, 409); and, for skip, the step is optional with no safety note (`DIY_STEP_TRANSITION_NOT_ALLOWED`, from the table, restated in the policy so the rule is checked even if the table changes). **The canonical transition table still performs the actual transition**; the policy only narrows what Ask may do. The page passes no policy, so its behavior (out-of-order updates included) is unchanged apart from item 1.
+3. **Withdrawal is read, and optionally locked, in the transaction.** The policy reads the revision and template head with the transaction client. Because withdrawal and supersession write those rows (W11), the plan asks 6a-0 to confirm whether a share lock on them is practical; if it is, the policy takes it so a concurrent withdrawal cannot commit between the read and the commit. If it is not, the residual is stated exactly: a withdrawal that commits during the few statements of the transaction is not seen, and the recorded step is still a true record of what the person reported.
+4. The policy is a pure predicate over the in-transaction snapshot plus the step and requested status, exported and unit-tested without a database; the service wires it. The same snapshot function feeds §3.2.1.
+
+### 3.10 The viewer filter is defense in depth, not authorization
+
+The audience filter hardening (§3.6) is a second layer that removes a mutation-looking action from a viewer's answer. **Authorization is the emit-time role gate, the propose and confirm role checks, and above all the in-transaction role check of §3.9.** No test or document counts the filter as the control.
+
 ## 4. Schema
 
 **None.** The transition, the version token and the ledger exist (step 2).
@@ -79,8 +106,8 @@ When the same guide card updates in place (a refresh after a confirmed command) 
 
 | Slice | Content | Gate |
 | --- | --- | --- |
-| **6-0** | A trace, no behavior change: how a `START_WORKFLOW` action on a `TASK_GUIDE` reaches the handler (which launch fields survive), the confirm-card rendering of fields, the domain-command and confirm-handler registries and their counted tests, the skill write-effects validators, and the exact verbs of the mutation filter | Findings recorded in §12 |
-| **6a** | Backend: the guide handler gains the user and emits the actions (§3.1, §3.7); the operation, propose and confirm handlers, the domain command, the receipt; the impact map; the skill moves to write effects (S6-7); the registration chain; the filter hardening; tests and mutation checks | Governance, registry, startup-registry and Ask suites; `tsc` |
+| **6-0** | **Done, recorded in §12.** A trace, no behavior change: how a `START_WORKFLOW` action on a `TASK_GUIDE` reaches the handler (which launch fields survive), the confirm-card rendering of fields, the domain-command and confirm-handler registries and their counted tests, the skill write-effects validators, and the exact verbs of the mutation filter | Findings recorded in §12 |
+| **6a** | Backend: **the service changes of §3.9 first (transaction-bound role check, the Ask policy, the snapshot function), then** the guide handler gains the user and emits the actions (§3.1, §3.7); the operation, propose and confirm handlers, the domain command, the receipt; the impact map; the skill moves to write effects (S6-7); the registration chain; the filter hardening; tests and mutation checks | Governance, registry, startup-registry and Ask suites; `tsc` |
 | **6b** | Frontend: focus and announcement on in-place update; jest tests and mutation checks | `next build`; the frontend Ask suites |
 | **6c** | An owner-run real-Postgres script (the real confirm path, the real transition, database triggers proving exactly which tables a command writes), read-only queries and the runbook; **written, not run here** | Your gate |
 
@@ -102,6 +129,9 @@ When the same guide card updates in place (a refresh after a confirmed command) 
 | Skill, domain command, adapter, coverage matrix, certification, semantic packages, audience policy, allow-lists with the exact action ids, startup-registry validators, the counted assertions (operations, adapters, confirm handlers, domain commands) | Test (governance, registry and Ask suites) |
 | Frontend: focus moves to the heading and the status announces the new position when a guide updates in place; nothing moves on first render, an unchanged refresh or the tip; the actions render with their declared styles | Test, jest |
 | Mutation checks: skip allowed for a required or safety-note step; the actions offered to viewers or on a withdrawn guide; typed wording writing; the `ASK_REFRESH` guard removed; the version token dropped; replay writing a second ledger row; the safety block dropped or moved after the card; the receipt saying "verified"; the impact refresh dropped; focus moving on first render | Executed in 6a/6b |
+| **Atomicity (new):** with the Ask policy set, a project step update is refused inside the transaction when the actor's role was revoked, the project closed, the guide was withdrawn or corrupted, the step is no longer the first non-terminal step, or skip is no longer allowed, each with nothing written, using a fake whose reads change between the pre-check and the transaction; the same role refusal for the page path without the policy; the idempotent early return comes after the role check | Test, on the shared fake |
+| **Context version:** changes when any other step, the project version, the revision's hash or retirement, or the head changes; unchanged by irrelevant fields; identical for propose and confirm on the same state | Test |
+| Mutation checks (added): role check moved after the early return or removed; policy skipped on confirm; "first non-terminal" replaced by "this step exists"; the context version reduced to step id/status/version | Executed in 6a |
 | Real Postgres: the real confirm and transition and the triggers | 6c: **written, owner-run, not run here** |
 
 ## 7. Rollout
@@ -112,8 +142,8 @@ No schema push, no worker. Deploy the backend, then the frontend. The `diy` skil
 
 - **A stale card.** A person opens the guide, someone else marks the step done on the page, the person presses "Mark this step done": the propose step sees the step already done and answers "already", or sees it is no longer current and refuses; the confirm re-checks and the service's token refuses anything that slipped between.
 - **Marking an earlier or later step.** Ask offers only the current step's action and re-checks it is still current at propose and confirm, so Ask cannot be used to mark steps out of order, although the page can (the service allows it); that asymmetry is deliberate and recorded.
-- **A guide that became ineligible or withdrawn mid-job.** The gate is re-run at propose and confirm; a withdrawn guide offers no advancing action and a confirm that arrives after withdrawal is refused.
-- **The viewer hole (W6).** Closed twice: no emit for viewers, and the pattern hardened; both tested on the final sequence.
+- **A guide that became ineligible or withdrawn mid-job, or a different step changed by the page, between confirm's check and the write.** The pre-checks and `contextVersion` are advisory; the policy of §3.9 re-checks currency, guideability and the current step inside the transaction after the project claim, so none of these can slip through the gap the earlier draft left. A withdrawn guide offers no advancing action and a confirm that arrives after withdrawal is refused.
+- **The viewer hole (W6).** The emit-time gate is primary; the pattern hardening is defense in depth only; both tested on the final sequence. Revocation between confirm and write is closed by the in-transaction role check (§3.9).
 - **Replays and double confirmation.** The service is idempotent by resulting state; a second confirmation yields an "already" receipt and no second ledger row.
 - **Self-report.** Nothing says "verified"; the receipt says so in words, and the skill's evaluation cases pin that no operation upgrades a step report.
 - **The page and Ask racing.** Both use the same service and the same version tokens; the loser gets `DIY_STALE` and plain copy.
@@ -131,15 +161,29 @@ No schema push, no worker. Deploy the backend, then the frontend. The `diy` skil
 
 | # | Decision | Recommendation |
 | --- | --- | --- |
-| **S6-1** | Scope: `DIY_STEP_UPDATE` with **complete** and **skip** only. Reopen, the previous-step view, project complete and abandon, and the recovery command are step 7 (the design's row 3) | Yes |
-| **S6-2** | One operation, entity `DIY_STEP`, the action chosen by the exact canned message; declared-action-only; non-routable; guarded against `ASK_REFRESH` | Yes |
-| **S6-3** | The actions live on the guide card, for the current step only, for contributors and owners only, only when the guide is current or superseded; skip only for an optional step without a safety note | Yes |
-| **S6-4** | The safety note stays a caution block directly before the card; the advancing action sits inside the card; the confirmation repeats the note; adjacency tested on the final trust-validated sequence | Yes |
-| **S6-5** | Propose and confirm both re-check access, the guide gate, that the step is still current and its version; the service is the final authority; replays return "already" | Yes |
-| **S6-6** | Receipt wording "Marked done by you" / "Skipped by you", self-reported, no verification claim; the all-resolved note points to the page | Yes |
-| **S6-7** | The `diy` skill moves to `autonomyLevel: 2`, effects `['READ', 'WRITE']`, `MATERIAL`, `PARTIALLY_REVERSIBLE`; a `CONTRIBUTOR` domain command with correction mode `REOPEN` declared and not offered; the FRD v1.58 "reads only" note is superseded for template-sourced projects only | Yes |
-| **S6-8** | Impact map: `DIY_STEP_UPDATE` refreshes `DIY_PROJECT_GUIDE` and `DIY_PROJECTS` | Yes |
-| **S6-9** | Harden the audience mutation-verb filter with `skip` and `reopen`; emit-time role gating stays primary | Yes |
-| **S6-10** | Frontend: focus the card heading and announce the position when a guide updates in place with a changed position; nothing otherwise | Yes |
-| **S6-11** | Verification as in §6: jest and the backend suites now; the real-Postgres script written and owner-run (not provisioned or run here); no browser; focus behavior reported unverified in a real browser | Yes |
-| **S6-12** | No schema change, no worker, no new flag; backend then frontend; accept that nothing is reachable in production until O7 | Yes |
+| **S6-1** | Scope: `DIY_STEP_UPDATE` with **complete** and **skip** only. Reopen, the previous-step view, project complete and abandon, and the recovery command are step 7 (the design's row 3) | Approved |
+| **S6-2** | One operation, entity `DIY_STEP`, the action chosen by the exact canned message; declared-action-only; non-routable; guarded against `ASK_REFRESH` | Approved |
+| **S6-3** | The actions live on the guide card, for the current step only, for contributors and owners only, only when the guide is current or superseded; skip only for an optional step without a safety note | Approved |
+| **S6-4** | The safety note stays a caution block directly before the card; the advancing action sits inside the card; the confirmation repeats the note; adjacency tested on the final trust-validated sequence | Approved |
+| **S6-5** | **Approved with corrections.** Propose and confirm re-check access, the guide gate, current step and the canonical-snapshot `contextVersion` as advisory early answers; **the service verifies CONTRIBUTOR access inside the mutation transaction (for every caller) and enforces the optional `requireCurrentGuideStep` policy inside it (project open, revision guideable and not withdrawn, first non-terminal step, skip allowed); the canonical transition table still performs the transition**; replays return "already" | Approved |
+| **S6-6** | Receipt wording "Marked done by you" / "Skipped by you", self-reported, no verification claim; the all-resolved note points to the page | Approved |
+| **S6-7** | The `diy` skill moves to `autonomyLevel: 2`, effects `['READ', 'WRITE']`, `MATERIAL`, `PARTIALLY_REVERSIBLE`; a `CONTRIBUTOR` domain command with correction mode `REOPEN` declared and not offered; the FRD v1.58 "reads only" note is superseded for template-sourced projects only | Approved |
+| **S6-8** | Impact map: `DIY_STEP_UPDATE` refreshes `DIY_PROJECT_GUIDE` and `DIY_PROJECTS` | Approved |
+| **S6-9** | Harden the audience mutation-verb filter with `skip` and `reopen`, **described as defense in depth, never as the authorization mechanism** | Approved |
+| **S6-10** | Frontend: focus the card heading and announce the position when a guide updates in place with a changed position; nothing otherwise | Approved |
+| **S6-11** | Verification as in §6: jest and the backend suites now; the real-Postgres script written and owner-run (not provisioned or run here); no browser; focus behavior reported unverified in a real browser | Approved |
+| **S6-12** | No schema change, no worker, no new flag; backend then frontend; accept that nothing is reachable in production until O7 | Approved |
+
+## 12. The 6-0 trace (read-only; nothing run)
+
+| # | Finding | Effect on the plan |
+| --- | --- | --- |
+| T1 | A `TASK_GUIDE` block's actions use the block-level action schema: `START_WORKFLOW` requires `message` and `operationId`, forbids `href`, and may carry `entityType`, `entityId` and `actionId`; the block allows up to six actions. The guided-journey precedent put its skip action on a list row (`interactionType: 'MUTATE_RECORD'`, `entityType: 'GUIDANCE_STEP'`); this plan uses the block-level shape instead. | Confirms §3.1's shape. The plan's choice to select the action by exact message stays; `actionId` (COMPLETE or SKIP) is carried as well and must match the message, which the propose guard checks. |
+| T2 | The precedent's propose handler guards exactly as §3.2 says (`launchContext.operationId`, `surface !== 'ASK_REFRESH'`, `message.trim() === CANNED`), refuses viewers with a boundary, returns an "already" receipt for a step already in the target state, and builds `NEEDS_CONFIRMATION` with `contextVersion`, `parameters` (including a 30-minute `confirmationExpiresAt`), a SUMMARY block and a `confirmation` object with `fields`, `editableFields: []`, `confirmLabel` and `consentText`. | Reuse the shape; the safety note goes in `fields` and in the SUMMARY block. |
+| T3 | Confirm handlers register by adapter key through `registerConfirmCapabilityHandler`, receiving `{ userId, execution, access, parameters, command }`, and may return `refreshedExecutions`. The registry test asserts **47** domain commands today and that the confirm-handler registry has no validation issues. | The count becomes 48; the test comment list gets the new entry. |
+| T4 | `TASK_GUIDE` actions **are** passed through the audience filter (`filterBlockActions` lists `TASK_GUIDE`); the filter tests id and label against `MUTATION_ACTION_PATTERN`. `mark` and `complete` match; `skip` and `reopen` do not. The same filter's owner-only pattern does not affect contributors. | Confirms W6 and §3.6, and that the hardening reaches the guide card. |
+| T5 | Skill validation: `skillRegistry.ts` requires `autonomyLevel >= 2` for any skill whose effects include WRITE or EXTERNAL_TRANSMISSION; the guided-journey skill is `autonomyLevel: 2` with `['READ', 'WRITE']`. Its adapter list, evaluation `expectedAdapters`/`expectedCanonicalCalls` and `skillAdapterRegistry` (kind `MUTATION_PREPARATION`) all name the new adapter. | Confirms S6-7. The DIY skill needs: manifest allowed adapter, evaluation case and expected lists, adapter registry entry (`'diy.step-update'`), SKILL.md write stance. |
+| T6 | The precedent's registration files outside the handler: orchestrator, operation registry (`definition(..., 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', adapter, ['SUMMARY','WORKFLOW_PROGRESS','BOUNDARY'])`), semantic packages, trust certification corpus, interaction coverage matrix (`canonicalOwner`), audience policy, answer trust policy (action ids), domain command registry, `ASK_MUTATION_IMPACT_MAP`, capability bridge, plus tests `askTrustArchitecture`, `askInteractionCoverageMatrix`, `askGovernance`, `skillTaxonomyExpansion`. | The 6a checklist; the operation's allow-listed action ids are added to `OPERATION_ACTION_IDS`, the coverage matrix entry must name `DIY_STEP_UPDATE`, and `startupRegistryValidation.test.js` runs before any push. |
+| T7 | Withdrawal and supersession are written by `diyTemplateRevision.service.ts` onto the revision row and the template head. Project writers claim only the project row. The existing precedent and the page path perform no in-transaction role check for step updates. | Basis for W10, W11 and §3.9. Open for 6a-0: whether a share lock on the revision and head rows is practical (table names and the writer's locking behavior are not yet read). |
+
+Everything above is **code-traced, not executed.**

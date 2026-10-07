@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.218
+**Version:** 1.219
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.219 — DIY step commands, step 6 plan approved with corrections:** the plan now requires that the canonical step update verify the person's edit access inside the same transaction that changes the step (for the project page as well as Ask), that Ask's narrower rules (project open, guide still reviewed and not withdrawn, this is still the first unfinished step, skipping still allowed) are re-checked inside that transaction rather than only before it, and that the confirmation's change detector covers every step, the project version and the guide's governance state. The earlier checks remain as early, friendly answers only. Tracing also recorded how the guide's declared actions, the confirmation and the registries fit. Nothing is built; the step stays unreachable for real projects until a first template is published (O7).
 
 **Revision 1.218 — DIY step commands, step 6 plan (draft):** a plan for letting a household member who can edit the property mark the current step of a DIY project done, or skip it when it is optional and has no safety note, from the project guide in Ask, through a confirmation and the same version-checked, attributed step change the project page uses. What is recorded is the person's own report ("marked done by you"); nothing is verified, and nothing else changes (no project completion, task, note or home event). The plan reuses the confirmation pattern of the guided-journey step skip, keeps the safety note directly above the action and repeats it in the confirmation, refreshes the guide in place, and moves focus to the new step. Tracing found that the viewer filter hides actions only when their text starts with a fixed list of verbs and "skip" is not on it, so the plan closes that two ways. The step needs no schema change and, like step 5, is unreachable for real projects until a first template is published (decision O7). Twelve decisions (S6-1 to S6-12) await approval; nothing is built. See `docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md`.
 
