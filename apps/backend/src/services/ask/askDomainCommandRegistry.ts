@@ -71,6 +71,8 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'DIY_PROJECT_ABANDON',
   // DIY completion recovery (step 7C): queue the failed records of a completion, or of a linked task, again. No correction mode: a re-queue of an idempotent request cannot be taken back.
   'DIY_COMPLETION_RECOVER',
+  // DIY project start (step 8): create a project from a reviewed template. Stoppable (Stop / Hand off on the guide), but not undoable or deletable.
+  'DIY_PROJECT_START',
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
@@ -193,6 +195,8 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   // No correction mode: a finished, stopped or handed-off project cannot be reopened anywhere in the product (claimOpenProject refuses any closed status).
   DIY_PROJECT_COMPLETE: command('DIY_PROJECT_COMPLETE', 'DIY_PROJECT_COMPLETE', 'diy.project-complete', 'CONTRIBUTOR', 'DIY_PROJECT', [], { title: 'Project not finished', body: 'The project was not changed.', suggestion: 'Show my DIY projects' }),
   DIY_PROJECT_ABANDON: command('DIY_PROJECT_ABANDON', 'DIY_PROJECT_ABANDON', 'diy.project-abandon', 'CONTRIBUTOR', 'DIY_PROJECT', [], { title: 'Project not changed', body: 'The project was not stopped or handed off.', suggestion: 'Show my DIY projects' }),
+  // STOP: a started project can be stopped or handed off from its guide or the project page; nothing undoes or deletes it.
+  DIY_PROJECT_START: command('DIY_PROJECT_START', 'DIY_PROJECT_START', 'diy.project-start', 'CONTRIBUTOR', 'DIY_PROJECT', ['STOP'], { title: 'Project not started', body: 'No project was created.', suggestion: 'Show the DIY projects I can start' }),
   DIY_COMPLETION_RECOVER: command('DIY_COMPLETION_RECOVER', 'DIY_COMPLETION_RECOVER', 'diy.completion-recover', 'CONTRIBUTOR', 'DIY_PROJECT', [], { title: 'Nothing queued again', body: 'No records were queued again and the project was not changed.', suggestion: 'Show my DIY projects' }),
   HOME_EVENT_RADAR_FEEDBACK: command('HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_FEEDBACK', 'home-event-radar.feedback', 'CONTRIBUTOR', 'PROPERTY_RADAR_FEEDBACK', ['EDIT'], { title: 'Feedback not sent', body: 'No feedback was recorded for this event.', suggestion: 'Show my home event radar feed' }),
 });

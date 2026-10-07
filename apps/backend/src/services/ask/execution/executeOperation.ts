@@ -625,6 +625,7 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   DIY_PROJECT_COMPLETE: ['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'],
   DIY_PROJECT_ABANDON: ['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'],
   DIY_COMPLETION_RECOVER: ['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'],
+  DIY_PROJECT_START: ['DIY_PROJECTS', 'DIY_TEMPLATE_BROWSE'],
   // B03 fix: BUYER_TASK_COMPLETE previously called no reconciliation
   // mechanism at all (not even the single-target one BUYER_TASK_UPDATE had
   // before B04) -- completing a task changes the same BUYER_PLAN_STATUS/

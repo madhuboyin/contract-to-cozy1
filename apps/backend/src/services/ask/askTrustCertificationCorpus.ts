@@ -233,6 +233,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   DIY_PROJECT_COMPLETE: 'You finished the hallway repaint; this is your own report, and the home-history record and any linked task update are being queued.',
   DIY_COMPLETION_RECOVER: 'You asked Cozy to try again to record your finished hallway repaint; the request was queued, and nothing was verified.',
   DIY_PROJECT_ABANDON: 'You stopped the hallway repaint; nothing else about it, including any linked task, was changed.',
+  DIY_TEMPLATE_BROWSE: 'Reviewed DIY projects that fit this home and can be started are listed, and any already started is marked.',
+  DIY_PROJECT_START: 'You started the furnace-filter project and are on step 1; nothing was booked, bought or scheduled, and you can stop it later.',
   DIY_STEP_UPDATE: 'You marked the step to tape the trim as done; this is your own report and nothing else about the project changed.',
   DIY_PROJECT_GUIDE: 'You are on the second of five steps of the hallway repaint, the step is to tape the trim, and one step is done.',
   DIY_PROJECTS: 'Two of your DIY projects still have steps left: repainting the hallway is 3 of 5 steps done and re-caulking the tub is still in planning.',

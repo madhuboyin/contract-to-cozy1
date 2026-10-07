@@ -11,6 +11,7 @@ import { DIY_TASK_RECONCILE_EVENT_KEY } from './diy/diyTaskReconciliationRequest
 import { getPropertyContext } from '../modules/propertyContext';
 import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
+import { evaluateTemplateStart } from './diy/templateStartPolicy';
 import { logger } from '../lib/logger';
 import { evaluateStepTransition, openStepsForCompletion, type DiyStepStatusValue } from './diy/stepTransitions';
 import { evaluateAskProjectPolicy, evaluateAskStepPolicy, type AskStepPolicyName } from './diy/askStepPolicy';
@@ -199,122 +200,32 @@ export class DiyService {
   ) {
     const { templateId, aiGuideId } = payload;
 
+    // The template branch is the one transactional authority shared with Ask (startProjectFromTemplate). This page path keeps its broad payload (links,
+    // verdict, score) and translates the "already open" outcome to a 409 carrying only the existing project's id.
+    if (templateId) {
+      const result = await this.startProjectFromTemplate(propertyId, templateId, {
+        actorUserId: userId,
+        requireGoverned: false,
+        extras: {
+          decisionVerdict: payload.decisionVerdict,
+          decisionScoreJson: payload.decisionScoreJson,
+          maintenanceTaskId: payload.maintenanceTaskId,
+          incidentId: payload.incidentId,
+          inventoryItemId: payload.inventoryItemId,
+        },
+      });
+      if (result.outcome === 'ALREADY_OPEN') {
+        throw new APIError('You already have an open project from this template.', 409, 'DIY_PROJECT_ALREADY_OPEN', { projectId: result.project.id });
+      }
+      return result.project;
+    }
+
     // A linked maintenance task must exist and belong to THIS property. `maintenanceTaskId` is a plain string (no foreign key), and both the completion
     // effects and the reverse reconciliation trust the link, so it is checked when it is made. A task that is already completed is allowed: the project
     // then shows "needs review" until it is finished (docs/architecture/ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md section 3.5).
     if (payload.maintenanceTaskId) {
       const linked = await prisma.propertyMaintenanceTask.findFirst({ where: { id: payload.maintenanceTaskId, propertyId }, select: { id: true } });
       if (!linked) throw new APIError('The linked maintenance task was not found for this property.', 404, 'DIY_TASK_NOT_FOUND');
-    }
-
-    const skillProfile = await prisma.diySkillProfile.findUnique({ where: { userId } });
-    const ownedTools: string[] = Array.isArray(skillProfile?.toolsOwnedJson) ? skillProfile.toolsOwnedJson as string[] : [];
-
-    if (templateId) {
-      // A project copies the template's PUBLISHED HEAD REVISION, never its working copy, and records which revision it copied.
-      const template = await prisma.diyProjectTemplate.findFirst({
-        where: { id: templateId, publishedRevisionId: { not: null } },
-        include: PUBLISHED_REVISION_INCLUDE,
-      });
-      const revision = template?.publishedRevision;
-      if (!template || !revision) throw new APIError('Template not found', 404);
-      // A governed revision must still match its hash. A legacy-backfill revision carries no hash and makes no integrity claim; it is accepted
-      // so templates that were live before revisions existed keep working, but it is never presented as reviewed (it is not guideable in Ask).
-      if (checkRevisionIntegrity(revision) === 'MISMATCH') {
-        logger.error({ templateId, revisionId: revision.id }, '[DIY] published template revision failed its integrity check; refusing to start a project from it');
-        throw new APIError('This template is temporarily unavailable.', 409, 'DIY_TEMPLATE_UNAVAILABLE');
-      }
-      const eligibility = evaluateDiyEligibility(eligibilityInputFromRevision(revision, payload.decisionVerdict));
-      if (!eligibility.eligible) {
-        throw new APIError(
-          'Only reviewed, low-risk, non-regulated work can be started as a DIY project.',
-          409,
-          'DIY_NOT_LOW_RISK',
-          { eligibility },
-        );
-      }
-      const context = await getPropertyContext(
-        propertyId,
-        { userId },
-        { scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] },
-      );
-      const applicability = evaluateDiyApplicability(context, revision.category);
-      if (applicability.status !== 'APPLICABLE') {
-        throw new APIError(
-          'This DIY project is not applicable to the selected property.',
-          409,
-          'DIY_PROPERTY_NOT_APPLICABLE',
-          { applicability },
-        );
-      }
-      const content = revisionContent(revision);
-
-      return prisma.$transaction(async (tx) => {
-        const project = await tx.diyProject.create({
-          data: {
-            propertyId,
-            userId,
-            templateId,
-            templateRevisionId: revision.id,
-            title: revision.title,
-            description: revision.shortDescription,
-            category: revision.category,
-            status: 'PLANNING',
-            decisionVerdict: payload.decisionVerdict ?? null,
-            decisionScoreJson: payload.decisionScoreJson ?? undefined,
-            maintenanceTaskId: payload.maintenanceTaskId ?? null,
-            incidentId: payload.incidentId ?? null,
-            inventoryItemId: payload.inventoryItemId ?? null,
-          },
-        });
-
-        await tx.diyProjectStep.createMany({
-          data: content.steps.map((s: any) => ({
-            projectId: project.id,
-            templateStepId: stepSnapshotId(revision.id, Number(s.stepNumber)),
-            stepNumber: s.stepNumber,
-            title: s.title,
-            description: s.description,
-            estimatedMinutes: s.estimatedMinutes,
-            safetyNote: s.safetyNote,
-            tipNote: s.tipNote,
-            isOptional: s.isOptional,
-            status: 'PENDING',
-          })),
-        });
-
-        await tx.diyProjectMaterial.createMany({
-          data: content.materials.map((m: any) => {
-            const quantity = evalQuantityFormula(m.quantityFormula, {});
-            return {
-              projectId: project.id,
-              name: m.name,
-              unit: m.unit,
-              quantity,
-              unitPriceCents: m.unitPriceCents,
-              totalEstimateCents: Math.round(quantity * m.unitPriceCents),
-              isOptional: m.isOptional,
-              purchaseNote: m.purchaseNote,
-              isPurchased: false,
-            };
-          }),
-        });
-
-        await tx.diyProjectTool.createMany({
-          data: content.tools.map((t: any) => ({
-            projectId: project.id,
-            name: t.name,
-            canonicalId: t.canonicalId,
-            isRequired: t.isRequired,
-            defaultToolAction: t.defaultToolAction,
-            userToolAction: t.canonicalId && ownedTools.includes(t.canonicalId) ? 'ALREADY_OWNED' : null,
-            rentDailyPriceCents: t.rentDailyPriceCents,
-            buyEstimatePriceCents: t.buyEstimatePriceCents,
-          })),
-        });
-
-        return this.getProjectDetail(project.id, propertyId, tx);
-      });
     }
 
     if (aiGuideId) {
@@ -427,6 +338,207 @@ export class DiyService {
     }
 
     throw new APIError('templateId or aiGuideId required', 400);
+  }
+
+  /**
+   * The ONE transactional authority for starting a project from a template (docs/architecture/ASK_COZY_DIY_PROJECT_START_PLAN.md section 3). The page and Ask
+   * both call it. Inside one transaction, in this order: (1) the actor's CONTRIBUTOR role (so a revoked member learns nothing, not even that a project exists);
+   * (2) a transaction-scoped advisory lock on the (property, template) key, which serializes concurrent starts (no unique constraint exists over open
+   * projects, and the revision's share lock does not serialize two creations); (3) the duplicate check, open meaning PLANNING or IN_PROGRESS; (4) the
+   * published head revision, share-locked in the governance writers' order, then integrity, eligibility and property applicability, the property context read
+   * on this same transaction; (5) the skill profile and the create. Nothing the caller saw earlier (a card, a page load) is trusted.
+   *
+   * Returns ALREADY_OPEN with the existing (earliest) project when one is open; the caller chooses how to present that (the page: 409; Ask: a receipt).
+   */
+  async startProjectFromTemplate(
+    propertyId: string,
+    templateId: string,
+    ctx: {
+      actorUserId: string;
+      // Ask: only a governed, hash-verified revision. The page also accepts a legacy-backfill revision.
+      requireGoverned: boolean;
+      // Ask: the head revision the person reviewed on the confirmation. A different head at confirmation time is refused (409 DIY_TEMPLATE_CHANGED), never started silently.
+      expectedRevisionId?: string;
+      // Page-only extras; Ask never passes them.
+      extras?: {
+        decisionVerdict?: any;
+        decisionScoreJson?: any;
+        maintenanceTaskId?: string;
+        incidentId?: string;
+        inventoryItemId?: string;
+      };
+    },
+  ): Promise<{ outcome: 'CREATED' | 'ALREADY_OPEN'; project: NonNullable<Awaited<ReturnType<DiyService['getProjectDetail']>>> }> {
+    const extras = ctx.extras ?? {};
+    return prisma.$transaction(async (tx) => {
+      if (!(await hasPropertyRoleWithin(tx, ctx.actorUserId, propertyId, 'CONTRIBUTOR'))) {
+        throw new APIError('You do not have access to start a project on this property.', 403, 'DIY_ACCESS_REVOKED');
+      }
+
+      // $executeRaw, not $queryRaw: the function returns void, which Prisma's query path cannot deserialize.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`diy-start:${propertyId}:${templateId}`}, 0))`;
+
+      const existing = await tx.diyProject.findFirst({
+        where: { propertyId, templateId, status: { in: OPEN_PROJECT_STATUSES } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true },
+      });
+      if (existing) {
+        const project = await this.getProjectDetail(existing.id, propertyId, tx);
+        return { outcome: 'ALREADY_OPEN' as const, project: project! };
+      }
+
+      // The page's link check keeps its place before the template read (a bad link is reported first), now inside the transaction.
+      if (extras.maintenanceTaskId) {
+        const linked = await tx.propertyMaintenanceTask.findFirst({ where: { id: extras.maintenanceTaskId, propertyId }, select: { id: true } });
+        if (!linked) throw new APIError('The linked maintenance task was not found for this property.', 404, 'DIY_TASK_NOT_FOUND');
+      }
+
+      // Governance rows are locked in the writers' order (revision, then template) once the head's id is known, then the head is read again: a
+      // withdrawal or re-revision that committed first is seen, and one that has not blocks until this transaction ends.
+      const first = await tx.diyProjectTemplate.findFirst({ where: { id: templateId, publishedRevisionId: { not: null } }, select: { id: true, publishedRevisionId: true } });
+      if (!first) throw new APIError('Template not found', 404);
+      await shareLockGovernanceRows(tx, { revisionId: first.publishedRevisionId, templateId: first.id });
+      const template = await tx.diyProjectTemplate.findFirst({ where: { id: templateId, publishedRevisionId: { not: null } }, include: PUBLISHED_REVISION_INCLUDE });
+      const revision = template?.publishedRevision;
+      if (!template || !revision) throw new APIError('Template not found', 404);
+      if (revision.id !== first.publishedRevisionId) throw new APIError('This template is temporarily unavailable.', 409, 'DIY_TEMPLATE_UNAVAILABLE');
+      if (ctx.expectedRevisionId && revision.id !== ctx.expectedRevisionId) throw new APIError('This project template was updated after you reviewed it.', 409, 'DIY_TEMPLATE_CHANGED');
+
+      const verdict = evaluateTemplateStart(revision, { requireGoverned: ctx.requireGoverned, decisionVerdict: extras.decisionVerdict });
+      if (!verdict.ok) {
+        if (verdict.code === 'DIY_TEMPLATE_UNAVAILABLE') {
+          logger.error({ templateId, revisionId: revision.id, integrity: verdict.integrity }, '[DIY] template revision not startable; refusing to start a project from it');
+          throw new APIError(verdict.message, verdict.status, verdict.code);
+        }
+        throw new APIError(verdict.message, verdict.status, verdict.code, { eligibility: verdict.eligibility });
+      }
+
+      // The property's facts are read on THIS transaction, after authorization and the lock (the shared-client authorize is skipped; the role check above is the authority).
+      const context = await getPropertyContext(
+        propertyId,
+        { userId: ctx.actorUserId },
+        { scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] },
+        undefined,
+        tx,
+      );
+      const applicability = evaluateDiyApplicability(context, revision.category);
+      if (applicability.status !== 'APPLICABLE') {
+        throw new APIError('This DIY project is not applicable to the selected property.', 409, 'DIY_PROPERTY_NOT_APPLICABLE', { applicability });
+      }
+
+      const skillProfile = await tx.diySkillProfile.findUnique({ where: { userId: ctx.actorUserId } });
+      const ownedTools: string[] = Array.isArray(skillProfile?.toolsOwnedJson) ? skillProfile.toolsOwnedJson as string[] : [];
+      const content = revisionContent(revision);
+
+      const project = await tx.diyProject.create({
+        data: {
+          propertyId,
+          userId: ctx.actorUserId,
+          templateId,
+          templateRevisionId: revision.id,
+          title: revision.title,
+          description: revision.shortDescription,
+          category: revision.category,
+          status: 'PLANNING',
+          decisionVerdict: extras.decisionVerdict ?? null,
+          decisionScoreJson: extras.decisionScoreJson ?? undefined,
+          maintenanceTaskId: extras.maintenanceTaskId ?? null,
+          incidentId: extras.incidentId ?? null,
+          inventoryItemId: extras.inventoryItemId ?? null,
+        },
+      });
+
+      await tx.diyProjectStep.createMany({
+        data: content.steps.map((s: any) => ({
+          projectId: project.id,
+          templateStepId: stepSnapshotId(revision.id, Number(s.stepNumber)),
+          stepNumber: s.stepNumber,
+          title: s.title,
+          description: s.description,
+          estimatedMinutes: s.estimatedMinutes,
+          safetyNote: s.safetyNote,
+          tipNote: s.tipNote,
+          isOptional: s.isOptional,
+          status: 'PENDING',
+        })),
+      });
+
+      await tx.diyProjectMaterial.createMany({
+        data: content.materials.map((m: any) => {
+          const quantity = evalQuantityFormula(m.quantityFormula, {});
+          return {
+            projectId: project.id,
+            name: m.name,
+            unit: m.unit,
+            quantity,
+            unitPriceCents: m.unitPriceCents,
+            totalEstimateCents: Math.round(quantity * m.unitPriceCents),
+            isOptional: m.isOptional,
+            purchaseNote: m.purchaseNote,
+            isPurchased: false,
+          };
+        }),
+      });
+
+      await tx.diyProjectTool.createMany({
+        data: content.tools.map((t: any) => ({
+          projectId: project.id,
+          name: t.name,
+          canonicalId: t.canonicalId,
+          isRequired: t.isRequired,
+          defaultToolAction: t.defaultToolAction,
+          userToolAction: t.canonicalId && ownedTools.includes(t.canonicalId) ? 'ALREADY_OWNED' : null,
+          rentDailyPriceCents: t.rentDailyPriceCents,
+          buyEstimatePriceCents: t.buyEstimatePriceCents,
+        })),
+      });
+
+      const detail = await this.getProjectDetail(project.id, propertyId, tx);
+      return { outcome: 'CREATED' as const, project: detail! };
+    }, { timeout: 15000 });
+  }
+
+  /**
+   * Templates a person can start from Ask on this property (docs/architecture/ASK_COZY_DIY_PROJECT_START_PLAN.md section 3.2): the strict projection, NOT listTemplates. A
+   * published head that is governed, hash-verified, eligible and applicable to this property. Read on the shared client (a card may be stale; the start re-checks everything
+   * inside its own transaction). `openProjectId` is the earliest open project already started from the template on this property (a courtesy link, not a gate).
+   */
+  async listStartableTemplates(propertyId: string, actorUserId: string, options: { templateId?: string; limit?: number } = {}) {
+    const limit = options.limit ?? 12;
+    const candidates = await prisma.diyProjectTemplate.findMany({
+      where: {
+        ...(options.templateId ? { id: options.templateId } : {}),
+        publishedRevisionId: { not: null },
+        publishedRevision: { is: { provenance: 'GOVERNED', safetyLevel: 'LOW', permitRequirement: { in: ['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'] } } },
+      },
+      orderBy: { publishedRevision: { title: 'asc' } },
+      take: options.templateId ? 1 : 60,
+      include: PUBLISHED_REVISION_INCLUDE,
+    });
+    const reviewed = candidates.filter((template) => template.publishedRevision && evaluateTemplateStart(template.publishedRevision, { requireGoverned: true }).ok);
+    if (!reviewed.length) return { items: [], hasMore: false };
+    const context = await getPropertyContext(propertyId, { userId: actorUserId }, { scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] });
+    const applicable = reviewed.filter((template) => evaluateDiyApplicability(context, template.publishedRevision!.category).status === 'APPLICABLE');
+    const open = await prisma.diyProject.findMany({
+      where: { propertyId, templateId: { in: applicable.map((template) => template.id) }, status: { in: OPEN_PROJECT_STATUSES } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, templateId: true },
+    });
+    const openByTemplate = new Map<string, string>();
+    for (const project of open) if (project.templateId && !openByTemplate.has(project.templateId)) openByTemplate.set(project.templateId, project.id);
+    const items = applicable.slice(0, limit).map((template) => {
+      const revision = template.publishedRevision!;
+      const content = revisionContent(revision);
+      return {
+        ...publishedTemplateSummary(template, revision),
+        revisionId: revision.id,
+        stepCount: content.steps.length,
+        toolCount: content.tools.length,
+        openProjectId: openByTemplate.get(template.id) ?? null,
+      };
+    });
+    return { items, hasMore: applicable.length > limit };
   }
 
   async listProjects(

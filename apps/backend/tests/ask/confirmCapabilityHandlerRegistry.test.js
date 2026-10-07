@@ -29,7 +29,8 @@ test('every one of the 42 confirmation-required Ask commands resolves to a regis
   // + DIY_STEP_UPDATE (DIY step command, step 6 of the stateful GUIDE).
   // + DIY_PROJECT_COMPLETE and DIY_PROJECT_ABANDON (DIY project commands, step 7B).
   // + DIY_COMPLETION_RECOVER (DIY completion recovery, step 7C).
-  assert.equal(commandIds.length, 51);
+  // + DIY_PROJECT_START (step 8, project creation from Ask).
+  assert.equal(commandIds.length, 52);
   assert.deepEqual(validateConfirmCapabilityHandlerRegistry(), []);
 });
 

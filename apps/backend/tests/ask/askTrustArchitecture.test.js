@@ -75,6 +75,9 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'DIY_PROJECT_ABANDON',
     // DIY completion recovery (step 7C): confirmation-gated, declared actions only.
     'DIY_COMPLETION_RECOVER',
+    // DIY project start (step 8): the browse is launch-only (from the DIY projects card); the start is confirmation-gated, from a browse row only.
+    'DIY_TEMPLATE_BROWSE',
+    'DIY_PROJECT_START',
     // Seasonal home care (exact-four starter source): launch-only; seasonal questions route to MAINTENANCE_STATUS.
     'SEASONAL_HOME_CARE',
     'HOME_BASICS_GUIDE',

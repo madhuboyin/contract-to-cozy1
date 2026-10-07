@@ -6,6 +6,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { readableCode } from '../askFormatting';
 import { diyService } from '../../diy.service';
+import { DIY_TEMPLATE_BROWSE_ACTION } from '../../diy/projectGuide';
 
 // DIY Project Center capability-card slice (FRD v1.58): the tenth new operation for a capability with none. Reads
 // diyService.listProjects with the page's own filter (planning and in progress, the service's default page of 20) --
@@ -25,6 +26,11 @@ const DIY_VERDICT_LABELS: Record<string, string> = { DIY_RECOMMENDED: 'DIY Recom
 export function diyProjectsFromView(view: DiyProjectListView, propertyId: string): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/diy`;
   const openAction = { id: 'open-diy', label: 'Open DIY Project Center', href: pageHref, style: 'PRIMARY' as const };
+  // Step 8: the declared launch of the read-only browse of reviewed templates this home can start (viewers may browse; only a contributor or owner is offered Start inside it).
+  const browseAction = {
+    id: DIY_TEMPLATE_BROWSE_ACTION.id, label: DIY_TEMPLATE_BROWSE_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: DIY_TEMPLATE_BROWSE_ACTION.message,
+    operationId: 'DIY_TEMPLATE_BROWSE', style: 'PRIMARY' as const,
+  };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'diy-boundary', title: 'Only for reviewed low-risk projects',
     // The five exclusions the DIY eligibility policy enforces (diy/eligibilityPolicy EXCLUDED_*).
@@ -37,8 +43,8 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
       status: 'ANSWERED', reasonCode: 'DIY_NO_ACTIVE_PROJECTS',
       blocks: [{
         type: 'SUMMARY', id: 'diy-summary', title: 'No DIY projects in progress',
-        body: 'You have no DIY projects in planning or in progress. Open the DIY Project Center to start a reviewed low-risk project.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: 'You have no DIY projects in planning or in progress. See the reviewed low-risk projects you can start, or open the DIY Project Center.',
+        tone: 'DEFAULT', actions: [browseAction, { ...openAction, style: 'SECONDARY' as const }],
       }, boundary],
       suggestions: ['What maintenance is due?'],
     };
@@ -88,7 +94,7 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
         } : {}),
       })),
     }],
-    actions: [],
+    actions: [{ ...browseAction, style: 'SECONDARY' as const }],
   });
   blocks.push(boundary);
   return { status: 'ANSWERED', reasonCode: 'DIY_PROJECTS_READY', blocks, suggestions: ['What maintenance is due?'] };

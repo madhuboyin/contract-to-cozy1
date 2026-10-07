@@ -1,4 +1,4 @@
-import { PropertyFactEvidence, PropertyFactSourceType, PropertyResponsibilityScope } from '@prisma/client';
+import { Prisma, PropertyFactEvidence, PropertyFactSourceType, PropertyResponsibilityScope } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { getFactDefinitionsForScope } from '../catalog/factCatalog';
 import { PropertyContextActor, PropertyContextScope, PropertyFact, PropertyFactConflict } from '../domain/contracts';
@@ -6,9 +6,15 @@ import { createPropertyFact, FactEvidenceMetadata } from '../domain/facts';
 import { getConflictedInsurancePolicyTerms, getConflictedWarrantyGroups } from '../../../services/coverageConflict.service';
 import { hasInsufficientRiskDetails } from '../../../services/riskReportSemantics';
 
+// The client an assembler reads through: the shared client, or a transaction client when the caller needs the read inside its own transaction.
+export type PropertyContextDb = Prisma.TransactionClient;
+
 export interface PropertyContextAssembler {
   readonly scope: PropertyContextScope;
-  assemble(propertyId: string, now: Date, actor?: PropertyContextActor): Promise<PropertyFact[]>;
+  // True only when `assemble` reads EVERYTHING through the `db` it is given. getPropertyContext refuses a transaction client for any scope
+  // whose assembler is not, so a transactional read can never silently fall back to the shared client.
+  readonly transactionAware?: true;
+  assemble(propertyId: string, now: Date, actor?: PropertyContextActor, db?: PropertyContextDb): Promise<PropertyFact[]>;
 }
 
 const sourcePriority: Record<PropertyFactSourceType, number> = {
@@ -47,10 +53,10 @@ function selectEvidence(rows: PropertyFactEvidence[]): Map<string, FactEvidenceM
   return selected;
 }
 
-async function loadEvidence(propertyId: string, scope: PropertyContextScope): Promise<Map<string, FactEvidenceMetadata>> {
+async function loadEvidence(propertyId: string, scope: PropertyContextScope, db: PropertyContextDb = prisma): Promise<Map<string, FactEvidenceMetadata>> {
   const factKeys = getFactDefinitionsForScope(scope).map((definition) => definition.key);
   if (factKeys.length === 0) return new Map();
-  const rows = await prisma.propertyFactEvidence.findMany({
+  const rows = await db.propertyFactEvidence.findMany({
     where: { propertyId, factKey: { in: factKeys }, supersededAt: null },
   });
   return selectEvidence(rows);
@@ -198,10 +204,11 @@ export const structureAssembler: PropertyContextAssembler = {
 
 export const exteriorAssembler: PropertyContextAssembler = {
   scope: 'EXTERIOR',
-  async assemble(propertyId, now) {
+  transactionAware: true,
+  async assemble(propertyId, now, _actor, db = prisma) {
     const [profile, evidence] = await Promise.all([
-      prisma.propertyExteriorProfile.findUnique({ where: { propertyId } }),
-      loadEvidence(propertyId, 'EXTERIOR'),
+      db.propertyExteriorProfile.findUnique({ where: { propertyId } }),
+      loadEvidence(propertyId, 'EXTERIOR', db),
     ]);
     const values: Record<string, unknown> = {
       'exterior.hasPrivateOutdoorSpace': profile?.hasPrivateOutdoorSpace,
@@ -261,10 +268,11 @@ const responsibilityFactKeys: Record<PropertyResponsibilityScope, string> = {
 
 export const responsibilityAssembler: PropertyContextAssembler = {
   scope: 'RESPONSIBILITY',
-  async assemble(propertyId, now) {
+  transactionAware: true,
+  async assemble(propertyId, now, _actor, db = prisma) {
     const [rows, evidence] = await Promise.all([
-      prisma.propertyResponsibility.findMany({ where: { propertyId } }),
-      loadEvidence(propertyId, 'RESPONSIBILITY'),
+      db.propertyResponsibility.findMany({ where: { propertyId } }),
+      loadEvidence(propertyId, 'RESPONSIBILITY', db),
     ]);
     const byScope = new Map(rows.map((row) => [row.scope, row.party]));
     return Object.entries(responsibilityFactKeys).map(([scope, key]) =>
@@ -298,9 +306,10 @@ function normalizeInstalledItemType(item: { category: string; name: string; tags
 
 export const systemsAssembler: PropertyContextAssembler = {
   scope: 'SYSTEMS',
-  async assemble(propertyId, now) {
+  transactionAware: true,
+  async assemble(propertyId, now, _actor, db = prisma) {
     const [property, evidence] = await Promise.all([
-      prisma.property.findUnique({
+      db.property.findUnique({
         where: { id: propertyId },
         select: {
           heatingType: true,
@@ -315,7 +324,7 @@ export const systemsAssembler: PropertyContextAssembler = {
           inventoryItems: { select: { category: true, name: true, tags: true } },
         },
       }),
-      loadEvidence(propertyId, 'SYSTEMS'),
+      loadEvidence(propertyId, 'SYSTEMS', db),
     ]);
     if (!property) return [];
     const installedItemTypes = [...new Set(property.inventoryItems.flatMap(normalizeInstalledItemType))].sort();
@@ -418,8 +427,9 @@ export const roomsAssembler: PropertyContextAssembler = {
 
 export const inventoryAssembler: PropertyContextAssembler = {
   scope: 'INVENTORY',
-  async assemble(propertyId, now) {
-    const items = await prisma.inventoryItem.findMany({
+  transactionAware: true,
+  async assemble(propertyId, now, _actor, db = prisma) {
+    const items = await db.inventoryItem.findMany({
       where: { propertyId },
       select: {
         id: true,

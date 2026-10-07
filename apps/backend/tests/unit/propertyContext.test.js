@@ -291,3 +291,29 @@ test('completeness excludes private-exterior-structure facts for attached dwelli
   const condoExterior = condoByOwnership.scopes.find((s) => s.scope === 'EXTERIOR');
   assert.ok(!condoExterior.missingFactKeys.includes('exterior.hasPoolOrSpa'));
 });
+
+// Transaction-client reads (docs/architecture/ASK_COZY_DIY_PROJECT_START_PLAN.md section 3.4): the caller has authorized inside its own transaction, the read goes
+// through that client, and a scope whose assembler is not transaction-aware is refused rather than silently read on the shared client.
+test('a transaction client is passed to transaction-aware assemblers, skips the shared authorize, and refuses scopes that are not transaction-aware', async () => {
+  const seen = [];
+  const aware = (scope) => ({ scope, transactionAware: true, async assemble(propertyId, now, actor, db) { seen.push([scope, db]); return []; } });
+  const plain = { scope: 'SAFETY', async assemble() { throw new Error('must not be reached'); } };
+  let authorizeCalls = 0;
+  const dependencies = { authorize: async () => { authorizeCalls += 1; return false; }, assemblers: [aware('EXTERIOR'), aware('SYSTEMS'), plain], now: () => NOW };
+  const tx = { marker: 'tx' };
+
+  const snapshot = await getPropertyContext('p1', { userId: 'u1' }, { scopes: ['EXTERIOR', 'SYSTEMS'] }, dependencies, tx);
+  assert.equal(snapshot.propertyId, 'p1');
+  assert.deepEqual(seen.map(([scope, db]) => [scope, db]), [['EXTERIOR', tx], ['SYSTEMS', tx]]);
+  assert.equal(authorizeCalls, 0, 'the caller authorized inside its transaction; the shared-client check is not used');
+
+  await assert.rejects(getPropertyContext('p1', { userId: 'u1' }, { scopes: ['EXTERIOR', 'SAFETY'] }, dependencies, tx), (error) => error.name === 'PropertyContextTransactionUnsupportedError' && /SAFETY/.test(error.message));
+
+  await assert.rejects(getPropertyContext('p1', { userId: 'u1' }, { scopes: ['EXTERIOR'] }, dependencies), PropertyContextAccessDeniedError, 'without a transaction client the shared authorize still applies');
+  assert.equal(authorizeCalls, 1);
+});
+
+test('exactly the four scopes the DIY start reads are transaction-aware', () => {
+  const { INITIAL_PROPERTY_CONTEXT_ASSEMBLERS } = require('../../src/modules/propertyContext/infrastructure/prismaAssemblers.ts');
+  assert.deepEqual(INITIAL_PROPERTY_CONTEXT_ASSEMBLERS.filter((assembler) => assembler.transactionAware).map((assembler) => assembler.scope).sort(), ['EXTERIOR', 'INVENTORY', 'RESPONSIBILITY', 'SYSTEMS']);
+});

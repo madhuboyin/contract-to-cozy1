@@ -63,6 +63,12 @@ export default function TemplateDetailPage() {
       });
       router.push(`/dashboard/diy/projects/${project.id}?propertyId=${propertyId}`);
     } catch (err: any) {
+      // A project from this template is already open on this property (the start is serialized and refuses a duplicate): take the person to it.
+      const existingProjectId = err?.payload?.error?.code === 'DIY_PROJECT_ALREADY_OPEN' ? err?.payload?.error?.details?.projectId : null;
+      if (typeof existingProjectId === 'string' && existingProjectId) {
+        router.push(`/dashboard/diy/projects/${existingProjectId}?propertyId=${propertyId}`);
+        return;
+      }
       setError(err?.message ?? 'Failed to start project');
     } finally {
       setStarting(false);

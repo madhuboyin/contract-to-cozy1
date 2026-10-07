@@ -470,3 +470,10 @@ export function buildFinishedProjectBlocks(input: {
     outline: ordered.map((step) => ({ stepId: step.id, title: clip(step.title, 160, { truncated: false }), optional: step.isOptional, state: (step.status === 'COMPLETED' ? 'DONE' : step.status === 'SKIPPED' ? 'SKIPPED' : 'UPCOMING') as 'DONE' | 'SKIPPED' | 'UPCOMING' })),
   } as AskPresentationBlock];
 }
+
+// Step 8 (docs/architecture/ASK_COZY_DIY_PROJECT_START_PLAN.md): the declared actions of starting a project from a reviewed template. The browse card's row action carries the
+// template as the entity (entityType DIY_TEMPLATE); the exact canned message selects it, and typed wording never starts a project.
+export const DIY_TEMPLATE_ENTITY_TYPE = 'DIY_TEMPLATE';
+export const DIY_PROJECT_START_ACTION = { id: 'diy-template-start', label: 'Start this project', message: 'Start this project.' };
+export const DIY_TEMPLATE_BROWSE_ACTION = { id: 'diy-template-browse', label: 'See projects you can start', message: 'Show the DIY projects I can start.' };
+export const DIY_START_GUIDE_ACTION_ID = 'diy-start-guide';

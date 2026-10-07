@@ -29,7 +29,8 @@ test('every represented Skill operation resolves to one registered immutable ada
   // + diy.step-update (DIY step command, step 6 of the stateful GUIDE).
   // + diy.project-complete and diy.project-abandon (DIY project commands, step 7B).
   // + diy.completion-recover (DIY completion recovery, step 7C).
-  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 111);
+  // + diy.template-browse and diy.project-start (DIY project start from Ask, step 8).
+  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 113);
   for (const skill of Object.values(SKILL_DEFINITIONS)) {
     for (const operation of skill.operations) {
       const reference = skill.allowedAdapters.find((candidate) => candidate.id === getSkillAdapterForOperation(operation.operationId).id);

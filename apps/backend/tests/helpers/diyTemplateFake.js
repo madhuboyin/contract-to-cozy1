@@ -25,7 +25,7 @@ const matches = (record, where = {}) => Object.entries(where).every(([key, value
 const pickKeys = (record, select) => Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, record[key]]));
 
 function makeDiyDb(templateSeeds = [], hooks = {}) {
-  const state = { templates: new Map(), revisions: [], writes: [], projects: [], events: [], domainEvents: [], uncommittedProjects: new Set(), txDepth: 0 };
+  const state = { templates: new Map(), revisions: [], writes: [], projects: [], events: [], domainEvents: [], uncommittedProjects: new Map(), txDepth: 0, advisoryLocks: new Map() };
   for (const seed of templateSeeds) {
     state.templates.set(seed.id, structuredClone({
       status: 'DRAFT', approvedBy: null, approvedAt: null, publishedRevisionId: null, featuredOrder: null, geminiPromptHint: null,
@@ -73,15 +73,17 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
   // A project row created inside an open transaction is visible through the transaction client only, never through the global client, until the
   // transaction commits (what Postgres does under READ COMMITTED). `seesUncommitted` is true for the transaction client.
   const stamp = () => new Date(Date.now());
-  const visible = (seesUncommitted) => (project) => seesUncommitted || !state.uncommittedProjects.has(project.id);
-  function projectDelegate(seesUncommitted) {
-    const see = visible(seesUncommitted);
+  // `txId` is the transaction that owns the delegate (null for the global client). A row created in a transaction is visible to that transaction and to nobody
+  // else until it commits, so two OVERLAPPING transactions (hooks.overlap) cannot see each other's uncommitted rows.
+  const visible = (txId) => (project) => !state.uncommittedProjects.has(project.id) || (txId !== null && state.uncommittedProjects.get(project.id) === txId);
+  function projectDelegate(txId) {
+    const see = visible(txId);
     return {
       async create({ data }) {
         fail('project.create');
         const project = { id: `project-${state.projects.length + 1}`, steps: [], materials: [], tools: [], aiGuide: null, updatedAt: stamp(), createdAt: stamp(), ...structuredClone(data) };
         state.projects.push(project);
-        if (state.txDepth > 0) state.uncommittedProjects.add(project.id);
+        if (state.txDepth > 0) state.uncommittedProjects.set(project.id, txId);
         state.writes.push({ model: 'project', op: 'create', data: structuredClone(data) });
         return structuredClone(project);
       },
@@ -91,6 +93,10 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
         return select ? pickKeys(structuredClone(row), select) : structuredClone(row);
       },
       async findUnique({ where }) { const row = state.projects.find((project) => project.id === where.id && see(project)); return row ? structuredClone(row) : null; },
+      // Insertion order is creation order (the clock can tie), so an ascending createdAt order is the array order.
+      async findMany({ where, select }) {
+        return state.projects.filter((project) => matches(project, where) && see(project)).map((row) => (select ? pickKeys(structuredClone(row), select) : structuredClone(row)));
+      },
       async updateMany({ where, data }) {
         state.writes.push({ model: 'project', op: 'updateMany', where, dataKeys: Object.keys(data) });
         fail('project.updateMany');
@@ -219,7 +225,7 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     diyTemplateMaterial: children('materials'),
     diyTemplateTool: children('tools'),
     diySkillProfile: { async findUnique() { return hooks.skillProfile ?? null; } },
-    diyProject: projectDelegate(false),
+    diyProject: projectDelegate(null),
     diyProjectStep: projectStepDelegate,
     diyProjectEvent: projectEventDelegate,
     householdMember: householdMemberDelegate,
@@ -262,17 +268,39 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     async $queryRaw(strings, ...values) { state.locks = state.locks ?? []; state.locks.push({ sql: strings.join('?').replace(/\s+/g, ' ').trim(), values }); return []; },
     // Serialized like row locks, all-or-nothing like a transaction.
     async $transaction(work) {
+      // hooks.overlap: transactions run CONCURRENTLY (no whole-database serialization), so only an explicit lock (advisory, below) orders them. The default
+      // serializes every transaction, which models row locks but would hide a missing advisory lock. Rollback restores a snapshot and is NOT meaningful with overlap.
+      const txId = `tx-${(state.txSeq = (state.txSeq ?? 0) + 1)}`;
       const previous = db.__tail;
-      let release; db.__tail = new Promise((resolve) => { release = resolve; });
-      await previous;
+      let release = () => {}; if (!hooks.overlap) db.__tail = new Promise((resolve) => { release = resolve; });
+      if (!hooks.overlap) await previous;
+      const heldAdvisory = [];
       const snapshot = structuredClone({ templates: [...state.templates], revisions: state.revisions, projects: state.projects, events: state.events, domainEvents: state.domainEvents });
       // The transaction client gets its OWN delegate objects for the shared models, bound to the ORIGINAL functions, so a test that wraps the GLOBAL client's methods
       // sees only calls that bypassed the transaction.
-      const tx = { ...db, diyProject: projectDelegate(true), ...txOwn };
+      const tx = {
+        ...db, diyProject: projectDelegate(txId), ...txOwn,
+        // pg_advisory_xact_lock(key): waits until no other transaction holds the key, holds it until this transaction ends. Everything else is recorded like the global client.
+        async $executeRaw(strings, ...values) { await tx.$queryRaw(strings, ...values); return 1; },
+        async $queryRaw(strings, ...values) {
+          const sql = strings.join('?').replace(/\s+/g, ' ').trim();
+          state.locks = state.locks ?? []; state.locks.push({ sql, values, txId });
+          if (sql.includes('pg_advisory_xact_lock')) {
+            const key = String(values[0]);
+            if (hooks.skipAdvisoryLock) return [];
+            while (state.advisoryLocks.has(key) && state.advisoryLocks.get(key).txId !== txId) await state.advisoryLocks.get(key).released;
+            if (!state.advisoryLocks.has(key)) {
+              let free; const released = new Promise((resolve) => { free = resolve; });
+              state.advisoryLocks.set(key, { txId, released, free }); heldAdvisory.push(key);
+            }
+          }
+          return [];
+        },
+      };
       state.txDepth += 1;
       try {
         const result = await work(tx);
-        state.uncommittedProjects.clear(); // commit
+        for (const [id, owner] of [...state.uncommittedProjects]) if (owner === txId || owner === null) state.uncommittedProjects.delete(id); // commit
         return result;
       } catch (error) {
         state.templates = new Map(snapshot.templates);
@@ -280,9 +308,10 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
         state.projects = snapshot.projects;
         state.events = snapshot.events;
         state.domainEvents = snapshot.domainEvents;
-        state.uncommittedProjects.clear();
+        for (const [id, owner] of [...state.uncommittedProjects]) if (owner === txId || owner === null) state.uncommittedProjects.delete(id);
         throw error;
       } finally {
+        for (const key of heldAdvisory) { const held = state.advisoryLocks.get(key); state.advisoryLocks.delete(key); held.free(); }
         state.txDepth -= 1;
         release();
       }

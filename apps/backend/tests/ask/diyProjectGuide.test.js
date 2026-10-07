@@ -373,6 +373,9 @@ test('the guide source read and the handler contain no write call (source scan),
   const service = read('services/diy.service.ts');
   const sourceRead = service.slice(service.indexOf('async getProjectGuideSource('), service.indexOf('async getProjectWithCompletionEffects('));
   for (const text of [handler, pure, sourceRead]) assert.doesNotMatch(text, /\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(|\$transaction|\$executeRaw|emit\(/);
-  assert.match(service, /evaluateDiyEligibility\(eligibilityInputFromRevision\(revision, payload\.decisionVerdict\)\)/);
+  // Project creation (the page and Ask) judges a revision through the shared start policy, which uses the same mapping the guide does (step 8A moved it there).
+  const startPolicy = read('services/diy/templateStartPolicy.ts');
+  assert.match(startPolicy, /evaluateDiyEligibility\(eligibilityInputFromRevision\(revision, options\.decisionVerdict\)\)/);
+  assert.match(service, /evaluateTemplateStart\(revision, /);
   assert.match(pure, /evaluateDiyEligibility\(eligibilityInputFromRevision\(/);
 });

@@ -25,12 +25,15 @@ Review this home's active DIY projects in planning or in progress, with how many
 - `DIY_PROJECT_ABANDON` (confirmed, CONTRIBUTOR floor; reached only by the declared Stop this project and Hand this off to a pro actions behind a read-only options view; **cannot be undone in Cozy**; touches no linked task or incident and books nobody)
 - `DIY_COMPLETION_RECOVER` (confirmed, CONTRIBUTOR floor; reached only by the declared "Record my completion again" action on a finished project's view, or "Update my linked task again" on an open project's guide, each only when its own status says the earlier request was dead-lettered; it re-queues the same request, never claims it worked, and verifies nothing)
 
+- `DIY_TEMPLATE_BROWSE` (read-only; launch-only, reached by the declared action on the DIY projects card, never by message; lists only reviewed templates that are governed, hash-verified, eligible and applicable to this home)
+- `DIY_PROJECT_START` (confirmed, CONTRIBUTOR floor; reached only by the declared Start this project action on a browse row; creates a project record that can later be stopped or handed off but **not undone or deleted**; books, buys and schedules nothing; a second start of the same template while one is open returns the existing project)
+
 ## Consumers
 
-- ASK: DIY_PROJECTS, DIY_PROJECT_GUIDE, DIY_STEP_UPDATE, DIY_PROJECT_COMPLETE, DIY_PROJECT_ABANDON, DIY_COMPLETION_RECOVER
+- ASK: DIY_PROJECTS, DIY_PROJECT_GUIDE, DIY_STEP_UPDATE, DIY_PROJECT_COMPLETE, DIY_PROJECT_ABANDON, DIY_COMPLETION_RECOVER, DIY_TEMPLATE_BROWSE, DIY_PROJECT_START
 
 ## Canonical ownership and boundaries
 
-The only write is `DIY_STEP_UPDATE`, limited to projects that pass the reviewed-guide gate; reopening, completing or abandoning a project, notes and photos stay on the project page. Authorization and the current-step rule are enforced inside the service transaction, not only before it.
+Step, finish, stop and recovery writes are limited to projects that pass the reviewed-guide gate; `DIY_PROJECT_START` starts only from a reviewed template; notes and photos stay on the project page. Authorization and the current-step rule are enforced inside the service transaction, not only before it.
 
 Operations remain owned by their registered canonical services and may be reached only through the adapters declared in the machine manifest. Context access is limited to declared providers. Peer Skill execution is prohibited; handoffs return to Ask for normal routing and authorization.

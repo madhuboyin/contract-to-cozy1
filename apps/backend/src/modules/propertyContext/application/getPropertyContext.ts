@@ -10,6 +10,7 @@ import {
 import {
   INITIAL_PROPERTY_CONTEXT_ASSEMBLERS,
   PropertyContextAssembler,
+  PropertyContextDb,
 } from '../infrastructure/prismaAssemblers';
 import {
   propertyContextFactStatesTotal,
@@ -43,14 +44,28 @@ function contextVersion(propertyId: string, scopes: PropertyContextScope[], fact
     .digest('hex');
 }
 
+export class PropertyContextTransactionUnsupportedError extends Error {
+  constructor(scopes: PropertyContextScope[]) {
+    super(`Property context scope(s) ${scopes.join(', ')} cannot be read inside a caller's transaction.`);
+    this.name = 'PropertyContextTransactionUnsupportedError';
+  }
+}
+
 export async function getPropertyContext(
   propertyId: string,
   actor: PropertyContextActor,
   request: PropertyContextRequest,
   dependencies: PropertyContextDependencies = defaultDependencies,
+  // A caller's transaction client. The caller has ALREADY authorized the actor inside that transaction (it is the authority for the write), so the
+  // shared-client authorize check is skipped; every requested scope must have a transaction-aware assembler or the read is refused, never
+  // silently done on the shared client.
+  db?: PropertyContextDb,
 ): Promise<PropertyContextSnapshot> {
   const startedAt = process.hrtime.bigint();
-  if (!await dependencies.authorize(actor.userId, propertyId)) {
+  if (db) {
+    const notAware = [...new Set(request.scopes)].filter((scope) => !dependencies.assemblers.some((assembler) => assembler.scope === scope && assembler.transactionAware));
+    if (notAware.length) throw new PropertyContextTransactionUnsupportedError(notAware);
+  } else if (!await dependencies.authorize(actor.userId, propertyId)) {
     for (const scope of request.scopes) propertyContextReadsTotal.inc({ scope, outcome: 'denied' });
     throw new PropertyContextAccessDeniedError();
   }
@@ -61,7 +76,7 @@ export async function getPropertyContext(
   const unsupportedScopes = scopes.filter((scope) => !assemblerByScope.has(scope));
   const now = dependencies.now();
   const assembled = await Promise.all(
-    supportedScopes.map((scope) => assemblerByScope.get(scope)!.assemble(propertyId, now, actor)),
+    supportedScopes.map((scope) => assemblerByScope.get(scope)!.assemble(propertyId, now, actor, db)),
   );
   const facts = Object.fromEntries(assembled.flat().map((fact) => [fact.key, fact]));
   const warnings: PropertyContextSnapshot['warnings'] = [];

@@ -344,5 +344,6 @@ The owner approved decisions **O2 through O13 at the recommended defaults in §1
 | 6b | Previous-step view, `REOPEN`, `DIY_PROJECT_COMPLETE`, `DIY_PROJECT_ABANDON`, recovery command (the design's acceptance step 3) | **Plan approved with four corrections (reopen reachable when all steps are resolved; task recovery on the open guide; queued-effects wording; transactional recovery and best-effort analytics); 7-0 trace done, 7A, 7B, 7C and 7D done (code pushed; the owner-run Postgres script is written and unrun):** [`ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md`](ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md) |
 | 7 | P6: first production template, **needs the O7 named owner** | Blocked on a name |
 | 8 | Help beyond local disclosure, seasonal-to-DIY mapping | Deferred (O9, O5) |
+| 5-ext | Project creation from Ask (`DIY_PROJECT_START`, template browse, one transactional start authority with an advisory-lock duplicate rule) | **Plan approved with four corrections and six edits (S8-1 to S8-4 at the owner's calls); 8-0 trace done as code reading; 8A to 8E all built (not committed); the owner-run Postgres script is written and unrun; no schema change:** [`ASK_COZY_DIY_PROJECT_START_PLAN.md`](ASK_COZY_DIY_PROJECT_START_PLAN.md) |
 
 Steps 1-4 change what the existing DIY page does (O3) and should ship and be verified before any Ask surface (step 5) claims content is reviewed.

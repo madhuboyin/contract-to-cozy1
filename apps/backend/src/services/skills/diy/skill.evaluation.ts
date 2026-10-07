@@ -21,6 +21,8 @@ export const DIY_SKILL_EVALUATION = deepFreezeSkillPackage({
     { operationId: 'DIY_PROJECT_COMPLETE', expectedAdapter: { id: 'diy.project-complete', version: '1.0' } },
     { operationId: 'DIY_PROJECT_ABANDON', expectedAdapter: { id: 'diy.project-abandon', version: '1.0' } },
     { operationId: 'DIY_COMPLETION_RECOVER', expectedAdapter: { id: 'diy.completion-recover', version: '1.0' } },
+    { operationId: 'DIY_TEMPLATE_BROWSE', expectedAdapter: { id: 'diy.template-browse', version: '1.0' } },
+    { operationId: 'DIY_PROJECT_START', expectedAdapter: { id: 'diy.project-start', version: '1.0' } },
   ],
   ambiguityCases: [
     {
@@ -36,6 +38,8 @@ export const DIY_SKILL_EVALUATION = deepFreezeSkillPackage({
     { consumer: 'ASK', operationId: 'DIY_PROJECT_COMPLETE', allowed: true },
     { consumer: 'ASK', operationId: 'DIY_PROJECT_ABANDON', allowed: true },
     { consumer: 'ASK', operationId: 'DIY_COMPLETION_RECOVER', allowed: true },
+    { consumer: 'ASK', operationId: 'DIY_TEMPLATE_BROWSE', allowed: true },
+    { consumer: 'ASK', operationId: 'DIY_PROJECT_START', allowed: true },
   ],
   contextCases: [
     { state: 'KNOWN', expectedBehavior: 'READY' },
@@ -63,13 +67,13 @@ export const DIY_SKILL_EVALUATION = deepFreezeSkillPackage({
       expectedBehavior: 'DEGRADED_OR_UNAVAILABLE',
     },
   ],
-  expectedAdapters: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }, { id: 'diy.step-update', version: '1.0' }, { id: 'diy.project-complete', version: '1.0' }, { id: 'diy.project-abandon', version: '1.0' }, { id: 'diy.completion-recover', version: '1.0' }],
+  expectedAdapters: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }, { id: 'diy.step-update', version: '1.0' }, { id: 'diy.project-complete', version: '1.0' }, { id: 'diy.project-abandon', version: '1.0' }, { id: 'diy.completion-recover', version: '1.0' }, { id: 'diy.template-browse', version: '1.0' }, { id: 'diy.project-start', version: '1.0' }],
   prohibitedAdapters: ['inventory.lookup', 'intelligence-envelope.query'],
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
   expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'TASK_GUIDE', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS'],
-  expectedCanonicalCalls: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }, { id: 'diy.step-update', version: '1.0' }, { id: 'diy.project-complete', version: '1.0' }, { id: 'diy.project-abandon', version: '1.0' }, { id: 'diy.completion-recover', version: '1.0' }],
+  expectedCanonicalCalls: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }, { id: 'diy.step-update', version: '1.0' }, { id: 'diy.project-complete', version: '1.0' }, { id: 'diy.project-abandon', version: '1.0' }, { id: 'diy.completion-recover', version: '1.0' }, { id: 'diy.template-browse', version: '1.0' }, { id: 'diy.project-start', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {
     message: 'Show my DIY projects',
