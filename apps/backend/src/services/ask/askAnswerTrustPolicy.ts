@@ -133,7 +133,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASES: new Set(['open-negotiation-shield']),
   HOME_UPGRADE_SCENARIOS: new Set(['open-home-digital-twin']),
   DIY_PROJECTS: new Set(['open-diy']),
-  DIY_PROJECT_GUIDE: new Set(['open-diy-project', 'diy-step-complete', 'diy-step-skip']),
+  DIY_PROJECT_GUIDE: new Set(['open-diy-project', 'diy-step-complete', 'diy-step-skip', 'diy-step-previous', 'diy-step-back', 'diy-step-reopen', 'diy-review-last-step']),
   DIY_STEP_UPDATE: new Set(['open-diy-project']),
   PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker']),
   SERVICE_PRICE_CHECKS: new Set(['open-service-price-radar']),

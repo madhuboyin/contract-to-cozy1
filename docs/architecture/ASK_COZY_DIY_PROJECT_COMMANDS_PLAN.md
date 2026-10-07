@@ -183,3 +183,19 @@ No schema change, no worker change, no new flag. Deploy the backend, then the fr
 | T9 | `DiyProject.incidentId` is not read or written by completion, abandon or the worker adapter for the completion event (O13). | The "no incident change" sentence is true of these operations; a write spy and 7D triggers check it. |
 
 Everything above is **code-traced, not executed.**
+
+## 13. Record of 7A (previous-step view and Reopen)
+
+**Built** (all **[Executed]** as tests unless stated):
+- `services/diy/stepOrder.ts` (pure): `currentStepOf`, `previousFinishedStep`, `isPreviousStepView`, shared by the policy and the guide builder so neither imports the other.
+- The step 6 boolean became the named policy: `updateStep({ askPolicy: 'ADVANCE_CURRENT_STEP' | 'REOPEN_FINISHED_STEP' })`, evaluated by `evaluateAskStepPolicy(source, stepId, target, policy)` inside the transaction. `REOPEN_FINISHED_STEP` refuses an unfinished step (`DIY_STEP_NOT_REOPENABLE`), a withdrawn or unverifiable guide and any target but `IN_PROGRESS`; `ADVANCE_CURRENT_STEP` refuses `IN_PROGRESS`. The page still passes no policy.
+- The previous-step view: `DIY_PROJECT_GUIDE` launched on `entityType DIY_STEP` with `actionId VIEW` (a read; a refresh keeps it). `buildPreviousStepBlocks` shows the viewed step's own safety note directly above the same card (same block id, so a refresh replaces the live guide in place), a label "Looking back at step N of M, done. You are on step K." (or "Every step is resolved."), the real outline with the real current step marked, and the actions Reopen (only for a person who can edit, on a guide that is not withdrawn), Previous step, Back and the page link. A step that is not a valid previous step falls back to the live guide. **No contract change.**
+- "Previous step" on the current-step card (a read, visible to everyone), and **"Review last step" on the all-resolved summary**, so Reopen is reachable when no step is current.
+- `DIY_STEP_UPDATE` gained its third declared action **Reopen this step** (`Reopen this step.`, target `IN_PROGRESS`); confirmation repeats the step's safety note and says "steps you finished after it stay finished"; receipt "Reopened by you" with no verification claim; "already reopened" on a replay. No new registry entry; text of the operation, its semantic package, the matrix note and SKILL.md updated; the four new action ids allow-listed.
+
+**Verification.**
+- New or changed tests: `tests/ask/diyStepUpdate.test.js` now 29 (was 18), `tests/unit/diyAskStepPolicy.test.js` 12, frontend `diyStepActions.test.tsx` 15 (was 9). Updated for the new names and for the fact that Previous step is a read action visible to viewers.
+- **Mutation checks: 14 new mutants, all 14 killed** (reopen of an unfinished step; the advance policy accepting the reopen target; the confirm always sending the advance policy; Reopen offered to everyone or on a withdrawn guide; a later or current step counting as previous; Previous ignoring its boundary; Review last step dropped; the viewed step's safety note dropped; the view ignoring the action id; the reopen id not allow-listed; a verification claim on the reopen receipt; a withdrawn guide not refused for reopen; the Back label).
+- Suites: `npm run test:ask:chunked` 1914 of 1921, the same six failures in the same six files as before this step (**not re-proved on a clean worktree this slice**); `tests/unit/diy*.test.js` 197 of 197; backend `tsc` clean; frontend `next build` succeeds and `src/components/ask` jest shows only the 5 known failures.
+- The step 6 scratch script was updated for the renamed option and still has never been run.
+- **Not run:** real Postgres, a browser, the built-worker smoke, the full frontend and worker suites.

@@ -173,7 +173,7 @@ test('the Ask policy inside the REAL transaction: not the current step, a requir
   await published('tPolicy', 'Policy project');
   const project = await start('tPolicy');
   const [s1, s3] = await Promise.all([1, 3].map((n) => stepAt(project.id, n)));
-  const ctx = (row, extra = {}) => ({ actorUserId: OWNER, expectedUpdatedAt: row.updatedAt.toISOString(), requireCurrentGuideStep: true, ...extra });
+  const ctx = (row, extra = {}) => ({ actorUserId: OWNER, expectedUpdatedAt: row.updatedAt.toISOString(), askPolicy: 'ADVANCE_CURRENT_STEP', ...extra });
   const snapshot = async () => JSON.stringify((await stepRows(project.id)).map((row) => [row.id, row.status, row.updatedAt])) + (await events(project.id)).length;
   const before = await snapshot();
   assert.equal(await codeOf(diyService.updateStep(project.id, PROP, s3.id, { status: 'COMPLETED' }, ctx(s3))), 'DIY_STEP_NOT_CURRENT');
@@ -197,7 +197,7 @@ test('the role is checked INSIDE the transaction against the real table: a viewe
   const step = await stepAt(project.id, 1);
   const call = (actorUserId, extra = {}) => diyService.updateStep(project.id, PROP, step.id, { status: 'COMPLETED' }, { actorUserId, expectedUpdatedAt: step.updatedAt.toISOString(), ...extra });
   assert.equal(await codeOf(call(VIEWER)), 'DIY_ACCESS_REVOKED');
-  assert.equal(await codeOf(call(VIEWER, { requireCurrentGuideStep: true })), 'DIY_ACCESS_REVOKED');
+  assert.equal(await codeOf(call(VIEWER, { askPolicy: 'ADVANCE_CURRENT_STEP' })), 'DIY_ACCESS_REVOKED');
   assert.equal(await codeOf(call('nobody')), 'DIY_ACCESS_REVOKED');
   // The handler's own check passes (the proposal is made as a contributor), then the role changes in the database before the write.
   const proposed = await propose(CONTRIBUTOR, 'COMPLETE', step.id);
@@ -232,7 +232,7 @@ test('THE SHARE LOCK, real concurrent transactions: a withdrawal that starts fir
     await adminHeld;
   }, { timeout: 30000 });
   await wait(300);
-  const command = diyService.updateStep(project.id, PROP, step.id, { status: 'COMPLETED' }, { actorUserId: OWNER, expectedUpdatedAt: step.updatedAt.toISOString(), requireCurrentGuideStep: true });
+  const command = diyService.updateStep(project.id, PROP, step.id, { status: 'COMPLETED' }, { actorUserId: OWNER, expectedUpdatedAt: step.updatedAt.toISOString(), askPolicy: 'ADVANCE_CURRENT_STEP' });
   assert.equal(await pending(command), true, 'the step command is WAITING on the withdrawal\'s row lock (the share lock conflicts with the uncommitted update)');
   releaseAdmin(); await admin;
   assert.equal(await codeOf(command), 'DIY_GUIDE_NOT_CURRENT', 'once the withdrawal commits, the command sees it and refuses');
@@ -280,7 +280,7 @@ test('THE PAGE AND ASK, interleaved on real rows: the page finishes a LATER step
   assert.equal((await stepAt(project.id, 1)).status, 'PENDING');
   // The transaction alone is not bothered by a change to a LATER step: step 1 is still the first unfinished step and its own token is unchanged.
   const stillCurrent = await stepAt(project.id, 1);
-  assert.equal((await diyService.updateStep(project.id, PROP, s1.id, { status: 'COMPLETED' }, { actorUserId: OWNER, expectedUpdatedAt: stillCurrent.updatedAt.toISOString(), requireCurrentGuideStep: true })).step.status, 'COMPLETED');
+  assert.equal((await diyService.updateStep(project.id, PROP, s1.id, { status: 'COMPLETED' }, { actorUserId: OWNER, expectedUpdatedAt: stillCurrent.updatedAt.toISOString(), askPolicy: 'ADVANCE_CURRENT_STEP' })).step.status, 'COMPLETED');
 });
 
 test('a withdrawn guide offers no advancing action to anyone, on the real guide', async () => {

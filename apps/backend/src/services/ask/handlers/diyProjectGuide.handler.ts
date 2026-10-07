@@ -9,12 +9,17 @@ import { type CapabilityInvocationEnvelope } from '../capabilityInvocation.contr
 import { diyService } from '../../diy.service';
 import { logger } from '../../../lib/logger';
 import { HouseholdRole } from '@prisma/client';
-import { buildProjectGuideBlocks, evaluateProjectGuide, projectNotFoundBlocks, refusalBlocks, type GuideSource } from '../../diy/projectGuide';
+import { buildPreviousStepBlocks, buildProjectGuideBlocks, DIY_VIEW_ACTION_ID, DIY_VIEW_ENTITY_TYPE, evaluateProjectGuide, projectNotFoundBlocks, refusalBlocks, type GuideSource } from '../../diy/projectGuide';
 
 /** `canEdit` is whether the person asking may change the project (a contributor or owner); only then does the guide card carry the step actions (plan section 3.1). Default false. */
 export async function diyProjectGuideResult(propertyId: string, launchContext?: CapabilityInvocationEnvelope['launchContext'], now: Date = new Date(), canEdit = false): Promise<AskOperationResult> {
-  const projectId = launchContext?.entityType === 'DIY_PROJECT' ? launchContext.entityId : null;
-  const source = projectId ? await diyService.getProjectGuideSource(projectId, propertyId) : null;
+  // Two launches: the project (the live guide) or one finished step of it (the previous-step view, a READ; a refresh keeps the entity fields, so the view survives one).
+  const viewedStepId = launchContext?.entityType === DIY_VIEW_ENTITY_TYPE && launchContext.actionId === DIY_VIEW_ACTION_ID ? launchContext.entityId ?? null : null;
+  const requestedProjectId = launchContext?.entityType === 'DIY_PROJECT' ? launchContext.entityId : null;
+  const source = viewedStepId
+    ? await diyService.getProjectGuideSourceForStep(viewedStepId, propertyId)
+    : requestedProjectId ? await diyService.getProjectGuideSource(requestedProjectId, propertyId) : null;
+  const projectId = source?.project.id ?? requestedProjectId;
   // Not in this property (another property's project, a deleted one, a missing id): the same answer, and nothing about whether it exists elsewhere.
   if (!projectId || !source) return { status: 'ANSWERED', reasonCode: 'DIY_GUIDE_PROJECT_NOT_FOUND', blocks: projectNotFoundBlocks(propertyId), suggestions: [] };
 
@@ -25,6 +30,11 @@ export async function diyProjectGuideResult(propertyId: string, launchContext?: 
       logger.warn({ projectId, reason: evaluation.reason, mismatches: evaluation.mismatches }, '[DIY-GUIDE] refusing to guide a project whose steps cannot be confirmed against its reviewed revision');
     }
     return { status: 'ANSWERED', reasonCode: `DIY_GUIDE_${evaluation.reason}`, blocks: refusalBlocks(evaluation.reason, source as unknown as GuideSource, propertyId, projectId), suggestions: [] };
+  }
+  if (viewedStepId) {
+    // A step that is not a valid "previous step" (it is the current step now, a later one, or unfinished) falls back to the live guide: the view never invents a state.
+    const previous = buildPreviousStepBlocks({ source: source as unknown as GuideSource, evaluation, propertyId, asOf: now, viewedStepId, canAdvance: canEdit });
+    if (previous) return { status: 'ANSWERED', reasonCode: 'DIY_PREVIOUS_STEP_READY', blocks: previous, suggestions: [] };
   }
   return {
     status: 'ANSWERED', reasonCode: 'DIY_PROJECT_GUIDE_READY',

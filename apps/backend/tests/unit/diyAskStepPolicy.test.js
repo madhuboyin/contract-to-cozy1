@@ -4,11 +4,12 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 // Step 6, slice 6a of docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md (sections 3.2.1 and 3.9): the pure Ask step policy and the canonical context
-// version, and the service's transaction-bound authorization and `requireCurrentGuideStep` policy, on the shared database-free fake. Not Postgres.
+// version, and the service's transaction-bound authorization and `askPolicy`, on the shared database-free fake. Not Postgres.
 const { makeDiyDb } = require('../helpers/diyTemplateFake.js');
 const { buildRevisionContent, computeContentHash } = require('../../src/services/diyTemplateRevision.service.ts');
 const { stepSnapshotId } = require('../../src/services/diyPublishedTemplate.ts');
 const policy = require('../../src/services/diy/askStepPolicy.ts');
+const decide = (source, stepId, target) => policy.evaluateAskStepPolicy(source, stepId, target, 'ADVANCE_CURRENT_STEP');
 
 const T0 = new Date('2026-10-06T12:00:00.000Z');
 const template = () => ({
@@ -41,32 +42,32 @@ function pureSource({ statuses = {}, revision = revisionRow(), head, project = {
 // ---- the pure policy -------------------------------------------------------------------------------------------------------------------------------
 
 test('policy: only the first unfinished step may be completed; any other step is "not current"', () => {
-  assert.deepEqual(policy.evaluateAskStepPolicy(pureSource(), 's1', 'COMPLETED'), { ok: true });
-  assert.equal(policy.evaluateAskStepPolicy(pureSource(), 's2', 'COMPLETED').code, 'DIY_STEP_NOT_CURRENT', 'a later step');
-  assert.equal(policy.evaluateAskStepPolicy(pureSource({ statuses: { 1: 'COMPLETED' } }), 's1', 'COMPLETED').code, 'DIY_STEP_NOT_CURRENT', 'an already finished step is not current');
-  assert.deepEqual(policy.evaluateAskStepPolicy(pureSource({ statuses: { 1: 'COMPLETED' } }), 's2', 'COMPLETED'), { ok: true });
+  assert.deepEqual(decide(pureSource(), 's1', 'COMPLETED'), { ok: true });
+  assert.equal(decide(pureSource(), 's2', 'COMPLETED').code, 'DIY_STEP_NOT_CURRENT', 'a later step');
+  assert.equal(decide(pureSource({ statuses: { 1: 'COMPLETED' } }), 's1', 'COMPLETED').code, 'DIY_STEP_NOT_CURRENT', 'an already finished step is not current');
+  assert.deepEqual(decide(pureSource({ statuses: { 1: 'COMPLETED' } }), 's2', 'COMPLETED'), { ok: true });
   assert.equal(policy.currentStepOf(pureSource({ statuses: { 1: 'COMPLETED', 2: 'SKIPPED' } }).project.steps).id, 's3');
   assert.equal(policy.currentStepOf(pureSource({ statuses: { 1: 'COMPLETED', 2: 'COMPLETED', 3: 'SKIPPED', 4: 'COMPLETED' } }).project.steps), null);
-  assert.equal(policy.evaluateAskStepPolicy(pureSource({ statuses: { 1: 'COMPLETED', 2: 'COMPLETED', 3: 'SKIPPED', 4: 'COMPLETED' } }), 's4', 'COMPLETED').code, 'DIY_STEP_NOT_CURRENT', 'nothing is current once every step is finished');
+  assert.equal(decide(pureSource({ statuses: { 1: 'COMPLETED', 2: 'COMPLETED', 3: 'SKIPPED', 4: 'COMPLETED' } }), 's4', 'COMPLETED').code, 'DIY_STEP_NOT_CURRENT', 'nothing is current once every step is finished');
 });
 
 test('policy: an in-progress step is still current; Ask offers only COMPLETED and SKIPPED', () => {
-  assert.deepEqual(policy.evaluateAskStepPolicy(pureSource({ statuses: { 1: 'IN_PROGRESS' } }), 's1', 'COMPLETED'), { ok: true });
+  assert.deepEqual(decide(pureSource({ statuses: { 1: 'IN_PROGRESS' } }), 's1', 'COMPLETED'), { ok: true });
   for (const target of ['IN_PROGRESS', 'PENDING', 'REOPEN', undefined]) {
-    const d = policy.evaluateAskStepPolicy(pureSource(), 's1', target);
+    const d = decide(pureSource(), 's1', target);
     assert.deepEqual([d.ok, d.code, d.reason], [false, 'DIY_STEP_TRANSITION_NOT_ALLOWED', 'TARGET_NOT_OFFERED']);
   }
 });
 
 test('policy: skip only an optional step with no safety note, restated here even though the transition table also checks it', () => {
   const at3 = { 1: 'COMPLETED', 2: 'COMPLETED' };
-  assert.deepEqual(policy.evaluateAskStepPolicy(pureSource({ statuses: at3 }), 's3', 'SKIPPED'), { ok: true });
-  assert.equal(policy.evaluateAskStepPolicy(pureSource(), 's1', 'SKIPPED').reason, 'SKIP_REQUIRED_STEP');
-  assert.equal(policy.evaluateAskStepPolicy(pureSource({ statuses: { ...at3, 3: 'SKIPPED' } }), 's4', 'SKIPPED').reason, 'SKIP_SAFETY_STEP');
+  assert.deepEqual(decide(pureSource({ statuses: at3 }), 's3', 'SKIPPED'), { ok: true });
+  assert.equal(decide(pureSource(), 's1', 'SKIPPED').reason, 'SKIP_REQUIRED_STEP');
+  assert.equal(decide(pureSource({ statuses: { ...at3, 3: 'SKIPPED' } }), 's4', 'SKIPPED').reason, 'SKIP_SAFETY_STEP');
 });
 
 test('policy: a withdrawn, corrupted, ineligible or finished guide offers nothing; a superseded one still works', () => {
-  const code = (input) => policy.evaluateAskStepPolicy(pureSource(input), 's1', 'COMPLETED');
+  const code = (input) => decide(pureSource(input), 's1', 'COMPLETED');
   assert.deepEqual(code({ head: { publishedRevisionId: null } }).reason, 'WITHDRAWN');
   assert.deepEqual(code({ revision: revisionRow({ retiredAt: T0, retiredReason: 'UNPUBLISHED' }) }).reason, 'WITHDRAWN');
   assert.deepEqual(code({ revision: revisionRow({ retiredAt: T0, retiredReason: 'ARCHIVED' }) }).reason, 'WITHDRAWN');
@@ -126,7 +127,7 @@ function harness(hooks) {
 const stepRow = (h, id) => h.state.projects[0].steps.find((row) => row.id === id);
 const advance = (h, id, status, extra = {}, actor = 'alice') =>
   h.diyService.updateStep('p1', 'prop-1', id, { status }, { actorUserId: actor, expectedUpdatedAt: stepRow(h, id).updatedAt.toISOString(), ...extra });
-const ask = { requireCurrentGuideStep: true };
+const ask = { askPolicy: 'ADVANCE_CURRENT_STEP' };
 const rejectsWith = (promise, code) => assert.rejects(promise, (error) => error.code === code, code);
 // "Nothing written" is judged on the committed state (the spy also sees the project-row claim that a refused transaction rolls back).
 const noWrites = (h) => assert.deepEqual(

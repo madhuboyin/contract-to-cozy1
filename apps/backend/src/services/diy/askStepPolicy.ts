@@ -6,17 +6,16 @@
 // The canonical transition table still performs the actual transition: this only narrows what Ask may ask for.
 import { createHash } from 'crypto';
 import { evaluateProjectGuide, type GuideSource } from './projectGuide';
+import { TERMINAL_STEP_STATUSES as TERMINAL, currentStepOf, isPreviousStepView, previousFinishedStep } from './stepOrder';
 
-export type AskStepTarget = 'COMPLETED' | 'SKIPPED';
-const TERMINAL = new Set(['COMPLETED', 'SKIPPED']);
+export { currentStepOf, isPreviousStepView, previousFinishedStep };
+
+export type AskStepTarget = 'COMPLETED' | 'SKIPPED' | 'IN_PROGRESS';
+/** The named rule set Ask asks `updateStep` to enforce inside its transaction. The page passes none. */
+export type AskStepPolicyName = 'ADVANCE_CURRENT_STEP' | 'REOPEN_FINISHED_STEP';
 
 type SnapshotStep = { id: string; stepNumber: number; status: string; isOptional: boolean; safetyNote: string | null; updatedAt?: Date | string | null };
 const iso = (value: Date | string | null | undefined) => (value ? new Date(value).toISOString() : null);
-
-/** The first step, in authored order, that is not finished: the only step Ask advances. */
-export function currentStepOf<T extends { stepNumber: number; status: string }>(steps: T[]): T | null {
-  return [...steps].sort((a, b) => a.stepNumber - b.stepNumber).find((step) => !TERMINAL.has(step.status)) ?? null;
-}
 
 /**
  * Everything a confirmation depends on, in a fixed shape: the project (id, status, version), the current step, a fingerprint of EVERY step (so a change to
@@ -43,18 +42,25 @@ export function guideContextVersion(source: Parameters<typeof guideSnapshot>[0])
 
 export type AskStepPolicyDecision =
   | { ok: true }
-  | { ok: false; code: 'DIY_GUIDE_NOT_CURRENT' | 'DIY_STEP_NOT_CURRENT' | 'DIY_STEP_TRANSITION_NOT_ALLOWED'; message: string; reason: string };
+  | { ok: false; code: 'DIY_GUIDE_NOT_CURRENT' | 'DIY_STEP_NOT_CURRENT' | 'DIY_STEP_NOT_REOPENABLE' | 'DIY_STEP_TRANSITION_NOT_ALLOWED'; message: string; reason: string };
 
 /**
- * Ask may only: complete or skip the CURRENT step of a project whose guide is reviewed, intact and not withdrawn; and skip only an optional step with no
- * safety note. A superseded guide is still usable (the project keeps the steps it started with).
+ * ADVANCE_CURRENT_STEP: complete or skip the CURRENT step of a project whose guide is reviewed, intact and not withdrawn; skip only an optional step with no safety
+ * note. REOPEN_FINISHED_STEP: put a FINISHED step (completed or skipped) of such a project back in progress. A superseded guide is still usable (the project keeps the
+ * steps it started with). Both refuse a withdrawn or unverifiable guide.
  */
-export function evaluateAskStepPolicy(source: GuideSource, stepId: string, target: string): AskStepPolicyDecision {
+export function evaluateAskStepPolicy(source: GuideSource, stepId: string, target: string, policy: AskStepPolicyName): AskStepPolicyDecision {
   const refuse = (code: Extract<AskStepPolicyDecision, { ok: false }>['code'], message: string, reason: string): AskStepPolicyDecision => ({ ok: false, code, message, reason });
-  if (target !== 'COMPLETED' && target !== 'SKIPPED') return refuse('DIY_STEP_TRANSITION_NOT_ALLOWED', 'Ask only marks a step done or skips it.', 'TARGET_NOT_OFFERED');
+  const offered = policy === 'REOPEN_FINISHED_STEP' ? target === 'IN_PROGRESS' : target === 'COMPLETED' || target === 'SKIPPED';
+  if (!offered) return refuse('DIY_STEP_TRANSITION_NOT_ALLOWED', policy === 'REOPEN_FINISHED_STEP' ? 'Ask only reopens a finished step.' : 'Ask only marks a step done or skips it.', 'TARGET_NOT_OFFERED');
   const evaluation = evaluateProjectGuide(source);
   if (evaluation.kind === 'REFUSED') return refuse('DIY_GUIDE_NOT_CURRENT', 'This project can no longer be guided here. Use the project page.', evaluation.reason);
   if (evaluation.sourceState === 'WITHDRAWN') return refuse('DIY_GUIDE_NOT_CURRENT', 'This guide has been withdrawn. Use the project page.', 'WITHDRAWN');
+  if (policy === 'REOPEN_FINISHED_STEP') {
+    const step = source.project.steps.find((row) => row.id === stepId);
+    if (!step || !TERMINAL.has(step.status)) return refuse('DIY_STEP_NOT_REOPENABLE', 'This step is not finished, so there is nothing to reopen. Look at the guide again.', 'NOT_FINISHED');
+    return { ok: true };
+  }
   const current = currentStepOf(source.project.steps);
   if (!current || current.id !== stepId) return refuse('DIY_STEP_NOT_CURRENT', 'This step is no longer the current step. Look at the guide again.', 'NOT_CURRENT_STEP');
   if (target === 'SKIPPED') {

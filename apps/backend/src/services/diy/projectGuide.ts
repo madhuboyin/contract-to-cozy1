@@ -8,6 +8,7 @@ import { evaluateDiyEligibility } from './eligibilityPolicy';
 import { checkRevisionIntegrity } from '../diyTemplateRevision.service';
 import { eligibilityInputFromRevision, revisionContent, stepSnapshotId } from '../diyPublishedTemplate';
 import { TASK_LINK_COPY } from './taskLinkStatus';
+import { currentStepOf, isPreviousStepView, previousFinishedStep } from './stepOrder';
 
 export const GUIDE_MAX_STEPS = 40;
 
@@ -130,9 +131,20 @@ export const DIY_GUIDE_ACTION_ID = 'open-diy-project';
 export const DIY_STEP_ENTITY_TYPE = 'DIY_STEP';
 export const DIY_STEP_COMPLETE_MESSAGE = 'Mark this step done.';
 export const DIY_STEP_SKIP_MESSAGE = 'Skip this step.';
+export const DIY_STEP_REOPEN_MESSAGE = 'Reopen this step.';
 export const DIY_STEP_ACTIONS = {
   COMPLETE: { id: 'diy-step-complete', message: DIY_STEP_COMPLETE_MESSAGE, target: 'COMPLETED' as const },
   SKIP: { id: 'diy-step-skip', message: DIY_STEP_SKIP_MESSAGE, target: 'SKIPPED' as const },
+  // Step 7 (docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md section 3.2): reopen a FINISHED step, offered only from the previous-step view.
+  REOPEN: { id: 'diy-step-reopen', message: DIY_STEP_REOPEN_MESSAGE, target: 'IN_PROGRESS' as const },
+};
+// The read-only launches of the previous-step view (a launch of DIY_PROJECT_GUIDE on entityType DIY_STEP with actionId VIEW) and the way back.
+export const DIY_VIEW_ENTITY_TYPE = 'DIY_STEP';
+export const DIY_VIEW_ACTION_ID = 'VIEW';
+export const DIY_VIEW_ACTIONS = {
+  PREVIOUS: { id: 'diy-step-previous', label: 'Previous step', message: 'Show the previous step.' },
+  REVIEW_LAST: { id: 'diy-review-last-step', label: 'Review last step', message: 'Review the last step.' },
+  BACK: { id: 'diy-step-back', message: 'Back to the guide.' },
 };
 export type DiyStepActionKey = keyof typeof DIY_STEP_ACTIONS;
 export const DIY_GUIDE_BOUNDARY_IDS = ['diy-step-safety', 'diy-guide-withdrawn', 'diy-guide-corrected', 'diy-project-guide-boundary'] as const;
@@ -197,6 +209,26 @@ export function projectNotFoundBlocks(propertyId: string): AskPresentationBlock[
   }];
 }
 
+/** The stale-source disclosure of a guide that passed the gate (withdrawn: caution with the page link; superseded: informational). Empty for a current one. */
+function sourceDisclosure(evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>, href: string): AskPresentationBlock[] {
+  if (evaluation.sourceState === 'WITHDRAWN') {
+    return [{ type: 'BOUNDARY', id: 'diy-guide-withdrawn', title: 'This guide has been withdrawn', body: GUIDE_WITHDRAWN_COPY, severity: 'CAUTION', suggestions: [], actions: [openAction(href)] }];
+  }
+  if (evaluation.sourceState === 'SUPERSEDED') {
+    return [{ type: 'BOUNDARY', id: 'diy-guide-corrected', title: 'A corrected version is available', body: GUIDE_CORRECTED_COPY, severity: 'INFO', suggestions: [] }];
+  }
+  return [];
+}
+
+const SCOPE_COVERAGE = 'This guide covers reviewed, low-risk projects. Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials such as asbestos, lead paint or mold are not covered. ';
+const scopeBoundary = (tail: string): AskPresentationBlock => ({ type: 'BOUNDARY', id: 'diy-project-guide-boundary', title: 'Only for reviewed low-risk projects', body: SCOPE_COVERAGE + tail, severity: 'INFO', suggestions: [] });
+
+/** A read-only launch of the guide: the previous-step view (entityType DIY_STEP, actionId VIEW) or the way back to the live guide (entityType DIY_PROJECT). */
+const viewAction = (spec: { id: string; label: string; message: string }, target: { entityType: string; entityId: string; actionId?: string }) => ({
+  id: spec.id, label: spec.label, interactionType: 'START_WORKFLOW' as const, message: spec.message, operationId: 'DIY_PROJECT_GUIDE',
+  entityType: target.entityType, entityId: target.entityId, ...(target.actionId ? { actionId: target.actionId } : {}), style: 'SECONDARY' as const,
+});
+
 /** The guide for a project that passed the gate: disclosures, the current step's safety note, the guide block, and the scope boundary. */
 export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>; propertyId: string; asOf: Date; canAdvance?: boolean }): AskPresentationBlock[] {
   const { source, evaluation, propertyId, asOf } = input;
@@ -204,17 +236,16 @@ export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation
   const href = projectPageHref(propertyId, project.id);
   const blocks: AskPresentationBlock[] = [];
 
-  if (evaluation.sourceState === 'WITHDRAWN') {
-    blocks.push({ type: 'BOUNDARY', id: 'diy-guide-withdrawn', title: 'This guide has been withdrawn', body: GUIDE_WITHDRAWN_COPY, severity: 'CAUTION', suggestions: [], actions: [openAction(href)] });
-  } else if (evaluation.sourceState === 'SUPERSEDED') {
-    blocks.push({ type: 'BOUNDARY', id: 'diy-guide-corrected', title: 'A corrected version is available', body: GUIDE_CORRECTED_COPY, severity: 'INFO', suggestions: [] });
-  }
+  blocks.push(...sourceDisclosure(evaluation, href));
 
   const { currentIndex, progress, outline } = projectGuideProgress(project.steps, asOf);
   if (currentIndex < 0 || !progress) {
     // Nothing left to do but finish; completing from Ask is a later step.
+    // Reopening must stay reachable here: with every step resolved there is no current step, so the way back to a finished one is a read action.
+    const last = previousFinishedStep(project.steps, null);
     blocks.push({
-      type: 'SUMMARY', id: 'diy-guide-resolved', title: project.title, tone: 'POSITIVE', actions: [openAction(href)],
+      type: 'SUMMARY', id: 'diy-guide-resolved', title: project.title, tone: 'POSITIVE',
+      actions: [...(last ? [viewAction({ ...DIY_VIEW_ACTIONS.REVIEW_LAST }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: last.id, actionId: DIY_VIEW_ACTION_ID })] : []), openAction(href)],
       body: 'Every step is resolved. Finish the project on the project page.',
     });
     return blocks;
@@ -235,6 +266,7 @@ export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation
     id: DIY_STEP_ACTIONS[key].id, label, interactionType: 'START_WORKFLOW' as const, message: DIY_STEP_ACTIONS[key].message, operationId: 'DIY_STEP_UPDATE',
     entityType: DIY_STEP_ENTITY_TYPE, entityId: step.id, actionId: key, style,
   });
+  const previous = previousFinishedStep(project.steps, step.stepNumber);
   const advancing = advance
     ? [stepAction('COMPLETE', 'Mark this step done', 'PRIMARY'), ...(step.isOptional && !(step.safetyNote && step.safetyNote.trim()) ? [stepAction('SKIP', 'Skip this step', 'QUIET')] : [])]
     : [];
@@ -256,14 +288,69 @@ export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation
     eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide'],
     icon: GUIDE_ICONS[project.category] ?? 'TASK',
     chips, tip, main: { title: mainTitle, body: mainBody, facts }, history: [], notes,
-    actions: [...advancing, openAction(href)],
+    actions: [...advancing, ...(previous ? [viewAction({ ...DIY_VIEW_ACTIONS.PREVIOUS }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: previous.id, actionId: DIY_VIEW_ACTION_ID })] : []), openAction(href)],
     progress, outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
   } as AskPresentationBlock);
 
+  blocks.push(scopeBoundary(advance ? 'You can mark the current step done or skip it here, or use the project page.' : 'You mark steps done on the project page.'));
+  return blocks;
+}
+
+/**
+ * The previous-step view (docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md section 3.1): a READ of one finished step before the current one (or any finished step when
+ * every step is resolved), on the same card. The viewed step's safety note is the block directly above the card; the outline keeps marking the REAL current step; the
+ * progress label says plainly that this is a step looked back at. Returns null when the step is not a valid previous step (it is the current step, a later one, or
+ * unfinished), so the caller shows the live guide instead. Reopen is offered only to a person who can edit, on a guide that is not withdrawn.
+ */
+export function buildPreviousStepBlocks(input: {
+  source: GuideSource; evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>; propertyId: string; asOf: Date; viewedStepId: string; canAdvance?: boolean;
+}): AskPresentationBlock[] | null {
+  const { source, evaluation, propertyId, asOf, viewedStepId } = input;
+  const { project } = source;
+  if (!isPreviousStepView(project.steps, viewedStepId)) return null;
+  const ordered = [...project.steps].sort((a, b) => a.stepNumber - b.stepNumber);
+  const viewedIndex = ordered.findIndex((row) => row.id === viewedStepId);
+  const step = ordered[viewedIndex];
+  const current = currentStepOf(ordered);
+  const currentIndex = current ? ordered.findIndex((row) => row.id === current.id) : -1;
+  const href = projectPageHref(propertyId, project.id);
+  const flags = { truncated: false };
+
+  const blocks: AskPresentationBlock[] = [...sourceDisclosure(evaluation, href)];
+  const hasNote = Boolean(step.safetyNote && step.safetyNote.trim());
+  if (hasNote) blocks.push({ type: 'BOUNDARY', id: 'diy-step-safety', title: 'Safety for this step', body: step.safetyNote as string, severity: 'CAUTION', suggestions: [] });
+  const safetyShown = !hasNote || blocks[blocks.length - 1]?.id === 'diy-step-safety';
+  const canReopen = Boolean(input.canAdvance) && evaluation.sourceState !== 'WITHDRAWN' && safetyShown;
+
+  const stateWord = step.status === 'SKIPPED' ? 'skipped' : 'done';
+  const completed = ordered.filter((row) => row.status === 'COMPLETED').length;
+  const skipped = ordered.filter((row) => row.status === 'SKIPPED').length;
+  const where = current ? ` You are on step ${currentIndex + 1}.` : ' Every step is resolved.';
+  const label = `Looking back at step ${viewedIndex + 1} of ${ordered.length}, ${stateWord}.${where}`;
+  const { outline } = projectGuideProgress(ordered, asOf);
+
+  const chips: Array<{ label: string; kind: 'TIME' | 'TAG' | 'STATUS' }> = [{ label: step.status === 'SKIPPED' ? 'Skipped' : 'Done', kind: 'STATUS' }];
+  if (step.estimatedMinutes) chips.push({ label: `About ${step.estimatedMinutes} min`, kind: 'TIME' });
+  const tip = step.tipNote && step.tipNote.trim() ? { title: 'Tip', body: clip(step.tipNote, 400, flags) } : null;
+  const previous = previousFinishedStep(ordered, step.stepNumber);
+  const back = current
+    ? viewAction({ id: DIY_VIEW_ACTIONS.BACK.id, label: `Back to step ${currentIndex + 1}`, message: DIY_VIEW_ACTIONS.BACK.message }, { entityType: 'DIY_PROJECT', entityId: project.id })
+    : viewAction({ id: DIY_VIEW_ACTIONS.BACK.id, label: 'Back to the guide', message: DIY_VIEW_ACTIONS.BACK.message }, { entityType: 'DIY_PROJECT', entityId: project.id });
+  const reopen = {
+    id: DIY_STEP_ACTIONS.REOPEN.id, label: 'Reopen this step', interactionType: 'START_WORKFLOW' as const, message: DIY_STEP_ACTIONS.REOPEN.message, operationId: 'DIY_STEP_UPDATE',
+    entityType: DIY_STEP_ENTITY_TYPE, entityId: step.id, actionId: 'REOPEN', style: 'SECONDARY' as const,
+  };
+
   blocks.push({
-    type: 'BOUNDARY', id: 'diy-project-guide-boundary', title: 'Only for reviewed low-risk projects',
-    body: 'This guide covers reviewed, low-risk projects. Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials such as asbestos, lead paint or mold are not covered. ' + (advance ? 'You can mark the current step done or skip it here, or use the project page.' : 'You mark steps done on the project page.'),
-    severity: 'INFO', suggestions: [],
-  });
+    type: 'TASK_GUIDE', id: 'diy-project-guide', title: clip(project.title, 160, flags), summary: label,
+    eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide', 'Earlier step'],
+    icon: GUIDE_ICONS[project.category] ?? 'TASK',
+    chips, tip, main: { title: clip(step.title, 80, flags), body: clip(step.description, 800, flags), facts: [{ label: 'This step', value: step.isOptional ? 'Optional' : 'Required' }] },
+    history: [], notes: flags.truncated ? [{ id: 'diy-guide-truncated', title: 'Longer on the page', body: 'Part of this step is shortened here. The full step is on the project page.' }] : [],
+    actions: [...(canReopen ? [reopen] : []), ...(previous ? [viewAction({ ...DIY_VIEW_ACTIONS.PREVIOUS }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: previous.id, actionId: DIY_VIEW_ACTION_ID })] : []), back, openAction(href)],
+    progress: { current: viewedIndex + 1, total: ordered.length, completed, skipped, label, asOf: asOf.toISOString() },
+    outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
+  } as AskPresentationBlock);
+  blocks.push(scopeBoundary(canReopen ? 'You can reopen this step here, or use the project page.' : 'You change steps on the project page.'));
   return blocks;
 }

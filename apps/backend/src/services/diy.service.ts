@@ -13,7 +13,7 @@ import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
 import { logger } from '../lib/logger';
 import { evaluateStepTransition, openStepsForCompletion, type DiyStepStatusValue } from './diy/stepTransitions';
-import { evaluateAskStepPolicy } from './diy/askStepPolicy';
+import { evaluateAskStepPolicy, type AskStepPolicyName } from './diy/askStepPolicy';
 import { buildRevisionContent, checkRevisionIntegrity, computeContentHash, shareLockGovernanceRows } from './diyTemplateRevision.service';
 import {
   PUBLISHED_REVISION_INCLUDE, eligibilityInputFromRevision, publishedTemplateDetail, publishedTemplateSummary, revisionContent, stepSnapshotId,
@@ -674,7 +674,7 @@ export class DiyService {
     propertyId: string,
     stepId: string,
     patch: { status: DiyStepStatusValue; notes?: string },
-    ctx: { actorUserId: string; expectedUpdatedAt?: unknown; requireCurrentGuideStep?: boolean },
+    ctx: { actorUserId: string; expectedUpdatedAt?: unknown; askPolicy?: AskStepPolicyName },
   ) {
     const expected = this.parseVersionToken(ctx.expectedUpdatedAt);
     return prisma.$transaction(async (tx) => {
@@ -702,10 +702,10 @@ export class DiyService {
 
       // Ask's narrower rules, evaluated against the snapshot read inside this transaction after the project row is held (the transition table below
       // still performs the actual transition).
-      if (ctx.requireCurrentGuideStep) {
+      if (ctx.askPolicy) {
         const source = await this.readGuideSource(tx, projectId, propertyId, true);
         if (!source) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
-        const policy = evaluateAskStepPolicy(source as any, stepId, patch.status);
+        const policy = evaluateAskStepPolicy(source as any, stepId, patch.status, ctx.askPolicy);
         if (!policy.ok) throw new APIError(policy.message, 409, policy.code, { reason: policy.reason });
       }
 

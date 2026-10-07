@@ -79,7 +79,7 @@ const DONE_1_2 = [['s1', 'COMPLETED'], ['s2', 'COMPLETED']];
 const launch = (key, stepId, overrides = {}) => ({
   surface: 'ASK_WORKSPACE', entityType: 'DIY_STEP', entityId: stepId, operationId: 'DIY_STEP_UPDATE', actionId: key, sourceExecutionId: 'exec-guide', ...overrides,
 });
-const MESSAGES = { COMPLETE: 'Mark this step done.', SKIP: 'Skip this step.' };
+const MESSAGES = { COMPLETE: 'Mark this step done.', SKIP: 'Skip this step.', REOPEN: 'Reopen this step.' };
 const propose = (key, stepId, launchOverrides, message = MESSAGES[key], propertyId = 'prop-1') =>
   capabilityInvoke('DIY_STEP_UPDATE', { userId: 'u1', propertyId, message, launchContext: launch(key, stepId, launchOverrides) });
 const execution = () => ({ id: 'exec-1', propertyId: 'prop-1', sessionId: 's1', userId: 'u1', operationId: 'DIY_STEP_UPDATE', createdAt: new Date() });
@@ -88,6 +88,8 @@ const confirm = (parameters, asRole = 'CONTRIBUTOR') => confirmCapabilityInvoke(
 });
 const codeOf = async (promise) => { try { await promise; return null; } catch (error) { return error.code ?? `NO_CODE:${error.message}`; } };
 const guideLaunch = { surface: 'ASK_WORKSPACE', entityType: 'DIY_PROJECT', entityId: 'p1' };
+// The actions that CHANGE a step (the read-only navigation actions, like Previous step, are separate and visible to everyone).
+const CHANGES = new Set(['diy-step-complete', 'diy-step-skip', 'diy-step-reopen']);
 const actionsOf = (result) => result.blocks.flatMap((block) => block.actions ?? []);
 const committedState = () => JSON.stringify([db.state.projects[0].status, db.state.projects[0].updatedAt, db.state.projects[0].steps.map((s) => [s.id, s.status, s.updatedAt]), db.state.events.length, db.state.domainEvents.length]);
 
@@ -95,19 +97,19 @@ const committedState = () => JSON.stringify([db.state.projects[0].status, db.sta
 
 test('the card carries Mark done for the current step; Skip only when it is optional with no safety note; each action is exactly declared', async () => {
   const first = await diyProjectGuideResult('prop-1', guideLaunch, NOW, true);
-  const complete = first.blocks.find((b) => b.type === 'TASK_GUIDE').actions.filter((a) => a.id.startsWith('diy-step'));
+  const complete = first.blocks.find((b) => b.type === 'TASK_GUIDE').actions.filter((a) => CHANGES.has(a.id));
   assert.deepEqual(complete, [{ id: 'diy-step-complete', label: 'Mark this step done', interactionType: 'START_WORKFLOW', message: 'Mark this step done.', operationId: 'DIY_STEP_UPDATE', entityType: 'DIY_STEP', entityId: 's1', actionId: 'COMPLETE', style: 'PRIMARY' }]);
   setStatus(...DONE_1_2); // step 3: optional, no safety note
   const third = (await diyProjectGuideResult('prop-1', guideLaunch, NOW, true)).blocks.find((b) => b.type === 'TASK_GUIDE').actions;
-  assert.deepEqual(third.filter((a) => a.id.startsWith('diy-step')).map((a) => [a.id, a.entityId, a.actionId, a.message, a.style]), [['diy-step-complete', 's3', 'COMPLETE', 'Mark this step done.', 'PRIMARY'], ['diy-step-skip', 's3', 'SKIP', 'Skip this step.', 'QUIET']]);
+  assert.deepEqual(third.filter((a) => CHANGES.has(a.id)).map((a) => [a.id, a.entityId, a.actionId, a.message, a.style]), [['diy-step-complete', 's3', 'COMPLETE', 'Mark this step done.', 'PRIMARY'], ['diy-step-skip', 's3', 'SKIP', 'Skip this step.', 'QUIET']]);
   setStatus(['s3', 'SKIPPED']); // step 4: optional BUT carries a safety note
   const fourth = (await diyProjectGuideResult('prop-1', guideLaunch, NOW, true)).blocks.find((b) => b.type === 'TASK_GUIDE').actions;
-  assert.deepEqual(fourth.filter((a) => a.id.startsWith('diy-step')).map((a) => a.id), ['diy-step-complete']);
+  assert.deepEqual(fourth.filter((a) => CHANGES.has(a.id)).map((a) => a.id), ['diy-step-complete']);
   for (const result of [first]) for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
 });
 
 test('no step action for a viewer, a default call, a withdrawn guide or a finished project; the page link always remains', async () => {
-  const noAdvance = (result) => assert.deepEqual(actionsOf(result).filter((a) => a.id.startsWith('diy-step')), []);
+  const noAdvance = (result) => assert.deepEqual(actionsOf(result).filter((a) => CHANGES.has(a.id)), []);
   noAdvance(await diyProjectGuideResult('prop-1', guideLaunch, NOW));
   noAdvance(await diyProjectGuideResult('prop-1', guideLaunch, NOW, false));
   db.state.templates.get('t1').publishedRevisionId = null; // withdrawn
@@ -126,7 +128,7 @@ test('the REGISTERED guide handler reads the role per request: a contributor get
   role = 'OWNER';
   assert.ok(actionsOf(await run()).some((a) => a.id === 'diy-step-complete'));
   role = 'VIEWER';
-  assert.deepEqual(actionsOf(await run()).filter((a) => a.id.startsWith('diy-step')), []);
+  assert.deepEqual(actionsOf(await run()).filter((a) => CHANGES.has(a.id)), []);
 });
 
 // ---- the trust pipeline: the FINAL sequence --------------------------------------------------------------------------------------------------------------
@@ -153,10 +155,10 @@ test('defense in depth: even if a producer emitted the actions for a viewer, the
   const emitted = await diyProjectGuideResult('prop-1', guideLaunch, NOW, true); // a "producer mistake": the actions are present
   assert.ok(actionsOf(emitted).some((a) => a.id === 'diy-step-complete'));
   const forViewer = validate('DIY_PROJECT_GUIDE', emitted, 'VIEWER');
-  assert.deepEqual(actionsOf(forViewer).filter((a) => a.id.startsWith('diy-step')), []);
+  assert.deepEqual(actionsOf(forViewer).filter((a) => CHANGES.has(a.id)), []);
   setStatus(...DONE_1_2);
   const withSkip = validate('DIY_PROJECT_GUIDE', await diyProjectGuideResult('prop-1', guideLaunch, NOW, true), 'VIEWER');
-  assert.deepEqual(actionsOf(withSkip).filter((a) => a.id.startsWith('diy-step')), [], 'Skip this step is filtered too: skip is now on the verb list');
+  assert.deepEqual(actionsOf(withSkip).filter((a) => CHANGES.has(a.id)), [], 'Skip this step is filtered too: skip is now on the verb list');
   const { isAskActionAllowedForHouseholdRole } = require('../../src/services/ask/askAudiencePresentation.ts');
   for (const label of ['Skip this step', 'Skip', 'Reopen step', 'Mark this step done']) assert.equal(isAskActionAllowedForHouseholdRole({ id: 'x', label, style: 'QUIET' }, 'VIEWER'), false, label);
   assert.equal(isAskActionAllowedForHouseholdRole({ id: 'x', label: 'Skip this step', style: 'QUIET' }, 'CONTRIBUTOR'), true);
@@ -347,7 +349,7 @@ test('confirm refuses a viewer and malformed parameters, writing nothing', async
   const before = committedState();
   assert.equal(await codeOf(confirm(proposed.parameters, 'VIEWER')), 'ASK_PERMISSION_REQUIRED');
   for (const key of ['diyStepId', 'diyProjectId', 'diyStepTarget', 'diyStepExpectedUpdatedAt']) assert.equal(await codeOf(confirm({ ...proposed.parameters, [key]: undefined })), 'ASK_CONFIRMATION_NOT_ACTIVE', key);
-  assert.equal(await codeOf(confirm({ ...proposed.parameters, diyStepTarget: 'IN_PROGRESS' })), 'ASK_CONFIRMATION_NOT_ACTIVE', 'Ask never confirms a move it does not offer');
+  assert.equal(await codeOf(confirm({ ...proposed.parameters, diyStepTarget: 'PENDING' })), 'ASK_CONFIRMATION_NOT_ACTIVE', 'Ask never confirms a move it does not offer');
   assert.equal(await codeOf(confirm({ ...proposed.parameters, diyStepId: 'nope' })), 'ASK_CONTEXT_VERSION_CONFLICT');
   assert.equal(committedState(), before);
 });
@@ -370,7 +372,219 @@ test('registry facts: a CONTRIBUTOR, confirmation-gated, non-routable command wi
 test('the handler source has the guard shape and no direct write: declared action, canned messages, ASK_REFRESH, the policy flag, no model write', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/diyStepUpdate.handler.ts'), 'utf8');
   assert.match(source, /launchContext\.surface === 'ASK_REFRESH'/);
-  assert.match(source, /requireCurrentGuideStep: true/);
+  assert.match(source, /askPolicy: TARGET_COPY\[target\]\.policy/);
   assert.doesNotMatch(source, /prisma\./, 'every write goes through diyService.updateStep');
   assert.doesNotMatch(source, /\.(create|update|updateMany|delete|upsert)\(/);
+});
+
+// ===========================================================================================================================================================
+// Step 7A (docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md sections 3.1 to 3.3): the previous-step view (a READ), the all-resolved "Review last step" path and
+// Reopen (the step operation's third action).
+// ===========================================================================================================================================================
+const viewLaunch = (stepId, overrides = {}) => ({ surface: 'ASK_WORKSPACE', entityType: 'DIY_STEP', entityId: stepId, actionId: 'VIEW', ...overrides });
+const view = (stepId, canEdit = true, overrides, propertyId = 'prop-1') => diyProjectGuideResult(propertyId, viewLaunch(stepId, overrides), NOW, canEdit);
+const taskGuideOf = (result) => result.blocks.find((b) => b.type === 'TASK_GUIDE');
+const finish = (...ids) => ids.forEach((id) => { stepRow(id).status = id === 's3' ? 'SKIPPED' : 'COMPLETED'; stepRow(id).completedByUserId = 'u9'; stepRow(id).completedAt = T0; });
+const RESOLVE_ALL = ['s1', 's2', 's3', 's4'];
+
+test('policy helpers: the previous finished step before a point, and what counts as a valid previous-step view', () => {
+  const steps = [{ id: 'a', stepNumber: 1, status: 'COMPLETED' }, { id: 'b', stepNumber: 3, status: 'SKIPPED' }, { id: 'c', stepNumber: 7, status: 'IN_PROGRESS' }, { id: 'd', stepNumber: 9, status: 'COMPLETED' }];
+  assert.equal(policy.previousFinishedStep(steps, 7).id, 'b');
+  assert.equal(policy.previousFinishedStep(steps, 3).id, 'a');
+  assert.equal(policy.previousFinishedStep(steps, 1), null);
+  assert.equal(policy.previousFinishedStep(steps, null).id, 'd', 'with no current step the last finished one');
+  assert.equal(policy.isPreviousStepView(steps, 'a'), true);
+  assert.equal(policy.isPreviousStepView(steps, 'b'), true);
+  for (const id of ['c', 'd', 'nope']) assert.equal(policy.isPreviousStepView(steps, id), false, `${id}: the current step, a LATER finished step and an unknown step are not previous steps`);
+  assert.equal(policy.isPreviousStepView(steps.map((s) => ({ ...s, status: 'COMPLETED' })), 'd'), true, 'every step resolved: any step may be reviewed');
+});
+
+test('the REOPEN policy: a finished step of a guide that is not withdrawn; anything else is refused; the two policies accept different targets', async () => {
+  const src = async () => diyService.getProjectGuideSource('p1', 'prop-1');
+  finish('s1', 's2');
+  assert.deepEqual(policy.evaluateAskStepPolicy(await src(), 's1', 'IN_PROGRESS', 'REOPEN_FINISHED_STEP'), { ok: true });
+  assert.equal(policy.evaluateAskStepPolicy(await src(), 's3', 'IN_PROGRESS', 'REOPEN_FINISHED_STEP').code, 'DIY_STEP_NOT_REOPENABLE', 'an unfinished step');
+  assert.equal(policy.evaluateAskStepPolicy(await src(), 's1', 'COMPLETED', 'REOPEN_FINISHED_STEP').reason, 'TARGET_NOT_OFFERED');
+  assert.equal(policy.evaluateAskStepPolicy(await src(), 's1', 'IN_PROGRESS', 'ADVANCE_CURRENT_STEP').reason, 'TARGET_NOT_OFFERED');
+  db.state.templates.get('t1').publishedRevisionId = null;
+  assert.equal(policy.evaluateAskStepPolicy(await src(), 's1', 'IN_PROGRESS', 'REOPEN_FINISHED_STEP').code, 'DIY_GUIDE_NOT_CURRENT');
+  db.state.templates.get('t1').publishedRevisionId = 'rev-1';
+  db.state.projects[0].status = 'COMPLETED';
+  assert.equal(policy.evaluateAskStepPolicy(await src(), 's1', 'IN_PROGRESS', 'REOPEN_FINISHED_STEP').reason, 'PROJECT_FINISHED');
+});
+
+test('the card offers "Previous step" only when a finished step comes before the current one, to everyone (it is a read); never for a later finished step', async () => {
+  const previousOf = (result) => taskGuideOf(result).actions.find((a) => a.id === 'diy-step-previous');
+  assert.equal(previousOf(await diyProjectGuideResult('prop-1', guideLaunch, NOW, true)), undefined, 'step 1 is current: nothing before it');
+  finish('s1', 's2');
+  const card = await diyProjectGuideResult('prop-1', guideLaunch, NOW, false); // a viewer still sees it
+  assert.deepEqual(previousOf(card), { id: 'diy-step-previous', label: 'Previous step', interactionType: 'START_WORKFLOW', message: 'Show the previous step.', operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_STEP', entityId: 's2', actionId: 'VIEW', style: 'SECONDARY' });
+  assert.deepEqual(actionsOf(card).filter((a) => CHANGES.has(a.id)), []);
+  stepRow('s2').status = 'PENDING'; stepRow('s3').status = 'COMPLETED'; // s2 current again; a LATER step finished out of order
+  assert.equal(previousOf(await diyProjectGuideResult('prop-1', guideLaunch, NOW, true)).entityId, 's1', 'the nearest finished step BEFORE the current one, never a later one');
+});
+
+test('the previous-step view: the viewed step\'s own safety note directly above, the real current step still marked, a plain label, the actions, a schema-valid card, and NO write', async () => {
+  finish('s1', 's2');
+  const before = committedState();
+  const result = await view('s1');
+  assert.equal(result.reasonCode, 'DIY_PREVIOUS_STEP_READY');
+  result.blocks.forEach((block) => AskPresentationBlockSchema.parse(block));
+  const cardIndex = result.blocks.findIndex((b) => b.type === 'TASK_GUIDE');
+  assert.deepEqual([result.blocks[cardIndex - 1].id, result.blocks[cardIndex - 1].body], ['diy-step-safety', 'Keep a window open while you work.']);
+  const card = taskGuideOf(result);
+  assert.equal(card.id, 'diy-project-guide', 'the same block id, so a refresh replaces the live guide in place');
+  assert.equal(card.summary, 'Looking back at step 1 of 4, done. You are on step 3.');
+  assert.equal(card.progress.label, card.summary);
+  assert.deepEqual(card.eyebrow, ['Painting', 'Reviewed guide', 'Earlier step']);
+  assert.deepEqual([card.main.title, card.chips[0]], ['Tape the trim', { label: 'Done', kind: 'STATUS' }]);
+  assert.deepEqual(card.outline.map((o) => o.state), ['DONE', 'DONE', 'CURRENT', 'UPCOMING'], 'the outline still marks the REAL current step');
+  assert.deepEqual(card.actions.map((a) => a.id), ['diy-step-reopen', 'diy-step-back', 'open-diy-project'], 'no earlier finished step, so no Previous');
+  assert.deepEqual(card.actions[0], { id: 'diy-step-reopen', label: 'Reopen this step', interactionType: 'START_WORKFLOW', message: 'Reopen this step.', operationId: 'DIY_STEP_UPDATE', entityType: 'DIY_STEP', entityId: 's1', actionId: 'REOPEN', style: 'SECONDARY' });
+  assert.deepEqual([card.actions[1].label, card.actions[1].entityType, card.actions[1].entityId, card.actions[1].operationId], ['Back to step 3', 'DIY_PROJECT', 'p1', 'DIY_PROJECT_GUIDE']);
+  assert.equal(committedState(), before, 'a view writes nothing');
+  assert.equal(db.state.writes.length, 0);
+  // From the second step, Previous leads back to the first, and a skipped step reads "skipped".
+  const second = taskGuideOf(await view('s2'));
+  assert.equal(second.actions.find((a) => a.id === 'diy-step-previous').entityId, 's1');
+  assert.equal(second.summary, 'Looking back at step 2 of 4, done. You are on step 3.');
+});
+
+test('the view for a viewer or a withdrawn guide has no Reopen; it stays readable; a refresh renders the same view', async () => {
+  finish('s1', 's2');
+  const ids = (result) => taskGuideOf(result).actions.map((a) => a.id);
+  assert.equal(ids(await view('s1', false)).includes('diy-step-reopen'), false);
+  assert.equal(ids(await view('s1', true)).includes('diy-step-reopen'), true);
+  db.state.templates.get('t1').publishedRevisionId = null;
+  const withdrawn = await view('s1', true);
+  assert.equal(withdrawn.blocks[0].id, 'diy-guide-withdrawn');
+  assert.equal(ids(withdrawn).includes('diy-step-reopen'), false, 'a withdrawn guide offers no change');
+  assert.equal(ids(withdrawn).includes('diy-step-back'), true);
+  db.state.templates.get('t1').publishedRevisionId = 'rev-1';
+  const refreshed = await view('s1', true, { surface: 'ASK_REFRESH' });
+  assert.equal(refreshed.reasonCode, 'DIY_PREVIOUS_STEP_READY');
+});
+
+test('a step that is not a valid previous step falls back to the live guide; an unknown step, another property and a missing action id answer "not found"', async () => {
+  finish('s1');
+  for (const id of ['s2', 's3']) assert.equal((await view(id)).reasonCode, 'DIY_PROJECT_GUIDE_READY', `${id}: the current step or a later one is not a previous step`);
+  finish('s2'); stepRow('s4').status = 'COMPLETED'; // s3 is current; s4 finished out of order
+  assert.equal((await view('s4')).reasonCode, 'DIY_PROJECT_GUIDE_READY');
+  for (const result of [await view('nope'), await view('s1', true, undefined, 'prop-2'), await diyProjectGuideResult('prop-1', { surface: 'ASK_WORKSPACE', entityType: 'DIY_STEP', entityId: 's1' }, NOW, true)]) {
+    assert.equal(result.reasonCode, 'DIY_GUIDE_PROJECT_NOT_FOUND');
+    assert.ok(!JSON.stringify(result).includes('Tape the trim'));
+  }
+});
+
+test('ALL STEPS RESOLVED: "Review last step" leads to the last finished step; its Back returns to the summary; Reopen is reachable from there', async () => {
+  finish(...RESOLVE_ALL);
+  const summary = await diyProjectGuideResult('prop-1', guideLaunch, NOW, true);
+  const resolved = summary.blocks.find((b) => b.id === 'diy-guide-resolved');
+  assert.deepEqual(resolved.actions.map((a) => a.id), ['diy-review-last-step', 'open-diy-project']);
+  assert.deepEqual(resolved.actions[0], { id: 'diy-review-last-step', label: 'Review last step', interactionType: 'START_WORKFLOW', message: 'Review the last step.', operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_STEP', entityId: 's4', actionId: 'VIEW', style: 'SECONDARY' });
+  const last = await view('s4');
+  assert.equal(last.reasonCode, 'DIY_PREVIOUS_STEP_READY');
+  const card = taskGuideOf(last);
+  assert.equal(card.summary, 'Looking back at step 4 of 4, done. Every step is resolved.');
+  assert.deepEqual(card.actions.map((a) => a.id), ['diy-step-reopen', 'diy-step-previous', 'diy-step-back', 'open-diy-project']);
+  assert.equal(card.actions.find((a) => a.id === 'diy-step-back').label, 'Back to the guide');
+  assert.deepEqual(card.outline.map((o) => o.state), ['DONE', 'DONE', 'SKIPPED', 'DONE'], 'no step is current');
+  // The summary is read-only for a viewer too: they can review, not reopen.
+  const forViewer = await diyProjectGuideResult('prop-1', guideLaunch, NOW, false);
+  assert.ok(forViewer.blocks.find((b) => b.id === 'diy-guide-resolved').actions.some((a) => a.id === 'diy-review-last-step'));
+  assert.equal(taskGuideOf(await view('s4', false)).actions.some((a) => a.id === 'diy-step-reopen'), false);
+});
+
+test('REOPEN, end to end: from the view, the confirmation repeats the safety note and says what changes, the step goes back in progress as the actor, the guide returns to it', async () => {
+  finish('s1', 's2');
+  const proposed = await propose('REOPEN', 's1');
+  assert.equal(proposed.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(proposed.blocks.map((b) => b.id), ['diy-step-safety', 'diy-step-update-review']);
+  assert.match(proposed.confirmation.description, /steps you finished after it stay finished/);
+  assert.equal(proposed.confirmation.confirmLabel, 'Reopen step');
+  assert.ok(proposed.confirmation.fields.some((f) => f.label === 'Safety note'));
+  assert.equal(proposed.parameters.diyStepTarget, 'IN_PROGRESS');
+  assert.equal(stepRow('s1').status, 'COMPLETED', 'a proposal changes nothing');
+  proposed.blocks.forEach((b) => AskPresentationBlockSchema.parse(b));
+
+  const { result } = await confirm(proposed.parameters);
+  assert.equal(result.reasonCode, 'DIY_STEP_REOPENED');
+  assert.equal(result.blocks[0].title, 'Reopened by you');
+  assert.doesNotMatch(JSON.stringify(result), /verified|your report; Cozy doesn't check/i, 'a reopen claims nothing about the work');
+  assert.deepEqual([stepRow('s1').status, stepRow('s1').completedByUserId, stepRow('s1').completedAt], ['IN_PROGRESS', null, null]);
+  assert.deepEqual(db.state.events.map((e) => [e.type, e.actorUserId, e.stepId, e.fromStatus, e.toStatus]), [['STEP_REOPENED', 'u1', 's1', 'COMPLETED', 'IN_PROGRESS']]);
+  assert.equal(db.state.domainEvents.length, 0);
+  assert.deepEqual([...new Set(db.state.writes.map((w) => w.model))].sort(), ['project', 'step']);
+  // The guide (and the same view, refreshed) now show step 1 as the current step.
+  const live = taskGuideOf(await diyProjectGuideResult('prop-1', guideLaunch, NOW, true));
+  assert.equal(live.progress.label, 'Step 1 of 4, 1 done');
+  assert.equal((await view('s1')).reasonCode, 'DIY_PROJECT_GUIDE_READY', 'the viewed step is the current step now: the refreshed view becomes the ordinary guide');
+  // A replay is "already".
+  const again = await confirm(proposed.parameters);
+  assert.equal(again.result.reasonCode, 'DIY_STEP_ALREADY_REOPENED');
+  assert.equal(db.state.events.length, 1);
+});
+
+test('REOPEN refusals: typed wording, an unfinished step, a withdrawn guide, a finished project, a viewer, a stale card and a revoked role; nothing written', async () => {
+  finish('s1', 's2');
+  db.state.projects[0].status = 'IN_PROGRESS'; // a project with finished steps is in progress
+  const before = committedState();
+  assert.equal((await propose('REOPEN', 's1', {}, 'reopen step one please')).reasonCode, 'DIY_STEP_NOT_DIRECTLY_ROUTABLE');
+  assert.equal((await propose('REOPEN', 's1', { surface: 'ASK_REFRESH' })).reasonCode, 'DIY_STEP_NOT_DIRECTLY_ROUTABLE');
+  assert.equal((await propose('REOPEN', 's3')).reasonCode, 'DIY_STEP_NOT_REOPENABLE', 'step 3 is not finished');
+  db.state.templates.get('t1').publishedRevisionId = null;
+  assert.equal((await propose('REOPEN', 's1')).reasonCode, 'DIY_STEP_GUIDE_NOT_CURRENT');
+  db.state.templates.get('t1').publishedRevisionId = 'rev-1';
+  db.state.projects[0].status = 'COMPLETED';
+  assert.equal((await propose('REOPEN', 's1')).reasonCode, 'DIY_STEP_PROJECT_FINISHED');
+  db.state.projects[0].status = 'IN_PROGRESS';
+  role = 'VIEWER';
+  assert.equal((await propose('REOPEN', 's1')).reasonCode, 'ASK_PERMISSION_REQUIRED');
+  role = 'CONTRIBUTOR';
+  assert.equal(committedState(), before);
+
+  // Confirm-side: the early checks pass on a stale read, the transaction refuses.
+  const proposed = await propose('REOPEN', 's1');
+  const stale = structuredClone(await diyService.getProjectGuideSource('p1', 'prop-1'));
+  diyService.getProjectGuideSource = async () => structuredClone(stale);
+  db.state.templates.get('t1').publishedRevisionId = null;
+  assert.equal(await codeOf(confirm(proposed.parameters)), 'ASK_CONFIRMATION_NOT_ACTIVE', 'withdrawn after the pre-check');
+  db.state.templates.get('t1').publishedRevisionId = 'rev-1';
+  dbRole = 'VIEWER';
+  assert.equal(await codeOf(confirm(proposed.parameters)), 'ASK_PERMISSION_REQUIRED', 'role revoked after the pre-check');
+  dbRole = 'CONTRIBUTOR';
+  stepRow('s1').status = 'PENDING'; // someone else changed the step to something that is no longer finished (not a normal transition, a race fixture)
+  assert.equal(await codeOf(confirm(proposed.parameters)), 'ASK_CONTEXT_VERSION_CONFLICT');
+  diyService.getProjectGuideSource = original.source;
+  assert.equal(db.state.events.length, 0);
+});
+
+test('every 7A action id survives the trust allow-list; read-only navigation stays visible to a viewer while Reopen is filtered', async () => {
+  finish('s1', 's2');
+  const ids = (result) => actionsOf(result).map((a) => a.id);
+  const owner = validate('DIY_PROJECT_GUIDE', await view('s1'), 'OWNER');
+  assert.deepEqual(ids(owner), ['diy-step-reopen', 'diy-step-back', 'open-diy-project']);
+  const live = validate('DIY_PROJECT_GUIDE', await diyProjectGuideResult('prop-1', guideLaunch, NOW, true), 'OWNER');
+  assert.ok(ids(live).includes('diy-step-previous'));
+  const forViewer = validate('DIY_PROJECT_GUIDE', await view('s1'), 'VIEWER'); // even if a producer emitted Reopen
+  assert.equal(ids(forViewer).includes('diy-step-reopen'), false);
+  assert.deepEqual(ids(forViewer), ['diy-step-back', 'open-diy-project']);
+  assert.ok(ids(validate('DIY_PROJECT_GUIDE', await diyProjectGuideResult('prop-1', guideLaunch, NOW, false), 'VIEWER')).includes('diy-step-previous'));
+  finish('s3', 's4');
+  const summary = validate('DIY_PROJECT_GUIDE', await diyProjectGuideResult('prop-1', guideLaunch, NOW, false), 'VIEWER');
+  assert.ok(ids(summary).includes('diy-review-last-step'));
+  const { isAskActionAllowedForHouseholdRole } = require('../../src/services/ask/askAudiencePresentation.ts');
+  for (const label of ['Previous step', 'Review last step', 'Back to step 3', 'Back to the guide']) assert.equal(isAskActionAllowedForHouseholdRole({ id: 'x', label, style: 'SECONDARY' }, 'VIEWER'), true, label);
+  assert.equal(isAskActionAllowedForHouseholdRole({ id: 'x', label: 'Reopen this step', style: 'SECONDARY' }, 'VIEWER'), false);
+});
+
+test('adjacency on the FINAL sequence: a card carrying Reopen has the viewed step\'s own safety note directly before it; a step without one has none', async () => {
+  finish('s1', 's2');
+  const final = validate('DIY_PROJECT_GUIDE', await view('s1'), 'OWNER');
+  const index = final.blocks.findIndex((b) => b.type === 'TASK_GUIDE');
+  assert.equal(final.blocks[index - 1].id, 'diy-step-safety');
+  assert.equal(final.blocks[index - 1].body, 'Keep a window open while you work.');
+  const noNote = validate('DIY_PROJECT_GUIDE', await view('s2'), 'OWNER');
+  assert.equal(noNote.blocks.some((b) => b.id === 'diy-step-safety'), false);
+  assert.ok(taskGuideOf(noNote).actions.some((a) => a.id === 'diy-step-reopen'));
 });

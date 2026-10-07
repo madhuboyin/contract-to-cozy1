@@ -19,8 +19,8 @@ Review this home's active DIY projects in planning or in progress, with how many
 ## Operations
 
 - `DIY_PROJECTS`
-- `DIY_PROJECT_GUIDE` (reached only by a launch context naming one project, from a row on the DIY projects list; never by message; read-only)
-- `DIY_STEP_UPDATE` (confirmed, CONTRIBUTOR floor; reached only by the declared Mark this step done and Skip this step actions on the project guide card, for the current step only; records the person's own report and verifies nothing)
+- `DIY_PROJECT_GUIDE` (reached only by a launch context naming one project, from a row on the DIY projects list, or one finished step for the read-only previous-step view; never by message; read-only)
+- `DIY_STEP_UPDATE` (confirmed, CONTRIBUTOR floor; reached only by the declared Mark this step done and Skip this step actions on the project guide card, for the current step only, and Reopen this step from the previous-step view, for a finished step only; records the person's own report and verifies nothing)
 
 ## Consumers
 

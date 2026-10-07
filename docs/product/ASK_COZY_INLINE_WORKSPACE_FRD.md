@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.223
+**Version:** 1.224
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.224 — DIY project commands, 7A built:** from the project guide in Ask a person can now look back at a step they finished (a read-only view of that step on the same card, with its own safety note above it and the real current step still marked) and, if they can edit the project, reopen it after a confirmation that says the guide returns to it and later finished steps stay finished. When every step is resolved the summary offers "Review last step", so reopening is still reachable before the project is finished. The step update's Ask rule is now a named policy checked inside the service's transaction (advance the current step, or reopen a finished one). Reopen is not offered to viewers or on a withdrawn guide, claims nothing about the work, and is attributed to the person. Tests and mutation checks pass against a database-free fake and jest; not run on real Postgres or in a browser; unreachable for real projects until a first template is published (O7).
 
 **Revision 1.223 — DIY project commands, step 7 plan approved with corrections:** reopening a finished step is now reachable even when every step is resolved (a read-only "Review last step" path from the all-resolved summary); recovery of a failed link to a maintenance task appears on an open project's guide, because that status can only exist while the project is open, while recovery of failed completion records appears on a completed project; the finish confirmation says Cozy will queue a home-history record and, when a valid linked task exists, queue it to be marked done, never that it has happened; each recovery decision (role, lookup, eligibility, re-queue) runs in one transaction; and analytics for finishing or stopping are best-effort and sent only when a change was newly applied. Contributors and above may finish, stop or hand off, as on the page. Tracing recorded how a refresh keeps a step view, that confirmations have no destructive styling, and that the `diy` skill becomes the first marked irreversible. Nothing is built.
 

@@ -133,3 +133,66 @@ describe('focus when the guide updates in place', () => {
     expect(document.activeElement?.tagName).not.toBe('H3');
   });
 });
+
+// ---- Step 7A: the previous-step view, "Review last step" and Reopen ---------------------------------------------------------------------------------------
+const wf = (id: string, label: string, message: string, operationId: string, entityType: string, entityId: string, actionId?: string, style = 'SECONDARY') => ({
+  id, label, interactionType: 'START_WORKFLOW', message, operationId, entityType, entityId, ...(actionId ? { actionId } : {}), style,
+});
+const previousView = (overrides: Record<string, unknown> = {}) => ({
+  type: 'TASK_GUIDE', id: 'diy-project-guide', title: 'Repaint the hallway', summary: 'Looking back at step 1 of 4, done. You are on step 3.',
+  eyebrow: ['Painting', 'Reviewed guide', 'Earlier step'], icon: 'TASK', chips: [{ label: 'Done', kind: 'STATUS' }], tip: null,
+  main: { title: 'Tape the trim', body: 'Apply painter tape.', facts: [{ label: 'This step', value: 'Required' }] }, history: [], notes: [],
+  actions: [
+    wf('diy-step-reopen', 'Reopen this step', 'Reopen this step.', 'DIY_STEP_UPDATE', 'DIY_STEP', 's1', 'REOPEN'),
+    wf('diy-step-previous', 'Previous step', 'Show the previous step.', 'DIY_PROJECT_GUIDE', 'DIY_STEP', 's0', 'VIEW'),
+    wf('diy-step-back', 'Back to step 3', 'Back to the guide.', 'DIY_PROJECT_GUIDE', 'DIY_PROJECT', 'p1'),
+    open,
+  ],
+  progress: { current: 1, total: 4, completed: 2, skipped: 0, label: 'Looking back at step 1 of 4, done. You are on step 3.', asOf: AS_OF },
+  outline: outlineAt(3), ...overrides,
+} as unknown as AskPresentationBlock);
+
+describe('the previous-step view and Reopen', () => {
+  it('renders the looked-back-at step with its state and the producer\'s label, and keeps marking the REAL current step', () => {
+    const view = card(execution([previousView()]));
+    expect(article(view)).toHaveTextContent('Looking back at step 1 of 4, done. You are on step 3.');
+    expect(article(view)).toHaveTextContent('Earlier step');
+    expect(article(view)).toHaveTextContent('Tape the trim');
+    expect(article(view).querySelectorAll('[aria-current="step"]')).toHaveLength(1);
+    expect(article(view).querySelector('[aria-current="step"]')).toHaveTextContent('Step title 3');
+  });
+
+  it('Reopen, Previous step and Back each launch exactly the declared command', () => {
+    const view = card(execution([previousView()]));
+    fireEvent.click(screen.getByRole('button', { name: /Reopen this step/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Reopen this step.', undefined, expect.objectContaining({ sourceExecutionId: 'exec-guide', operationId: 'DIY_STEP_UPDATE', entityType: 'DIY_STEP', entityId: 's1', actionId: 'REOPEN' }));
+    fireEvent.click(screen.getByRole('button', { name: /Previous step/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Show the previous step.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_STEP', entityId: 's0', actionId: 'VIEW' }));
+    fireEvent.click(screen.getByRole('button', { name: /Back to step 3/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Back to the guide.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_PROJECT', entityId: 'p1' }));
+    expect(view.ask).toHaveBeenCalledTimes(3);
+  });
+
+  it('a view without Reopen (a viewer, a withdrawn guide) shows only the read actions and the page link', () => {
+    card(execution([previousView({ actions: [wf('diy-step-back', 'Back to step 3', 'Back to the guide.', 'DIY_PROJECT_GUIDE', 'DIY_PROJECT', 'p1'), open] })]));
+    expect(screen.queryByRole('button', { name: /Reopen this step/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Back to step 3/ })).toBeInTheDocument();
+  });
+
+  it('the all-resolved summary offers "Review last step", which launches the read view of the last finished step', () => {
+    const summary = { type: 'SUMMARY', id: 'diy-guide-resolved', title: 'Repaint the hallway', body: 'Every step is resolved. Finish the project on the project page.', tone: 'POSITIVE',
+      actions: [wf('diy-review-last-step', 'Review last step', 'Review the last step.', 'DIY_PROJECT_GUIDE', 'DIY_STEP', 's4', 'VIEW'), open] } as unknown as AskPresentationBlock;
+    const view = card(execution([summary]));
+    fireEvent.click(screen.getByRole('button', { name: /Review last step/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Review the last step.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_STEP', entityId: 's4', actionId: 'VIEW' }));
+  });
+
+  it('focus lands on the guide heading when the view replaces the live guide in place, and the status announces the new label', () => {
+    const view = card(execution([guide(3)]), jest.fn(), 'exec-guide');
+    expect(article(view).querySelector('[data-task-guide-progress]')).toHaveTextContent('Step 3 of 4, 2 done');
+    (document.activeElement as HTMLElement).blur();
+    rerenderCard(view, execution([previousView()], '2026-10-06T12:05:00.000Z'), 'exec-guide');
+    expect(article(view).querySelector('[data-task-guide-progress]')).toHaveTextContent('Looking back at step 1 of 4, done.');
+    expect(document.activeElement).toBe(heading(view));
+  });
+});
