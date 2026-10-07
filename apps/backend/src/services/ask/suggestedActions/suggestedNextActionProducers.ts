@@ -17,6 +17,7 @@ import { SKILL_HANDOFF_PRODUCER_ID, skillHandoffCandidates } from './skillHandof
 import { URGENT_WORK_PRODUCER_ID, loadUrgentHomeActionState, urgentWorkCandidates } from './urgentWorkCandidates';
 import { HOME_OPPORTUNITY_PRODUCER_ID, homeOpportunityCandidates, loadHomeOpportunityState } from './homeOpportunityCandidates';
 import { ACTIVE_PLAN_PRODUCER_ID, activePlanCandidates, loadActivePlanState } from './activePlanCandidates';
+import { CAPABILITY_RECOMMENDATION_PRODUCER_ID, capabilityRecommendationCandidates } from './capabilityRecommendationCandidates';
 
 export interface ProducerContext {
   result: AskOperationResult;
@@ -105,6 +106,13 @@ export const activePlanProducer: SuggestedNextActionProducer = {
     : [],
 };
 
+export const capabilityRecommendationProducer: SuggestedNextActionProducer = {
+  id: CAPABILITY_RECOMMENDATION_PRODUCER_ID,
+  source: 'CAPABILITY_RECOMMENDATION',
+  essential: false,
+  nominate: ({ result, propertyId }) => capabilityRecommendationCandidates(result, propertyId),
+};
+
 export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [
-  resultCandidatesProducer, skillHandoffProducer, urgentWorkProducer, activePlanProducer, actionableProfileProducer, homeOpportunityProducer, ...starterProducers,
+  resultCandidatesProducer, skillHandoffProducer, urgentWorkProducer, activePlanProducer, capabilityRecommendationProducer, actionableProfileProducer, homeOpportunityProducer, ...starterProducers,
 ];

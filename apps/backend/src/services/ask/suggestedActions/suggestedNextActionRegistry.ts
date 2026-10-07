@@ -11,6 +11,13 @@ import { ASK_OPERATION_DEFINITIONS } from '../askOperationRegistry';
 
 export type SuggestedNextActionTier = SuggestedNextAction['priority']['tier'];
 export type SuggestedNextActionSource = SuggestedNextAction['provenance']['source'];
+export const CAPABILITY_RECOMMENDATION_OUTCOME = 'REVIEW_RECOMMENDED_CAPABILITY';
+const SAFE_CAPABILITY_READ_FAMILIES = new Set(['RECORD_QUERY', 'STATUS_SUMMARY']);
+export function isSafeCapabilityRecommendationOperation(operationId: string): boolean {
+  const definition = ASK_OPERATION_DEFINITIONS[operationId as keyof typeof ASK_OPERATION_DEFINITIONS];
+  return Boolean(definition && definition.requiresProperty && definition.propertyRoleFloor === 'VIEWER'
+    && definition.safetyClass === 'STANDARD' && SAFE_CAPABILITY_READ_FAMILIES.has(definition.family));
+}
 
 // ---- limits (plan §3.3, §7.3, §7.4) ---------------------------------------------------------------------------------------
 
@@ -161,6 +168,7 @@ export const RESTART_AFTER_EXPIRY_LABELS: Readonly<Record<string, string>> = {
 };
 
 export function isRegisteredOutcome(operationId: string, outcomeKey: string): boolean {
+  if (outcomeKey === CAPABILITY_RECOMMENDATION_OUTCOME) return isSafeCapabilityRecommendationOperation(operationId);
   return (SUGGESTED_ACTION_OUTCOMES[operationId] ?? []).includes(outcomeKey);
 }
 

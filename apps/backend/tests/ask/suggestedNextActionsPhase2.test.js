@@ -476,7 +476,7 @@ test('the result producer passes handler-attached candidates through, and nothin
   assert.deepEqual(resultCandidatesProducer.nominate({ result: baseResult({ suggestedNextActionCandidates: [candidate()] }), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }).length, 1);
   // Activation also carries governed Skill, urgent-work, profile-gap and starter producers.
   const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
-  assert.equal(SUGGESTED_NEXT_ACTION_PRODUCERS.length, 6 + starterProducers.length);
+  assert.equal(SUGGESTED_NEXT_ACTION_PRODUCERS.length, 7 + starterProducers.length);
   for (const producer of starterProducers) {
     assert.deepEqual(producer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }), [], producer.id);
     assert.ok(producer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: 'p1', message: 'm' }).length >= 1, producer.id);

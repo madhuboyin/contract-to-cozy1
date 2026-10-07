@@ -11,7 +11,7 @@ const { prisma } = require('../../src/lib/prisma.ts');
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
 const { evaluateAskOperationAvailability } = require('../../src/services/ask/support/answerGuards.ts');
 const { finalizeSuggestedNextActionsWithReport } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
-const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers, actionableProfileProducer, skillHandoffProducer, urgentWorkProducer, homeOpportunityProducer, activePlanProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
+const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers, actionableProfileProducer, skillHandoffProducer, urgentWorkProducer, homeOpportunityProducer, activePlanProducer, capabilityRecommendationProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
 const { SUGGESTED_NEXT_ACTION_LIMITS, CURATED_STARTER_OUTCOME_KEYS, REPEATABLE_OUTCOMES, PROMPT_HISTORY_EXEMPT_OUTCOMES, SUGGESTED_NEXT_ACTION_BUDGET } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
 const { lifecycleKey, STARTER_ROTATION_MS } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
 const { suggestedNextActionSemanticKeyHash } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
@@ -65,7 +65,7 @@ function assertFour(r, label) {
 }
 
 test('the registry is populated for activation: all four starter producers are registered and all seven outcomes are BOTH repeatable and prompt-history exempt', () => {
-  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', skillHandoffProducer.id, urgentWorkProducer.id, activePlanProducer.id, actionableProfileProducer.id, homeOpportunityProducer.id, ...starterProducers.map((p) => p.id)]);
+  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', skillHandoffProducer.id, urgentWorkProducer.id, activePlanProducer.id, capabilityRecommendationProducer.id, actionableProfileProducer.id, homeOpportunityProducer.id, ...starterProducers.map((p) => p.id)]);
   assert.equal(CURATED_STARTER_OUTCOME_KEYS.length, 7);
   for (const key of CURATED_STARTER_OUTCOME_KEYS) { assert.ok(REPEATABLE_OUTCOMES.has(key), key); assert.ok(PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), key); }
   for (const producer of starterProducers) assert.equal(producer.essential, false, 'starters are the first dropped under budget');
@@ -144,7 +144,7 @@ test('BUDGET-DROPPED OPPORTUNITY PRODUCER: a nonessential producer dropped for b
   const opportunity = { id: 'opportunity.fake', source: 'CAPABILITY_RECOMMENDATION', essential: false, nominate: () => [{ ...ALL[0], slotClass: 'HOME_OPPORTUNITY', operationId: 'WARRANTY_LOOKUP', outcomeKey: 'REVIEW_X' }] };
   // The clock stays inside the budget for the essential and starter producers, then jumps past it before the last producer.
   // Calls: start, one per producer (result producer, four starters, the opportunity producer), then the finish.
-  const nowMs = () => { ticks += 1; return ticks <= 7 + starterProducers.length ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
+  const nowMs = () => { ticks += 1; return ticks <= 8 + starterProducers.length ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
   const r = await run({ producers: [...SUGGESTED_NEXT_ACTION_PRODUCERS, opportunity], nowMs });
   assert.deepEqual(r.report.droppedProducers, [{ producer: 'opportunity.fake', reason: 'BUDGET' }]);
   assertFour(r, 'budget-dropped opportunity');
@@ -155,7 +155,7 @@ test('BOUNDED DIAGNOSTIC: when the starters themselves are dropped for budget, n
   const nowMs = () => { ticks += 1; return ticks === 1 ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
   const r = await run({ nowMs });
   assert.equal(r.shown.length, 0);
-  assert.equal(r.report.droppedProducers.length, starterProducers.length + 4);
+  assert.equal(r.report.droppedProducers.length, starterProducers.length + 5);
   assert.ok(r.report.droppedProducers.every((d) => d.reason === 'BUDGET'));
   assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR');
   assert.equal(r.report.exactFour.shortage, 4);

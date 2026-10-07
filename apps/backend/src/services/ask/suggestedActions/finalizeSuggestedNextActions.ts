@@ -44,6 +44,7 @@ import { recordSuggestedActionImpressions, recordSuggestedActionSuppression } fr
 import { loadUrgentHomeActionState } from './urgentWorkCandidates';
 import { loadHomeOpportunityState } from './homeOpportunityCandidates';
 import { loadActivePlanState } from './activePlanCandidates';
+import { removeSelectedCapabilityDuplicates } from './capabilityRecommendationCandidates';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
@@ -349,10 +350,11 @@ export async function finalizeSuggestedNextActionsWithReport(
   if (policy.exactFour.applicability === 'EXACT_FOUR' && input.propertyId) {
     await (deps.recordOffers ?? recordSuggestedActionOffers)({ userId: input.userId, propertyId: input.propertyId, offers: offersFromExactFour(policy.selected, policy.evaluated), now });
   }
-  const presented = passthrough(actions);
+  let presented = passthrough(actions);
   // The compact action now owns this destination. Keeping the legacy handoff card would duplicate the same
   // registered operation on two surfaces and bypass the shared row's ordering/lifecycle semantics.
   if (actions.some((action) => action.provenance.source === 'SKILL_HANDOFF')) presented.skillHandoff = null;
+  presented = removeSelectedCapabilityDuplicates(presented);
   return finish(presented);
 }
 
