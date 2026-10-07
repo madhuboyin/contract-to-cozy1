@@ -44,7 +44,7 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
         body: 'You have no DIY projects in planning or in progress. See the reviewed low-risk projects you can start.',
         tone: 'DEFAULT', actions: [{ ...browseAction, style: 'PRIMARY' as const }],
       }, boundary],
-      suggestions: ['What maintenance is due?'],
+      suggestions: [],
     };
   }
   const inProgress = items.filter((item) => item.status === 'IN_PROGRESS').length;
@@ -94,7 +94,7 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
     actions: [{ ...browseAction, style: 'SECONDARY' as const }],
   });
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'DIY_PROJECTS_READY', blocks, suggestions: ['What maintenance is due?'] };
+  return { status: 'ANSWERED', reasonCode: 'DIY_PROJECTS_READY', blocks, suggestions: [] };
 }
 
 async function diyProjectsResult(propertyId: string): Promise<AskOperationResult> {

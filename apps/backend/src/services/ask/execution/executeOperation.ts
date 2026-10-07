@@ -18,7 +18,6 @@ import type { CapabilityInvocationEnvelope } from '../capabilityInvocation.contr
 import { buildAskNextActionsBlock } from '../askNextActions';
 import { asInputJson, audienceApplicabilityResult, audienceTelemetryFor, ensurePropertyAccess, expireIfSkillBindingChanged, journeyContextFrom, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus } from '../askHandlerSupport';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
-import { suppressRepeatedAskSuggestions } from '../askSuggestionPolicy';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
 import { loadCompletedSuggestedActionKeyHashes } from '../suggestedActions/suggestedNextActionHistory';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
@@ -401,11 +400,8 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   // counterpart to `capabilitySuppressionPolicy.ts`'s own property-wide,
   // 30-day dismissal-cooldown suppression (already applied automatically
   // inside `getCapabilitySuggestions`, `askNextActions.ts`'s one call).
-  // `askSuggestionPolicy.ts`'s own `suppressRepeatedAskSuggestions` is
-  // string-message-shaped and not reused verbatim here -- a structured
-  // capability candidate has no message text to key off -- but this is the
-  // same underlying signal (recently-completed turns this session)
-  // suppressing the analogous thing for a different response shape.
+  // Structured capability and typed-action history suppression both use these
+  // recent completed turns. Phase 5 removed the former raw-string branch.
   let recentCompletedMessages: string[] = [];
   let recentCompletedCapabilityIds: ReadonlySet<string> = new Set();
   let recentCompletedOperationIds: ReadonlySet<string> = new Set();
@@ -434,15 +430,8 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   const finalize = async (): Promise<AskOperationResult> => {
     const controls = readAskOperationalControls();
     const skillHandoff = resolveAskSkillHandoff({ operationId: input.operation.operationId, result, propertyId: input.propertyId, launchContext: input.launchContext, recentCompletedOperationIds });
-    // String history suppression stays until the string producers are retired (Phase 5); typed candidates go through the shared
-    // finalizer (plan §7.4), which owns eligibility, ranking, cross-surface deduplication and typed history suppression.
-    const stringSuppressed = suppressRepeatedAskSuggestions(
-      { ...result, skillHandoff },
-      input.message,
-      recentCompletedMessages,
-    );
     const suggestionAwareResult = await finalizeSuggestedNextActions({
-      result: stringSuppressed, executionId: input.executionId, userId: input.userId, sessionId: input.sessionId,
+      result: { ...result, skillHandoff }, executionId: input.executionId, userId: input.userId, sessionId: input.sessionId,
       propertyId: input.propertyId ?? null, operationId: input.operation.operationId, message: input.message,
       completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: input.executionId, sessionId: input.sessionId, userId: input.userId }),
       recentCompletedMessages,

@@ -206,7 +206,7 @@ async function inventoryLookupResult(
         tone: 'CAUTION',
         actions: [{ ...inventoryAddItemAction(), label: 'Add inventory items' }],
       }],
-      suggestions: ['Open home inventory'],
+      suggestions: [],
     };
   }
 
@@ -289,7 +289,7 @@ async function inventoryLookupResult(
         tone: 'DEFAULT',
         actions: [{ id: 'search-inventory', label: 'Search home inventory', href: inventoryHref, style: 'PRIMARY' }],
       }],
-      suggestions: ['List all inventory items', 'Show incomplete inventory records'],
+      suggestions: [],
     };
   }
 
@@ -317,7 +317,7 @@ async function inventoryLookupResult(
         }],
         actions: [],
       }],
-      suggestions: ['Open home inventory'],
+      suggestions: [],
     };
   }
 
@@ -469,14 +469,7 @@ async function inventoryLookupResult(
     parameters: viewState ? { viewState } : selectedItem ? { inventoryItemId: selectedItem.id } : undefined,
     captureRequests,
     blocks,
-    suggestions: [
-      ...(access.role !== HouseholdRole.VIEWER && matches.some((item) => inventoryMissingFacts(item).length > 0)
-        ? [INVENTORY_MISSING_DETAILS_SUGGESTION]
-        : []),
-      ...(!incompleteFocus ? ['Show incomplete inventory records'] : []),
-      'Which systems are nearing end of life?',
-      'List all appliances',
-    ],
+    suggestions: [],
   };
 }
 
@@ -890,7 +883,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
         })) }],
         actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }],
       }],
-      suggestions: items.slice(0, 3).map((item) => `Correct the install date of inventory item "${item.name}"`),
+      suggestions: [],
     };
   }
   const field = inventoryCorrectionFieldFor(message, launchContext?.outcomeKey);
@@ -902,7 +895,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
       status: 'NEEDS_CLARIFICATION', reasonCode: 'INVENTORY_CORRECTION_FIELD_REQUIRED',
       ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', `Which detail should change for ${selected.name}? Ask can correct its name, dates, condition, brand, model, serial number, costs, notes, room, or category.`),
       blocks: [{ type: 'SUMMARY', id: 'inventory-correct-field', title: `Which detail should change for ${selected.name}?`, body: 'Say which one: name, install date, purchase date, last serviced date, condition, brand, model, serial number, purchase cost, replacement cost, or notes. Nothing has changed.', tone: 'CAUTION', actions: [] }],
-      suggestions: [`Correct the install date of inventory item "${selected.name}"`, `Correct the purchase date of inventory item "${selected.name}"`],
+      suggestions: [],
     };
   }
   const current = inventoryFieldCurrent(selected, field);
@@ -1133,6 +1126,6 @@ registerCapabilityHandler('inventory.create', async (envelope) => {
   return {
     status: 'NOT_APPLICABLE', reasonCode: 'ASK_INVENTORY_CREATE_NOT_DIRECTLY_ROUTABLE',
     blocks: [{ type: 'SUMMARY', id: 'inventory-create-not-routable', title: 'Use the Add an item button', body: 'Items are added from the inventory list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
-    suggestions: ['Show my inventory'],
+    suggestions: [],
   };
 });

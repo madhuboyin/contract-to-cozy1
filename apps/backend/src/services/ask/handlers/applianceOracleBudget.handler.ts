@@ -92,7 +92,7 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
           : 'Appliance Oracle estimates failure risk from each appliance\'s age. Add appliances with their purchase date to the inventory to see it.',
         tone: 'DEFAULT', actions: [openAction],
       }, ...(missing.length ? [lifespan([])] : []), ...(skippedBlock ? [skippedBlock] : []), boundary],
-      suggestions: ['Show my inventory'],
+      suggestions: [],
     };
   }
   const blocks: AskPresentationBlock[] = [{
@@ -108,7 +108,7 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
   }];
   if (skippedBlock) blocks.push(skippedBlock);
   blocks.push(lifespan(report.predictions), boundary);
-  return { status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_READY', blocks, suggestions: ['When should I replace my water heater?'] };
+  return { status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_READY', blocks, suggestions: [] };
 }
 
 async function applianceFailureRiskResult(propertyId: string, userId: string): Promise<AskOperationResult> {
@@ -165,7 +165,7 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
     body: 'The forecast uses typical upkeep costs for this kind of home and its age, not what you have actually spent. Use it to set aside a buffer, and check real bills against it.',
     severity: 'INFO', suggestions: [],
   });
-  return { status: 'ANSWERED', reasonCode: 'BUDGET_FORECAST_READY', blocks, suggestions: ['What are my monthly ownership costs?'] };
+  return { status: 'ANSWERED', reasonCode: 'BUDGET_FORECAST_READY', blocks, suggestions: [] };
 }
 
 async function maintenanceBudgetResult(propertyId: string, userId: string): Promise<AskOperationResult> {

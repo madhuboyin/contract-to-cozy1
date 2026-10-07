@@ -323,7 +323,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         body: 'Ask could not load the final governed action feed. It will not substitute raw signals, model memory, or an unfiltered recommendation.',
         tone: 'CAUTION', actions: [{ id: 'open-home', label: 'Open Home', href: homeHref, style: 'PRIMARY' }],
       }],
-      suggestions: ['Summarize my home record', 'What maintenance is pending?'],
+      suggestions: [],
     };
   }
   const feed = feedResult.feed;
@@ -343,7 +343,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
           tone: 'DEFAULT',
           actions: [{ id: 'open-home-actions', label: 'View current Home Actions', href: homeHref, style: 'PRIMARY' }],
         }],
-        suggestions: ['What else needs my attention?'],
+        suggestions: [],
       };
     }
     // Group B health-factor checklist slice (gap audit §17): the checklist needs property
@@ -561,7 +561,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     blocks,
     // Offered only when the canonical feed (not just the capped cards) has actionable maintenance.
     followUp: resolveHomeActionsFollowUp({ feedActions: feed.actions, displayedActions: selectedActions }),
-    suggestions: ['Anything urgent?', 'What should I plan?', 'What can wait?'],
+    suggestions: [],
   };
 }
 

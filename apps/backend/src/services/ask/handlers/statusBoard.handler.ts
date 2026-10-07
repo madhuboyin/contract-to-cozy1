@@ -107,7 +107,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
     status: limitations.length ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: total ? (count('ACTION_NEEDED') ? 'STATUS_BOARD_ACTION_NEEDED' : 'STATUS_BOARD_REVIEWED') : 'STATUS_BOARD_EMPTY',
     blocks,
-    suggestions: ['What maintenance is due?', 'Should I repair or replace my oldest appliance?'],
+    suggestions: [],
   };
 }
 

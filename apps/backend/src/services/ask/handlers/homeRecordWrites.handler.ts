@@ -67,7 +67,7 @@ export async function householdInvitationResult(
         body: 'Inviting someone changes access to this home’s records. Contributors and viewers can review their current access, but only an owner can choose a role and send an invitation.',
         tone: 'CAUTION', actions: [{ id: 'open-household', label: 'Review household access', href: householdHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['What can my current household role do?'],
+      suggestions: [],
     };
   }
 
@@ -102,7 +102,7 @@ export async function householdInvitationResult(
         currentAnswer, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used for this household invitation',
         confirmationText: null, expectedContextVersion: contextVersion,
       }],
-      suggestions: ['Open household settings instead'],
+      suggestions: [],
     };
   }
 
@@ -259,7 +259,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
         })) }],
         actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }],
       }],
-      suggestions: events.slice(0, 3).map((event) => `Correct the title of the timeline event ${event.title}`),
+      suggestions: [],
     };
   }
   const field = homeEventCorrectionField(message, typedOutcome);
@@ -268,7 +268,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
       status: 'NEEDS_CLARIFICATION', reasonCode: 'HOME_EVENT_CORRECTION_FIELD_REQUIRED',
       ...durableFreeTextClarification('HOME_EVENT_CORRECT', `Which detail of "${selected.title}" should change? Ask can correct its title, date, summary, amount, type, importance, room, or inventory item.`),
       blocks: [{ type: 'SUMMARY', id: 'home-event-correct-field', title: 'Which detail should change?', body: 'Say title, date, summary, amount, type, importance, room, or inventory item. Nothing has changed.', tone: 'CAUTION', actions: [] }],
-      suggestions: [`Correct the title of the timeline event ${selected.title}`, `Correct the date of the timeline event ${selected.title}`],
+      suggestions: [],
     };
   }
   const blocker = homeEventCorrectionBlocker(selected, field);
@@ -352,7 +352,7 @@ async function homeEventVisibilityResult(userId: string, propertyId: string, mes
         })) }],
         actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }],
       }],
-      suggestions: events.slice(0, 3).map((event) => `Change the visibility of the timeline event ${event.title}`),
+      suggestions: [],
     };
   }
   const proposed = selected.visibility;
@@ -619,7 +619,7 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
         })) }],
         actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'SECONDARY' }],
       }],
-      suggestions: mine.slice(0, 3).map((warranty) => `Correct the expiry date of the ${warranty.providerName} warranty`),
+      suggestions: [],
     };
   }
   if (selected.homeownerProfile.userId !== userId) {
@@ -635,7 +635,7 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
       status: 'NEEDS_CLARIFICATION', reasonCode: 'WARRANTY_CORRECTION_FIELD_REQUIRED',
       ...durableFreeTextClarification('WARRANTY_CORRECT', `Which detail of the ${selected.providerName} warranty should change? Ask can correct its provider, dates, coverage type, policy number, cost, or coverage details.`),
       blocks: [{ type: 'SUMMARY', id: 'warranty-correct-field', title: 'Which detail should change?', body: 'Say provider, expiry date, start date, coverage type, policy number, cost, or coverage details. Nothing has changed.', tone: 'CAUTION', actions: [] }],
-      suggestions: [`Correct the provider of the ${selected.providerName} warranty`, `Correct the expiry date of the ${selected.providerName} warranty`],
+      suggestions: [],
     };
   }
   const current = warrantyFieldCurrent(selected, field);
@@ -772,7 +772,7 @@ async function roomRenameResult(userId: string, propertyId: string, message: str
         })) }],
         actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }],
       }],
-      suggestions: rooms.slice(0, 3).map((room) => (field === 'name' ? `Rename ${room.name}` : `Change the ${ROOM_CORRECTION_FIELDS[field].label} of ${room.name}`)),
+      suggestions: [],
     };
   }
   const current = roomFieldCurrent(selected, field);
@@ -845,7 +845,7 @@ export async function roomCreateResult(userId: string, propertyId: string, suppl
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
       blocks: [{ type: 'SUMMARY', id: 'room-add-permission', title: 'A contributor or owner can add a room', body: 'Your role can view rooms but not add them. Nothing has changed.', tone: 'CAUTION', actions: [] }],
-      suggestions: ['Show my rooms'],
+      suggestions: [],
     };
   }
   const contextVersion = roomCreateContextVersion(propertyId);
@@ -896,7 +896,7 @@ registerCapabilityHandler('room.create', async (envelope) => {
   return {
     status: 'NOT_APPLICABLE', reasonCode: 'ASK_ROOM_CREATE_NOT_DIRECTLY_ROUTABLE',
     blocks: [{ type: 'SUMMARY', id: 'room-create-not-routable', title: 'Use the Add a room button', body: 'Rooms are added from the Rooms list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
-    suggestions: ['Show my rooms'],
+    suggestions: [],
   };
 });
 

@@ -1085,7 +1085,7 @@ registerCapabilityHandler('property-context.area-capture', async (envelope) => {
   const notRoutable = (): AskOperationResult => ({
     status: 'NOT_APPLICABLE', reasonCode: 'ASK_AREA_CAPTURE_NOT_DIRECTLY_ROUTABLE',
     blocks: [{ type: 'SUMMARY', id: 'area-capture-not-routable', title: 'Use "Fill in missing details" on the home record', body: 'Missing home details are filled in from the completeness list in your home summary. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
-    suggestions: ['How complete is my home record?'],
+    suggestions: [],
   });
   if (declaredStart && scope) {
     const access = await ensurePropertyAccess(envelope.userId, envelope.propertyId!);

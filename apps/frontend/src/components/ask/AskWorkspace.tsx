@@ -251,7 +251,14 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const usingFallbackPrompts = personalizedFeaturedPrompts.length === 0;
   const featuredPrompts = usingFallbackPrompts ? fallbackPrompts : personalizedFeaturedPrompts;
   const latestExecutionId = latestExecution?.executionId ?? '';
-  const starterDismissal = useStarterDismissal(latestExecution?.executionId); const followUps = starterDismissal.visible(calm ? followUpItems(latestExecution, askedQuestionKeys, askSuggestionKey) : []);
+  const starterDismissal = useStarterDismissal(latestExecution?.executionId);
+  // Governed typed actions are available in both shells. Historical strings stay in the calm compatibility row;
+  // the non-calm shell continues to render those old strings on their original execution card.
+  const followUps = starterDismissal.visible(
+    calm || latestExecution?.suggestedNextActionsGoverned === true
+      ? followUpItems(latestExecution, askedQuestionKeys, askSuggestionKey)
+      : [],
+  );
   // A typed action submits its transcript message with verified-selection proof; a historical string is asked as plain text,
   // exactly as before (SUGGESTED_NEXT_ACTIONS plan §9 Phase 1 compatibility boundary).
   const pickFollowUp = (item: FollowUpItem) => {
@@ -404,7 +411,10 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             <PinnedResultsStrip executions={executions.filter((execution) => conversationView.view.pinned.includes(execution.executionId))} onUnpin={conversationView.togglePin} />
             {executions.map((execution) => {
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
-              const visibleSuggestions = execution.suggestions.filter((suggestion) => !askedQuestionKeys.has(askSuggestionKey(suggestion)));
+              // Phase 5: raw strings render only for historical executions that predate the governed marker.
+              const visibleSuggestions = execution.suggestedNextActionsGoverned === true
+                ? []
+                : execution.suggestions.filter((suggestion) => !askedQuestionKeys.has(askSuggestionKey(suggestion)));
               const isSuperseded = executions.some((other) => other.continuesExecutionId === execution.executionId || (other.viewState && execution.viewState && other.viewState.resultId === execution.viewState.resultId && other.viewState.revision > execution.viewState.revision));
               return <AskActionReturnContext.Provider key={execution.executionId} value={askReturnHref}>
                 <ExecutionCard
@@ -438,7 +448,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
       </main>
 
-      {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}>{calm && <FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />}{renderComposer('footer')}</footer>}
+      {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}
         </div>
         {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
           <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />

@@ -160,14 +160,14 @@ const withValidatorRows = async (rows, fn) => {
 const vrow = (over = {}) => ({ id: 'w-1', propertyId: 'prop-1', updatedAt: UPDATED, ...over });
 const candidates = () => warrantyExpiryReminderCandidates(warranty(), ctx);
 
-test('the warranty validator is registered; the chip survives for the current warranty and the plain fallback is preserved', async () => {
+test('the warranty validator is registered; the typed chip survives without a raw fallback', async () => {
   assert.equal(typeof getSuggestedNextActionEntityValidator('WARRANTY'), 'function');
   await withValidatorRows([vrow()], async (calls) => {
     const { result } = await finalize(await candidates());
     assert.equal(calls(), 1);
     assert.equal(result.suggestedNextActions.length, 1);
     assert.ok(SuggestedNextActionSchema.safeParse(result.suggestedNextActions[0]).success);
-    assert.deepEqual(result.suggestions, ['Show my warranties']);
+    assert.deepEqual(result.suggestions, []);
   });
 });
 

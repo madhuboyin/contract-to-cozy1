@@ -41,7 +41,7 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
         body: 'Material Specs keeps the paint colours, tile, flooring, fixtures and suppliers used in this home so you can match them later. Open it to add one.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['Summarize my home record'],
+      suggestions: [],
     };
   }
   const discontinued = specs.filter((spec) => spec.supplierDiscontinued).length;
@@ -86,7 +86,7 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
     actions: [],
   });
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_READY', blocks, suggestions: ['Summarize my home record'] };
+  return { status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_READY', blocks, suggestions: [] };
 }
 
 async function materialSpecsResult(propertyId: string): Promise<AskOperationResult> {

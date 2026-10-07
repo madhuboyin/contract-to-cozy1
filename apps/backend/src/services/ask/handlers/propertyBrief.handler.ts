@@ -36,7 +36,7 @@ export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[],
         body: 'A Property Brief is a snapshot of chosen home records you can share with a contractor, insurer, buyer or trusted contact through an expiring link. Open Property Brief to prepare one.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['Summarize my home record'],
+      suggestions: [],
     };
   }
   const rows = briefs.map((brief) => {
@@ -91,7 +91,7 @@ export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[],
       description: 'Newest first, as on the page. Open Property Brief to preview a brief, share it, test or revoke a link, or check it for updates.',
       sections, actions: [],
     }, boundary],
-    suggestions: ['Summarize my home record'],
+    suggestions: [],
   };
 }
 

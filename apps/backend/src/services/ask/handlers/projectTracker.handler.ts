@@ -43,7 +43,7 @@ export function trackedProjectsFromView(projects: readonly TrackedProjectView[],
         body: 'Project Tracker follows a contractor project from signed contract through completion and warranty: milestones, payments, change orders and progress photos. Open it to start one.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['What maintenance is due?'],
+      suggestions: [],
     };
   }
   const active = projects.filter((project) => !['COMPLETED', 'CANCELLED'].includes(project.status));
@@ -87,7 +87,7 @@ export function trackedProjectsFromView(projects: readonly TrackedProjectView[],
     actions: [],
   });
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'PROJECT_TRACKER_PROJECTS_READY', blocks, suggestions: ['What maintenance is due?'] };
+  return { status: 'ANSWERED', reasonCode: 'PROJECT_TRACKER_PROJECTS_READY', blocks, suggestions: [] };
 }
 
 async function trackedProjectsResult(propertyId: string): Promise<AskOperationResult> {

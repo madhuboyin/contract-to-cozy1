@@ -319,7 +319,7 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     status: degraded ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: degraded ? 'HOME_EVENT_RADAR_FEED_PARTIAL' : undefined,
     blocks,
-    suggestions: page.pageInfo?.hasNextPage ? ['Show more monitored events'] : [],
+    suggestions: [],
     parameters: { viewState, ...(page.pageInfo?.hasNextPage ? { nextCursor: page.pageInfo.endCursor } : {}) },
   };
 }
@@ -441,7 +441,7 @@ function radarWriteBoundary(propertyId: string, title: string, body: string, sta
     status,
     reasonCode: 'HOME_EVENT_RADAR_WRITE_NOT_AVAILABLE',
     blocks: [{ type: 'BOUNDARY', id: 'radar-write-boundary', title, body, severity: 'INFO', suggestions: ['Show my home event radar feed'] }],
-    suggestions: ['Show my home event radar feed'],
+    suggestions: [],
   };
 }
 
@@ -487,7 +487,7 @@ export async function homeEventRadarStateResult(userId: string, propertyId: stri
       ],
       actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }],
     }],
-    suggestions: ['Show my home event radar feed'],
+    suggestions: [],
   };
 }
 
@@ -516,7 +516,7 @@ async function homeEventRadarMarkDoneResult(userId: string, propertyId: string, 
     return {
       status: 'COMPLETED', reasonCode: 'HOME_EVENT_RADAR_ALREADY_DONE',
       blocks: [{ type: 'WORKFLOW_PROGRESS', id: `radar-mark-done-${matchId}`, title: 'Already marked done', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Event', value: String(detail.title) }], actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }] }],
-      suggestions: ['Show my home event radar feed'],
+      suggestions: [],
     };
   }
   const expiresAt = new Date(Date.now() + 30 * 60_000);
@@ -584,7 +584,7 @@ export function radarConfirmError(message: string, code: string): Error {
 }
 
 export async function radarWriteReceipt(ctx: ConfirmCapabilityContext, matchId: string, block: Extract<AskPresentationBlock, { type: 'WORKFLOW_PROGRESS' }>, reasonCode: string, artifactType: string): Promise<ConfirmCapabilityResult> {
-  const result: AskOperationResult = { status: 'COMPLETED', reasonCode, blocks: [block], suggestions: ['Show my home event radar feed'] };
+  const result: AskOperationResult = { status: 'COMPLETED', reasonCode, blocks: [block], suggestions: [] };
   const refresh = await reconcileAskExecutionSideEffects(ctx.userId, ctx.execution, ctx.parameters);
   if (refresh.attemptedAndFailed) {
     result.blocks.push({ type: 'LIMITATION', id: `radar-refresh-failed-${matchId}`, severity: 'CAUTION', title: 'Saved; view could not refresh', body: 'This was saved to Home Event Radar. The feed you were viewing could not refresh automatically -- ask "Show my home event radar feed" to see its current state.' });
@@ -713,7 +713,7 @@ function radarTaskAlreadyPlanned(propertyId: string, matchId: string, eventTitle
       details: [{ label: 'Event', value: eventTitle }, { label: 'Recommended action', value: action.label }, { label: 'Task', value: link.task.title }],
       actions: [{ id: 'open-task', label: 'Open task', href: link.task.href, style: 'PRIMARY' }, { id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }],
     }],
-    suggestions: ['Show my home event radar feed'],
+    suggestions: [],
   };
 }
 

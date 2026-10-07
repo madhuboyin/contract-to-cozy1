@@ -190,9 +190,7 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     contextVersion: context.contextVersion,
     captureRequests,
     blocks,
-    suggestions: permissionLimited
-      ? ['Ask a household owner or contributor to improve the property context', 'Open Sell / Hold / Rent']
-      : ['What assumptions matter most?', 'Open Sell / Hold / Rent', 'How much does this home cost each month?'],
+    suggestions: [],
   };
 }
 
@@ -287,7 +285,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
         tone: 'DEFAULT',
         actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'PRIMARY' }],
       }],
-      suggestions: ['Should I sell, hold, or rent this home?'],
+      suggestions: [],
     };
   }
 
@@ -392,7 +390,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     blocks,
     // The checklist already contains its prioritized next steps and live item decisions.
     // Do not suggest paraphrases that route straight back to this same operation.
-    suggestions: openItems.length ? [] : ['Open Sell / Hold / Rent'],
+    suggestions: [],
   };
 }
 

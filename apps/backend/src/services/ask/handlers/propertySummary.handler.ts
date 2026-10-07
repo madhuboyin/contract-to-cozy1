@@ -135,15 +135,6 @@ export function propertyOverviewStatusObservation(pendingDetailCount: number): s
   return 'Nothing in the current record suggests an urgent issue.';
 }
 
-/** Two or three contextual follow-ups, not a catalog of every domain -- each launches its own certified operation in-conversation. */
-export function propertyOverviewSuggestions(pendingDetailCount: number): string[] {
-  return [
-    ...(pendingDetailCount > 0 ? ['What details are missing?'] : []),
-    'Show me my home by room.',
-    'What changed recently?',
-  ].slice(0, 3);
-}
-
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const propertyHref = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
   const completenessFocus = isPropertyCompletenessRequest(message);
@@ -339,11 +330,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
     followUp: null,
     captureRequests: completenessFocus ? captureRequests : [],
     blocks,
-    suggestions: roomFocus
-      ? []
-      : completenessFocus
-      ? ['Summarize my home record', 'Show incomplete inventory records', 'List pending maintenance tasks']
-      : propertyOverviewSuggestions(pendingDetailCount),
+    suggestions: [],
   };
 }
 
@@ -427,7 +414,7 @@ export async function areaCapturePrompt(
   if (!requirement || requirement.capture.inputSchema.type === 'RELATIONAL_SELECT_CREATE' || requirement.capture.inputSchema.type === 'RELATIONAL_UPDATE') {
     return {
       status: 'ANSWERED', reasonCode: 'AREA_CAPTURE_NO_MORE_QUESTIONS', contextVersion: evaluation.contextVersion, parameters,
-      blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, true, false)], suggestions: ['How complete is my home record?'],
+      blocks: [...noticeBlock, areaProgressBlock(propertyId, scope, progress, true, false)], suggestions: [],
     };
   }
   const capture = requirement.capture;

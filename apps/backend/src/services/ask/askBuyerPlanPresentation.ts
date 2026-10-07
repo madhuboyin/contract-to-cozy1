@@ -46,7 +46,7 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
       }],
       // Pre-close buyer answer: the HOME_ACTIONS -> MAINTENANCE_STATUS handoff is about a home they own.
       suppressSkillHandoff: true,
-      suggestions: ['Summarize this home record before closing.'],
+      suggestions: [],
     };
   }
 
@@ -129,6 +129,6 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
     blocks,
     // Pre-close buyer answer: the HOME_ACTIONS -> MAINTENANCE_STATUS handoff is about a home they own.
     suppressSkillHandoff: true,
-    suggestions: ['Summarize this home record before closing.', 'What are the ownership costs for this home after purchase?'],
+    suggestions: [],
   };
 }

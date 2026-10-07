@@ -81,7 +81,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
         body: 'The Home Timeline keeps a history of what happened to this home: repairs, improvements, purchases, inspections and claims. Open it to log an event.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['What changed at my home recently?'],
+      suggestions: [],
     };
   }
   const verified = events.filter((event) => event.verificationStatus === 'EVIDENCE_VERIFIED' || event.verificationStatus === 'HOMEOWNER_CONFIRMED').length;
@@ -150,7 +150,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
     });
   }
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'HOME_TIMELINE_READY', blocks, suggestions: ['What changed at my home recently?'] };
+  return { status: 'ANSWERED', reasonCode: 'HOME_TIMELINE_READY', blocks, suggestions: [] };
 }
 
 async function homeTimelineResult(propertyId: string, userId: string): Promise<AskOperationResult> {

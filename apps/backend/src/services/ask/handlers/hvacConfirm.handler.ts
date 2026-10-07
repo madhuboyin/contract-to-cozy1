@@ -122,7 +122,6 @@ async function confirmHvacDecisionStart(ctx: ConfirmCapabilityContext): Promise<
         body: 'The decision thread was started successfully. A result you were viewing could not refresh automatically -- ask "Should I repair or replace my HVAC?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'Should I repair or replace my HVAC?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -175,7 +174,6 @@ async function confirmHvacDecisionScenario(ctx: ConfirmCapabilityContext): Promi
         body: 'The scenario was saved successfully. A result you were viewing could not refresh automatically -- ask "Should I repair or replace my HVAC?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'Should I repair or replace my HVAC?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -355,7 +353,7 @@ async function confirmHvacPreferenceSave(ctx: ConfirmCapabilityContext): Promise
     });
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_PREFERENCE_SAVED',
-      blocks: savedBlocks, confirmation: null, suggestions: ['Should I repair or replace my HVAC?'],
+      blocks: savedBlocks, confirmation: null, suggestions: [],
     };
     artifactType = command.artifactType;
     artifactId = savedIds[0] ?? '';

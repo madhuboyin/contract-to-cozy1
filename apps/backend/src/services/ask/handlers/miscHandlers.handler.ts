@@ -53,7 +53,7 @@ async function guidanceJourneyCreateResult(userId: string, propertyId: string, m
     status: 'NEEDS_ENTITY', reasonCode: 'GUIDANCE_JOURNEY_SCOPE_REQUIRED',
     ...durableFreeTextClarification('GUIDANCE_JOURNEY_CREATE', 'What recorded item or approved home service should the guided plan cover?'),
     blocks: [{ type: 'SUMMARY', id: 'journey-scope', title: 'What should the guided plan cover?', body: 'Name a recorded appliance/system, warranty, insurance decision, inspection, or cleaning need. Ask will not start an ungrounded workflow.', tone: 'CAUTION', actions: [] }],
-    suggestions: inventory.slice(0, 3).map((candidate) => `Start a guided plan for ${candidate.name}`),
+    suggestions: [],
   };
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   const contextVersion = await guidanceJourneyContextVersion(propertyId, input);
@@ -100,7 +100,7 @@ export async function homeDeadlineMonitorResult(userId: string, propertyId: stri
       status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_MONITOR_TASK_REQUIRED',
       ...durableFreeTextClarification('HOME_DEADLINE_MONITOR', 'Which dated maintenance task should Ask monitor?'),
       blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'maintenance-monitor-options', title: 'Choose a dated maintenance task', description: tasks.length ? 'Use the exact task title in your next message. No notification preference has changed.' : 'No open maintenance task with a due date is recorded yet. Add or schedule the task first.', sections: [{ id: 'tasks', title: 'Dated maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({ id: task.id, title: task.title, description: `Due ${humanDate(task.nextDueDate)}`, meta: [task.priority], status: task.status, href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}` })) }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'PRIMARY' }] }],
-      suggestions: tasks.slice(0, 3).map((task) => `Remind me when ${task.title} is due`),
+      suggestions: [],
     };
     const input = HomeDeadlineMonitorInputSchema.parse({ sourceType: 'MAINTENANCE', sourceId: selected.id, title: selected.title, dueDate: selected.nextDueDate!.toISOString().slice(0, 10), leadDays: 7 });
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
@@ -201,7 +201,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
         tone: 'CAUTION',
         actions: [allItems.length ? inventoryShowAllAction() : { ...inventoryAddItemAction(), label: 'Add an inventory item' }],
       }],
-      suggestions: allItems.slice(0, 3).map((item) => `Should I repair or replace ${item.name}?`),
+      suggestions: [],
     };
   }
   if (items.length > 1) {
@@ -218,7 +218,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
           actions: [repairReplaceItemAction(item)],
         })) }], actions: [],
       }],
-      suggestions: items.slice(0, 3).map((item) => `Should I repair or replace ${item.name}?`),
+      suggestions: [],
     };
   }
 
@@ -293,7 +293,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     { type: 'BOUNDARY', id: 'repair-replace-boundary', title: 'Planning guidance—not a diagnosis or quote', body: 'A qualified technician should diagnose safety, performance, and repairability. Actual repair and replacement prices, efficiency gains, warranties, and code requirements may differ.', severity: 'INFO', suggestions: [] }],
     // Suggestions are submitted as new turns, so keep the inventory referent
     // explicit instead of making the router guess what "this item" means.
-    suggestions: [`How much should I reserve for ${item.name} replacement?`, 'Show my capital timeline'],
+    suggestions: [],
   };
 }
 
@@ -348,11 +348,7 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
         tone: 'CAUTION',
         actions: [{ id: 'open-work', label: 'Manage action instead', href, style: 'SECONDARY' }],
       }],
-      suggestions: [
-        `Complete ${selected.title}; it is working as expected`,
-        `Complete ${selected.title}; it still needs attention`,
-        `Complete ${selected.title}; it failed again`,
-      ],
+      suggestions: [],
     };
   }
   const targetState = action === 'ACCEPT' ? 'ACCEPTED' : action === 'DEFER' ? 'DEFERRED' : action === 'REOPEN' ? 'REOPENED' : null;
@@ -403,7 +399,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
         body: 'Ask could not verify recent change records against the current governed Home Action feed, so it will not show possibly stale or duplicate cards.',
         tone: 'CAUTION', actions: [],
       }],
-      suggestions: ['Summarize my home record'],
+      suggestions: [],
     };
   }
   const materialCandidates = changes.filter((change) => change.materiality !== 'INFORMATIONAL');
@@ -416,7 +412,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
         body: `This covers ${HOME_CHANGE_SUMMARY_COVERED_SOURCES.join(', ')}. It is not a confirmation that nothing at all happened at this property -- only that no material change was recorded in these sources.`,
         actions: [],
       }],
-      suggestions: ['What should I do next?', 'Summarize my home record'],
+      suggestions: [],
     };
   }
 
@@ -469,7 +465,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
         body: 'Recent Operational Work ledger entries no longer map to an active governed Home Action. Ask has left them out rather than presenting expired work or a review control that cannot open.',
         actions: [],
       }],
-      suggestions: ['What should I do next?', 'Summarize my home record'],
+      suggestions: [],
     };
   }
 
@@ -505,7 +501,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
   return {
     status: 'ANSWERED', reasonCode: 'HOME_CHANGE_SUMMARY_FOUND',
     blocks,
-    suggestions: ['What should I do next?'],
+    suggestions: [],
   };
 }
 
@@ -544,7 +540,7 @@ function unsafeRestrictedResult(): AskOperationResult {
       body: 'I can help you understand the safe, documented path, prepare questions and records, or find the appropriate Contract to Cozy tool. I cannot help evade permits or inspections, disable safety equipment, conceal material facts, access another user’s private records, or guarantee a regulated, coverage, structural, or professional determination.',
       suggestions: ['Review the safe permit, inspection, or policy-verification path.', 'Open only the records available for your selected home.', 'Consult the appropriate authority or qualified professional for a controlling determination.'],
     }],
-    suggestions: ['What is required before my renovation can start?', 'Which home records should I verify?'],
+    suggestions: [],
   };
 }
 
@@ -658,7 +654,7 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
         body: 'The registered Envelope producers have not created intelligence for this property yet.',
         actions: [],
       }],
-      suggestions: ['Summarize my home record'],
+      suggestions: [],
     };
   }
 
@@ -722,7 +718,7 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
     reasonCode: page.diagnostics.length ? 'INTELLIGENCE_ENVELOPE_PARTIAL' : undefined,
     contextVersion: page.contextVersion,
     blocks,
-    suggestions: page.nextCursor ? ['Show more intelligence', 'Ask about a specific intelligence domain'] : [],
+    suggestions: [],
     parameters: page.nextCursor ? { nextCursor: page.nextCursor } : undefined,
   };
 }

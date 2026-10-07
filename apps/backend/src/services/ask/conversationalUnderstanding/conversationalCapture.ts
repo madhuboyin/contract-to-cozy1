@@ -1400,7 +1400,7 @@ async function processGoalCandidate(
         captureRequests: [],
         confirmation: null,
         clarification: null,
-        suggestions: ['Open Sell / Hold / Rent', 'What would help me get ready to sell?'],
+        suggestions: [],
       } as unknown as Prisma.InputJsonValue,
       },
     });

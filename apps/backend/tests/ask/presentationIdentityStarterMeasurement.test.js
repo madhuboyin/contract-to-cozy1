@@ -49,7 +49,7 @@ test('a presented action publishes an identity only for a REGISTERED outcome: an
   assert.equal(collectPresentationIdentities(action('PROPERTY_SUMMARY', 'OPEN_SUMMARY'), 'p1').size, 0, 'an unregistered outcome publishes nothing');
   // PROPERTY_SUMMARY now has registered starter outcomes (D-O4), so an entity action declaring one WOULD publish an entity-scoped identity; no handler does
   // (the scan above), and an entity-scoped identity never equals an entity-less starter key.
-  assert.deepEqual(SUGGESTED_ACTION_OUTCOMES.PROPERTY_SUMMARY, ['REVIEW_HOME_SUMMARY', 'REVIEW_COMPLETENESS']);
+  assert.deepEqual(SUGGESTED_ACTION_OUTCOMES.PROPERTY_SUMMARY, ['REVIEW_HOME_SUMMARY', 'REVIEW_COMPLETENESS', 'HANDOFF_REVIEW_PROPERTY']);
   assert.equal(collectPresentationIdentities(action('PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY'), 'p1').size, 1);
 });
 

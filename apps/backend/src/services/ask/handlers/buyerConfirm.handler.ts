@@ -67,7 +67,7 @@ async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<
         actions: [{ id: 'open-task', label: 'Open completed task', href: buyerTaskHref, style: 'PRIMARY' }],
       }],
       confirmation: null,
-      suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
+      suggestions: [],
     };
     artifactType = 'HOME_BUYER_TASK';
     artifactId = updated.id;
@@ -83,7 +83,6 @@ async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<
         body: 'This completion was saved to the canonical Buyer Plan. The list you were viewing could not refresh automatically -- ask "What should I do next for this purchase?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'What should I do next for this purchase?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -131,7 +130,7 @@ async function confirmBuyerTaskCreate(ctx: ConfirmCapabilityContext): Promise<Co
         actions: [{ id: 'open-task', label: 'Open new task', href: buyerTaskHref, style: 'PRIMARY' }],
       }],
       confirmation: null,
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
     artifactType = 'HOME_BUYER_TASK';
     artifactId = created.id;
@@ -144,7 +143,6 @@ async function confirmBuyerTaskCreate(ctx: ConfirmCapabilityContext): Promise<Co
         body: 'This task was saved to the canonical Buyer Plan. The list you were viewing could not refresh automatically -- ask "What should I do next for this purchase?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'What should I do next for this purchase?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -191,7 +189,7 @@ async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<Co
         actions: [{ id: 'open-task', label: 'Open updated task', href: buyerTaskHref, style: 'PRIMARY' }],
       }],
       confirmation: null,
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
     artifactType = 'HOME_BUYER_TASK';
     artifactId = updated.id;
@@ -211,7 +209,6 @@ async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<Co
         body: 'This change was saved to the canonical Buyer Plan. The list you were viewing could not refresh automatically -- ask "What should I do next for this purchase?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'What should I do next for this purchase?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -263,7 +260,7 @@ async function confirmBuyerFindingDisposition(ctx: ConfirmCapabilityContext): Pr
         actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }],
       }],
       confirmation: null,
-      suggestions: ['Which inspection findings still need a decision?', 'What should I do next for this purchase?'],
+      suggestions: [],
     };
     artifactType = 'INSPECTION_FINDING';
     artifactId = finding.id;
@@ -276,7 +273,6 @@ async function confirmBuyerFindingDisposition(ctx: ConfirmCapabilityContext): Pr
         body: 'This classification was saved to the canonical record. The findings list you were viewing could not refresh automatically -- ask "Which inspection findings still need a decision?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'Which inspection findings still need a decision?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -380,7 +376,6 @@ async function confirmBuyerLifecycleUpdate(ctx: ConfirmCapabilityContext): Promi
         body: 'This change was saved to the canonical Buyer Plan. The list you were viewing could not refresh automatically -- ask "What should I do next for this purchase?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'What should I do next for this purchase?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }

@@ -115,7 +115,7 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
           : 'The Home Upgrade Planner builds a model of your home\'s systems so you can compare repairing, replacing, upgrading or waiting. Open it to set it up.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['What maintenance is due?'],
+      suggestions: [],
     };
   }
   // Group by component and order groups the way the page does: selected, then in progress, then pinned, then newest.
@@ -175,7 +175,7 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
     actions: [],
   });
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: outOfDate ? 'HOME_UPGRADE_RESULTS_STALE' : 'HOME_UPGRADE_SCENARIOS_READY', blocks, suggestions: ['What maintenance is due?'] };
+  return { status: 'ANSWERED', reasonCode: outOfDate ? 'HOME_UPGRADE_RESULTS_STALE' : 'HOME_UPGRADE_SCENARIOS_READY', blocks, suggestions: [] };
 }
 
 async function homeUpgradeScenariosResult(propertyId: string): Promise<AskOperationResult> {

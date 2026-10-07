@@ -59,7 +59,7 @@ export function hoaComplianceFromView(
         body: 'HOA Compliance keeps your association, dues, approval requests and any violation notices in one place. If this home has an HOA, open it to add the association.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['Is my renovation ready to start?'],
+      suggestions: [],
     };
   }
   const open = violations.filter((violation) => HOA_OPEN_VIOLATION_STATUSES.has(String(violation.status)));
@@ -129,7 +129,7 @@ export function hoaComplianceFromView(
     });
   }
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'HOA_COMPLIANCE_READY', blocks, suggestions: ['Is my renovation ready to start?'] };
+  return { status: 'ANSWERED', reasonCode: 'HOA_COMPLIANCE_READY', blocks, suggestions: [] };
 }
 
 async function hoaComplianceResult(propertyId: string): Promise<AskOperationResult> {

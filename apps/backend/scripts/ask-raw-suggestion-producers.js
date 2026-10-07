@@ -1,18 +1,15 @@
 #!/usr/bin/env node
-// ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN Appendix C.14 ("Phase 5 containment"): a ratchet on raw string-suggestion
-// producers in production Ask code. It does NOT claim that every follow-up is typed; the ~40 unconverted handlers still produce plain
-// chips at runtime. The guarantee is narrower: no new raw producer file and no additional raw producer site may be introduced, and
-// existing legacy producers stay bounded at the reviewed per-file baseline (docs/architecture/ask-raw-suggestion-producers.json).
+// ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN Phase 5: production Ask may not construct raw string follow-up chips.
+// Historical persisted results retain frontend read compatibility; every newly constructed compact follow-up is typed and ledger-backed.
 //
-// What counts as a raw producer: a `suggestions:` property in an object literal under src/services/ask whose value contains a string or
-// template literal (it generates compact text). What does not: `suggestions: []`, pass-throughs of an existing value
+// What counts as a raw producer: a `suggestions:` property in an object literal, or a later `.suggestions = ...` assignment, under
+// src/services/ask whose value contains a string or template literal (it generates compact text). What does not: `suggestions: []`, pass-throughs of an existing value
 // (`result.suggestions`, `stored.suggestions ?? []`, shorthand), a block's own metadata (an object with a string-literal `type`),
-// test files, typed candidates, and anything outside src/services/ask. Indirect producers (a variable assigned a list and returned
-// later) are not tracked; that limitation is deliberate and recorded in C.14.
+// test files, typed candidates, and anything outside src/services/ask.
 //
 //   node scripts/ask-raw-suggestion-producers.js            print the per-file counts
-//   node scripts/ask-raw-suggestion-producers.js --check    exit 1 on a new producer file or a per-file increase
-//   node scripts/ask-raw-suggestion-producers.js --write    rewrite the baseline (an increase needs explicit review; see C.14)
+//   node scripts/ask-raw-suggestion-producers.js --check    exit 1 on any raw producer
+//   node scripts/ask-raw-suggestion-producers.js --write    rewrite the zero baseline after reviewed removals
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
@@ -52,6 +49,9 @@ function countRawProducers(fileName, text) {
   (function visit(n) {
     if (ts.isPropertyAssignment(n) && n.name.getText() === 'suggestions' && ts.isObjectLiteralExpression(n.parent)
       && !isBlockObject(n.parent) && containsTextLiteral(n.initializer)) count += 1;
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isPropertyAccessExpression(n.left) && n.left.name.text === 'suggestions'
+      && containsTextLiteral(n.right)) count += 1;
     ts.forEachChild(n, visit);
   })(sf);
   return count;
@@ -66,7 +66,7 @@ function scan() {
   return files;
 }
 
-/** Increases and new files fail; decreases and removed files are reported but allowed. */
+/** The baseline is pinned at zero; compare remains exported for focused scanner tests. */
 function compare(current, baseline) {
   const increases = [];
   const decreases = [];
@@ -81,9 +81,9 @@ function compare(current, baseline) {
 
 function formatIncreases(increases) {
   return [
-    'New raw string-suggestion producers are not allowed (plan C.14). Build a typed Suggested Next Action candidate instead.',
+    'Raw string-suggestion producers are not allowed (plan Phase 5). Build a typed Suggested Next Action candidate instead.',
     ...increases.map(({ file, before, now, isNewFile }) => `  ${file}: ${before} -> ${now} (+${now - before})${isNewFile ? ' [new producer file]' : ''}`),
-    'If an increase is genuinely approved, run `node scripts/ask-raw-suggestion-producers.js --write`, review the diff, and record the approval in plan C.14.',
+    'Do not update the zero baseline. Remove the string or build a governed typed candidate.',
   ].join('\n');
 }
 
@@ -96,7 +96,7 @@ if (require.main === module) {
   const mode = process.argv[2];
   if (mode === '--write') {
     const files = Object.fromEntries(Object.keys(current).sort().map((file) => [file, current[file]]));
-    fs.writeFileSync(BASELINE, `${JSON.stringify({ comment: 'Reviewed per-file counts of raw string-suggestion producers in src/services/ask (plan C.14, Phase 5 containment). Counts may fall freely; an increase or a new file needs an explicit reviewed update: `node scripts/ask-raw-suggestion-producers.js --write`.', files }, null, 2)}\n`);
+    fs.writeFileSync(BASELINE, `${JSON.stringify({ comment: 'Phase 5 zero baseline: production Ask code may not construct raw string follow-up suggestions. Historical persisted strings are read-compatible in the frontend only.', files }, null, 2)}\n`);
     console.log(`wrote ${path.relative(process.cwd(), BASELINE)} (${total(current)} producers in ${Object.keys(files).length} files)`);
   } else {
     const baseline = JSON.parse(fs.readFileSync(BASELINE, 'utf8')).files;

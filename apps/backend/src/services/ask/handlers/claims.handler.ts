@@ -147,7 +147,7 @@ async function claimTransitionResult(propertyId: string, message: string, launch
   if (!isValidClaimTransition(selected.status as ClaimStatus, nextStatus)) return {
     status: 'BLOCKED', reasonCode: 'CLAIM_TRANSITION_NOT_ALLOWED',
     blocks: [{ type: 'BOUNDARY', id: 'claim-transition-boundary', title: 'That claim status change is not allowed', severity: 'INFO', body: `The canonical claim lifecycle does not allow ${String(selected.status).toLowerCase().replace(/_/g, ' ')} → ${nextStatus.toLowerCase().replace(/_/g, ' ')}. No record was changed.`, suggestions: ['Review the claim and choose its next valid lifecycle step.'] }],
-    suggestions: ['Show my open claims'],
+    suggestions: [],
   };
   const contextVersion = createHash('sha256').update(`${selected.id}:${selected.status}:${selected.updatedAt.toISOString()}`).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
@@ -180,7 +180,7 @@ export function incidentContinuationFromRecords(
       { id: 'open-claims', label: 'Open incident and claims records', href, style: 'PRIMARY' },
       { id: 'open-emergency-help', label: 'Open Emergency Help (AI troubleshooter)', href: `/dashboard/emergency?propertyId=${encodeURIComponent(propertyId)}`, style: 'SECONDARY' },
     ] },
-  ], suggestions: ['File a water damage claim', 'What is the status of my open claim?'] };
+  ], suggestions: [] };
 }
 
 async function incidentContinuationResult(propertyId: string): Promise<AskOperationResult> {
@@ -400,7 +400,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
           ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'SECONDARY' as const }]),
         ],
       }, CLAIM_STATUS_BOUNDARY],
-      suggestions: ['What do I need for an insurance claim?'],
+      suggestions: [],
     };
   }
 
@@ -433,7 +433,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
       },
       CLAIM_STATUS_BOUNDARY,
     ],
-    suggestions: claimFocus ? ['What do I need for an insurance claim?'] : incidentFocus ? ['What should I do next?'] : ['What do I need for an insurance claim?', 'What should I do next?'],
+    suggestions: [],
   };
 }
 

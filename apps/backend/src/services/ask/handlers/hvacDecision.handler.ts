@@ -106,7 +106,7 @@ export async function hvacDecisionStartResult(userId: string, propertyId: string
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_AMBIGUOUS',
       ...durableFreeTextClarification('HVAC_DECISION_START', 'Which recorded HVAC system should Ask evaluate?'),
       blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'hvac-decision-items', title: 'Choose an HVAC system', description: 'Use the exact name in your next message.', sections: [{ id: 'items', title: 'Recorded HVAC systems', count: items.length, items: items.map((candidate) => ({ id: candidate.id, title: candidate.name, description: null, meta: [], status: null, href: null })) }], actions: [] }],
-      suggestions: items.slice(0, 3).map((candidate) => `Should I repair or replace my ${candidate.name}?`),
+      suggestions: [],
     };
   }
 
@@ -122,7 +122,7 @@ export async function hvacDecisionStartResult(userId: string, propertyId: string
     return {
       status: 'ANSWERED', reasonCode: 'HVAC_DECISION_ALREADY_ACTIVE',
       blocks,
-      suggestions: ['What changed about this decision?'],
+      suggestions: [],
     };
   }
   if (selection.kind === 'AMBIGUOUS') {
@@ -168,7 +168,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
           body: 'The selected decision thread is not active for this home. Ask will not substitute a different decision based on title or recency.',
           actions: [],
         }],
-        suggestions: ['Show my active home decisions'],
+        suggestions: [],
       };
     }
     const focusedItem = await prisma.inventoryItem.findFirst({
@@ -201,7 +201,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
       reasonCode: 'HVAC_DECISION_RESUMED',
       parameters: { focusedDecisionThreadId: focusedThread.id },
       blocks,
-      suggestions: ['Compare a new quote for this decision', 'Abandon this decision'],
+      suggestions: [],
     };
   }
   const { items, item } = await findHvacItemForMessage(propertyId, message);
@@ -210,7 +210,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
       ...durableFreeTextClarification('HVAC_DECISION_CONTINUE', 'Which HVAC decision should Ask resume?'),
       blocks: [{ type: 'EMPTY_STATE', id: 'hvac-decision-continue-empty', title: 'No matching HVAC decision found', body: 'Name the HVAC system exactly as recorded, or start a new decision.', actions: [] }],
-      suggestions: items.slice(0, 3).map((candidate) => `What's the status of my ${candidate.name} decision?`),
+      suggestions: [],
     };
   }
   const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
@@ -218,7 +218,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
       blocks: [{ type: 'EMPTY_STATE', id: 'hvac-decision-none', title: 'No active decision for this system yet', body: `Ask has not started a repair-or-replace decision for ${item.name}.`, actions: [inventoryViewItemAction(item.name)] }],
-      suggestions: [`Should I repair or replace my ${item.name}?`],
+      suggestions: [],
     };
   }
   if (selection.kind === 'AMBIGUOUS') {
@@ -234,7 +234,7 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
   return {
     status: 'ANSWERED', reasonCode: 'HVAC_DECISION_RESUMED',
     blocks,
-    suggestions: ['Compare a new quote for this decision', 'Abandon this decision'],
+    suggestions: [],
   };
 }
 
@@ -254,7 +254,7 @@ async function hvacDecisionScenarioResult(userId: string, propertyId: string, me
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
       blocks: [{ type: 'EMPTY_STATE', id: 'hvac-scenario-no-thread', title: 'No active decision to compare against', body: `Start a repair-or-replace decision for ${item.name} first.`, actions: [] }],
-      suggestions: [`Should I repair or replace my ${item.name}?`],
+      suggestions: [],
     };
   }
 
@@ -351,7 +351,7 @@ async function hvacDecisionOutcomeReportResult(userId: string, propertyId: strin
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
       blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-report-no-thread', title: 'No active decision to record an outcome for', body: `Start a repair-or-replace decision for ${item.name} first.`, actions: [] }],
-      suggestions: [`Should I repair or replace my ${item.name}?`],
+      suggestions: [],
     };
   }
 
@@ -403,7 +403,7 @@ async function hvacDecisionOutcomeViewResult(userId: string, propertyId: string,
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'HVAC_DECISION_NOT_STARTED',
       blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-view-no-thread', title: 'No active decision for this system yet', body: `Ask has not started a repair-or-replace decision for ${item.name}.`, actions: [] }],
-      suggestions: [`Should I repair or replace my ${item.name}?`],
+      suggestions: [],
     };
   }
   const rows = await outcomeObservationService.getOutcomeSummaryForThread(selection.thread.id, propertyId);
@@ -411,14 +411,14 @@ async function hvacDecisionOutcomeViewResult(userId: string, propertyId: string,
     return {
       status: 'ANSWERED', reasonCode: 'HVAC_DECISION_OUTCOME_NONE',
       blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-view-empty', title: 'No outcome recorded yet', body: `Once ${item.name} is repaired or replaced, tell Ask what happened to record the outcome.`, actions: [] }],
-      suggestions: [`I replaced my ${item.name}`],
+      suggestions: [],
     };
   }
   const disputable = rows.some((row) => (['REPORTED', 'CORROBORATED', 'VERIFIED'] as string[]).includes(row.observation.verificationStatus));
   return {
     status: 'ANSWERED', reasonCode: 'HVAC_DECISION_OUTCOME_FOUND',
     blocks: [outcomeSummaryBlock('hvac-outcome-summary', selection.thread.id, rows)],
-    suggestions: disputable ? [`That outcome is wrong for my ${item.name}`] : [],
+    suggestions: [],
   };
 }
 
@@ -483,7 +483,7 @@ async function hvacPreferenceSaveResult(userId: string, propertyId: string, mess
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_PREFERENCE_SAVE_DETAILS_REQUIRED',
       ...durableFreeTextClarification('HVAC_PREFERENCE_SAVE', 'What would you like Ask to save for future HVAC decisions?'),
       blocks: [{ type: 'SUMMARY', id: 'hvac-preference-save-details-required', title: 'What should Ask save?', body: 'Say something like "Save that we plan to sell in about 18 months" or "Remember I want to minimize upfront cost."', tone: 'DEFAULT', actions: [] }],
-      suggestions: ['Save that we plan to sell in about 18 months', 'Remember I want to minimize long-term cost'],
+      suggestions: [],
     };
   }
 
@@ -539,7 +539,7 @@ async function hvacPreferenceForgetResult(userId: string, propertyId: string, me
         status: 'NEEDS_ENTITY', reasonCode: 'HVAC_PREFERENCE_FORGET_AMBIGUOUS',
         ...durableFreeTextClarification('HVAC_PREFERENCE_FORGET', 'Which saved preference should Ask forget — the ownership horizon or the repair/replace approach?'),
         blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'hvac-preference-forget-candidates', title: 'Saved preferences', description: 'Use the exact name in your next message.', sections: [{ id: 'preferences', title: 'Active', count: active.length, items: active.map((candidate) => ({ id: candidate.key, title: candidate.label, description: null, meta: [], status: null, href: null })) }], actions: [] }],
-        suggestions: ['Forget my ownership horizon', 'Forget my repair/replace approach'],
+        suggestions: [],
       };
     }
     target = matched;
@@ -633,7 +633,7 @@ function specialistUnavailableRedirect(propertyId: string, reason: string): AskO
       body: `${reason} Ask can start a durable repair-or-replace decision instead, or you can open Home Actions to engage a flagged one.`,
       actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'PRIMARY' }],
     }],
-    suggestions: ['Should I repair or replace my furnace?', 'What needs my attention?'],
+    suggestions: [],
   };
 }
 
@@ -733,7 +733,7 @@ export async function hvacSpecialistEngageResult(
         body: 'Ask could not load the governed action feed needed to engage the HVAC Specialist. It will not substitute a raw recommendation.',
         actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'PRIMARY' }],
       }],
-      suggestions: ['Should I repair or replace my furnace?'],
+      suggestions: [],
     };
   }
 
@@ -795,7 +795,7 @@ export async function hvacSpecialistEngageResult(
             }],
             actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'SECONDARY' }],
           }],
-          suggestions: hvacActions.slice(0, 5).map((candidate) => `Help me decide about ${candidate.presentation?.headline ?? candidate.recommendedAction} from my Home Actions`),
+          suggestions: [],
         };
       }
     } else {
@@ -894,11 +894,7 @@ export async function hvacSpecialistEngageResult(
       contextVersion: origin.contextVersion,
       parameters: projection.decisionThreadId ? { decisionThreadId: projection.decisionThreadId } : undefined,
       blocks,
-      suggestions: projection.phase === 'RECOMMENDATION_READY'
-        ? ['What changed about this decision?', 'Compare a new quote for this decision']
-        : projection.phase === 'NEEDS_CONTEXT'
-          ? ['My HVAC condition is good', 'It was installed in 2012', 'The replacement estimate is $8,000']
-          : ['Open my Home Actions'],
+      suggestions: [],
     };
   };
 
@@ -916,7 +912,7 @@ export async function hvacSpecialistEngageResult(
           title: 'The HVAC Specialist is not available right now',
           body: 'The bounded HVAC Specialist is currently turned off. The canonical repair-or-replace decision is still available from Home Actions or by starting a decision here.',
         }],
-        suggestions: ['Should I repair or replace my furnace?'],
+        suggestions: [],
       };
     }
     if (error instanceof AgentRuntimeCasConflictError) {
@@ -927,7 +923,7 @@ export async function hvacSpecialistEngageResult(
           title: 'This HVAC decision was updated elsewhere',
           body: 'The Specialist run changed while Ask was reading it. Open the in-app decision panel to see the current state.',
         }],
-        suggestions: ['Open my Home Actions'],
+        suggestions: [],
       };
     }
     if (error instanceof AgentRuntimeStateError) {
@@ -938,7 +934,7 @@ export async function hvacSpecialistEngageResult(
           title: 'The HVAC Specialist could not continue from here',
           body: error.message,
         }],
-        suggestions: ['Open my Home Actions', 'Should I repair or replace my furnace?'],
+        suggestions: [],
       };
     }
     throw error;

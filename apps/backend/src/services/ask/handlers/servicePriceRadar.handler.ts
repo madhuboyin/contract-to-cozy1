@@ -49,7 +49,7 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
         body: 'Service Price Radar compares a contractor quote with typical local prices for the service. Open it to check a quote.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['Compare my service quotes'],
+      suggestions: [],
     };
   }
   const above = checks.filter((check) => check.verdict === 'HIGH' || check.verdict === 'VERY_HIGH').length;
@@ -94,7 +94,7 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
     actions: [],
   });
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'SERVICE_PRICE_RADAR_CHECKS_READY', blocks, suggestions: ['Compare my service quotes'] };
+  return { status: 'ANSWERED', reasonCode: 'SERVICE_PRICE_RADAR_CHECKS_READY', blocks, suggestions: [] };
 }
 
 async function servicePriceChecksResult(propertyId: string, userId: string): Promise<AskOperationResult> {

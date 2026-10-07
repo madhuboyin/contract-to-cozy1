@@ -89,7 +89,7 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
         actions: [{ id: 'open-task', label: 'Open completed task', href: taskHref, style: 'PRIMARY' }],
       }],
       confirmation: null,
-      suggestions: ['What maintenance is still pending?', 'Show maintenance completed this year'],
+      suggestions: [],
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK_COMPLETION';
     artifactId = updated.id;
@@ -105,7 +105,6 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
         body: 'This completion was saved to the canonical Maintenance record. The pending list you were viewing could not refresh automatically -- ask "What maintenance is pending?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'What maintenance is pending?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -187,7 +186,7 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
         }],
       }],
       confirmation: null,
-      suggestions: ['What maintenance is still pending?', 'Create another maintenance task'],
+      suggestions: [],
     };
     artifactType = 'PROPERTY_MAINTENANCE_TASK';
     artifactId = task.id;
@@ -249,7 +248,7 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
       const removedResult: AskOperationResult = {
         status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_REMOVED',
         blocks: [{ type: 'WORKFLOW_PROGRESS', id: `maintenance-update-${current.id}`, title: 'Maintenance task removed', status: 'COMPLETED', description: 'The task was permanently removed from the shared Maintenance record.', details: [{ label: 'Task', value: current.title }, { label: 'Action', value: 'remove' }], actions: [] }],
-        confirmation: null, suggestions: ['What maintenance is pending?'],
+        confirmation: null, suggestions: [],
       };
       const removedRefresh = await refreshAskSourceExecution(userId, execution.id, parameters);
       if (removedRefresh.attemptedAndFailed) {
@@ -310,7 +309,7 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
         ...(candidate.data.serviceCategory !== undefined ? [{ label: 'Service category', value: updated.serviceCategory?.toLowerCase().replace(/_/g, ' ') ?? 'Not set' }] : []),
         ...(candidate.data.action === 'SNOOZE' || candidate.data.action === 'UNSNOOZE' ? [{ label: 'Reminders', value: updated.snoozedUntil ? `Snoozed until ${humanDate(updated.snoozedUntil)}` : 'Active' }] : []),
         { label: 'Assignee', value: updated.assignedTo?.email ?? 'Unassigned' }], actions: [] }],
-      confirmation: null, suggestions: ['What maintenance is pending?'],
+      confirmation: null, suggestions: [],
       // Undo of what this receipt just did, as a typed action on the exact task (the plain fallback above shows when there is none).
       suggestedNextActionCandidates: candidate.data.action === 'ARCHIVE' ? maintenanceUndoCandidates(updated, { propertyId: execution.propertyId, undo: 'REOPEN' })
         : candidate.data.action === 'SNOOZE' ? maintenanceUndoCandidates(updated, { propertyId: execution.propertyId, undo: 'UNSNOOZE' }) : [],
@@ -324,7 +323,6 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
         body: 'This change was saved to the canonical Maintenance record. The list you were viewing could not refresh automatically -- ask "What maintenance is pending?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'What maintenance is pending?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }

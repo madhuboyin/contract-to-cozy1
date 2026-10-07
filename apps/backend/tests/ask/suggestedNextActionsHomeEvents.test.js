@@ -186,7 +186,7 @@ test('the HOME_EVENT validator is registered and enforces current revision, not 
     assert.equal(probe().calls, 1, 'one batched query for both candidates');
     assert.deepEqual(result.suggestedNextActions.map((a) => a.outcomeKey), ['ADD_AMOUNT', 'LINK_INVENTORY_ITEM'], 'tier-only: same tier orders by outcomeKey');
     for (const a of result.suggestedNextActions) { assert.ok(SuggestedNextActionSchema.safeParse(a).success); assert.equal(a.provenance.source, 'MISSING_DETAIL'); }
-    assert.deepEqual(result.suggestions, ['Show my home timeline']);
+    assert.deepEqual(result.suggestions, []);
     assert.equal(probe().lastWhere.isCurrent, true);
     assert.equal(probe().lastWhere.deletedAt, null);
   });

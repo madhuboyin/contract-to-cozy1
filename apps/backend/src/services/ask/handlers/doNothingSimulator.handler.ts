@@ -50,7 +50,7 @@ export function doNothingSimulationFromView(
         body: 'Some insurance records for this home disagree with each other, and the simulation depends on them. Once the conflicting coverage is resolved, the latest simulation can be shown.',
         tone: 'CAUTION', actions: [openAction],
       }, boundary],
-      suggestions: ['What coverage gaps does my home have?'],
+      suggestions: [],
     };
   }
   const { run, scenarios } = view;
@@ -75,7 +75,7 @@ export function doNothingSimulationFromView(
       blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'Saved scenarios', description: 'Open the simulator to run one.', sections: [{ id: 'do-nothing-scenarios', title: 'Saved scenarios', count: scenarioItems.length, items: scenarioItems }], actions: [] });
     }
     blocks.push(boundary);
-    return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_NO_RUN', blocks, suggestions: ['What are my monthly ownership costs?'] };
+    return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_NO_RUN', blocks, suggestions: [] };
   }
   const scenarioName = run.scenarioId ? scenarios.find((scenario) => scenario.id === run.scenarioId)?.name ?? null : null;
   const low = doNothingMoney(run.expectedCostDeltaCentsMin);
@@ -126,7 +126,7 @@ export function doNothingSimulationFromView(
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'What drives the estimate', description: 'From the latest run, as on the page. Open the simulator to change the horizon or run a scenario.', sections, actions: [] });
   }
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_READY', blocks, suggestions: ['What are my monthly ownership costs?'] };
+  return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_READY', blocks, suggestions: [] };
 }
 
 async function doNothingSimulationResult(propertyId: string, userId: string): Promise<AskOperationResult> {

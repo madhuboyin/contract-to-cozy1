@@ -228,15 +228,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     contextVersion: context.contextVersion,
     captureRequests,
     blocks,
-    suggestions: permissionLimited
-      ? ['Ask a household owner or contributor to improve the savings context', 'Which opportunity has the fastest payback?']
-      : unsupportedInventoryCapture
-      ? ['Open Savings and Benefits to add installed systems', 'Which opportunity has the fastest payback?']
-      : realizedFocus
-        ? ['Which opportunity has the fastest payback?', 'Where else could I save money?']
-        : paybackFocus
-          ? ['What savings have I already realized?', 'Where else could I save money?']
-          : ['Which opportunity has the fastest payback?', 'What savings have I already realized?'],
+    suggestions: [],
   };
 }
 
@@ -291,7 +283,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
         tone: 'CAUTION',
         actions: [{ id: 'open-ownership-costs', label: 'Open Ownership Costs tool', href: workspaceHref, style: 'SECONDARY' }],
       }],
-      suggestions: captureRequests.length ? ['Add this detail and retry automatically'] : ['Open Ownership Costs'],
+      suggestions: [],
     };
   }
 
@@ -388,9 +380,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
     contextVersion: context.contextVersion,
     captureRequests,
     blocks,
-    suggestions: lens === 'CASH_OUTFLOW'
-      ? ['Show operating expenses only', 'Which category costs the most?', 'Where could I save money?']
-      : ['Show cash outflow including mortgage principal', 'Which category costs the most?', 'Where could I save money?'],
+    suggestions: [],
   };
 }
 

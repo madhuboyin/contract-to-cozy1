@@ -150,7 +150,7 @@ async function inspectionFindingBatchProposal(propertyId: string, decisions: Arr
   if (included.length === 0) return {
     status: 'BLOCKED', reasonCode: 'INSPECTION_FINDING_BATCH_EMPTY',
     blocks: [{ type: 'SUMMARY', id: 'inspection-finding-batch-empty', title: 'Nothing to confirm', body: 'None of these decisions can be applied to the findings as they are now. Nothing was changed.', tone: 'CAUTION', actions: [] }, ...leftOutBlock],
-    suggestions: ['Show remaining inspection findings'],
+    suggestions: [],
   };
   const entries = included.map(({ finding, action }) => ({ findingId: finding.id, reportId: finding.reportId, action, contextVersion: inspectionFindingVersion(finding) }));
   const contextVersion = createHash('sha256').update(entries.map((entry) => `${entry.findingId}:${entry.action}:${entry.contextVersion}`).join('|')).digest('hex');

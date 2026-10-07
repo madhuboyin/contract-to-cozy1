@@ -197,7 +197,7 @@ async function recallReviewResult(userId: string, propertyId: string): Promise<A
       body: 'Recall details come from official recall records, not a safety inspection of this home.',
       severity: 'INFO', suggestions: [],
     }],
-    suggestions: ['Open Recalls & Safety Alerts'],
+    suggestions: [],
   };
 }
 

@@ -152,7 +152,7 @@ async function coverageResult(userId: string, propertyId: string, message: strin
     } : undefined,
     captureRequests,
     blocks,
-    suggestions: ['Which gaps have the largest exposure?', 'Show warranties expiring soon', 'Which items are missing coverage evidence?'],
+    suggestions: [],
   };
 }
 
@@ -265,7 +265,7 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
           severity: 'CAUTION',
           suggestions: [],
         }],
-        suggestions: ['Which items have missing coverage?'],
+        suggestions: [],
       };
     }
     throw error;
@@ -283,7 +283,7 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
         tone: 'DEFAULT',
         actions: [{ id: 'open-coverage-comparison', label: 'Open coverage comparison', href, style: 'PRIMARY' }],
       }],
-      suggestions: ['Which items have missing coverage?'],
+      suggestions: [],
     };
   }
 
@@ -348,9 +348,7 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
       optionIds: comparison.options.map((option) => option.id), decisionId: latestDecision?.id ?? null,
     })).digest('hex'),
     blocks,
-    suggestions: alternativeOptions.length
-      ? ['Open coverage comparison']
-      : ['Open coverage comparison', 'Which items have missing coverage?'],
+    suggestions: [],
   };
 }
 

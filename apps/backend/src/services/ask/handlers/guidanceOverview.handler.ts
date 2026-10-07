@@ -62,7 +62,7 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
         body: 'Guidance Overview walks through a home issue step by step, such as an aging system, a coverage gap or an inspection follow-up. Open it to pick what you need help with.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['Start a step-by-step plan for this home project'],
+      suggestions: [],
     };
   }
   const nextByJourney = new Map((payload.next as any[]).map((next) => [next.journeyId, next]));
@@ -120,7 +120,7 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
         .map((section) => ({ id: `guidance-journeys-${section.key.toLowerCase()}`, title: section.label, count: section.items.length, items: section.items })),
       actions: [],
     }, boundary],
-    suggestions: ['Start a step-by-step plan for this home project'],
+    suggestions: [],
   };
 }
 
@@ -185,7 +185,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
     return {
       status: 'ANSWERED', reasonCode: ended[0],
       blocks: [{ type: 'SUMMARY', id: 'guidance-journey-summary', title: ended[1], body: `${title}. ${ended[2]}`, tone: 'DEFAULT', actions: [openAction] }, boundary('Guidance is a suggested path built from what is recorded for this home, not a professional assessment.')],
-      suggestions: ['Show my guided journeys'],
+      suggestions: [],
     };
   }
   const { progress } = mapGuidanceJourney(journey);
@@ -287,7 +287,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
 
   return {
     status: 'ANSWERED', reasonCode: followedBranch ? 'GUIDANCE_JOURNEY_BRANCH_FOLLOWED' : 'GUIDANCE_JOURNEY_READY',
-    blocks, suggestions: ['Show my guided journeys'],
+    blocks, suggestions: [],
   };
 }
 
@@ -297,7 +297,7 @@ async function guidanceJourneyContinueResult(userId: string, propertyId: string,
   const gone = (title: string, body: string, reasonCode: string): AskOperationResult => ({
     status: 'NOT_APPLICABLE', reasonCode,
     blocks: [{ type: 'EMPTY_STATE', id: 'guidance-journey-unavailable', title, body, actions: [listAction] }],
-    suggestions: ['Show my guided journeys'],
+    suggestions: [],
   });
   if (!journeyId) return gone('Choose a guided journey', 'Open a journey from your guided journeys list to see where it stands.', 'GUIDANCE_JOURNEY_REQUIRED');
   let journey: any;
@@ -342,7 +342,7 @@ const guidanceWriteError = (message: string, code: string) => Object.assign(new 
 const guidanceWriteBoundary = (propertyId: string, title: string, body: string, status: 'BLOCKED' | 'NOT_APPLICABLE', reasonCode: string): AskOperationResult => ({
   status, reasonCode,
   blocks: [{ type: 'BOUNDARY', id: 'guidance-step-boundary', title, body, severity: 'INFO', suggestions: ['Show my guided journeys'] }],
-  suggestions: ['Show my guided journeys'],
+  suggestions: [],
 });
 
 export const guidanceStepContextVersion = (step: { id: string; status: string; updatedAt: Date | string }, journey: { status: string; version?: number | null }) =>
@@ -376,7 +376,7 @@ async function guidanceStepSkipResult(userId: string, propertyId: string, messag
     return guidanceWriteBoundary(propertyId, 'This journey is no longer active', 'Steps of a journey that is finished, dismissed or branched cannot be skipped. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_STEP_JOURNEY_NOT_ACTIVE');
   }
   if (step.status === 'SKIPPED') {
-    return { status: 'COMPLETED', reasonCode: 'GUIDANCE_STEP_ALREADY_SKIPPED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-step-skip-${step.id}`, title: 'Already skipped', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Step', value: step.label }], actions: [] }], suggestions: ['Show my guided journeys'] };
+    return { status: 'COMPLETED', reasonCode: 'GUIDANCE_STEP_ALREADY_SKIPPED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-step-skip-${step.id}`, title: 'Already skipped', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Step', value: step.label }], actions: [] }], suggestions: [] };
   }
   if (step.status === 'COMPLETED') return guidanceWriteBoundary(propertyId, 'This step is already done', 'A completed step is not skipped. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_STEP_ALREADY_COMPLETED');
   if (getStepSkipPolicy(step.journey.journeyTypeKey ?? null, step.stepKey) === 'DISALLOWED') {
@@ -412,7 +412,7 @@ async function guidanceJourneyDismissResult(userId: string, propertyId: string, 
   const journey = await loadGuidanceJourneyForWrite(propertyId, journeyId);
   if (!journey) return guidanceWriteBoundary(propertyId, 'This journey is no longer available', 'It was removed or does not belong to this home. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_JOURNEY_NOT_FOUND');
   if (journey.status === 'DISMISSED') {
-    return { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_ALREADY_DISMISSED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-dismiss-${journey.id}`, title: 'Already dismissed', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Journey', value: journeyTitleFor(journey) }], actions: [] }], suggestions: ['Show my guided journeys'] };
+    return { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_ALREADY_DISMISSED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-dismiss-${journey.id}`, title: 'Already dismissed', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Journey', value: journeyTitleFor(journey) }], actions: [] }], suggestions: [] };
   }
   if (!['ACTIVE', 'NOT_STARTED'].includes(String(journey.status))) {
     return guidanceWriteBoundary(propertyId, 'This journey cannot be dismissed', 'Only a journey that is still open can be dismissed. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_JOURNEY_NOT_OPEN');
@@ -436,7 +436,7 @@ async function guidanceJourneyDismissResult(userId: string, propertyId: string, 
 }
 
 async function guidanceWriteReceipt(ctx: ConfirmCapabilityContext, id: string, block: Extract<AskPresentationBlock, { type: 'WORKFLOW_PROGRESS' }>, reasonCode: string, artifactType: string): Promise<ConfirmCapabilityResult> {
-  const result: AskOperationResult = { status: 'COMPLETED', reasonCode, blocks: [block], suggestions: ['Show my guided journeys'] };
+  const result: AskOperationResult = { status: 'COMPLETED', reasonCode, blocks: [block], suggestions: [] };
   const refresh = await reconcileAskExecutionSideEffects(ctx.userId, ctx.execution, ctx.parameters);
   if (refresh.attemptedAndFailed) {
     result.blocks.push({ type: 'BOUNDARY', id: `guidance-refresh-failed-${id}`, severity: 'CAUTION', title: 'Saved; view could not refresh', body: 'This was saved. The journey view you were looking at could not refresh automatically; ask "Show my guided journeys" to see its current state.', suggestions: ['Show my guided journeys'] });

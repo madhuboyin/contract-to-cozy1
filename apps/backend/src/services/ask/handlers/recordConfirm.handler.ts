@@ -78,7 +78,7 @@ async function confirmDocumentPromotionConfirm(ctx: ConfirmCapabilityContext): P
       await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'INSPECTION_REPORT', promotedEntityId: report.id, userId });
       artifactType = 'INSPECTION_REPORT'; artifactId = report.id;
     } else throw Object.assign(new Error('This document-promotion action must be reviewed again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    result = { status: 'COMPLETED', reasonCode: decision === 'CONFIRM' ? 'DOCUMENT_PROMOTION_CONFIRMED' : 'DOCUMENT_PROMOTION_REJECTED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `document-promotion-${candidateId}`, title: decision === 'CONFIRM' ? 'Document-derived record promoted' : 'Document candidate rejected', status: 'COMPLETED', description: decision === 'CONFIRM' ? 'The canonical domain adapter applied the reviewed values and recorded a promotion outcome.' : 'The source evidence remains available, but its candidate values were not promoted.', details: [{ label: 'Candidate id', value: candidateId }, { label: 'Decision', value: String(decision).toLowerCase() }], actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/documents`, style: 'PRIMARY' }] }], suggestions: ['Show remaining document reviews'] };
+    result = { status: 'COMPLETED', reasonCode: decision === 'CONFIRM' ? 'DOCUMENT_PROMOTION_CONFIRMED' : 'DOCUMENT_PROMOTION_REJECTED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `document-promotion-${candidateId}`, title: decision === 'CONFIRM' ? 'Document-derived record promoted' : 'Document candidate rejected', status: 'COMPLETED', description: decision === 'CONFIRM' ? 'The canonical domain adapter applied the reviewed values and recorded a promotion outcome.' : 'The source evidence remains available, but its candidate values were not promoted.', details: [{ label: 'Candidate id', value: candidateId }, { label: 'Decision', value: String(decision).toLowerCase() }], actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/documents`, style: 'PRIMARY' }] }], suggestions: [] };
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
     // all -- see ASK_MUTATION_IMPACT_MAP's DOCUMENT_PROMOTION_CONFIRM entry.
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -88,7 +88,6 @@ async function confirmDocumentPromotionConfirm(ctx: ConfirmCapabilityContext): P
         body: 'This decision was saved to the canonical record. The document review list you were viewing could not refresh automatically -- ask "Show remaining document reviews" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'Show remaining document reviews'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -152,7 +151,7 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
     artifactType = 'OPERATIONAL_WORK_ITEM'; artifactId = item.id;
     const workReasonCode = action === 'ACCEPT' ? 'OPERATIONAL_WORK_ACCEPTED' : action === 'DEFER' ? 'OPERATIONAL_WORK_DEFERRED' : action === 'SNOOZE' ? 'OPERATIONAL_WORK_SNOOZED' : action === 'VERIFY' ? 'OPERATIONAL_WORK_VERIFIED' : action === 'REOPEN' ? 'OPERATIONAL_WORK_REOPENED' : 'OPERATIONAL_WORK_COMPLETED';
     const completionDecision = ['VERIFY', 'REOPEN'].includes(String(action));
-    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: action === 'VERIFY' ? 'Completion verified' : action === 'REOPEN' ? 'Action reopened' : 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : action === 'VERIFY' ? 'Your attestation was saved as verified evidence and this action is now complete.' : action === 'REOPEN' ? 'The reported completion was rejected and this action is active again.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: completionDecision ? [] : [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: ['What needs my attention next?'] };
+    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: action === 'VERIFY' ? 'Completion verified' : action === 'REOPEN' ? 'Action reopened' : 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : action === 'VERIFY' ? 'Your attestation was saved as verified evidence and this action is now complete.' : action === 'REOPEN' ? 'The reported completion was rejected and this action is active again.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: completionDecision ? [] : [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: [] };
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
     // all -- see ASK_MUTATION_IMPACT_MAP's OPERATIONAL_WORK_UPDATE entry.
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -211,7 +210,7 @@ async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promis
         actions: [{ id: 'manage-invitation', label: 'Manage invitation', href: householdHref, style: 'PRIMARY' }],
       }],
       confirmation: null,
-      suggestions: ['Who currently has access to this home?'],
+      suggestions: [],
     };
     artifactType = 'HOUSEHOLD_INVITE';
     artifactId = invite.id;
@@ -303,7 +302,7 @@ async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promi
       details: [{ label: 'Item', value: item.name }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : inventoryFieldDisplay(field, previous, dynamicOptions) }, { label: 'New value', value: inventoryFieldDisplay(field, normalized, dynamicOptions) }],
       actions: [inventoryViewItemAction(item.name)],
     }],
-    suggestions: ['Show my home inventory'],
+    suggestions: [],
     // After a correction, offer the details this same item is still missing (the field just corrected is no longer missing).
     suggestedNextActionCandidates: inventoryMissingDetailCandidates(updated, { propertyId: execution.propertyId!, sourceOperationId: 'INVENTORY_ITEM_CORRECT' }),
   };
@@ -411,7 +410,7 @@ async function confirmHomeEventVisibility(ctx: ConfirmCapabilityContext): Promis
       details: [{ label: 'Event', value: current.title }, { label: 'Previous visibility', value: alreadyApplied ? 'Already set' : HOME_EVENT_VISIBILITY_LABELS[current.visibility] ?? current.visibility }, { label: 'New visibility', value: HOME_EVENT_VISIBILITY_LABELS[proposed] ?? proposed }],
       actions: [{ id: 'open-timeline', label: 'Open home timeline', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/timeline`, style: 'PRIMARY' }],
     }],
-    suggestions: ['Show my home timeline'],
+    suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
@@ -461,7 +460,7 @@ async function confirmWarrantyCorrect(ctx: ConfirmCapabilityContext): Promise<Co
       details: [{ label: 'Warranty', value: updated.providerName }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : correctionDisplay(meta, previous) }, { label: 'New value', value: correctionDisplay(meta, next) }],
       actions: [{ id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'PRIMARY' }],
     }],
-    suggestions: ['Show my warranties'],
+    suggestions: [],
     // The reminder deadline follows the expiry date, so only an expiry-date correction can make a reminder worth offering.
     suggestedNextActionCandidates: field === 'expiryDate'
       ? await warrantyExpiryReminderCandidates(updated, { propertyId: execution.propertyId!, sourceOperationId: 'WARRANTY_CORRECT', checkExistingReminder: true })
@@ -522,7 +521,7 @@ async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<Confirm
         : [{ label: 'Room', value: room.name }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : roomFieldDisplay(field, previous) }, { label: 'New value', value: roomFieldDisplay(field, proposed) }],
       actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/rooms`, style: 'PRIMARY' }],
     }],
-    suggestions: ['Show my rooms'],
+    suggestions: [],
     suggestedNextActionCandidates: roomAddItemCandidates({ id: room.id, name: renamed ? proposed : room.name }, { propertyId: execution.propertyId!, sourceOperationId: 'ROOM_RENAME' }),
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -575,7 +574,7 @@ async function confirmRoomCreate(ctx: ConfirmCapabilityContext): Promise<Confirm
       details: [{ label: 'Room name', value: name }, { label: 'Type', value: roomTypeLabel(type) }, ...(floorLevel !== null ? [{ label: 'Floor level', value: String(floorLevel) }] : [])],
       actions: [],
     }],
-    suggestions: ['Show my rooms'],
+    suggestions: [],
     suggestedNextActionCandidates: roomAddItemCandidates({ id: roomId, name }, { propertyId, sourceOperationId: 'ROOM_CREATE' }),
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -639,7 +638,7 @@ async function confirmInventoryItemCreate(ctx: ConfirmCapabilityContext): Promis
     }],
     // The item the homeowner just created is the exact target of the next details to add; typed candidates name it, so a chip can never
     // be re-read as a different item. The plain suggestion is only the fallback when the record is already complete.
-    suggestions: ['Show my home inventory'],
+    suggestions: [],
     // A just-created item has no purchase date or serial number; brand and model are whatever the homeowner entered. No version is
     // stamped (no extra read): the entity validator still confirms the item exists in this property before anything is offered.
     suggestedNextActionCandidates: inventoryMissingDetailCandidates({ id: itemId, name: input.name, brand: input.brand, model: input.model }, { propertyId, sourceOperationId: 'INVENTORY_ITEM_CREATE' }),
@@ -700,7 +699,7 @@ async function confirmPropertyAreaCapture(ctx: ConfirmCapabilityContext): Promis
       actions: [],
     },
     areaProgressBlock(propertyId, state.scope, progress, progress.askable.length === 0, true)],
-    suggestions: ['How complete is my home record?'],
+    suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {

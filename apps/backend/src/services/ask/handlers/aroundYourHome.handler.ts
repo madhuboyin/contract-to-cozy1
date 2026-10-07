@@ -80,7 +80,7 @@ export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propert
     status: coverageCurrent ? 'ANSWERED' : 'READY_WITH_LIMITATIONS',
     reasonCode: active.length ? 'NEIGHBORHOOD_CHANGES_FOUND' : sourceCount ? 'NEIGHBORHOOD_NO_NEW_CHANGES' : 'NEIGHBORHOOD_COVERAGE_NOT_CONFIGURED',
     blocks,
-    suggestions: ['What is happening near my home?', 'Show my home event radar feed'],
+    suggestions: [],
   };
 }
 

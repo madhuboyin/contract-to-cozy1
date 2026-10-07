@@ -152,7 +152,7 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string):
     reasonCode: `BREAK_EVEN_${breakEven.status}`,
     contextVersion: dto.ownershipCostContext.calculationFingerprint,
     blocks,
-    suggestions: ['Should I sell, hold, or rent this home?', 'What does this home cost me each year?'],
+    suggestions: [],
   };
 }
 
@@ -227,7 +227,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'NO_MORTGAGE',
       blocks: [{ type: 'SUMMARY', id: 'refinance-not-applicable', title: 'No mortgage is recorded for this home', body: 'A mortgage refinance analysis does not apply unless the financing profile is corrected to show an active mortgage.', tone: 'DEFAULT', actions: [{ id: 'review-financing', label: 'Review financing profile', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'SECONDARY' }] }],
-      suggestions: ['Show other home savings opportunities'],
+      suggestions: [],
     };
   }
 
@@ -264,7 +264,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
         confirmationText: 'I confirm these mortgage details are accurate enough to save to this home’s Financing Profile.',
         expectedContextVersion: financialContext.contextVersion,
       }],
-      suggestions: ['Use the full Financing Profile instead'],
+      suggestions: [],
     };
   }
 
@@ -272,7 +272,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
     return {
       status: 'UNAVAILABLE', reasonCode: 'MARKET_RATE_UNAVAILABLE', contextVersion: financialContext.contextVersion,
       blocks: [{ type: 'SUMMARY', id: 'refinance-market-unavailable', title: 'A current governed mortgage-rate benchmark is unavailable', body: 'Your loan details are ready, but Ask will not use model knowledge or an undated rate as the market benchmark. Try again after the Mortgage Refinance Radar receives a dated source snapshot.', tone: 'CAUTION', actions: [{ id: 'open-radar', label: 'Open Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] }],
-      suggestions: ['What rate would make refinancing worth reviewing?'],
+      suggestions: [],
     };
   }
 
@@ -323,7 +323,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
           body: 'This models a hypothetical rate and term only. Actual eligibility, APR, and closing costs depend on lender underwriting. Nothing here changes your recorded mortgage facts or enables rate monitoring.',
           severity: 'INFO', suggestions: [],
         }],
-        suggestions: ['Is refinancing worth it right now?', 'Notify me when rates reach this level'],
+        suggestions: [],
       };
     } catch (error) {
       // Best-effort: a scenario computation failure must not break the
@@ -363,7 +363,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
     }, {
       type: 'BOUNDARY', id: 'refinance-boundary', title: 'Planning estimate—not a loan offer', body: 'Actual eligibility, APR, closing costs, taxes, insurance, points, credits, and available rates depend on lender underwriting and a formal Loan Estimate. Compare offers before making a financial commitment.', severity: 'INFO', suggestions: [],
     }],
-    suggestions: ['What rate would open a stronger opportunity?', 'Show me the Mortgage Refinance Radar'],
+    suggestions: [],
   };
 }
 
@@ -382,7 +382,7 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
       status: 'NEEDS_CLARIFICATION', reasonCode: 'RATE_THRESHOLD_REQUIRED',
       ...durableFreeTextClarification('REFINANCE_RATE_MONITOR', 'What mortgage-rate threshold and term should trigger the alert?'),
       blocks: [{ type: 'SUMMARY', id: 'rate-monitor-threshold-needed', title: 'What rate should trigger the alert?', body: 'Enter a mortgage benchmark threshold such as “Notify me when 30-year rates reach 5.5%.”', tone: 'CAUTION', actions: [] }],
-      suggestions: ['Notify me when 30-year rates reach 5.5%', 'Notify me when 15-year rates reach 4.75%'],
+      suggestions: [],
     };
   }
   const product = /\b15[ -]?year\b/i.test(message) ? RefinanceRateMonitorProduct.FIXED_15_YEAR : RefinanceRateMonitorProduct.FIXED_30_YEAR;
@@ -391,7 +391,7 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
     return {
       status: 'UNAVAILABLE', reasonCode: !preference.recipientInRolloutCohort ? 'REFINANCE_ALERT_ROLLOUT_UNAVAILABLE' : 'REFINANCE_ALERT_DELIVERY_UNAVAILABLE',
       blocks: [{ type: 'SUMMARY', id: 'rate-monitor-unavailable', title: 'Email rate alerts are not available for this account yet', body: 'Mortgage Refinance Radar can still show the latest governed benchmark and personalized review threshold in the app. Ask will not claim an external notification is active until delivery eligibility is confirmed.', tone: 'CAUTION', actions: [{ id: 'open-radar', label: 'Open Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] }],
-      suggestions: ['Is refinancing worth reviewing now?'],
+      suggestions: [],
     };
   }
   const confirmationVersion = 1;

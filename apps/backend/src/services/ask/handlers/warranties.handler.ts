@@ -264,7 +264,7 @@ export function warrantiesFromRecords(input: {
         body: `This home has ${records.length} recorded ${records.length === 1 ? 'warranty' : 'warranties'}, but none match this request. That reflects the Home Record only: it does not mean anything is or is not covered.`,
         tone: 'DEFAULT', actions: [openPage],
       }, BOUNDARY],
-      suggestions: ['Show my warranties'],
+      suggestions: [],
     };
   }
 
@@ -324,7 +324,7 @@ export function warrantiesFromRecords(input: {
     reasonCode: count('NEEDS_REVIEW') ? 'WARRANTY_DATES_NEED_REVIEW' : undefined,
     ...(viewState ? { parameters: { viewState } } : {}),
     blocks,
-    suggestions: ['Which warranties expire within 60 days?'],
+    suggestions: [],
   };
 }
 

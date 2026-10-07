@@ -35,7 +35,7 @@ async function documentPromotionReviewResult(propertyId: string): Promise<AskOpe
   const candidates = await pendingDocumentPromotionCandidates(propertyId);
   const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
   if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }], suggestions: [] };
-  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: candidates.slice(0, 2).map((candidate) => `Confirm document candidate ${candidate.id}`) };
+  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: [] };
 }
 
 async function documentPromotionConfirmResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
@@ -236,7 +236,7 @@ async function documentLookupResult(userId: string, propertyId: string, message:
         body: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}, but none match this request.`,
         tone: 'DEFAULT', actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }],
       }, DOCUMENT_LOOKUP_BOUNDARY],
-      suggestions: ['Show my documents'],
+      suggestions: [],
     };
   }
 
@@ -308,7 +308,7 @@ async function documentLookupResult(userId: string, propertyId: string, message:
     contextVersion: createHash('sha256').update(JSON.stringify(documents.map((document) => ({ id: document.id, source: document.source, verification: document.verification, needsReview: document.needsReview, updatedAt: document.updatedAt })))).digest('hex'),
     parameters: { viewState },
     blocks,
-    suggestions: ['Open Home Records'],
+    suggestions: [],
   };
 }
 

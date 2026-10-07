@@ -42,7 +42,7 @@ export function negotiationShieldCasesFromView(cases: readonly NegotiationShield
         body: 'Negotiation Shield reviews a contractor quote, a premium increase, a claim settlement, contractor urgency pressure or a buyer inspection request before you respond. Open it to start one.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['Compare my service quotes'],
+      suggestions: [],
     };
   }
   const shown = cases.slice(0, NEGOTIATION_SHIELD_ASK_LIMIT);
@@ -89,7 +89,7 @@ export function negotiationShieldCasesFromView(cases: readonly NegotiationShield
     actions: [],
   });
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_CASES_READY', blocks, suggestions: ['Compare my service quotes'] };
+  return { status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_CASES_READY', blocks, suggestions: [] };
 }
 
 async function negotiationShieldCasesResult(propertyId: string): Promise<AskOperationResult> {

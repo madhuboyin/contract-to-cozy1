@@ -89,7 +89,7 @@ function buyerNotActiveResult(propertyId: string, contextVersion: string | null,
       tone: 'DEFAULT',
       actions: [{ id: 'open-home', label: 'Open Home', href: `/dashboard?propertyId=${encodeURIComponent(propertyId)}`, style: 'PRIMARY' }],
     }],
-    suggestions: ['What should I do next for this home?'],
+    suggestions: [],
   };
 }
 
@@ -172,7 +172,7 @@ async function buyerPlanStatusResult(userId: string, propertyId: string): Promis
       },
       BUYER_PROFESSIONAL_BOUNDARY,
     ],
-    suggestions: hasOpenWork ? ['What is due before closing?', 'Which transaction documents are missing?'] : [],
+    suggestions: [],
   };
 }
 
@@ -351,7 +351,7 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
     contextVersion: data.contextVersion,
     parameters: { viewState },
     blocks,
-    suggestions: ['What should I do next for this purchase?', 'Which transaction documents are missing?'],
+    suggestions: [],
   };
 }
 
@@ -389,7 +389,7 @@ async function buyerDocumentReadinessResult(userId: string, propertyId: string):
         ],
       },
     ],
-    suggestions: ['What is due before closing?', 'Which inspection findings still need a decision?'],
+    suggestions: [],
   };
 }
 
@@ -427,7 +427,7 @@ async function buyerInspectionReviewResult(userId: string, propertyId: string): 
       },
       BUYER_PROFESSIONAL_BOUNDARY,
     ],
-    suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
+    suggestions: [],
   };
 }
 
@@ -446,7 +446,7 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
         body: 'Completing a Buyer Plan task changes the shared closing record. Viewers can review the plan but cannot change it.',
         tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
 
@@ -460,7 +460,7 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
         body: 'No pending, in-progress, or blocked task is recorded for this purchase. Ask will not create a completion without a canonical task.',
         tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
       }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   // FRD v1.46: a row action names its task by id. It must never fall through to text matching or to "the only open
@@ -473,7 +473,7 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
         body: 'It was completed, marked not needed, or removed after this list was shown. Nothing was changed.',
         tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['What is due before closing?'],
+      suggestions: [],
     };
   }
   const matched = launchedTaskId
@@ -487,7 +487,7 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
         body: 'Ask could not identify one open task with enough confidence. Name the exact task, or open the plan and complete it directly.',
         tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan instead', href: planHref, style: 'SECONDARY' }],
       }],
-      suggestions: openTasks.slice(0, 3).map((task) => `Mark the ${task.title} buyer plan task complete`),
+      suggestions: [],
     };
   }
 
@@ -551,7 +551,7 @@ async function buyerTaskCreateResult(userId: string, propertyId: string, message
         body: 'Adding a task changes the shared Buyer Plan. Viewers can review the plan but cannot change it.',
         tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   const title = extractBuyerTaskTitle(message);
@@ -563,7 +563,7 @@ async function buyerTaskCreateResult(userId: string, propertyId: string, message
         type: 'SUMMARY', id: 'buyer-task-create-title', title: 'Name the closing checklist item', body: 'Nothing has been created yet. Name the task, then review it before it is saved.',
         tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan instead', href: planHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['Add final walkthrough photos to my buyer plan'],
+      suggestions: [],
     };
   }
   const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } });
@@ -611,7 +611,7 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
         body: 'Updating a task changes the shared Buyer Plan. Viewers can review the plan but cannot change it.',
         tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   const [allTasks, members] = await Promise.all([
@@ -632,7 +632,7 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
           id: task.id, title: task.title, description: task.dueAt ? `Due ${humanDate(task.dueAt)}` : 'No due date',
           meta: [task.priority, task.status], status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
         })) }], actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
-      }], suggestions: openTasks.slice(0, 3).map((task) => `Reschedule the ${task.title} buyer plan task`),
+      }], suggestions: [],
     };
   }
   const action = maintenanceUpdateAction(message);
@@ -650,7 +650,7 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
       blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-value', title: `What should change for ${matched.title}?`, body: action === 'RESCHEDULE'
         ? 'Include a date such as 2026-10-15.'
         : 'Name an active household member or use their email address.', tone: 'CAUTION', actions: [] }],
-      suggestions: action === 'ASSIGN' ? members.slice(0, 3).map((member) => `Assign ${matched.title} to ${member.user.email}`) : [],
+      suggestions: [],
     };
   }
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
@@ -730,7 +730,7 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
     status: 'ANSWERED',
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['What should I do next for this purchase?', 'What is due before closing?'],
+    suggestions: [],
   };
 }
 
@@ -751,7 +751,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
         body: 'No lender, appraisal, or underwriting steps apply. Financing readiness tracking is for financed purchases only.',
         tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
       }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   if (readinessData.purchasePath === 'UNKNOWN' || !readinessData.readiness) {
@@ -762,7 +762,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
         body: 'Record whether this purchase is financed or cash, then select a confirmed Loan Estimate to track appraisal and underwriting readiness.',
         tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
       }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   const readiness = readinessData.readiness as unknown as { appraisalStatus: string; underwritingStatus: string; clearToCloseRecordedAt: string | null; conditions: Array<{ id: string; title: string; notes: string | null; dueAt: string | null; blocking: boolean; status: string }> };
@@ -790,7 +790,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
     reasonCode: blockingConditions.length ? 'BUYER_FINANCING_HAS_BLOCKERS' : undefined,
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+    suggestions: [],
   };
 }
 
@@ -807,7 +807,7 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_TITLE_ESCROW_NOT_RECORDED',
       blocks: [{ type: 'SUMMARY', id: 'buyer-title-unrecorded', title: 'Title and escrow readiness has not been recorded yet', body: 'Add the responsible title, attorney, or escrow contact to start tracking readiness.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   const workspace = titleData.workspace as unknown as { titleReviewStatus: string; closingAppointmentAt: string | null; issues: Array<{ id: string; title: string; dueAt: string | null; blocking: boolean; status: string }> };
@@ -835,7 +835,7 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
     reasonCode: openBlockingIssues.length ? 'BUYER_TITLE_ESCROW_HAS_BLOCKERS' : undefined,
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+    suggestions: [],
   };
 }
 
@@ -853,7 +853,7 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_WALKTHROUGH_NOT_SCHEDULED',
       blocks: [{ type: 'SUMMARY', id: 'buyer-walkthrough-unscheduled', title: 'The final walkthrough has not been scheduled yet', body: 'Schedule the walkthrough close to closing and record attendees before it happens.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   const openIssues = workspace.issues.filter((issue) => !['RESOLVED', 'ROUTED'].includes(issue.status));
@@ -878,7 +878,7 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
     reasonCode: openIssues.length ? 'BUYER_WALKTHROUGH_HAS_ISSUES' : undefined,
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+    suggestions: [],
   };
 }
 
@@ -896,7 +896,7 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_DISCLOSURE_NOT_RECORDED',
       blocks: [{ type: 'SUMMARY', id: 'buyer-disclosure-unrecorded', title: 'No Closing Disclosure has been recorded yet', body: 'Upload or manually enter the latest Closing Disclosure once your lender or closing professional sends it.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   const outstanding: string[] = [];
@@ -917,7 +917,7 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
     reasonCode: outstanding.length ? 'BUYER_DISCLOSURE_FUNDS_NOT_READY' : undefined,
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['What is due before closing?', 'What do I need for closing day?'],
+    suggestions: [],
   };
 }
 
@@ -996,7 +996,7 @@ async function buyerClosingDayReadinessResult(userId: string, propertyId: string
     reasonCode: blockers.length ? 'BUYER_CLOSING_DAY_HAS_BLOCKERS' : undefined,
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+    suggestions: [],
   };
 }
 
@@ -1015,7 +1015,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_CONTRACT_NOT_CONFIRMED',
       blocks: [{ type: 'SUMMARY', id: 'buyer-contract-unconfirmed', title: 'No confirmed contract revision is recorded yet', body: 'Upload or record the accepted contract and confirm its extracted dates and terms.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
-      suggestions: ['What should I do next for this purchase?'],
+      suggestions: [],
     };
   }
   const openContingencies = current.contingencies.filter((item) => item.status === 'ACTIVE');
@@ -1043,7 +1043,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
     reasonCode: conflicts.length ? 'BUYER_CONTRACT_HAS_CONFLICTS' : openContingencies.length ? 'BUYER_CONTRACT_HAS_OPEN_CONTINGENCIES' : undefined,
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['What is due before closing?', 'What should I do next for this purchase?'],
+    suggestions: [],
   };
 }
 
@@ -1088,7 +1088,7 @@ async function buyerNegotiationReadinessResult(userId: string, propertyId: strin
     reasonCode: pendingResponse.length ? 'BUYER_NEGOTIATION_AWAITING_RESPONSE' : undefined,
     contextVersion: data.contextVersion,
     blocks,
-    suggestions: ['Which inspection findings still need a decision?', 'What is due before closing?'],
+    suggestions: [],
   };
 }
 
@@ -1128,7 +1128,7 @@ async function buyerCostReadinessResult(userId: string, propertyId: string): Pro
     // tasks -- the response itself already covers "what to do next" via
     // the SUMMARY block's own "Add an estimated cost..." CTA in that case,
     // so a chat-level suggestion has nothing genuinely relevant to add.
-    suggestions: costedTasks.length ? ['What is due before closing?', 'What should I do next for this purchase?'] : [],
+    suggestions: [],
   };
 }
 
@@ -1147,7 +1147,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
       blocks: [{ type: 'SUMMARY', id: 'buyer-finding-disposition-permission', title: 'A contributor or owner needs to classify this finding', body: 'Classifying a finding changes the shared inspection and closing record. Viewers can review but cannot change it.', tone: 'CAUTION', actions: [{ id: 'open-inspection-hub', label: 'Review Inspection Hub', href: inspectionHref, style: 'SECONDARY' }] }],
-      suggestions: ['Which inspection findings still need a decision?'],
+      suggestions: [],
     };
   }
   const findings = await prisma.inspectionFinding.findMany({
@@ -1158,7 +1158,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'NO_OPEN_FINDINGS',
       blocks: [{ type: 'SUMMARY', id: 'buyer-finding-disposition-empty', title: 'No open inspection finding is available to classify', body: 'Confirm an inspection report first, or all findings are already dispositioned.', tone: 'DEFAULT', actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }] }],
-      suggestions: ['Which inspection findings still need a decision?'],
+      suggestions: [],
     };
   }
   const disposition = buyerFindingDispositionFromMessage(message);
@@ -1175,7 +1175,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
           meta: [finding.severity], status: finding.buyerDisposition, href: inspectionHref,
         })) }], actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub instead', href: inspectionHref, style: 'SECONDARY' }],
       }],
-      suggestions: findings.slice(0, 3).map((finding) => `Move the ${finding.homeSystem} finding into my post-close plan`),
+      suggestions: [],
     };
   }
   const confirmationVersion = 1;
@@ -1210,7 +1210,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
     return {
       status: 'OUT_OF_SCOPE', reasonCode: 'BUYER_CLOSE_REQUIRES_DEDICATED_TOOL',
       blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-close-redirect', title: 'Confirm closing in the Closing Day Companion', body: 'Recording the professional close requires the closing-day identification, funds, and wire-fraud checklist. Ask cannot complete this transition directly.', tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Closing Day Companion', href: planHref, style: 'PRIMARY' }] }],
-      suggestions: ['What do I need for closing day?'],
+      suggestions: [],
     };
   }
   if (/\b(?:pause|resume)\b/i.test(message)) {
@@ -1219,7 +1219,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
       return {
         status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
         blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-pause-permission', title: `Only the property owner can ${isResume ? 'resume' : 'pause'} this purchase`, body: `${isResume ? 'Resuming' : 'Pausing'} this purchase requires owner permission.`, tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }] }],
-        suggestions: ['What should I do next for this purchase?'],
+        suggestions: [],
       };
     }
     const confirmationVersion = 1;
@@ -1247,7 +1247,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
       return {
         status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
         blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-cancel-permission', title: 'Only the property owner can cancel this purchase', body: 'Cancelling this purchase requires owner permission.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }] }],
-        suggestions: ['What should I do next for this purchase?'],
+        suggestions: [],
       };
     }
     const reasonMatch = message.match(/\bcancel\b.{0,10}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|closing)\b\s*[:\-]?\s*(.*)$/i);
@@ -1257,7 +1257,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
         status: 'NEEDS_CLARIFICATION', reasonCode: 'BUYER_CANCEL_REASON_REQUIRED',
         ...durableFreeTextClarification('BUYER_LIFECYCLE_UPDATE', 'Why is this purchase being cancelled? A short reason is required.'),
         blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-cancel-reason', title: 'Why is this purchase being cancelled?', body: 'A short reason (at least 5 characters) is required and is preserved with the cancelled journey.', tone: 'CAUTION', actions: [] }],
-        suggestions: ['Cancel this purchase: financing fell through'],
+        suggestions: [],
       };
     }
     const confirmationVersion = 1;

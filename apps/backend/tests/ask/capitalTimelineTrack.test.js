@@ -97,8 +97,8 @@ test('phrasings that scored below the relevance floor with the earlier answer ar
   }
 });
 
-test('repair-or-replace follow-up names a real capital-plan item instead of asking for an ambiguous oldest system', () => {
+test('capital planning no longer emits legacy raw repair-or-replace follow-ups', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/capitalPlanning.handler.ts'), 'utf8');
-  assert.match(source, /`Should I repair or replace \$\{firstNamedItem\}\?`/);
+  assert.doesNotMatch(source, /Should I repair or replace/);
   assert.doesNotMatch(source, /Should I repair or replace my oldest system\?/);
 });

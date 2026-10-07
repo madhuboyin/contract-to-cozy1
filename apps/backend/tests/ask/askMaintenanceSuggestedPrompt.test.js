@@ -7,7 +7,6 @@ const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingC
 const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
 const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
 const { matchesMaintenanceStatusAnswerContract } = require('../../src/services/ask/askMaintenanceIntent.ts');
-const { suppressRepeatedAskSuggestions } = require('../../src/services/ask/askSuggestionPolicy.ts');
 const {
   attachAskAuthoritativeSourceEvidence,
   completedAskAuthoritativeSourceEvidence,
@@ -135,17 +134,4 @@ test('explicit operation selection does not override a clearly unrelated answer'
     },
   });
   assert.notEqual(relevance.outcome, 'PASS');
-});
-
-test('follow-up suggestions remove current, recent, and duplicate prompts', () => {
-  const filtered = suppressRepeatedAskSuggestions({
-    status: 'ANSWERED', blocks: [],
-    suggestions: [
-      'Show incomplete inventory records',
-      'Which systems are nearing end of life?',
-      'List all appliances',
-      'List all appliances',
-    ],
-  }, 'Show incomplete inventory records', ['List all appliances']);
-  assert.deepEqual(filtered.suggestions, ['Which systems are nearing end of life?']);
 });

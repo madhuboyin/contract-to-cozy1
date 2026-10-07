@@ -52,7 +52,7 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
         body: 'Price Finalization records the price and terms you accept from a vendor before booking the work. Open it to save one.',
         tone: 'DEFAULT', actions: [openAction],
       }, boundary],
-      suggestions: ['Compare my service quotes'],
+      suggestions: [],
     };
   }
   const row = (record: PriceFinalizationView) => {
@@ -103,7 +103,7 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
       .map((section) => ({ id: `price-finalization-${section.status.toLowerCase()}`, title: section.title, count: section.items.length, items: section.items })),
     actions: [],
   }, boundary);
-  return { status: 'ANSWERED', reasonCode: 'PRICE_FINALIZATIONS_READY', blocks, suggestions: ['Compare my service quotes'] };
+  return { status: 'ANSWERED', reasonCode: 'PRICE_FINALIZATIONS_READY', blocks, suggestions: [] };
 }
 
 async function priceFinalizationsResult(propertyId: string, userId: string): Promise<AskOperationResult> {

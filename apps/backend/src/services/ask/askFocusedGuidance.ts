@@ -682,6 +682,6 @@ export function buildFocusedHomeActionGuidance(
     // unrelated to the one action being viewed, and the recommended step is already the first
     // section above -- offering it again as a "Suggested next step" only misleads.
     suppressSkillHandoff: true,
-    suggestions: isPreparation ? [] : ['What else needs my attention?'],
+    suggestions: [],
   };
 }

@@ -76,6 +76,6 @@ export function buildMaintenanceImportanceResult(task: MaintenanceImportanceTask
       { type: 'SUMMARY', id: 'maintenance-task-importance', title: `Why “${task.title}” is on your list`, body, tone: 'DEFAULT', actions: [] },
       { type: 'EVIDENCE', id: 'maintenance-task-importance-evidence', title: 'Sources used', items: [{ label: task.title, source: 'Maintenance record (exact task)', observedAt: task.updatedAt.toISOString() }] },
     ],
-    suggestions: ['What maintenance is pending?'],
+    suggestions: [],
   };
 }

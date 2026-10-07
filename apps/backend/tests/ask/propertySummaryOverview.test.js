@@ -15,7 +15,7 @@ const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const getPropertyContextModule = require('../../src/modules/propertyContext/application/getPropertyContext.ts');
 const evaluateModule = require('../../src/modules/propertyContext/application/evaluateFeatureContext.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewMissingLine, propertyOverviewStatusObservation, propertyOverviewSuggestions } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
+const { propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewMissingLine, propertyOverviewStatusObservation } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
 const { PROPERTY_RECORD_CONTEXT_SCOPES } = require('../../src/services/propertyRecordOverview.service.ts');
 const { getContextCompleteness } = require('../../src/modules/propertyContext/application/getContextCompleteness.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
@@ -87,11 +87,6 @@ test('propertyOverviewStatusObservation is one priority-ordered sentence, never 
   assert.equal(propertyOverviewStatusObservation(3), '3 home details still need review, but nothing in the current record suggests an urgent issue.');
 });
 
-test('propertyOverviewSuggestions offers two or three contextual follow-ups, not a catalog of every domain', () => {
-  assert.deepEqual(propertyOverviewSuggestions(0), ['Show me my home by room.', 'What changed recently?']);
-  assert.deepEqual(propertyOverviewSuggestions(2), ['What details are missing?', 'Show me my home by room.', 'What changed recently?']);
-});
-
 test('a vague overview question: a headline naming the home, a scannable facts table, one status observation, no generic CTA', async () => {
   const facts = { 'core.dwellingType': { state: 'KNOWN' } };
   install(facts);
@@ -105,7 +100,7 @@ test('a vague overview question: a headline naming the home, a scannable facts t
   assert.deepEqual(summary.actions, []);
   assert.deepEqual(result.captureRequests, []);
   assert.equal(result.followUp, null, 'Property Summary always declines a handoff');
-  assert.deepEqual(result.suggestions, propertyOverviewSuggestions(pending));
+  assert.deepEqual(result.suggestions, []);
   const factsTable = result.blocks.find((block) => block.id === 'property-summary-facts');
   assert.equal(factsTable.type, 'TABLE');
   assert.equal(factsTable.preferredPresentation, 'TABLE');

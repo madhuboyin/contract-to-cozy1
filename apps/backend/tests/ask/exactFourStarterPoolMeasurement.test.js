@@ -320,12 +320,18 @@ test('MEASUREMENT (PROPERTY_SUMMARY supplies TWO starters): the largest operatio
   assert.equal(await minimalPoolSize({ grouped: true, withCurrentRemoval: true }), 13);
 });
 
-test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds four existing non-starter outcomes (plus the seven approved starters), which a rule keyed on repeatability would also change', () => {
+test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds seven non-starter outcomes (plus the seven approved starters), which a rule keyed on repeatability would also change', () => {
   const nonStarter = [...outcomes.REPEATABLE_OUTCOMES].filter((key) => !outcomes.CURATED_STARTER_OUTCOME_KEYS.includes(key)).sort();
   assert.deepEqual(nonStarter, [
-    'INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD', 'MAINTENANCE_TASK_CREATE:RESTART_AFTER_EXPIRY', 'QUOTE_COMPARISON_CREATE:RESTART_AFTER_EXPIRY', 'REFINANCE_RATE_MONITOR:RESTART_AFTER_EXPIRY',
+    'CAPITAL_RESERVE_PLAN:REVIEW_CAPITAL_OUTLOOK',
+    'INSPECTION_FINDINGS:REVIEW_OPEN_FINDINGS',
+    'INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD',
+    'MAINTENANCE_TASK_CREATE:RESTART_AFTER_EXPIRY',
+    'QUOTE_COMPARISON_CREATE:RESTART_AFTER_EXPIRY',
+    'REFINANCE_RATE_MONITOR:RESTART_AFTER_EXPIRY',
+    'WARRANTY_LOOKUP:REVIEW_EXPIRING_WARRANTIES',
   ]);
-  // The four existing outcomes are repeatable but NOT prompt-history exempt; the seven approved starters are BOTH.
+  // These seven outcomes are repeatable but NOT prompt-history exempt; the seven approved starters are BOTH.
   for (const key of nonStarter) assert.equal(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), false, key);
   for (const key of outcomes.CURATED_STARTER_OUTCOME_KEYS) { assert.ok(outcomes.REPEATABLE_OUTCOMES.has(key), key); assert.ok(outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), key); }
   // Repeatable COMPLETION ("this may be done again") and recent-PROMPT deduplication ("this exact text was just asked") are different concepts.

@@ -70,7 +70,7 @@ const withRooms = async (rows, fn) => {
   try { return await fn(() => calls); } finally { prisma.inventoryRoom.findMany = original; }
 };
 
-test('the room validator is registered; the chip survives for a current room and the plain fallback is preserved', async () => {
+test('the room validator is registered; the typed chip survives for a current room without a raw fallback', async () => {
   assert.equal(typeof getSuggestedNextActionEntityValidator('INVENTORY_ROOM'), 'function');
   await withRooms([{ id: 'room-1', propertyId: 'prop-1', updatedAt: UPDATED }], async (calls) => {
     const { result } = await finalize(roomAddItemCandidates({ id: 'room-1', name: 'Garage', updatedAt: UPDATED }, ctxArgs));
@@ -80,7 +80,7 @@ test('the room validator is registered; the chip survives for a current room and
     assert.ok(SuggestedNextActionSchema.safeParse(action).success);
     assert.equal(action.operationId, 'INVENTORY_ITEM_CREATE');
     assert.equal(action.entityContext.entityType, 'INVENTORY_ROOM');
-    assert.deepEqual(result.suggestions, ['Show my rooms']);
+    assert.deepEqual(result.suggestions, []);
   });
 });
 
@@ -105,11 +105,11 @@ test('a viewer is not offered the chip (INVENTORY_ITEM_CREATE requires a contrib
 
 // ---- wiring guards ---------------------------------------------------------------------------------------------------------
 
-test('both room receipts nominate the typed candidate and keep the plain fallback', () => {
+test('both room receipts nominate the typed candidate and emit no raw fallback', () => {
   const source = readFileSync(resolve(__dirname, '../../src/services/ask/handlers/recordConfirm.handler.ts'), 'utf8');
   assert.match(source, /roomAddItemCandidates\(\{ id: room\.id, name: renamed \? proposed : room\.name \}/);
   assert.match(source, /roomAddItemCandidates\(\{ id: roomId, name \}/);
-  assert.equal((source.match(/suggestions: \['Show my rooms'\]/g) ?? []).length, 2);
+  assert.equal((source.match(/suggestions: \['Show my rooms'\]/g) ?? []).length, 0);
 });
 
 test('the add-item handler reads the room from the launch entity the selected action supplies', () => {

@@ -116,7 +116,7 @@ export function needsPropertyResult(): AskOperationResult {
       tone: 'CAUTION',
       actions: [{ id: 'select-property', label: 'Select a home', href: '/dashboard/properties', style: 'PRIMARY' }],
     }],
-    suggestions: ['You can also ask a general home-care question without selecting a property.'],
+    suggestions: [],
   };
 }
 
@@ -128,7 +128,7 @@ export function permissionRequiredResult(authorizationFloor: HouseholdRole): Ask
       body: 'This registered operation is unavailable for your current household role. No home record was changed.',
       tone: 'CAUTION', actions: [],
     }],
-    suggestions: ['Ask a read-only question about this home'],
+    suggestions: [],
   };
 }
 

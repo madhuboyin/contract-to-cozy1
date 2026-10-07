@@ -78,7 +78,7 @@ function routingClarificationResult(
         expiresAt,
       },
     },
-    suggestions: choices.map((choice) => `Help me with ${choice}`).slice(0, 3),
+    suggestions: [],
   };
 }
 

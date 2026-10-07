@@ -250,7 +250,7 @@ export async function maintenanceTaskCreateResult(
         body: 'Creating a maintenance task changes the shared home record. Viewers can review tasks but cannot add or modify them.',
         tone: 'CAUTION', actions: [{ id: 'open-maintenance', label: 'Review maintenance', href: maintenanceHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['What maintenance is pending?'],
+      suggestions: [],
     };
   }
 
@@ -295,7 +295,7 @@ export async function maintenanceTaskCreateResult(
         destinationLabel: 'Used to prepare this task; nothing is saved until you confirm', confirmationText: null,
         expectedContextVersion: workflowVersion,
       }],
-      suggestions: ['Open Maintenance instead'],
+      suggestions: [],
     };
   }
 
@@ -471,7 +471,7 @@ export async function maintenanceTaskCompleteResult(
         body: 'Completing a task changes the shared Maintenance record and may update recurring schedules and Home Actions. Viewers remain read-only.',
         tone: 'CAUTION', actions: [{ id: 'open-maintenance', label: 'Review maintenance', href: maintenanceHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['What maintenance is pending?'],
+      suggestions: [],
     };
   }
 
@@ -488,7 +488,7 @@ export async function maintenanceTaskCompleteResult(
         body: 'No pending, in-progress, or needs-review task is recorded for this home. Ask will not create a completion without a canonical task.',
         tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open maintenance', href: maintenanceHref, style: 'PRIMARY' }],
       }],
-      suggestions: ['Create a maintenance task'],
+      suggestions: [],
     };
   }
 
@@ -523,7 +523,7 @@ export async function maintenanceTaskCompleteResult(
         destinationLabel: 'Used to prepare this completion; nothing is saved until you confirm', confirmationText: null,
         expectedContextVersion: workflowVersion,
       }],
-      suggestions: ['Open Maintenance instead'],
+      suggestions: [],
     };
   }
 
@@ -660,7 +660,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
           id: task.id, title: task.title, description: task.nextDueDate ? `Due ${humanDate(task.nextDueDate)}` : 'No due date',
           meta: [task.priority, task.status], status: task.status, href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}`,
         })) }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'SECONDARY' }],
-      }], suggestions: tasks.slice(0, 3).map((task) => `Update ${task.title}`),
+      }], suggestions: [],
     };
   }
   // Desktop's Remove is a permanent delete, which the service refuses for Action
@@ -690,7 +690,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
       status: 'NEEDS_CLARIFICATION', reasonCode: 'MAINTENANCE_UPDATE_VALUE_REQUIRED',
       ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', `What should change for ${match.title}?`),
       blocks: [{ type: 'SUMMARY', id: 'maintenance-update-value', title: `What should change for ${match.title}?`, body: action === 'ASSIGN' ? 'Name an active household member or use their email address.' : action === 'SNOOZE' ? 'Choose when reminders should resume. The task and due date will stay unchanged.' : 'Specify a new priority, recurrence, or service category.', tone: 'CAUTION', actions: [] }],
-      suggestions: action === 'ASSIGN' ? members.slice(0, 3).map((member) => `Assign ${match.title} to ${member.user.email}`) : action === 'SNOOZE' ? [`Snooze reminders for ${match.title} for one week`] : [],
+      suggestions: [],
     };
   }
   const parsed = MaintenanceTaskUpdateInputSchema.parse({
@@ -1194,11 +1194,7 @@ export async function maintenanceResult(
     contextVersion: createHash('sha256').update(JSON.stringify(tasks.map((task) => ({ id: task.id, status: task.status, updatedAt: task.updatedAt })))).digest('hex'),
     parameters: { viewState },
     blocks,
-    suggestions: [
-      ...(hasOverdueTask && !overdueOnly ? ['Show overdue tasks only'] : []),
-      ...(hasDueSoonTask && !dueSoonOnly ? ['What maintenance is due soon?'] : []),
-      ...(canManage && !creationFocus ? ['Create a maintenance task'] : []),
-    ],
+    suggestions: [],
   };
 }
 
@@ -1246,7 +1242,7 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
         body: 'Ask found no verified HVAC, roof, or water-heater inventory items to forecast maintenance for. Verify these items in your inventory to unlock predictions.',
         actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href, style: 'PRIMARY' }],
       }],
-      suggestions: ['What maintenance is pending?'],
+      suggestions: [],
     };
   }
 
@@ -1297,7 +1293,7 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
     reasonCode: overdueCount ? 'MAINTENANCE_FORECAST_HAS_OVERDUE' : 'MAINTENANCE_FORECAST_READY',
     contextVersion: createHash('sha256').update(JSON.stringify(predictions.map((prediction) => ({ id: prediction.id, status: prediction.status, updatedAt: prediction.updatedAt })))).digest('hex'),
     blocks,
-    suggestions: ['What maintenance is pending?'],
+    suggestions: [],
   };
 }
 

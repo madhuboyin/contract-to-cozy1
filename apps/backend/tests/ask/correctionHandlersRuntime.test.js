@@ -1213,7 +1213,7 @@ test('ROOM_CREATE confirm creates the room with a narrowed body and repeats the 
   assert.equal(result.reasonCode, 'ROOM_CREATED');
   assert.equal(result.blocks[0].title, 'Room added');
   assert.deepEqual(result.blocks[0].actions, [], 'the receipt keeps the homeowner in Ask');
-  assert.deepEqual(result.suggestions, ['Show my rooms']);
+  assert.deepEqual(result.suggestions, []);
   assert.deepEqual([artifactType, artifactId], ['INVENTORY_ROOM', 'room-new']);
 });
 
@@ -1370,7 +1370,7 @@ test('INVENTORY_ITEM_CREATE confirm creates the item through createItem with a n
   assert.equal(result.blocks[0].title, 'Item added');
   assert.equal(result.blocks[0].details.find((detail) => detail.label === 'Room').value, 'Kitchen');
   // The old strings named no item ("... for this inventory item"). The receipt now nominates typed candidates for the exact new item.
-  assert.deepEqual(result.suggestions, ['Show my home inventory']);
+  assert.deepEqual(result.suggestions, []);
   assert.deepEqual(result.suggestedNextActionCandidates.map((c) => [c.outcomeKey, c.entityContext.entityId, c.operationId]), [
     ['ADD_PURCHASE_DATE', 'item-new', 'INVENTORY_ITEM_CORRECT'], ['ADD_MODEL', 'item-new', 'INVENTORY_ITEM_CORRECT'], ['ADD_SERIAL_NUMBER', 'item-new', 'INVENTORY_ITEM_CORRECT'],
   ], 'brand was entered, so it is not offered');

@@ -84,7 +84,10 @@ test('a selected Reopen on a task named "Urgent: remove old paint" proposes a pl
 const clock = fixedSuggestedNextActionClock(NOW);
 const finalize = (candidates, availability = null) => finalizeSuggestedNextActionsWithReport(
   { result: { status: 'COMPLETED', blocks: [], suggestions: ['What maintenance is pending?'], suggestedNextActionCandidates: candidates }, executionId: 'exec-1', userId: 'u1', sessionId: 's1', propertyId: 'prop-1', operationId: 'MAINTENANCE_TASK_UPDATE', message: 'Cancel this maintenance task.' },
-  { clock, loadOperationAvailability: async () => new Map([['MAINTENANCE_TASK_UPDATE', availability]]), loadExecutionExpiresAt: async () => null },
+  {
+    clock, loadOperationAvailability: async () => new Map([['MAINTENANCE_TASK_UPDATE', availability]]), loadExecutionExpiresAt: async () => null,
+    loadUrgentHomeActionState: async () => ({ nowCount: 0 }),
+  },
 );
 const withTasks = async (rows, fn) => {
   const original = prisma.propertyMaintenanceTask.findMany;
@@ -95,7 +98,7 @@ const withTasks = async (rows, fn) => {
 const row = (over = {}) => ({ id: 'task-1', propertyId: 'prop-1', status: 'CANCELLED', updatedAt: UPDATED, snoozedUntil: null, ...over });
 const reopen = () => maintenanceUndoCandidates(task(), { propertyId: 'prop-1', undo: 'REOPEN' });
 
-test('the task validator is registered; the chip survives for the current task and the plain fallback is preserved', async () => {
+test('the task validator is registered; the typed chip survives without a raw fallback', async () => {
   assert.equal(typeof getSuggestedNextActionEntityValidator('MAINTENANCE_TASK'), 'function');
   await withTasks([row()], async (calls) => {
     const { result } = await finalize(reopen());
@@ -103,7 +106,7 @@ test('the task validator is registered; the chip survives for the current task a
     assert.equal(result.suggestedNextActions.length, 1);
     assert.ok(SuggestedNextActionSchema.safeParse(result.suggestedNextActions[0]).success);
     assert.equal(result.suggestedNextActions[0].outcomeKey, 'REOPEN_TASK');
-    assert.deepEqual(result.suggestions, ['What maintenance is pending?']);
+    assert.deepEqual(result.suggestions, []);
   });
 });
 

@@ -119,7 +119,7 @@ export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId:
     status: 'ANSWERED',
     reasonCode: !view.plants.length && !view.zones.length ? 'PLANT_CARE_NOTHING_TRACKED' : unavailable.length ? 'PLANT_CARE_PARTIAL_CONDITIONS' : 'PLANT_CARE_OUTLOOK_READY',
     blocks,
-    suggestions: ['What maintenance is due?'],
+    suggestions: [],
   };
 }
 

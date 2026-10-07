@@ -83,7 +83,7 @@ export function pastHazardExposureFromView(view: PastHazardView, propertyId: str
     status: coverageCurrent ? 'ANSWERED' : 'READY_WITH_LIMITATIONS',
     reasonCode: past.length || longTerm.length ? 'PAST_HAZARDS_FOUND' : coverageCurrent ? 'PAST_HAZARDS_NONE_MATCHED' : 'PAST_HAZARD_COVERAGE_LIMITED',
     blocks,
-    suggestions: ['What is happening near my home?', 'Which of my systems are unprotected?'],
+    suggestions: [],
   };
 }
 
@@ -93,7 +93,7 @@ async function pastHazardExposureResult(propertyId: string): Promise<AskOperatio
     return {
       status: 'UNAVAILABLE', reasonCode: 'REVIEWED_SOURCE_COVERAGE_REQUIRED',
       blocks: [{ type: 'SUMMARY', id: 'past-hazard-unavailable', title: 'Home Risk Replay is not available yet', body: 'This view is unavailable until reviewed live hazard source coverage is configured. Nothing here means this home has no hazard history.', tone: 'CAUTION', actions: [] }],
-      suggestions: ['What is happening near my home?'],
+      suggestions: [],
     };
   }
   return pastHazardExposureFromView(await getPastHazardExposure(propertyId), propertyId);

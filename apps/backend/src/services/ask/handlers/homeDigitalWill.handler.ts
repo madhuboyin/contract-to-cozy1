@@ -63,7 +63,7 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
         tone: 'DEFAULT',
         actions: [{ id: 'open-home-digital-will', label: 'Open Home Continuity Plan', href: pageHref, style: 'PRIMARY' }],
       }, boundary],
-      suggestions: ['What home records do I have?'],
+      suggestions: [],
     };
   }
   const handoff = evaluateHomeDigitalWillHandoffReadiness(will);
@@ -129,7 +129,7 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
     status: 'ANSWERED',
     reasonCode: handoff.state === 'READY' ? 'DIGITAL_WILL_READY' : 'DIGITAL_WILL_NEEDS_CONTEXT',
     blocks,
-    suggestions: ['What home records do I have?', 'What maintenance is due?'],
+    suggestions: [],
   };
 }
 

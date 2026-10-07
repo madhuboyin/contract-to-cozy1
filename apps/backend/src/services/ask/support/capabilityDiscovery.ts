@@ -52,7 +52,7 @@ export async function capabilityResult(userId: string, propertyId: string | null
         tone: 'CAUTION',
         actions: [{ id: 'explore-available-tools', label: 'Explore available tools', href: exploreToolsHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['Show me another available option', 'What can help with this goal instead?'],
+      suggestions: [],
     };
   }
 
@@ -64,7 +64,7 @@ export async function capabilityResult(userId: string, propertyId: string | null
         body: 'I could not identify one specific tool yet. Describe the decision, task, risk, savings goal, or major home moment you want help with.',
         tone: 'DEFAULT', actions: [{ id: 'explore-tools', label: 'Explore home tools', href: exploreToolsHref, style: 'SECONDARY' }],
       }],
-      suggestions: ['Help me compare contractor quotes', 'I want to plan future replacements', 'Can you monitor refinance rates?'],
+      suggestions: [],
     };
   }
 
@@ -150,9 +150,7 @@ export async function capabilityResult(userId: string, propertyId: string | null
     status: 'ANSWERED',
     contextVersion: readiness?.contextVersion ?? catalog.registryVersion,
     blocks,
-    suggestions: availableMatches.ambiguous
-      ? ['Help me narrow these options', 'Show only tools ready for this home']
-      : ['What information does this tool need?', 'What result will I get?', 'Show another option'],
+    suggestions: [],
   };
 }
 

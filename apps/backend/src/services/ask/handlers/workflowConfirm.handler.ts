@@ -180,7 +180,7 @@ async function confirmClaimFile(ctx: ConfirmCapabilityContext): Promise<ConfirmC
       generateChecklist: true,
     });
     artifactType = 'CLAIM'; artifactId = claim.id;
-    result = { status: 'COMPLETED', reasonCode: 'CLAIM_DRAFT_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-created-${claim.id}`, title: 'Draft claim created', status: 'COMPLETED', description: 'The canonical draft claim, checklist, timeline event, and linked Operational Work were created. Nothing was submitted to an insurer or warranty provider.', details: [{ label: 'Claim', value: claim.title }, { label: 'Status', value: String(claim.status).toLowerCase() }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['What should I gather for this claim?'] };
+    result = { status: 'COMPLETED', reasonCode: 'CLAIM_DRAFT_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-created-${claim.id}`, title: 'Draft claim created', status: 'COMPLETED', description: 'The canonical draft claim, checklist, timeline event, and linked Operational Work were created. Nothing was submitted to an insurer or warranty provider.', details: [{ label: 'Claim', value: claim.title }, { label: 'Status', value: String(claim.status).toLowerCase() }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: [] };
     // P05 fix: previously never called any reconciliation mechanism -- a
     // durable receipt existed, but the incidents/claims list the homeowner
     // may have been viewing (INCIDENT_CONTINUATION) had no read-retry path
@@ -192,7 +192,6 @@ async function confirmClaimFile(ctx: ConfirmCapabilityContext): Promise<ConfirmC
         body: 'This draft claim was created. The list you were viewing could not refresh automatically -- ask "Show my recorded claims" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'Show my recorded claims'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: claimFileRefresh.refreshedExecutions };
 }
@@ -220,7 +219,7 @@ async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<Co
       throw Object.assign(new Error(`This claim cannot be submitted yet. Finish its checklist first${items.length ? `: ${items.join('; ')}` : ''}. Nothing was changed.`), { code: 'CLAIM_SUBMIT_BLOCKED' });
     }
     artifactType = 'CLAIM'; artifactId = claim.id;
-    result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: ['Show my open claims'] };
+    result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: [] };
     // P05 fix: see confirmClaimFile's identical fix above -- same missing
     // reconciliation mechanism, same INCIDENT_CONTINUATION sibling.
     const claimTransitionRefresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -230,7 +229,6 @@ async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<Co
         body: 'This claim status change was saved. The list you were viewing could not refresh automatically -- ask "Show my open claims" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'Show my open claims'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: claimTransitionRefresh.refreshedExecutions };
 }
@@ -279,7 +277,7 @@ async function confirmInspectionFindingBatch(ctx: ConfirmCapabilityContext): Pro
       type: 'LIMITATION' as const, id: 'inspection-finding-batch-not-changed', title: `${notDone.length} finding${notDone.length === 1 ? ' was' : 's were'} not changed`, severity: 'CAUTION' as const,
       body: notDone.map((entry) => `${entry.title} ${notDoneReason[entry.outcome]}.`).slice(0, 10).join(' '),
     }] : [])],
-    suggestions: ['Show remaining inspection findings'],
+    suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
@@ -319,7 +317,7 @@ async function confirmInspectionFindingUpdate(ctx: ConfirmCapabilityContext): Pr
     }
     artifactType = 'INSPECTION_FINDING'; artifactId = finding.id;
     const findingReasonCode = action === 'ACCEPT' ? 'INSPECTION_FINDING_ACCEPTED' : action === 'DISMISS' ? 'INSPECTION_FINDING_DISMISSED' : 'INSPECTION_FINDING_RESOLVED';
-    result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection`, style: 'PRIMARY' }] }], suggestions: ['Show remaining inspection findings'] };
+    result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection`, style: 'PRIMARY' }] }], suggestions: [] };
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
     // all -- see ASK_MUTATION_IMPACT_MAP's INSPECTION_FINDING_UPDATE entry.
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -381,7 +379,7 @@ async function confirmRecallMatchUpdate(ctx: ConfirmCapabilityContext): Promise<
       description: action === 'CONFIRM' ? 'The canonical recall match now reflects a confirmed product identity.' : action === 'DISMISS' ? 'The canonical recall match and any linked maintenance task were updated.' : 'The canonical recall match now records how this recall was handled.',
       details: [{ label: 'Recall', value: match.recall.title }, { label: 'Action', value: String(action).toLowerCase() }],
       actions: [{ id: 'open-recalls', label: 'Open Recalls & Safety Alerts', href, style: 'PRIMARY' }],
-    }], suggestions: ['Show remaining recall matches'],
+    }], suggestions: [],
   };
   // Same reconciliation this whole arc's writes already use -- see ASK_MUTATION_IMPACT_MAP's RECALL_MATCH_UPDATE entry.
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -436,7 +434,7 @@ async function confirmSellerPrepItemDecision(ctx: ConfirmCapabilityContext): Pro
       details: [{ label: 'Item', value: item.title }, { label: 'Decision', value: String(action).toLowerCase() }],
       actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: saleCaseHref(execution.propertyId, item.id), style: 'PRIMARY' }],
     }],
-    suggestions: ['Check my sale readiness'],
+    suggestions: [],
   };
   // IW-FRESH-003 fix: previously called no reconciliation mechanism at all
   // -- see ASK_MUTATION_IMPACT_MAP's SELLER_PREP_ITEM_DECISION entry.
@@ -610,7 +608,7 @@ async function confirmHomeDeadlineMonitor(ctx: ConfirmCapabilityContext): Promis
     await upsertNotificationPreference(userId, { propertyId: execution.propertyId!, category: deadlineCategory, channel: 'EMAIL', enabled: true, cadence: 'IMMEDIATE', timezone: property?.timezone ?? 'UTC' });
     const href = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
     const maintenanceSource = candidate.data.sourceType === 'MAINTENANCE';
-    result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [{ id: 'manage-reminder', label: 'Manage reminder', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [`Reschedule ${task.title}`, `Archive ${task.title}`] };
+    result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [{ id: 'manage-reminder', label: 'Manage reminder', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
     artifactType = command.artifactType;
     artifactId = task.id;
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
@@ -656,7 +654,7 @@ async function confirmRefinanceRateMonitor(ctx: ConfirmCapabilityContext): Promi
     result = {
       status: 'COMPLETED', reasonCode: 'RATE_MONITOR_ACTIVE',
       blocks: [refinanceMonitorBlock(monitor, 'Mortgage-rate monitor started')],
-      confirmation: null, suggestions: ['Is refinancing worth reviewing now?'],
+      confirmation: null, suggestions: [],
     };
     artifactType = 'REFINANCE_RATE_MONITOR';
     artifactId = monitor.id;
@@ -669,7 +667,6 @@ async function confirmRefinanceRateMonitor(ctx: ConfirmCapabilityContext): Promi
         body: 'This monitor was saved. A refinance result you were viewing could not refresh automatically -- ask "Is refinancing worth reviewing now?" to see its current state.',
         severity: 'CAUTION',
       });
-      result.suggestions = [...new Set([...result.suggestions, 'Is refinancing worth reviewing now?'])];
     }
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
