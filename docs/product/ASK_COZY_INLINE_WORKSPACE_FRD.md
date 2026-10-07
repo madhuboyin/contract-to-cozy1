@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.226
+**Version:** 1.227
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.227 — DIY project commands, 7D written (step 7 complete):** an owner-run script for a throwaway Postgres covering the previous-step view and Reopen, Finish, Stop and Hand off, and recovery (writes measured by database triggers, a linked task left untouched, the outbox row left pending, Finish racing a reopen, two recoveries at once, the share locks), ten read-only queries (where the records after completions stand, invariants such as a normally completed project with no outbox row or with an unfinished step, dead-lettered requests waiting to be queued again, and reopened steps) and a rollout note. Step 7 is now built and documented; the script and queries are written and load-checked only, none of the database assertions has been run, the worker's side of a completion is not covered, and the work stays unreachable for real projects until a first template is published (O7).
 
 **Revision 1.226 — DIY project commands, 7C built:** a finished project in Ask now says in words what is known about the records that follow a completion (recording, recorded, or some could not be updated) and, when the earlier request failed, a person who can edit can ask Cozy to queue it again after a confirmation that says it only asks Cozy to try again, changes nothing about the project and verifies nothing; the receipt says only that it was queued again. A linked maintenance task whose update failed is shown on the open project's guide with the same option, because that status can only exist while the project is open; a project closed from its linked task shows its explanation and no action. The whole recovery decision (role, lookups, eligibility, re-queue) is now one transaction for the project page's retry buttons too. Tests and mutation checks pass against a database-free fake and jest; not run on real Postgres or in a browser; unreachable for real projects until a first template is published (O7).
 
