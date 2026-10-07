@@ -12,7 +12,7 @@ import { isAppliancesInsight } from './healthGapCapture';
 export const INVENTORY_ADD_ACTION_MESSAGE = 'Add an item to my home inventory.';
 
 export type HomeActionPriority = 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER';
-type FocusedAskRouting = { operationId: AskOperationId; message: string; entityType?: string; entityId?: string };
+type FocusedAskRouting = { operationId: AskOperationId; message: string; entityType?: string; entityId?: string; label?: string; keepLinkAsSecondary?: boolean };
 
 /** Keeps Ask landing section prompts aligned with the dashboard's canonical partitions. */
 export function homeActionPriorityFilter(message: string): HomeActionPriority[] | null {
@@ -181,6 +181,9 @@ export function isGroupCWholeToolDestination(action: RankedHomeAction): boolean 
   if (propertyToolPath('sale-case').test(pathname)) return true;
   if (propertyToolPath('capital-timeline').test(pathname)) return true;
   if (propertyToolPath('savings-benefits').test(pathname) && params.has('actionId')) return true;
+  // Weather/environment preparation: the checklist is answered inline, but the step tracker (check off, mark not
+  // applicable) only exists on the preparation page, which returns to Ask (`from=ask`); so the link stays, as secondary.
+  if (/^\/dashboard\/properties\/[^/]+\/environment-report(?:\/preparation)?$/.test(pathname)) return true;
   return false;
 }
 
@@ -347,6 +350,15 @@ function resolveGroupDJourneyRouting(action: RankedHomeAction): FocusedAskRoutin
   return { operationId: 'GUIDANCE_JOURNEY_CONTINUE', entityType: 'GUIDANCE_JOURNEY', entityId: action.relatedJourneyId, message: 'Continue this guided journey.' };
 }
 
+// Ownership-cost change (producer `ownership-cost-change:`): the focused answer already carries the observed change and
+// its evidence, and OWNERSHIP_COSTS shows the current per-category breakdown in Ask. The producer's destination is a
+// category tool (coverage, HOA, financing, reserve plan, ...), kept as the secondary link. A refinance-lever action
+// keeps its own, more specific Group A routing (mortgage-refinance-radar) and never reaches this.
+function resolveOwnershipCostChangeRouting(action: RankedHomeAction): FocusedAskRouting | null {
+  if (!action.lineageId.startsWith('ownership-cost-change:')) return null;
+  return { operationId: 'OWNERSHIP_COSTS', message: 'Show my home ownership costs', label: 'Show my ownership costs', keepLinkAsSecondary: true };
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -399,7 +411,8 @@ export function buildFocusedHomeActionGuidance(
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
   const groupDRouting = !groupARouting ? resolveGroupDReplacementGuidanceRouting(action) : null;
   const groupBRecordReviewRouting = !groupARouting && !groupDRouting ? resolveGroupBRecordReviewRouting(action) : null;
-  const specificRouting = groupARouting ?? groupDRouting ?? groupBRecordReviewRouting;
+  const ownershipCostRouting = !groupARouting && !groupDRouting && !groupBRecordReviewRouting ? resolveOwnershipCostChangeRouting(action) : null;
+  const specificRouting = groupARouting ?? groupDRouting ?? groupBRecordReviewRouting ?? ownershipCostRouting;
   const checklist = !specificRouting && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
@@ -450,7 +463,7 @@ export function buildFocusedHomeActionGuidance(
   const primaryAction = routing
     ? {
       id: `home-action-primary-${action.id}`,
-      label: action.primaryCta.label,
+      label: routing.label ?? action.primaryCta.label,
       interactionType: 'START_WORKFLOW' as const,
       message: routing.message,
       operationId: routing.operationId,
@@ -585,7 +598,9 @@ export function buildFocusedHomeActionGuidance(
     // round trip out of Ask -- omit the action entirely rather than demote it.
     actions: checklist || policyConflictResolvableInline || hasFeatureCapture || isInlinePersonalizationReview
       ? []
-      : acceptedWorkActions ?? (completeApplianceAction
+      : acceptedWorkActions ?? (routing?.keepLinkAsSecondary
+        ? [primaryAction, { id: `home-action-link-${action.id}`, label: action.primaryCta.label, href: action.primaryCta.href, style: 'SECONDARY' as const }]
+        : completeApplianceAction
         ? [completeApplianceAction, { ...applianceAddAction!, style: 'SECONDARY' as const }]
         : applianceAddAction ? [applianceAddAction, { ...primaryAction, style: 'SECONDARY' as const }] : [primaryAction]),
   }, {

@@ -119,6 +119,24 @@ test('a reviewed personalization recommendation has no link back to the personal
   assert.deepEqual(guidance(action).actions, []);
 });
 
+test('an ownership-cost change continues in Ask and keeps its category tool as the secondary link', () => {
+  const action = focused(insight('Insurance up', { lineageId: 'ownership-cost-change:p1:INSURANCE', primaryCta: { kind: 'REVIEW', label: 'Review coverage and premium', href: '/dashboard/properties/p1/tools/coverage-intelligence' } }), { canContribute: true });
+  const actions = guidance(action).actions;
+  assert.deepEqual(actions.map((a) => [a.label, a.style, a.operationId ?? 'link']), [['Show my ownership costs', 'PRIMARY', 'OWNERSHIP_COSTS'], ['Review coverage and premium', 'SECONDARY', 'link']]);
+  assert.equal(actions[0].href, undefined);
+  // The refinance lever keeps its own, more specific routing.
+  const refi = guidance(focused(insight('Mortgage up', { lineageId: 'ownership-cost-change:p1:MORTGAGE', primaryCta: { kind: 'REVIEW', label: 'Compare refinance options', href: '/dashboard/properties/p1/tools/mortgage-refinance-radar' } }), { canContribute: true })).actions;
+  assert.equal(refi[0].operationId, 'REFINANCE_ANALYSIS');
+  for (const block of action.blocks) assert.ok(AskPresentationBlockSchema.safeParse(block).success, block.id);
+});
+
+test('weather preparation and environment report links are secondary, never the primary action', () => {
+  for (const href of ['/dashboard/properties/p1/environment-report/preparation?insightId=i1', '/dashboard/properties/p1/environment-report']) {
+    const actions = guidance(focused(insight('Heat', { lineageId: 'weather:1', primaryCta: { kind: 'START', label: 'Start checklist', href } }), { canContribute: true })).actions;
+    assert.deepEqual(actions.map((a) => [a.href, a.style]), [[href, 'SECONDARY']]);
+  }
+});
+
 test('the add-appliance message is the exact text the inventory handler recognises, and routes on its own', () => {
   const { INVENTORY_ADD_MESSAGE } = require('../../src/services/ask/handlers/inventory.handler.ts');
   assert.equal(INVENTORY_ADD_ACTION_MESSAGE, INVENTORY_ADD_MESSAGE, 'a drifted literal would silently stop being recognised as the declared add action');
