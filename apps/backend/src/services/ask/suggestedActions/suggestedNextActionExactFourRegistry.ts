@@ -37,7 +37,11 @@ export const OPPORTUNITY_SLOT_CLASSES: ReadonlySet<SuggestedNextActionSlotClass>
  * Registered "why now" reason tokens (plan C.15.2). A candidate's `reasonCodes` count as a why-now signal only when listed here.
  * Empty until the opportunity producer (step 4) registers its reviewed signals; tests inject their own through the policy input.
  */
-export const REGISTERED_WHY_NOW_REASONS: ReadonlySet<string> = new Set<string>();
+export const REGISTERED_WHY_NOW_REASONS: ReadonlySet<string> = new Set<string>([
+  'WHY_NOW_CAPITAL_ITEMS_UPCOMING',
+  'WHY_NOW_WARRANTY_EXPIRING',
+  'WHY_NOW_OPEN_FINDINGS',
+]);
 
 /**
  * Server-owned slot grants (plan C.15 review finding 1). A candidate's own `slotClass`, tier, source and traits are claims by the
@@ -75,6 +79,8 @@ export const PRODUCER_SLOT_GRANTS: Readonly<Record<string, ProducerSlotGrant>> =
   'profile.actionable-gaps': { allowed: new Set(['PROFILE_GAP']), fallback: 'PROFILE_GAP' },
   'handoff.skill': { allowed: new Set(['GOVERNED_CAPABILITY']), fallback: 'GOVERNED_CAPABILITY' },
   'home-actions.urgent': { allowed: new Set(['URGENT_WORK']), fallback: 'HOME_OPPORTUNITY' },
+  'home-opportunities.signals': { allowed: new Set(['HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY' },
+  'active-plan.decision-thread': { allowed: new Set(['CONTINUE_WORK']), fallback: 'HOME_OPPORTUNITY', mayClaimActiveGoalMatch: true },
   // Curated starters (inventory D-O4/D-O16): last-resort fill only. A starter producer may occupy no other slot class and claims nothing.
   'starter.seasonal-home-care': { allowed: new Set(['CURATED_STARTER']), fallback: 'HOME_OPPORTUNITY' },
   'starter.home-basics': { allowed: new Set(['CURATED_STARTER']), fallback: 'HOME_OPPORTUNITY' },

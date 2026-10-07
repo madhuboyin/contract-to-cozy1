@@ -15,6 +15,8 @@ import { ACTIONABLE_PROFILE_PRODUCER_ID, actionableProfileCandidates } from './a
 import { loadActionableProfileState } from './actionableCompletenessLoader';
 import { SKILL_HANDOFF_PRODUCER_ID, skillHandoffCandidates } from './skillHandoffCandidates';
 import { URGENT_WORK_PRODUCER_ID, loadUrgentHomeActionState, urgentWorkCandidates } from './urgentWorkCandidates';
+import { HOME_OPPORTUNITY_PRODUCER_ID, homeOpportunityCandidates, loadHomeOpportunityState } from './homeOpportunityCandidates';
+import { ACTIVE_PLAN_PRODUCER_ID, activePlanCandidates, loadActivePlanState } from './activePlanCandidates';
 
 export interface ProducerContext {
   result: AskOperationResult;
@@ -25,6 +27,8 @@ export interface ProducerContext {
   userId: string;
   loadActionableProfileState: typeof loadActionableProfileState;
   loadUrgentHomeActionState: typeof loadUrgentHomeActionState;
+  loadHomeOpportunityState: typeof loadHomeOpportunityState;
+  loadActivePlanState: typeof loadActivePlanState;
 }
 
 export interface SuggestedNextActionProducer {
@@ -83,6 +87,24 @@ export const urgentWorkProducer: SuggestedNextActionProducer = {
     : [],
 };
 
+export const homeOpportunityProducer: SuggestedNextActionProducer = {
+  id: HOME_OPPORTUNITY_PRODUCER_ID,
+  source: 'PLATFORM_STATE',
+  essential: false,
+  nominate: ({ userId, propertyId, loadHomeOpportunityState: loadState }) => propertyId
+    ? homeOpportunityCandidates({ userId, propertyId }, loadState)
+    : [],
+};
+
+export const activePlanProducer: SuggestedNextActionProducer = {
+  id: ACTIVE_PLAN_PRODUCER_ID,
+  source: 'ACTIVE_GOAL',
+  essential: false,
+  nominate: ({ propertyId, loadActivePlanState: loadState }) => propertyId
+    ? activePlanCandidates({ propertyId }, loadState)
+    : [],
+};
+
 export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [
-  resultCandidatesProducer, skillHandoffProducer, urgentWorkProducer, actionableProfileProducer, ...starterProducers,
+  resultCandidatesProducer, skillHandoffProducer, urgentWorkProducer, activePlanProducer, actionableProfileProducer, homeOpportunityProducer, ...starterProducers,
 ];

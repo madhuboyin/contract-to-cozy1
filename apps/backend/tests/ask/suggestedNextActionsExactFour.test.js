@@ -374,7 +374,9 @@ test('confidence alone never reserves the opportunity slot; a contextual signal 
   }
   const unregisteredReason = run([...gaps, named('opp', 'HOME_OPPORTUNITY', { ...signals({}), reasonCodes: ['WHY_NOW_TEST_SIGNAL'] })]);
   assert.equal(unregisteredReason.exactFour.opportunityReserved, false, 'only registered why-now tokens count');
-  assert.equal(registry.REGISTERED_WHY_NOW_REASONS.size, 0, 'no why-now token is registered until the opportunity producer review');
+  assert.deepEqual([...registry.REGISTERED_WHY_NOW_REASONS].sort(), [
+    'WHY_NOW_CAPITAL_ITEMS_UPCOMING', 'WHY_NOW_OPEN_FINDINGS', 'WHY_NOW_WARRANTY_EXPIRING',
+  ]);
 });
 
 // ---- determinism ---------------------------------------------------------------------------------------------------------

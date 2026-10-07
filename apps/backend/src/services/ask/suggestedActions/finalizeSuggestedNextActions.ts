@@ -42,6 +42,8 @@ import { loadCurrentOutcomeKeyHashes } from './suggestedNextActionHistory';
 import { systemSuggestedNextActionClock, type SuggestedNextActionClock } from './suggestedNextActionClock';
 import { recordSuggestedActionImpressions, recordSuggestedActionSuppression } from './suggestedActionAnalytics';
 import { loadUrgentHomeActionState } from './urgentWorkCandidates';
+import { loadHomeOpportunityState } from './homeOpportunityCandidates';
+import { loadActivePlanState } from './activePlanCandidates';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
@@ -94,6 +96,10 @@ export interface FinalizeSuggestedNextActionsDeps {
   loadActionableProfileState?: typeof loadActionableProfileState;
   /** Canonical Home Action NOW-bucket state for the governed urgent-work producer. */
   loadUrgentHomeActionState?: typeof loadUrgentHomeActionState;
+  /** Approved O1-O3 why-now state from one authorized Property Context read. */
+  loadHomeOpportunityState?: typeof loadHomeOpportunityState;
+  /** Canonical cross-session active decision-thread state. */
+  loadActivePlanState?: typeof loadActivePlanState;
   entityValidatorFor?: typeof getSuggestedNextActionEntityValidator;
   /** Monotonic ms clock for the pipeline budget. */
   nowMs?: () => number;
@@ -163,6 +169,8 @@ export async function finalizeSuggestedNextActionsWithReport(
         userId: input.userId,
         loadActionableProfileState: deps.loadActionableProfileState ?? loadActionableProfileState,
         loadUrgentHomeActionState: deps.loadUrgentHomeActionState ?? loadUrgentHomeActionState,
+        loadHomeOpportunityState: deps.loadHomeOpportunityState ?? loadHomeOpportunityState,
+        loadActivePlanState: deps.loadActivePlanState ?? loadActivePlanState,
       }));
     } catch (error) {
       report.droppedProducers.push({ producer: producer.id, reason: 'ERROR' });
