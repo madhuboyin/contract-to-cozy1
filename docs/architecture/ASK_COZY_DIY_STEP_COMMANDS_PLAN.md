@@ -1,7 +1,7 @@
 # `DIY_STEP_UPDATE`: Marking a Step Done or Skipping It From Ask — Step 6 Implementation Plan
 
 **Date:** October 6, 2026
-**Status:** **Approved with three corrections, now incorporated (§3.2, §3.9, §10): S6-1 to S6-4 and S6-6 to S6-12 approved; S6-5 approved with transaction-bound authorization and the atomic Ask policy guard.** The 6-0 trace is recorded in §12; **6a (backend) and the 6b frontend change are built and recorded in §13, uncommitted; 6c is not started.** **It needs no schema change.**
+**Status:** **Approved with three corrections, now incorporated (§3.2, §3.9, §10): S6-1 to S6-4 and S6-6 to S6-12 approved; S6-5 approved with transaction-bound authorization and the atomic Ask policy guard.** The 6-0 trace is recorded in §12; **6a (backend) and the 6b frontend change are built and recorded in §13, uncommitted; 6c (script, queries, runbook) is written, owner-run, not executed.** **It needs no schema change.**
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 6 (sequencing row "2": decisions O3, O8, O10, O11), D3 (current step, skip rules), D5 (self-reported, never verified), D7 (no notes from Ask), D8 (authorization, concurrency, impact refresh)
 **Follows:** steps 1 to 5, all pushed: revisions, transitions, completion outbox, reverse reconciliation and the read-only project guide ([`…PROJECT_GUIDE_PLAN`](ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md) is the direct predecessor: this step adds the first write to it).
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20 and the section 7 adversarial pass (§8); the project's Ask write-command rules (non-retrievable, read the traditional controller for hidden effects, declared-action-only starts guarded against `ASK_REFRESH`, allow-listed action ids, startup validators). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -213,4 +213,10 @@ Everything above is **code-traced, not executed.**
 
 **Honest limits.** Nothing here is reachable for a real project until a first template is published (O7). The in-transaction checks are proved against a serialized fake, not against concurrent Postgres transactions. The DIY skill's enable flag is unchanged; its start-up validators passed in tests, not at a real boot.
 
-**Remaining:** 6c (owner-run Postgres script, read-only queries, runbook), then FRD and design-doc closure for the step.
+**Remaining:** none for the step except the owner's run of 6c (§14) and the open items below.
+
+## 14. Record of 6c
+
+Written, **not executed**: `apps/backend/tests/scratch/diyStepUpdate.scratch.js` (8 tests: the real stack end to end; what a command writes, by database triggers; the policy and the in-transaction role check against real rows; **the share locks with real concurrent transactions**; two concurrent confirmations; the page interleaved with Ask; a withdrawn guide), `apps/backend/prisma/diy-step-update-inflight.pgadmin.sql` (8 read-only queries, including invariants) and `docs/operations/DIY_STEP_UPDATE_ROLLOUT.md`. **Checked:** the script's syntax, its skip and refuse guards, and that its module graph loads (it must load the Ask orchestrator first and keep the stubbed modules' real exports; both mistakes were found and fixed while checking); against a closed port every test fails only with the connection error. **Not checked:** every database assertion, the lock timing, the queries.
+
+Open items carried forward: O7 (no usable production guide until the first template); the share-lock behavior is unproven on real Postgres until the owner runs 6c; step 7 (reopen, previous-step view, project complete and abandon, recovery); the raw-task writers that bypass governed completion; the Ask-failure comparison against a clean worktree was not repeated this slice.

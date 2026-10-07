@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.220
+**Version:** 1.221
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.221 — DIY step commands, 6c written:** an owner-run script for a throwaway Postgres (real handlers and service; what a command writes measured by database triggers; the in-transaction role and policy checks against real rows; the share locks with real concurrent transactions; two concurrent confirmations), eight read-only queries (what Ask would offer, out-of-order progress, and invariants such as a finished step without a ledger row or actor) and a rollout note. It also records that the shared step update now refuses a viewer or a removed member with a 403 for the project page too. Written and load-checked only: none of the database assertions or queries has been run, and the lock behavior is unproven on real Postgres.
 
 **Revision 1.220 — DIY step commands, 6a/6b built (uncommitted):** from the DIY project guide in Ask, a contributor or owner can mark the current step done, or skip it when it is optional and has no safety note, after a confirmation; the receipt says it is the person's own report and nothing is verified. The shared step update now checks the person's edit access inside its own transaction for every caller (the project page too), and Ask's narrower rules (guide not withdrawn, this is still the first unfinished step, skip allowed) are re-checked inside that transaction after the project is locked, with the template's governance rows share-locked; the earlier checks and the confirmation's change detector (now covering every step, the project version and the guide's governance state) are early answers only. The `diy` skill moves from read-only to write effects for projects that pass the reviewed-guide gate (superseding the FRD v1.58 note). The audience filter now also hides skip and reopen actions from viewers, as defense in depth only. Focus lands on the guide heading when the guide refreshes in place, and the position is a polite status. Verified by tests against a database-free fake and jest only: not run on real Postgres or in a browser, and unreachable for real projects until a first template is published (O7).
 
