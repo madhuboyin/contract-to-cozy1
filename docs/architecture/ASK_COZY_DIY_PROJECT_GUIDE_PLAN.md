@@ -1,7 +1,7 @@
 # Read-Only `DIY_PROJECT_GUIDE` and `TASK_GUIDE` Progress — Step 5 Implementation Plan
 
 **Date:** October 6, 2026
-**Status:** **Revision 2, after review (October 6, 2026).** The review approved the direction and the start of slice 5a-0, explicitly approved S5-6, S5-12 (as amended) and S5-13, and approved the rest subject to three corrections, all made here (§11): the AI-versus-not-template refusal is split, the step-matching rule is strict, and the progress arithmetic is exact. 5a-0 (a read-only trace) is done (§12) and slice 5a (the backend) is pushed (§13) and slice 5b (the frontend) is built and verified locally (§14); 5c is not started. Nothing else is built. **No schema change.**
+**Status:** **Revision 2, after review (October 6, 2026).** The review approved the direction and the start of slice 5a-0, explicitly approved S5-6, S5-12 (as amended) and S5-13, and approved the rest subject to three corrections, all made here (§11): the AI-versus-not-template refusal is split, the step-matching rule is strict, and the progress arithmetic is exact. 5a-0 (a read-only trace) is done (§12) and slice 5a (the backend) is pushed (§13) and slice 5b (the frontend) is pushed (§14); slice 5c (the owner-run Postgres script, read-only queries and runbook) is written but not run (§15). Nothing else is built. **No schema change.**
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13, step 5 (sequencing row "1": decisions O1 and O8, approved October 6, 2026), D1 (canonical step source and the stale-source rule), D2 (where progress lives), D3 (current step and optional-step semantics), D6 (help is a local disclosure), D8 (authorization)
 **Follows:** steps 1 to 4, all pushed: [`…TEMPLATE_REVISIONS_PLAN`](ASK_COZY_DIY_TEMPLATE_REVISIONS_PLAN.md), [`…STEP_TRANSITIONS_PLAN`](ASK_COZY_DIY_STEP_TRANSITIONS_PLAN.md), [`…COMPLETION_OUTBOX_PLAN`](ASK_COZY_DIY_COMPLETION_OUTBOX_PLAN.md), [`…TASK_RECONCILIATION_PLAN`](ASK_COZY_DIY_TASK_RECONCILIATION_PLAN.md). Their rollouts are yours; this step's code does not depend on them being applied except as §9 states.
 **Method:** `AUDIT_METHODOLOGY.md` design items 11-20 and the section 7 adversarial pass (§8). Labels: **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.
@@ -272,3 +272,22 @@ No code, schema or behavior changed. This was a read of the code and of git hist
 **Limits, stated plainly.** The "caution boundary directly before the guide" check here is a document-order check on the rendered text; the real adjacency guarantee is the backend test on the final trust-validated block sequence (§13). Responsive behavior is verified only as the classes the component declares: **no browser has rendered this**, so layout, focus rings and screen-reader output are unverified. The numbering "1. 2. 3." is the position in the producer's array, not a computed progress figure.
 
 **Not run:** any browser (by the review's decision); the real-Postgres script (5c, owner-run and not yet written). **5a and 5b are now both built and should ship together**, and no production project is guideable until O7 (S5-13).
+
+## 15. Slice 5c record: the owner-run Postgres script, the queries and the runbook (October 6, 2026)
+
+**Built, as decided at review (S5-12): written, not provisioned and not run.**
+
+- `apps/backend/tests/scratch/diyProjectGuide.scratch.js` (9 tests), guarded like the earlier scratch scripts (a local URL whose database name contains "scratch", never port 5433; it creates and drops `scratch_*` objects). What it is meant to show is listed in `docs/operations/DIY_PROJECT_GUIDE_ROLLOUT.md`: the strict step rule on a project copied by the real `createProject` from a really published revision (non-ASCII text, a trailing space, absent versus null fields, sparse step numbers), the real step transitions moving progress as the plan defines it, every refusal on real rows (including the real backfill's legacy revision and a tampered hash) and nine individual step alterations, withdrawn and superseded on real revisions, the property scoping, the real list and row action, and **a write spy measured by database triggers** on every DIY table, the outbox, tasks and home events.
+- `apps/backend/prisma/diy-project-guide-inflight.pgadmin.sql` (four read-only queries) and `docs/operations/DIY_PROJECT_GUIDE_ROLLOUT.md` (order, what ships, how to run the script, how to read a failure, manual checks, what is not covered).
+
+**What was checked, and what was not.**
+
+| Check | Result | Kind |
+| --- | --- | --- |
+| `node --check` on the script | clean | Executed |
+| Guards: no URL (skips, exit 0); a non-scratch URL on port 5433 (refuses, exit 1); a remote host (refuses) | as designed | Executed |
+| Module loading: the script run against a scratch-named URL on a closed port loads every `require` and fails only at the database connection (9 of 9 tests, "can't reach database server"); no database was involved | pass | Executed |
+| A line-by-line read of every assertion against the code it exercises (reason codes, the progress arithmetic on step numbers 1, 3, 7, 9, the tampering SQL, the lifecycle actions, the list page size) | two fixes made: the list is asked for a larger page (the script creates more than the default 20 open projects), and the sub-checks that depend on template governance publishing a high-risk or a 41-step template report and skip instead of failing for a reason that is not the guide's | Reviewed, not run |
+| **Every database assertion, and the four SQL queries** | **never executed** | **Unverified** |
+
+**Not run:** the script's database assertions and the queries (by decision); a browser; the Docker and Pi images. **Step 5 is complete as code with the verification split exactly as the review set it:** 5a and 5b executed locally (unit, contract, trust-pipeline, component and mutation tests); 5c written for the owner to run; the production feature remains empty until O7.

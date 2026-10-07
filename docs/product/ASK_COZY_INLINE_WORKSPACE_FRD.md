@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.216
+**Version:** 1.217
 **Date:** October 6, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+
+**Revision 1.217 — DIY project guide, slice 5c (owner-run database script, queries and runbook):** a script for a throwaway Postgres was written for the owner to run, covering the guide against real rows: a project copied by the real project-creation code from a really published template version is guided, the step-by-step progress follows the real step changes, every refusal and the withdrawn and superseded cases on real template versions, and a measurement by database triggers that opening a guide writes nothing. Four read-only queries and a rollout runbook were added. As decided at review, no database was provisioned: the script's checks of syntax, safety guards and module loading were run, but **its database assertions and the queries have never been executed**, which the runbook says before anything else. Step 5 is complete as code. **It establishes a governed capability and delivers no usable production guide until a named content owner authors and publishes the first template (decision O7); until then every project answers with a refusal and a link to the project page.** See `docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md` §15 and `docs/operations/DIY_PROJECT_GUIDE_ROLLOUT.md`.
 
 **Revision 1.216 — DIY project guide, slice 5b (frontend):** the guide card now shows a stepped guide when the answer carries an outline: the progress as a sentence ("Step 3 of 4, 1 done, 1 skipped", with the time it was read), a list of every step with its state in words (Done, Skipped, You are here, Not started, Optional) and the current step marked for assistive technology, and the step's tip behind a "Show tip" button. Nothing is computed or corrected by the card, the list is not interactive, and a card without an outline looks exactly as before. Verified with component tests and mutation checks (10 of 11 caught; the survivor is a redundancy the icon library already provides) and `next build`; no browser has rendered it. **This still delivers no usable production guide until a named content owner authors and publishes the first template (decision O7).** See `docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md` §14.
 
