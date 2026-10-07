@@ -70,6 +70,9 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'DIY_PROJECT_GUIDE',
     // DIY step command (step 6 of the stateful GUIDE): confirmation-gated, reached only by the declared actions on the project guide.
     'DIY_STEP_UPDATE',
+    // DIY project commands (step 7B): finish a project, stop or hand it off; confirmation-gated, irreversible, declared actions only.
+    'DIY_PROJECT_COMPLETE',
+    'DIY_PROJECT_ABANDON',
     // Seasonal home care (exact-four starter source): launch-only; seasonal questions route to MAINTENANCE_STATUS.
     'SEASONAL_HOME_CARE',
     'HOME_BASICS_GUIDE',

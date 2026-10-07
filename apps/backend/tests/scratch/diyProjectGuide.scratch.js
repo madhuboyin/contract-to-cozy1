@@ -145,8 +145,8 @@ test('REAL step transitions move the guide as the plan defines: sparse step numb
   assert.equal(await label(), 'Step 2 of 4, 1 done, 1 skipped');
   await move(project.id, 3, 'COMPLETED'); await move(project.id, 7, 'COMPLETED');
   const resolved = await guide(project.id);
-  assert.deepEqual(types(resolved), ['SUMMARY']);
-  assert.match(resolved.blocks[0].body, /Every step is resolved/);
+  assert.deepEqual(types(resolved), ['TASK_GUIDE']); // step 7B: the resolved state is a TASK_GUIDE card
+  assert.match(resolved.blocks[0].main.body, /Finish the project on the project page/);
 });
 
 // ---- every refusal on real rows -----------------------------------------------------------------------------------------------------------------------

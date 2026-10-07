@@ -44,6 +44,14 @@ export type AskStepPolicyDecision =
   | { ok: true }
   | { ok: false; code: 'DIY_GUIDE_NOT_CURRENT' | 'DIY_STEP_NOT_CURRENT' | 'DIY_STEP_NOT_REOPENABLE' | 'DIY_STEP_TRANSITION_NOT_ALLOWED'; message: string; reason: string };
 
+/** The project-level rule for finishing from Ask (COMPLETE_PROJECT): the guide is reviewed, intact and not withdrawn. Whether every step is resolved is the service's own check. */
+export function evaluateAskProjectPolicy(source: GuideSource, _policy: 'COMPLETE_PROJECT'): AskStepPolicyDecision {
+  const evaluation = evaluateProjectGuide(source);
+  if (evaluation.kind === 'REFUSED') return { ok: false, code: 'DIY_GUIDE_NOT_CURRENT', message: 'This project can no longer be guided here. Use the project page.', reason: evaluation.reason };
+  if (evaluation.sourceState === 'WITHDRAWN') return { ok: false, code: 'DIY_GUIDE_NOT_CURRENT', message: 'This guide has been withdrawn. Use the project page.', reason: 'WITHDRAWN' };
+  return { ok: true };
+}
+
 /**
  * ADVANCE_CURRENT_STEP: complete or skip the CURRENT step of a project whose guide is reviewed, intact and not withdrawn; skip only an optional step with no safety
  * note. REOPEN_FINISHED_STEP: put a FINISHED step (completed or skipped) of such a project back in progress. A superseded guide is still usable (the project keeps the

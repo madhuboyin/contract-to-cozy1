@@ -200,8 +200,10 @@ test('a withdrawn guide keeps its snapshot readable behind a caution boundary; a
 
 test('every step resolved while the project is open: a summary pointing at the page, no guide block', () => {
   const resolved = guideBlocks({ steps: stepsFor(revisionRow(), { 1: 'COMPLETED', 3: 'COMPLETED', 7: 'COMPLETED', 9: 'SKIPPED' }) });
-  assert.deepEqual(resolved.map((b) => b.type), ['SUMMARY']);
-  assert.match(resolved[0].body, /Every step is resolved\. Finish the project on the project page\./);
+  // Step 7B: the resolved state is a TASK_GUIDE card (the calm shell shows only a SUMMARY's first action, which would hide the Review last step action).
+  assert.deepEqual(resolved.map((b) => b.type), ['TASK_GUIDE']);
+  assert.match(resolved[0].main.body, /Finish the project on the project page\./);
+  assert.match(resolved[0].progress.label, /^All 4 steps resolved/);
 });
 
 test('over-long step text is shortened to the contract limits and says so, never silently cut', () => {

@@ -8,6 +8,8 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 // and abandoning projects, and the AI guide, stay on the page.
 // Step 6 of the stateful GUIDE (docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md) adds ONE write, DIY_STEP_UPDATE: mark the current step of a reviewed project done, or
 // skip it, after confirmation. That supersedes the read-only stance above for template-sourced projects that pass the reviewed-guide gate; everything else stays on the page.
+const DIY_PROJECT_WRITE_OPERATIONS = ['DIY_PROJECT_COMPLETE', 'DIY_PROJECT_ABANDON'] as const;
+
 export const DIY_SKILL = Object.freeze({
   id: 'diy',
   version: '1.0.0',
@@ -15,7 +17,7 @@ export const DIY_SKILL = Object.freeze({
   displayName: 'DIY Project Center',
   description: "Review this home's active DIY projects in planning or in progress, with how many required steps are done.",
   homeownerJobs: ['STAY_AHEAD'],
-  supportedGoals: ['review-diy-projects', 'follow-diy-project-guide', 'advance-diy-project-step'],
+  supportedGoals: ['review-diy-projects', 'follow-diy-project-guide', 'advance-diy-project-step', 'finish-diy-project', 'stop-diy-project'],
   aliases: ['diy project center', 'diy projects', 'do it yourself projects'],
   operations: [{
     operationId: 'DIY_PROJECTS',
@@ -34,18 +36,25 @@ export const DIY_SKILL = Object.freeze({
     version: '1.0',
     requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
     optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
-  }],
+  }, ...DIY_PROJECT_WRITE_OPERATIONS.map((operationId) => ({
+    // Step 7B: finishing a project, and stopping or handing it off. Confirmation-gated, CONTRIBUTOR, IRREVERSIBLE in Cozy; reached only by declared actions on the project guide.
+    operationId,
+    version: '1.0',
+    requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+    optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
+  }))],
   requiredContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
   optionalContextProviders: [PROPERTY_JOURNEY_CONTEXT_PROVIDER],
-  allowedAdapters: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }, { id: 'diy.step-update', version: '1.0' }],
+  allowedAdapters: [{ id: 'diy.projects', version: '1.0' }, { id: 'diy.project-guide', version: '1.0' }, { id: 'diy.step-update', version: '1.0' }, { id: 'diy.project-complete', version: '1.0' }, { id: 'diy.project-abandon', version: '1.0' }],
   allowedExternalConnectors: [],
-  consumerPolicy: [{ consumer: 'ASK', operations: ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE', 'DIY_STEP_UPDATE'] }],
+  consumerPolicy: [{ consumer: 'ASK', operations: ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE', 'DIY_STEP_UPDATE', ...DIY_PROJECT_WRITE_OPERATIONS] }],
   autonomyLevel: 2,
   riskPolicy: {
     effects: ['READ', 'WRITE'],
     materiality: 'MATERIAL',
     riskDomains: ['HOME_SAFETY'],
-    reversibility: 'PARTIALLY_REVERSIBLE',
+    // Finishing, stopping and handing off a project cannot be undone anywhere in Cozy (no operation reopens a closed project), so the skill is declared IRREVERSIBLE.
+    reversibility: 'IRREVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
   allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'TASK_GUIDE', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS'],
@@ -55,6 +64,7 @@ export const DIY_SKILL = Object.freeze({
     { type: 'OPERATION_CONTRACT', id: 'DIY_PROJECTS', version: '1.0', required: true },
     { type: 'OPERATION_CONTRACT', id: 'DIY_PROJECT_GUIDE', version: '1.0', required: true },
     { type: 'OPERATION_CONTRACT', id: 'DIY_STEP_UPDATE', version: '1.0', required: true },
+    ...DIY_PROJECT_WRITE_OPERATIONS.map((id) => ({ type: 'OPERATION_CONTRACT' as const, id, version: '1.0', required: true })),
   ],
   contextBudget: {
     maxFacts: 50,

@@ -13,7 +13,7 @@ import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
 import { logger } from '../lib/logger';
 import { evaluateStepTransition, openStepsForCompletion, type DiyStepStatusValue } from './diy/stepTransitions';
-import { evaluateAskStepPolicy, type AskStepPolicyName } from './diy/askStepPolicy';
+import { evaluateAskProjectPolicy, evaluateAskStepPolicy, type AskStepPolicyName } from './diy/askStepPolicy';
 import { buildRevisionContent, checkRevisionIntegrity, computeContentHash, shareLockGovernanceRows } from './diyTemplateRevision.service';
 import {
   PUBLISHED_REVISION_INCLUDE, eligibilityInputFromRevision, publishedTemplateDetail, publishedTemplateSummary, revisionContent, stepSnapshotId,
@@ -518,7 +518,7 @@ export class DiyService {
     const project = await db.diyProject.findFirst({
       where: { id: projectId, propertyId },
       select: {
-        id: true, title: true, status: true, category: true, templateId: true, aiGuideId: true, templateRevisionId: true, completionBasis: true, updatedAt: true,
+        id: true, title: true, status: true, category: true, templateId: true, aiGuideId: true, templateRevisionId: true, completionBasis: true, updatedAt: true, maintenanceTaskId: true,
         steps: {
           orderBy: { stepNumber: 'asc' },
           select: { id: true, stepNumber: true, templateStepId: true, title: true, description: true, estimatedMinutes: true, isOptional: true, safetyNote: true, tipNote: true, status: true, updatedAt: true },
@@ -549,6 +549,17 @@ export class DiyService {
       completionEffects: describeCompletionEffects(project.status, event?.status ?? null, project.completionBasis ?? null),
       taskLink: (await this.readTaskLink(project)).view,
     };
+  }
+
+  /**
+   * What a finish confirmation needs to say about a project's linked maintenance task, as it is now: no link, the task is gone, it is already complete, or it is open.
+   * READ-ONLY. The worker (not this read) decides what happens to it after a completion.
+   */
+  async getLinkedTaskState(propertyId: string, maintenanceTaskId: string | null): Promise<'NONE' | 'MISSING' | 'COMPLETED' | 'OPEN'> {
+    if (!maintenanceTaskId) return 'NONE';
+    const task = await prisma.propertyMaintenanceTask.findFirst({ where: { id: maintenanceTaskId, propertyId }, select: { status: true } });
+    if (!task) return 'MISSING';
+    return task.status === 'COMPLETED' ? 'COMPLETED' : 'OPEN';
   }
 
   /** Reads the linked task and its reconcile event as they are now, and maps them to the disclosure. No writes. */
@@ -752,7 +763,7 @@ export class DiyService {
     projectId: string,
     propertyId: string,
     payload: { actualMinutes?: number; actualMaterialCostCents?: number; notes?: string },
-    ctx: { actorUserId: string; expectedUpdatedAt?: unknown },
+    ctx: { actorUserId: string; expectedUpdatedAt?: unknown; askPolicy?: 'COMPLETE_PROJECT' },
   ) {
     const expected = this.parseVersionToken(ctx.expectedUpdatedAt);
     return prisma.$transaction(async (tx) => {
@@ -762,6 +773,13 @@ export class DiyService {
         throw new APIError('You no longer have access to complete this project.', 403, 'DIY_ACCESS_REVOKED');
       }
       await this.claimOpenProject(tx, projectId, propertyId, expected);
+      // Ask's narrower rule, on a guide source read inside this transaction after the project row is held, with the governance rows share-locked (as for a step command).
+      if (ctx.askPolicy) {
+        const source = await this.readGuideSource(tx, projectId, propertyId, true);
+        if (!source) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+        const policy = evaluateAskProjectPolicy(source as any, ctx.askPolicy);
+        if (!policy.ok) throw new APIError(policy.message, 409, policy.code, { reason: policy.reason });
+      }
       // The rule is checked against the steps as they are NOW, in this transaction, with the project row held: no step can change underneath it.
       const open = await this.openStepsWithin(tx, projectId);
       if (open.length > 0) throw this.stepsIncompleteError(open);
@@ -889,6 +907,10 @@ export class DiyService {
   ) {
     const expected = this.parseVersionToken(ctx.expectedUpdatedAt);
     return prisma.$transaction(async (tx) => {
+      // Authorization decided inside the transaction that writes the change, for every caller (the page too): a revocation between the route's check and this write is refused.
+      if (!(await hasPropertyRoleWithin(tx, ctx.actorUserId, propertyId, 'CONTRIBUTOR'))) {
+        throw new APIError('You do not have access to change this project.', 403, 'DIY_ACCESS_REVOKED');
+      }
       await this.claimOpenProject(tx, projectId, propertyId, expected);
       const before = await tx.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { status: true } });
       const status = hireOut ? 'HIRED_OUT' : 'ABANDONED';

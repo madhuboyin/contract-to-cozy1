@@ -179,14 +179,6 @@ describe('the previous-step view and Reopen', () => {
     expect(screen.getByRole('button', { name: /Back to step 3/ })).toBeInTheDocument();
   });
 
-  it('the all-resolved summary offers "Review last step", which launches the read view of the last finished step', () => {
-    const summary = { type: 'SUMMARY', id: 'diy-guide-resolved', title: 'Repaint the hallway', body: 'Every step is resolved. Finish the project on the project page.', tone: 'POSITIVE',
-      actions: [wf('diy-review-last-step', 'Review last step', 'Review the last step.', 'DIY_PROJECT_GUIDE', 'DIY_STEP', 's4', 'VIEW'), open] } as unknown as AskPresentationBlock;
-    const view = card(execution([summary]));
-    fireEvent.click(screen.getByRole('button', { name: /Review last step/ }));
-    expect(view.ask).toHaveBeenLastCalledWith('Review the last step.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_STEP', entityId: 's4', actionId: 'VIEW' }));
-  });
-
   it('focus lands on the guide heading when the view replaces the live guide in place, and the status announces the new label', () => {
     const view = card(execution([guide(3)]), jest.fn(), 'exec-guide');
     expect(article(view).querySelector('[data-task-guide-progress]')).toHaveTextContent('Step 3 of 4, 2 done');
@@ -194,5 +186,76 @@ describe('the previous-step view and Reopen', () => {
     rerenderCard(view, execution([previousView()], '2026-10-06T12:05:00.000Z'), 'exec-guide');
     expect(article(view).querySelector('[data-task-guide-progress]')).toHaveTextContent('Looking back at step 1 of 4, done.');
     expect(document.activeElement).toBe(heading(view));
+  });
+});
+
+// ---- Step 7B: Finish, and the stop-or-hand-off options -------------------------------------------------------------------------------------------------------
+describe('finish, stop and hand off', () => {
+  // The all-resolved state and the options are TASK_GUIDE cards (every action renders). A SUMMARY would show only its FIRST action in the calm shell (IW-CONV-002), which would
+  // hide Review last step, Hand off and Back: a regression test below pins that, so these surfaces are never moved back to a SUMMARY.
+  const resolvedCard = (actions: unknown[]) => guide(4, {
+    summary: 'All 4 steps resolved, 3 done, 1 skipped', progress: { current: 4, total: 4, completed: 3, skipped: 1, label: 'All 4 steps resolved, 3 done, 1 skipped', asOf: AS_OF },
+    main: { title: 'Every step is resolved', body: 'You can finish the project here, or on the project page.', facts: [] }, tip: null,
+    outline: [1, 2, 3, 4].map((n) => ({ stepId: `s${n}`, title: `Step title ${n}`, state: n === 3 ? 'SKIPPED' : 'DONE', optional: false })), actions,
+  });
+  const allResolvedActions = [
+    wf('diy-project-finish', 'Finish this project', 'Finish this project.', 'DIY_PROJECT_COMPLETE', 'DIY_PROJECT', 'p1', 'COMPLETE', 'PRIMARY'),
+    wf('diy-review-last-step', 'Review last step', 'Review the last step.', 'DIY_PROJECT_GUIDE', 'DIY_STEP', 's4', 'VIEW'), open,
+  ];
+  const optionsCard = (actions: unknown[]) => guide(2, {
+    summary: 'Stop or hand off this project', eyebrow: ['Painting', 'Reviewed guide', 'Stop or hand off'], tip: null,
+    main: { title: 'What each choice does', body: 'Stopping marks the project as stopped. Handing off marks it as handed to a professional; it does not book or contact anyone. Neither can be undone in Cozy.', facts: [] }, actions,
+  });
+  const optionActions = [
+    wf('diy-project-stop', 'Stop this project', 'Stop this project.', 'DIY_PROJECT_ABANDON', 'DIY_PROJECT', 'p1', 'STOP'),
+    wf('diy-project-handoff', 'Hand this off to a pro', 'Hand this off to a pro.', 'DIY_PROJECT_ABANDON', 'DIY_PROJECT', 'p1', 'HAND_OFF'),
+    wf('diy-step-back', 'Back to the guide', 'Back to the guide.', 'DIY_PROJECT_GUIDE', 'DIY_PROJECT', 'p1'),
+  ];
+
+  it('Finish is the filled button on the all-resolved card, every action renders, and Finish launches exactly the declared command', () => {
+    const view = card(execution([resolvedCard(allResolvedActions)]));
+    const finish = screen.getByRole('button', { name: /Finish this project/ });
+    expect(finish.className).toMatch(/bg-teal-700/);
+    expect(screen.getByRole('button', { name: /Review last step/ })).toBeInTheDocument();
+    expect(within(article(view)).getByRole('link', { name: /Open this project/ })).toBeInTheDocument();
+    fireEvent.click(finish);
+    expect(view.ask).toHaveBeenLastCalledWith('Finish this project.', undefined, expect.objectContaining({ sourceExecutionId: 'exec-guide', operationId: 'DIY_PROJECT_COMPLETE', entityType: 'DIY_PROJECT', entityId: 'p1', actionId: 'COMPLETE' }));
+    expect(view.ask).toHaveBeenCalledTimes(1);
+  });
+
+  it('a card without Finish (a viewer, a withdrawn guide) shows only the read action and the page link', () => {
+    card(execution([resolvedCard(allResolvedActions.slice(1))]));
+    expect(screen.queryByRole('button', { name: /Finish this project/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Review last step/ })).toBeInTheDocument();
+  });
+
+  it('the options card states that neither can be undone, none of the buttons is filled, ALL THREE render, and each launches exactly its declared command', () => {
+    const view = card(execution([optionsCard(optionActions)]));
+    expect(screen.getByText(/Neither can be undone in Cozy/)).toBeInTheDocument();
+    for (const name of [/Stop this project/, /Hand this off to a pro/, /Back to the guide/]) expect(screen.getByRole('button', { name }).className).not.toMatch(/bg-teal-700/);
+    fireEvent.click(screen.getByRole('button', { name: /Stop this project/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Stop this project.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_ABANDON', entityType: 'DIY_PROJECT', entityId: 'p1', actionId: 'STOP' }));
+    fireEvent.click(screen.getByRole('button', { name: /Hand this off to a pro/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Hand this off to a pro.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_ABANDON', actionId: 'HAND_OFF' }));
+    fireEvent.click(screen.getByRole('button', { name: /Back to the guide/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Back to the guide.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_PROJECT', entityId: 'p1' }));
+    expect(view.ask).toHaveBeenCalledTimes(3);
+  });
+
+  it('REGRESSION PIN: the calm shell shows only the FIRST action of a SUMMARY, so these surfaces must stay TASK_GUIDE cards', () => {
+    const summary = { type: 'SUMMARY', id: 'x-summary', title: 'Options', body: 'Body', tone: 'CAUTION', actions: optionActions } as unknown as AskPresentationBlock;
+    card(execution([summary]));
+    expect(screen.queryByRole('button', { name: /Hand this off to a pro/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Back to the guide/ })).toBeNull();
+  });
+
+  it('the current-step card carries "Stop or hand off" as a quiet button, never Stop or Hand off themselves', () => {
+    const more = wf('diy-project-more', 'Stop or hand off', 'Show the options to stop or hand off this project.', 'DIY_PROJECT_GUIDE', 'DIY_PROJECT', 'p1', 'MORE', 'QUIET');
+    const view = card(execution([guide(2, { actions: [stepAction('COMPLETE', 's2'), more, open] })]));
+    const button = screen.getByRole('button', { name: /Stop or hand off/ });
+    expect(button.className).not.toMatch(/bg-teal-700/);
+    expect(screen.queryByRole('button', { name: /^Stop this project/ })).toBeNull();
+    fireEvent.click(button);
+    expect(view.ask).toHaveBeenLastCalledWith('Show the options to stop or hand off this project.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_PROJECT', actionId: 'MORE' }));
   });
 });

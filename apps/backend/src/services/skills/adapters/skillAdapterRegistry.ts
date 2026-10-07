@@ -68,6 +68,8 @@ const DEFINITIONS = [
   adapter('diy.projects', 'DIY Project Center projects (DiyService)', 'DIY_PROJECTS'),
   adapter('diy.project-guide', 'DIY project guide (DiyService, read-only)', 'DIY_PROJECT_GUIDE'),
   adapter('diy.step-update', 'DIY step update (DiyService.updateStep)', 'DIY_STEP_UPDATE', 'MUTATION_PREPARATION'),
+  adapter('diy.project-complete', 'DIY project completion (DiyService.completeProject)', 'DIY_PROJECT_COMPLETE', 'MUTATION_PREPARATION'),
+  adapter('diy.project-abandon', 'DIY project stop or hand-off (DiyService.abandonProject)', 'DIY_PROJECT_ABANDON', 'MUTATION_PREPARATION'),
   adapter('project-tracker.projects', 'Project Tracker projects (projectTracker.service)', 'PROJECT_TRACKER_PROJECTS'),
   adapter('service-price-radar.checks', 'Service Price Radar checks (ServicePriceRadarService)', 'SERVICE_PRICE_CHECKS'),
   adapter('home-timeline.events', 'Home Timeline events (HomeEventsService)', 'HOME_TIMELINE_EVENTS'),

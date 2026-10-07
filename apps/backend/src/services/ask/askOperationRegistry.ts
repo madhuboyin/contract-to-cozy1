@@ -117,6 +117,10 @@ export type AskOperationId =
   // DIY step command (docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md): mark the CURRENT step of a guided project done, or skip it when it is optional and has no
   // safety note. Confirmation-gated, reached only by the declared actions on the project guide.
   | 'DIY_STEP_UPDATE'
+  // DIY project commands (docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md, step 7B): finish a project once every step is resolved, or stop it or hand it off to a pro.
+  // Both are confirmation-gated, IRREVERSIBLE in Cozy, and reached only by the declared actions on the project guide.
+  | 'DIY_PROJECT_COMPLETE'
+  | 'DIY_PROJECT_ABANDON'
   | 'PROJECT_TRACKER_PROJECTS'
   | 'SERVICE_PRICE_CHECKS'
   | 'HOME_TIMELINE_EVENTS'
@@ -321,6 +325,9 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'DIY_PROJECT_GUIDE',
   // DIY step command (ASK_COZY_DIY_STEP_COMMANDS_PLAN): a confirmation-gated write reached only by the declared actions on the DIY project guide.
   'DIY_STEP_UPDATE',
+  // DIY project commands (ASK_COZY_DIY_PROJECT_COMMANDS_PLAN, 7B): confirmation-gated writes reached only by declared actions on the DIY project guide.
+  'DIY_PROJECT_COMPLETE',
+  'DIY_PROJECT_ABANDON',
   // Seasonal home care (exact-four starter source, inventory D-O4/D-O16): a pure, data-independent read of the general tasks for this
   // home's climate region and season. Reached only by a stored starter's typed launch; not retrievable by message, because seasonal
   // questions already route to MAINTENANCE_STATUS over the homeowner's generated checklist and this must not compete with it.
@@ -527,6 +534,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // Read-only step-by-step guide to one reviewed DIY project; reads diyService.getProjectGuideSource and writes nothing.
   DIY_PROJECT_GUIDE: definition('DIY_PROJECT_GUIDE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'diy.project-guide', ['SUMMARY', 'TASK_GUIDE', 'EMPTY_STATE', 'BOUNDARY']),
   DIY_STEP_UPDATE: definition('DIY_STEP_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.step-update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  DIY_PROJECT_COMPLETE: definition('DIY_PROJECT_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.project-complete', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  DIY_PROJECT_ABANDON: definition('DIY_PROJECT_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.project-abandon', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   HOME_UPGRADE_SCENARIOS: definition('HOME_UPGRADE_SCENARIOS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-digital-twin.scenarios', ['SUMMARY', 'GROUPED_LIST', 'COMPARISON', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASES: definition('NEGOTIATION_SHIELD_CASES', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'negotiation-shield.cases', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PLANT_CARE_OUTLOOK: definition('PLANT_CARE_OUTLOOK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'plant-advisor.care-outlook', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),

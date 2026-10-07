@@ -59,7 +59,7 @@ type StepRow = {
 };
 export type GuideProject = {
   id: string; title: string; status: string; category: string; templateId: string | null; aiGuideId: string | null; templateRevisionId: string | null;
-  completionBasis: string | null; steps: StepRow[]; updatedAt?: Date | string | null;
+  completionBasis: string | null; steps: StepRow[]; updatedAt?: Date | string | null; maintenanceTaskId?: string | null;
 };
 /** A full revision row, as stored (the integrity check hashes it). */
 export type GuideRevision = Record<string, any> & { id: string; provenance: string; contentJson: any; retiredAt: Date | null; retiredReason: string | null };
@@ -138,6 +138,15 @@ export const DIY_STEP_ACTIONS = {
   // Step 7 (docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md section 3.2): reopen a FINISHED step, offered only from the previous-step view.
   REOPEN: { id: 'diy-step-reopen', message: DIY_STEP_REOPEN_MESSAGE, target: 'IN_PROGRESS' as const },
 };
+// Step 7B (docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md sections 3.4 and 3.5): the project-level declared actions. Finish is offered in the all-resolved summary;
+// Stop and Hand off sit behind a read-only options view (the quiet "Stop or hand off" action), never beside the step buttons, because neither can be undone in Cozy.
+export const DIY_PROJECT_ENTITY_TYPE = 'DIY_PROJECT';
+export const DIY_PROJECT_FINISH = { id: 'diy-project-finish', label: 'Finish this project', message: 'Finish this project.', actionId: 'COMPLETE' };
+export const DIY_PROJECT_STOP_ACTIONS = {
+  STOP: { id: 'diy-project-stop', label: 'Stop this project', message: 'Stop this project.', actionId: 'STOP', status: 'ABANDONED' as const },
+  HAND_OFF: { id: 'diy-project-handoff', label: 'Hand this off to a pro', message: 'Hand this off to a pro.', actionId: 'HAND_OFF', status: 'HIRED_OUT' as const },
+};
+export const DIY_PROJECT_MORE = { id: 'diy-project-more', label: 'Stop or hand off', message: 'Show the options to stop or hand off this project.', actionId: 'MORE' };
 // The read-only launches of the previous-step view (a launch of DIY_PROJECT_GUIDE on entityType DIY_STEP with actionId VIEW) and the way back.
 export const DIY_VIEW_ENTITY_TYPE = 'DIY_STEP';
 export const DIY_VIEW_ACTION_ID = 'VIEW';
@@ -178,6 +187,14 @@ export function projectGuideProgress(steps: Array<Pick<StepRow, 'id' | 'stepNumb
   const current = currentIndex + 1; // one-based position in the sorted outline, never the raw step number
   const label = `Step ${current} of ${sorted.length}, ${completed} done${skipped > 0 ? `, ${skipped} skipped` : ''}`;
   return { currentIndex, progress: { current, total: sorted.length, completed, skipped, label, asOf: asOf.toISOString() }, outline };
+}
+
+/** The progress of a project whose every step is resolved: the position is the last one, the label says so in words, and skipped steps are named separately. */
+export function resolvedProgress(steps: Array<Pick<StepRow, 'status'>>, asOf: Date) {
+  const total = steps.length;
+  const completed = steps.filter((step) => step.status === 'COMPLETED').length;
+  const skipped = steps.filter((step) => step.status === 'SKIPPED').length;
+  return { current: Math.max(1, total), total: Math.max(1, total), completed, skipped, label: `All ${total} ${total === 1 ? 'step' : 'steps'} resolved, ${completed} done${skipped > 0 ? `, ${skipped} skipped` : ''}`, asOf: asOf.toISOString() };
 }
 
 export function projectPageHref(propertyId: string, projectId: string) {
@@ -223,10 +240,16 @@ function sourceDisclosure(evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }
 const SCOPE_COVERAGE = 'This guide covers reviewed, low-risk projects. Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials such as asbestos, lead paint or mold are not covered. ';
 const scopeBoundary = (tail: string): AskPresentationBlock => ({ type: 'BOUNDARY', id: 'diy-project-guide-boundary', title: 'Only for reviewed low-risk projects', body: SCOPE_COVERAGE + tail, severity: 'INFO', suggestions: [] });
 
+/** A declared project-level command action (Finish, Stop, Hand off): the exact message selects it, and the project id is the entity. */
+const projectAction = (spec: { id: string; label: string; message: string; actionId: string }, operationId: string, projectId: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET') => ({
+  id: spec.id, label: spec.label, interactionType: 'START_WORKFLOW' as const, message: spec.message, operationId,
+  entityType: DIY_PROJECT_ENTITY_TYPE, entityId: projectId, actionId: spec.actionId, style,
+});
+
 /** A read-only launch of the guide: the previous-step view (entityType DIY_STEP, actionId VIEW) or the way back to the live guide (entityType DIY_PROJECT). */
-const viewAction = (spec: { id: string; label: string; message: string }, target: { entityType: string; entityId: string; actionId?: string }) => ({
+const viewAction = (spec: { id: string; label: string; message: string }, target: { entityType: string; entityId: string; actionId?: string }, style: 'SECONDARY' | 'QUIET' = 'SECONDARY') => ({
   id: spec.id, label: spec.label, interactionType: 'START_WORKFLOW' as const, message: spec.message, operationId: 'DIY_PROJECT_GUIDE',
-  entityType: target.entityType, entityId: target.entityId, ...(target.actionId ? { actionId: target.actionId } : {}), style: 'SECONDARY' as const,
+  entityType: target.entityType, entityId: target.entityId, ...(target.actionId ? { actionId: target.actionId } : {}), style,
 });
 
 /** The guide for a project that passed the gate: disclosures, the current step's safety note, the guide block, and the scope boundary. */
@@ -240,14 +263,22 @@ export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation
 
   const { currentIndex, progress, outline } = projectGuideProgress(project.steps, asOf);
   if (currentIndex < 0 || !progress) {
-    // Nothing left to do but finish; completing from Ask is a later step.
-    // Reopening must stay reachable here: with every step resolved there is no current step, so the way back to a finished one is a read action.
+    // Every step is resolved: there is no current step. The way back to a finished one (so Reopen stays reachable) is a read action, and Finish is offered here.
+    // This is a TASK_GUIDE card, NOT a SUMMARY: the calm shell shows only a SUMMARY's first action (one primary action per turn), which would hide Review last step.
     const last = previousFinishedStep(project.steps, null);
+    const canFinish = Boolean(input.canAdvance) && evaluation.sourceState !== 'WITHDRAWN';
     blocks.push({
-      type: 'SUMMARY', id: 'diy-guide-resolved', title: project.title, tone: 'POSITIVE',
-      actions: [...(last ? [viewAction({ ...DIY_VIEW_ACTIONS.REVIEW_LAST }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: last.id, actionId: DIY_VIEW_ACTION_ID })] : []), openAction(href)],
-      body: 'Every step is resolved. Finish the project on the project page.',
-    });
+      type: 'TASK_GUIDE', id: 'diy-project-guide', title: clip(project.title, 160, { truncated: false }), summary: resolvedProgress(project.steps, asOf).label,
+      eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide'], icon: GUIDE_ICONS[project.category] ?? 'TASK', chips: [], tip: null,
+      main: { title: 'Every step is resolved', body: canFinish ? 'You can finish the project here, or on the project page.' : 'Finish the project on the project page.', facts: [] },
+      history: [], notes: [],
+      actions: [
+        ...(canFinish ? [projectAction(DIY_PROJECT_FINISH, 'DIY_PROJECT_COMPLETE', project.id, 'PRIMARY')] : []),
+        ...(last ? [viewAction({ ...DIY_VIEW_ACTIONS.REVIEW_LAST }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: last.id, actionId: DIY_VIEW_ACTION_ID })] : []),
+        openAction(href),
+      ],
+      progress: resolvedProgress(project.steps, asOf), outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
+    } as AskPresentationBlock);
     return blocks;
   }
 
@@ -288,7 +319,8 @@ export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation
     eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide'],
     icon: GUIDE_ICONS[project.category] ?? 'TASK',
     chips, tip, main: { title: mainTitle, body: mainBody, facts }, history: [], notes,
-    actions: [...advancing, ...(previous ? [viewAction({ ...DIY_VIEW_ACTIONS.PREVIOUS }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: previous.id, actionId: DIY_VIEW_ACTION_ID })] : []), openAction(href)],
+    actions: [...advancing, ...(previous ? [viewAction({ ...DIY_VIEW_ACTIONS.PREVIOUS }, { entityType: DIY_VIEW_ENTITY_TYPE, entityId: previous.id, actionId: DIY_VIEW_ACTION_ID })] : []),
+      ...(input.canAdvance ? [viewAction(DIY_PROJECT_MORE, { entityType: DIY_PROJECT_ENTITY_TYPE, entityId: project.id, actionId: DIY_PROJECT_MORE.actionId }, 'QUIET')] : []), openAction(href)],
     progress, outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
   } as AskPresentationBlock);
 
@@ -353,4 +385,35 @@ export function buildPreviousStepBlocks(input: {
   } as AskPresentationBlock);
   blocks.push(scopeBoundary(canReopen ? 'You can reopen this step here, or use the project page.' : 'You change steps on the project page.'));
   return blocks;
+}
+
+/**
+ * The stop-or-hand-off OPTIONS view (a READ): says what each does and that neither can be undone in Cozy, and, for a person who can edit, carries the two declared
+ * confirm-launching actions beside a way back. A person who cannot edit sees the explanation and the way back only. It writes nothing.
+ */
+export function buildProjectOptionsBlocks(input: { source: GuideSource; evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>; propertyId: string; asOf: Date; canEdit: boolean }): AskPresentationBlock[] {
+  const { source, evaluation, propertyId, asOf } = input;
+  const { project } = source;
+  const href = projectPageHref(propertyId, project.id);
+  const back = viewAction({ id: 'diy-step-back', label: 'Back to the guide', message: DIY_VIEW_ACTIONS.BACK.message }, { entityType: DIY_PROJECT_ENTITY_TYPE, entityId: project.id });
+  const { currentIndex, progress, outline } = projectGuideProgress(project.steps, asOf);
+  const shown = currentIndex >= 0 && progress ? progress : resolvedProgress(project.steps, asOf);
+  // A TASK_GUIDE card, NOT a SUMMARY: the calm shell shows only a SUMMARY's first action, which would hide Hand off and Back.
+  return [
+    ...sourceDisclosure(evaluation, href),
+    {
+      type: 'TASK_GUIDE', id: 'diy-project-guide', title: clip(project.title, 160, { truncated: false }), summary: 'Stop or hand off this project',
+      eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Reviewed guide', 'Stop or hand off'], icon: GUIDE_ICONS[project.category] ?? 'TASK', chips: [], tip: null,
+      main: {
+        title: 'What each choice does',
+        body: 'Stopping marks the project as stopped. Handing off marks it as handed to a professional; it does not book or contact anyone. Neither can be undone in Cozy. Your steps and notes are kept, a linked maintenance task is not changed, and no incident changes.',
+        facts: [],
+      },
+      history: [], notes: [],
+      actions: input.canEdit
+        ? [projectAction(DIY_PROJECT_STOP_ACTIONS.STOP, 'DIY_PROJECT_ABANDON', project.id, 'SECONDARY'), projectAction(DIY_PROJECT_STOP_ACTIONS.HAND_OFF, 'DIY_PROJECT_ABANDON', project.id, 'SECONDARY'), back]
+        : [back],
+      progress: shown, outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
+    } as AskPresentationBlock,
+  ];
 }

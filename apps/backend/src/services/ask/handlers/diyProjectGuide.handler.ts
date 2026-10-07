@@ -9,7 +9,7 @@ import { type CapabilityInvocationEnvelope } from '../capabilityInvocation.contr
 import { diyService } from '../../diy.service';
 import { logger } from '../../../lib/logger';
 import { HouseholdRole } from '@prisma/client';
-import { buildPreviousStepBlocks, buildProjectGuideBlocks, DIY_VIEW_ACTION_ID, DIY_VIEW_ENTITY_TYPE, evaluateProjectGuide, projectNotFoundBlocks, refusalBlocks, type GuideSource } from '../../diy/projectGuide';
+import { buildPreviousStepBlocks, buildProjectGuideBlocks, buildProjectOptionsBlocks, DIY_PROJECT_MORE, DIY_VIEW_ACTION_ID, DIY_VIEW_ENTITY_TYPE, evaluateProjectGuide, projectNotFoundBlocks, refusalBlocks, type GuideSource } from '../../diy/projectGuide';
 
 /** `canEdit` is whether the person asking may change the project (a contributor or owner); only then does the guide card carry the step actions (plan section 3.1). Default false. */
 export async function diyProjectGuideResult(propertyId: string, launchContext?: CapabilityInvocationEnvelope['launchContext'], now: Date = new Date(), canEdit = false): Promise<AskOperationResult> {
@@ -30,6 +30,10 @@ export async function diyProjectGuideResult(propertyId: string, launchContext?: 
       logger.warn({ projectId, reason: evaluation.reason, mismatches: evaluation.mismatches }, '[DIY-GUIDE] refusing to guide a project whose steps cannot be confirmed against its reviewed revision');
     }
     return { status: 'ANSWERED', reasonCode: `DIY_GUIDE_${evaluation.reason}`, blocks: refusalBlocks(evaluation.reason, source as unknown as GuideSource, propertyId, projectId), suggestions: [] };
+  }
+  // The stop-or-hand-off options (a read, kept across a refresh by the stored action id), for the project itself.
+  if (!viewedStepId && launchContext?.entityType === 'DIY_PROJECT' && launchContext.actionId === DIY_PROJECT_MORE.actionId) {
+    return { status: 'ANSWERED', reasonCode: 'DIY_PROJECT_OPTIONS_READY', blocks: buildProjectOptionsBlocks({ source: source as unknown as GuideSource, evaluation, propertyId, asOf: now, canEdit }), suggestions: [] };
   }
   if (viewedStepId) {
     // A step that is not a valid "previous step" (it is the current step now, a later one, or unfinished) falls back to the live guide: the view never invents a state.

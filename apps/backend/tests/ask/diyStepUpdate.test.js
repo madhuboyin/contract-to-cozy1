@@ -365,7 +365,7 @@ test('registry facts: a CONTRIBUTOR, confirmation-gated, non-routable command wi
   const executeSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8');
   assert.match(executeSource, /DIY_STEP_UPDATE: \['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'\]/);
   const { DIY_SKILL } = require('../../src/services/skills/diy/skill.manifest.ts');
-  assert.deepEqual([DIY_SKILL.autonomyLevel, DIY_SKILL.riskPolicy.effects, DIY_SKILL.riskPolicy.materiality, DIY_SKILL.riskPolicy.reversibility], [2, ['READ', 'WRITE'], 'MATERIAL', 'PARTIALLY_REVERSIBLE']);
+  assert.deepEqual([DIY_SKILL.autonomyLevel, DIY_SKILL.riskPolicy.effects, DIY_SKILL.riskPolicy.materiality, DIY_SKILL.riskPolicy.reversibility], [2, ['READ', 'WRITE'], 'MATERIAL', 'IRREVERSIBLE']);
   assert.ok(DIY_SKILL.allowedResultBlocks.includes('WORKFLOW_PROGRESS'));
 });
 
@@ -479,9 +479,9 @@ test('a step that is not a valid previous step falls back to the live guide; an 
 test('ALL STEPS RESOLVED: "Review last step" leads to the last finished step; its Back returns to the summary; Reopen is reachable from there', async () => {
   finish(...RESOLVE_ALL);
   const summary = await diyProjectGuideResult('prop-1', guideLaunch, NOW, true);
-  const resolved = summary.blocks.find((b) => b.id === 'diy-guide-resolved');
-  assert.deepEqual(resolved.actions.map((a) => a.id), ['diy-review-last-step', 'open-diy-project']);
-  assert.deepEqual(resolved.actions[0], { id: 'diy-review-last-step', label: 'Review last step', interactionType: 'START_WORKFLOW', message: 'Review the last step.', operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_STEP', entityId: 's4', actionId: 'VIEW', style: 'SECONDARY' });
+  const resolved = taskGuideOf(summary); // the all-resolved state is a TASK_GUIDE card: the calm shell would show only a SUMMARY's first action
+  assert.deepEqual(resolved.actions.map((a) => a.id), ['diy-project-finish', 'diy-review-last-step', 'open-diy-project']);
+  assert.deepEqual(resolved.actions[1], { id: 'diy-review-last-step', label: 'Review last step', interactionType: 'START_WORKFLOW', message: 'Review the last step.', operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_STEP', entityId: 's4', actionId: 'VIEW', style: 'SECONDARY' });
   const last = await view('s4');
   assert.equal(last.reasonCode, 'DIY_PREVIOUS_STEP_READY');
   const card = taskGuideOf(last);
@@ -491,7 +491,7 @@ test('ALL STEPS RESOLVED: "Review last step" leads to the last finished step; it
   assert.deepEqual(card.outline.map((o) => o.state), ['DONE', 'DONE', 'SKIPPED', 'DONE'], 'no step is current');
   // The summary is read-only for a viewer too: they can review, not reopen.
   const forViewer = await diyProjectGuideResult('prop-1', guideLaunch, NOW, false);
-  assert.ok(forViewer.blocks.find((b) => b.id === 'diy-guide-resolved').actions.some((a) => a.id === 'diy-review-last-step'));
+  assert.ok(taskGuideOf(forViewer).actions.some((a) => a.id === 'diy-review-last-step'));
   assert.equal(taskGuideOf(await view('s4', false)).actions.some((a) => a.id === 'diy-step-reopen'), false);
 });
 
