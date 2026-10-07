@@ -377,6 +377,17 @@ test('the history loader is only invoked once something has been nominated', asy
   assert.equal(loads, 1);
 });
 
+test('a slow nonessential producer is dropped by the in-flight pipeline deadline', async () => {
+  let tick = 0;
+  const slow = { id: 'slow.optional', source: 'PLATFORM_STATE', essential: false, nominate: () => new Promise(() => {}) };
+  const { result, report } = await finalizeSuggestedNextActionsWithReport(finalizeInput(baseResult()), deps({
+    producers: [resultCandidatesProducer, slow],
+    nowMs: () => (tick++ < 2 ? 0 : registry.SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs - 1),
+  }).deps);
+  assert.deepEqual(result.suggestedNextActions, []);
+  assert.deepEqual(report.droppedProducers, [{ producer: 'slow.optional', reason: 'BUDGET' }]);
+});
+
 test('handler-attached candidates become contract-valid actions with deterministic ids; the internal candidate field never survives', async () => {
   const { calls, deps: d } = deps();
   const input = finalizeInput(baseResult({ suggestedNextActionCandidates: [candidate(), candidate({ entityContext: { propertyId: 'prop-1', entityType: 'INVENTORY_ITEM', entityId: 'item-2', contextVersion: 'v1' } })] }));

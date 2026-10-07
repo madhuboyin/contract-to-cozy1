@@ -158,13 +158,14 @@ export async function finalizeSuggestedNextActionsWithReport(
   const nominations = new Map<string, readonly unknown[]>();
   const ordered = [...producers].sort((a, b) => Number(b.essential) - Number(a.essential));
   for (const producer of ordered) {
-    if (nowMs() - startedAt > SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs && !producer.essential) {
+    const elapsedMs = nowMs() - startedAt;
+    if (elapsedMs > SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs && !producer.essential) {
       report.droppedProducers.push({ producer: producer.id, reason: 'BUDGET' });
       askSuggestedActionsProducerFailuresTotal.inc({ producer: producer.id, reason: 'BUDGET' });
       continue;
     }
     try {
-      nominations.set(producer.id, await producer.nominate({
+      const nomination = Promise.resolve(producer.nominate({
         result: input.result, executionId: input.executionId, sourceOperationId: input.operationId, propertyId: input.propertyId, message: input.message,
         userId: input.userId,
         loadActionableProfileState: deps.loadActionableProfileState ?? loadActionableProfileState,
@@ -172,6 +173,24 @@ export async function finalizeSuggestedNextActionsWithReport(
         loadHomeOpportunityState: deps.loadHomeOpportunityState ?? loadHomeOpportunityState,
         loadActivePlanState: deps.loadActivePlanState ?? loadActivePlanState,
       }));
+      if (producer.essential) {
+        nominations.set(producer.id, await nomination);
+      } else {
+        const timeoutToken = Symbol('producer-budget');
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const remainingMs = Math.max(1, SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs - elapsedMs);
+        const timeout = new Promise<typeof timeoutToken>((resolve) => { timer = setTimeout(() => resolve(timeoutToken), remainingMs); timer.unref?.(); });
+        const value = await Promise.race([nomination, timeout]);
+        if (timer) clearTimeout(timer);
+        if (value === timeoutToken) {
+          // Keep the abandoned promise observed so a later rejection cannot become unhandled. Its result is intentionally ignored.
+          void nomination.catch(() => undefined);
+          report.droppedProducers.push({ producer: producer.id, reason: 'BUDGET' });
+          askSuggestedActionsProducerFailuresTotal.inc({ producer: producer.id, reason: 'BUDGET' });
+          continue;
+        }
+        nominations.set(producer.id, value);
+      }
     } catch (error) {
       report.droppedProducers.push({ producer: producer.id, reason: 'ERROR' });
       askSuggestedActionsProducerFailuresTotal.inc({ producer: producer.id, reason: 'ERROR' });

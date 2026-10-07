@@ -30,7 +30,7 @@ import { recordToolLifecycleEvents } from '../analytics/toolLifecycle';
 import { reconcileCoverageGuidanceJourneyApplicability } from '../coverageJourneyReconciliation.service';
 import { runJourneyCompletionHooks } from './guidanceCompletionHooks.service';
 
-const ACTIVE_GUIDANCE_JOURNEY_STATUSES = ['ACTIVE', 'NOT_STARTED'] as const;
+export const ACTIVE_GUIDANCE_JOURNEY_STATUSES = ['ACTIVE', 'NOT_STARTED'] as const;
 const REPLACEMENT_BRANCH_TYPE_BY_CHOICE: Record<
   Extract<RepairReplaceBranchChoice, 'CONTINUE_REPLACEMENT' | 'PLAN_LATER' | 'SHOP_NOW'>,
   { branchType: string; journeyTypeKey: string; issueType: string }
