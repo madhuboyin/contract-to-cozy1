@@ -392,13 +392,20 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     const applianceCount = isAppliancesInsight(focusedAction) && access.role !== HouseholdRole.VIEWER
       ? await prisma.inventoryItem.count({ where: { propertyId, category: 'APPLIANCE' } })
       : null;
+    const applianceNeedingDetails = applianceCount && applianceCount > 0
+      ? await prisma.inventoryItem.findFirst({
+        where: { propertyId, category: 'APPLIANCE', purchasedOn: null },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true },
+      })
+      : null;
     // Policy-fact conflict (FRD v1.171): read the live conflict for this exact term, the same detection the producer uses,
     // so the answer shows the current pending-vs-confirmed values and never a stale snapshot.
     const conflictTermId = policyConflictTermIdFromLineage(focusedAction.lineageId);
     const policyConflict = conflictTermId
       ? (await getConflictedInsurancePolicyTerms(propertyId, prisma)).find((term) => term.termId === conflictTermId) ?? null
       : null;
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict, captureFeature, applianceCount });
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict, captureFeature, applianceCount, applianceNeedingDetails });
   }
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);

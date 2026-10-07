@@ -390,6 +390,9 @@ export function buildFocusedHomeActionGuidance(
     captureFeature?: { featureKey: string; operationKey: string; operationInput?: Record<string, unknown> } | null;
     // Appliances recorded for this home, when this is the Appliances insight; null/undefined otherwise.
     applianceCount?: number | null;
+    // First recorded appliance still missing a purchase date (same filter as the producer); lets "Complete appliance
+    // details" continue in Ask through the single-item inventory correction instead of the bulk edit page.
+    applianceNeedingDetails?: { id: string; name: string } | null;
   } = {},
 ): AskOperationResult {
   const title = focusedTitle(action);
@@ -422,6 +425,22 @@ export function buildFocusedHomeActionGuidance(
       style: 'PRIMARY' as const,
     }
     : null;
+  const completeApplianceAction = applianceAddAction && options.applianceNeedingDetails
+    ? {
+      id: `home-action-complete-appliance-${action.id}`,
+      label: 'Complete appliance details',
+      interactionType: 'START_WORKFLOW' as const,
+      message: inventoryCorrectionMessageForMissingDetails([]),
+      operationId: 'INVENTORY_ITEM_CORRECT' as const,
+      entityType: 'INVENTORY_ITEM',
+      entityId: options.applianceNeedingDetails.id,
+      style: 'PRIMARY' as const,
+    }
+    : null;
+  // A reviewed personalization recommendation is fully explained in this answer (headline, reason, evidence), so the
+  // personalization page link is a redundant round trip out of Ask; omit it like the inline checklist's link.
+  const isInlinePersonalizationReview = !routing && !checklist && !acceptedWorkActions && !policyConflictSection
+    && !applianceAddAction && action.lineageId.startsWith('personalization:');
   const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
   const isProviderHandoff = !routing && !checklist && isProviderServiceHandoff(action.primaryCta.href);
   const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && !policyConflictSection && !applianceAddAction && Boolean(captureRequest);
@@ -564,9 +583,11 @@ export function buildFocusedHomeActionGuidance(
     }] : []), ...(policyConflictSection ? [policyConflictSection] : [])],
     // The inline checklist IS the destination page's content, so linking back to it is a redundant
     // round trip out of Ask -- omit the action entirely rather than demote it.
-    actions: checklist || policyConflictResolvableInline || hasFeatureCapture
+    actions: checklist || policyConflictResolvableInline || hasFeatureCapture || isInlinePersonalizationReview
       ? []
-      : acceptedWorkActions ?? (applianceAddAction ? [applianceAddAction, { ...primaryAction, style: 'SECONDARY' as const }] : [primaryAction]),
+      : acceptedWorkActions ?? (completeApplianceAction
+        ? [completeApplianceAction, { ...applianceAddAction!, style: 'SECONDARY' as const }]
+        : applianceAddAction ? [applianceAddAction, { ...primaryAction, style: 'SECONDARY' as const }] : [primaryAction]),
   }, {
     type: 'EVIDENCE',
     id: 'focused-home-action-evidence',

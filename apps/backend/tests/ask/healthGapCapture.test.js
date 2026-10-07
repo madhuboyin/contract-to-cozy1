@@ -104,6 +104,21 @@ test('the appliances insight offers one appliance at a time and keeps the bulk f
   assert.deepEqual(guidance(focused(insight('Size Factor'), { canContribute: true, applianceCount: 0 })).actions.map((action) => action.label), ['Add year built']);
 });
 
+test('an appliance missing a purchase date is completed in Ask for that exact item, not through the edit page', () => {
+  const appliances = () => insight('Appliances', { primaryCta: { kind: 'REVIEW', label: 'Complete appliance details', href: '/dashboard/properties/p1/edit?focus=appliances' } });
+  const actions = guidance(focused(appliances(), { canContribute: true, applianceCount: 2, applianceNeedingDetails: { id: 'item-9', name: 'Microwave' } })).actions;
+  assert.deepEqual(actions.map((action) => [action.label, action.style]), [['Complete appliance details', 'PRIMARY'], ['Add another appliance', 'SECONDARY']]);
+  assert.equal(actions[0].operationId, 'INVENTORY_ITEM_CORRECT');
+  assert.equal(actions[0].entityType, 'INVENTORY_ITEM');
+  assert.equal(actions[0].entityId, 'item-9');
+  assert.ok(actions.every((action) => action.href === undefined), 'no action may navigate out of Ask');
+});
+
+test('a reviewed personalization recommendation has no link back to the personalization page', () => {
+  const action = focused(insight('Size Factor', { lineageId: 'personalization:rec-1', primaryCta: { kind: 'REVIEW', label: 'Review recommendation', href: '/dashboard/personalization?propertyId=p1' } }), { canContribute: true });
+  assert.deepEqual(guidance(action).actions, []);
+});
+
 test('the add-appliance message is the exact text the inventory handler recognises, and routes on its own', () => {
   const { INVENTORY_ADD_MESSAGE } = require('../../src/services/ask/handlers/inventory.handler.ts');
   assert.equal(INVENTORY_ADD_ACTION_MESSAGE, INVENTORY_ADD_MESSAGE, 'a drifted literal would silently stop being recognised as the declared add action');
@@ -127,5 +142,5 @@ test('handler wiring: viewers are never offered capture, and the derived feature
   // Derived cards never offer "Not sure": it is stored as an UNKNOWN observation and would re-ask the same question.
   assert.match(source, /baseCaptureRequest && derivedCapture \? \{ \.\.\.baseCaptureRequest, allowNotSure: false \} : baseCaptureRequest/);
   assert.match(source, /prisma\.inventoryItem\.count\(\{ where: \{ propertyId, category: 'APPLIANCE' \} \}\)/);
-  assert.match(source, /\{ canContribute: access\.role !== HouseholdRole\.VIEWER, policyConflict, captureFeature, applianceCount \}/);
+  assert.match(source, /\{ canContribute: access\.role !== HouseholdRole\.VIEWER, policyConflict, captureFeature, applianceCount, applianceNeedingDetails \}/);
 });
