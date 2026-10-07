@@ -359,6 +359,25 @@ function resolveOwnershipCostChangeRouting(action: RankedHomeAction): FocusedAsk
   return { operationId: 'OWNERSHIP_COSTS', message: 'Show my home ownership costs', label: 'Show my ownership costs', keepLinkAsSecondary: true };
 }
 
+// Health insight matched to one inventory item: its destination is the guidance-overview tool for that item
+// (`itemId` in the href; a `journeyId` instead means a started journey, handled by the journey routing). Ask shows
+// the exact item record inline; the tool stays as the secondary link because it is a stateful journey.
+function resolveMatchedItemHealthRouting(action: RankedHomeAction): FocusedAskRouting | null {
+  if (!action.lineageId.startsWith('health-insight:')) return null;
+  const parsed = parseHomeActionHref(action.primaryCta.href);
+  if (!parsed || !propertyToolPath('guidance-overview').test(parsed.pathname) || parsed.params.has('journeyId')) return null;
+  const itemId = parsed.params.get('itemId');
+  if (!itemId) return null;
+  return {
+    operationId: 'INVENTORY_LOOKUP',
+    message: 'Show this inventory item in my Home Record.',
+    entityType: 'INVENTORY_ITEM',
+    entityId: itemId,
+    label: 'Review this item',
+    keepLinkAsSecondary: true,
+  };
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -411,8 +430,10 @@ export function buildFocusedHomeActionGuidance(
   const groupARouting = resolveGroupAAskRouting(action.primaryCta.href);
   const groupDRouting = !groupARouting ? resolveGroupDReplacementGuidanceRouting(action) : null;
   const groupBRecordReviewRouting = !groupARouting && !groupDRouting ? resolveGroupBRecordReviewRouting(action) : null;
-  const ownershipCostRouting = !groupARouting && !groupDRouting && !groupBRecordReviewRouting ? resolveOwnershipCostChangeRouting(action) : null;
-  const specificRouting = groupARouting ?? groupDRouting ?? groupBRecordReviewRouting ?? ownershipCostRouting;
+  const noEarlierRouting = !groupARouting && !groupDRouting && !groupBRecordReviewRouting;
+  const ownershipCostRouting = noEarlierRouting ? resolveOwnershipCostChangeRouting(action) : null;
+  const matchedItemHealthRouting = noEarlierRouting && !ownershipCostRouting ? resolveMatchedItemHealthRouting(action) : null;
+  const specificRouting = groupARouting ?? groupDRouting ?? groupBRecordReviewRouting ?? ownershipCostRouting ?? matchedItemHealthRouting;
   const checklist = !specificRouting && propertyFacts && isHealthFactorFocusHref(action.primaryCta.href)
     ? resolveHealthFactorChecklist(action.signal, propertyFacts)
     : null;
@@ -454,6 +475,7 @@ export function buildFocusedHomeActionGuidance(
   // personalization page link is a redundant round trip out of Ask; omit it like the inline checklist's link.
   const isInlinePersonalizationReview = !routing && !checklist && !acceptedWorkActions && !policyConflictSection
     && !applianceAddAction && action.lineageId.startsWith('personalization:');
+  const policyConflictReadOnly = Boolean(policyConflictSection) && !policyConflictResolvableInline;
   const isGroupCDestination = !routing && !checklist && isGroupCWholeToolDestination(action);
   const isProviderHandoff = !routing && !checklist && isProviderServiceHandoff(action.primaryCta.href);
   const hasFeatureCapture = !routing && !checklist && !acceptedWorkActions && !policyConflictSection && !applianceAddAction && Boolean(captureRequest);
@@ -480,7 +502,8 @@ export function buildFocusedHomeActionGuidance(
       // SUMMARY/GROUPED_LIST content above it is the actual answer, navigation is correct but
       // not the primary action. Same for a Group B feature-capture case: the missing fact is now
       // asked inline as a captureRequest card, so the resolution-center escape hatch is optional.
-      style: checklist || isGroupCDestination || hasFeatureCapture || isProviderHandoff ? 'SECONDARY' as const : 'PRIMARY' as const,
+      // A policy conflict shown read-only (viewer) is likewise answered above; the link is only the way to the full tool.
+      style: checklist || isGroupCDestination || hasFeatureCapture || isProviderHandoff || policyConflictReadOnly ? 'SECONDARY' as const : 'PRIMARY' as const,
     };
 
   const timing = action.timing.dueAt

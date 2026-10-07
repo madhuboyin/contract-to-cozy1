@@ -130,6 +130,18 @@ test('an ownership-cost change continues in Ask and keeps its category tool as t
   for (const block of action.blocks) assert.ok(AskPresentationBlockSchema.safeParse(block).success, block.id);
 });
 
+test('a health insight matched to one inventory item shows that item in Ask and keeps the guidance tool secondary', () => {
+  const href = '/dashboard/properties/p1/tools/guidance-overview?scopeCategory=ITEM&itemId=item-7&customIssueLabel=HVAC%20Age';
+  const action = focused(insight('HVAC Age', { primaryCta: { kind: 'REVIEW', label: 'Book an HVAC check', href } }), { canContribute: true });
+  const actions = guidance(action).actions;
+  assert.deepEqual(actions.map((a) => [a.label, a.style, a.operationId ?? 'link']), [['Review this item', 'PRIMARY', 'INVENTORY_LOOKUP'], ['Book an HVAC check', 'SECONDARY', 'link']]);
+  assert.equal(actions[0].entityType, 'INVENTORY_ITEM');
+  assert.equal(actions[0].entityId, 'item-7');
+  // A started journey keeps the journey routing, not the item record.
+  const journey = guidance(focused(insight('HVAC Age', { relatedJourneyId: 'j1', primaryCta: { kind: 'REVIEW', label: 'Continue', href: `${href}&journeyId=j1` } }), { canContribute: true })).actions;
+  assert.equal(journey[0].operationId, 'GUIDANCE_JOURNEY_CONTINUE');
+});
+
 test('weather preparation and environment report links are secondary, never the primary action', () => {
   for (const href of ['/dashboard/properties/p1/environment-report/preparation?insightId=i1', '/dashboard/properties/p1/environment-report']) {
     const actions = guidance(focused(insight('Heat', { lineageId: 'weather:1', primaryCta: { kind: 'START', label: 'Start checklist', href } }), { canContribute: true })).actions;
