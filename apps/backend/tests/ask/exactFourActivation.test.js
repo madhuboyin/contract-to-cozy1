@@ -80,6 +80,33 @@ test('EMPTY-HOME VIEWER, typed question: the settled answer shows exactly four d
   assert.equal(r.calls.completeness, 0, 'a starters-only turn never loads actionable completeness');
 });
 
+test('the real finalizer shares one Property Context-backed state across profile, opportunity and completeness consumers', async () => {
+  let sharedReads = 0;
+  const out = await finalizeSuggestedNextActionsWithReport(
+    { result: { status: 'ANSWERED', blocks: [], suggestions: [] }, executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PROPERTY, operationId: 'MAINTENANCE_STATUS', message: 'What maintenance is pending?', completedSemanticKeyHashes: new Set() },
+    {
+      clock: { now: () => NOW },
+      loadSharedPropertyState: async () => {
+        sharedReads += 1;
+        return {
+          profile: { denominatorVersion: 'actionable-profile-1:BASE', audiences: [], audienceUncertain: false, fraction: 1, knownWeight: 1, totalWeight: 1, unresolved: [], unresolvedByArea: {} },
+          opportunities: { contextVersion: 'ctx-shared', capitalItemsUpcoming: false, warrantyExpiring: false, openFindings: false },
+        };
+      },
+      loadUrgentHomeActionState: async () => ({ nowCount: 0 }),
+      loadActivePlanState: async () => ({ sellHoldRentActive: false }),
+      loadOperationAvailability: async () => availability(),
+      loadExecutionExpiresAt: async () => null,
+      loadCurrentOutcomeKeyHashes: async () => new Set(),
+      loadLifecycleState: okLifecycle(),
+      recordOffers: async () => ({ attempted: 0, ok: true }),
+      recordImpressions: () => {}, recordSuppression: () => {},
+    },
+  );
+  assert.equal(sharedReads, 1);
+  assertFour({ ...out, shown: out.result.suggestedNextActions }, 'shared Property Context state');
+});
+
 test('every role x operating mode reaches four on an empty home', async () => {
   for (const role of ['VIEWER', 'CONTRIBUTOR', 'OWNER']) for (const mode of ['UNKNOWN', 'BUYING', 'OWNING', 'SELLING']) assertFour(await run({ role, mode }), `${role}/${mode}`);
 });

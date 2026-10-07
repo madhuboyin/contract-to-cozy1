@@ -32,7 +32,7 @@ import { recordExactFourDiagnostics } from './suggestedNextActionExactFourDiagno
 import {
   loadLifecycleState, offersFromExactFour, recordSuggestedActionOffers, type LifecycleState,
 } from './askSuggestedActionLifecycle.service';
-import { loadActionableCompletenessForFinalizer, loadActionableProfileState } from './actionableCompletenessLoader';
+import { loadActionableProfileState } from './actionableCompletenessLoader';
 import { SUGGESTED_NEXT_ACTION_BUDGET } from './suggestedNextActionRegistry';
 import { SUGGESTED_NEXT_ACTION_PRODUCERS, type SuggestedNextActionProducer } from './suggestedNextActionProducers';
 import { getSuggestedNextActionEntityValidator } from './suggestedNextActionEntityValidators';
@@ -45,6 +45,7 @@ import { loadUrgentHomeActionState } from './urgentWorkCandidates';
 import { loadHomeOpportunityState } from './homeOpportunityCandidates';
 import { loadActivePlanState } from './activePlanCandidates';
 import { removeSelectedCapabilityDuplicates } from './capabilityRecommendationCandidates';
+import { loadSuggestedActionSharedPropertyState } from './suggestedActionSharedPropertyState';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
@@ -99,6 +100,8 @@ export interface FinalizeSuggestedNextActionsDeps {
   loadUrgentHomeActionState?: typeof loadUrgentHomeActionState;
   /** Approved O1-O3 why-now state from one authorized Property Context read. */
   loadHomeOpportunityState?: typeof loadHomeOpportunityState;
+  /** Shared Property Context-backed profile/opportunity state; primarily injectable for environment-independent verification. */
+  loadSharedPropertyState?: typeof loadSuggestedActionSharedPropertyState;
   /** Canonical cross-session active decision-thread state. */
   loadActivePlanState?: typeof loadActivePlanState;
   entityValidatorFor?: typeof getSuggestedNextActionEntityValidator;
@@ -137,6 +140,25 @@ export async function finalizeSuggestedNextActionsWithReport(
   const clock = deps.clock ?? systemSuggestedNextActionClock;
   const mode = resolveSuggestedNextActionMode(input.result, input.operationId);
   const report: FinalizeSuggestedNextActionsReport = { mode, durationMs: 0, droppedProducers: [], diagnostics: null, exactFour: null, contextFailed: false };
+  let sharedPropertyStatePromise: ReturnType<typeof loadSuggestedActionSharedPropertyState> | undefined;
+  const sharedPropertyState = () => {
+    if (!input.propertyId) throw new Error('Shared suggested-action property state requires a property.');
+    return sharedPropertyStatePromise ??= (deps.loadSharedPropertyState ?? loadSuggestedActionSharedPropertyState)(
+      { userId: input.userId, propertyId: input.propertyId },
+      { now: () => clock.now() },
+    );
+  };
+  let actionableProfileStatePromise: ReturnType<typeof loadActionableProfileState> | undefined;
+  const resolvedActionableProfileLoader: typeof loadActionableProfileState = (loaderInput) => {
+    if (!actionableProfileStatePromise) {
+      actionableProfileStatePromise = deps.loadActionableProfileState
+        ? deps.loadActionableProfileState(loaderInput)
+        : sharedPropertyState().then((state) => state.profile);
+    }
+    return actionableProfileStatePromise;
+  };
+  const resolvedHomeOpportunityLoader: typeof loadHomeOpportunityState = deps.loadHomeOpportunityState
+    ?? (() => sharedPropertyState().then((state) => state.opportunities));
   // The candidate field is internal: whatever happens below it is never persisted.
   const { suggestedNextActionCandidates: _internal, ...withoutCandidates } = input.result;
   const passthrough = (actions: SuggestedNextAction[]): AskOperationResult => ({
@@ -169,9 +191,9 @@ export async function finalizeSuggestedNextActionsWithReport(
       const nomination = Promise.resolve(producer.nominate({
         result: input.result, executionId: input.executionId, sourceOperationId: input.operationId, propertyId: input.propertyId, message: input.message,
         userId: input.userId,
-        loadActionableProfileState: deps.loadActionableProfileState ?? loadActionableProfileState,
+        loadActionableProfileState: resolvedActionableProfileLoader,
         loadUrgentHomeActionState: deps.loadUrgentHomeActionState ?? loadUrgentHomeActionState,
-        loadHomeOpportunityState: deps.loadHomeOpportunityState ?? loadHomeOpportunityState,
+        loadHomeOpportunityState: resolvedHomeOpportunityLoader,
         loadActivePlanState: deps.loadActivePlanState ?? loadActivePlanState,
       }));
       if (producer.essential) {
@@ -297,7 +319,9 @@ export async function finalizeSuggestedNextActionsWithReport(
     });
     if (canUseProfileOrOpportunity) {
       try {
-        const completeness = await (deps.loadActionableCompleteness ?? loadActionableCompletenessForFinalizer)({ userId: input.userId, propertyId: input.propertyId });
+        const completeness = deps.loadActionableCompleteness
+          ? await deps.loadActionableCompleteness({ userId: input.userId, propertyId: input.propertyId })
+          : await resolvedActionableProfileLoader({ userId: input.userId, propertyId: input.propertyId });
         actionableCompleteness = completeness.fraction;
         audienceUncertain = completeness.audienceUncertain;
       } catch (error) {

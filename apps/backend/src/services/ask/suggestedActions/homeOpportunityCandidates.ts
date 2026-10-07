@@ -1,4 +1,5 @@
 import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
+import type { PropertyContextSnapshot } from '../../../modules/propertyContext/domain/contracts';
 import { WARRANTY_EXPIRING_DAYS, warrantyDaysRemaining } from '../handlers/warranties.handler';
 import {
   DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, SuggestedNextActionCandidateSchema,
@@ -27,12 +28,7 @@ const validDate = (value: unknown): Date | null => {
   return Number.isFinite(date.getTime()) ? date : null;
 };
 
-export async function loadHomeOpportunityState(
-  input: { userId: string; propertyId: string },
-  now = new Date(),
-  loadContext: typeof getPropertyContext = getPropertyContext,
-): Promise<HomeOpportunityState> {
-  const snapshot = await loadContext(input.propertyId, { userId: input.userId }, { scopes: ['FINANCIAL', 'COVERAGE', 'INSPECTION'] });
+export function homeOpportunityStateFromSnapshot(snapshot: PropertyContextSnapshot, now = new Date()): HomeOpportunityState {
   const capitalHorizon = new Date(now);
   capitalHorizon.setUTCMonth(capitalHorizon.getUTCMonth() + 24);
   const capitalItemsUpcoming = knownRows(snapshot.facts, 'financial.upcomingCapitalExposure').some((row) => {
@@ -51,6 +47,15 @@ export async function loadHomeOpportunityState(
     warrantyExpiring,
     openFindings: knownRows(snapshot.facts, 'inspection.openFindings').length > 0,
   };
+}
+
+export async function loadHomeOpportunityState(
+  input: { userId: string; propertyId: string },
+  now = new Date(),
+  loadContext: typeof getPropertyContext = getPropertyContext,
+): Promise<HomeOpportunityState> {
+  const snapshot = await loadContext(input.propertyId, { userId: input.userId }, { scopes: ['FINANCIAL', 'COVERAGE', 'INSPECTION'] });
+  return homeOpportunityStateFromSnapshot(snapshot, now);
 }
 
 export async function homeOpportunityCandidates(

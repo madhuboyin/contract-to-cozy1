@@ -97,7 +97,7 @@ test('the inventory entity validator is registered, and one batched query serves
       assert.equal(action.provenance.sourceExecutionId, 'exec-1');
       assert.equal(action.entityContext.entityId, 'item-1');
     }
-    assert.deepEqual(result.suggestions, ['Show my home inventory'], 'the plain fallback is preserved');
+    assert.deepEqual(result.suggestions, [], 'newly governed results do not preserve raw-string fallbacks');
   });
 });
 
