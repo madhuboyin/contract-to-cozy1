@@ -199,6 +199,8 @@ export interface AskExecutionResponse {
     retryResponse: boolean;
   };
   suggestions: string[];
+  /** True when this result passed through the server-governed action finalizer; string suggestions are historical-only thereafter. */
+  suggestedNextActionsGoverned?: boolean;
   /** Absent on executions persisted before the typed contract; those keep rendering from `suggestions`. */
   suggestedNextActions?: SuggestedNextAction[];
   createdAt: string;

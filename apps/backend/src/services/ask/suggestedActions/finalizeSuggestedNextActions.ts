@@ -32,7 +32,7 @@ import { recordExactFourDiagnostics } from './suggestedNextActionExactFourDiagno
 import {
   loadLifecycleState, offersFromExactFour, recordSuggestedActionOffers, type LifecycleState,
 } from './askSuggestedActionLifecycle.service';
-import { loadActionableCompletenessForFinalizer } from './actionableCompletenessLoader';
+import { loadActionableCompletenessForFinalizer, loadActionableProfileState } from './actionableCompletenessLoader';
 import { SUGGESTED_NEXT_ACTION_BUDGET } from './suggestedNextActionRegistry';
 import { SUGGESTED_NEXT_ACTION_PRODUCERS, type SuggestedNextActionProducer } from './suggestedNextActionProducers';
 import { getSuggestedNextActionEntityValidator } from './suggestedNextActionEntityValidators';
@@ -40,6 +40,7 @@ import './entityValidators/registerAll';
 import { collectPresentationIdentities } from './suggestedNextActionPresentationIdentities';
 import { loadCurrentOutcomeKeyHashes } from './suggestedNextActionHistory';
 import { systemSuggestedNextActionClock, type SuggestedNextActionClock } from './suggestedNextActionClock';
+import { recordSuggestedActionImpressions, recordSuggestedActionSuppression } from './suggestedActionAnalytics';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
@@ -88,9 +89,13 @@ export interface FinalizeSuggestedNextActionsDeps {
   recordOffers?: typeof recordSuggestedActionOffers;
   /** Actionable profile completeness, loaded ONLY when a nominated candidate can occupy a profile or opportunity slot. */
   loadActionableCompleteness?: (input: { userId: string; propertyId: string }) => Promise<{ fraction: number | null; audienceUncertain: boolean }>;
+  /** Full actionable-profile state for the governed profile-gap producer. */
+  loadActionableProfileState?: typeof loadActionableProfileState;
   entityValidatorFor?: typeof getSuggestedNextActionEntityValidator;
   /** Monotonic ms clock for the pipeline budget. */
   nowMs?: () => number;
+  recordImpressions?: typeof recordSuggestedActionImpressions;
+  recordSuppression?: typeof recordSuggestedActionSuppression;
 }
 
 async function defaultLoadOperationAvailability(input: { userId: string; propertyId: string | null }) {
@@ -124,7 +129,11 @@ export async function finalizeSuggestedNextActionsWithReport(
   const report: FinalizeSuggestedNextActionsReport = { mode, durationMs: 0, droppedProducers: [], diagnostics: null, exactFour: null, contextFailed: false };
   // The candidate field is internal: whatever happens below it is never persisted.
   const { suggestedNextActionCandidates: _internal, ...withoutCandidates } = input.result;
-  const passthrough = (actions: SuggestedNextAction[]): AskOperationResult => ({ ...withoutCandidates, suggestedNextActions: actions });
+  const passthrough = (actions: SuggestedNextAction[]): AskOperationResult => ({
+    ...withoutCandidates,
+    suggestedNextActionsGoverned: true,
+    suggestedNextActions: actions,
+  });
   const finish = (result: AskOperationResult) => {
     report.durationMs = nowMs() - startedAt;
     askSuggestedActionsPipelineDurationSeconds.observe({ mode }, report.durationMs / 1000);
@@ -144,6 +153,8 @@ export async function finalizeSuggestedNextActionsWithReport(
     try {
       nominations.set(producer.id, await producer.nominate({
         result: input.result, executionId: input.executionId, sourceOperationId: input.operationId, propertyId: input.propertyId, message: input.message,
+        userId: input.userId,
+        loadActionableProfileState: deps.loadActionableProfileState ?? loadActionableProfileState,
       }));
     } catch (error) {
       report.droppedProducers.push({ producer: producer.id, reason: 'ERROR' });
@@ -280,6 +291,9 @@ export async function finalizeSuggestedNextActionsWithReport(
   askSuggestedActionsCandidatesTotal.inc({ stage: 'eligible', mode }, policy.diagnostics.eligible);
   askSuggestedActionsCandidatesTotal.inc({ stage: 'rejected', mode }, Object.values(policy.diagnostics.rejections).reduce((a, b) => a + b, 0));
   askSuggestedActionsCandidatesTotal.inc({ stage: 'selected', mode }, policy.selected.length);
+  if (input.propertyId) (deps.recordSuppression ?? recordSuggestedActionSuppression)({
+    userId: input.userId, propertyId: input.propertyId, executionId: input.executionId, rejections: policy.diagnostics.rejections,
+  });
   if (policy.selected.length === 0) return finish(passthrough([]));
 
   // 4. Materialize with deterministic ids, registry TTLs capped at the source execution expiry.
@@ -295,6 +309,7 @@ export async function finalizeSuggestedNextActionsWithReport(
     mergedReasonCodes: entry.mergedReasonCodes,
     eligibility: { state: entry.verdict.state, reasonCodes: entry.verdict.reasonCodes, missingFactKeys: entry.verdict.missingFactKeys },
   }));
+  if (input.propertyId) (deps.recordImpressions ?? recordSuggestedActionImpressions)({ userId: input.userId, propertyId: input.propertyId, executionId: input.executionId, actions });
   // 5. Persist what was offered (exact-four answers only; every offer, so selection, completion and starter rotation have a row). Fail open.
   if (policy.exactFour.applicability === 'EXACT_FOUR' && input.propertyId) {
     await (deps.recordOffers ?? recordSuggestedActionOffers)({ userId: input.userId, propertyId: input.propertyId, offers: offersFromExactFour(policy.selected, policy.evaluated), now });

@@ -1080,6 +1080,9 @@ const AskExecutionResponseBaseSchema = z.object({
     retryResponse: z.boolean(),
   }).default({ intent: false, entity: false, homeRecord: false, retryResponse: false }),
   suggestions: z.array(z.string()).max(5),
+  // Present on every result that passed through the governed Suggested Next Action finalizer. Historical
+  // executions predate this marker and may still render their string suggestions; governed results never do.
+  suggestedNextActionsGoverned: z.boolean().optional(),
   // Plan §4 (Phase 1): absent on executions persisted before the typed contract, which keep rendering from `suggestions`.
   suggestedNextActions: z.array(SuggestedNextActionSchema).max(SUGGESTED_NEXT_ACTIONS_MAX).default([]),
   createdAt: z.string().datetime(),

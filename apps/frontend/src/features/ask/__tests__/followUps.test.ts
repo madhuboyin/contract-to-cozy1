@@ -37,6 +37,10 @@ describe('followUpItems', () => {
     expect(followUpItems({ ...latest(['Only show overdue']), suggestedNextActions: [] }, new Set(), key, NOW)).toHaveLength(1);
   });
 
+  it('never revives strings for a newly governed result whose typed row is empty', () => {
+    expect(followUpItems({ ...latest(['Route this text']), suggestedNextActionsGoverned: true, suggestedNextActions: [] }, new Set(), key, NOW)).toEqual([]);
+  });
+
   it('prefers typed actions over strings, in the server order, labelled by label', () => {
     const items = followUpItems(withTyped([typed('v1.aaaaaaaaaaaaaaaa', 'Add the brand'), typed('v1.bbbbbbbbbbbbbbbb', 'Set the purchase date')], ['A string']), new Set(), key, NOW);
     expect(items.map((item) => [item.kind, item.label])).toEqual([['ACTION', 'Add the brand'], ['ACTION', 'Set the purchase date']]);

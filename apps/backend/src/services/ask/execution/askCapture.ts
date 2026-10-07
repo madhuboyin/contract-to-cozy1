@@ -301,7 +301,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: replayed.reasonCode,
         contextVersion: replayed.contextVersion ?? previousCapture.contextVersion,
         parametersJson: replayed.parameters ? asInputJson(replayed.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions, suggestedNextActions: replayed.suggestedNextActions ?? [], skillHandoff: replayed.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, replayed.blocks) }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: replayed.blocks, captureRequests: replayed.captureRequests ?? [], confirmation: replayed.confirmation ?? null, clarification: replayed.clarification ?? null, suggestions: replayed.suggestions, suggestedNextActionsGoverned: replayed.suggestedNextActionsGoverned === true, suggestedNextActions: replayed.suggestedNextActions ?? [], skillHandoff: replayed.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, replayed.blocks) }),
         completedAt: terminalStatus(replayed.status) ? new Date() : null,
       },
     });
@@ -1013,7 +1013,7 @@ export async function submitAskCapture(userId: string, executionId: string, inpu
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion ?? capturedContextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });

@@ -5,23 +5,27 @@ import { logger } from '../../../lib/logger';
 import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
 import { getFactDefinition, isFactApplicable } from '../../../modules/propertyContext/catalog/factCatalog';
 import { PROPERTY_AREA_CAPTURE_SCOPES } from '../../../modules/propertyContext/catalog/featureRequirementRegistry';
-import { computeActionableCompleteness, type ProfileFactObservation } from './actionableProfileRegistry';
+import { computeActionableCompleteness, type ActionableCompleteness, type ProfileFactObservation } from './actionableProfileRegistry';
 import { loadProfileAudienceState } from './profileAudienceAdapter';
+
+export async function loadActionableProfileState(input: { userId: string; propertyId: string }): Promise<ActionableCompleteness> {
+  const [snapshot, audience] = await Promise.all([
+    getPropertyContext(input.propertyId, { userId: input.userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] }),
+    loadProfileAudienceState(input.propertyId),
+  ]);
+  const facts: Record<string, ProfileFactObservation> = {};
+  for (const [key, fact] of Object.entries(snapshot.facts)) facts[key] = { state: fact.state as ProfileFactObservation['state'], value: fact.value };
+  return computeActionableCompleteness({
+    facts, activeAudiences: audience.audiences, audienceUncertain: !audience.ok,
+    isCatalogApplicable: (factKey) => {
+      try { return isFactApplicable(getFactDefinition(factKey), snapshot.facts); } catch { return true; }
+    },
+  });
+}
 
 export async function loadActionableCompletenessForFinalizer(input: { userId: string; propertyId: string }): Promise<{ fraction: number | null; audienceUncertain: boolean }> {
   try {
-    const [snapshot, audience] = await Promise.all([
-      getPropertyContext(input.propertyId, { userId: input.userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] }),
-      loadProfileAudienceState(input.propertyId),
-    ]);
-    const facts: Record<string, ProfileFactObservation> = {};
-    for (const [key, fact] of Object.entries(snapshot.facts)) facts[key] = { state: fact.state as ProfileFactObservation['state'], value: fact.value };
-    const completeness = computeActionableCompleteness({
-      facts, activeAudiences: audience.audiences, audienceUncertain: !audience.ok,
-      isCatalogApplicable: (factKey) => {
-        try { return isFactApplicable(getFactDefinition(factKey), snapshot.facts); } catch { return true; }
-      },
-    });
+    const completeness = await loadActionableProfileState(input);
     return { fraction: completeness.fraction, audienceUncertain: completeness.audienceUncertain };
   } catch (error) {
     logger.warn({ err: error, propertyId: input.propertyId }, '[ask-suggested-actions] actionable completeness load failed');

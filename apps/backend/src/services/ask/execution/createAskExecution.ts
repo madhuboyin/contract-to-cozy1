@@ -28,6 +28,7 @@ import { reclaimOrphanedRunningExecution } from '../execution/askSessions';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
 import { suggestedNextActionSemanticKeyHash } from '../suggestedActions/suggestedNextActionIdentity';
 import { recordSuggestedActionCompleted, recordSuggestedActionSelected } from '../suggestedActions/askSuggestedActionLifecycle.service';
+import { recordSuggestedActionOutcomeAnalytics, recordSuggestedActionSelectedAnalytics } from '../suggestedActions/suggestedActionAnalytics';
 import { resolveSuggestedActionSelection, type SuggestedActionResolution, type SuggestedActionRejectionReason } from '../suggestedActions/suggestedNextActionSelection';
 
 function stableSkillRoutingReasonCode(outcome: SkillRoutingOutcome): string | null {
@@ -235,6 +236,9 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           operationId: selected.operationId, outcomeKey: selected.outcomeKey, entityType: selected.entityContext.entityType, entityId: selected.entityContext.entityId,
         }, new Date());
       }
+      recordSuggestedActionSelectedAnalytics({
+        userId, resultingExecutionId: execution.id, sourceExecutionId: suggestionResolution.sourceExecutionId, action: selected,
+      });
     } catch {
       // Telemetry must never fail the answer the user asked for.
     }
@@ -549,7 +553,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         // at this point), so continuesExecutionId is a fresh assignment
         // from this turn's own follow-up resolution, not a preserved value
         // -- only originalResponse comes from the shared history policy.
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedExecutionHistory(execution.resultJson, result.blocks).originalResponse }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedExecutionHistory(execution.resultJson, result.blocks).originalResponse }),
         completedAt,
       },
     });
@@ -559,6 +563,10 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       await recordSuggestedActionCompleted(userId, done.entityContext.propertyId!, {
         operationId: done.operationId, outcomeKey: done.outcomeKey, entityType: done.entityContext.entityType, entityId: done.entityContext.entityId,
       }, new Date());
+      recordSuggestedActionOutcomeAnalytics({
+        userId, resultingExecutionId: execution.id, sourceExecutionId: suggestionResolution.sourceExecutionId, action: done,
+        status: result.status, reasonCode: result.reasonCode ?? null,
+      });
     }
     if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: result.status, metadataJson: asInputJson({ skillId: selectedSkill?.id ?? null, skillVersion: selectedSkill?.version ?? null, operationId: operation.operationId, operationVersion: operation.version, blockTypes: result.blocks.map((block) => block.type) }) } });

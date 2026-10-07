@@ -377,6 +377,8 @@ export interface AskOperationResult {
    * (Phase 2); handlers keep nominating through `suggestions` until their domain migrates. Persisted as the offered-action ledger.
    */
   suggestedNextActions?: SuggestedNextAction[];
+  /** Marks a newly finalized result so clients never revive its legacy string suggestions when the typed row is empty. */
+  suggestedNextActionsGoverned?: boolean;
   /**
    * Typed nominations a handler attaches for the shared finalizer (plan §5). Never persisted: the finalizer validates, evaluates,
    * ranks and deduplicates them into `suggestedNextActions` and clears this field.

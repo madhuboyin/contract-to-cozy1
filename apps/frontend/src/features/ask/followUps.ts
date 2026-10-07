@@ -50,7 +50,7 @@ export type FollowUpItem =
  * selection) and caps the row at the display limit.
  */
 export function followUpItems(
-  latest: Pick<AskExecutionResponse, 'suggestions' | 'correctionCapabilities' | 'suggestedNextActions'> | undefined,
+  latest: Pick<AskExecutionResponse, 'suggestions' | 'correctionCapabilities' | 'suggestedNextActions' | 'suggestedNextActionsGoverned'> | undefined,
   askedKeys: ReadonlySet<string>,
   keyOf: (suggestion: string) => string,
   now: number = Date.now(),
@@ -58,6 +58,9 @@ export function followUpItems(
   if (!latest) return [];
   const typed = latest.suggestedNextActions ?? [];
   if (typed.length === 0) {
+    // A governed result with no eligible typed actions is an intentional empty/degraded row. Never revive its
+    // handler-authored strings and send an application-authored choice back through semantic routing.
+    if (latest.suggestedNextActionsGoverned === true) return [];
     return followUpSuggestions(latest, askedKeys, keyOf).map((text) => ({ kind: 'TEXT' as const, key: `text:${keyOf(text)}`, label: text, text }));
   }
   const seen = new Set<string>();

@@ -10,6 +10,8 @@ import {
   homeBasicsStarters, hiringGuideStarters, propertySummaryStarters, seasonalHomeCareStarters,
   STARTER_HIRING_GUIDE_PRODUCER_ID, STARTER_HOME_BASICS_PRODUCER_ID, STARTER_PROPERTY_SUMMARY_PRODUCER_ID, STARTER_SEASONAL_PRODUCER_ID,
 } from './starterCandidates';
+import { ACTIONABLE_PROFILE_PRODUCER_ID, actionableProfileCandidates } from './actionableProfileCandidates';
+import { loadActionableProfileState } from './actionableCompletenessLoader';
 
 export interface ProducerContext {
   result: AskOperationResult;
@@ -17,6 +19,8 @@ export interface ProducerContext {
   sourceOperationId: string | null;
   propertyId: string | null;
   message: string;
+  userId: string;
+  loadActionableProfileState: typeof loadActionableProfileState;
 }
 
 export interface SuggestedNextActionProducer {
@@ -52,4 +56,11 @@ export const starterProducers: readonly SuggestedNextActionProducer[] = [
   starterProducer(STARTER_HIRING_GUIDE_PRODUCER_ID, hiringGuideStarters),
 ];
 
-export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [resultCandidatesProducer, ...starterProducers];
+export const actionableProfileProducer: SuggestedNextActionProducer = {
+  id: ACTIONABLE_PROFILE_PRODUCER_ID,
+  source: 'MISSING_DETAIL',
+  essential: false,
+  nominate: ({ userId, propertyId, loadActionableProfileState: loadState }) => propertyId ? actionableProfileCandidates({ userId, propertyId }, loadState) : [],
+};
+
+export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [resultCandidatesProducer, actionableProfileProducer, ...starterProducers];
