@@ -1,6 +1,7 @@
 // Plan §5.1: producers nominate candidates; they never decide visibility. The registry is a static, ordered list so the
 // documentation-parity script (§13) can read it. Handlers attach typed candidates to their result and the one producer below passes them
-// to the policy; there is no string-compatibility layer (no real customers, so unconverted handlers simply keep plain-text chips).
+// to the policy. Raw handler suggestions may still exist while migration is in progress, but the finalizer strips them from every
+// newly governed result; only historical results without the governance marker retain frontend compatibility.
 //
 // A producer failure is isolated by the finalizer (its nominations are dropped and counted); it can never crash startup or
 // invalidate an otherwise safe answer, so producers may throw.
@@ -12,6 +13,8 @@ import {
 } from './starterCandidates';
 import { ACTIONABLE_PROFILE_PRODUCER_ID, actionableProfileCandidates } from './actionableProfileCandidates';
 import { loadActionableProfileState } from './actionableCompletenessLoader';
+import { SKILL_HANDOFF_PRODUCER_ID, skillHandoffCandidates } from './skillHandoffCandidates';
+import { URGENT_WORK_PRODUCER_ID, loadUrgentHomeActionState, urgentWorkCandidates } from './urgentWorkCandidates';
 
 export interface ProducerContext {
   result: AskOperationResult;
@@ -21,6 +24,7 @@ export interface ProducerContext {
   message: string;
   userId: string;
   loadActionableProfileState: typeof loadActionableProfileState;
+  loadUrgentHomeActionState: typeof loadUrgentHomeActionState;
 }
 
 export interface SuggestedNextActionProducer {
@@ -63,4 +67,22 @@ export const actionableProfileProducer: SuggestedNextActionProducer = {
   nominate: ({ userId, propertyId, loadActionableProfileState: loadState }) => propertyId ? actionableProfileCandidates({ userId, propertyId }, loadState) : [],
 };
 
-export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [resultCandidatesProducer, actionableProfileProducer, ...starterProducers];
+export const skillHandoffProducer: SuggestedNextActionProducer = {
+  id: SKILL_HANDOFF_PRODUCER_ID,
+  source: 'SKILL_HANDOFF',
+  essential: true,
+  nominate: ({ result, sourceOperationId, propertyId }) => skillHandoffCandidates({ result, sourceOperationId, propertyId }),
+};
+
+export const urgentWorkProducer: SuggestedNextActionProducer = {
+  id: URGENT_WORK_PRODUCER_ID,
+  source: 'PLATFORM_STATE',
+  essential: false,
+  nominate: ({ userId, propertyId, loadUrgentHomeActionState: loadState }) => propertyId
+    ? urgentWorkCandidates({ userId, propertyId }, loadState)
+    : [],
+};
+
+export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [
+  resultCandidatesProducer, skillHandoffProducer, urgentWorkProducer, actionableProfileProducer, ...starterProducers,
+];

@@ -362,7 +362,8 @@ test('with nothing nominated the finalizer issues no reads at all and returns an
   const { calls, deps: d } = deps();
   const { result, report } = await finalizeSuggestedNextActionsWithReport(finalizeInput(baseResult()), d);
   assert.deepEqual(result.suggestedNextActions, []);
-  assert.deepEqual(result.suggestions, ['A legacy string'], 'legacy strings pass through untouched');
+  assert.deepEqual(result.suggestions, [], 'newly governed results strip legacy raw strings at the persistence boundary');
+  assert.equal(result.suggestedNextActionsGoverned, true);
   assert.deepEqual(calls, { availability: 0, expires: 0, validator: 0 });
   assert.equal(report.diagnostics, null);
 });
@@ -462,9 +463,9 @@ test('mode: emergency/restricted boundaries and recovery statuses are SAFE_RECOV
 test('the result producer passes handler-attached candidates through, and nothing else nominates for a property-less turn', () => {
   assert.deepEqual(resultCandidatesProducer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }), []);
   assert.deepEqual(resultCandidatesProducer.nominate({ result: baseResult({ suggestedNextActionCandidates: [candidate()] }), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }).length, 1);
-  // Activation: the registry now also carries the four starter producers, which nominate ONLY for a property-scoped turn.
+  // Activation also carries governed Skill, urgent-work, profile-gap and starter producers.
   const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
-  assert.equal(SUGGESTED_NEXT_ACTION_PRODUCERS.length, 1 + starterProducers.length);
+  assert.equal(SUGGESTED_NEXT_ACTION_PRODUCERS.length, 4 + starterProducers.length);
   for (const producer of starterProducers) {
     assert.deepEqual(producer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: null, message: 'm' }), [], producer.id);
     assert.ok(producer.nominate({ result: baseResult(), executionId: 'e', sourceOperationId: null, propertyId: 'p1', message: 'm' }).length >= 1, producer.id);

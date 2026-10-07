@@ -11,7 +11,7 @@ const { prisma } = require('../../src/lib/prisma.ts');
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
 const { evaluateAskOperationAvailability } = require('../../src/services/ask/support/answerGuards.ts');
 const { finalizeSuggestedNextActionsWithReport } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
-const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers, actionableProfileProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
+const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers, actionableProfileProducer, skillHandoffProducer, urgentWorkProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
 const { SUGGESTED_NEXT_ACTION_LIMITS, CURATED_STARTER_OUTCOME_KEYS, REPEATABLE_OUTCOMES, PROMPT_HISTORY_EXEMPT_OUTCOMES, SUGGESTED_NEXT_ACTION_BUDGET } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
 const { lifecycleKey, STARTER_ROTATION_MS } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
 const { suggestedNextActionSemanticKeyHash } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
@@ -46,6 +46,7 @@ async function run({ role, mode, disabled, status = 'ANSWERED', message = 'What 
       loadLifecycleState: async (input) => { calls.lifecycle += 1; return lifecycle(input); },
       loadActionableCompleteness: async () => { calls.completeness += 1; return { fraction: 1, audienceUncertain: false }; },
       loadActionableProfileState: async () => ({ denominatorVersion: 'actionable-profile-1:BASE', audiences: [], audienceUncertain: false, fraction: 1, knownWeight: 1, totalWeight: 1, unresolved: [], unresolvedByArea: {} }),
+      loadUrgentHomeActionState: async () => ({ nowCount: 0 }),
       recordOffers: async (input) => { offers.push(input); return { attempted: input.offers.length, ok: true }; },
       recordImpressions: () => {}, recordSuppression: () => {},
     },
@@ -62,7 +63,7 @@ function assertFour(r, label) {
 }
 
 test('the registry is populated for activation: all four starter producers are registered and all seven outcomes are BOTH repeatable and prompt-history exempt', () => {
-  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', actionableProfileProducer.id, ...starterProducers.map((p) => p.id)]);
+  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', skillHandoffProducer.id, urgentWorkProducer.id, actionableProfileProducer.id, ...starterProducers.map((p) => p.id)]);
   assert.equal(CURATED_STARTER_OUTCOME_KEYS.length, 7);
   for (const key of CURATED_STARTER_OUTCOME_KEYS) { assert.ok(REPEATABLE_OUTCOMES.has(key), key); assert.ok(PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), key); }
   for (const producer of starterProducers) assert.equal(producer.essential, false, 'starters are the first dropped under budget');
@@ -109,7 +110,7 @@ test('RECENT STARTER HISTORY: five just-asked starter messages plus the current 
   const completed = new Set(ALL.map(hashOf));
   const out = await finalizeSuggestedNextActionsWithReport(
     { result: { status: 'ANSWERED', blocks: [], suggestions: [] }, executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PROPERTY, operationId: 'MAINTENANCE_STATUS', message: 'What maintenance is pending?', completedSemanticKeyHashes: completed },
-    { clock: { now: () => NOW }, loadOperationAvailability: async () => availability(), loadExecutionExpiresAt: async () => null, loadCurrentOutcomeKeyHashes: async () => new Set(), loadLifecycleState: okLifecycle(), loadActionableProfileState: async () => ({ denominatorVersion: 'actionable-profile-1:BASE', audiences: [], audienceUncertain: false, fraction: 1, knownWeight: 1, totalWeight: 1, unresolved: [], unresolvedByArea: {} }), recordOffers: async () => ({ attempted: 0, ok: true }), recordImpressions: () => {}, recordSuppression: () => {} },
+    { clock: { now: () => NOW }, loadOperationAvailability: async () => availability(), loadExecutionExpiresAt: async () => null, loadCurrentOutcomeKeyHashes: async () => new Set(), loadLifecycleState: okLifecycle(), loadActionableProfileState: async () => ({ denominatorVersion: 'actionable-profile-1:BASE', audiences: [], audienceUncertain: false, fraction: 1, knownWeight: 1, totalWeight: 1, unresolved: [], unresolvedByArea: {} }), loadUrgentHomeActionState: async () => ({ nowCount: 0 }), recordOffers: async () => ({ attempted: 0, ok: true }), recordImpressions: () => {}, recordSuppression: () => {} },
   );
   assert.equal(out.result.suggestedNextActions.length, 4, 'every starter completed in the session: repeatable, so still four');
 });
@@ -141,7 +142,7 @@ test('BUDGET-DROPPED OPPORTUNITY PRODUCER: a nonessential producer dropped for b
   const opportunity = { id: 'opportunity.fake', source: 'CAPABILITY_RECOMMENDATION', essential: false, nominate: () => [{ ...ALL[0], slotClass: 'HOME_OPPORTUNITY', operationId: 'WARRANTY_LOOKUP', outcomeKey: 'REVIEW_X' }] };
   // The clock stays inside the budget for the essential and starter producers, then jumps past it before the last producer.
   // Calls: start, one per producer (result producer, four starters, the opportunity producer), then the finish.
-  const nowMs = () => { ticks += 1; return ticks <= 3 + starterProducers.length ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
+  const nowMs = () => { ticks += 1; return ticks <= 5 + starterProducers.length ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
   const r = await run({ producers: [...SUGGESTED_NEXT_ACTION_PRODUCERS, opportunity], nowMs });
   assert.deepEqual(r.report.droppedProducers, [{ producer: 'opportunity.fake', reason: 'BUDGET' }]);
   assertFour(r, 'budget-dropped opportunity');
@@ -152,7 +153,7 @@ test('BOUNDED DIAGNOSTIC: when the starters themselves are dropped for budget, n
   const nowMs = () => { ticks += 1; return ticks === 1 ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
   const r = await run({ nowMs });
   assert.equal(r.shown.length, 0);
-  assert.equal(r.report.droppedProducers.length, starterProducers.length + 1);
+  assert.equal(r.report.droppedProducers.length, starterProducers.length + 2);
   assert.ok(r.report.droppedProducers.every((d) => d.reason === 'BUDGET'));
   assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR');
   assert.equal(r.report.exactFour.shortage, 4);

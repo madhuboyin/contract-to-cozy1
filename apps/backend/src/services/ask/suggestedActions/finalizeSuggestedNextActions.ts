@@ -41,6 +41,7 @@ import { collectPresentationIdentities } from './suggestedNextActionPresentation
 import { loadCurrentOutcomeKeyHashes } from './suggestedNextActionHistory';
 import { systemSuggestedNextActionClock, type SuggestedNextActionClock } from './suggestedNextActionClock';
 import { recordSuggestedActionImpressions, recordSuggestedActionSuppression } from './suggestedActionAnalytics';
+import { loadUrgentHomeActionState } from './urgentWorkCandidates';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
@@ -91,6 +92,8 @@ export interface FinalizeSuggestedNextActionsDeps {
   loadActionableCompleteness?: (input: { userId: string; propertyId: string }) => Promise<{ fraction: number | null; audienceUncertain: boolean }>;
   /** Full actionable-profile state for the governed profile-gap producer. */
   loadActionableProfileState?: typeof loadActionableProfileState;
+  /** Canonical Home Action NOW-bucket state for the governed urgent-work producer. */
+  loadUrgentHomeActionState?: typeof loadUrgentHomeActionState;
   entityValidatorFor?: typeof getSuggestedNextActionEntityValidator;
   /** Monotonic ms clock for the pipeline budget. */
   nowMs?: () => number;
@@ -131,6 +134,10 @@ export async function finalizeSuggestedNextActionsWithReport(
   const { suggestedNextActionCandidates: _internal, ...withoutCandidates } = input.result;
   const passthrough = (actions: SuggestedNextAction[]): AskOperationResult => ({
     ...withoutCandidates,
+    // New results are typed-only. Historical stored results can still expose their legacy strings because the frontend
+    // uses suggestedNextActionsGoverned to distinguish them, but carrying fresh raw strings forward would preserve the
+    // duplicate, ungoverned producer surface Phase 5 removes.
+    suggestions: [],
     suggestedNextActionsGoverned: true,
     suggestedNextActions: actions,
   });
@@ -155,6 +162,7 @@ export async function finalizeSuggestedNextActionsWithReport(
         result: input.result, executionId: input.executionId, sourceOperationId: input.operationId, propertyId: input.propertyId, message: input.message,
         userId: input.userId,
         loadActionableProfileState: deps.loadActionableProfileState ?? loadActionableProfileState,
+        loadUrgentHomeActionState: deps.loadUrgentHomeActionState ?? loadUrgentHomeActionState,
       }));
     } catch (error) {
       report.droppedProducers.push({ producer: producer.id, reason: 'ERROR' });
@@ -314,7 +322,11 @@ export async function finalizeSuggestedNextActionsWithReport(
   if (policy.exactFour.applicability === 'EXACT_FOUR' && input.propertyId) {
     await (deps.recordOffers ?? recordSuggestedActionOffers)({ userId: input.userId, propertyId: input.propertyId, offers: offersFromExactFour(policy.selected, policy.evaluated), now });
   }
-  return finish(passthrough(actions));
+  const presented = passthrough(actions);
+  // The compact action now owns this destination. Keeping the legacy handoff card would duplicate the same
+  // registered operation on two surfaces and bypass the shared row's ordering/lifecycle semantics.
+  if (actions.some((action) => action.provenance.source === 'SKILL_HANDOFF')) presented.skillHandoff = null;
+  return finish(presented);
 }
 
 export async function finalizeSuggestedNextActions(input: FinalizeSuggestedNextActionsInput, deps?: FinalizeSuggestedNextActionsDeps): Promise<AskOperationResult> {

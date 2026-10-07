@@ -73,6 +73,8 @@ export const PRODUCER_SLOT_GRANTS: Readonly<Record<string, ProducerSlotGrant>> =
     ownershipRequiresRegisteredRelationship: true,
   },
   'profile.actionable-gaps': { allowed: new Set(['PROFILE_GAP']), fallback: 'PROFILE_GAP' },
+  'handoff.skill': { allowed: new Set(['GOVERNED_CAPABILITY']), fallback: 'GOVERNED_CAPABILITY' },
+  'home-actions.urgent': { allowed: new Set(['URGENT_WORK']), fallback: 'HOME_OPPORTUNITY' },
   // Curated starters (inventory D-O4/D-O16): last-resort fill only. A starter producer may occupy no other slot class and claims nothing.
   'starter.seasonal-home-care': { allowed: new Set(['CURATED_STARTER']), fallback: 'HOME_OPPORTUNITY' },
   'starter.home-basics': { allowed: new Set(['CURATED_STARTER']), fallback: 'HOME_OPPORTUNITY' },
