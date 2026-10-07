@@ -547,7 +547,25 @@ export class DiyService {
     return {
       ...project,
       completionEffects: describeCompletionEffects(project.status, event?.status ?? null, project.completionBasis ?? null),
-      taskLink: (await this.readTaskLink(project)).view,
+      taskLink: (await this.readTaskLink(prisma, project)).view,
+    };
+  }
+
+  /**
+   * Just the effect status of one project, for the Ask guide: the completion-effects view (a completed project) and the task-link view (an open one). READ-ONLY, scoped to the
+   * property; null when the project is not in it. It never retries or repairs anything.
+   */
+  async readProjectEffects(projectId: string, propertyId: string) {
+    const project = await prisma.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { id: true, propertyId: true, status: true, maintenanceTaskId: true, completionBasis: true } });
+    if (!project) return null;
+    const event = project.status === 'COMPLETED' ? await prisma.domainEvent.findUnique({ where: { idempotencyKey: DIY_COMPLETION_EVENT_KEY(projectId) }, select: { status: true, updatedAt: true } }) : null;
+    const link = await this.readTaskLink(prisma, project);
+    return {
+      status: project.status,
+      completionEffects: describeCompletionEffects(project.status, event?.status ?? null, project.completionBasis ?? null),
+      taskLink: link.view,
+      // The versions of the two events, so a confirmation can tell that the request it was drawn for has since been re-queued and failed AGAIN.
+      versions: { completion: event?.updatedAt ? new Date(event.updatedAt).toISOString() : null, task: link.event?.updatedAt ? new Date(link.event.updatedAt).toISOString() : null },
     };
   }
 
@@ -563,23 +581,23 @@ export class DiyService {
   }
 
   /** Reads the linked task and its reconcile event as they are now, and maps them to the disclosure. No writes. */
-  private async readTaskLink(project: { id: string; propertyId: string; status: string; maintenanceTaskId: string | null; completionBasis: string | null }) {
+  private async readTaskLink(db: Prisma.TransactionClient | typeof prisma, project: { id: string; propertyId: string; status: string; maintenanceTaskId: string | null; completionBasis: string | null }) {
     const open = project.status === 'PLANNING' || project.status === 'IN_PROGRESS';
     const task = open && project.maintenanceTaskId
-      ? await prisma.propertyMaintenanceTask.findFirst({ where: { id: project.maintenanceTaskId, propertyId: project.propertyId }, select: { status: true, completionMetadata: true } })
+      ? await db.propertyMaintenanceTask.findFirst({ where: { id: project.maintenanceTaskId, propertyId: project.propertyId }, select: { status: true, completionMetadata: true } })
       : null;
     const occurrenceId = task ? occurrenceIdOf(task.completionMetadata) : null;
     const event = task && occurrenceId && project.maintenanceTaskId
-      ? await prisma.domainEvent.findUnique({ where: { idempotencyKey: DIY_TASK_RECONCILE_EVENT_KEY(project.maintenanceTaskId, occurrenceId) }, select: { id: true, status: true, payload: true, updatedAt: true } })
+      ? await db.domainEvent.findUnique({ where: { idempotencyKey: DIY_TASK_RECONCILE_EVENT_KEY(project.maintenanceTaskId, occurrenceId) }, select: { id: true, status: true, payload: true, updatedAt: true } })
       : null;
     return { view: describeTaskLink({ project, task: task ?? null, event: event ?? null }), event };
   }
 
   /** Resets one dead-lettered outbox event to PENDING (same row, conditional on status and version), recording who, when and how many times in its payload. */
-  private async requeueDeadLetter(event: { id: string; payload: unknown; updatedAt: Date }, actorUserId: string): Promise<{ reset: boolean; count: number }> {
+  private async requeueDeadLetter(db: Prisma.TransactionClient | typeof prisma, event: { id: string; payload: unknown; updatedAt: Date }, actorUserId: string): Promise<{ reset: boolean; count: number }> {
     const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload) ? (event.payload as Record<string, any>) : {};
     const count = Number(payload.recovery?.count ?? 0) + 1;
-    const written = await prisma.domainEvent.updateMany({
+    const written = await db.domainEvent.updateMany({
       where: { id: event.id, status: 'DEAD_LETTER', updatedAt: event.updatedAt },
       data: {
         status: 'PENDING', attempts: 0, availableAt: new Date(), lastError: null, processingStartedAt: null, leaseExpiresAt: null, processedAt: null,
@@ -597,22 +615,25 @@ export class DiyService {
    * worker is the only trigger.
    */
   async retryCompletionEffects(projectId: string, propertyId: string, actorUserId: string) {
-    if (!(await hasPropertyRoleWithin(prisma, actorUserId, propertyId, 'CONTRIBUTOR'))) {
-      throw new APIError('You do not have access to change this project.', 403, 'DIY_ACCESS_REVOKED');
-    }
-    const project = await prisma.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { id: true, status: true, completionBasis: true } });
-    if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+    // The WHOLE decision is one transaction: the role check, the project and event lookup, the eligibility check and the conditional re-queue (step 7C, plan section 4).
+    return prisma.$transaction(async (tx) => {
+      if (!(await hasPropertyRoleWithin(tx, actorUserId, propertyId, 'CONTRIBUTOR'))) {
+        throw new APIError('You do not have access to change this project.', 403, 'DIY_ACCESS_REVOKED');
+      }
+      const project = await tx.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { id: true, status: true, completionBasis: true } });
+      if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
 
-    const key = DIY_COMPLETION_EVENT_KEY(projectId);
-    const event = project.status === 'COMPLETED' ? await prisma.domainEvent.findUnique({ where: { idempotencyKey: key } }) : null;
-    let reset = false;
-    if (event && event.status === 'DEAD_LETTER') {
-      const result = await this.requeueDeadLetter(event, actorUserId);
-      reset = result.reset;
-      if (reset) logger.info({ projectId, eventId: event.id, actorUserId, recoveryCount: result.count }, '[DIY] completion effects re-queued from a dead letter');
-    }
-    const current = project.status === 'COMPLETED' ? await prisma.domainEvent.findUnique({ where: { idempotencyKey: key }, select: { status: true } }) : null;
-    return { reset, completionEffects: describeCompletionEffects(project.status, current?.status ?? null, project.completionBasis ?? null) };
+      const key = DIY_COMPLETION_EVENT_KEY(projectId);
+      const event = project.status === 'COMPLETED' ? await tx.domainEvent.findUnique({ where: { idempotencyKey: key } }) : null;
+      let reset = false;
+      if (event && event.status === 'DEAD_LETTER') {
+        const result = await this.requeueDeadLetter(tx, event, actorUserId);
+        reset = result.reset;
+        if (reset) logger.info({ projectId, eventId: event.id, actorUserId, recoveryCount: result.count }, '[DIY] completion effects re-queued from a dead letter');
+      }
+      const current = project.status === 'COMPLETED' ? await tx.domainEvent.findUnique({ where: { idempotencyKey: key }, select: { status: true } }) : null;
+      return { reset, completionEffects: describeCompletionEffects(project.status, current?.status ?? null, project.completionBasis ?? null) };
+    });
   }
 
   /**
@@ -622,20 +643,23 @@ export class DiyService {
    * every project that already has a final outcome, it re-drives only what failed.
    */
   async retryTaskReconciliation(projectId: string, propertyId: string, actorUserId: string) {
-    if (!(await hasPropertyRoleWithin(prisma, actorUserId, propertyId, 'CONTRIBUTOR'))) {
-      throw new APIError('You do not have access to change this project.', 403, 'DIY_ACCESS_REVOKED');
-    }
-    const project = await prisma.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { id: true, propertyId: true, status: true, maintenanceTaskId: true, completionBasis: true } });
-    if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
+    // One transaction for the whole decision, as for the completion effects: role, lookups, eligibility and the conditional re-queue.
+    return prisma.$transaction(async (tx) => {
+      if (!(await hasPropertyRoleWithin(tx, actorUserId, propertyId, 'CONTRIBUTOR'))) {
+        throw new APIError('You do not have access to change this project.', 403, 'DIY_ACCESS_REVOKED');
+      }
+      const project = await tx.diyProject.findFirst({ where: { id: projectId, propertyId }, select: { id: true, propertyId: true, status: true, maintenanceTaskId: true, completionBasis: true } });
+      if (!project) throw new APIError('Project not found', 404, 'PROJECT_NOT_FOUND');
 
-    const before = await this.readTaskLink(project);
-    let reset = false;
-    if (before.view?.canRecover && before.event && before.event.status === 'DEAD_LETTER') {
-      const result = await this.requeueDeadLetter(before.event, actorUserId);
-      reset = result.reset;
-      if (reset) logger.info({ projectId, eventId: before.event.id, actorUserId, recoveryCount: result.count }, '[DIY] task reconciliation re-queued from a dead letter');
-    }
-    return { reset, taskLink: (await this.readTaskLink(project)).view };
+      const before = await this.readTaskLink(tx, project);
+      let reset = false;
+      if (before.view?.canRecover && before.event && before.event.status === 'DEAD_LETTER') {
+        const result = await this.requeueDeadLetter(tx, before.event, actorUserId);
+        reset = result.reset;
+        if (reset) logger.info({ projectId, eventId: before.event.id, actorUserId, recoveryCount: result.count }, '[DIY] task reconciliation re-queued from a dead letter');
+      }
+      return { reset, taskLink: (await this.readTaskLink(tx, project)).view };
+    });
   }
 
   async updateProject(projectId: string, propertyId: string, patch: { notesJson?: any; photoUrls?: string[] }) {

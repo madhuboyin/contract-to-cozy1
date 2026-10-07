@@ -121,6 +121,9 @@ export type AskOperationId =
   // Both are confirmation-gated, IRREVERSIBLE in Cozy, and reached only by the declared actions on the project guide.
   | 'DIY_PROJECT_COMPLETE'
   | 'DIY_PROJECT_ABANDON'
+  // DIY completion recovery (step 7C): ask for the records after a completion, or a failed link to a maintenance task, to be queued again. Confirmation-gated; a retry of an
+  // idempotent request, never a verification.
+  | 'DIY_COMPLETION_RECOVER'
   | 'PROJECT_TRACKER_PROJECTS'
   | 'SERVICE_PRICE_CHECKS'
   | 'HOME_TIMELINE_EVENTS'
@@ -328,6 +331,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // DIY project commands (ASK_COZY_DIY_PROJECT_COMMANDS_PLAN, 7B): confirmation-gated writes reached only by declared actions on the DIY project guide.
   'DIY_PROJECT_COMPLETE',
   'DIY_PROJECT_ABANDON',
+  // DIY completion recovery (7C): a confirmation-gated write reached only by declared actions on the DIY project guide.
+  'DIY_COMPLETION_RECOVER',
   // Seasonal home care (exact-four starter source, inventory D-O4/D-O16): a pure, data-independent read of the general tasks for this
   // home's climate region and season. Reached only by a stored starter's typed launch; not retrievable by message, because seasonal
   // questions already route to MAINTENANCE_STATUS over the homeowner's generated checklist and this must not compete with it.
@@ -536,6 +541,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   DIY_STEP_UPDATE: definition('DIY_STEP_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.step-update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   DIY_PROJECT_COMPLETE: definition('DIY_PROJECT_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.project-complete', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   DIY_PROJECT_ABANDON: definition('DIY_PROJECT_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.project-abandon', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  DIY_COMPLETION_RECOVER: definition('DIY_COMPLETION_RECOVER', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.completion-recover', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   HOME_UPGRADE_SCENARIOS: definition('HOME_UPGRADE_SCENARIOS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-digital-twin.scenarios', ['SUMMARY', 'GROUPED_LIST', 'COMPARISON', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASES: definition('NEGOTIATION_SHIELD_CASES', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'negotiation-shield.cases', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PLANT_CARE_OUTLOOK: definition('PLANT_CARE_OUTLOOK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'plant-advisor.care-outlook', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),

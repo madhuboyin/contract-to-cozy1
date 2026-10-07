@@ -147,6 +147,12 @@ export const DIY_PROJECT_STOP_ACTIONS = {
   HAND_OFF: { id: 'diy-project-handoff', label: 'Hand this off to a pro', message: 'Hand this off to a pro.', actionId: 'HAND_OFF', status: 'HIRED_OUT' as const },
 };
 export const DIY_PROJECT_MORE = { id: 'diy-project-more', label: 'Stop or hand off', message: 'Show the options to stop or hand off this project.', actionId: 'MORE' };
+// Step 7C (docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md section 3.6): asking for failed records to be queued again. Each action sits on the state whose status model can expose it:
+// the completion-effects one on the finished-project view, the task one on the OPEN project's guide (a task link can only be recovered while the project is open).
+export const DIY_RECOVER_ACTIONS = {
+  COMPLETION_EFFECTS: { id: 'diy-record-again', label: 'Record my completion again', message: 'Record my completion again.', actionId: 'COMPLETION_EFFECTS' },
+  TASK_LINK: { id: 'diy-task-record-again', label: 'Update my linked task again', message: 'Update my linked task again.', actionId: 'TASK_LINK' },
+};
 // The read-only launches of the previous-step view (a launch of DIY_PROJECT_GUIDE on entityType DIY_STEP with actionId VIEW) and the way back.
 export const DIY_VIEW_ENTITY_TYPE = 'DIY_STEP';
 export const DIY_VIEW_ACTION_ID = 'VIEW';
@@ -246,6 +252,12 @@ const projectAction = (spec: { id: string; label: string; message: string; actio
   entityType: DIY_PROJECT_ENTITY_TYPE, entityId: projectId, actionId: spec.actionId, style,
 });
 
+/** A declared recovery action (queue failed records again): the exact message selects it, and the project id is the entity. */
+const recoverAction = (spec: { id: string; label: string; message: string; actionId: string }, projectId: string) => ({
+  id: spec.id, label: spec.label, interactionType: 'START_WORKFLOW' as const, message: spec.message, operationId: 'DIY_COMPLETION_RECOVER',
+  entityType: DIY_PROJECT_ENTITY_TYPE, entityId: projectId, actionId: spec.actionId, style: 'SECONDARY' as const,
+});
+
 /** A read-only launch of the guide: the previous-step view (entityType DIY_STEP, actionId VIEW) or the way back to the live guide (entityType DIY_PROJECT). */
 const viewAction = (spec: { id: string; label: string; message: string }, target: { entityType: string; entityId: string; actionId?: string }, style: 'SECONDARY' | 'QUIET' = 'SECONDARY') => ({
   id: spec.id, label: spec.label, interactionType: 'START_WORKFLOW' as const, message: spec.message, operationId: 'DIY_PROJECT_GUIDE',
@@ -253,13 +265,24 @@ const viewAction = (spec: { id: string; label: string; message: string }, target
 });
 
 /** The guide for a project that passed the gate: disclosures, the current step's safety note, the guide block, and the scope boundary. */
-export function buildProjectGuideBlocks(input: { source: GuideSource; evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>; propertyId: string; asOf: Date; canAdvance?: boolean }): AskPresentationBlock[] {
+export function buildProjectGuideBlocks(input: {
+  source: GuideSource; evaluation: Extract<GuideEvaluation, { kind: 'GUIDE' }>; propertyId: string; asOf: Date; canAdvance?: boolean;
+  /** The open project's linked-task status (read-only). Only a RECOVERABLE one is shown: the other states are on the project page. */
+  taskLink?: { summary: string; canRecover: boolean } | null;
+}): AskPresentationBlock[] {
   const { source, evaluation, propertyId, asOf } = input;
   const { project } = source;
   const href = projectPageHref(propertyId, project.id);
   const blocks: AskPresentationBlock[] = [];
 
   blocks.push(...sourceDisclosure(evaluation, href));
+  // A linked task whose reconciliation failed (only possible while the project is open). Placed BEFORE the step's safety note, which must stay directly above the card.
+  if (input.taskLink?.canRecover) {
+    blocks.push({
+      type: 'BOUNDARY', id: 'diy-task-link', title: 'Your linked task did not update', body: input.taskLink.summary, severity: 'CAUTION', suggestions: [],
+      actions: input.canAdvance ? [recoverAction(DIY_RECOVER_ACTIONS.TASK_LINK, project.id)] : [],
+    });
+  }
 
   const { currentIndex, progress, outline } = projectGuideProgress(project.steps, asOf);
   if (currentIndex < 0 || !progress) {
@@ -416,4 +439,34 @@ export function buildProjectOptionsBlocks(input: { source: GuideSource; evaluati
       progress: shown, outline: outline.map((entry) => ({ ...entry, title: clip(entry.title, 160, { truncated: false }) })),
     } as AskPresentationBlock,
   ];
+}
+
+/**
+ * The finished-project view of a COMPLETED project that would otherwise be guideable (docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md section 3.6): a READ that says in
+ * words what is known about the records that follow a completion (from the same status functions the page uses) and, for a person who can edit, offers to queue a
+ * dead-lettered completion event again. A project closed from its linked task shows its closed-by-task disclosure and NO recovery. It is a TASK_GUIDE card, not a SUMMARY
+ * (the calm shell shows only a SUMMARY's first action), and never marks a "current" step.
+ */
+export function buildFinishedProjectBlocks(input: {
+  source: GuideSource; propertyId: string; asOf: Date; canEdit: boolean;
+  effects: { completionEffects: { summary: string; canRecover: boolean } | null; taskLink: { summary: string } | null } | null;
+}): AskPresentationBlock[] {
+  const { source, propertyId, asOf } = input;
+  const { project } = source;
+  const href = projectPageHref(propertyId, project.id);
+  const ordered = [...project.steps].sort((a, b) => a.stepNumber - b.stepNumber);
+  const completed = ordered.filter((step) => step.status === 'COMPLETED').length;
+  const skipped = ordered.filter((step) => step.status === 'SKIPPED').length;
+  const status = input.effects?.completionEffects?.summary ?? input.effects?.taskLink?.summary ?? 'This project is finished.';
+  const label = `Finished, ${completed} of ${ordered.length} ${ordered.length === 1 ? 'step' : 'steps'} done${skipped > 0 ? `, ${skipped} skipped` : ''}`;
+  const canRecord = input.canEdit && Boolean(input.effects?.completionEffects?.canRecover);
+  return [{
+    type: 'TASK_GUIDE', id: 'diy-project-guide', title: clip(project.title, 160, { truncated: false }), summary: label,
+    eyebrow: [CATEGORY_LABELS[project.category] ?? 'DIY', 'Finished'], icon: GUIDE_ICONS[project.category] ?? 'TASK', chips: [], tip: null,
+    main: { title: 'This project is finished', body: `${status} You can still add time, cost and notes on the project page.`, facts: [] },
+    history: [], notes: [],
+    actions: [...(canRecord ? [recoverAction(DIY_RECOVER_ACTIONS.COMPLETION_EFFECTS, project.id)] : []), openAction(href)],
+    progress: { current: Math.max(1, ordered.length), total: Math.max(1, ordered.length), completed, skipped, label, asOf: asOf.toISOString() },
+    outline: ordered.map((step) => ({ stepId: step.id, title: clip(step.title, 160, { truncated: false }), optional: step.isOptional, state: (step.status === 'COMPLETED' ? 'DONE' : step.status === 'SKIPPED' ? 'SKIPPED' : 'UPCOMING') as 'DONE' | 'SKIPPED' | 'UPCOMING' })),
+  } as AskPresentationBlock];
 }

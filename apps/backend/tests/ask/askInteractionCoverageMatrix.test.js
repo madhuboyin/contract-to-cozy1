@@ -25,7 +25,7 @@ test('every one of the 86 Ask operations has a coverage-matrix entry with no reg
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(operationIds.length, 127);
+  assert.equal(operationIds.length, 128);
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -127,6 +127,7 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'DIY_STEP_UPDATE',
   'DIY_PROJECT_COMPLETE',
   'DIY_PROJECT_ABANDON',
+  'DIY_COMPLETION_RECOVER',
   'HOME_DIGITAL_WILL',
   'PLANT_CARE_OUTLOOK',
   'NEGOTIATION_SHIELD_CASES',
@@ -156,7 +157,7 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 127);
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 128);
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
@@ -168,7 +169,7 @@ test('Stage 2 fields are TRACED with real notes only for operations actually tra
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
   // + GUIDANCE_JOURNEY_CONTINUE (guided journey continuation Phase 1), GUIDANCE_STEP_SKIP and GUIDANCE_JOURNEY_DISMISS (Phase 3).
   // + DIY_PROJECT_GUIDE (step 5 of the stateful GUIDE: a read-only, launch-only walk through one DIY project).
-  assert.equal(operationIds.length, 127);
+  assert.equal(operationIds.length, 128);
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

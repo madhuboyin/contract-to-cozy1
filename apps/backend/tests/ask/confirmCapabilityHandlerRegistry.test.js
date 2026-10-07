@@ -28,7 +28,8 @@ test('every one of the 42 confirmation-required Ask commands resolves to a regis
   // + SEASONAL_CHECKLIST_SETUP (Add these to my tasks on the seasonal answer).
   // + DIY_STEP_UPDATE (DIY step command, step 6 of the stateful GUIDE).
   // + DIY_PROJECT_COMPLETE and DIY_PROJECT_ABANDON (DIY project commands, step 7B).
-  assert.equal(commandIds.length, 50);
+  // + DIY_COMPLETION_RECOVER (DIY completion recovery, step 7C).
+  assert.equal(commandIds.length, 51);
   assert.deepEqual(validateConfirmCapabilityHandlerRegistry(), []);
 });
 

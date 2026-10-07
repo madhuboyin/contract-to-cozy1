@@ -23,10 +23,11 @@ Review this home's active DIY projects in planning or in progress, with how many
 - `DIY_STEP_UPDATE` (confirmed, CONTRIBUTOR floor; reached only by the declared Mark this step done and Skip this step actions on the project guide card, for the current step only, and Reopen this step from the previous-step view, for a finished step only; records the person's own report and verifies nothing)
 - `DIY_PROJECT_COMPLETE` (confirmed, CONTRIBUTOR floor; reached only by the declared Finish this project action once every step is resolved, on a guide that is not withdrawn; **cannot be undone in Cozy**; queues the home-history record and any linked-task completion and never changes an incident)
 - `DIY_PROJECT_ABANDON` (confirmed, CONTRIBUTOR floor; reached only by the declared Stop this project and Hand this off to a pro actions behind a read-only options view; **cannot be undone in Cozy**; touches no linked task or incident and books nobody)
+- `DIY_COMPLETION_RECOVER` (confirmed, CONTRIBUTOR floor; reached only by the declared "Record my completion again" action on a finished project's view, or "Update my linked task again" on an open project's guide, each only when its own status says the earlier request was dead-lettered; it re-queues the same request, never claims it worked, and verifies nothing)
 
 ## Consumers
 
-- ASK: DIY_PROJECTS, DIY_PROJECT_GUIDE, DIY_STEP_UPDATE, DIY_PROJECT_COMPLETE, DIY_PROJECT_ABANDON
+- ASK: DIY_PROJECTS, DIY_PROJECT_GUIDE, DIY_STEP_UPDATE, DIY_PROJECT_COMPLETE, DIY_PROJECT_ABANDON, DIY_COMPLETION_RECOVER
 
 ## Canonical ownership and boundaries
 

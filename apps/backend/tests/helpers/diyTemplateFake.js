@@ -186,6 +186,11 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
     },
   });
 
+  // The transaction client's OWN delegates for the shared models, bound at creation to the ORIGINAL functions: a test that later wraps the GLOBAL client's methods (they are the
+  // same objects) sees only calls that bypassed the transaction.
+  const own = (delegate) => Object.fromEntries(Object.entries(delegate).map(([name, fn]) => [name, (...args) => fn(...args)]));
+  const txOwn = { domainEvent: own(domainEventDelegate), householdMember: own(householdMemberDelegate), propertyMaintenanceTask: own(maintenanceTaskDelegate) };
+
   const db = {
     state,
     diyProjectTemplate: {
@@ -261,7 +266,9 @@ function makeDiyDb(templateSeeds = [], hooks = {}) {
       let release; db.__tail = new Promise((resolve) => { release = resolve; });
       await previous;
       const snapshot = structuredClone({ templates: [...state.templates], revisions: state.revisions, projects: state.projects, events: state.events, domainEvents: state.domainEvents });
-      const tx = { ...db, diyProject: projectDelegate(true) };
+      // The transaction client gets its OWN delegate objects for the shared models, bound to the ORIGINAL functions, so a test that wraps the GLOBAL client's methods
+      // sees only calls that bypassed the transaction.
+      const tx = { ...db, diyProject: projectDelegate(true), ...txOwn };
       state.txDepth += 1;
       try {
         const result = await work(tx);

@@ -147,8 +147,12 @@ test('the options view is a READ: the explanation says irreversible, an editor g
   assert.equal((await guide({ ...optionsLaunch, surface: 'ASK_REFRESH' })).reasonCode, 'DIY_PROJECT_OPTIONS_READY');
   assert.equal(committed(), before);
   assert.equal(db.state.writes.length, 0);
+  project().status = 'ABANDONED';
+  assert.equal((await guide(optionsLaunch)).reasonCode, 'DIY_GUIDE_PROJECT_FINISHED', 'a stopped project has no options');
   project().status = 'COMPLETED';
-  assert.equal((await guide(optionsLaunch)).reasonCode, 'DIY_GUIDE_PROJECT_FINISHED', 'a finished project has no options');
+  const finished = await guide(optionsLaunch);
+  assert.equal(finished.reasonCode, 'DIY_PROJECT_FINISHED_VIEW', 'a finished project shows its finished view, with no options');
+  assert.equal(actionsOf(finished).some((a) => a.id === 'diy-project-stop' || a.id === 'diy-project-handoff'), false);
 });
 
 test('trust and viewers: every 7B action id survives the allow-list; Finish, Stop and Hand off are filtered from a viewer; the read-only Back and Review stay visible', async () => {
@@ -254,9 +258,10 @@ test('finish confirm: the project is COMPLETED as the actor with one ledger row 
   assert.deepEqual([tracked[0].userId, tracked[0].metadataJson], ['u1', { actionType: 'complete_project', source: 'ask' }]);
   assert.deepEqual([...new Set(db.state.writes.map((w) => w.model))].sort(), ['project'], 'the project row is the only model written directly; the outbox row is checked above');
   assert.equal(validate('DIY_PROJECT_COMPLETE', result, 'OWNER').blocks[0].actions[0].id, 'open-diy-project');
-  // The guide afterwards is the finished-project refusal, with no step or finish action.
+  // The guide afterwards is the finished-project view (7C), with no step, finish, stop or hand-off action.
   const after = await guide();
-  assert.equal(after.reasonCode, 'DIY_GUIDE_PROJECT_FINISHED');
+  assert.equal(after.reasonCode, 'DIY_PROJECT_FINISHED_VIEW');
+  assert.equal(actionsOf(after).some((a) => /^diy-(step|project)-/.test(a.id)), false);
 });
 
 test('finish confirm replay and concurrent finish: "already", no second event, no second ledger row, NO analytics', async () => {

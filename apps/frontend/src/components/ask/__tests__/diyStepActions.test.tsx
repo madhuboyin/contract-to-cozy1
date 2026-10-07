@@ -259,3 +259,37 @@ describe('finish, stop and hand off', () => {
     expect(view.ask).toHaveBeenLastCalledWith('Show the options to stop or hand off this project.', undefined, expect.objectContaining({ operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_PROJECT', actionId: 'MORE' }));
   });
 });
+
+// ---- Step 7C: the finished-project view and recovery --------------------------------------------------------------------------------------------------------
+describe('finished project and recovery', () => {
+  const finished = (actions: unknown[], body = 'Some records could not be updated. You can still add time, cost and notes on the project page.') => guide(4, {
+    summary: 'Finished, 3 of 4 steps done, 1 skipped', eyebrow: ['Painting', 'Finished'], tip: null,
+    main: { title: 'This project is finished', body, facts: [] },
+    progress: { current: 4, total: 4, completed: 3, skipped: 1, label: 'Finished, 3 of 4 steps done, 1 skipped', asOf: AS_OF },
+    outline: [1, 2, 3, 4].map((n) => ({ stepId: `s${n}`, title: `Step title ${n}`, state: n === 3 ? 'SKIPPED' : 'DONE', optional: false })), actions,
+  });
+  const recover = wf('diy-record-again', 'Record my completion again', 'Record my completion again.', 'DIY_COMPLETION_RECOVER', 'DIY_PROJECT', 'p1', 'COMPLETION_EFFECTS');
+
+  it('shows the status in words with the recovery action and the page link, and launches exactly the declared command', () => {
+    const view = card(execution([finished([recover, open])]));
+    expect(article(view)).toHaveTextContent('Some records could not be updated.');
+    expect(article(view).querySelectorAll('[aria-current="step"]')).toHaveLength(0);
+    expect(within(article(view)).getByRole('link', { name: /Open this project/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Record my completion again/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Record my completion again.', undefined, expect.objectContaining({ sourceExecutionId: 'exec-guide', operationId: 'DIY_COMPLETION_RECOVER', entityType: 'DIY_PROJECT', entityId: 'p1', actionId: 'COMPLETION_EFFECTS' }));
+    expect(view.ask).toHaveBeenCalledTimes(1);
+  });
+
+  it('a finished card without the action (recorded, still recording, a viewer) offers only the page link', () => {
+    card(execution([finished([open], 'Completion recorded. You can still add time, cost and notes on the project page.')]));
+    expect(screen.queryByRole('button', { name: /Record my completion again/ })).toBeNull();
+  });
+
+  it('the task-link failure is a caution block with its own action above the guide, and launches the task recovery', () => {
+    const block = { type: 'BOUNDARY', id: 'diy-task-link', title: 'Your linked task did not update', body: 'The linked maintenance task was completed, but this project was not updated.', severity: 'CAUTION', suggestions: [],
+      actions: [wf('diy-task-record-again', 'Update my linked task again', 'Update my linked task again.', 'DIY_COMPLETION_RECOVER', 'DIY_PROJECT', 'p1', 'TASK_LINK')] } as unknown as AskPresentationBlock;
+    const view = card(execution([block, guide(2)]));
+    fireEvent.click(screen.getByRole('button', { name: /Update my linked task again/ }));
+    expect(view.ask).toHaveBeenLastCalledWith('Update my linked task again.', undefined, expect.objectContaining({ operationId: 'DIY_COMPLETION_RECOVER', entityType: 'DIY_PROJECT', actionId: 'TASK_LINK' }));
+  });
+});

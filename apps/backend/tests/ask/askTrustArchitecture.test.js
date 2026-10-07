@@ -73,6 +73,8 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     // DIY project commands (step 7B): finish a project, stop or hand it off; confirmation-gated, irreversible, declared actions only.
     'DIY_PROJECT_COMPLETE',
     'DIY_PROJECT_ABANDON',
+    // DIY completion recovery (step 7C): confirmation-gated, declared actions only.
+    'DIY_COMPLETION_RECOVER',
     // Seasonal home care (exact-four starter source): launch-only; seasonal questions route to MAINTENANCE_STATUS.
     'SEASONAL_HOME_CARE',
     'HOME_BASICS_GUIDE',
