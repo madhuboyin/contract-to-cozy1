@@ -238,7 +238,7 @@ test('7B FINISH on real rows, measured by triggers: the project, one ledger row 
 
 test('7B STOP and HAND OFF on real rows: the project and one ledger row only; a linked task is byte-for-byte untouched; nothing in the outbox; closed projects are refused; the role is checked inside the transaction', async () => {
   for (const [key, status, ledger] of [['STOP', 'ABANDONED', 'PROJECT_ABANDONED'], ['HAND_OFF', 'HIRED_OUT', 'PROJECT_HIRED_OUT']]) {
-    const task = await prisma.propertyMaintenanceTask.create({ data: { propertyId: PROP, title: `Linked task for ${key}` } });
+    const task = await prisma.propertyMaintenanceTask.create({ data: { propertyId: PROP, source: 'USER_CREATED', title: `Linked task for ${key}` } });
     const { projectId } = await freshProject({ maintenanceTaskId: task.id });
     const taskBefore = JSON.stringify(await prisma.propertyMaintenanceTask.findUnique({ where: { id: task.id } }));
     const options = await guide(projectId, true, { actionId: 'MORE' });
@@ -273,7 +273,7 @@ test('7B STOP and HAND OFF on real rows: the project and one ledger row only; a 
 });
 
 test('7B FINISH with a linked task: the Ask command itself never touches the task or an incident (the worker would, later; it does not run here)', async () => {
-  const task = await prisma.propertyMaintenanceTask.create({ data: { propertyId: PROP, title: 'Linked task for finish' } });
+  const task = await prisma.propertyMaintenanceTask.create({ data: { propertyId: PROP, source: 'USER_CREATED', title: 'Linked task for finish' } });
   const { projectId } = await freshProject({ maintenanceTaskId: task.id });
   await resolveAll(projectId);
   const proposed = await proposeFinish(CONTRIBUTOR, projectId);
@@ -339,7 +339,7 @@ test('7C TWO RECOVERIES AT ONCE re-queue a dead letter exactly once (real concur
 });
 
 test('7C TASK-LINK recovery on an OPEN project: a linked task completed elsewhere whose reconciliation dead-lettered shows on the open guide; recovery re-queues it; a project closed from its linked task shows no action', async () => {
-  const task = await prisma.propertyMaintenanceTask.create({ data: { propertyId: PROP, title: 'Task completed elsewhere', status: 'COMPLETED', completionMetadata: { reconciliationOccurrenceId: 'occ-7d' } } });
+  const task = await prisma.propertyMaintenanceTask.create({ data: { propertyId: PROP, source: 'USER_CREATED', title: 'Task completed elsewhere', status: 'COMPLETED', completionMetadata: { reconciliationOccurrenceId: 'occ-7d' } } });
   const { projectId } = await freshProject({ maintenanceTaskId: task.id });
   const key = DIY_TASK_RECONCILE_EVENT_KEY(task.id, 'occ-7d');
   await prisma.domainEvent.create({ data: { type: 'DIY_TASK_COMPLETED_RECONCILE', status: 'DEAD_LETTER', propertyId: PROP, userId: OWNER, idempotencyKey: key, attempts: 5, payload: { projectIds: [projectId] } } });

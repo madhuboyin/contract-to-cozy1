@@ -251,8 +251,14 @@ test('THE SHARE LOCK, real concurrent transactions: a withdrawal that starts fir
 test('re-revised after review: a template re-published with a new revision refuses the old proposal (DIY_TEMPLATE_CHANGED -> a context conflict) and a closed project does not block a new start', async () => {
   const templateId = await liveTemplate();
   const proposed = await proposeStart(CONTRIBUTOR, templateId);
+  // UNPUBLISH then PUBLISH brings back the SAME approved revision (findPublishableRevision), so the old proposal stays valid; that is correct and is checked first.
   await act(templateId, 'UNPUBLISH', 'publisher');
+  await act(templateId, 'PUBLISH', 'publisher');
+  // A corrected, re-reviewed revision is a NEW head: edit, then a full review round (the same way the step 5 script supersedes).
+  const headBefore = (await prisma.diyProjectTemplate.findUnique({ where: { id: templateId } })).publishedRevisionId;
+  await diyService.adminUpdateTemplate(templateId, { title: 'Corrected title' });
   await publish(templateId);
+  assert.notEqual((await prisma.diyProjectTemplate.findUnique({ where: { id: templateId } })).publishedRevisionId, headBefore, 'a new head');
   assert.equal(await codeOf(confirm(proposed.parameters)), 'ASK_CONTEXT_VERSION_CONFLICT', 'a different head than the one reviewed');
   const fresh = await proposeStart(CONTRIBUTOR, templateId);
   await confirm(fresh.parameters);

@@ -1,7 +1,7 @@
 # Start a DIY Project From Ask — Step 8 Implementation Plan
 
 **Date:** October 7, 2026
-**Status:** **Approved with four corrections and six edits, now incorporated (§3.2 to §3.6, §4, §7): decisions S8-1 to S8-4 at the owner's calls.** 8A to 8E are built (§11, §12); the Postgres script is written and unrun. **It needs no schema change.**
+**Status:** **Approved with four corrections and six edits, now incorporated (§3.2 to §3.6, §4, §7): decisions S8-1 to S8-4 at the owner's calls.** 8A to 8E are built (§11, §12); the Postgres script was run on 2026-10-07 and passes 8/8, and the lock-removal mutation was caught (FRD 1.230). **It needs no schema change.**
 **Parent design:** [`ASK_COZY_STATEFUL_GUIDE_DESIGN.md`](ASK_COZY_STATEFUL_GUIDE_DESIGN.md) §13 step 5 ("project creation from Ask", same eligibility and applicability checks as the page), D8 (authorization inside the transaction), O5 (seasonal mapping stays deferred), O7 (no production template yet).
 **Follows:** steps 1 to 7, all pushed. Step 7 ([`…PROJECT_COMMANDS_PLAN`](ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md)) supplies the command pattern.
 **Labels:** **[Code-traced]** read, not run; **[Executed]** ran. Nothing in this document was executed.

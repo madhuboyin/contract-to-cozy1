@@ -2,6 +2,8 @@
 
 Plan: `docs/architecture/ASK_COZY_DIY_STEP_COMMANDS_PLAN.md`. Slices 6a (backend) and the 6b frontend change are pushed. 6c (this file, the owner-run Postgres script and the read-only queries) is written. **Nothing has been applied to a database or deployed, and the Postgres script and the read-only queries have never been executed by their author.**
 
+> **Update 2026-10-07:** the step 6 scratch script was run in a Claude Code session against a throwaway local Postgres 15 and passes (after script-only fixes to stale assumptions; no product change). The "never executed" wording below is historical. A browser pass, the worker and the Docker/Pi images are still unrun.
+
 ## What ships, and what does not
 
 - **Ask's first write for DIY.** The operation `DIY_STEP_UPDATE`: on the project guide card, a contributor or owner can press **Mark this step done** (current step) or **Skip this step** (only an optional step with no safety note), review a confirmation that repeats the step's safety note, and confirm. The receipt says "Marked done by you" / "Skipped by you" and that Cozy does not check the work.

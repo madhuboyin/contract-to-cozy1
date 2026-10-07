@@ -2,6 +2,8 @@
 
 Plan: `docs/architecture/ASK_COZY_DIY_PROJECT_START_PLAN.md`. Slices 8A (the transactional start authority), 8B (the read-only template browse), 8C (the confirmation-gated start), 8D (frontend tests) and 8E (this file, the owner-run Postgres script and the read-only queries) are written. **Nothing has been applied to a database or deployed, and the Postgres script and the read-only queries have never been executed by their author.**
 
+> **Update 2026-10-07:** the step 8 scratch script was run in a Claude Code session against a throwaway local Postgres 15 and passes (after script-only fixes to stale assumptions; no product change). The "never executed" wording below is historical. A browser pass, the worker and the Docker/Pi images are still unrun. The lock-removal mutation was run by hand: 8 open projects instead of 1, so the script does prove serialization.
+
 ## What ships, and what does not
 
 - **Ask:** a read-only **template browse** (launch-only: from the new "See projects you can start" action on the DIY projects card) and the confirmation-gated **Start this project** (from a browse row only; a contributor or owner). It starts a project **only from a reviewed template**: a published head that is governed, hash-verified, eligible and applicable to the home. The confirmation says it creates a durable project record that can later be **stopped or handed off, but not undone or deleted**, and that nothing is booked, bought or scheduled. The receipt offers "Guide me through this project" (one click to the guide with step 1 current).

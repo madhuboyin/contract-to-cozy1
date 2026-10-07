@@ -85,7 +85,7 @@ const confirm = (userId, parameters, role = 'CONTRIBUTOR') => confirmCapabilityI
   userId, execution: execution(userId), parameters, access: { role }, command: getAskDomainCommandByOperation('DIY_STEP_UPDATE'),
 });
 const guide = (projectId, canEdit = true) => diyProjectGuideResult(PROP, { surface: 'ASK_WORKSPACE', entityType: 'DIY_PROJECT', entityId: projectId }, NOW, canEdit);
-const advancing = (result) => result.blocks.flatMap((block) => block.actions ?? []).filter((action) => action.id.startsWith('diy-step'));
+const advancing = (result) => result.blocks.flatMap((block) => block.actions ?? []).filter((action) => action.id.startsWith('diy-step') && action.id !== 'diy-step-previous'); // step 7A added a read-only "Review last step" action; it does not advance anything
 
 test.before(async () => {
   const [{ db, port }] = await prisma.$queryRawUnsafe('select current_database() as db, inet_server_port() as port');
@@ -150,6 +150,8 @@ test('WHAT A COMMAND WRITES, by database triggers: a proposal writes nothing; a 
   const written = async () => (await prisma.$queryRawUnsafe('SELECT tbl, op FROM scratch_write_log GROUP BY 1, 2 ORDER BY 1, 2')).map((row) => `${row.tbl}:${row.op}`);
   try {
     const current = await stepAt(hall.projectId, 3); // step 2 of 4, the current step
+    // resolvePropertyAccess creates a pre-household owner's OWNER membership row on first access (its documented migration path), which would show as a write in the read check below; materialize it first.
+    await require('../../src/services/propertyAccess.service.ts').resolvePropertyAccess(OWNER, PROP);
     await sql('DELETE FROM scratch_write_log');
     const proposed = await propose(OWNER, 'COMPLETE', current.id);
     assert.equal(proposed.status, 'NEEDS_CONFIRMATION');

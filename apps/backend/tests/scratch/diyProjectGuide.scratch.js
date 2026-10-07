@@ -131,7 +131,8 @@ test('a project copied by the REAL createProject from a REALLY published revisio
 });
 
 test('REAL step transitions move the guide as the plan defines: sparse step numbers give the one-based position; completed counts only COMPLETED; skipped is named separately; reopening moves "current" back', async () => {
-  const project = await start('tHall');
+  // createProject now refuses a second open project from the same template on one property (step 8), so copy one the way it would; the step transitions below stay real.
+  const project = { id: await copyProject(hallway.revisionId, 'tHall') };
   const label = async () => taskGuide(await guide(project.id)).progress.label;
   await move(project.id, 1, 'COMPLETED');
   assert.equal(await label(), 'Step 2 of 4, 1 done', 'step number 3 is position 2');
@@ -193,8 +194,9 @@ test('REFUSALS on real rows: AI guide, no template, no revision, a legacy (unrev
   for (const status of ['COMPLETED', 'ABANDONED', 'HIRED_OUT']) {
     const finished = await copyProject(hallway.revisionId, 'tHall', { status });
     const result = await guide(finished);
-    assert.equal(result.reasonCode, 'DIY_GUIDE_PROJECT_FINISHED', status);
-    assert.equal(types(result)[0], 'SUMMARY');
+    // Step 7C: a COMPLETED project of a reviewed template shows the finished view; a stopped or handed-off one keeps the plain refusal.
+    assert.equal(result.reasonCode, status === 'COMPLETED' ? 'DIY_PROJECT_FINISHED_VIEW' : 'DIY_GUIDE_PROJECT_FINISHED', status);
+    assert.equal(types(result)[0], status === 'COMPLETED' ? 'TASK_GUIDE' : 'SUMMARY'); // the finished view is a TASK_GUIDE card (calm shell shows one SUMMARY action only)
   }
 });
 

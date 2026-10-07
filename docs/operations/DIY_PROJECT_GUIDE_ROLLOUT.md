@@ -2,6 +2,8 @@
 
 Plan: `docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md`. Slices 5a (backend) and 5b (frontend) are pushed. 5c (this file, the owner-run Postgres script and the read-only queries) is written. **Nothing has been applied to a database or deployed, and the Postgres script and the read-only queries have never been executed by their author.**
 
+> **Update 2026-10-07:** the step 5 scratch script was run in a Claude Code session against a throwaway local Postgres 15 and passes (after script-only fixes to stale assumptions; no product change). The "never executed" wording below is historical. A browser pass, the worker and the Docker/Pi images are still unrun.
+
 ## What ships, and what does not
 
 - A **read-only** Ask operation, `DIY_PROJECT_GUIDE`, launched only by the row action "Guide me through this project" on a DIY projects list row. It writes nothing; every step is marked done on the project page.

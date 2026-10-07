@@ -2,6 +2,8 @@
 
 Plan: `docs/architecture/ASK_COZY_DIY_PROJECT_COMMANDS_PLAN.md`. Tracks 7A (previous-step view and Reopen), 7B (Finish, Stop, Hand off) and 7C (the finished-project view and recovery) are pushed. 7D (this file, the owner-run Postgres script and the read-only queries) is written. **Nothing has been applied to a database or deployed, and the Postgres script and the read-only queries have never been executed by their author.**
 
+> **Update 2026-10-07:** the step 7 scratch script was run in a Claude Code session against a throwaway local Postgres 15 and passes (after script-only fixes to stale assumptions; no product change). The "never executed" wording below is historical. A browser pass, the worker and the Docker/Pi images are still unrun.
+
 ## What ships, and what does not
 
 - **Ask commands, all from the project guide, all confirmation-gated, all the person's own report (nothing is verified):**
