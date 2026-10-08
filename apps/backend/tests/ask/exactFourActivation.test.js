@@ -65,10 +65,10 @@ function assertFour(r, label) {
 }
 
 test('the registry is populated for activation: all four starter producers are registered and all seven outcomes are BOTH repeatable and prompt-history exempt', () => {
-  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', skillHandoffProducer.id, urgentWorkProducer.id, activePlanProducer.id, capabilityRecommendationProducer.id, actionableProfileProducer.id, homeOpportunityProducer.id, ...starterProducers.map((p) => p.id)]);
+  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', skillHandoffProducer.id, ...starterProducers.map((p) => p.id), urgentWorkProducer.id, activePlanProducer.id, capabilityRecommendationProducer.id, actionableProfileProducer.id, homeOpportunityProducer.id]);
   assert.equal(CURATED_STARTER_OUTCOME_KEYS.length, 7);
   for (const key of CURATED_STARTER_OUTCOME_KEYS) { assert.ok(REPEATABLE_OUTCOMES.has(key), key); assert.ok(PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), key); }
-  for (const producer of starterProducers) assert.equal(producer.essential, false, 'starters are the first dropped under budget');
+  for (const producer of starterProducers) assert.equal(producer.essential, false, 'starters remain optional when the deadline was already exhausted');
 });
 
 test('EMPTY-HOME VIEWER, typed question: the settled answer shows exactly four distinct approved starters, and every offer is recorded', async () => {
@@ -175,6 +175,18 @@ test('BUDGET-DROPPED OPPORTUNITY PRODUCER: a nonessential producer dropped for b
   const r = await run({ producers: [...SUGGESTED_NEXT_ACTION_PRODUCERS, opportunity], nowMs });
   assert.deepEqual(r.report.droppedProducers, [{ producer: 'opportunity.fake', reason: 'BUDGET' }]);
   assertFour(r, 'budget-dropped opportunity');
+});
+
+test('SLOW OPTIONAL ENRICHMENT cannot consume the budget before static exact-four starters are nominated', async () => {
+  let elapsed = 0;
+  const slowEnrichment = { id: 'enrichment.slow', source: 'PLATFORM_STATE', essential: false, nominate: () => { elapsed = SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; return []; } };
+  const trailingEnrichment = { id: 'enrichment.trailing', source: 'PLATFORM_STATE', essential: false, nominate: () => [] };
+  const r = await run({
+    producers: [skillHandoffProducer, ...starterProducers, slowEnrichment, trailingEnrichment],
+    nowMs: () => elapsed,
+  });
+  assert.deepEqual(r.report.droppedProducers, [{ producer: 'enrichment.trailing', reason: 'BUDGET' }]);
+  assertFour(r, 'slow enrichment after starters');
 });
 
 test('BOUNDED DIAGNOSTIC: when the starters themselves are dropped for budget, nothing is invented: zero actions and the approved shortage diagnostic naming the cause', async () => {

@@ -114,5 +114,9 @@ export const capabilityRecommendationProducer: SuggestedNextActionProducer = {
 };
 
 export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [
-  resultCandidatesProducer, skillHandoffProducer, urgentWorkProducer, activePlanProducer, capabilityRecommendationProducer, actionableProfileProducer, homeOpportunityProducer, ...starterProducers,
+  // Static starters are deliberately nominated before database-backed enrichment. They are still nonessential and may be
+  // dropped when the deadline was already exhausted, but a slow optional read must not consume the entire budget before the
+  // exact-four fallback inventory has even been collected.
+  resultCandidatesProducer, skillHandoffProducer, ...starterProducers,
+  urgentWorkProducer, activePlanProducer, capabilityRecommendationProducer, actionableProfileProducer, homeOpportunityProducer,
 ];
