@@ -247,7 +247,9 @@ test('confirm marks the step done as the actor, writes exactly the step, the pro
   assert.doesNotMatch(JSON.stringify(result), /verified|confirmed that|inspected/i);
   assert.doesNotMatch(receipt.description, /Every step is resolved/);
   AskPresentationBlockSchema.parse(receipt);
-  assert.deepEqual(validate('DIY_STEP_UPDATE', result, 'OWNER').blocks[0].actions.map((a) => a.id), []);
+  // The receipt always has a way forward (the refreshed guide card is usually above the fold): the next step, opened as a fresh guide card, and it survives the trust allow-list.
+  assert.deepEqual(receipt.actions.map((a) => [a.id, a.label, a.operationId, a.entityType, a.entityId, a.interactionType]), [['diy-continue-guide', 'Continue: Cut in the edges', 'DIY_PROJECT_GUIDE', 'DIY_PROJECT', 'p1', 'START_WORKFLOW']]);
+  assert.deepEqual(validate('DIY_STEP_UPDATE', result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-continue-guide']);
 });
 
 test('confirm skip: "Skipped by you"; and the last resolved step says every step is resolved', async () => {
@@ -257,6 +259,8 @@ test('confirm skip: "Skipped by you"; and the last resolved step says every step
   assert.equal(stepRow('s3').status, 'SKIPPED');
   const last = await confirm((await propose('COMPLETE', 's4')).parameters);
   assert.match(last.result.blocks[0].description, /Every step is resolved\./);
+  assert.deepEqual(skipped.result.blocks[0].actions.map((x) => x.label), ['Continue: Wipe the tools'], 'a skip also offers the next step');
+  assert.deepEqual(last.result.blocks[0].actions.map((x) => [x.id, x.label]), [['diy-continue-guide', 'Review and finish']], 'the last step leads to Finish, not to a bare receipt');
   assert.equal(db.state.events.map((e) => e.type).join(','), 'STEP_SKIPPED,STEP_COMPLETED');
 });
 
@@ -266,6 +270,7 @@ test('a replay, or a step already in the target status, is an "already" receipt 
   const again = await confirm(proposed.parameters);
   assert.equal(again.result.reasonCode, 'DIY_STEP_ALREADY_COMPLETED');
   assert.equal(again.result.blocks[0].title, 'Already marked done');
+  assert.deepEqual(again.result.blocks[0].actions.map((x) => x.label), ['Continue: Cut in the edges'], 'an "already" receipt is not a dead end either');
   assert.equal(db.state.events.length, 1);
 });
 
@@ -510,6 +515,7 @@ test('REOPEN, end to end: from the view, the confirmation repeats the safety not
   const { result } = await confirm(proposed.parameters);
   assert.equal(result.reasonCode, 'DIY_STEP_REOPENED');
   assert.equal(result.blocks[0].title, 'Reopened by you');
+  assert.deepEqual(result.blocks[0].actions.map((x) => x.label), ['Continue: Tape the trim'], 'a reopen continues at the reopened step');
   assert.doesNotMatch(JSON.stringify(result), /verified|your report; Cozy doesn't check/i, 'a reopen claims nothing about the work');
   assert.deepEqual([stepRow('s1').status, stepRow('s1').completedByUserId, stepRow('s1').completedAt], ['IN_PROGRESS', null, null]);
   assert.deepEqual(db.state.events.map((e) => [e.type, e.actorUserId, e.stepId, e.fromStatus, e.toStatus]), [['STEP_REOPENED', 'u1', 's1', 'COMPLETED', 'IN_PROGRESS']]);

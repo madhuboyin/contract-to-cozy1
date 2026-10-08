@@ -462,3 +462,9 @@ export const DIY_TEMPLATE_ENTITY_TYPE = 'DIY_TEMPLATE';
 export const DIY_PROJECT_START_ACTION = { id: 'diy-template-start', label: 'Start this project', message: 'Start this project.' };
 export const DIY_TEMPLATE_BROWSE_ACTION = { id: 'diy-template-browse', label: 'See projects you can start', message: 'Show the DIY projects I can start.' };
 export const DIY_START_GUIDE_ACTION_ID = 'diy-start-guide';
+export const DIY_CONTINUE_GUIDE_ACTION_ID = 'diy-continue-guide';
+/** The receipt's way forward: opens the guide again at the bottom of the conversation, where the person is looking (the card that refreshed in place may be out of view). */
+export const continueGuideAction = (projectId: string, label: string) => ({
+  id: DIY_CONTINUE_GUIDE_ACTION_ID, label: label.length > 80 ? `${label.slice(0, 79)}…` : label, interactionType: 'START_WORKFLOW' as const, message: 'Guide me through this project.',
+  operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_PROJECT', entityId: projectId, style: 'PRIMARY' as const,
+});

@@ -140,6 +140,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   DIY_PROJECTS: new Set(['diy-template-browse']),
   DIY_PROJECT_GUIDE: new Set(['diy-step-complete', 'diy-step-skip', 'diy-step-previous', 'diy-step-back', 'diy-step-reopen', 'diy-review-last-step', 'diy-project-finish', 'diy-project-more', 'diy-project-stop', 'diy-project-handoff', 'diy-record-again', 'diy-task-record-again']),
   DIY_PROJECT_START: new Set(['diy-start-guide']),
+  DIY_STEP_UPDATE: new Set(['diy-continue-guide']),
   DIY_PROJECT_ABANDON: new Set(['open-diy-project']),
   PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker']),
   SERVICE_PRICE_CHECKS: new Set(['open-service-price-radar']),

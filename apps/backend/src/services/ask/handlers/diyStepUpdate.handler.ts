@@ -13,7 +13,7 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { diyService } from '../../diy.service';
 import { evaluateAskStepPolicy, guideContextVersion, currentStepOf, type AskStepPolicyName } from '../../diy/askStepPolicy';
-import { DIY_STEP_ACTIONS, DIY_STEP_ENTITY_TYPE, type DiyStepActionKey, type GuideSource } from '../../diy/projectGuide';
+import { DIY_STEP_ACTIONS, DIY_STEP_ENTITY_TYPE, continueGuideAction, type DiyStepActionKey, type GuideSource } from '../../diy/projectGuide';
 
 const BOUNDARY_ID = 'diy-step-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -162,15 +162,22 @@ async function confirmDiyStepUpdate(ctx: ConfirmCapabilityContext): Promise<Conf
 
   const projectTitle = source.project.title;
   const blocks: AskPresentationBlock[] = [];
+  // Where the project stands after the write is read best effort: the receipt never fails because a follow-up read did. It decides the way forward the receipt offers, so a person is
+  // never left at a bare receipt (the guide card that refreshed in place is usually above the fold).
+  let allResolved = false;
+  let nextTitle: string | null = null;
+  try {
+    const after = await diyService.getProjectGuideSource(projectId, execution.propertyId);
+    if (after) {
+      const next = currentStepOf(after.project.steps);
+      allResolved = next === null;
+      nextTitle = next ? next.title : null;
+    }
+  } catch { allResolved = false; nextTitle = null; }
+  const forward = nextTitle ? continueGuideAction(projectId, `Continue: ${nextTitle}`) : allResolved ? continueGuideAction(projectId, 'Review and finish') : null;
   if (alreadyApplied) {
     blocks.push(...alreadyReceipt(target, step.title, projectTitle).blocks);
   } else {
-    // Whether that was the last step is read after the write, best effort: the receipt never fails because a follow-up read did.
-    let allResolved = false;
-    try {
-      const after = await diyService.getProjectGuideSource(projectId, execution.propertyId);
-      allResolved = Boolean(after) && currentStepOf(after!.project.steps) === null;
-    } catch { allResolved = false; }
     blocks.push({
       type: 'WORKFLOW_PROGRESS', id: 'diy-step-update-receipt', title: TARGET_COPY[target].doneTitle, status: 'COMPLETED',
       description: allResolved && target !== 'IN_PROGRESS'
@@ -179,6 +186,8 @@ async function confirmDiyStepUpdate(ctx: ConfirmCapabilityContext): Promise<Conf
       details: [{ label: 'Step', value: step.title }, { label: 'Project', value: projectTitle }], actions: [],
     });
   }
+  const receipt = blocks[0];
+  if (forward && receipt && receipt.type === 'WORKFLOW_PROGRESS') receipt.actions = [forward];
   const result: AskOperationResult = { status: 'COMPLETED', reasonCode: alreadyApplied ? TARGET_COPY[target].alreadyCode : TARGET_COPY[target].doneCode, blocks, suggestions: SUGGESTIONS };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
