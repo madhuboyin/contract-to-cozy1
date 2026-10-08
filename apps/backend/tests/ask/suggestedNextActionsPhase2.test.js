@@ -247,6 +247,16 @@ test('a rich card action that declares the same registered identity suppresses t
   assert.equal(dedup.suppressedByPresentation, 1);
 });
 
+test('an entity-less response action suppresses the same compact workflow outcome', () => {
+  const blocks = [{ type: 'SUMMARY', id: 'next', actions: [{
+    id: 'monthly', operationId: 'HOME_BASICS_GUIDE', interactionType: 'START_WORKFLOW',
+    outcomeKey: 'REVIEW_MONTHLY_ROUTINE', label: 'Monthly routine', message: 'Show me a simple monthly home routine',
+  }] }];
+  const identities = collectPresentationIdentities(blocks, 'prop-1');
+  const key = suggestedNextActionSemanticKey({ operationId: 'HOME_BASICS_GUIDE', interactionType: 'START_WORKFLOW', propertyId: 'prop-1', entityType: null, entityId: null, outcomeKey: 'REVIEW_MONTHLY_ROUTINE' });
+  assert.deepEqual([...identities], [key]);
+});
+
 // ---- policy ----------------------------------------------------------------------------------------------------------
 
 const nominations = (...lists) => new Map(lists.map((list, i) => [`producer-${i}`, list]));

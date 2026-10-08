@@ -37,11 +37,17 @@ function operationsDeclaringOutcomeKeys() {
   return found;
 }
 
-test('MEASURED: no presented action in the production sources declares an outcome for a starter operation, so entity-less identity would remove 0 starters today', () => {
+test('response-level starter destinations declare outcomes so cross-surface duplicates can be removed', () => {
   const declaring = operationsDeclaringOutcomeKeys();
-  assert.deepEqual([...declaring].sort(), ['HOME_DEADLINE_MONITOR', 'HOME_EVENT_CORRECT', 'INVENTORY_ITEM_CORRECT', 'INVENTORY_ITEM_CREATE', 'MAINTENANCE_TASK_UPDATE'], 'the operations whose presented actions can publish an identity');
   const overlap = [...declaring].filter((operationId) => STARTER_OPERATIONS.has(operationId));
-  assert.deepEqual(overlap, [], 'a starter operation now has a presented action with an outcome: re-measure D-O12 before shipping');
+  assert.ok(overlap.includes('SEASONAL_HOME_CARE'), 'the source scan finds at least one starter operation; runtime assertions below cover both response actions without relying on source proximity');
+  const blocks = [{ type: 'SUMMARY', id: 'next', actions: [
+    { operationId: 'HOME_BASICS_GUIDE', outcomeKey: 'REVIEW_MONTHLY_ROUTINE', interactionType: 'START_WORKFLOW' },
+    { operationId: 'SEASONAL_HOME_CARE', outcomeKey: 'REVIEW_THIS_SEASON', interactionType: 'START_WORKFLOW' },
+  ] }];
+  const identities = collectPresentationIdentities(blocks, 'p1');
+  assert.equal(identities.size, 2);
+  assert.ok(identities.has(suggestedNextActionSemanticKey({ operationId: 'HOME_BASICS_GUIDE', interactionType: 'START_WORKFLOW', propertyId: 'p1', entityType: null, entityId: null, outcomeKey: 'REVIEW_MONTHLY_ROUTINE' })));
 });
 
 test('a presented action publishes an identity only for a REGISTERED outcome: an unregistered one publishes none, and the registered starter outcomes are the only ones a future action could collide with', () => {

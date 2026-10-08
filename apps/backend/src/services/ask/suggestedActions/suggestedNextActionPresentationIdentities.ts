@@ -22,13 +22,22 @@ export function collectPresentationIdentities(blocks: readonly Json[], propertyI
     visited += 1;
     if (Array.isArray(node)) { for (const entry of node) walk(entry, depth + 1); return; }
     const record = node as Record<string, Json>;
-    const entityType = typeof record.entityType === 'string' ? record.entityType : null;
-    const entityId = typeof record.id === 'string' ? record.id : null;
-    if (Array.isArray(record.actions) && entityType && entityId) {
+    const parentEntityType = typeof record.entityType === 'string' ? record.entityType : null;
+    const parentEntityId = typeof record.id === 'string' ? record.id : null;
+    if (Array.isArray(record.actions)) {
       for (const action of record.actions) {
         const a = action as Record<string, Json> | null;
         if (!a || typeof a.operationId !== 'string' || typeof a.outcomeKey !== 'string' || typeof a.interactionType !== 'string') continue;
         if (!COMPACT_INTERACTIONS.has(a.interactionType) || !isRegisteredOutcome(a.operationId, a.outcomeKey)) continue;
+        // Item actions inherit their enclosing entity. Response-level actions
+        // are intentionally entity-less unless they explicitly own a complete
+        // entity pair. Never infer scope from labels, messages, or action ids.
+        const actionEntityType = typeof a.entityType === 'string' ? a.entityType : null;
+        const actionEntityId = typeof a.entityId === 'string' ? a.entityId : null;
+        const hasActionEntity = Boolean(actionEntityType && actionEntityId);
+        const hasParentEntity = Boolean(parentEntityType && parentEntityId);
+        const entityType = hasActionEntity ? actionEntityType : hasParentEntity ? parentEntityType : null;
+        const entityId = hasActionEntity ? actionEntityId : hasParentEntity ? parentEntityId : null;
         identities.add(suggestedNextActionSemanticKey({
           operationId: a.operationId, interactionType: a.interactionType as 'CONVERSATION_CONTINUE' | 'MUTATE_RECORD' | 'START_WORKFLOW',
           propertyId, entityType, entityId, outcomeKey: a.outcomeKey,

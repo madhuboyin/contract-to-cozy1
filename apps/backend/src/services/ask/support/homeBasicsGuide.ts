@@ -59,9 +59,9 @@ const nextSteps = (focus: HomeBasicsFocus): AskPresentationBlock => ({
   type: 'SUMMARY', id: 'home-basics-next', title: 'What would you like to do next?', body: 'Both are general guides. Nothing here changes your home record.', tone: 'DEFAULT',
   actions: [
     focus === 'SAFETY_BASICS'
-      ? { id: 'home-basics-monthly-routine', label: 'A simple monthly routine', interactionType: 'START_WORKFLOW' as const, message: HOME_BASICS_MONTHLY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', style: 'SECONDARY' as const }
-      : { id: 'home-basics-safety-basics', label: 'Home safety basics', interactionType: 'START_WORKFLOW' as const, message: HOME_BASICS_SAFETY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', style: 'SECONDARY' as const },
-    { id: 'home-basics-seasonal-plan', label: 'Home care for this season', interactionType: 'START_WORKFLOW' as const, message: SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE, operationId: 'SEASONAL_HOME_CARE', style: 'SECONDARY' as const },
+      ? { id: 'home-basics-monthly-routine', label: 'A simple monthly routine', interactionType: 'START_WORKFLOW' as const, message: HOME_BASICS_MONTHLY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', outcomeKey: 'REVIEW_MONTHLY_ROUTINE', style: 'SECONDARY' as const }
+      : { id: 'home-basics-safety-basics', label: 'Home safety basics', interactionType: 'START_WORKFLOW' as const, message: HOME_BASICS_SAFETY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', outcomeKey: 'REVIEW_SAFETY_BASICS', style: 'SECONDARY' as const },
+    { id: 'home-basics-seasonal-plan', label: 'Home care for this season', interactionType: 'START_WORKFLOW' as const, message: SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE, operationId: 'SEASONAL_HOME_CARE', outcomeKey: 'REVIEW_THIS_SEASON', style: 'SECONDARY' as const },
   ],
 });
 

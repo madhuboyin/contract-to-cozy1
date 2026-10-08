@@ -8,7 +8,7 @@ require('ts-node/register');
 const { prisma } = require('../../src/lib/prisma.ts');
 const { SuggestedNextActionSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 const { SuggestedNextActionCandidateSchema } = require('../../src/services/ask/suggestedActions/suggestedNextActionCandidate.ts');
-const { inventoryMissingDetailCandidates, inventoryCorrectionFieldFor, inventoryItemContextVersion, INVENTORY_CORRECTION_FIELDS } = require('../../src/services/ask/handlers/inventory.handler.ts');
+const { inventoryMissingDetailCandidates, inventoryMissingCorrectionActions, inventoryCorrectionItemActions, inventoryCorrectionFieldFor, inventoryItemContextVersion, INVENTORY_CORRECTION_FIELDS } = require('../../src/services/ask/handlers/inventory.handler.ts');
 const { isRegisteredOutcome, correctionFieldForOutcome, MISSING_FACT_CAPTURES } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
 const { finalizeSuggestedNextActionsWithReport } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
 const { fixedSuggestedNextActionClock } = require('../../src/services/ask/suggestedActions/suggestedNextActionClock.ts');
@@ -45,6 +45,13 @@ test('each candidate is schema-valid, names the exact item, uses a registered ou
     assert.match(candidate.message, /inventory item "Samsung microwave"/);
     assert.ok(candidate.label.startsWith('Add the '));
   }
+});
+
+test('rich inventory correction actions publish the same registered outcomes used by compact candidates', () => {
+  const all = inventoryCorrectionItemActions(true);
+  assert.equal(all.length, Object.keys(INVENTORY_CORRECTION_FIELDS).length);
+  assert.ok(all.every((action) => isRegisteredOutcome(action.operationId, action.outcomeKey)));
+  assert.deepEqual(inventoryMissingCorrectionActions(item(), true).map((action) => action.outcomeKey), ['ADD_BRAND', 'ADD_MODEL', 'ADD_SERIAL_NUMBER', 'ADD_PURCHASE_DATE']);
 });
 
 test('a long item name keeps the label within the contract limit while the message keeps the full name', () => {
@@ -139,6 +146,13 @@ test('both inventory receipts nominate typed candidates and no longer emit item-
   assert.match(source, /inventoryMissingDetailCandidates\(\{ id: itemId, name: input\.name/);
   assert.match(source, /inventoryMissingDetailCandidates\(updated/);
   assert.doesNotMatch(source, /Set the purchase date for this inventory item|Update the brand of this inventory item/);
+});
+
+test('incomplete inventory reads nominate exact missing-record candidates instead of only generic starters', () => {
+  const source = readFileSync(resolve(__dirname, '../../src/services/ask/handlers/inventory.handler.ts'), 'utf8');
+  assert.match(source, /const candidateItems = incompleteFocus \? shown : selectedItem \? \[selectedItem\] : \[\]/);
+  assert.match(source, /sourceOperationId: 'INVENTORY_LOOKUP'/);
+  assert.match(source, /suggestedNextActionCandidates\.length \? \{ suggestedNextActionCandidates \}/);
 });
 
 test('a verified selection carries its outcome into the launch context, and the correction handler reads it', () => {

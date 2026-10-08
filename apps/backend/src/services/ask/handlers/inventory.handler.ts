@@ -462,6 +462,19 @@ async function inventoryLookupResult(
     })),
   });
 
+  // A read of incomplete records should lead to those exact records, not fall
+  // through to generic starter prompts. Keep the nomination bounded across the
+  // whole answer; finalization still rechecks role, entity ownership, freshness,
+  // history, and presentation deduplication before showing anything.
+  const candidateItems = incompleteFocus ? shown : selectedItem ? [selectedItem] : [];
+  const suggestedNextActionCandidates = access.role === HouseholdRole.VIEWER ? [] : candidateItems.flatMap((item) =>
+    inventoryMissingDetailCandidates(item, {
+      propertyId,
+      sourceOperationId: 'INVENTORY_LOOKUP',
+      limit: 3,
+    }),
+  ).slice(0, 3);
+
   return {
     status: captureRequests.length || (selectedItem ? inventoryMissingFacts(selectedItem).length > 0 : false) ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length ? 'INVENTORY_LIFECYCLE_CONTEXT_OPTIONAL' : selectedItem && inventoryMissingFacts(selectedItem).length ? 'INVENTORY_RECORD_INCOMPLETE' : undefined,
@@ -470,6 +483,7 @@ async function inventoryLookupResult(
     captureRequests,
     blocks,
     suggestions: [],
+    ...(suggestedNextActionCandidates.length ? { suggestedNextActionCandidates } : {}),
   };
 }
 
@@ -525,6 +539,13 @@ export const INVENTORY_CORRECTION_FIELDS = {
 } as const;
 
 type InventoryCorrectionField = keyof typeof INVENTORY_CORRECTION_FIELDS;
+
+const INVENTORY_CORRECTION_OUTCOME_BY_FIELD: Readonly<Record<InventoryCorrectionField, string>> = {
+  name: 'ADD_NAME', installedOn: 'ADD_INSTALL_DATE', purchasedOn: 'ADD_PURCHASE_DATE', lastServicedOn: 'ADD_LAST_SERVICED_DATE',
+  condition: 'ADD_CONDITION', brand: 'ADD_BRAND', model: 'ADD_MODEL', serialNo: 'ADD_SERIAL_NUMBER',
+  purchaseCostCents: 'ADD_PURCHASE_COST', replacementCostCents: 'ADD_REPLACEMENT_COST', notes: 'ADD_NOTES',
+  category: 'ADD_CATEGORY', roomId: 'ADD_ROOM',
+};
 
 const INVENTORY_COMPLETION_FIELDS: readonly InventoryCorrectionField[] = [
   'installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model',
@@ -759,7 +780,7 @@ export function inventoryCorrectionItemActions(canManage: boolean) {
   if (!canManage) return undefined;
   return (Object.keys(INVENTORY_CORRECTION_FIELDS) as InventoryCorrectionField[]).map((field) => ({
     id: `correct-${field}`, label: INVENTORY_CORRECTION_FIELDS[field].action, message: INVENTORY_CORRECTION_FIELDS[field].message,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: INVENTORY_CORRECTION_OUTCOME_BY_FIELD[field],
   }));
 }
 
@@ -782,7 +803,7 @@ export function inventoryMissingCorrectionActions(
   return fields.map((field) => ({
     id: `correct-${field}`, label: `Add ${INVENTORY_CORRECTION_FIELDS[field].label}`,
     message: INVENTORY_CORRECTION_FIELDS[field].message,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: INVENTORY_CORRECTION_OUTCOME_BY_FIELD[field],
   }));
 }
 

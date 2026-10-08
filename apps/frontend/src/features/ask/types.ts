@@ -12,6 +12,8 @@ export interface AskAction {
   interactionType?: 'START_WORKFLOW';
   message?: string;
   operationId?: string;
+  /** Registered semantic outcome used by the server to deduplicate richer and compact action surfaces. */
+  outcomeKey?: string;
   capabilityId?: string;
   entityType?: string;
   entityId?: string;

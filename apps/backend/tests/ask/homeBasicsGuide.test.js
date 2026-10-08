@@ -52,6 +52,8 @@ test('EXECUTED through the registered canonical call: both starter messages retu
     assert.equal(result.blocks[0].type, 'SUMMARY');
     assert.equal(result.blocks[1].type, 'GROUPED_LIST');
     for (const block of result.blocks) assert.doesNotThrow(() => AskPresentationBlockSchema.parse(block), block.id);
+    const next = result.blocks.find((block) => block.id === 'home-basics-next');
+    assert.ok(next.actions.every((action) => outcomes.isRegisteredOutcome(action.operationId, action.outcomeKey)));
     assert.ok(result.blocks[1].sections[0].items.length >= 4);
     assert.match(result.blocks.find((b) => b.id === 'home-basics-boundary').body, /not an assessment of your home/);
   }

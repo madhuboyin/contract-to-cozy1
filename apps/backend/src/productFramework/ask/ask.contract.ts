@@ -36,6 +36,10 @@ const AskActionSchema = z.object({
   interactionType: z.literal('START_WORKFLOW').optional(),
   message: z.string().trim().min(1).max(300).optional(),
   operationId: z.string().trim().min(1).max(120).optional(),
+  // A rich response action may target the same registered outcome as a compact
+  // Suggested Next Action. Publishing the bounded outcome lets finalization
+  // suppress that duplicate without interpreting homeowner-facing copy.
+  outcomeKey: z.string().regex(/^[A-Z][A-Z0-9_]{2,79}$/).optional(),
   entityType: z.string().trim().min(1).max(120).optional(),
   entityId: z.string().trim().min(1).max(160).optional(),
   actionId: z.string().trim().min(1).max(160).optional(),
@@ -45,7 +49,7 @@ const AskActionSchema = z.object({
     if (!action.message) ctx.addIssue({ code: 'custom', path: ['message'], message: 'START_WORKFLOW actions require a message.' });
     if (!action.operationId) ctx.addIssue({ code: 'custom', path: ['operationId'], message: 'START_WORKFLOW actions require an operationId.' });
     if (action.href) ctx.addIssue({ code: 'custom', path: ['href'], message: 'START_WORKFLOW actions must not also navigate.' });
-  } else if (action.message || action.operationId || action.entityType || action.entityId || action.actionId) {
+  } else if (action.message || action.operationId || action.outcomeKey || action.entityType || action.entityId || action.actionId) {
     ctx.addIssue({ code: 'custom', path: ['interactionType'], message: 'Workflow metadata requires interactionType START_WORKFLOW.' });
   }
 });
