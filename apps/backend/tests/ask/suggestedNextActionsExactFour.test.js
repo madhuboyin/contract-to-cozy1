@@ -533,7 +533,7 @@ test('result-producer ownership holds only when the TRUSTED current operation ow
 });
 
 test('ownership relationships: every owned outcome is a registered outcome of an operation that exists, and every source operation is a real handler call site', () => {
-  const handlerSource = ['inventory', 'homeRecordWrites', 'maintenance', 'warranties', 'recordConfirm', 'captureConfirm']
+  const handlerSource = ['inventory', 'homeRecordWrites', 'maintenance', 'warranties', 'recordConfirm', 'captureConfirm', 'diyProjectCenter', 'diyProjectStart']
     .map((name) => fs.readFileSync(nodePath.join(__dirname, `../../src/services/ask/handlers/${name}.handler.ts`), 'utf8')).join('\n');
   const PLATFORM_RECOVERY = new Set(['MAINTENANCE_TASK_CREATE', 'REFINANCE_RATE_MONITOR', 'QUOTE_COMPARISON_CREATE', 'INVENTORY_LOOKUP']);
   for (const [sourceOperation, owned] of Object.entries(registry.RESULT_OWNERSHIP_RELATIONSHIPS)) {

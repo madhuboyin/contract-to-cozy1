@@ -6,3 +6,4 @@ import './warranty';
 import './homeEvent';
 import './decisionThread';
 import './guidanceJourney';
+import './diyProject';

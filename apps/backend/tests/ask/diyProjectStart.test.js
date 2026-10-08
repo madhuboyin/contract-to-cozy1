@@ -99,12 +99,17 @@ test('browse lists a governed, applicable template with the start action for a c
   const [row] = rowsOf(result);
   assert.deepEqual([row.id, row.title, row.entityType, row.status ?? null], ['t1', 'Repaint a hallway', 'DIY_TEMPLATE', null]);
   assert.deepEqual(row.actions, [{ id: 'diy-template-start', label: 'Start this project', message: 'Start this project.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'DIY_PROJECT_START' }]);
+  assert.deepEqual(result.suggestedNextActionCandidates.map((candidate) => [candidate.label, candidate.operationId, candidate.outcomeKey, candidate.entityContext.entityType, candidate.entityContext.entityId]), [
+    ['Start Repaint a hallway', 'DIY_PROJECT_START', 'START_REVIEWED_PROJECT', 'DIY_TEMPLATE', 't1'],
+  ], 'the sticky composer gets the exact reviewed project action, not a generic starter');
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
   const trusted = validate('DIY_TEMPLATE_BROWSE', result, 'CONTRIBUTOR');
   assert.equal(trusted.blocks.length, result.blocks.length, 'no block was stripped by the trust policy');
   assert.deepEqual(trusted.blocks.find((b) => b.type === 'GROUPED_LIST').sections[0].items[0].actions.map((a) => a.id), ['diy-template-start'], 'the row action survives validation');
   role = 'VIEWER';
-  assert.equal(rowsOf(await browse())[0].actions, undefined, 'a viewer can browse but is offered no start');
+  const viewer = await browse();
+  assert.equal(rowsOf(viewer)[0].actions, undefined, 'a viewer can browse but is offered no start');
+  assert.deepEqual(viewer.suggestedNextActionCandidates, [], 'a viewer gets no contributor-only sticky start action');
   assert.equal(rowsOf(await browse()).length, 1);
 });
 
@@ -135,6 +140,9 @@ test('browse marks a template that already has an open project, offers the in-As
   assert.deepEqual(row.actions.map((a) => [a.id, a.operationId]), [['guide-diy-project', 'DIY_PROJECT_GUIDE']], 'only the guide, never a second start');
   assert.equal(row.href, undefined, 'no link out to the desktop page');
   assert.equal(row.id, 'p1');
+  assert.deepEqual((await browse()).suggestedNextActionCandidates.map((candidate) => [candidate.operationId, candidate.outcomeKey, candidate.entityContext.entityType, candidate.entityContext.entityId]), [
+    ['DIY_PROJECT_GUIDE', 'CONTINUE_REVIEWED_PROJECT', 'DIY_PROJECT', 'p1'],
+  ]);
   db.state.projects[0].status = 'COMPLETED';
   assert.equal(rowsOf(await browse())[0].status ?? null, null);
 });

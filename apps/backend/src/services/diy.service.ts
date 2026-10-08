@@ -576,6 +576,7 @@ export class DiyService {
       // Additive: whether the project was started from a reviewed template version (the Ask project guide offers its row action only for those).
       aiGuideId: p.aiGuideId,
       templateRevisionId: p.templateRevisionId,
+      updatedAt: p.updatedAt.toISOString(),
       startedAt: p.startedAt?.toISOString(),
       completedAt: p.completedAt?.toISOString(),
       createdAt: p.createdAt.toISOString(),

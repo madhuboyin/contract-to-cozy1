@@ -347,6 +347,9 @@ test('DIY_PROJECTS rows: only a project started from a reviewed template version
   const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
   assert.deepEqual(byId.reviewed.actions, [{ id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'DIY_PROJECT_GUIDE' }]);
   assert.equal(byId.reviewed.entityType, 'DIY_PROJECT');
+  assert.deepEqual(result.suggestedNextActionCandidates.map((candidate) => [candidate.label, candidate.operationId, candidate.outcomeKey, candidate.entityContext.entityId]), [
+    ['Continue reviewed', 'DIY_PROJECT_GUIDE', 'CONTINUE_REVIEWED_PROJECT', 'reviewed'],
+  ]);
   for (const id of ['ai', 'legacy', 'custom']) { assert.equal(byId[id].actions, undefined, id); assert.equal(byId[id].entityType, undefined, id); }
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
   const validated = validateAskAnswerTrust({ question: 'Show my DIY projects', operationId: 'DIY_PROJECTS', result: withEvidence('DIY_PROJECTS', result), propertyId: 'prop-1' }).result;

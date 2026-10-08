@@ -154,6 +154,8 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
   SELL_HOLD_RENT_ANALYSIS: ['CONTINUE_SELL_HOLD_RENT_PLAN'],
   HVAC_DECISION_CONTINUE: ['CONTINUE_ACTIVE_HVAC_DECISION'],
   GUIDANCE_JOURNEY_CONTINUE: ['CONTINUE_ACTIVE_GUIDANCE_JOURNEY'],
+  DIY_PROJECT_START: ['START_REVIEWED_PROJECT'],
+  DIY_PROJECT_GUIDE: ['CONTINUE_REVIEWED_PROJECT'],
 };
 
 /**
@@ -293,6 +295,8 @@ export const DOMAIN_FRESHNESS_MATRIX: Readonly<Record<string, FreshnessStrategy>
   RADAR_MATCH: { kind: 'CONTEXT_VERSION', versionFunction: 'radarStateContextVersion', derivedFrom: 'matchId + userState' },
   CLAIM: { kind: 'REQUERY', rule: 'claims.handler derives its version inline (sha256 of id + status + updatedAt) with no exported helper; requery the claim and compare status/updatedAt until a helper is extracted in the Claims migration step' },
   INSPECTION_FINDING: { kind: 'CONTEXT_VERSION', versionFunction: 'inspectionFindingVersion', derivedFrom: 'finding record' },
+  DIY_TEMPLATE: { kind: 'REQUERY', rule: 'Requery the template published head; the validator exposes publishedRevisionId as the current version for comparison.' },
+  DIY_PROJECT: { kind: 'REQUERY', rule: 'Requery the property-scoped open project; the validator exposes updatedAt as the current progress version for comparison.' },
 };
 
 // ---- static validation (CI/tests only) --------------------------------------------------------------------------------------

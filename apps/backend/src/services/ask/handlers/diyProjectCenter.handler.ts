@@ -7,6 +7,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { readableCode } from '../askFormatting';
 import { diyService } from '../../diy.service';
 import { DIY_TEMPLATE_BROWSE_ACTION } from '../../diy/projectGuide';
+import { diyProjectGuideCandidate } from '../suggestedActions/diyProjectCandidates';
 
 // DIY Project Center capability-card slice (FRD v1.58): the tenth new operation for a capability with none. Reads
 // diyService.listProjects with the page's own filter (planning and in progress, the service's default page of 20) --
@@ -94,7 +95,13 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
     actions: [{ ...browseAction, style: 'SECONDARY' as const }],
   });
   blocks.push(boundary);
-  return { status: 'ANSWERED', reasonCode: 'DIY_PROJECTS_READY', blocks, suggestions: [] };
+  const suggestedNextActionCandidates = items
+    .filter((item) => item.templateId && !item.aiGuideId && item.templateRevisionId)
+    .slice(0, 4)
+    .map((item) => diyProjectGuideCandidate({
+      propertyId, projectId: item.id, title: item.title, contextVersion: item.updatedAt, sourceOperationId: 'DIY_PROJECTS',
+    }));
+  return { status: 'ANSWERED', reasonCode: 'DIY_PROJECTS_READY', blocks, suggestions: [], suggestedNextActionCandidates };
 }
 
 async function diyProjectsResult(propertyId: string): Promise<AskOperationResult> {

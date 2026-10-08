@@ -18,6 +18,7 @@ import { logger } from '../../../lib/logger';
 import {
   DIY_PROJECT_ENTITY_TYPE, DIY_PROJECT_START_ACTION, DIY_START_GUIDE_ACTION_ID, DIY_TEMPLATE_ENTITY_TYPE,
 } from '../../diy/projectGuide';
+import { diyProjectGuideCandidate, diyTemplateStartCandidate } from '../suggestedActions/diyProjectCandidates';
 
 const BOUNDARY_ID = 'diy-template-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -92,7 +93,10 @@ export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; h
     actions: [],
   });
   blocks.push(scope);
-  return { status: 'ANSWERED', reasonCode: 'DIY_TEMPLATE_BROWSE_READY', blocks, suggestions: SUGGESTIONS };
+  const suggestedNextActionCandidates = view.items.slice(0, 4).flatMap((item) => item.openProjectId
+    ? [diyProjectGuideCandidate({ propertyId, projectId: item.openProjectId, title: item.title, sourceOperationId: 'DIY_TEMPLATE_BROWSE' })]
+    : canStart ? [diyTemplateStartCandidate({ propertyId, templateId: item.id, revisionId: item.revisionId, title: item.title })] : []);
+  return { status: 'ANSWERED', reasonCode: 'DIY_TEMPLATE_BROWSE_READY', blocks, suggestions: SUGGESTIONS, suggestedNextActionCandidates };
 }
 
 registerCapabilityHandler('diy.template-browse', async (envelope) => {

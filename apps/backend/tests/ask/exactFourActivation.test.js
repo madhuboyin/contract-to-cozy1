@@ -16,6 +16,7 @@ const { SUGGESTED_NEXT_ACTION_LIMITS, CURATED_STARTER_OUTCOME_KEYS, REPEATABLE_O
 const { lifecycleKey, STARTER_ROTATION_MS } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
 const { suggestedNextActionSemanticKeyHash } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
 const starters = require('../../src/services/ask/suggestedActions/starterCandidates.ts');
+const { diyTemplateStartCandidate } = require('../../src/services/ask/suggestedActions/diyProjectCandidates.ts');
 
 const NOW = new Date('2026-10-05T12:00:00.000Z');
 const PROPERTY = 'p1';
@@ -33,7 +34,7 @@ async function availability({ role = 'VIEWER', mode = 'UNKNOWN', disabled = null
 const okLifecycle = (over = {}) => async () => ({ cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true, ...over });
 
 async function run({ role, mode, disabled, status = 'ANSWERED', message = 'What maintenance is pending?', operationId = 'MAINTENANCE_STATUS', propertyId = PROPERTY,
-  current = null, recent = [], lifecycle = okLifecycle(), producers, nowMs, result: resultOver = {} } = {}) {
+  current = null, recent = [], lifecycle = okLifecycle(), producers, nowMs, entityValidatorFor, result: resultOver = {} } = {}) {
   const offers = []; const calls = { lifecycle: 0, completeness: 0 };
   const avail = await availability({ role, mode, disabled });
   const out = await finalizeSuggestedNextActionsWithReport(
@@ -49,6 +50,7 @@ async function run({ role, mode, disabled, status = 'ANSWERED', message = 'What 
       loadUrgentHomeActionState: async () => ({ nowCount: 0 }),
       loadHomeOpportunityState: async () => ({ contextVersion: 'v1', capitalItemsUpcoming: false, warrantyExpiring: false, openFindings: false }),
       loadActivePlanState: async () => ({ sellHoldRentActive: false }),
+      entityValidatorFor,
       recordOffers: async (input) => { offers.push(input); return { attempted: input.offers.length, ok: true }; },
       recordImpressions: () => {}, recordSuppression: () => {},
     },
@@ -98,6 +100,24 @@ test('a settled answer with declared contextual workflow controls does not get a
   });
   assert.equal(r.calls.lifecycle, 0, 'contextual results do not load starter lifecycle state');
   assert.equal(r.offers.length, 0, 'no starter offers are recorded when the rich result owns the next action');
+});
+
+test('a declared DIY result candidate survives the contextual exemption and becomes the sticky footer action', async () => {
+  const candidate = diyTemplateStartCandidate({ propertyId: PROPERTY, templateId: 'template-1', revisionId: 'revision-1', title: 'Touch up a scuffed wall' });
+  const r = await run({
+    role: 'CONTRIBUTOR',
+    operationId: 'DIY_TEMPLATE_BROWSE',
+    result: {
+      blocks: [{ type: 'GROUPED_LIST', actions: [{ id: 'start', label: 'Start this project', message: 'Start this project.', interactionType: 'MUTATE_RECORD', operationId: 'DIY_PROJECT_START' }] }],
+      suggestedNextActionCandidates: [candidate],
+    },
+    producers: [SUGGESTED_NEXT_ACTION_PRODUCERS[0], ...starterProducers],
+    entityValidatorFor: (entityType) => entityType === 'DIY_TEMPLATE' ? async () => new Map([['template-1', { exists: true, propertyId: null, currentContextVersion: 'revision-1' }]]) : undefined,
+  });
+  assert.deepEqual(r.shown.map((action) => [action.label, action.operationId, action.outcomeKey, action.entityContext.entityId]), [
+    ['Start Touch up a scuffed wall', 'DIY_PROJECT_START', 'START_REVIEWED_PROJECT', 'template-1'],
+  ]);
+  assert.equal(r.report.exactFour.exemptReason, 'CONTEXTUAL_ACTIONS_IN_RESULT');
 });
 
 test('the real finalizer shares one Property Context-backed state across profile, opportunity and completeness consumers', async () => {
