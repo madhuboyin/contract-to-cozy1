@@ -7,6 +7,7 @@ import { getSkillForOperation } from '../../skills/skillRegistry';
 import { validateSkillExecutionBinding } from '../../skills/skillExecutionBinding';
 import { getSkillLineageMetadata } from '../../skills/skillLineageRegistry';
 import { requiredAskTargetEntity } from '../askEntityResolution';
+import { logger } from '../../../lib/logger';
 import { captureFallbackHref } from './capture';
 import { propertySummary } from './propertyContext';
 import { readStoredSuggestedNextActions } from '../suggestedActions/suggestedNextAction.contract';
@@ -192,6 +193,8 @@ export function mapPersistedExecution(execution: {
   };
   const parsed = AskExecutionResponseSchema.safeParse(candidate);
   if (parsed.success) return parsed.data;
+  // The fallback hides WHY a saved answer no longer parses; record the failing paths (never the content) so it can be diagnosed.
+  logger.warn({ executionId: execution.id, operationId: execution.operationId, storedSchemaVersion, issues: parsed.error.issues.slice(0, 10).map((issue) => ({ path: issue.path.join('.'), code: issue.code })) }, 'Saved Ask response failed schema validation; showing the refresh fallback');
   return AskExecutionResponseSchema.parse({
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
     executionId: execution.id,

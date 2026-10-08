@@ -468,3 +468,10 @@ export const continueGuideAction = (projectId: string, label: string) => ({
   id: DIY_CONTINUE_GUIDE_ACTION_ID, label: label.length > 80 ? `${label.slice(0, 79)}…` : label, interactionType: 'START_WORKFLOW' as const, message: 'Guide me through this project.',
   operationId: 'DIY_PROJECT_GUIDE', entityType: 'DIY_PROJECT', entityId: projectId, style: 'PRIMARY' as const,
 });
+
+export const DIY_SHOW_PROJECTS_ACTION_ID = 'diy-show-projects';
+/** The way forward from a receipt that closes a project (finished, stopped, handed off, or a recovery request): the person's DIY projects, inside Ask. */
+export const showProjectsAction = () => ({
+  id: DIY_SHOW_PROJECTS_ACTION_ID, label: 'Show my DIY projects', interactionType: 'START_WORKFLOW' as const, message: 'Show my DIY projects.',
+  operationId: 'DIY_PROJECTS', style: 'PRIMARY' as const,
+});

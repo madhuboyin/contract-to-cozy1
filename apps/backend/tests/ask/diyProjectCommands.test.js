@@ -257,7 +257,8 @@ test('finish confirm: the project is COMPLETED as the actor with one ledger row 
   assert.equal(tracked.length, 1);
   assert.deepEqual([tracked[0].userId, tracked[0].metadataJson], ['u1', { actionType: 'complete_project', source: 'ask' }]);
   assert.deepEqual([...new Set(db.state.writes.map((w) => w.model))].sort(), ['project'], 'the project row is the only model written directly; the outbox row is checked above');
-  assert.deepEqual(validate('DIY_PROJECT_COMPLETE', result, 'OWNER').blocks[0].actions.map((a) => a.id), [], 'the receipt offers no link out to the desktop page');
+  assert.deepEqual(validate('DIY_PROJECT_COMPLETE', result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-show-projects'], 'the receipt is not a dead end: its one way forward stays inside Ask, and no link out to the desktop page');
+  assert.deepEqual(validate('DIY_PROJECT_COMPLETE', result, 'OWNER').blocks[0].actions[0].operationId, 'DIY_PROJECTS');
   // The guide afterwards is the finished-project view (7C), with no step, finish, stop or hand-off action.
   const after = await guide();
   assert.equal(after.reasonCode, 'DIY_PROJECT_FINISHED_VIEW');
@@ -270,6 +271,7 @@ test('finish confirm replay and concurrent finish: "already", no second event, n
   await confirm('DIY_PROJECT_COMPLETE', proposed.parameters);
   const again = await confirm('DIY_PROJECT_COMPLETE', proposed.parameters);
   assert.equal(again.result.reasonCode, 'DIY_PROJECT_ALREADY_COMPLETED');
+  assert.deepEqual(validate('DIY_PROJECT_COMPLETE', again.result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-show-projects'], 'the "already" receipt also leads on');
   assert.equal(db.state.events.length, 1);
   assert.equal(db.state.domainEvents.length, 1);
   assert.equal(tracked.length, 1, 'only the first, newly applied completion emitted');
@@ -394,6 +396,7 @@ test('stop and hand off confirm: the status, the actor, abandonedAt and one ledg
   assert.match(stop.result.blocks[0].description, /Nothing else was changed/);
   assert.deepEqual(tracked.map((e) => e.metadataJson), [{ actionType: 'abandon_project', hireOut: false, source: 'ask' }]);
   AskPresentationBlockSchema.parse(stop.result.blocks[0]);
+  assert.deepEqual(validate('DIY_PROJECT_ABANDON', stop.result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-show-projects'], 'a stopped project leads on to the DIY projects, inside Ask');
 
   install(); // a fresh project for the hand-off
   const hand = await confirm('DIY_PROJECT_ABANDON', (await proposeStop('HAND_OFF', {})).parameters);
@@ -402,12 +405,15 @@ test('stop and hand off confirm: the status, the actor, abandonedAt and one ledg
   assert.equal(hand.result.blocks[0].title, 'Handed off');
   assert.match(hand.result.blocks[0].description, /Nobody was booked or contacted/);
   assert.equal(tracked[0].metadataJson.hireOut, true);
+  assert.deepEqual(validate('DIY_PROJECT_ABANDON', hand.result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-show-projects'], 'so does a hand-off');
 });
 
 test('stop and hand off confirm: a replay or a concurrent stop is "already" with no analytics; refusals for a changed project, a revoked role and another closure write nothing', async () => {
   const proposed = await proposeStop('STOP', {});
   await confirm('DIY_PROJECT_ABANDON', proposed.parameters);
-  assert.equal((await confirm('DIY_PROJECT_ABANDON', proposed.parameters)).result.reasonCode, 'DIY_PROJECT_ALREADY_STOPPED');
+  const alreadyStopped = await confirm('DIY_PROJECT_ABANDON', proposed.parameters);
+  assert.equal(alreadyStopped.result.reasonCode, 'DIY_PROJECT_ALREADY_STOPPED');
+  assert.deepEqual(validate('DIY_PROJECT_ABANDON', alreadyStopped.result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-show-projects'], 'the "already" receipt also leads on');
   assert.equal(db.state.events.length, 1);
   assert.equal(tracked.length, 1);
 

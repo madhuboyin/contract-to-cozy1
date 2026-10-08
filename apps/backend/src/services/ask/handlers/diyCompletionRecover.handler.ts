@@ -14,7 +14,7 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { diyService } from '../../diy.service';
-import { DIY_PROJECT_ENTITY_TYPE, DIY_RECOVER_ACTIONS } from '../../diy/projectGuide';
+import { DIY_PROJECT_ENTITY_TYPE, DIY_RECOVER_ACTIONS, showProjectsAction } from '../../diy/projectGuide';
 
 const BOUNDARY_ID = 'diy-recover-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -105,7 +105,7 @@ async function confirmDiyCompletionRecover(ctx: ConfirmCapabilityContext): Promi
       description: already
         ? 'The request was already queued, so nothing was changed. The records update in the background.'
         : 'I asked Cozy to try again. The records update in the background, and this answer does not know yet whether it worked. Ask me to show this project again afterwards to see its status.',
-      details: [{ label: 'Request', value: kind === 'COMPLETION_EFFECTS' ? 'Record my completion' : 'Update my linked task' }], actions: [],
+      details: [{ label: 'Request', value: kind === 'COMPLETION_EFFECTS' ? 'Record my completion' : 'Update my linked task' }], actions: [showProjectsAction()],
     }],
     suggestions: SUGGESTIONS,
   });

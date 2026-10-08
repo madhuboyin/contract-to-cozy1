@@ -17,7 +17,7 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } f
 import { logger } from '../../../lib/logger';
 import { currentStepOf, evaluateAskProjectPolicy, guideContextVersion } from '../../diy/askStepPolicy';
 import { describeCompletionEffects } from '../../diy/completionEffectsStatus';
-import { DIY_PROJECT_ENTITY_TYPE, DIY_PROJECT_FINISH, DIY_PROJECT_STOP_ACTIONS, type GuideSource } from '../../diy/projectGuide';
+import { DIY_PROJECT_ENTITY_TYPE, DIY_PROJECT_FINISH, DIY_PROJECT_STOP_ACTIONS, showProjectsAction, type GuideSource } from '../../diy/projectGuide';
 
 const BOUNDARY_ID = 'diy-project-command-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -81,7 +81,7 @@ const FINISH_TABLE = { FINISH: DIY_PROJECT_FINISH };
 function alreadyFinished(title: string): AskOperationResult {
   return {
     status: 'COMPLETED', reasonCode: 'DIY_PROJECT_ALREADY_COMPLETED',
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'diy-project-complete-already', title: 'Already finished', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Project', value: title }], actions: [] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'diy-project-complete-already', title: 'Already finished', status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Project', value: title }], actions: [showProjectsAction()] }],
     suggestions: SUGGESTIONS,
   };
 }
@@ -176,7 +176,7 @@ async function confirmDiyProjectComplete(ctx: ConfirmCapabilityContext): Promise
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: 'diy-project-complete-receipt', title: 'Finished by you', status: 'COMPLETED',
       description: `${effects?.summary ?? 'Recording your completion.'} This is recorded as your report; Cozy doesn't check the work.`,
-      details: [{ label: 'Project', value: source.project.title }, { label: 'Records', value: 'Being queued; this can take a little while' }], actions: [],
+      details: [{ label: 'Project', value: source.project.title }, { label: 'Records', value: 'Being queued; this can take a little while' }], actions: [showProjectsAction()],
     }],
     suggestions: SUGGESTIONS,
   };
@@ -206,7 +206,7 @@ const OUTCOME_COPY: Record<Outcome, {
 function alreadyClosed(outcome: Outcome, title: string): AskOperationResult {
   return {
     status: 'COMPLETED', reasonCode: OUTCOME_COPY[outcome].alreadyCode,
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'diy-project-abandon-already', title: OUTCOME_COPY[outcome].alreadyTitle, status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Project', value: title }], actions: [] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'diy-project-abandon-already', title: OUTCOME_COPY[outcome].alreadyTitle, status: 'COMPLETED', description: 'Nothing was changed.', details: [{ label: 'Project', value: title }], actions: [showProjectsAction()] }],
     suggestions: SUGGESTIONS,
   };
 }
@@ -284,7 +284,7 @@ async function confirmDiyProjectAbandon(ctx: ConfirmCapabilityContext): Promise<
       description: outcome === 'HIRED_OUT'
         ? 'The project is marked as handed off. Nobody was booked or contacted, and nothing else was changed.'
         : 'The project is marked as stopped. Nothing else was changed.',
-      details: [{ label: 'Project', value: source.project.title }], actions: [],
+      details: [{ label: 'Project', value: source.project.title }], actions: [showProjectsAction()],
     }],
     suggestions: SUGGESTIONS,
   };

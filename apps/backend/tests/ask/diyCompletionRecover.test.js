@@ -231,6 +231,7 @@ test('confirm re-queues ONLY the dead-lettered row, recording who and how many t
   assert.match(result.blocks[0].description, /does not know yet whether it worked/);
   assert.doesNotMatch(JSON.stringify(result), /verified|recorded successfully|Completion recorded/i);
   AskPresentationBlockSchema.parse(result.blocks[0]);
+  assert.deepEqual(validate('DIY_COMPLETION_RECOVER', result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-show-projects'], 'the receipt leads on inside Ask');
   // The guide afterwards says it is recording again, with no recovery action.
   const after = await guide();
   assert.match(cardOf(after).main.body, /Recording your completion/);
