@@ -139,7 +139,7 @@ test('suggestion mode: the safety guide (with its EMERGENCY boundary) is SAFE_RE
   assert.equal(resolveSuggestedNextActionMode(buildSeasonalHomeCareResult({ zipCode: '60601', now: WINTER_NOW, focus: 'THIS_SEASON', setup: owner }), 'SEASONAL_HOME_CARE'), 'NORMAL');
 });
 
-test('finalizer: with the real starter producers, the safety guide ends with no response-level starter or promotional candidate, and its block-level actions remain', async () => {
+test('finalizer: contextual Home Basics controls own the next step in both safety and normal modes, without starter padding', async () => {
   const NOW = new Date('2027-01-15T12:00:00.000Z');
   const run = (result, operationId) => finalizeSuggestedNextActionsWithReport(
     { result, executionId: 'exec-1', userId: 'u1', sessionId: 's1', propertyId: 'prop-1', operationId, message: HOME_BASICS_SAFETY_MESSAGE },
@@ -159,5 +159,6 @@ test('finalizer: with the real starter producers, the safety guide ends with no 
   assert.equal(emergency.result.blocks.find((block) => block.id === 'home-basics-next').actions.length, 2, 'block-level continuations remain');
   const routine = await run(buildHomeBasicsResult('MONTHLY_ROUTINE'), 'HOME_BASICS_GUIDE');
   assert.equal(routine.report.mode, 'NORMAL');
-  assert.ok(routine.result.suggestedNextActions.length > 0, 'control: without the emergency block the same producers do offer starters');
+  assert.deepEqual(routine.result.suggestedNextActions, [], 'normal contextual controls also suppress unrelated starter padding');
+  assert.equal(routine.report.exactFour.exemptReason, 'CONTEXTUAL_ACTIONS_IN_RESULT');
 });

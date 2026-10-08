@@ -18,6 +18,8 @@ export const EXACT_FOUR_COOLDOWN_REJECTION = 'COOLDOWN:SUPPRESSED';
 export const EXACT_FOUR_COMPLETED_REJECTION = 'COMPLETED:SUPPRESSED';
 
 export interface ExactFourInput extends PolicyInput {
+  /** The answer already renders declared workflow controls; curated starter padding would compete with that contextual surface. */
+  contextualPresentationActions?: boolean;
   /**
    * Actionable profile completeness as a fraction in [0, 1] (plan C.15.1), or null when it could not be computed. Below the
    * threshold, missing-profile capture is prioritized. null (could not be computed) is NOT treated as complete: it fails profile-first
@@ -94,10 +96,14 @@ export interface ExactFourResult extends PolicyResult {
   evaluated: ExactFourEvaluation[];
 }
 
-export function resolveExactFourExemption(eligibility: PolicyInput['eligibility']): ExactFourExemptReason | null {
+export function resolveExactFourExemption(
+  eligibility: PolicyInput['eligibility'],
+  contextualPresentationActions = false,
+): ExactFourExemptReason | null {
   if (eligibility.mode !== 'NORMAL') return 'SAFE_RECOVERY_ONLY';
   if (eligibility.pendingInteractionActive) return 'PENDING_INTERACTION';
   if (!eligibility.sourcePropertyId) return 'NO_PROPERTY';
+  if (contextualPresentationActions) return 'CONTEXTUAL_ACTIONS_IN_RESULT';
   return null;
 }
 
@@ -114,7 +120,7 @@ interface PoolEntry {
 }
 
 export function selectExactFourSuggestedNextActions(input: ExactFourInput): ExactFourResult {
-  const exemptReason = resolveExactFourExemption(input.eligibility);
+  const exemptReason = resolveExactFourExemption(input.eligibility, input.contextualPresentationActions);
   if (exemptReason) {
     // Required-step and safety states keep their dedicated controls; the existing policy decides what (if anything) accompanies them.
     const legacy = selectSuggestedNextActions(input);

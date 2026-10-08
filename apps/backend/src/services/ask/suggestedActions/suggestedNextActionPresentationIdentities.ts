@@ -14,6 +14,35 @@ const COMPACT_INTERACTIONS = new Set<string>(SUGGESTED_NEXT_ACTION_INTERACTION_T
 const MAX_DEPTH = 6;
 const MAX_NODES = 2000;
 
+/**
+ * A structured action rendered in the answer is already the contextual next-action surface for that result. The finalizer uses this
+ * signal to avoid padding the composer with unrelated curated starters. This deliberately reads only declared action metadata; labels,
+ * messages and block types are never used to infer intent.
+ */
+export function hasContextualPresentationActions(blocks: readonly Json[]): boolean {
+  let found = false;
+  let visited = 0;
+  const walk = (node: Json, depth: number): void => {
+    if (found || depth > MAX_DEPTH || visited >= MAX_NODES || !node || typeof node !== 'object') return;
+    visited += 1;
+    if (Array.isArray(node)) { for (const entry of node) walk(entry, depth + 1); return; }
+    const record = node as Record<string, Json>;
+    if (Array.isArray(record.actions) && record.actions.some((action) => {
+      const candidate = action as Record<string, Json> | null;
+      return Boolean(candidate
+        && typeof candidate.operationId === 'string'
+        && typeof candidate.interactionType === 'string'
+        && COMPACT_INTERACTIONS.has(candidate.interactionType));
+    })) {
+      found = true;
+      return;
+    }
+    for (const value of Object.values(record)) walk(value, depth + 1);
+  };
+  walk(blocks, 0);
+  return found;
+}
+
 export function collectPresentationIdentities(blocks: readonly Json[], propertyId: string | null): Set<string> {
   const identities = new Set<string>();
   let visited = 0;

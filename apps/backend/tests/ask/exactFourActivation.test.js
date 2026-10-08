@@ -22,7 +22,7 @@ const PROPERTY = 'p1';
 const ALL = [...starters.propertySummaryStarters(PROPERTY), ...starters.seasonalHomeCareStarters(PROPERTY), ...starters.homeBasicsStarters(PROPERTY), ...starters.hiringGuideStarters(PROPERTY)];
 const keyOf = (c) => `${c.operationId}:${c.outcomeKey}`;
 const lk = (c) => lifecycleKey({ operationId: c.operationId, outcomeKey: c.outcomeKey, entityType: null, entityId: null });
-const hashOf = (c) => suggestedNextActionSemanticKeyHash({ operationId: c.operationId, interactionType: 'CONVERSATION_CONTINUE', propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: c.outcomeKey });
+const hashOf = (c) => suggestedNextActionSemanticKeyHash({ operationId: c.operationId, interactionType: c.interactionType, propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: c.outcomeKey });
 const ONBOARDING = { UNKNOWN: null, BUYING: 'SHOPPING', OWNING: 'ESTABLISHED_OWNER', SELLING: 'PREPARING_TRANSFER' };
 
 async function availability({ role = 'VIEWER', mode = 'UNKNOWN', disabled = null } = {}) {
@@ -78,6 +78,26 @@ test('EMPTY-HOME VIEWER, typed question: the settled answer shows exactly four d
   assert.equal(r.offers[0].offers.length, 4);
   assert.ok(r.offers[0].offers.every((o) => o.slotClass === 'CURATED_STARTER' && o.currentResultOwnership === false));
   assert.equal(r.calls.completeness, 0, 'a starters-only turn never loads actionable completeness');
+});
+
+test('a settled answer with declared contextual workflow controls does not get an unrelated curated-starter footer', async () => {
+  const r = await run({
+    result: {
+      blocks: [{
+        type: 'LIST',
+        actions: [{
+          id: 'guide-current-project', label: 'Guide me through this project', message: 'Guide me through this project.',
+          style: 'PRIMARY', interactionType: 'START_WORKFLOW', operationId: 'DIY_PROJECT_GUIDE',
+        }],
+      }],
+    },
+  });
+  assert.equal(r.shown.length, 0);
+  assert.deepEqual(r.report.exactFour, {
+    policyVersion: 'sna-exact-four-1', applicability: 'EXEMPT', exemptReason: 'CONTEXTUAL_ACTIONS_IN_RESULT',
+  });
+  assert.equal(r.calls.lifecycle, 0, 'contextual results do not load starter lifecycle state');
+  assert.equal(r.offers.length, 0, 'no starter offers are recorded when the rich result owns the next action');
 });
 
 test('the real finalizer shares one Property Context-backed state across profile, opportunity and completeness consumers', async () => {

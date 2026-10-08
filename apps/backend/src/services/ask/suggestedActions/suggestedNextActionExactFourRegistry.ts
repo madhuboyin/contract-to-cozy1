@@ -113,7 +113,7 @@ export function resolveSuggestedNextActionSlotClass(candidate: ClassifiableCandi
 }
 
 /** Bounded reason tokens for the degraded diagnostic and metrics (no homeowner data). */
-export const EXACT_FOUR_EXEMPT_REASONS = ['SAFE_RECOVERY_ONLY', 'PENDING_INTERACTION', 'NO_PROPERTY'] as const;
+export const EXACT_FOUR_EXEMPT_REASONS = ['SAFE_RECOVERY_ONLY', 'PENDING_INTERACTION', 'NO_PROPERTY', 'CONTEXTUAL_ACTIONS_IN_RESULT'] as const;
 export type ExactFourExemptReason = typeof EXACT_FOUR_EXEMPT_REASONS[number];
 
 export const EXACT_FOUR_SHORTAGE_REASONS = [

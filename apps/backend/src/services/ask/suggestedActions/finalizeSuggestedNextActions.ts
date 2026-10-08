@@ -37,7 +37,7 @@ import { SUGGESTED_NEXT_ACTION_BUDGET } from './suggestedNextActionRegistry';
 import { SUGGESTED_NEXT_ACTION_PRODUCERS, type SuggestedNextActionProducer } from './suggestedNextActionProducers';
 import { getSuggestedNextActionEntityValidator } from './suggestedNextActionEntityValidators';
 import './entityValidators/registerAll';
-import { collectPresentationIdentities } from './suggestedNextActionPresentationIdentities';
+import { collectPresentationIdentities, hasContextualPresentationActions } from './suggestedNextActionPresentationIdentities';
 import { loadCurrentOutcomeKeyHashes } from './suggestedNextActionHistory';
 import { systemSuggestedNextActionClock, type SuggestedNextActionClock } from './suggestedNextActionClock';
 import { recordSuggestedActionImpressions, recordSuggestedActionSuppression } from './suggestedActionAnalytics';
@@ -139,6 +139,7 @@ export async function finalizeSuggestedNextActionsWithReport(
   const startedAt = nowMs();
   const clock = deps.clock ?? systemSuggestedNextActionClock;
   const mode = resolveSuggestedNextActionMode(input.result, input.operationId);
+  const contextualPresentationActions = hasContextualPresentationActions(input.result.blocks);
   const report: FinalizeSuggestedNextActionsReport = { mode, durationMs: 0, droppedProducers: [], diagnostics: null, exactFour: null, contextFailed: false };
   let sharedPropertyStatePromise: ReturnType<typeof loadSuggestedActionSharedPropertyState> | undefined;
   const sharedPropertyState = () => {
@@ -220,11 +221,27 @@ export async function finalizeSuggestedNextActionsWithReport(
       logger.warn({ err: error, producer: producer.id, executionId: input.executionId }, '[ask-suggested-actions] producer dropped');
     }
   }
+  // Rich result controls are already the answer's contextual next actions. Keep any genuinely contextual compact nominations, but do
+  // not manufacture a competing footer by padding it with generic starters (the source of the repeated four-chip row).
+  if (contextualPresentationActions) {
+    for (const [producerId, candidates] of nominations) {
+      nominations.set(producerId, candidates.filter((candidate) => (candidate as { slotClass?: unknown } | null)?.slotClass !== 'CURATED_STARTER'));
+    }
+  }
   const nominated = [...nominations.values()].reduce((sum, list) => sum + list.length, 0);
   askSuggestedActionsCandidatesTotal.inc({ stage: 'nominated', mode }, nominated);
   // Nothing nominated: no reads, no ledger beyond an empty list. A property-scoped, ordinary (not recovery, not pending) turn that nominated
   // NOTHING (for example every starter producer dropped for budget) is still reported as the approved bounded shortage diagnostic, never silently.
   if (nominated === 0) {
+    if (contextualPresentationActions) {
+      report.exactFour = {
+        policyVersion: SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION,
+        applicability: 'EXEMPT',
+        exemptReason: 'CONTEXTUAL_ACTIONS_IN_RESULT',
+      };
+      recordExactFourDiagnostics(report.exactFour);
+      return finish(passthrough([]));
+    }
     const pending = Boolean(input.result.clarification || input.result.confirmation || (input.result.captureRequests?.length ?? 0) > 0);
     if (mode === 'NORMAL' && input.propertyId && !pending) {
       const shortageReasons: Array<'NO_CANDIDATES' | 'PRODUCER_DROPPED'> = ['NO_CANDIDATES'];
@@ -292,7 +309,7 @@ export async function finalizeSuggestedNextActionsWithReport(
   // 3. Exact-four inputs (lifecycle, completeness) and the pure policy. Every extra read is lazy and fails open: a lifecycle or completeness
   // outage can never strip the row of actions, and is reported as a bounded diagnostic reason instead.
   const nominatedRaw = [...nominations.values()].flat() as Array<Record<string, any>>;
-  const exemptReason = resolveExactFourExemption(eligibility);
+  const exemptReason = resolveExactFourExemption(eligibility, contextualPresentationActions);
   const upstreamShortageReasons: Array<'PRODUCER_DROPPED' | 'CONTEXT_FAILED'> = [];
   if (report.droppedProducers.length > 0) upstreamShortageReasons.push('PRODUCER_DROPPED');
   let lifecycle: LifecycleState | null = null;
@@ -341,6 +358,7 @@ export async function finalizeSuggestedNextActionsWithReport(
     starterLastOfferedAtMs: lifecycle?.lastOfferedAtMs,
     rotationNowMs: clock.now().getTime(),
     currentOperationId: input.operationId,
+    contextualPresentationActions,
     upstreamShortageReasons,
   };
   const policy = selectExactFourSuggestedNextActions(exactFourInput);
