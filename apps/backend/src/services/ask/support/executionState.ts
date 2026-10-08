@@ -122,7 +122,7 @@ export function mapPersistedExecution(execution: {
       ? { id: currentSkill.id, version: currentSkill.version, domain: currentSkill.domain }
       : null;
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; skillHandoff?: unknown; continuesExecutionId?: unknown; originalResponse?: unknown }
+    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; suggestedNextActionsGoverned?: unknown; skillHandoff?: unknown; continuesExecutionId?: unknown; originalResponse?: unknown }
     : {};
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005: viewState lives in
   // parametersJson (stamped by maintenanceResult), not resultJson.
@@ -176,6 +176,9 @@ export function mapPersistedExecution(execution: {
     clarification: stored.clarification ?? null,
     correctionCapabilities,
     suggestions: stored.suggestions ?? [],
+    // This marker is the compatibility boundary between historical raw strings and newly governed typed actions.
+    // Omitting it here made the non-calm frontend treat every mapped governed execution as historical and hide its typed row.
+    ...(stored.suggestedNextActionsGoverned === true ? { suggestedNextActionsGoverned: true } : {}),
     // Dropped entry-by-entry when invalid, so a corrupt ledger can never blank an otherwise valid saved answer.
     suggestedNextActions: readStoredSuggestedNextActions(execution.resultJson),
     createdAt: execution.createdAt.toISOString(),

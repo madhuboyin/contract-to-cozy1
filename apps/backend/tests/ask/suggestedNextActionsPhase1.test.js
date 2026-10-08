@@ -15,6 +15,7 @@ const {
 } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
 const { resolveSuggestedActionSelection } = require('../../src/services/ask/suggestedActions/suggestedNextActionSelection.ts');
 const { fixedSuggestedNextActionClock } = require('../../src/services/ask/suggestedActions/suggestedNextActionClock.ts');
+const { mapPersistedExecution } = require('../../src/services/ask/support/executionState.ts');
 
 // ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN Phase 1: contract, deterministic ids, selection proof.
 
@@ -90,6 +91,18 @@ test('historical results without typed actions read as empty, and a corrupt ledg
   const good = action();
   const stored = readStoredSuggestedNextActions({ suggestedNextActions: [good, { ...good, id: 'bad' }, action({ operationId: 'NOT_A_REAL_OPERATION', id: deriveSuggestedNextActionId('exec-1', { ...identity, operationId: 'NOT_A_REAL_OPERATION' }) }), 42] });
   assert.deepEqual(stored.map((entry) => entry.id), [good.id]);
+});
+
+test('the persisted governed marker reaches the API response so non-calm clients render typed actions', () => {
+  const now = new Date('2026-10-04T12:00:00.000Z');
+  const mapped = mapPersistedExecution({
+    id: 'exec-1', sessionId: 'session-1', message: 'Mark this step done.', status: 'COMPLETED', reasonCode: 'DIY_STEP_COMPLETED',
+    propertyId: 'prop-1', operationId: 'DIY_STEP_UPDATE', operationVersion: '1.0', intentFamily: 'COMMAND', contextVersion: null,
+    resultJson: { schemaVersion: '1.0', blocks: [], captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActionsGoverned: true, suggestedNextActions: [action()] },
+    createdAt: now, updatedAt: now,
+  }, { id: 'prop-1', label: '94 Ashford Dr' });
+  assert.equal(mapped.suggestedNextActionsGoverned, true);
+  assert.deepEqual(mapped.suggestedNextActions.map((entry) => entry.id), [action().id]);
 });
 
 test('an action expiry is capped at the source execution expiry, and an unparseable expiry is already expired', () => {
