@@ -27,7 +27,7 @@ import type { PolicyDiagnostics } from './suggestedNextActionPolicy';
 import {
   resolveExactFourExemption, selectExactFourSuggestedNextActions, type ExactFourDiagnostics, type ExactFourInput,
 } from './suggestedNextActionExactFourPolicy';
-import { resolveSuggestedNextActionSlotClass, SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION, type LifecycleIdentity } from './suggestedNextActionExactFourRegistry';
+import { allowsOptionalResultEscapeRoutes, resolveSuggestedNextActionSlotClass, SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION, type LifecycleIdentity } from './suggestedNextActionExactFourRegistry';
 import { recordExactFourDiagnostics } from './suggestedNextActionExactFourDiagnostics';
 import {
   loadLifecycleState, offersFromExactFour, recordSuggestedActionOffers, type LifecycleState,
@@ -139,7 +139,8 @@ export async function finalizeSuggestedNextActionsWithReport(
   const startedAt = nowMs();
   const clock = deps.clock ?? systemSuggestedNextActionClock;
   const mode = resolveSuggestedNextActionMode(input.result, input.operationId);
-  const contextualPresentationActions = hasContextualPresentationActions(input.result.blocks);
+  const optionalEscapeRoutes = allowsOptionalResultEscapeRoutes(input.operationId, input.result.status);
+  const contextualPresentationActions = hasContextualPresentationActions(input.result.blocks) && !optionalEscapeRoutes;
   const report: FinalizeSuggestedNextActionsReport = { mode, durationMs: 0, droppedProducers: [], diagnostics: null, exactFour: null, contextFailed: false };
   let sharedPropertyStatePromise: ReturnType<typeof loadSuggestedActionSharedPropertyState> | undefined;
   const sharedPropertyState = () => {
@@ -242,7 +243,8 @@ export async function finalizeSuggestedNextActionsWithReport(
       recordExactFourDiagnostics(report.exactFour);
       return finish(passthrough([]));
     }
-    const pending = Boolean(input.result.clarification || input.result.confirmation || (input.result.captureRequests?.length ?? 0) > 0);
+    const pending = Boolean(input.result.clarification || input.result.confirmation
+      || (!optionalEscapeRoutes && (input.result.captureRequests?.length ?? 0) > 0));
     if (mode === 'NORMAL' && input.propertyId && !pending) {
       const shortageReasons: Array<'NO_CANDIDATES' | 'PRODUCER_DROPPED'> = ['NO_CANDIDATES'];
       if (report.droppedProducers.length > 0) shortageReasons.push('PRODUCER_DROPPED');
@@ -294,7 +296,10 @@ export async function finalizeSuggestedNextActionsWithReport(
       operationTargetEntityType: (operationId) => (operationId in ASK_OPERATION_DEFINITIONS ? requiredAskTargetEntity(operationId as AskOperationId) : null),
       entities,
       validatedEntityTypes,
-      pendingInteractionActive: Boolean(result.clarification || result.confirmation || (result.captureRequests?.length ?? 0) > 0),
+      // READY_WITH_LIMITATIONS capture prompts on the two registered read surfaces are optional CTAs. They do not become an active,
+      // focus-owning interaction until the homeowner launches the capture operation; the footer remains an escape route meanwhile.
+      pendingInteractionActive: Boolean(result.clarification || result.confirmation
+        || (!optionalEscapeRoutes && (result.captureRequests?.length ?? 0) > 0)),
       completedSemanticKeyHashes: typeof input.completedSemanticKeyHashes === 'function' ? await input.completedSemanticKeyHashes() : (input.completedSemanticKeyHashes ?? new Set()),
       askedMessageKeys: new Set([input.message, ...(input.recentCompletedMessages ?? [])].map(suggestionKey).filter(Boolean)),
       messageKey: suggestionKey,

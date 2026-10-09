@@ -102,6 +102,38 @@ test('a settled answer with declared contextual workflow controls does not get a
   assert.equal(r.offers.length, 0, 'no starter offers are recorded when the rich result owns the next action');
 });
 
+test('optional Property Summary capture and seller-prep controls retain four governed escape routes', async () => {
+  const propertySummary = await run({
+    role: 'CONTRIBUTOR', operationId: 'PROPERTY_SUMMARY', status: 'READY_WITH_LIMITATIONS',
+    message: 'How complete is my home record?',
+    result: {
+      captureRequests: [{ requirementId: 'location-1' }],
+      blocks: [{
+        type: 'PROGRESS', actions: [], nextSteps: [{
+          id: 'LOCATION', entityType: 'PROPERTY_CONTEXT_AREA',
+          actions: [{ id: 'fill-location', label: 'Fill in missing details', message: 'Fill in the missing location details.', interactionType: 'MUTATE_RECORD', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE' }],
+        }],
+      }],
+    },
+  });
+  assertFour(propertySummary, 'optional Property Summary capture');
+  assert.equal(propertySummary.report.exactFour.applicability, 'EXACT_FOUR');
+
+  const sellerPrep = await run({
+    role: 'CONTRIBUTOR', operationId: 'SELLER_PREP_CHECKLIST', message: 'Check my sale readiness',
+    result: {
+      blocks: [{
+        type: 'PROGRESS', actions: [], nextSteps: [{
+          id: 'item-1', entityType: 'SALE_READINESS_ITEM',
+          actions: [{ id: 'pursue', label: 'Pursue before listing', message: 'Pursue this seller-prep checklist item.', interactionType: 'MUTATE_RECORD', operationId: 'SELLER_PREP_ITEM_DECISION' }],
+        }],
+      }],
+    },
+  });
+  assertFour(sellerPrep, 'seller-prep optional controls');
+  assert.equal(sellerPrep.report.exactFour.applicability, 'EXACT_FOUR');
+});
+
 test('a declared DIY result candidate survives the contextual exemption and becomes the sticky footer action', async () => {
   const candidate = diyTemplateStartCandidate({ propertyId: PROPERTY, templateId: 'template-1', revisionId: 'revision-1', title: 'Touch up a scuffed wall' });
   const r = await run({

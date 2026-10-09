@@ -114,6 +114,13 @@ test('a normal property-scoped answer is not exempt', () => {
   assert.equal(resolveExactFourExemption(ctx()), null);
 });
 
+test('optional result escape-route registry is explicit and limited to settled read statuses', () => {
+  assert.equal(registry.allowsOptionalResultEscapeRoutes('PROPERTY_SUMMARY', 'READY_WITH_LIMITATIONS'), true);
+  assert.equal(registry.allowsOptionalResultEscapeRoutes('SELLER_PREP_CHECKLIST', 'ANSWERED'), true);
+  assert.equal(registry.allowsOptionalResultEscapeRoutes('PROPERTY_SUMMARY', 'NEEDS_CONTEXT'), false);
+  assert.equal(registry.allowsOptionalResultEscapeRoutes('DIY_PROJECTS', 'ANSWERED'), false);
+});
+
 // ---- selection order -----------------------------------------------------------------------------------------------------
 
 test('below 90%: current work, urgent work and the exact record come first, then profile gaps fill the rest', () => {

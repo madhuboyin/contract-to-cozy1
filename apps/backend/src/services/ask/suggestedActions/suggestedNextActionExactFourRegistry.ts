@@ -27,6 +27,22 @@ export const EXACT_FOUR = {
   strongOpportunityMinConfidence: 0.5,
 } as const;
 
+/**
+ * Completed read surfaces whose embedded controls are optional branches, not a step the homeowner must finish. These operations keep
+ * the governed footer as an escape route when the homeowner does not want the in-result CTA. This is deliberately operation-scoped:
+ * capture, confirmation, clarification, recovery and safety states remain focused and never opt in through labels or block shape.
+ */
+export const OPTIONAL_RESULT_ESCAPE_ROUTE_OPERATIONS: ReadonlySet<string> = new Set([
+  'PROPERTY_SUMMARY',
+  'SELLER_PREP_CHECKLIST',
+]);
+
+export function allowsOptionalResultEscapeRoutes(operationId: string | null | undefined, status: string): boolean {
+  return Boolean(operationId
+    && OPTIONAL_RESULT_ESCAPE_ROUTE_OPERATIONS.has(operationId)
+    && (status === 'ANSWERED' || status === 'READY_WITH_LIMITATIONS'));
+}
+
 /** Classes that carry no generic impression/dismissal cooldown (plan C.15.4): they are the current answer, urgent work, or the record in view. */
 export const COOLDOWN_EXEMPT_SLOT_CLASSES: ReadonlySet<SuggestedNextActionSlotClass> = new Set(['CONTINUE_WORK', 'URGENT_WORK', 'EXACT_RECORD']);
 
