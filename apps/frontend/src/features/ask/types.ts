@@ -433,6 +433,8 @@ export interface ConciergeHomeView {
   };
   landingSpotlight?: { kind: 'ATTENTION' | 'DECISION'; entityId: string } | null;
   capabilityGroups: AskCapabilityGroup[];
+  // Explore with Cozy: server-owned topics and starters. Optional only so older payloads and fixtures still parse.
+  discoveryTopics?: AskDiscoveryTopic[];
   featuredPrompts: AskFeaturedPrompt[];
   suggestedQuestions: string[];
 }
@@ -476,6 +478,29 @@ export interface AskCapabilityPrompt {
     documentId?: string;
     batchDecisions?: AskBatchDecision[];
   };
+}
+
+export type AskDiscoveryTopicId = 'HOME_CARE' | 'DIY_PROJECTS' | 'HOME_RECORD';
+
+// Mirrors AskDiscoveryTopic/AskDiscoveryStarter in backend conciergeHome.contract.ts. A starter launches through the ordinary Ask path:
+// its message is the turn and its operationId rides in launchContext.operationId. Selecting a topic is client view state only.
+export interface AskDiscoveryStarter {
+  id: string;
+  label: string;
+  message: string;
+  operationId: string;
+  interactionType: 'CONVERSATION_CONTINUE' | 'START_WORKFLOW';
+  availability: 'AVAILABLE' | 'NEEDS_CONTEXT' | 'UNAVAILABLE';
+  reasonCodes: string[];
+  entityContext: Record<string, string> | null;
+}
+
+export interface AskDiscoveryTopic {
+  id: AskDiscoveryTopicId;
+  label: string;
+  order: number;
+  indicator: { label: string; value: number | string; sourceVersion: string | null; freshness: 'CURRENT' | 'STALE' | 'UNAVAILABLE' } | null;
+  starters: AskDiscoveryStarter[];
 }
 
 export interface AskFeaturedPrompt extends AskCapabilityPrompt {

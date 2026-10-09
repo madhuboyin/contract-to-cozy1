@@ -54,7 +54,7 @@ export function recentSessionStatus(status: AskRecentSessionSummary['latestStatu
   return 'Not available';
 }
 
-export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = [], continuingId = null, view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onResumePending, onNew, onLoadMore, backHref, backLabel, statusSlot, accountName, accountEmail, loggingOut = false, onLogout }: {
+export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = [], continuingId = null, view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onResumePending, onNew, onLoadMore, backHref, backLabel, statusSlot, discoverySlot, accountName, accountEmail, loggingOut = false, onLogout }: {
   items: AskRecentSessionSummary[];
   // IW-HIST-003/011 (FRD v1.71): the pinned group (recent view only) and the explicit archived view.
   pinnedItems?: AskRecentSessionSummary[];
@@ -85,6 +85,8 @@ export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = 
   backLabel?: string;
   // IW-CALM-007 (FRD v1.112): the refresh-status dot, shown beside New conversation when the page header is hidden on wide screens.
   statusSlot?: ReactNode;
+  // Explore with Cozy: the desktop rail's discovery group, kept visually apart from New conversation, search and history.
+  discoverySlot?: ReactNode;
   accountName?: string;
   accountEmail?: string;
   loggingOut?: boolean;
@@ -130,6 +132,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = 
         </button>
         {calm && statusSlot && <div className="shrink-0 pr-2">{statusSlot}</div>}
       </div>
+      {discoverySlot}
       <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-label="Conversation home scope">
         <button type="button" aria-pressed={scope === 'THIS_HOME'} disabled={!selectedHomeAvailable} onClick={() => onScopeChange('THIS_HOME')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold disabled:opacity-50', scope === 'THIS_HOME' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>This home</button>
         <button type="button" aria-pressed={scope === 'ALL_HOMES'} onClick={() => onScopeChange('ALL_HOMES')} className={cn('min-h-9 rounded-lg px-2 text-xs font-semibold', scope === 'ALL_HOMES' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>All homes</button>

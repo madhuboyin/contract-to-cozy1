@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; Phase 1 implemented (backend only); Phases 2-4 not started
+**Status:** Approved product direction; Phases 1-2 implemented; Phases 3-4 not started
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -165,6 +165,23 @@ Exit: every returned starter is authorized, registry-backed, and Ask-native; no 
 5. Preserve conversation, selected property, draft, transcript position, and pending workflow state.
 
 Exit: all four controls are reachable by pointer, keyboard, touch, and assistive technology.
+
+**Phase 2 as built** (`apps/frontend/src/components/ask/workspace/ExploreWithCozy.tsx`; tests `exploreWithCozy.test.tsx`,
+`exploreWithCozyWorkspace.test.tsx`, `e2e/ask/explore.spec.ts`, `e2e/ask/explore.mobile.spec.ts`):
+
+- **Desktop:** the group sits directly under New conversation in the expanded history rail (`discoverySlot`). When the rail is collapsed,
+  a **Compass** button in the collapsed rail opens the first topic, so discovery is never hidden.
+- **Narrow screens:** one collapsed-by-default inline disclosure above the conversation. It is not a dialog or a second drawer; the existing
+  history sheet is untouched.
+- **Focused view:** renders in `main` and the conversation is hidden, not unmounted, so the draft, pending workflows and result state survive.
+  Scroll position and focus are restored on **Not now**. Starters render the server's order and availability; an unavailable starter is
+  disabled with its reason.
+- **Launch:** a starter sends exactly one request: its message, `launchContext.operationId`, and the starter's property. It refuses to send if
+  the loaded overview belongs to a different property than the one selected.
+- **Data:** the Concierge Home overview was loaded only on the empty landing. It is now also loaded in page mode, kept once loaded for the
+  selected home, and refetched on every return to the landing exactly as before. Without this the topics would vanish mid-conversation.
+- **More ideas** in the rail opens the existing `CapabilityExplorer`; Phase 4 extends it.
+- Not done in Phase 2: indicators (Phase 3), explorer search and registry-backed membership (Phase 4), analytics events (Phase 4).
 
 ### Phase 3 — Contextual indicators
 

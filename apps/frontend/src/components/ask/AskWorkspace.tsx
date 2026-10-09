@@ -7,7 +7,7 @@ import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import { VoiceInputButton } from './VoiceInputButton';
-import type { AskCapabilityPrompt, AskExecutionResponse, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
+import type { AskCapabilityPrompt, AskDiscoveryStarter, AskExecutionResponse, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { track } from '@/lib/analytics/events';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
@@ -47,6 +47,7 @@ import { buildConciergeStateStrip } from '@/features/ask/conciergeStateStrip';
 import { AskShellHeader } from './workspace/AskShellHeader';
 import { useAskAccount } from './workspace/useAskAccount';
 import { CollapsedConversationRail } from './workspace/CollapsedConversationRail';
+import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup, useExploreFocus } from './workspace/ExploreWithCozy';
 // Re-exported for existing test imports; ./blocks/registry.tsx is the implementation.
 export { BlockView };
 // The history rail and the draft key moved to ./workspace/; re-exported for existing imports.
@@ -140,8 +141,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   // It is also loaded when a user explicitly returns home without deleting
   // their conversation, which keeps discovery independent from retention.
   const concierge = useConciergeHome(
-    !historyLoading && landingVisible && !propertyMismatch ? selectedPropertyId : undefined,
+    !historyLoading && (landingVisible || mode === 'page') && !propertyMismatch ? selectedPropertyId : undefined,
     availabilityEpoch,
+    landingVisible,
   );
   // ACUI-006: on the calm landing the desktop rail starts collapsed; an explicit choice is remembered, and a search keeps it open.
   const [railPreference, chooseRailPreference] = useHistoryRailPreference();
@@ -287,6 +289,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       onSelect={(prompt) => runPrompt(prompt, 'EXPLORER')}
     />
   );
+  // Explore with Cozy: topic selection is view state only; only a starter sends, once, with its declared operation and this property.
+  const exploreState = { topics: concierge.view?.discoveryTopics ?? [], loading: concierge.loading, failed: concierge.failed };
+  const explore = useExploreFocus(conversationScrollRef, selectedPropertyId ?? '');
+  const moreIdeas = <CapabilityExplorer row groups={concierge.view?.capabilityGroups ?? []} onOpen={() => track('ask_capability_explorer_opened', { propertyId: selectedPropertyId ?? null, groupCount: concierge.view?.capabilityGroups.length ?? 0, capabilityCount: 0 })} onSelect={(prompt) => runPrompt(prompt, 'EXPLORER')} />;
+  const startExploreStarter = (starter: AskDiscoveryStarter) => {
+    if (!sessionId || loading || starter.availability !== 'AVAILABLE' || concierge.view?.propertyId !== selectedPropertyId) return;
+    explore.close();
+    void ask(starter.message, undefined, { operationId: starter.operationId, propertyId: starter.entityContext?.propertyId ?? selectedPropertyId ?? undefined });
+  };
   const renderComposer = (placement: 'hero' | 'footer') => (
     <form onSubmit={submit} className={cn('group mx-auto w-full', placement === 'hero' ? 'max-w-none' : calm ? 'max-w-[1140px]' : 'max-w-3xl')} aria-label="Ask Cozy question">
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
@@ -358,14 +369,17 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           railExpanded ? (
           <aside id="ask-history-rail" className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
             {calm && <button type="button" id="ask-history-toggle" onClick={() => { setHistorySearchInput(''); railToggled.current = true; chooseRailPreference('collapsed'); }} aria-expanded="true" aria-controls="ask-history-rail" className="mb-2 inline-flex min-h-8 items-center gap-1.5 self-end rounded-lg px-2 text-xs font-medium text-slate-500 hover:bg-slate-200/60 hover:text-slate-800"><ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />Hide history</button>}
-            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} pendingWork={visiblePendingWork} continuingId={continuingId} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onResumePending={(item) => void resumePendingWork(item)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} accountName={accountName} accountEmail={accountEmail} loggingOut={loggingOut} onLogout={() => void handleLogout()} />
+            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} pendingWork={visiblePendingWork} continuingId={continuingId} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onResumePending={(item) => void resumePendingWork(item)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} discoverySlot={<ExploreRailGroup state={exploreState} activeTopicId={explore.focus} onOpen={explore.open} moreIdeas={moreIdeas} />} accountName={accountName} accountEmail={accountEmail} loggingOut={loggingOut} onLogout={() => void handleLogout()} />
           </aside>
           ) : (
-          <CollapsedConversationRail accountLabel={accountName || accountEmail} loggingOut={loggingOut} onNew={startNewSession} onExpand={() => { railToggled.current = true; chooseRailPreference('expanded'); }} onLogout={() => void handleLogout()} />
+          <CollapsedConversationRail accountLabel={accountName || accountEmail} loggingOut={loggingOut} onNew={startNewSession} onExpand={() => { railToggled.current = true; chooseRailPreference('expanded'); }} onExplore={() => explore.open(exploreState.topics[0]?.id ?? 'HOME_CARE')} onLogout={() => void handleLogout()} />
           )
         )}
         <div className="flex min-w-0 flex-1 flex-col">
+      {mode === 'page' && !askUnavailable && <ExploreDisclosure state={exploreState} activeTopicId={explore.focus} onOpen={explore.open} moreIdeas={moreIdeas} />}
       <main ref={conversationScrollRef} data-ask-scroll-container="" className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
+        {explore.focus && <ExploreFocusedView topics={exploreState.topics} topicId={explore.focus} busy={loading || !sessionId} onSelectTopic={(topicId) => explore.open(topicId)} onStart={startExploreStarter} onClose={explore.close} />}
+        <div className={explore.focus ? 'hidden' : 'contents'}>
         {calm && mode === 'page' && <h1 className="sr-only hidden lg:block">Ask Cozy</h1>}
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : askUnavailable ? (
           <section className="mx-auto mt-6 max-w-2xl rounded-3xl border border-amber-200 bg-amber-50/80 px-5 py-8 text-center sm:px-8" role="status" aria-labelledby="ask-paused-title">
@@ -446,6 +460,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {pendingMessage ? <PendingTurn message={pendingMessage} /> : loading && <div className="flex items-center gap-3 rounded-2xl border border-teal-100 bg-white p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin text-teal-700" />Checking your home record…</div>}
           </div>
         )}
+        </div>
       </main>
 
       {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}

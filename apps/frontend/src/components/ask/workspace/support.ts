@@ -120,19 +120,23 @@ export const capturePolicy = {
   WORKFLOW_INPUT: { eyebrow: 'Complete this workflow', note: null, border: 'border-sky-200 bg-sky-50/80' },
 } satisfies Record<AskCaptureRequest['classification'], { eyebrow: string; note: string | null; border: string }>;
 
-export function useConciergeHome(propertyId?: string, retryKey = 0) {
+export function useConciergeHome(propertyId?: string, retryKey = 0, landing = true) {
   const [view, setView] = useState<ConciergeHomeView | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [failureCode, setFailureCode] = useState<string | null>(null);
+  const loadedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!propertyId) { setView(null); setLoading(false); setFailed(false); setFailureCode(null); return; }
+    if (!propertyId) { loadedFor.current = null; setView(null); setLoading(false); setFailed(false); setFailureCode(null); return; }
+    // Explore with Cozy reads this payload mid-conversation too. Away from the landing, keep what is already loaded for this home;
+    // returning to the landing still refetches, exactly as before.
+    if (!landing && loadedFor.current === propertyId) return;
     const controller = new AbortController();
     setLoading(true); setFailed(false); setFailureCode(null);
     api.getConciergeHome(propertyId, { signal: controller.signal })
       .then((response) => {
-        if (response.success && response.data) setView(response.data);
+        if (response.success && response.data) { loadedFor.current = propertyId; setView(response.data); }
         else setFailed(true);
       })
       .catch((caught) => {
@@ -143,7 +147,7 @@ export function useConciergeHome(propertyId?: string, retryKey = 0) {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [propertyId, retryKey]);
+  }, [propertyId, retryKey, landing]);
 
   return { view, loading, failed, failureCode };
 }

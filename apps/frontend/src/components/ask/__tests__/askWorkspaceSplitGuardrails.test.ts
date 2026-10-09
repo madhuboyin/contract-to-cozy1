@@ -28,7 +28,7 @@ describe('AskWorkspace split guardrails', () => {
   });
 
   it('no workspace file imports AskWorkspace, and each stays below 700 lines', () => {
-    expect(workspaceFiles.sort()).toEqual(['AskShellHeader.tsx', 'CaptureCards.tsx', 'CollapsedConversationRail.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'support.ts', 'useAskAccount.ts', 'useAskRequest.ts', 'useComposerKeys.ts', 'useConversationHistory.ts', 'usePendingWork.ts', 'useResponseContextPanel.ts', 'useResultRefresh.ts', 'useSelectedPropertyLabel.ts', 'useSessionHistoryActions.ts', 'useSessionLifecycle.ts', 'useStarterDismissal.ts']);
+    expect(workspaceFiles.sort()).toEqual(['AskShellHeader.tsx', 'CaptureCards.tsx', 'CollapsedConversationRail.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'ExploreWithCozy.tsx', 'support.ts', 'useAskAccount.ts', 'useAskRequest.ts', 'useComposerKeys.ts', 'useConversationHistory.ts', 'usePendingWork.ts', 'useResponseContextPanel.ts', 'useResultRefresh.ts', 'useSelectedPropertyLabel.ts', 'useSessionHistoryActions.ts', 'useSessionLifecycle.ts', 'useStarterDismissal.ts']);
     for (const name of workspaceFiles) {
       const source = read(path.join(workspaceDir, name));
       expect(source).not.toMatch(/from '(\.\.\/)?(\.\/)?AskWorkspace'/);
@@ -41,6 +41,17 @@ describe('AskWorkspace split guardrails', () => {
     expect(source).toMatch(/export \{ ConversationHistoryNav \} from '\.\/workspace\/ConversationHistoryNav'/);
     expect(source).toMatch(/export \{ draftStorageKey \} from '\.\/workspace\/support'/);
     expect(read(path.join(workspaceDir, 'support.ts'))).not.toMatch(/from '\.\/(CaptureCards|ConciergeHome|ConversationHistoryNav|ExecutionCard)'/);
+  });
+
+  it('keeps Explore with Cozy inside Ask and independent of Suggested Next Actions', () => {
+    const source = read(path.join(workspaceDir, 'ExploreWithCozy.tsx'));
+    // Navigation: no router, link, href or location change anywhere in the group.
+    expect(source).not.toMatch(/next\/(link|navigation)|useRouter|window\.location|href=|\.assign\(/);
+    // Independence: the group reads only the server's discoveryTopics, never follow-up or dismissal state.
+    expect(source).not.toMatch(/followUp|suggestedNextAction|SuggestedNextAction|starterDismissal|useStarterDismissal/);
+    const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
+    expect(workspace).toContain('topics: concierge.view?.discoveryTopics ?? []');
+    expect(workspace).not.toMatch(/discoveryTopics[^\n]*(followUps|starterDismissal)/);
   });
 
   it('pins footer follow-ups to the answer that declared them', () => {

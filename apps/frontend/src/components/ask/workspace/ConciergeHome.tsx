@@ -21,7 +21,9 @@ export function CapabilityCategoryIcon({ categoryId, className = 'h-4 w-4' }: { 
   return <Icon className={className} aria-hidden="true" />;
 }
 
-export function CapabilityExplorer({ groups, onSelect, onOpen, chip = false }: {
+export function CapabilityExplorer({ groups, onSelect, onOpen, chip = false, row = false }: {
+  /** The Explore with Cozy rail lists "More ideas" as one more row beside its topics. */
+  row?: boolean;
   /** The calm landing shows the entry as one more suggestion chip instead of a text link. */
   chip?: boolean;
   groups: AskCapabilityGroup[];
@@ -33,7 +35,9 @@ export function CapabilityExplorer({ groups, onSelect, onOpen, chip = false }: {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) onOpen(); }}>
       <DialogTrigger asChild>
-        {chip
+        {row
+          ? <button type="button" className="flex min-h-10 w-full items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span>More ideas</span><ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" /></button>
+          : chip
           ? <button type="button" className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-slate-300 px-3.5 py-1.5 text-sm text-slate-600 transition hover:border-teal-300 hover:text-teal-900">More ideas <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></button>
           : <button type="button" className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 hover:text-teal-900">
             Explore everything Ask Cozy can do <ArrowRight className="h-4 w-4" />

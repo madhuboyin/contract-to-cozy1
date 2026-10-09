@@ -2918,6 +2918,17 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
       { id: 'DECIDE', label: 'Compare and decide', description: 'Compare options with the relevant home context.', capabilityIds: ['replace-repair'], prompts: [{ id: 'decide-replace', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me compare repair and replacement options for a home system or appliance.' }] },
       { id: 'PLAN_MONITOR', label: 'Plan and monitor', description: 'Build plans and keep watch on important deadlines.', capabilityIds: ['capital-timeline'], prompts: [{ id: 'plan-reserve', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'Create a capital reserve plan for future replacements.' }] },
     ],
+    // Explore with Cozy (capability discovery plan, Phase 2): server-owned topics and starters.
+    discoveryTopics: [
+      { id: 'HOME_CARE', label: 'Home care', order: 1, indicator: null, starters: [
+        { id: 'home-care-attention', label: 'What needs attention?', message: 'What needs my attention at home?', operationId: 'HOME_ACTIONS', interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
+        { id: 'home-care-seasonal', label: 'Home care for this season', message: 'What home care should I do this season?', operationId: 'SEASONAL_HOME_CARE', interactionType: 'START_WORKFLOW', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
+      ] },
+      { id: 'DIY_PROJECTS', label: 'DIY & Projects', order: 2, indicator: null, starters: [] },
+      { id: 'HOME_RECORD', label: 'My Home Record', order: 3, indicator: null, starters: [
+        { id: 'home-record-summary', label: 'Summarize my home record', message: 'Give me a summary of my home record', operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
+      ] },
+    ],
     featuredPrompts: [
       ...(!options.noDecision ? [{ id: 'decision-decision-1', categoryId: 'DECIDE' as const, categoryLabel: 'Decide', question: 'Help me continue this decision: Repair or replace the refrigerator', subject: { kind: 'INVENTORY_ITEM' as const, id: 'refrigerator-1', label: 'Refrigerator' }, context: { entityType: 'DECISION_THREAD' as const, entityId: 'decision-1' }, source: 'PERSONALIZED' as const }] : []),
       options.heatAttention
