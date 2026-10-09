@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.1 |
+| Version | 1.2 |
 | Date | October 9, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
@@ -14,6 +14,8 @@
 | Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
+
+**Revision 1.2 — Ask discovery ownership clarified (owner decision, 2026-10-09):** the existing property-scoped Concierge Home view carries Ask discovery; a parallel bootstrap endpoint is not required. The existing Ask-native capability explorer is extended for **More ideas** with registry-backed membership and homeowner-language search rather than duplicating the explorer or returning to traditional Explore Tools. Home care, DIY & Projects, and My Home Record indicators now have explicit owning-domain definitions and may disappear independently when stale or unavailable.
 
 **Revision 1.1 — Ask-native lightweight discovery (owner decision, 2026-10-09):** the canonical capability platform also supplies the authorized starters and contextual indicators for Ask Cozy's persistent **Explore with Cozy** group. The initial stable visible topics are **Home care**, **DIY & Projects**, and **My Home Record**, plus **More ideas**. This projection is neither the full capability catalog nor a recommendation row: it provides learnable awareness of important capability families while remaining inside Ask. Response-level Suggested Next Actions continue to use their own contextual ranking and lifecycle.
 
@@ -406,14 +408,28 @@ The first three are stable topic containers, not individual capability recommend
 traditional product destinations. Their order may respond to viewport constraints, but the system
 shall not continuously replace their identities based on ranking. Each topic resolves its focused
 starters from the canonical registry, Ask operation coverage, current authorization, selected
-property, readiness, and lifecycle policy. A topic may display a concise record-derived indicator
-such as “3 due”, “1 active”, or “97% complete” only when the value is current, authorized, and
-defined by the owning domain.
+property, readiness, and lifecycle policy. The projection is carried in the existing
+property-scoped Concierge Home view so discovery and its surrounding Ask shell share one access and
+property context.
+
+Each topic's optional indicator has one non-interchangeable owning-domain definition:
+
+| Topic | Display meaning | Owning definition |
+| --- | --- | --- |
+| Home care | **N need attention** | Current actionable Home Actions attention projection. Excludes suppressed, completed, unavailable, stale, and watch-only/no-action items; it is not a raw maintenance-task count. |
+| DIY & Projects | **N active** | Canonical DIY projects in `PLANNING` or `IN_PROGRESS`; excludes contractor Project Tracker projects and closed DIY projects. |
+| My Home Record | **N% complete** | Canonical Property Context completeness used by Property Summary; it is not Suggested Next Actions' actionable-profile completeness. |
+
+The client shall not derive or reinterpret these values. When an indicator is stale, unauthorized,
+or unavailable, the projection omits that indicator while preserving the stable topic and any
+independently available starters.
 
 Selecting a topic shall open a focused Ask-native starter view and shall not submit a message.
-Selecting a starter begins the declared Ask interaction. **More ideas** opens the broader authorized
-Ask capability explorer. An unavailable capability is omitted or explained honestly; it is never
-represented by a fallback link to a traditional page.
+Selecting a starter begins the declared Ask interaction. **More ideas** extends the existing
+Ask-native capability explorer with canonical registry-backed membership and homeowner-language
+search. It shall not create a second explorer or navigate to or embed the traditional Explore Tools
+page. An unavailable capability is omitted or explained honestly; it is never represented by a
+fallback link to a traditional page.
 
 This projection is independent of response-level Suggested Next Actions. It is not subject to their
 exact-count, continuation ranking, cooldown, dismissal, or cross-response exhaustion rules, and its
@@ -828,6 +844,9 @@ Inspection Hub
 | CAP-FR-037 | Ask Cozy shall expose the stable visible topics Home care, DIY & Projects, and My Home Record, followed by More ideas. |
 | CAP-FR-038 | Each visible topic shall resolve only authorized, property-applicable Ask-native starters from canonical capability and Ask-operation metadata; it shall not maintain an independent capability inventory. |
 | CAP-FR-039 | Topic selection shall not submit a question or navigate to a traditional page; starter selection shall launch the declared Ask interaction. |
+| CAP-FR-039A | Ask discovery shall be projected through the existing property-scoped Concierge Home view; a discovery or indicator-source failure shall not fail unrelated shell sections. |
+| CAP-FR-039B | Home care, DIY & Projects, and My Home Record indicators shall use the exact owning-domain definitions in §7.5; a stale, unauthorized, or unavailable indicator shall be omitted without removing its topic. |
+| CAP-FR-039C | More ideas shall extend the existing Ask-native capability explorer with registry-backed membership and homeowner-language search; it shall not use a second explorer or the traditional Explore Tools page. |
 
 ### 12.5 Inline and post-completion suggestions
 
@@ -1348,7 +1367,9 @@ capabilities.
 - Selecting a discovery topic opens a focused Ask-native starter view without submitting a message or navigating to a traditional route.
 - Topic starters respect property access, role, applicability, readiness, and Ask-operation availability.
 - Suggested Next Action exhaustion, dismissal, cooldown, exact-count exemptions, pending responses, and result-local actions do not remove the stable discovery topics.
-- Contextual topic indicators use owning-domain values and disappear or degrade honestly when their source is unavailable or stale.
+- Home care shows only the current actionable Home Actions attention count; DIY & Projects shows only planning or in-progress DIY projects; My Home Record shows canonical Property Context completeness.
+- A stale, unauthorized, or unavailable indicator disappears without removing its stable topic or independently available starters.
+- More ideas uses the existing Ask-native explorer, canonical registry and Ask-operation metadata, and homeowner-language search; it never opens the traditional Explore Tools page.
 - Narrow layouts expose the same topics through an accessible compact disclosure without obscuring the composer or active conversation.
 - Explore Tools preserves the selected property.
 - Homeowner-language search terms return expected capabilities.

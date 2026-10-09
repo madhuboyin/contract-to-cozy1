@@ -2,8 +2,8 @@
 
 **Date:** October 9, 2026
 **Status:** Approved product direction; implementation not started
-**Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.236, especially IW-SHELL-009 and IW-SHELL-014–016
-**Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.1
+**Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
+**Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
 
 ## 1. Objective
@@ -59,7 +59,10 @@ state.
 ## 3. Source of truth and contracts
 
 Introduce one backend-owned discovery projection assembled from canonical capability metadata and
-the Ask operation registry. A frontend-only topic-to-prompt map is prohibited.
+the Ask operation registry. Carry it as `discoveryTopics` on the existing property-scoped
+`GET /api/ask/concierge-home?propertyId=...` response and its `ConciergeHomeView` contract. Do not
+create a second shell-bootstrap request for the initial implementation. A frontend-only
+topic-to-prompt map is prohibited.
 
 The projection should contain:
 
@@ -104,6 +107,8 @@ Contract rules:
 - The client renders server order and availability; it does not infer operations from labels.
 - Topic selection is local view state. Starter selection uses the ordinary authorized Ask launch
   path and revalidates current access and state.
+- The Concierge Home projection remains independently degradable: a discovery or indicator-source
+  failure must not prevent the rest of the Ask shell from loading.
 - No Prisma change is expected for the initial implementation. Add persistence only if an approved
   requirement later needs cross-device topic-view restoration or durable impression deduplication.
 
@@ -129,7 +134,10 @@ inside an open focused topic view. That deduplication must never remove or renam
 2. Map reviewed Ask-native starters to each topic through canonical registry metadata.
 3. Add startup/static validation for unknown operations, duplicate starters, non-Ask destinations,
    and missing audience policy.
-4. Add a property-scoped discovery projection endpoint or extend an existing Ask shell payload.
+4. Extend `ConciergeHomeView` and the existing `GET /api/ask/concierge-home?propertyId=...`
+   projection with `discoveryTopics`. Reuse its property-access check, selected-property scope,
+   audience filtering, capability metadata, and section-level fail-closed behavior. Do not add a
+   new endpoint for the initial implementation.
 
 Exit: every returned starter is authorized, registry-backed, and Ask-native; no UI change yet.
 
@@ -145,20 +153,37 @@ Exit: all four controls are reachable by pointer, keyboard, touch, and assistive
 
 ### Phase 3 — Contextual indicators
 
-1. Define one owning-domain indicator for each topic.
-2. Reuse canonical counts; do not recalculate domain semantics in the client.
-3. Add freshness and unavailable behavior.
-4. Prevent an indicator failure from removing its topic or starters.
+1. Implement the following owning-domain definitions without substituting adjacent metrics:
+
+   | Topic | Indicator | Canonical ownership and exclusions |
+   | --- | --- | --- |
+   | Home care | **N need attention** | Count the current actionable Home Actions attention projection used by Concierge Home. Exclude suppressed, completed, unavailable, stale, and watch-only/no-action items. This is not a raw maintenance-task count. |
+   | DIY & Projects | **N active** | Count canonical DIY projects whose status is `PLANNING` or `IN_PROGRESS`. Do not include contractor Project Tracker projects or completed, abandoned, or otherwise closed DIY projects. |
+   | My Home Record | **N% complete** | Use canonical Property Context completeness from `getContextCompleteness`, the same meaning exposed by `PROPERTY_SUMMARY`. Do not use Suggested Next Actions' actionable-profile completeness. |
+
+2. Read these values from owning-domain services in the backend projection; do not recalculate
+   domain semantics in the client.
+3. Add freshness and unavailable behavior. When a value is stale, unauthorized, or unavailable,
+   omit the indicator while retaining the stable topic and its independently available starters.
+4. Prevent an indicator failure from removing its topic, starters, or the other Concierge Home
+   sections.
 
 Exit: indicators are correct, optional, and honestly degraded.
 
 ### Phase 4 — More ideas and measurement
 
-1. Project the canonical capability explorer inside Ask.
-2. Preserve property and launch context.
-3. Record topic visible, topic opened, starter visible, starter selected, Ask started, completed, and
+1. Extend the existing Ask-native `CapabilityExplorer` and its Concierge Home `capabilityGroups`;
+   do not build a second explorer and do not navigate to or embed the traditional
+   `ExploreToolsCatalog` page.
+2. Move the explorer's starter membership away from the static
+   `CONCIERGE_CAPABILITY_GROUPS` mapping toward canonical capability-registry and Ask-operation
+   metadata, retaining server-side audience, availability, and launch-policy validation.
+3. Add homeowner-language search within the Ask explorer. Search results must remain authorized,
+   property-aware, Ask-native, and grouped or labelled by homeowner outcome.
+4. Preserve selected property, conversation, and launch context through browsing and selection.
+5. Record topic visible, topic opened, starter visible, starter selected, Ask started, completed, and
    abandoned events using bounded IDs and no raw homeowner content.
-4. Verify that response-level Suggested Next Action analytics remain separate.
+6. Verify that response-level Suggested Next Action analytics remain separate.
 
 Exit: additional capabilities are discoverable without expanding the persistent topic set.
 
@@ -167,13 +192,19 @@ Exit: additional capabilities are discoverable without expanding the persistent 
 Required environment-independent validation:
 
 - Contract tests for topic schema, stable IDs/order, and starter operation registration.
+- Contract tests proving `discoveryTopics` is carried by the Concierge Home payload and one failed
+  indicator source does not fail unrelated shell sections.
 - Authorization tests across viewer, contributor, owner, revoked access, and property switching.
 - Applicability tests for homes with and without active DIY projects, maintenance, and incomplete
   Home Record data.
+- Indicator tests for the exact owning-domain definitions and exclusions in Phase 3, including the
+  rule that stale or unavailable values remove only the indicator.
 - Component tests proving topic selection sends no message and starter selection sends exactly one.
 - Tests proving exact-four shortage, exemption, cooldown, dismissal, loading, and error states do
   not remove the persistent topics.
 - Tests proving no discovery starter contains or resolves to a traditional application route.
+- Explorer tests for registry-backed membership, homeowner-language search, authorization,
+  property switching, and preservation of launch context.
 - Responsive and accessibility checks for rail expanded, rail collapsed, and narrow-screen states.
 - State-continuity tests for conversation, draft, pending confirmation, selected property, and
   browser back/forward behavior.
