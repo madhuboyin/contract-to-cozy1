@@ -5,8 +5,8 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.0 |
-| Date | July 24, 2026 |
+| Version | 1.1 |
+| Date | October 9, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
 | Primary framework dependency | ContractToCozy Product Framework v1.0 |
@@ -14,6 +14,8 @@
 | Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
+
+**Revision 1.1 — Ask-native lightweight discovery (owner decision, 2026-10-09):** the canonical capability platform also supplies the authorized starters and contextual indicators for Ask Cozy's persistent **Explore with Cozy** group. The initial stable visible topics are **Home care**, **DIY & Projects**, and **My Home Record**, plus **More ideas**. This projection is neither the full capability catalog nor a recommendation row: it provides learnable awareness of important capability families while remaining inside Ask. Response-level Suggested Next Actions continue to use their own contextual ranking and lifecycle.
 
 ## Table of Contents
 
@@ -389,7 +391,36 @@ Search shall match:
 For example, “what paint did I use” shall match Material Specs even when the user does not know the
 feature name.
 
-### 7.5 Post-completion suggestions
+### 7.5 Ask Cozy lightweight discovery projection
+
+Ask Cozy shall expose a small, persistent **Explore with Cozy** projection so a homeowner can
+discover important capabilities without waiting for a response-level recommendation or knowing
+what to type. The initial visible topic identities are:
+
+1. **Home care**
+2. **DIY & Projects**
+3. **My Home Record**
+4. **More ideas**
+
+The first three are stable topic containers, not individual capability recommendations and not
+traditional product destinations. Their order may respond to viewport constraints, but the system
+shall not continuously replace their identities based on ranking. Each topic resolves its focused
+starters from the canonical registry, Ask operation coverage, current authorization, selected
+property, readiness, and lifecycle policy. A topic may display a concise record-derived indicator
+such as “3 due”, “1 active”, or “97% complete” only when the value is current, authorized, and
+defined by the owning domain.
+
+Selecting a topic shall open a focused Ask-native starter view and shall not submit a message.
+Selecting a starter begins the declared Ask interaction. **More ideas** opens the broader authorized
+Ask capability explorer. An unavailable capability is omitted or explained honestly; it is never
+represented by a fallback link to a traditional page.
+
+This projection is independent of response-level Suggested Next Actions. It is not subject to their
+exact-count, continuation ranking, cooldown, dismissal, or cross-response exhaustion rules, and its
+visible topics do not count as Suggested Next Action impressions. Capability and starter selections
+still use the canonical lifecycle telemetry described in §15.
+
+### 7.6 Post-completion suggestions
 
 After meaningful completion, the platform may show the most useful next capability when:
 
@@ -794,6 +825,9 @@ Inspection Hub
 | CAP-FR-034 | Search results shall preserve selected property and authorized launch context. |
 | CAP-FR-035 | Workflow-only capabilities shall be excluded from general discovery unless a compatible workflow context is present. |
 | CAP-FR-036 | An unavailable capability shall not be promoted as ready. |
+| CAP-FR-037 | Ask Cozy shall expose the stable visible topics Home care, DIY & Projects, and My Home Record, followed by More ideas. |
+| CAP-FR-038 | Each visible topic shall resolve only authorized, property-applicable Ask-native starters from canonical capability and Ask-operation metadata; it shall not maintain an independent capability inventory. |
+| CAP-FR-039 | Topic selection shall not submit a question or navigate to a traditional page; starter selection shall launch the declared Ask interaction. |
 
 ### 12.5 Inline and post-completion suggestions
 
@@ -1310,6 +1344,12 @@ capabilities.
 
 - Unified Home renders no more than three server-provided suggestions.
 - Every card displays why now, outcome, and readiness.
+- Ask Cozy shows Home care, DIY & Projects, My Home Record, and More ideas as a quiet discovery group independently of the latest response.
+- Selecting a discovery topic opens a focused Ask-native starter view without submitting a message or navigating to a traditional route.
+- Topic starters respect property access, role, applicability, readiness, and Ask-operation availability.
+- Suggested Next Action exhaustion, dismissal, cooldown, exact-count exemptions, pending responses, and result-local actions do not remove the stable discovery topics.
+- Contextual topic indicators use owning-domain values and disappear or degrade honestly when their source is unavailable or stale.
+- Narrow layouts expose the same topics through an accessible compact disclosure without obscuring the composer or active conversation.
 - Explore Tools preserves the selected property.
 - Homeowner-language search terms return expected capabilities.
 - Actual-view impressions fire only after visibility thresholds.

@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.235
-**Date:** October 6, 2026
+**Version:** 1.236
+**Date:** October 9, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
-**Scope:** Ask Cozy inline interaction across homeowner-facing domains on desktop and mobile, with traditional navigation preserved as a fully supported user choice
+**Scope:** Ask Cozy interaction across homeowner-facing domains on desktop and mobile, including lightweight capability discovery and Ask-native completion
+
+**Revision 1.236 — Lightweight persistent capability discovery (owner decision, 2026-10-09):** Ask Cozy must not make a homeowner wait for a response-level Suggested Next Action or know what to type before discovering important capabilities. The Ask shell therefore gains a quiet, persistent **Explore with Cozy** layer with three visible topic cues — **Home care**, **DIY & Projects**, and **My Home Record** — plus **More ideas**. These are not traditional application destinations, domain modes, or another static Suggested Next Action row. Selecting a topic stays inside Ask and reveals a small set of authorized, property-aware conversational starters; the first selection does not silently submit a question. The cues remain visually subordinate to the composer and current conversation, separate from conversation history, and available through a compact disclosure on narrow screens. Stable topic identity provides learnability; contextual counts or short status labels may draw attention when they are derived from current authorized records. This revision supersedes IW-SHELL-009/011 only where their earlier wording would prohibit these bounded discovery cues, and supersedes §11.9/§18 where they require Ask to expose traditional application navigation. Direct routes may continue during transition, but Ask discovery and ordinary Ask completion must not depend on them. Response-level Suggested Next Actions retain their separate job: continuing the latest answer.
 
 **Revision 1.235 — Fix: "I need one detail to verify this answer" on the browse question (browser pass, 2026-10-08):** the same words as the "See projects you can start" button, typed or re-sent ("Change and resend" drops the launch context), went through free-text routing and landed on `DIY_PROJECTS` (with the full stop, deterministic) or `RENOVATION_PERMIT_READINESS` (without it, local classifier, because the "can i" in `diyProjectsOtherIntentPattern` pushed it out of the deterministic DIY rule). The semantic answer validator then failed or could not decide for the answer against that question, which produced the clarification card; the outcome flipped with punctuation, template text and role. A click on the button was never affected: a declared action skips the competing-operation check (`createAskExecution.ts`, `declaredOperationRan`). Fix: one deterministic routing branch, `diyProjectsBrowseWordingPattern` ("DIY projects I/we can start/begin/do", "can I start …", "reviewed/available/startable DIY projects", "DIY projects … available/fit/suit"), routes these phrasings to `DIY_PROJECTS`, whose card already carries the browse action (primary on the empty card). Tests: `diyProjectStart.test.js` sweeps eight phrasings (with and without punctuation and case) to `DIY_PROJECTS`, keeps the permit questions on `RENOVATION_PERMIT_READINESS` and the start unreachable by typing; `diyAnswerRelevance.test.js` runs the real card (empty, one, two projects) through the real validator for five browse phrasings. Removing the routing branch fails the sweep. **Considered and rejected:** making `DIY_TEMPLATE_BROWSE` routable by message (it would have needed calibration fixtures and evidence, skill routing sweeps and registry-drift changes across routing for one read-only card; the DIY projects card already links to it). A typed question about startable projects therefore shows the person's own projects plus the browse button, one click short of the list. Also tried and reverted: a declared-launch exemption in the semantic validator (it already exists). **Not verified in a browser.** The "This saved response needs to be refreshed" card on the stop and hand-off options view is NOT explained yet; the backend now logs the failing schema paths ("Saved Ask response failed schema validation").
 
@@ -115,7 +117,7 @@
 
 Ask Cozy is ContractToCozy's primary conversational workspace. A homeowner should be able to understand their home, inspect records, provide information, compare choices, complete supported work, review consequences, and recover from errors without needing to discover or navigate the application's module structure.
 
-This FRD defines the target experience in which normal homeowner journeys complete inside Ask Cozy through conversational and structured inline interaction. Existing traditional pages, routes, sidebar navigation, deep links, and direct workflows remain supported. Ask Cozy does not remove or hide them; it stops using them as an implicit prerequisite for ordinary completion.
+This FRD defines the target experience in which normal homeowner journeys are discovered and completed inside Ask Cozy through conversational and structured inline interaction. Traditional routes that remain during retirement are transition compatibility, not Ask navigation and not an implicit prerequisite for ordinary completion.
 
 This document governs observable product behavior and shared interaction architecture. It does not replace:
 
@@ -189,21 +191,21 @@ INTENT OR CONTROL
   -> OPTIONAL NEXT ACTION
 ```
 
-At any appropriate point, the homeowner may explicitly choose the existing full domain page. That choice preserves context and does not reduce the completeness of the inline flow.
+During retirement, a retained direct route may still be reached from an external bookmark or transition-only boundary. Ask-native navigation, discovery, and ordinary completion do not depend on that route.
 
 ## 5. Product principles
 
-**IW-PRIN-001 — Ask-first, not Ask-only.** Ask Cozy is the default interaction workspace; traditional navigation remains available and supported.
+**IW-PRIN-001 — Ask-native homeowner experience.** Ask Cozy is the target homeowner interaction workspace. Important capabilities are discoverable and completable in Ask without exposing the retired application module hierarchy.
 
 **IW-PRIN-002 — No implicit ejection.** An ordinary record title, row, card, recommendation, or next action must not unexpectedly navigate away from Ask Cozy.
 
 **IW-PRIN-003 — Conversation plus workspace.** Inline does not mean prose-only or card-only. Ask may present structured lists, forms, comparisons, timelines, document views, and focused workspaces inside its shell.
 
-**IW-PRIN-004 — One domain model.** Inline and traditional surfaces invoke the same canonical services and operate on the same records. No Ask-only shadow record or duplicated business rule is permitted.
+**IW-PRIN-004 — One domain model.** Ask and any temporarily retained transition surface invoke the same canonical services and operate on the same records. No Ask-only shadow record or duplicated business rule is permitted.
 
 **IW-PRIN-005 — Safety is not friction.** Required authorization, clarification, review, confirmation, consent, and legal/safety boundaries remain. Zero friction means removing avoidable navigation, repeated context, and lost state—not removing safeguards.
 
-**IW-PRIN-006 — User choice is explicit.** Opening a traditional page or external destination is a labeled action distinct from the primary inline action.
+**IW-PRIN-006 — Boundary choice is explicit.** Opening an external, administrative, or temporarily retained transition destination is a labelled boundary action, never the implementation of an Ask discovery topic or ordinary inline action.
 
 **IW-PRIN-007 — Progressive disclosure.** Show the minimum needed to understand and act; reveal detail, evidence, history, and secondary controls on demand.
 
@@ -256,16 +258,16 @@ All actions must reflect the current household role and canonical operation poli
 - Typed direct actions and conversational continuations.
 - Inline structured input, validated editing, confirmation, receipts, and recovery.
 - Desktop contextual workspace and mobile nested full-screen/sheet behavior.
-- Stable workspace state across conversation turns, refreshes, reloads, and optional round trips.
+- Stable workspace state across conversation turns, refreshes, reloads, and any transition-only round trip.
 - A reusable component and action registry rather than domain-specific rendering branches in one monolithic component.
 - Domain-by-domain migration of homeowner-facing Ask operations.
-- Explicit optional links to existing domain pages.
+- Honest external, administrative, and transition-only boundaries where Ask does not yet own the outcome.
 - Analytics and a golden-journey quality harness.
 - Static checks preventing unclassified operations and implicit navigation from being introduced silently.
 
 ### 7.2 Excluded
 
-- Removing, hiding, or deprecating existing traditional navigation.
+- Defining route-removal sequencing, redirects, or external bookmark migration; those belong to the retirement plan.
 - Rebuilding canonical domain services inside Ask Cozy.
 - Creating a universal write endpoint.
 - Allowing model-generated executable UI, arbitrary markup, arbitrary URLs, or model-selected write destinations.
@@ -275,7 +277,7 @@ All actions must reflect the current household role and canonical operation poli
 - Claiming that an operation is inline-complete solely because it returns text or a presentation block.
 - Introducing release flags, pilot gates, or compatibility layers solely to protect nonexistent production users.
 
-## 8. Dual-surface product model
+## 8. Ask-native product model and transition surfaces
 
 ### 8.1 Ask Cozy surface
 
@@ -290,22 +292,20 @@ Ask Cozy owns the normal homeowner journey for each delivered capability:
 - receipt, reconciliation, and next action; and
 - conversational explanation throughout the journey.
 
-### 8.2 Traditional surfaces
+### 8.2 Transition surfaces
 
-Existing pages remain available through sidebar navigation, direct URLs, bookmarks, deep links, and explicit secondary actions from Ask Cozy. They continue to support their current behavior, including direct structured editing, audit/history views, dashboards, and bulk management.
-
-Traditional surfaces must not be described to homeowners as “legacy.” Use existing names such as “Open Maintenance,” “View full home record,” or “Open Buyer Plan.”
+Pages retained during retirement may continue to support direct URLs, bookmarks, administrative work, and capability gaps until their removal sequence is complete. They are not surfaced as Ask navigation and are not substitutes for Ask-native coverage. Homeowner-facing copy describes the actual boundary or unavailable capability rather than advertising a retired module.
 
 ### 8.3 Parity rule
 
 For a capability classified as inline-complete, the ordinary homeowner outcome must be achievable in Ask Cozy without opening a traditional page. Exact pixel or layout parity is not required. Domain-rule, data, authorization, validation, and resulting-state parity are required.
 
-### 8.4 Optional transition rule
+### 8.4 Transition compatibility rule
 
-An optional traditional-page action must:
+A transition-boundary action, where temporarily required, must:
 
 - be secondary to the primary inline action;
-- name the destination and expected purpose;
+- name the boundary and expected purpose;
 - preserve property, entity, supported filters, workflow identity, and return context;
 - never include transcript text, credentials, document contents, or sensitive proposal values in the URL;
 - restore the Ask session, result, selection, and position on return where supported; and
@@ -536,13 +536,14 @@ Ask Cozy must retain ContractToCozy's visual identity and differentiate through 
 
 **IW-SHELL-007 — Feedback proximity.** Response-level feedback and correction controls appear near the response they affect and carry exact execution/result identity. They must not be confused with record-level mutation actions.
 
-**IW-SHELL-008 — No duplicated navigation burden.** The shell must not keep two full-width left sidebars open when doing so materially constrains the conversation. It uses responsive collapse, a compact application rail, or an overlay/drawer while keeping both conversation history and traditional product navigation reachable.
+**IW-SHELL-008 — No duplicated navigation burden.** The shell must not keep two full-width left sidebars open when doing so materially constrains the conversation. It uses responsive collapse or an overlay/drawer while keeping Explore with Cozy, conversation history, account access, and the active conversation reachable.
 
-**IW-SHELL-009 — Conversation-oriented left navigation.** The full-page Ask Cozy experience must provide a persistent left navigation rail on desktop and an equivalent accessible drawer or nested view on mobile. The rail organizes the conversational workspace; it must not divide Ask Cozy into domain modes such as “Home,” “Work,” or “Record.” A homeowner may ask about maintenance, records, coverage, decisions, finances, or any other supported domain from the same active conversation and composer.
+**IW-SHELL-009 — Conversation-oriented left navigation.** The full-page Ask Cozy experience must provide a persistent left navigation rail on desktop and an equivalent accessible drawer or nested view on mobile. The rail organizes the conversational workspace; it must not recreate the retired application module hierarchy or make a topic a separate mode with its own composer. A homeowner may ask about maintenance, records, coverage, decisions, finances, or any other supported domain from the same active conversation and composer. The bounded discovery cues in IW-SHELL-014 are permitted because they focus the same Ask workspace rather than navigating to another product surface.
 
 **IW-SHELL-010 — Required left-navigation contents (revised October 1, 2026).** The expanded rail must provide:
 
 - a prominent **New conversation** control;
+- the quiet **Explore with Cozy** group governed by IW-SHELL-014;
 - searchable, grouped conversation history with the active conversation identified, as governed by §11.8;
 - pinned or saved conversations when that capability is available;
 - a conditional **Needs you** history group when an Ask conversation has authoritative pending input, confirmation, or recoverable execution state; and
@@ -550,11 +551,17 @@ Ask Cozy must retain ContractToCozy's visual identity and differentiate through 
 
 The rail must not show an empty “Active work” or generic “Continue where you left off” destination. Ordinary continuation happens through conversation history. **Needs you** is reserved for actionable Ask state, shows at most two conversations, names the required next action, and hides those conversations from Pinned and Recent while they appear in the group. It is omitted when no conversation requires action; “work” must not ambiguously refer to both unfinished Ask workflows and home maintenance tasks.
 
-**IW-SHELL-011 — Domain destinations are contextual, not Ask modes.** Maintenance, Home Record, coverage, finances, and other traditional product surfaces must not appear as peer modes in the Ask Cozy conversation rail. When a traditional surface provides useful review, bulk management, or functionality not available inline, Ask may expose it as a clearly secondary, context-specific action such as “Open maintenance schedule” or “View in Home Record.” Traditional application navigation remains reachable under IW-SHELL-008 and IW-TRAD-001 without competing with the conversation rail.
+**IW-SHELL-011 — Discovery cues are not application destinations.** Ask must not reproduce a comprehensive application menu or present traditional pages as peer modes in the conversation rail. A discovery cue names a high-level homeowner topic, keeps the homeowner inside Ask, and reveals a bounded set of conversational starters backed by supported Ask operations. It must not link to a traditional route, replace the active composer, or imply that capabilities outside the visible set are unavailable.
 
 **IW-SHELL-012 — Account identity and Log out.** The account area must identify the signed-in homeowner sufficiently to prevent account ambiguity and provide a plainly labeled **Log out** action. Log out must invoke the canonical application logout flow, invalidate or clear locally held authenticated and property-specific state, and return the homeowner to the unauthenticated entry experience. It must not be hidden behind domain navigation, require leaving Ask Cozy first, or be styled as a primary conversational action. While logout is in progress, duplicate activation must be prevented; failure handling must not leave the interface falsely indicating that the user is logged out.
 
 **IW-SHELL-013 — Responsive and accessible navigation behavior.** On desktop, the rail may collapse to preserve a comfortable conversation width, but New conversation, history access, account identity, and Log out must remain reachable. On mobile, the same functions must be available through an accessible drawer or nested navigation view. Opening, closing, or collapsing navigation must preserve the active conversation, property scope, composer draft, focus continuity, and browser navigation behavior. All controls require visible labels or accessible names, keyboard operation, and clear focus treatment.
+
+**IW-SHELL-014 — Explore with Cozy.** The Ask shell provides a lightweight capability-discovery group, visually separated from conversation history and subordinate to the composer and active work. Its initial visible topics are exactly **Home care**, **DIY & Projects**, and **My Home Record**, followed by **More ideas**. The three topic identities remain stable enough to become learnable; authorization, applicability, and record-derived state determine the available starters and any contextual count or short status label. Selecting a topic opens an Ask-native focused starter view without submitting a message. Selecting a starter begins the declared Ask interaction. **More ideas** opens the broader authorized Ask capability explorer. None of these controls navigate to a traditional page.
+
+**IW-SHELL-015 — Discovery, continuation, and history remain distinct.** Explore with Cozy answers “What can Cozy help me with?” Suggested Next Actions answer “What makes sense after this response?” Conversation history answers “Where was I working?” They use distinct presentation and state. Suggested-action ranking, exhaustion, dismissal, deduplication, or temporary failure must not remove the persistent discovery group. Discovery cues must not be counted toward the response-level Suggested Next Action limit.
+
+**IW-SHELL-016 — Lightweight escape from focused work.** A focused starter view or non-consequential workflow provides one quiet route back to the Ask home state, labelled with plain language such as **Not now** or **Explore something else** according to context. Leaving the view does not delete the conversation, submit a message, confirm a write, or imply reversal of completed work. A pending consequential proposal retains its explicit Cancel behavior and authoritative state.
 
 ### 11.8 Conversation history rail
 
@@ -563,7 +570,7 @@ The full Ask Cozy experience includes a persistent left-side conversation rail o
 The reference desktop composition is:
 
 ```text
-COMPACT APPLICATION NAVIGATION
+LIGHTWEIGHT ASK DISCOVERY
   + ASK COZY CONVERSATION RAIL
   + ACTIVE CONVERSATION / ADAPTIVE WORKSPACE
   + OPTIONAL CONTEXTUAL INFORMATION PANEL
@@ -607,13 +614,13 @@ The exact column widths are responsive design decisions, but the active conversa
 
 **IW-HIST-018 — Keyboard and assistive navigation.** The rail provides an accessible name, current-item semantics, predictable focus order, visible focus, non-color status communication, and keyboard access to search, conversation selection, pagination/loading, and session actions. Closing a mobile drawer returns focus to its trigger.
 
-### 11.9 Traditional navigation and the Ask shell
+### 11.9 Ask-native discovery and wayfinding
 
-Traditional ContractToCozy navigation remains fully supported within the redesigned shell. The history rail supplements application navigation; it does not replace or remove it.
+Ask Cozy is the homeowner interaction shell. It does not require a parallel application menu to expose important capabilities. Explore with Cozy provides bounded, high-level awareness; the composer remains the universal path; response-level Suggested Next Actions provide contextual continuation; and conversation history provides return and recovery.
 
-On wide desktop layouts, the product may combine a compact application rail with an expanded Ask conversation rail. On constrained layouts, an explicit “All features,” application-menu, or equivalent control exposes the full traditional navigation. The system may remember separate non-sensitive collapse preferences for the application rail and conversation rail, but it must not trap the homeowner in Ask Cozy or require starting a conversation to reach traditional pages.
+On wide desktop layouts, the discovery group may remain visible within or immediately beside the conversation rail without creating a second full-width sidebar. On constrained layouts it uses a compact disclosure or nested Ask view. Opening or closing it preserves the active conversation, selected property, safe draft, transcript position, and pending workflow state.
 
-The application must preserve recognizable destinations, direct routes, bookmarks, and browser behavior. Future removal or material hiding of traditional navigation still requires the separate evidence-backed decision defined in §18.
+Discovery selection changes the focused Ask view, not the product surface. Direct routes and bookmarks that remain during retirement are transition compatibility and must not be used as the implementation of an Explore with Cozy topic or starter.
 
 ### 11.10 Display pattern library (decided September 24, 2026; FRD v1.72)
 
@@ -719,7 +726,7 @@ Otherwise it renders the grouped list (IW-PRES-012). The renderer never infers a
 
 **IW-CALM-007 — One Ask header.** The Ask surface adds one slim header: the Cozy avatar and the title "Ask Cozy". It adds no subtitle and no second title band; the selected home is already shown by the application header. Refresh state ("Partially refreshed", "Refreshing…", "Some updates delayed") becomes a small colored dot whose label is announced and shown on hover or focus, and it still opens the affected-capabilities detail. The delete action stays reachable as an icon.
 
-**IW-CALM-008 — History rail.** The rail contains New conversation, search, grouped history, and archive. It carries no explanatory copy and collapses per IW-SHELL-008. Session status labels use plain words ("In progress", "Needs a retry", "Could not finish", "Not available"); a raw status name is never shown.
+**IW-CALM-008 — History rail.** The rail contains New conversation, the quiet Explore with Cozy group, search, grouped history, and archive. Discovery and history are visually separated, neither carries explanatory copy, and the rail collapses per IW-SHELL-008. Session status labels use plain words ("In progress", "Needs a retry", "Could not finish", "Not available"); a raw status name is never shown.
 
 **IW-CALM-009 — Plain vocabulary.** Homeowner-facing copy must not expose internal concepts: session or branch names, page-size or server-paging notes, "fold", or raw status enums. Each removed string gets a plain replacement or is omitted.
 
@@ -888,19 +895,19 @@ The existing distinction between original response, current view, and current au
 
 **IW-CONF-007:** When a domain supports correction or reversal, Ask invokes that declared domain behavior. It must not invent a generic undo action.
 
-## 18. Traditional navigation preservation
+## 18. Ask-native navigation and transition compatibility
 
-**IW-TRAD-001:** Existing sidebar/navigation access and direct domain routes remain available during this program.
+**IW-TRAD-001:** Ask Cozy is the target homeowner interaction shell. Its discovery cues, starters, results, workflows, confirmations, and receipts remain inside Ask.
 
-**IW-TRAD-002:** Existing pages are not removed, disabled, renamed as “legacy,” or made harder to discover as part of inline rollout.
+**IW-TRAD-002:** Explore with Cozy must not use an existing traditional route as its destination or expose the retired module hierarchy as a menu.
 
-**IW-TRAD-003:** Ask Cozy provides a clearly secondary “Open…” or “View full…” action where a traditional surface adds value.
+**IW-TRAD-003:** A capability advertised by Explore with Cozy must have an authorized Ask-native entry and an honest incomplete or unavailable state. A traditional-page link is not a substitute for missing Ask coverage.
 
-**IW-TRAD-004:** Users entering a traditional page directly do not need to pass through Ask Cozy.
+**IW-TRAD-004:** Direct traditional routes may remain reachable during retirement for transition compatibility, bookmarks, administrative needs, or capability gaps, but their existence does not make them part of Ask navigation.
 
-**IW-TRAD-005:** Inline rollout must not fork canonical records, permissions, validation, or business behavior between surfaces.
+**IW-TRAD-005:** Transition work must not fork canonical records, permissions, validation, confirmation, audit, or business behavior between Ask and any surface that remains temporarily reachable.
 
-**IW-TRAD-006:** Future deprecation or removal requires a separate approved product decision supported by real usage and outcome evidence. It is not authorized by this FRD.
+**IW-TRAD-006:** Removal sequencing, redirects, and external deep-link compatibility are governed by the retirement plan. They must not block delivery of Ask-native discovery, and Ask telemetry must distinguish an Ask-native starter from a transition-route visit.
 
 ## 19. Domain rollout requirements
 
@@ -915,7 +922,8 @@ Before a domain is classified as inline-complete, its coverage matrix must recor
 | Inputs | Schemas, validation, current values, and sensitivity |
 | Writes | Role floor, confirmation, idempotency, freshness, and receipt |
 | Reconciliation | Source and dependent results affected |
-| Traditional choice | Existing page and optional transition behavior |
+| Ask-native entry | Supported topic, starter, result, workflow, and honest incomplete boundary |
+| Transition compatibility | Any temporarily retained route, bookmark, or external deep-link behavior |
 | Exceptions | External/admin/bulk boundary and rationale |
 | Responsive proof | Desktop, narrow viewport, keyboard, and assistive technology |
 | Verification | Static, unit, component, database, browser, and live-provider levels actually executed |

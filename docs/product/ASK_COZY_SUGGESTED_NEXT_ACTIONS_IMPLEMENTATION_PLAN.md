@@ -1,7 +1,7 @@
 # Ask Cozy High-Precision Suggested Next Actions — Implementation Plan
 
 **Date:** October 4, 2026
-**Status:** Phases 1-5, exact-four engagement, governed opportunity backfill, the Phase 5 zero-producer closure, entity-less cross-surface deduplication, and incomplete-inventory result candidates are implemented (October 7, 2026; not live-verified). Appendix C records the implementation sequence and supersedes the staged-migration language in §9, §12 and §16 where they differ.
+**Status:** Phases 1-5, exact-four engagement, governed opportunity backfill, the Phase 5 zero-producer closure, entity-less cross-surface deduplication, and incomplete-inventory result candidates are implemented (October 7, 2026; not live-verified). The October 9 lightweight capability-discovery decision is a separate shell concern and is not an expansion of the Suggested Next Action pipeline. Appendix C records the implementation sequence and supersedes the staged-migration language in §9, §12 and §16 where they differ.
 **Product requirement:** Preserve unrestricted homeowner input while making app-authored next actions accurate, contextual, and easy to select
 **Primary references:** `docs/product/AI_HOME_CONCIERGE_ASK_REDO_FRD.md` v1.25; `docs/product/ASK_COZY_CONVERSATIONAL_UI_GAP_AUDIT.md` ACUI-009; `docs/architecture/ASK_COZY_ARCHITECTURE_EXPLAINED.md`
 
@@ -72,6 +72,17 @@ The result is locally correct behavior with global inconsistencies:
 ### 3.5 No new database schema in the initial implementation
 
 The contract, ranking, deduplication, and dispatch changes can use the existing execution result JSON, execution events, launch context, and analytics pipeline. No Prisma schema change is required unless later measurement shows a need for a durable recommendation-impression ledger. If such a need is approved, update Prisma and affected contracts but leave migration creation to the user.
+
+### 3.6 Persistent discovery is a separate contract
+
+Ask Cozy's approved **Explore with Cozy** group — **Home care**, **DIY & Projects**, **My Home Record**, and **More ideas** — is not a Suggested Next Action source or fallback inventory.
+
+- Persistent discovery answers “What can Cozy help me with?”; Suggested Next Actions answer “What makes sense after this response?”
+- Topic controls remain available independently of the latest execution, so exact-four exemptions, shortages, cooldown, history suppression, dismissal, result-action ownership, or a pending response do not remove them.
+- Topic controls do not count toward the response-level exact-four target and do not enter Suggested Next Action ranking or deduplication.
+- Selecting a topic changes the focused Ask view without creating an execution. Selecting one of its declared starters creates an ordinary authorized Ask interaction.
+- The discovery projection may reuse canonical capability, eligibility, readiness, Ask-operation, and lifecycle metadata, but it must not reuse the sticky response row as its renderer or persist topic controls in an execution result.
+- A response-level action that matches a discovery starter may suppress a duplicate starter within the focused topic view while that response is current; it must not suppress or rename the stable top-level topic.
 
 ## 4. Target contract
 
@@ -504,6 +515,7 @@ Requirements:
 - Hide or disable actions whose `expiresAt` has passed and refresh/recover through the server; never silently send expired actions as ordinary text.
 - Use server-returned presentation identities to suppress overlap with rich result-card and block actions.
 - A rich entity button retains the lifetime and revalidation rules of its existing card contract; expiry of a compact promoted copy does not disable the rich button.
+- Do not render Explore with Cozy topics through `FollowUpRow` or derive their visibility from the latest execution. The discovery component owns its focused topic view and hands only an explicitly selected starter to the ordinary Ask launch path.
 
 ## 11. Analytics and evaluation
 
@@ -663,6 +675,7 @@ The increment is complete when:
 - consequential actions still require review and confirmation;
 - analytics measure precision, completion, clarification, suppression, and manual-input escape without collecting raw homeowner text;
 - documentation parity checks cover operations, Skills, adapter keys, governed adapters, handlers, handoffs, and typed action producers; and
+- persistent Explore with Cozy topics remain present independently of response-level exact-four success, exemptions, dismissal, and exhaustion; and
 - the architecture guide, Ask Redo FRD, conversational UI audit, and implementation plan remain mutually consistent.
 
 ## 16. Delivery, rollback, and verification
