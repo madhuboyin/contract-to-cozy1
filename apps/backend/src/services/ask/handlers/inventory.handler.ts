@@ -224,12 +224,18 @@ async function inventoryLookupResult(
     { test: /\bdishwasher\b/i, terms: ['dishwasher'] },
   ];
   const specific = refinement ? undefined : specificAliases.find((candidate) => candidate.test.test(message));
-  const genericList = /\b(?:inventory|systems?|equipment|appliances?)\b/i.test(message) && !specific && !categoryFilter;
+  // The declared "View this item" action sends `Show inventory item "<name>"`: resolve that quoted name exactly instead of
+  // letting the word "inventory" turn it into a whole-home list.
+  const quotedName = refinement ? null : /^\s*show inventory item\s+"(.+)"\s*$/i.exec(message)?.[1]?.trim().toLowerCase() ?? null;
+  const exactNameMatches = quotedName ? allItems.filter((item) => item.name.trim().toLowerCase() === quotedName) : [];
+  const genericList = /\b(?:inventory|systems?|equipment|appliances?)\b/i.test(message) && !specific && !categoryFilter && !exactNameMatches.length;
   const tokens = inventorySearchTokens(message);
 
   let matches = allItems;
   if (targetItemId) {
     matches = allItems.filter((item) => item.id === targetItemId);
+  } else if (exactNameMatches.length) {
+    matches = exactNameMatches;
   } else if (categoryFilter) {
     matches = allItems.filter((item) => inventoryMatchesCategory(item, categoryFilter));
   } else if (refinement) {

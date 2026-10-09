@@ -241,3 +241,13 @@ test('the follow-up resolver pins a declared inventory chip to INVENTORY_LOOKUP 
     }
   } finally { prismaModule.prisma = realPrisma; }
 });
+
+test('the declared "View this item" message resolves that exact item, not the whole inventory', async () => {
+  install();
+  try {
+    const result = await run('Show inventory item "Heat pump"');
+    assert.equal(result.reasonCode, 'INVENTORY_RECORD_INCOMPLETE');
+    assert.equal(result.parameters.inventoryItemId, 'heatpump');
+    assert.deepEqual(ids(result), ["heatpump"]);
+  } finally { restore(); }
+});
