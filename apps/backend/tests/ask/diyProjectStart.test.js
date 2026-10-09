@@ -91,6 +91,17 @@ test('both operations are launch-only, the start is a CONTRIBUTOR command with t
   }
 });
 
+test('typed wording of the browse question routes to the DIY projects card (which carries the browse action), never to a renovation or permit answer; the start stays unreachable by typing', () => {
+  const routed = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation?.operationId;
+  // The production failure (2026-10-08): "Show the DIY projects I can start" without the full stop went to RENOVATION_PERMIT_READINESS.
+  for (const message of [
+    'Show the DIY projects I can start.', 'Show the DIY projects I can start', 'show the diy projects i can start', 'What DIY projects can I start?', 'Which DIY projects can I start',
+    'Which DIY projects are available for my home?', 'Which reviewed DIY projects fit my home?', 'Show me DIY projects I can start',
+  ]) assert.equal(routed(message), 'DIY_PROJECTS', message);
+  for (const message of ['Do I need a permit for a kitchen renovation?', 'Is my renovation ready for a permit?']) assert.equal(routed(message), 'RENOVATION_PERMIT_READINESS', message);
+  for (const message of ['Start this project.', 'Start this DIY project.']) assert.notEqual(routed(message), 'DIY_PROJECT_START', message);
+});
+
 // ---- browse (8B) ------------------------------------------------------------------------------------------------------------------------------
 
 test('browse lists a governed, applicable template with the start action for a contributor, and none for a viewer; the card and answer pass the block schema and trust policy', async () => {

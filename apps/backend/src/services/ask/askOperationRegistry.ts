@@ -1066,6 +1066,9 @@ const trackedProjectsOtherIntentPattern = /\b(?:diy|do[- ]it[- ]yourself|permits
 // The household's active DIY projects. Asking whether to do a job yourself is the page's decision engine, and starting a
 // project is the page's write; neither is this read.
 const diyProjectsPattern = /\bdiy (?:project center|projects?)\b|\b(?:my|our) diy\b|\bdo[- ]it[- ]yourself projects?\b/i;
+// "The DIY projects I can start / that are available / that fit my home": the card for DIY_PROJECTS carries the "See projects you can start" action, so these route there. Without this
+// the "can i" in diyProjectsOtherIntentPattern pushed them to free-text routing, where the wording without a full stop landed on RENOVATION_PERMIT_READINESS (browser pass, 2026-10-08).
+const diyProjectsBrowseWordingPattern = /\bdiy projects?\b[^.?!]*\b(?:(?:i|we) can|can (?:i|we)) (?:start|begin|do)\b|\b(?:reviewed|available|startable) diy projects?\b|\bdiy projects?\b[^.?!]*\b(?:available|fits?|suits?)\b/i;
 const diyProjectsOtherIntentPattern = /\b(?:start|create|new|add|begin|should i|can i|or hire|abandon|complete|finish)\b/i;
 // The household's saved Home Upgrade Planner (home digital twin) options. Asking whether to repair or replace something
 // is REPLACEMENT_GUIDANCE; this is the options already saved in the planner.
@@ -1320,7 +1323,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('DOCUMENT_LOOKUP', 0.95);
   }
   if (operationalWorkUpdatePattern.test(message)) return resolved('OPERATIONAL_WORK_UPDATE', 0.98);
-  if (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if ((diyProjectsBrowseWordingPattern.test(message) || (diyProjectsPattern.test(message) && !diyProjectsOtherIntentPattern.test(message))) && !explicitCapabilityPattern.test(message)) {
     return resolved('DIY_PROJECTS', 0.96);
   }
   if (guidanceJourneysPattern.test(message) && !guidanceJourneysOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {

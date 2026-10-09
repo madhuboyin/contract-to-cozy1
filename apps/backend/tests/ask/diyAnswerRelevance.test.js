@@ -23,6 +23,8 @@ const template = (over = {}) => ({
 const verdict = (question, operationId, result) => validateAskSemanticAnswerRelevance({ question, operationId, result });
 
 const LIST_QUESTIONS = ['Show my DIY projects', 'show my diy projects', 'Which DIY projects am I in the middle of?', 'Which steps are left on my DIY projects?', 'Open the DIY project center'];
+// Typed wording of the browse button's own question: it routes to DIY_PROJECTS (whose card carries the browse action), so that card must pass the validator for it too.
+const BROWSE_WORDING = ['Show the DIY projects I can start.', 'Show the DIY projects I can start', 'What DIY projects can I start?', 'Which DIY projects are available for my home?', 'Which reviewed DIY projects fit my home?'];
 
 test('the EMPTY DIY projects card passes the semantic answer validator for every declared phrasing', () => {
   const empty = diyProjectsFromView({ items: [], nextCursor: null }, PROPERTY);
@@ -30,6 +32,16 @@ test('the EMPTY DIY projects card passes the semantic answer validator for every
   for (const question of LIST_QUESTIONS) {
     const result = verdict(question, 'DIY_PROJECTS', empty);
     assert.equal(result.outcome, 'PASS', `${question}: ${JSON.stringify([result.outcome, result.reasonCodes, result.competingOperationId, result.selectedOperationScore, result.competingOperationScore])}`);
+  }
+});
+
+test('the DIY projects card, empty and populated, passes the validator for the browse wording that routes to it', () => {
+  for (const view of [{ items: [], nextCursor: null }, { items: [project()], nextCursor: null }, { items: [project(), project({ id: 'p2', title: 'Seal the deck', category: 'EXTERIOR', status: 'PLANNING', completedStepCount: 0, requiredStepCount: 3 })], nextCursor: null }]) {
+    const card = diyProjectsFromView(view, PROPERTY);
+    for (const question of BROWSE_WORDING) {
+      const result = verdict(question, 'DIY_PROJECTS', card);
+      assert.equal(result.outcome, 'PASS', `${question} (${view.items.length} items): ${JSON.stringify([result.reasonCodes, result.competingOperationId, result.selectedOperationScore, result.competingOperationScore])}`);
+    }
   }
 });
 
