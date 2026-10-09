@@ -134,6 +134,40 @@ export const ConciergeHomeCapabilityGroupSchema = z.object({
   prompts: z.array(ConciergeHomeCapabilityPromptSchema),
 });
 
+// Explore with Cozy (docs/product/ASK_COZY_LIGHTWEIGHT_CAPABILITY_DISCOVERY_IMPLEMENTATION_PLAN.md §3). Server-owned: the topic ids,
+// labels and order are stable product configuration; starters and their availability come from the Ask operation registry. Selecting a
+// topic is client view state and creates no execution -- only a starter launches, through the ordinary Ask path.
+export const ASK_DISCOVERY_TOPIC_IDS = ['HOME_CARE', 'DIY_PROJECTS', 'HOME_RECORD'] as const;
+export type AskDiscoveryTopicId = (typeof ASK_DISCOVERY_TOPIC_IDS)[number];
+
+export const AskDiscoveryStarterSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  label: z.string().trim().min(1).max(120),
+  message: z.string().trim().min(1).max(300),
+  operationId: z.string().trim().min(1).max(120),
+  interactionType: z.enum(['CONVERSATION_CONTINUE', 'START_WORKFLOW']),
+  availability: z.enum(['AVAILABLE', 'NEEDS_CONTEXT', 'UNAVAILABLE']),
+  reasonCodes: z.array(z.string().max(80)),
+  entityContext: z.record(z.string(), z.string()).nullable(),
+});
+
+export const AskDiscoveryTopicSchema = z.object({
+  id: z.enum(ASK_DISCOVERY_TOPIC_IDS),
+  label: z.string().trim().min(1).max(80),
+  order: z.number().int().nonnegative(),
+  // Phase 3 supplies the owning-domain indicator; null means "no indicator", never "zero".
+  indicator: z.object({
+    label: z.string().max(80),
+    value: z.union([z.number(), z.string()]),
+    sourceVersion: z.string().nullable(),
+    freshness: z.enum(['CURRENT', 'STALE', 'UNAVAILABLE']),
+  }).nullable(),
+  starters: z.array(AskDiscoveryStarterSchema),
+});
+
+export type AskDiscoveryStarter = z.infer<typeof AskDiscoveryStarterSchema>;
+export type AskDiscoveryTopic = z.infer<typeof AskDiscoveryTopicSchema>;
+
 export const ConciergeHomeJourneyContextSchema = z.object({
   state: z.enum(['AVAILABLE', 'UNKNOWN', 'UNAVAILABLE']),
   ownershipState: z.enum(['SHOPPING', 'UNDER_CONTRACT', 'RECENT_OWNER', 'ESTABLISHED_OWNER', 'PREPARING_TRANSFER', 'UNKNOWN']).nullable(),
@@ -157,6 +191,7 @@ export const ConciergeHomeViewSchema = z.object({
     z.object({ kind: z.literal('DECISION'), entityId: z.string().trim().min(1).max(160) }),
   ]).nullable(),
   capabilityGroups: z.array(ConciergeHomeCapabilityGroupSchema),
+  discoveryTopics: z.array(AskDiscoveryTopicSchema),
   featuredPrompts: z.array(ConciergeHomeFeaturedPromptSchema),
   suggestedQuestions: z.array(z.string()),
 });

@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; implementation not started
+**Status:** Approved product direction; Phase 1 implemented (backend only); Phases 2-4 not started
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -140,6 +140,21 @@ inside an open focused topic view. That deduplication must never remove or renam
    new endpoint for the initial implementation.
 
 Exit: every returned starter is authorized, registry-backed, and Ask-native; no UI change yet.
+
+**Phase 1 as built** (`apps/backend/src/services/ask/askDiscoveryTopics.ts`, tests in `tests/unit/askDiscoveryTopics.test.js`):
+
+- Starters launch with the message plus `launchContext.operationId`; `createAskExecution` already validates that hint against the
+  operation registry. Internal operations (`SEASONAL_HOME_CARE`, `DIY_TEMPLATE_BROWSE`) are reachable only this way.
+- Reviewed starters: Home care (attention, maintenance due, this season, next season); DIY & Projects (my projects, projects I can start);
+  My Home Record (summary, completeness).
+- Example copy that does not route as written and was therefore changed: "Find a project I can start" resolves to
+  `RENOVATION_PERMIT_READINESS`; "Help me with seasonal home care" resolves to `CAPABILITY_DISCOVERY`; "Help me add a missing detail"
+  falls to `GROUNDED_GUIDANCE`.
+- **Deferred to a separate follow-up phase:** "Add a missing detail" has no starter and is not a generic `NEEDS_CONTEXT` starter; it needs an area-selection contract first. `PROPERTY_CONTEXT_AREA_CAPTURE` needs a chosen area and no reviewed generic launch exists.
+  "Help me continue a project" is omitted for the same reason (`DIY_PROJECT_GUIDE` needs project selection). Design the canonical picker and entity-context behavior before either returns.
+- Operations that are disabled, runtime-unavailable or audience-hidden are omitted; a caller below an operation's role floor receives an
+  `UNAVAILABLE` starter with `ASK_PERMISSION_REQUIRED`. `NEEDS_CONTEXT` is in the contract but not yet produced. Indicators are `null`.
+- `validateAskDiscoveryTopics` runs at startup from `index.ts` and is covered by `startupRegistryValidation.test.js`.
 
 ### Phase 2 — Ask shell presentation
 

@@ -26,6 +26,7 @@ import type { ConciergeHomeView } from '../../../productFramework/conciergeHome.
 import { conciergeLandingSubjectKey, inventoryDecisionQuestion, selectConciergeLandingSpotlight, selectInventoryDecisionCandidate } from '../askConciergePromptPolicy';
 import { getSkillDefinition } from '../../skills/skillRegistry';
 import { focusedHomeActionCategory, focusedHomeActionQuestion } from '../askFocusedGuidance';
+import { buildAskDiscoveryTopics } from '../askDiscoveryTopics';
 import { lifecyclePromptsFor } from '../askLifecyclePromptPolicy';
 import {
   dashboardSectionRepresentativeActions,
@@ -367,6 +368,15 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
   const audienceCapabilityGroups: ConciergeHomeView['capabilityGroups'] = capabilityGroups
     .map((group) => ({ ...group, prompts: group.prompts.filter(promptIsDiscoverable) }))
     .filter((group) => group.prompts.length > 0);
+  // Independently degradable (plan §3): a projection failure leaves the topics empty of starters, never the rest of the shell.
+  const discoveryTopics: ConciergeHomeView['discoveryTopics'] = (() => {
+    try {
+      return buildAskDiscoveryTopics({ controls, householdRole: conciergeAccess.role, operatingMode: discoveryOperatingMode, propertyId });
+    } catch (error) {
+      logger.warn({ err: error, propertyId, userId }, 'Concierge Home discovery topics failed closed');
+      return [];
+    }
+  })();
   const eligiblePriorityItems = priorityList.items
     .filter((item) => !item.suppressed && !item.completed && !item.unavailable && !item.stale && item.consumerPriority !== 'NO_ACTION');
   const topPriority = eligiblePriorityItems[0];
@@ -462,6 +472,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     homeContinuity,
     landingSpotlight,
     capabilityGroups: audienceCapabilityGroups,
+    discoveryTopics,
     featuredPrompts,
     suggestedQuestions: featuredPrompts.map((prompt) => prompt.question),
   };
