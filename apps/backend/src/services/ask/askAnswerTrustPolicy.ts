@@ -153,8 +153,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The answer's next steps (each opens a confirmation, an inline answer, or the home-record check) and the walkthrough's way on and back.
   SEASONAL_HOME_CARE: new Set(['seasonal-add-tasks', 'seasonal-walkthrough', 'seasonal-show-checklist', 'seasonal-update-home-details', 'seasonal-next-task', 'seasonal-back-to-plan']),
   SEASONAL_CHECKLIST_SETUP: new Set(['seasonal-show-checklist', 'seasonal-update-home-details']),
-  // The home-basics guides' continuations: the other guide and the seasonal plan, each an inline answer that changes nothing.
-  HOME_BASICS_GUIDE: new Set(['home-basics-monthly-routine', 'home-basics-safety-basics', 'home-basics-seasonal-plan']),
+  // Home Basics deliberately has no local continuation carousel; the governed exact-four footer owns onward navigation.
+  HOME_BASICS_GUIDE: new Set(),
   // The attached-document receipt: an inventory item opens inline in Ask; a warranty keeps its page link.
   CAPTURE_EVIDENCE_CONFIRM: new Set(['view-inventory-item', 'open-attached-record']),
   GUIDANCE_STEP_SKIP: new Set(['open-guidance-overview']),

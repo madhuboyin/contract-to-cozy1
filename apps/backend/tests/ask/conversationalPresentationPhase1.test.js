@@ -11,9 +11,8 @@ const { buildSeasonalHomeCareResult, buildSeasonalTaskWalkthrough } = require('.
 const { buildHomeBasicsResult, HOME_BASICS_SAFETY_MESSAGE } = require('../../src/services/ask/support/homeBasicsGuide.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
-const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { finalizeSuggestedNextActionsWithReport, resolveSuggestedNextActionMode } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
-const { SUGGESTED_NEXT_ACTION_PRODUCERS } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
+const { starterProducers } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
 const { fixedSuggestedNextActionClock } = require('../../src/services/ask/suggestedActions/suggestedNextActionClock.ts');
 
 const WINTER_NOW = new Date(2027, 0, 15);
@@ -117,48 +116,43 @@ test('home safety: the gas emergency is its own EMERGENCY boundary, stated in wo
   assert.equal(buildHomeBasicsResult('MONTHLY_ROUTINE').blocks.some((block) => block.id === 'home-basics-gas-emergency'), false);
 });
 
-test('home safety: the emergency boundary and the three continuation ids survive validateAskAnswerTrust; an unlisted id is stripped (negative control)', () => {
+test('home safety: the emergency boundary survives trust validation and looping authored continuation controls are absent', () => {
   for (const focus of ['SAFETY_BASICS', 'MONTHLY_ROUTINE']) {
     const raw = trusted('HOME_BASICS_GUIDE', buildHomeBasicsResult(focus));
     const { result } = validateAskAnswerTrust({ question: HOME_BASICS_SAFETY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', result: raw, propertyId: 'p1' });
     assert.deepEqual(result.blocks.map((block) => block.id), raw.blocks.map((block) => block.id), `${focus}: no block removed`);
-    const next = result.blocks.find((block) => block.id === 'home-basics-next');
-    assert.equal(next.actions.length, 2, `${focus}: both continuations kept`);
-    assert.equal(next.actions.every((action) => action.interactionType === 'START_WORKFLOW' && !action.href), true);
+    assert.equal(result.blocks.some((block) => block.id === 'home-basics-next'), false);
   }
-  const raw = trusted('HOME_BASICS_GUIDE', buildHomeBasicsResult('SAFETY_BASICS'));
-  const withStray = { ...raw, blocks: raw.blocks.map((block) => (block.id === 'home-basics-next' ? { ...block, actions: [...block.actions, { ...block.actions[0], id: 'home-basics-not-listed' }] } : block)) };
-  const stripped = validateAskAnswerTrust({ question: HOME_BASICS_SAFETY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', result: withStray, propertyId: 'p1' }).result;
-  assert.deepEqual(stripped.blocks.find((block) => block.id === 'home-basics-next').actions.map((action) => action.id), ['home-basics-monthly-routine', 'home-basics-seasonal-plan']);
-  assert.equal(isAskActionApplicable({ action: { id: 'home-basics-not-listed' }, operationId: 'HOME_BASICS_GUIDE', householdRole: null, authoritativeSourceAvailable: true }), false);
 });
 
-test('suggestion mode: the safety guide (with its EMERGENCY boundary) is SAFE_RECOVERY_ONLY; the monthly guide and the winter plan stay NORMAL', () => {
-  assert.equal(resolveSuggestedNextActionMode(buildHomeBasicsResult('SAFETY_BASICS'), 'HOME_BASICS_GUIDE'), 'SAFE_RECOVERY_ONLY');
+test('suggestion mode: conditional safety education and ordinary guides stay NORMAL', () => {
+  assert.equal(resolveSuggestedNextActionMode(buildHomeBasicsResult('SAFETY_BASICS'), 'HOME_BASICS_GUIDE'), 'NORMAL');
   assert.equal(resolveSuggestedNextActionMode(buildHomeBasicsResult('MONTHLY_ROUTINE'), 'HOME_BASICS_GUIDE'), 'NORMAL');
   assert.equal(resolveSuggestedNextActionMode(buildSeasonalHomeCareResult({ zipCode: '60601', now: WINTER_NOW, focus: 'THIS_SEASON', setup: owner }), 'SEASONAL_HOME_CARE'), 'NORMAL');
 });
 
-test('finalizer: contextual Home Basics controls own the next step in both safety and normal modes, without starter padding', async () => {
+test('finalizer: both completed Home Basics guides use four governed footer actions without an authored loop', async () => {
   const NOW = new Date('2027-01-15T12:00:00.000Z');
   const run = (result, operationId) => finalizeSuggestedNextActionsWithReport(
     { result, executionId: 'exec-1', userId: 'u1', sessionId: 's1', propertyId: 'prop-1', operationId, message: HOME_BASICS_SAFETY_MESSAGE },
     {
-      producers: SUGGESTED_NEXT_ACTION_PRODUCERS, clock: fixedSuggestedNextActionClock ? fixedSuggestedNextActionClock(NOW) : { now: () => NOW },
+      producers: starterProducers, clock: fixedSuggestedNextActionClock ? fixedSuggestedNextActionClock(NOW) : { now: () => NOW },
       loadOperationAvailability: async () => new Map([['HOME_BASICS_GUIDE', null], ['SEASONAL_HOME_CARE', null], ['PROPERTY_SUMMARY', null], ['HIRING_GUIDE', null]]),
       loadExecutionExpiresAt: async () => new Date(NOW.getTime() + 24 * 3600_000),
       loadCurrentOutcomeKeyHashes: async () => new Set(),
       loadLifecycleState: async () => ({ cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true }),
       recordOffers: async () => undefined,
+      recordImpressions: () => undefined,
+      recordSuppression: () => undefined,
       loadActionableCompleteness: async () => ({ fraction: 1, audienceUncertain: false }),
     },
   );
-  const emergency = await run(buildHomeBasicsResult('SAFETY_BASICS'), 'HOME_BASICS_GUIDE');
-  assert.equal(emergency.report.mode, 'SAFE_RECOVERY_ONLY');
-  assert.deepEqual(emergency.result.suggestedNextActions, [], 'no starter, promotional or unrelated candidate survives');
-  assert.equal(emergency.result.blocks.find((block) => block.id === 'home-basics-next').actions.length, 2, 'block-level continuations remain');
+  const safety = await run(buildHomeBasicsResult('SAFETY_BASICS'), 'HOME_BASICS_GUIDE');
+  assert.equal(safety.report.mode, 'NORMAL');
+  assert.equal(safety.result.suggestedNextActions.length, 4);
+  assert.equal(safety.result.blocks.some((block) => block.id === 'home-basics-next'), false);
   const routine = await run(buildHomeBasicsResult('MONTHLY_ROUTINE'), 'HOME_BASICS_GUIDE');
   assert.equal(routine.report.mode, 'NORMAL');
-  assert.deepEqual(routine.result.suggestedNextActions, [], 'normal contextual controls also suppress unrelated starter padding');
-  assert.equal(routine.report.exactFour.exemptReason, 'CONTEXTUAL_ACTIONS_IN_RESULT');
+  assert.equal(routine.result.suggestedNextActions.length, 4);
+  assert.equal(routine.report.exactFour.applicability, 'EXACT_FOUR');
 });

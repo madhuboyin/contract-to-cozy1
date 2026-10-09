@@ -51,12 +51,17 @@ const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
 ]);
 
+// HOME_BASICS_GUIDE contains a conditional "If you smell gas" emergency disclosure in otherwise general authored education. It is
+// not evidence that the homeowner is reporting an active emergency, so it must not disable the normal governed escape routes.
+const INFORMATIONAL_EMERGENCY_BOUNDARY_OPERATIONS: ReadonlySet<string> = new Set(['HOME_BASICS_GUIDE']);
+
 /** Emergency, restricted, unavailable, expired, cancelled and similar results keep only safe recovery actions (plan §6). */
 export function resolveSuggestedNextActionMode(result: Pick<AskOperationResult, 'status' | 'blocks'>, operationId: string | null): SuggestedNextActionMode {
   if (RECOVERY_STATUSES.has(result.status)) return 'SAFE_RECOVERY_ONLY';
   const definition = operationId && operationId in ASK_OPERATION_DEFINITIONS ? getAskOperationDefinition(operationId as AskOperationId) : null;
   if (definition?.family === 'UNSAFE_OR_RESTRICTED') return 'SAFE_RECOVERY_ONLY';
-  if (result.blocks.some((block) => block.type === 'BOUNDARY' && block.severity === 'EMERGENCY')) return 'SAFE_RECOVERY_ONLY';
+  if (!INFORMATIONAL_EMERGENCY_BOUNDARY_OPERATIONS.has(operationId ?? '')
+    && result.blocks.some((block) => block.type === 'BOUNDARY' && block.severity === 'EMERGENCY')) return 'SAFE_RECOVERY_ONLY';
   return 'NORMAL';
 }
 

@@ -4,7 +4,6 @@
 // defers to the homeowner's own manufacturer instructions, local codes and utilities. Not registered as a message route.
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
-import { SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE } from './seasonalHomeCare';
 
 export type HomeBasicsFocus = 'SAFETY_BASICS' | 'MONTHLY_ROUTINE';
 
@@ -55,16 +54,6 @@ const gasEmergencyBoundary = (): AskPresentationBlock => ({
   severity: 'EMERGENCY', suggestions: [],
 });
 
-const nextSteps = (focus: HomeBasicsFocus): AskPresentationBlock => ({
-  type: 'SUMMARY', id: 'home-basics-next', title: 'What would you like to do next?', body: 'Both are general guides. Nothing here changes your home record.', tone: 'DEFAULT',
-  actions: [
-    focus === 'SAFETY_BASICS'
-      ? { id: 'home-basics-monthly-routine', label: 'A simple monthly routine', interactionType: 'START_WORKFLOW' as const, message: HOME_BASICS_MONTHLY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', outcomeKey: 'REVIEW_MONTHLY_ROUTINE', style: 'SECONDARY' as const }
-      : { id: 'home-basics-safety-basics', label: 'Home safety basics', interactionType: 'START_WORKFLOW' as const, message: HOME_BASICS_SAFETY_MESSAGE, operationId: 'HOME_BASICS_GUIDE', outcomeKey: 'REVIEW_SAFETY_BASICS', style: 'SECONDARY' as const },
-    { id: 'home-basics-seasonal-plan', label: 'Home care for this season', interactionType: 'START_WORKFLOW' as const, message: SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE, operationId: 'SEASONAL_HOME_CARE', outcomeKey: 'REVIEW_THIS_SEASON', style: 'SECONDARY' as const },
-  ],
-});
-
 export function buildHomeBasicsResult(focus: HomeBasicsFocus): AskOperationResult {
   const guide = GUIDES[focus];
   const boundary: AskPresentationBlock = {
@@ -85,7 +74,7 @@ export function buildHomeBasicsResult(focus: HomeBasicsFocus): AskOperationResul
       }],
     },
     ...(focus === 'SAFETY_BASICS' ? [gasEmergencyBoundary()] : []),
-    nextSteps(focus), boundary],
+    boundary],
     suggestions: [],
   };
 }
