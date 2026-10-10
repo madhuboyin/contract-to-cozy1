@@ -255,6 +255,16 @@ Exit: additional capabilities are discoverable without expanding the persistent 
   selected, started and completed (bounded status, no raw error); abandoned on Not now or a property change. One search event per interaction with a
   bucketed result count (`0`, `1`, `2-5`, `6+`) and whether a result was picked; never the phrase, a label or a message.
 - **Copy.** A count of one reads "1 needs attention".
+- **Key-tool awareness.** **More ideas** includes a broad, explicit shelf of important tools that already have reviewed Ask-native reads, not just
+  the outcome-shaped starter set. The shelf reuses the canonical capability-card operation and launch message for Maintenance, Home Event Radar,
+  Claims, Inspection Hub, Seller Prep, Refinance Radar, Buyer Closing, Renovation Risk Advisor, Break-Even, Neighborhood Change Radar, Home Risk
+  Replay, Status Board, Home Habit Coach, Plant Advisor, Negotiation Shield, Home Upgrade Planner, Project Tracker, Service Price Radar, Home
+  Timeline, Property Brief, Emergency Help, Guided Journeys, HOA records, Price Finalization, Do-Nothing Simulator, Appliance Oracle and Budget
+  Planner. **Home Continuity Plan** (the homeowner-safe name for Home Digital Will) and **Material Specs** remain explicit reviewed entries. The
+  server still removes anything unavailable, unauthorized or outside rollout for the selected home. Documents, Home Records and Reserve Fund card
+  reads remain out because their card-to-operation ownership disagrees with the canonical guidance bridge; they are not silently advertised through
+  a substitute capability. Claims uses one separately reviewed, message-routable question because its shorter capability-card message relies on a
+  declared operation and would otherwise fall to general guidance.
 - **Open:** "Completed" is request-settled, not a business outcome; the explorer had no entity picker at Phase 4; Phase 7 added canonical target
   selectors, so "Add a missing detail" and "Continue a project" are offered from the focused topic view (the explorer dialog still does not host them).
 

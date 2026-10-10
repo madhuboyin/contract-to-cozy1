@@ -125,6 +125,60 @@ const read = (
   ...(options.selectorId ? { selectorId: options.selectorId } : {}),
 });
 
+/**
+ * Capability-card reads are already reviewed, Ask-native entry points. This explicit allowlist gives important tools a named shelf in More ideas
+ * without duplicating their operation or launch message. Audience, rollout and runtime availability are still filtered by Concierge Home.
+ * Known card/bridge disagreements are deliberately absent until their canonical ownership is resolved.
+ */
+export const ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS = Object.freeze([
+  'maintenance',
+  'home-event-radar',
+  'claims',
+  'inspection-hub',
+  'seller-prep',
+  'mortgage-refinance-radar',
+  'buyer-closing',
+  'home-renovation-risk-advisor',
+  'break-even',
+  'neighborhood-change-radar',
+  'home-risk-replay',
+  'status-board',
+  'home-habit-coach',
+  'plant-advisor',
+  'negotiation-shield',
+  'home-digital-twin',
+  'project-tracker',
+  'service-price-radar',
+  'home-timeline',
+  'property-brief',
+  'emergency',
+  'guidance-overview',
+  'hoa-compliance',
+  'price-finalization',
+  'do-nothing-simulator',
+  'oracle',
+  'budget',
+] as const satisfies readonly (keyof typeof CARD_ENTRY_BINDINGS)[]);
+
+// The Claims card is allowed to carry a declared operation, but reviewed discovery requires a message-routable question. Keep the one exception
+// explicit and tested; all other advertised tools reuse the card message verbatim.
+const ASK_ADVERTISED_CARD_READ_QUESTION_OVERRIDES: Readonly<Partial<Record<(typeof ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS)[number], string>>> = Object.freeze({
+  claims: 'What is the status of my insurance claims?',
+});
+
+function advertisedCardRead(capabilityId: (typeof ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS)[number]): AskCapabilityBinding {
+  const binding = CARD_ENTRY_BINDINGS[capabilityId];
+  return {
+    id: `tool-${capabilityId}`,
+    capabilityId,
+    operationId: binding.operationId,
+    question: ASK_ADVERTISED_CARD_READ_QUESTION_OVERRIDES[capabilityId] ?? binding.message,
+    kind: 'READ',
+    launch: 'MESSAGE',
+    interactionType: 'CONVERSATION_CONTINUE',
+  };
+}
+
 // Entry ids are stable identifiers (telemetry, topic starters), so they keep their original names even where the derived group differs from the
 // id's prefix (for example `protect-coverage` now sits with its capability's outcome, Compare and decide).
 export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.freeze([
@@ -135,6 +189,10 @@ export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.fr
     consequence: 'Cozy asks about the area you pick and shows a review first. Nothing is saved until you confirm.',
   },
   read('understand-completeness', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, 'How complete is my home record?'),
+  // Key contextual tools need an explicit shelf in More ideas: otherwise a homeowner must already know the product name or the exact question
+  // that routes to them. Keep these as pure Ask reads; the answer can explain the tool and offer its existing page handoff.
+  read('understand-continuity-plan', 'home-digital-will', 'HOME_DIGITAL_WILL', 'Show my home continuity plan', 'Review my Home Continuity Plan'),
+  read('understand-material-specs', 'material-specs', 'MATERIAL_SPECS_LIST', 'Show my material specs', 'Review my Material Specs'),
 
   read('maintain-attention', 'home-operations', 'HOME_ACTIONS', 'What needs my attention at home?', 'What needs attention?'),
   read('maintain-due', 'maintenance', 'MAINTENANCE_STATUS', 'What maintenance tasks are due this month?', 'What maintenance is coming due?'),
@@ -159,6 +217,9 @@ export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.fr
   // `quote-comparison` is a workflow-only capability (CAP-FR-035), so its review is not offered as a general idea; the validator rejects a binding to it.
 
   read('plan-reserve', 'capital-timeline', 'CAPITAL_RESERVE_PLAN', 'How is my reserve fund doing?', 'How is my reserve fund doing?'),
+
+  // A broad, named tool shelf. These supplement the outcome-shaped ideas above; search aliases and grouping remain canonical-registry owned.
+  ...ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS.map(advertisedCardRead),
 ]);
 
 /**

@@ -8,7 +8,7 @@ require('ts-node/register/transpile-only');
 const registry = require('../../src/services/ask/askExplorerRegistry.ts');
 const bindings = require('../../src/services/ask/askCapabilityBindings.ts');
 const { ASK_EXPLORER_ENTRIES, ASK_EXPLORER_GROUPS, validateAskExplorerRegistry, validateAskCapabilityBindings, buildAskExplorerGroups, explorerEntryById, deriveAskExplorerEntries } = registry;
-const { ASK_DISCOVERY_BINDINGS, CARD_ENTRY_BINDINGS, KNOWN_CARD_BRIDGE_DISAGREEMENTS } = bindings;
+const { ASK_DISCOVERY_BINDINGS, ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS, CARD_ENTRY_BINDINGS, KNOWN_CARD_BRIDGE_DISAGREEMENTS } = bindings;
 const { ASK_DISCOVERY_TOPICS, validateAskDiscoveryTopics, buildAskDiscoveryTopics } = require('../../src/services/ask/askDiscoveryTopics.ts');
 const { ConciergeHomeCapabilityGroupSchema } = require('../../src/productFramework/conciergeHome.contract.ts');
 const { canonicalCapabilityRegistry } = require('../../src/productFramework/capabilities/index.ts');
@@ -70,6 +70,31 @@ test('the registry gained Seasonal Maintenance, and the bridge owns the seasonal
   assert.equal(ASK_OPERATION_CAPABILITY.SEASONAL_CHECKLIST_SETUP, 'seasonal-maintenance');
   assert.equal(ASK_OPERATION_CAPABILITY.HOME_CHANGE_SUMMARY, 'home-briefing');
   assert.equal(ASK_OPERATION_CAPABILITY.MAINTENANCE_FORECAST, 'maintenance');
+});
+
+test('More ideas explicitly advertises the Home Continuity Plan and Material Specs through their safe Ask reads', () => {
+  const entries = ['understand-continuity-plan', 'understand-material-specs'].map((id) => explorerEntryById(id));
+  assert.deepEqual(entries.map((entry) => [entry.capabilityId, entry.operationId, entry.groupId, entry.label]), [
+    ['home-digital-will', 'HOME_DIGITAL_WILL', 'UNDERSTAND', 'Review my Home Continuity Plan'],
+    ['material-specs', 'MATERIAL_SPECS_LIST', 'UNDERSTAND', 'Review my Material Specs'],
+  ]);
+  assert.deepEqual(entries.map((entry) => entry.question), ['Show my home continuity plan', 'Show my material specs']);
+  assert.ok(entries[0].aliases.includes('home digital will'));
+  assert.ok(entries[1].aliases.includes('material specs'));
+});
+
+test('More ideas advertises the broad reviewed tool shelf from canonical card reads without importing ownership disagreements', () => {
+  assert.equal(ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS.length, 27);
+  for (const capabilityId of ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS) {
+    const card = CARD_ENTRY_BINDINGS[capabilityId];
+    const entry = explorerEntryById(`tool-${capabilityId}`);
+    assert.ok(entry, capabilityId);
+    assert.deepEqual([entry.capabilityId, entry.operationId, entry.kind], [capabilityId, card.operationId, 'READ']);
+    assert.equal(entry.question, capabilityId === 'claims' ? 'What is the status of my insurance claims?' : card.message, capabilityId);
+    assert.equal(entry.label, canonicalCapabilityRegistry.getById(capabilityId).presentation.label, capabilityId);
+  }
+  assert.ok(!ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS.some((id) => id in KNOWN_CARD_BRIDGE_DISAGREEMENTS));
+  assert.ok(!ASK_DISCOVERY_BINDINGS.some((entry) => entry.id === 'tool-documents' || entry.id === 'tool-home-records' || entry.id === 'tool-reserve-fund'));
 });
 
 test('the explorer and the topics share the same bindings; topics only reference them', () => {

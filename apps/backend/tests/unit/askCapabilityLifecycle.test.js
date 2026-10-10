@@ -34,10 +34,8 @@ test('an answered execution produces output but does NOT complete a capability t
   }
 });
 
-test('no discovery entry can complete its capability by being answered, today: every bound capability declares a non-output completion kind', () => {
+test('no discovery entry can complete its capability merely by being answered, including a capability completed by true viewing', () => {
   for (const binding of ASK_DISCOVERY_BINDINGS) {
-    const kind = capability(binding.capabilityId).lifecycle.completionKind;
-    assert.ok(!['OUTPUT_VIEWED', 'OUTPUT_GENERATED'].includes(kind), `${binding.id}: ${kind}`);
     const events = planAskCapabilityLifecycle({ capability: capability(binding.capabilityId), operationId: binding.operationId, status: 'ANSWERED', signal: 'RESULT' });
     assert.ok(!stages(events).includes('COMPLETED'), binding.id);
     const confirmed = planAskCapabilityLifecycle({ capability: capability(binding.capabilityId), operationId: binding.operationId, status: 'COMPLETED', signal: 'CONFIRMED' });
