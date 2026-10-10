@@ -1,5 +1,5 @@
 // Ask handler support: commandInputs. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
-import { HouseholdRole, MaintenanceTaskPriority, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
+import { HouseholdRole, MaintenanceTaskPriority, MaterialCategory, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { z } from 'zod';
 import { isMeaningfulMaintenanceTaskTitle } from '../askMaintenanceTaskInput';
 import { prisma } from '../../../lib/prisma';
@@ -9,6 +9,7 @@ import { RADAR_ACTION_CODES } from '../../../modules/homeEventRadar/domain/radar
 import { INVENTORY_CATEGORY_VALUES, ROOM_TYPE_VALUES } from './capture';
 import { askContextFingerprint } from './propertyContext';
 import { HOME_JOURNEY_OPTIONS } from './homeSettingsConstants';
+import { WHOLE_HOME_VALUE } from './homeRecordAddConstants';
 
 export const MaintenanceTaskWorkflowInputSchema = z.object({
   title: z.string().trim().min(3).max(160).refine(isMeaningfulMaintenanceTaskTitle, {
@@ -234,4 +235,27 @@ export const PurchaseDateInputSchema = z.object({ purchaseDate: PURCHASE_DATE_DA
 // Home journey (HOME_JOURNEY_SET): the same five confirmed choices the onboarding page offers (UNKNOWN is not a choice).
 export const HomeJourneyInputSchema = z.object({
   ownershipState: z.enum(HOME_JOURNEY_OPTIONS.map((option) => option.value) as [string, ...string[]]),
+}).strict();
+
+// Material spec (MATERIAL_SPEC_ADD) and indoor plant (HOME_PLANT_ADD): the inline forms' answers and the stored, confirmed input. Optional text that is
+// left empty is stored as null; the whole-home room choice is stored as no room.
+const optionalText = (max: number) => z.string().trim().max(max).nullish().transform((value) => (value ? value : null));
+
+export const MaterialSpecAddInputSchema = z.object({
+  category: z.nativeEnum(MaterialCategory),
+  label: z.string().trim().min(1).max(120),
+  roomId: z.string().trim().max(160).nullish().transform((value) => (!value || value === WHOLE_HOME_VALUE ? null : value)),
+  manufacturer: optionalText(120),
+  productName: optionalText(120),
+  colorCode: optionalText(60),
+  finish: optionalText(60),
+  supplier: optionalText(120),
+  notes: optionalText(1000),
+}).strict();
+
+export const HomePlantAddInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  roomId: z.string().trim().min(1).max(160),
+  nickname: optionalText(120),
+  notes: optionalText(1000),
 }).strict();

@@ -6,6 +6,9 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { readableCode } from '../askFormatting';
 import { MaterialSpecService } from '../../materialSpec.service';
+import { HouseholdRole } from '@prisma/client';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { MATERIAL_SPEC_ADD_ACTION_ID, MATERIAL_SPEC_ADD_MESSAGE } from '../support/homeRecordAddConstants';
 
 const materialSpecService = new MaterialSpecService();
 
@@ -18,13 +21,15 @@ const materialSpecService = new MaterialSpecService();
 // quantities and compliance checks stay on the spec page. Read-only.
 type MaterialSpecListView = Awaited<ReturnType<MaterialSpecService['listSpecs']>>;
 // The page's own labels (MaterialSpecsClient CATEGORY_LABELS; lifecycle shown as its enum words).
-const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
+export const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
   PAINT: 'Paint', TILE: 'Tile', FLOORING: 'Flooring', GROUT: 'Grout', COUNTERTOP: 'Countertop', CABINET: 'Cabinet', HARDWARE: 'Hardware',
   TRIM_MOLDING: 'Trim & Molding', WALLPAPER: 'Wallpaper', ROOFING: 'Roofing', SIDING: 'Siding', WINDOW: 'Window', DOOR: 'Door',
   INSULATION: 'Insulation', OTHER: 'Other',
 };
 
-export function materialSpecsFromView(view: MaterialSpecListView, propertyId: string): AskOperationResult {
+export function materialSpecsFromView(view: MaterialSpecListView, propertyId: string, canAdd = false): AskOperationResult {
+  // A contributor or owner can record a material from here, inside Ask; a viewer reads the list only.
+  const addActions = canAdd ? [{ id: MATERIAL_SPEC_ADD_ACTION_ID, label: 'Add a material', interactionType: 'START_WORKFLOW' as const, message: MATERIAL_SPEC_ADD_MESSAGE, operationId: 'MATERIAL_SPEC_ADD', style: 'PRIMARY' as const }] : [];
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'material-specs-boundary', title: 'As recorded, not checked against the product',
     body: 'Products, colours and suppliers are what was recorded for this home. Confirm a colour or product with the supplier before buying a match, since formulas and product lines change.',
@@ -37,7 +42,7 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
       blocks: [{
         type: 'SUMMARY', id: 'material-specs-summary', title: 'No materials recorded yet',
         body: 'Material Specs keeps the paint colours, tile, flooring, fixtures and suppliers used in this home so you can match them later. None have been recorded for this home yet.',
-        tone: 'DEFAULT', actions: [],
+        tone: 'DEFAULT', actions: addActions,
       }, boundary],
       suggestions: [],
     };
@@ -53,7 +58,7 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
       discontinued ? `${discontinued} ${discontinued === 1 ? 'is' : 'are'} marked discontinued by the supplier.` : null,
     ].filter(Boolean).join(' '),
     tone: discontinued ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: addActions,
   }];
   if (view.hasMore) {
     blocks.push({
@@ -86,8 +91,11 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
   return { status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_READY', blocks, suggestions: [] };
 }
 
-async function materialSpecsResult(propertyId: string): Promise<AskOperationResult> {
-  return materialSpecsFromView(await materialSpecService.listSpecs(propertyId, {}), propertyId);
+async function materialSpecsResult(propertyId: string, canAdd: boolean): Promise<AskOperationResult> {
+  return materialSpecsFromView(await materialSpecService.listSpecs(propertyId, {}), propertyId, canAdd);
 }
 
-registerCapabilityHandler('material-specs.list', async (envelope) => materialSpecsResult(envelope.propertyId!));
+registerCapabilityHandler('material-specs.list', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return materialSpecsResult(envelope.propertyId!, access.role !== HouseholdRole.VIEWER);
+});

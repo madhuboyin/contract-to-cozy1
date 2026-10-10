@@ -6,6 +6,9 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { readableCode } from '../askFormatting';
 import { PlantCarePlannerService } from '../../plantCarePlanner.service';
+import { HouseholdRole } from '@prisma/client';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { HOME_PLANT_ADD_ACTION_ID, HOME_PLANT_ADD_MESSAGE } from '../support/homeRecordAddConstants';
 
 // Plant Advisor capability-card slice (FRD v1.55): the seventh new operation for a capability with none. Reads
 // PlantCarePlannerService.getOutlook, the same call GET /properties/:id/plant-advisor/care-outlook (the page's Care
@@ -26,9 +29,9 @@ const PLANT_OUTDOOR_REASON_LABELS: Record<string, string> = {
   LANDSCAPING_RESPONSIBILITY_CONFLICT: 'the home\'s records disagree about who is responsible for landscaping',
 };
 
-export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/plant-advisor`;
-  const openAction = { id: 'open-plant-advisor', label: 'Open Plant Advisor', href: pageHref, style: 'PRIMARY' as const };
+export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId: string, canAdd = false): AskOperationResult {
+  // A contributor or owner can add an indoor plant from here, inside Ask; a viewer reads the outlook only.
+  const addActions = canAdd ? [{ id: HOME_PLANT_ADD_ACTION_ID, label: 'Add a plant', interactionType: 'START_WORKFLOW' as const, message: HOME_PLANT_ADD_MESSAGE, operationId: 'HOME_PLANT_ADD', style: 'PRIMARY' as const }] : [];
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'plant-care-boundary', title: 'General care guidance, not a plant diagnosis',
     body: 'Care changes come from the forecast and each plant\'s recorded needs. Check the soil and the plant before acting, and follow local watering restrictions.',
@@ -45,8 +48,10 @@ export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId:
   if (!view.plants.length && !view.zones.length) {
     blocks.push({
       type: 'SUMMARY', id: 'plant-care-summary', title: 'No plants or garden zones tracked yet',
-      body: 'Plant Advisor adapts care to the forecast for plants and garden zones you add. Open it to add them or get room plant ideas.',
-      tone: 'DEFAULT', actions: [openAction],
+      body: canAdd
+        ? 'Plant care follows the forecast for the plants you add. Add an indoor plant to start.'
+        : 'Plant care follows the forecast for the plants a household member adds.',
+      tone: 'DEFAULT', actions: addActions,
     });
   } else {
     const counts = [
@@ -64,7 +69,7 @@ export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId:
           : null,
       ].filter(Boolean).join(' '),
       tone: urgent || !weatherChecked ? 'CAUTION' : 'DEFAULT',
-      actions: [openAction],
+      actions: addActions,
     });
   }
   if (unavailable.length) {
@@ -96,7 +101,6 @@ export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId:
           ...(rec.adjustedCheckCadenceDays ? [`check every ${rec.adjustedCheckCadenceDays} days`] : []),
         ],
         status: rec.priority,
-        href: pageHref,
       })),
     })),
     ...(view.gardenRecommendations.length ? [{
@@ -107,7 +111,6 @@ export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId:
         description: rec.actions.join(' '),
         meta: [PLANT_CARE_PRIORITY_LABELS[rec.priority] ?? readableCode(rec.priority), readableCode(rec.season)],
         status: rec.priority,
-        href: pageHref,
       })),
     }] : []),
   ];
@@ -123,8 +126,11 @@ export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId:
   };
 }
 
-async function plantCareOutlookResult(propertyId: string, userId: string): Promise<AskOperationResult> {
-  return plantCareOutlookFromView(await new PlantCarePlannerService().getOutlook(propertyId, userId), propertyId);
+async function plantCareOutlookResult(propertyId: string, userId: string, canAdd: boolean): Promise<AskOperationResult> {
+  return plantCareOutlookFromView(await new PlantCarePlannerService().getOutlook(propertyId, userId), propertyId, canAdd);
 }
 
-registerCapabilityHandler('plant-advisor.care-outlook', async (envelope) => plantCareOutlookResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('plant-advisor.care-outlook', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return plantCareOutlookResult(envelope.propertyId!, envelope.userId, access.role !== HouseholdRole.VIEWER);
+});

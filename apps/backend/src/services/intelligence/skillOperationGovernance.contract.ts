@@ -83,6 +83,9 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   // Recommended maintenance tasks (launch-only read, skill-less like the other declared-action reads). It must stay in this list or the boot check fails.
   'MAINTENANCE_TEMPLATES_BROWSE',
   'HOME_JOURNEY_SET',
+  // Material and plant adds written inside Ask (declared-action, confirmation-gated, skill-less).
+  'MATERIAL_SPEC_ADD',
+  'HOME_PLANT_ADD',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like SEASONAL_HOME_CARE.
   'HOME_BASICS_GUIDE',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like the two above.

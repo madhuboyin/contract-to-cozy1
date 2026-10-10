@@ -41,7 +41,7 @@ test('every Ask operation has a complete governed definition', () => {
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
   // + GUIDANCE_STEP_SKIP and GUIDANCE_JOURNEY_DISMISS (guided journey continuation Phase 3).
-  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 133); // + DIY_TEMPLATE_BROWSE and DIY_PROJECT_START (step 8) // + DIY_PROJECT_GUIDE (step 5 of the stateful GUIDE), + DIY_STEP_UPDATE (step 6) // + PROPERTY_PURCHASE_DATE_SET and HOME_JOURNEY_SET (property settings inside Ask) // + MAINTENANCE_TEMPLATES_BROWSE
+  assert.equal(Object.keys(ASK_OPERATION_DEFINITIONS).length, 135); // + DIY_TEMPLATE_BROWSE and DIY_PROJECT_START (step 8) // + DIY_PROJECT_GUIDE (step 5 of the stateful GUIDE), + DIY_STEP_UPDATE (step 6) // + PROPERTY_PURCHASE_DATE_SET and HOME_JOURNEY_SET (property settings inside Ask) // + MAINTENANCE_TEMPLATES_BROWSE // + MATERIAL_SPEC_ADD, HOME_PLANT_ADD
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     assert.ok(definition.adapterKey);
     assert.ok(definition.evalSuite);
@@ -66,7 +66,7 @@ test('every material Ask command has governed confirmation, authorization, cance
   // + DIY_STEP_UPDATE (DIY step command, step 6 of the stateful GUIDE).
   // + DIY_PROJECT_COMPLETE and DIY_PROJECT_ABANDON (DIY project commands, step 7B).
   // + DIY_COMPLETION_RECOVER (DIY completion recovery, step 7C).
-  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 54); // + DIY_PROJECT_START (step 8) // + PROPERTY_PURCHASE_DATE_SET, HOME_JOURNEY_SET
+  assert.equal(Object.keys(ASK_DOMAIN_COMMAND_REGISTRY).length, 56); // + DIY_PROJECT_START (step 8) // + PROPERTY_PURCHASE_DATE_SET, HOME_JOURNEY_SET // + MATERIAL_SPEC_ADD, HOME_PLANT_ADD
   for (const definition of Object.values(ASK_DOMAIN_COMMAND_REGISTRY)) {
     assert.equal(getAskDomainCommandByOperation(definition.operationId), definition);
     assert.equal(definition.material, true);

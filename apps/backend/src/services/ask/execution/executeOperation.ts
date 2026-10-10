@@ -696,6 +696,10 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   PROPERTY_PURCHASE_DATE_SET: ['MAINTENANCE_STATUS'],
   // The home journey frames every audience-aware answer; the property summary is the one that states it.
   HOME_JOURNEY_SET: ['PROPERTY_SUMMARY'],
+  // A recorded material appears in the material specs list.
+  MATERIAL_SPEC_ADD: ['MATERIAL_SPECS_LIST'],
+  // A new plant changes the care outlook, which was empty or shorter before it.
+  HOME_PLANT_ADD: ['PLANT_CARE_OUTLOOK'],
   // A new item appears in the Property Summary inventory collection and the inventory lookup lists.
   INVENTORY_ITEM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // Answering an area question changes the completeness rows and percentage the Property Summary shows.

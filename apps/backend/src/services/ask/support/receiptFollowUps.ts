@@ -17,6 +17,8 @@ export const RECEIPT_FOLLOW_UPS = {
   SELLER_PREP: { label: 'Show my sale readiness checklist', message: 'Show my sale readiness checklist', operationId: 'SELLER_PREP_CHECKLIST' },
   GUIDED_PLANS: { label: 'Show my guided plan', message: 'Show my guided plan', operationId: 'GUIDANCE_JOURNEYS_LIST' },
   QUOTES: { label: 'Show my quote comparisons', message: 'Show my quote comparisons', operationId: 'QUOTE_COMPARISON_REVIEW' },
+  MATERIAL_SPECS: { label: 'Show my material specs', message: 'Show my material specs', operationId: 'MATERIAL_SPECS_LIST' },
+  PLANT_CARE: { label: 'Show my plant care outlook', message: 'Show my plant care outlook', operationId: 'PLANT_CARE_OUTLOOK' },
   RADAR: { label: 'Show my home event radar', message: 'Show my home event radar feed', operationId: 'HOME_EVENT_RADAR_FEED' },
 } as const;
 export type ReceiptFollowUpKey = keyof typeof RECEIPT_FOLLOW_UPS;

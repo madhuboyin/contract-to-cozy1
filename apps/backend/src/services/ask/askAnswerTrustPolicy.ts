@@ -116,6 +116,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   ROOM_CREATE: new Set(),
   PROPERTY_PURCHASE_DATE_SET: new Set(),
   HOME_JOURNEY_SET: new Set(),
+  MATERIAL_SPEC_ADD: new Set(),
+  HOME_PLANT_ADD: new Set(['add-room-for-plant']),
   INVENTORY_ITEM_CREATE: new Set(['open-inventory', 'open-rooms', 'view-inventory-item']),
   PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['open-property-record', 'continue-area-capture']),
   // Every action id PROPERTY_SUMMARY actually emits: the record link, one secondary "open the full collection"
@@ -138,7 +140,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_HABITS: new Set(['open-home-habit-coach', 'habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list', 'habits-review-first', 'habits-show-maintenance']),
   HOME_HABIT_UPDATE: new Set(['habits-back-to-list']),
   HOME_DIGITAL_WILL: new Set(['open-home-digital-will']),
-  PLANT_CARE_OUTLOOK: new Set(['open-plant-advisor']),
+  PLANT_CARE_OUTLOOK: new Set(['add-home-plant']),
   NEGOTIATION_SHIELD_CASES: new Set(['open-negotiation-shield']),
   HOME_UPGRADE_SCENARIOS: new Set(['open-home-digital-twin']),
   DIY_PROJECTS: new Set(['diy-template-browse']),
@@ -151,7 +153,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker']),
   SERVICE_PRICE_CHECKS: new Set(['open-service-price-radar']),
   HOME_TIMELINE_EVENTS: new Set(),
-  MATERIAL_SPECS_LIST: new Set(),
+  MATERIAL_SPECS_LIST: new Set(['add-material-spec']),
   GUIDANCE_JOURNEYS_LIST: new Set(['open-guidance-overview']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview', 'continue-step-in-ask', 'dismiss-guided-journey']),
   // The answer's next steps (each opens a confirmation, an inline answer, or the home-record check) and the walkthrough's way on and back.

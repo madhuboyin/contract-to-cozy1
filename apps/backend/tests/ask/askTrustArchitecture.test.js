@@ -81,6 +81,8 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     // DIY project start (step 8): the browse is launch-only (from the DIY projects card); the start is confirmation-gated, from a browse row only.
     'DIY_TEMPLATE_BROWSE',
     'MAINTENANCE_TEMPLATES_BROWSE',
+    'MATERIAL_SPEC_ADD',
+    'HOME_PLANT_ADD',
     'DIY_PROJECT_START',
     // Seasonal home care (exact-four starter source): launch-only; seasonal questions route to MAINTENANCE_STATUS.
     'SEASONAL_HOME_CARE',
