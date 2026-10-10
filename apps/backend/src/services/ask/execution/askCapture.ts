@@ -590,6 +590,8 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       execution.message,
       candidate.data,
       typeof parameters.sourceExecutionId === 'string' ? parameters.sourceExecutionId : null,
+      // The form was opened from a recommended-task template: keep the link through to the confirmation.
+      typeof parameters.maintenanceTemplateId === 'string' ? { id: parameters.maintenanceTemplateId } : null,
     );
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;

@@ -127,6 +127,7 @@ export type AskOperationId =
   // DIY project start (docs/architecture/ASK_COZY_DIY_PROJECT_START_PLAN.md, step 8): a read-only card of the reviewed templates this home can start, reached from the DIY projects
   // card, and the confirmation-gated write that starts one, reached only by the row action on that card.
   | 'DIY_TEMPLATE_BROWSE'
+  | 'MAINTENANCE_TEMPLATES_BROWSE'
   | 'DIY_PROJECT_START'
   | 'PROJECT_TRACKER_PROJECTS'
   | 'SERVICE_PRICE_CHECKS'
@@ -346,6 +347,9 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // the row action on a browse row.
   'DIY_TEMPLATE_BROWSE',
   'DIY_PROJECT_START',
+  // Recommended maintenance tasks (the Maintenance Setup catalogue, inside Ask): launch-only, reached by the declared action on a maintenance answer, never by
+  // message (it would compete with MAINTENANCE_STATUS and MAINTENANCE_TASK_CREATE).
+  'MAINTENANCE_TEMPLATES_BROWSE',
   // Seasonal home care (exact-four starter source, inventory D-O4/D-O16): a pure, data-independent read of the general tasks for this
   // home's climate region and season. Reached only by a stored starter's typed launch; not retrievable by message, because seasonal
   // questions already route to MAINTENANCE_STATUS over the homeowner's generated checklist and this must not compete with it.
@@ -557,6 +561,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   DIY_PROJECT_COMPLETE: definition('DIY_PROJECT_COMPLETE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.project-complete', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   DIY_PROJECT_ABANDON: definition('DIY_PROJECT_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.project-abandon', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // Read-only: the strict projection of startable templates (governed, verified, eligible, applicable); writes nothing.
+  MAINTENANCE_TEMPLATES_BROWSE: definition('MAINTENANCE_TEMPLATES_BROWSE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'maintenance.templates-browse', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'EMPTY_STATE', 'BOUNDARY']),
   DIY_TEMPLATE_BROWSE: definition('DIY_TEMPLATE_BROWSE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'diy.template-browse', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'EMPTY_STATE', 'BOUNDARY']),
   DIY_PROJECT_START: definition('DIY_PROJECT_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.project-start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   DIY_COMPLETION_RECOVER: definition('DIY_COMPLETION_RECOVER', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy.completion-recover', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),

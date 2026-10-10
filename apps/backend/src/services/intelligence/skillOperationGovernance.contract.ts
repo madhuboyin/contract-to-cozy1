@@ -80,6 +80,8 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   // Property settings written inside Ask (the purchase date, the home journey): owner-declared actions, confirmation-gated, skill-less. They must
   // stay in this list or the boot-time governance check fails.
   'PROPERTY_PURCHASE_DATE_SET',
+  // Recommended maintenance tasks (launch-only read, skill-less like the other declared-action reads). It must stay in this list or the boot check fails.
+  'MAINTENANCE_TEMPLATES_BROWSE',
   'HOME_JOURNEY_SET',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like SEASONAL_HOME_CARE.
   'HOME_BASICS_GUIDE',

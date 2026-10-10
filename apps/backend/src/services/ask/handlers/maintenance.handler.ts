@@ -5,6 +5,8 @@ import { HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, Recurren
 import { createHash, randomUUID } from 'node:crypto';
 import { maintenanceTaskVersion } from '../suggestedActions/domainVersions';
 import { PURCHASE_DATE_SET_MESSAGE } from '../support/homeSettingsConstants';
+import { MAINTENANCE_TEMPLATE_ADD_ACTION, MAINTENANCE_TEMPLATE_ENTITY_TYPE, MAINTENANCE_TEMPLATES_BROWSE_ACTION } from '../support/maintenanceTemplateConstants';
+import { MaintenanceService } from '../../maintenance.service';
 import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
 import { resolveTypedActionTarget } from '../suggestedActions/typedTarget';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
@@ -240,6 +242,9 @@ export async function maintenanceTaskCreateResult(
   message: string,
   suppliedInput?: MaintenanceTaskWorkflowInput,
   sourceExecutionId?: string | null,
+  // A recommended-task template this add starts from (Maintenance Setup, inside Ask). `prefill` opens the form with the template's values; the id
+  // is carried through the form and the confirmation so the write links the task to its template.
+  template?: { id: string; prefill?: Partial<MaintenanceTaskWorkflowInput> } | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
@@ -259,15 +264,17 @@ export async function maintenanceTaskCreateResult(
     prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }),
     maintenanceWorkflowVersion(propertyId),
   ]);
-  const candidate = suppliedInput ?? extractMaintenanceTaskInput(message, new Date(), safeTimezone(property?.timezone));
+  const templatePrefill = !suppliedInput && template?.prefill ? template.prefill : null;
+  const candidate = suppliedInput ?? templatePrefill ?? extractMaintenanceTaskInput(message, new Date(), safeTimezone(property?.timezone));
   const parsed = MaintenanceTaskWorkflowInputSchema.safeParse(candidate);
-  if (!parsed.success) {
+  // A template opens the form with its values even when they would already pass, so the due date and cost can be set before review.
+  if (!parsed.success || templatePrefill) {
     const currentAnswer = Object.fromEntries(Object.entries(candidate).filter(([, value]) => value !== undefined));
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'MAINTENANCE_TASK_INPUT_REQUIRED', contextVersion: workflowVersion,
-      parameters: { maintenanceWorkflowVersion: workflowVersion, sourceExecutionId: sourceExecutionId ?? null },
+      parameters: { maintenanceWorkflowVersion: workflowVersion, sourceExecutionId: sourceExecutionId ?? null, maintenanceTemplateId: template?.id ?? null },
       blocks: [{
-        type: 'SUMMARY', id: 'maintenance-create-input', title: 'Add the task details',
+        type: 'SUMMARY', id: 'maintenance-create-input', title: template ? 'Review the recommended task' : 'Add the task details',
         body: 'Nothing has been created yet. Add the minimum useful details, then review the task before it is saved.',
         tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open Maintenance instead', href: maintenanceHref, style: 'SECONDARY' }],
       }],
@@ -313,6 +320,7 @@ export async function maintenanceTaskCreateResult(
       maintenanceIsRecurring: parsed.data.isRecurring,
       maintenanceFrequency: parsed.data.frequency ?? null,
       maintenanceWorkflowVersion: workflowVersion,
+      maintenanceTemplateId: template?.id ?? null,
       sourceExecutionId: sourceExecutionId ?? null,
       confirmationVersion,
       confirmationExpiresAt: expiresAt.toISOString(),
@@ -1069,7 +1077,7 @@ export async function maintenanceResult(
     actions: creationFocus && canManage
       ? [
         { id: 'create-maintenance', label: 'Create maintenance task', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' },
-        { id: 'open-maintenance-setup', label: 'Open Maintenance Setup', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'SECONDARY' },
+        { id: MAINTENANCE_TEMPLATES_BROWSE_ACTION.id, label: MAINTENANCE_TEMPLATES_BROWSE_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: MAINTENANCE_TEMPLATES_BROWSE_ACTION.message, operationId: 'MAINTENANCE_TEMPLATES_BROWSE', style: 'SECONDARY' as const },
       ]
       : [
         { id: 'open-maintenance', label: 'Open maintenance', href: maintenanceHref, style: 'PRIMARY' },
@@ -1132,7 +1140,7 @@ export async function maintenanceResult(
       { id: 'view-all-maintenance', label: 'View all in Maintenance', href: maintenanceHref, style: 'SECONDARY' },
       ...(canManage ? [
         { id: 'create-maintenance', label: 'Create a task', interactionType: 'START_WORKFLOW' as const, message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' as const },
-        { id: 'open-maintenance-setup', label: 'Maintenance Setup', href: `/dashboard/maintenance-setup?propertyId=${encodeURIComponent(propertyId)}&from=ask`, style: 'SECONDARY' as const },
+        { id: MAINTENANCE_TEMPLATES_BROWSE_ACTION.id, label: MAINTENANCE_TEMPLATES_BROWSE_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: MAINTENANCE_TEMPLATES_BROWSE_ACTION.message, operationId: 'MAINTENANCE_TEMPLATES_BROWSE', style: 'SECONDARY' as const },
       ] : []),
     ],
   });
@@ -1298,7 +1306,34 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
   };
 }
 
-registerCapabilityHandler('maintenance.create', async (envelope) => maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message, undefined, envelope.launchContext?.sourceExecutionId ?? null));
+registerCapabilityHandler('maintenance.create', async (envelope) => {
+  const sourceExecutionId = envelope.launchContext?.sourceExecutionId ?? null;
+  // The declared "Add to my maintenance" row action on the recommended-task list: the add form, pre-filled from that template.
+  const fromTemplate = envelope.launchContext?.operationId === 'MAINTENANCE_TASK_CREATE'
+    && envelope.launchContext.surface !== 'ASK_REFRESH'
+    && envelope.launchContext.entityType === MAINTENANCE_TEMPLATE_ENTITY_TYPE
+    && Boolean(envelope.launchContext.entityId)
+    && envelope.message === MAINTENANCE_TEMPLATE_ADD_ACTION.message;
+  if (!fromTemplate) return maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message, undefined, sourceExecutionId);
+  const templateId = envelope.launchContext!.entityId as string;
+  const templates = await MaintenanceService.getMaintenanceTemplates(envelope.userId, envelope.propertyId!);
+  const template = (templates as Array<{ id: string; title: string; description: string | null; defaultFrequency: RecurrenceFrequency; applicability?: { status?: string } }>)
+    .find((candidate) => candidate.id === templateId);
+  if (!template || template.applicability?.status !== 'APPLICABLE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'MAINTENANCE_TEMPLATE_UNAVAILABLE',
+      blocks: [{ type: 'SUMMARY', id: 'maintenance-template-unavailable', title: 'That recommended task is not available for this home', body: 'It was removed or no longer fits what is recorded about the home. Nothing was added.', tone: 'CAUTION', actions: [] }],
+      suggestions: [],
+    };
+  }
+  return maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message, undefined, sourceExecutionId, {
+    id: template.id,
+    prefill: {
+      title: template.title.slice(0, 160), description: template.description?.slice(0, 1000) ?? undefined,
+      priority: MaintenanceTaskPriority.MEDIUM, isRecurring: true, frequency: template.defaultFrequency,
+    },
+  });
+});
 
 registerCapabilityHandler('maintenance.status', async (envelope, deps) => {
   const composedContext = deps.composedContext!;

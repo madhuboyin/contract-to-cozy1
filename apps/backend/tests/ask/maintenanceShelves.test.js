@@ -201,3 +201,19 @@ test('a "since I bought" answer without a purchase date offers the in-Ask comman
   const viewer = await invoke(question, 'VIEWER');
   assert.ok(!viewer.blocks.find((block) => block.id === 'maintenance-summary').actions.some((candidate) => candidate.id === 'add-purchase-date'), 'a viewer is not offered a write');
 });
+
+// "Maintenance Setup" was a desktop page; the maintenance answer now offers the in-Ask recommended-task list instead.
+test('the maintenance answer offers the in-Ask recommended-task list to a contributor or owner, with no Maintenance Setup link, and it survives the answer checker', async () => {
+  install([task('flush', { title: 'Flush water heater', nextDueDate: relative(5) })]);
+  const result = await invoke('What maintenance is pending?');
+  const list = result.blocks.find((block) => block.id === 'maintenance-groups');
+  const action = list.actions.find((candidate) => candidate.id === 'maintenance-templates-browse');
+  assert.deepEqual({ label: action.label, interactionType: action.interactionType, message: action.message, operationId: action.operationId, href: action.href },
+    { label: 'Browse recommended tasks', interactionType: 'START_WORKFLOW', message: 'Show the maintenance tasks I could set up.', operationId: 'MAINTENANCE_TEMPLATES_BROWSE', href: undefined });
+  assert.ok(!JSON.stringify(result.blocks).includes('maintenance-setup'), 'no link to the desktop Maintenance Setup page');
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'What maintenance is pending?', operationId: 'MAINTENANCE_STATUS', propertyId: 'p1', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence({ ...result, parameters: { ...(result.parameters ?? {}), audiencePresentation: { householdRole: 'OWNER' } } }, [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')]),
+  });
+  assert.ok(checked.result.blocks.find((block) => block.id === 'maintenance-groups').actions.some((candidate) => candidate.id === 'maintenance-templates-browse'), 'kept by the answer checker');
+});

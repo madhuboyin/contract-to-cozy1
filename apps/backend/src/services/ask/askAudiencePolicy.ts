@@ -159,6 +159,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('DIY_PROJECT_ABANDON', ALL_MODES),
   definePolicy('DIY_COMPLETION_RECOVER', ALL_MODES),
   definePolicy('DIY_TEMPLATE_BROWSE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('MAINTENANCE_TEMPLATES_BROWSE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('DIY_PROJECT_START', ALL_MODES),
   definePolicy('PROJECT_TRACKER_PROJECTS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('SERVICE_PRICE_CHECKS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),

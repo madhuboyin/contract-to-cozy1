@@ -13,6 +13,7 @@ import { householdService } from '../handlers/homeRecordWrites.handler';
 import { reconcileAskExecutionSideEffects, refreshAskSourceExecution } from '../execution/executeOperation';
 import { maintenanceConflictDescription, maintenanceMoney, maintenanceTaskVersion, maintenanceUndoCandidates, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import { receiptFollowUpAction } from '../support/receiptFollowUps';
+import { maintenanceTemplateActionKey } from '../../maintenance/applicabilityPolicy';
 
 async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -139,8 +140,17 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
         : 'ASK_CONFIRMATION_NOT_ACTIVE';
       throw error;
     }
+    // A task added from a recommended template is written under the template's own key (the service enforces applicability and reuses or reactivates
+    // that task), so the same write twice is the same task and no execution-scoped pre-check is needed.
+    const templateId = typeof parameters.maintenanceTemplateId === 'string' ? parameters.maintenanceTemplateId : null;
+    const template = templateId
+      ? await prisma.maintenanceTaskTemplate.findFirst({ where: { id: templateId, isActive: true }, select: { serviceCategory: true } })
+      : null;
+    if (templateId && !template) {
+      throw Object.assign(new Error('That recommended task is no longer available. Nothing was added.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    }
     const actionKey = `ask:${execution.id}:maintenance-task`;
-    let task = await prisma.propertyMaintenanceTask.findUnique({
+    let task = templateId ? null : await prisma.propertyMaintenanceTask.findUnique({
       where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
     });
     if (!task) {
@@ -153,12 +163,12 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
           isRecurring: candidate.data.isRecurring,
           frequency: candidate.data.isRecurring ? candidate.data.frequency : undefined,
           nextDueDate: candidate.data.nextDueDate,
-          actionKey,
+          ...(templateId ? { templateId, serviceCategory: template?.serviceCategory ?? undefined } : { actionKey }),
         });
       } catch (error) {
         if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
         task = await prisma.propertyMaintenanceTask.findUnique({
-          where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey } },
+          where: { propertyId_actionKey: { propertyId: execution.propertyId, actionKey: templateId ? maintenanceTemplateActionKey(templateId) : actionKey } },
         });
         if (!task) throw error;
       }
