@@ -192,26 +192,8 @@ function buildToolMetadata(args: {
 }
 
 const PLATFORM_PRODUCT_TOOL_SEEDS: ProductToolSeed[] = [
-  {
-    key: 'SEASONAL_MAINTENANCE',
-    slug: 'seasonal-maintenance',
-    name: 'Seasonal Maintenance',
-    shortDescription: 'Stay on top of time-sensitive maintenance with a checklist organized around season, climate, and current property needs.',
-    toolType: ProductToolType.FEATURE,
-    status: ProductToolStatus.ACTIVE,
-    routePath: '/dashboard/seasonal',
-    iconName: 'calendar-days',
-    badgeLabel: 'Seasonal',
-    sortOrder: 400,
-    category: 'Seasonal Care',
-    metadata: buildToolMetadata({
-      catalogKey: 'seasonal',
-      routeScope: 'global',
-      propertyScoped: false,
-      surfaces: ['dashboard', 'mobile', 'seasonal'],
-      sourceFiles: ['apps/frontend/src/app/(dashboard)/dashboard/seasonal/page.tsx'],
-    }),
-  },
+  // Seasonal Maintenance is now a registered capability (`seasonal-maintenance`), so the capability projection supplies this tool with the same
+  // key and slug; it is no longer listed here, which would duplicate it.
   {
     key: 'REPORT_PACK',
     slug: 'report-pack',

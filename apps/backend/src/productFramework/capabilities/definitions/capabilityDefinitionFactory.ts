@@ -4,6 +4,7 @@ import {
   type CapabilityRecommendationMode,
   type ToolCapabilityDefinition,
 } from '../capability.contract';
+import { ASK_DISCOVERY_INTENT_ALIASES } from './discoveryIntentAliases';
 import { PERSONALIZATION_DEFINITIONS } from '../../../modules/personalization/catalog/personalizationDefinitions';
 
 // Ask Cozy Stage 3 §23 ("Personalization — expose later... wire once the
@@ -57,6 +58,11 @@ type ContextualDefinition = {
   acceptedContext?: ToolCapabilityDefinition['destination']['acceptedContext'];
   readinessRequirements?: ToolCapabilityDefinition['recommendation']['readinessRequirements'];
 };
+
+function withDiscoveryAliases(capabilityId: string, own: string[]): string[] {
+  const extra = (ASK_DISCOVERY_INTENT_ALIASES[capabilityId] ?? []).filter((alias) => !own.includes(alias));
+  return extra.length ? [...own, ...extra] : own;
+}
 
 const JOB_BY_OUTCOME: Record<
   CapabilityOutcomeCategory,
@@ -554,10 +560,8 @@ export function buildCapabilityDefinition(seed: CapabilitySeed): ToolCapabilityD
       shortDescription: seed.description,
       longDescription: `${seed.description} The capability uses the current Home Record and preserves the homeowner's context across the workflow.`,
       iconName: seed.iconName ?? ICON_BY_OUTCOME[seed.outcomeCategory],
-      intentAliases: seed.intentAliases ?? [
-        seed.label.toLowerCase(),
-        seed.id.replace(/-/g, ' '),
-      ],
+      // The capability's own wording unchanged, then any approved Ask-discovery aliases it does not already have (discoveryIntentAliases.ts).
+      intentAliases: withDiscoveryAliases(seed.id, seed.intentAliases ?? [seed.label.toLowerCase(), seed.id.replace(/-/g, ' ')]),
       outcomeCategory: seed.outcomeCategory,
       badges: seed.releaseStage === 'BETA' ? ['BETA'] : [],
     },

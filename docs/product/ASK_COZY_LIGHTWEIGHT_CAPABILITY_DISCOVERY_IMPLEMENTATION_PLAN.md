@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; Phases 1-4 implemented and pushed; Phases 5-7 decided, not started (Inline Workspace FRD v1.239, Appendix C.12; Capability Discovery FRD v1.4)
+**Status:** Approved product direction; Phases 1-5 built (Phase 5 uncommitted); Phases 6-7 decided, not started (Inline Workspace FRD v1.239, Appendix C.12; Capability Discovery FRD v1.4)
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -263,6 +263,9 @@ Exit: additional capabilities are discoverable without expanding the persistent 
 Phases 1-4 shipped a first shape. The owner then closed three questions (Inline Workspace FRD v1.239, IW-SHELL-020-022; Capability
 Discovery FRD v1.4, CAP-FR-039G-039I). The work below is owed and has not begun.
 
+- **Phase 5 - Binding layer. DONE (October 9, 2026; FRD v1.240 / v1.5).** Built as described, plus: the `seasonal-maintenance` capability,
+  aliases in the capability definitions, a startup validator for the card bindings with three pinned bridge disagreements, and the bridge extended
+  for four operations. "What changed recently" binds to the existing `home-briefing` capability instead of a new one. Original scope follows.
 - **Phase 5 - Binding layer.** Rebuild the explorer registry as a validated binding layer: groups, labels, and aliases derived from the capability
   registry; operation facts from the Ask operation registry; one binding source shared with `askCapabilityCardLaunch.ts`. Prerequisites: a
   capability for seasonal care and a decision for "what changed recently", which have none today; per-entry bindings because one capability has

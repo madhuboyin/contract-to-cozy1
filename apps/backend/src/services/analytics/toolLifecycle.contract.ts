@@ -64,6 +64,9 @@ const DISCOVERABLE_TOOL_IDS = new Set([
   'financing',
   'material-specs',
   'maintenance',
+  // Registered as capabilities without a lifecycle id (environment-report, September 25; seasonal-maintenance, October 9).
+  'environment-report',
+  'seasonal-maintenance',
   'diy',
   'permits',
   'hoa-compliance',

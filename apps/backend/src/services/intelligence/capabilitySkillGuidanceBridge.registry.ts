@@ -19,7 +19,11 @@ import type { CapabilitySkillGuidanceBridgeEntry } from './capabilitySkillGuidan
  * to derive ownership from the canonical Home Action registry.
  */
 const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
-  maintenance: ['MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE', 'HOME_DEADLINE_MONITOR'],
+  maintenance: ['MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE', 'HOME_DEADLINE_MONITOR'],
+  // Capability discovery Phase 5 (2026-10-09): the general seasonal read and the checklist setup it offers belong to the Seasonal Maintenance page.
+  'seasonal-maintenance': ['SEASONAL_HOME_CARE', 'SEASONAL_CHECKLIST_SETUP'],
+  // The Home Briefing reads the same canonical property-change store as HOME_CHANGE_SUMMARY (reconcileCanonicalPropertyChanges / propertyChange).
+  'home-briefing': ['HOME_CHANGE_SUMMARY'],
   'coverage-intelligence': ['COVERAGE_GAPS'],
   'savings-benefits': ['SAVINGS_OPPORTUNITIES'],
   'ownership-costs': ['OWNERSHIP_COSTS'],
@@ -81,7 +85,6 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
  * Ask-reachable.
  */
 const HOME_ACTION_ONLY_CAPABILITY_IDS: readonly string[] = [
-  'home-briefing',
   'permits',
 ];
 

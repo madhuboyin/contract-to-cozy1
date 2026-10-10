@@ -1,86 +1,9 @@
 import { canonicalCapabilityRegistry } from '../../productFramework/capabilities/canonicalCapabilityRegistry';
 import type { AskOperationId } from './askOperationRegistry';
 import { ASK_OPERATION_DEFINITIONS } from './askOperationRegistry';
+import { CARD_ENTRY_BINDINGS } from './askCapabilityBindings';
 
-// These are entry reads, not claims that the corresponding tool journey is
-// inline-complete. Keep this allowlist narrower than the capability registry.
-const INLINE_ENTRY_READS = {
-  maintenance: { operationId: 'MAINTENANCE_STATUS', message: 'Show maintenance tasks for this home' },
-  documents: { operationId: 'DOCUMENT_LOOKUP', message: 'Show documents for this home' },
-  'home-records': { operationId: 'PROPERTY_SUMMARY', message: 'Show this home’s records' },
-  // Capability-card audit (FRD Appendix D), second reference journey
-  // (2026-09-22). Deliberately points at HOME_EVENT_RADAR_FEED, a new
-  // operation reading the real canonical radar feed/detail directly -- NOT
-  // INTELLIGENCE_ENVELOPE_QUERY, which the audit already flagged as not
-  // proof of this specific workflow.
-  'home-event-radar': { operationId: 'HOME_EVENT_RADAR_FEED', message: 'Show my home event radar feed' },
-  // Capability-card audit, first candidate slice (FRD v1.42): the claims-only view of INCIDENT_CLAIM_STATUS, with
-  // inline claim detail and the existing confirmed CLAIM_TRANSITION as declared actions.
-  claims: { operationId: 'INCIDENT_CLAIM_STATUS', message: 'Show my claims' },
-  // Second candidate slice (FRD v1.43): open inspection findings, with inline finding detail and the existing
-  // confirmed INSPECTION_FINDING_UPDATE (accept as work / dismiss / resolve) as declared actions.
-  'inspection-hub': { operationId: 'INSPECTION_FINDINGS', message: 'Show my open inspection findings' },
-  // Third candidate slice (FRD v1.44): the sale readiness checklist, with inline item detail and the existing confirmed
-  // SELLER_PREP_ITEM_DECISION (pursue / stop pursuing / disclose and waive / reopen) as declared actions.
-  'seller-prep': { operationId: 'SELLER_PREP_CHECKLIST', message: 'Check my sale readiness' },
-  // Fourth candidate slice (FRD v1.45): the refinance analysis, which now also shows the homeowner's own rate monitors
-  // with their pause / resume / stop. It has no item list, so there is no inline detail.
-  'mortgage-refinance-radar': { operationId: 'REFINANCE_ANALYSIS', message: 'Is refinancing worth reviewing now?' },
-  // Fifth candidate slice (FRD v1.46), first cut of buyer-closing: the deadlines list, with blocking tasks opening inline
-  // and the existing confirmed BUYER_TASK_COMPLETE as a declared action.
-  'buyer-closing': { operationId: 'BUYER_DEADLINES', message: 'What is due before closing?' },
-  // FRD v1.47: two capabilities the Appendix D audit listed as having no Ask operation, whose page reads the same
-  // canonical source as an existing one. Both are partial (see the FRD row): the reserve plan shows the fund's
-  // shortfall and allocations but not its contributions; the readiness answer covers one renovation case.
-  'reserve-fund': { operationId: 'CAPITAL_RESERVE_PLAN', message: 'How is my reserve fund doing?' },
-  'home-renovation-risk-advisor': { operationId: 'RENOVATION_PERMIT_READINESS', message: 'Is my renovation ready to start?' },
-  // FRD v1.48: backed by a new operation reading the same BreakEvenService the Break-Even page reads.
-  'break-even': { operationId: 'BREAK_EVEN_ANALYSIS', message: 'Show my home break-even analysis' },
-  // FRD v1.49: backed by a new operation reading the same getAroundYourHome the Around Your Home page reads.
-  'neighborhood-change-radar': { operationId: 'NEIGHBORHOOD_CHANGE_FEED', message: "What's changing around my home?" },
-  // FRD v1.50: backed by a new operation reading the same getPastHazardExposure the Home Risk Replay page reads.
-  'home-risk-replay': { operationId: 'PAST_HAZARD_EXPOSURE', message: 'Show my home risk replay' },
-  // FRD v1.51: backed by a new operation reading the same listBoard the Status Board page reads.
-  'status-board': { operationId: 'HOME_STATUS_BOARD', message: 'Show my status board' },
-  // FRD v1.53: backed by a new operation reading the same listActiveHabits the Home Habit Coach page reads.
-  'home-habit-coach': { operationId: 'HOME_HABITS', message: 'Show my home habits' },
-  // FRD v1.54: backed by a new operation reading the same getByProperty the Home Continuity Plan page reads.
-  'home-digital-will': { operationId: 'HOME_DIGITAL_WILL', message: 'Show my home continuity plan' },
-  // FRD v1.55: backed by a new operation reading the same getOutlook Plant Advisor's Care tab reads.
-  'plant-advisor': { operationId: 'PLANT_CARE_OUTLOOK', message: 'Show my plant care outlook' },
-  // FRD v1.56: backed by a new operation reading the same listCasesForProperty the Negotiation Shield case list reads.
-  'negotiation-shield': { operationId: 'NEGOTIATION_SHIELD_CASES', message: 'Show my negotiation shield cases' },
-  // FRD v1.57: backed by a new operation reading the Home Upgrade Planner's saved scenarios (listScenarios).
-  'home-digital-twin': { operationId: 'HOME_UPGRADE_SCENARIOS', message: 'Show my upgrade planner options' },
-  // FRD v1.58: backed by a new operation reading the DIY page's active-project list (listProjects).
-  diy: { operationId: 'DIY_PROJECTS', message: 'Show my DIY projects' },
-  // FRD v1.59: backed by a new operation reading the Project Tracker page's list (listProjects).
-  'project-tracker': { operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my project tracker' },
-  // FRD v1.60: backed by a new operation reading the Service Price Radar page's recent checks (listChecks).
-  'service-price-radar': { operationId: 'SERVICE_PRICE_CHECKS', message: 'Show my service price radar' },
-  // FRD v1.61: backed by a new operation reading the Home Timeline page's events (listHomeEvents).
-  'home-timeline': { operationId: 'HOME_TIMELINE_EVENTS', message: 'Show my home timeline' },
-  // FRD v1.62: backed by a new operation reading the Material Specs page's list (listSpecs).
-  'material-specs': { operationId: 'MATERIAL_SPECS_LIST', message: 'Show my material specs' },
-  // FRD v1.63: backed by a new operation reading the Property Brief page's saved briefs (listPropertyBriefs).
-  'property-brief': { operationId: 'PROPERTY_BRIEFS_LIST', message: 'Show my property briefs' },
-  // FRD v1.64 (product option A): Emergency Help launches the incident and claim follow-up read; the page's AI
-  // troubleshooter is a labelled handoff on that answer, not a model call inside Ask.
-  emergency: { operationId: 'INCIDENT_CONTINUATION', message: 'Follow up on a home emergency' },
-  // FRD v1.65 (product option A): backed by a new operation reading the Guidance Overview page's journeys
-  // (getPropertyGuidance).
-  'guidance-overview': { operationId: 'GUIDANCE_JOURNEYS_LIST', message: 'Show my guided journeys' },
-  // FRD v1.66: backed by a new operation reading the HOA page's association, approval records and violations.
-  'hoa-compliance': { operationId: 'HOA_COMPLIANCE_STATUS', message: 'Show my HOA records' },
-  // FRD v1.67: backed by a new operation reading the Price Finalization page's saved records (listForProperty).
-  'price-finalization': { operationId: 'PRICE_FINALIZATIONS_LIST', message: 'Show my price finalizations' },
-  // FRD v1.68: backed by a new operation reading the Do-Nothing Simulator's latest run and saved scenarios.
-  'do-nothing-simulator': { operationId: 'DO_NOTHING_SIMULATION', message: 'Show my do-nothing simulation' },
-  // FRD v1.70 (product option A): the calculated parts of two Gemini-backed tools, without the model call. The AI
-  // recommendations stay on each page behind a labelled link.
-  oracle: { operationId: 'APPLIANCE_FAILURE_RISK', message: 'Show my appliance oracle' },
-  budget: { operationId: 'MAINTENANCE_BUDGET_FORECAST', message: 'Show my budget planner' },
-} as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
+const INLINE_ENTRY_READS = CARD_ENTRY_BINDINGS;
 
 // FRD v1.70 (product decision, option A): tools whose page runs a fresh AI analysis of something the user supplies and saves
 // nothing, so there is no record for Ask to read. They stay on their pages by design, and the card says so rather than

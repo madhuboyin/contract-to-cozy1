@@ -39,9 +39,9 @@ const EXISTING_STABLE_KEYS = {
 
 test('Knowledge Hub projection includes every canonical capability exactly once', () => {
   const seeds = buildCapabilityProductToolSeeds();
-  assert.equal(seeds.length, 49);
-  assert.equal(new Set(seeds.map((seed) => seed.key)).size, 49);
-  assert.equal(new Set(seeds.map((seed) => seed.slug)).size, 49);
+  assert.equal(seeds.length, 50);
+  assert.equal(new Set(seeds.map((seed) => seed.key)).size, 50);
+  assert.equal(new Set(seeds.map((seed) => seed.slug)).size, 50);
   assert.deepEqual(
     seeds.map((seed) => seed.slug).sort(),
     canonicalCapabilityRegistry.capabilities.map((capability) => capability.id),

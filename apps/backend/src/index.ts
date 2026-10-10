@@ -193,7 +193,7 @@ import { APP_CONFIG_KEYS, isEmailVerificationDisabled } from './config/appConfig
 import { validateAskOperationDefinitions } from './services/ask/askOperationRegistry';
 import { validateAskAudiencePolicies } from './services/ask/askAudiencePolicy';
 import { validateAskDiscoveryTopics } from './services/ask/askDiscoveryTopics';
-import { validateAskExplorerRegistry } from './services/ask/askExplorerRegistry';
+import { validateAskCapabilityBindings, validateAskExplorerRegistry } from './services/ask/askExplorerRegistry';
 import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
 import { validateAskLlmPurposeContracts } from './services/ask/askRemoteFallbackTypedClaims';
 import { validateCapabilityHandlerRegistry } from './services/ask/capabilityHandlerRegistry';
@@ -231,6 +231,7 @@ dotenv.config();
 const askRegistryIssues = [
   ...validateAskOperationDefinitions(),
   ...validateAskAudiencePolicies(),
+  ...validateAskCapabilityBindings(),
   ...validateAskExplorerRegistry(),
   ...validateAskDiscoveryTopics(),
   ...validateAskDomainCommandRegistry(),

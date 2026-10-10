@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.4 |
+| Version | 1.5 |
 | Date | October 9, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
@@ -14,6 +14,8 @@
 | Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
+
+**Revision 1.5 — Binding layer built (CAP-FR-039G); two capabilities' status recorded (owner decision "option 1", 2026-10-09):** the Ask explorer registry now derives each entry's outcome group, label, and search aliases from the capability registry, takes operation facts from the Ask operation registry, and keeps only Ask-specific facts in a single binding file shared with the capability-card launches. CAP-FR-033 and CAP-FR-038 now hold as written. **Capability changes made to do it:** `seasonal-maintenance` is registered (route `/dashboard/seasonal`, replacing the Knowledge Hub's explicit "Seasonal Maintenance" entry under the same key and slug), and the approved Ask-discovery aliases are merged into existing capabilities' intent aliases from one reviewed map; they are noun phrases, because question-shaped aliases made the Explore Tools goal matcher misread generic messages. **Departure from the decision as worded:** "what changed recently" was not given a new capability, since the registered `home-briefing` capability reads the same canonical property-change store, and a duplicate capability would have been wrong. The registration also repaired pre-existing drift (the Environment Report lacked a parity-inventory row, a lifecycle id, and updated pinned counts). §7.5.1 records what remains: the lifecycle telemetry (CAP-FR-039H) and the target selectors (CAP-FR-039I) are still unbuilt.
 
 **Revision 1.4 — Open questions 10–12 closed (owner decisions, 2026-10-09; nothing built yet):** (10) **Canonical sources:** the capability registry stays canonical for identity and version, outcome group, homeowner label and description, approved intent aliases, and the completion definition; the Ask operation registry stays canonical for availability, audience, authorization, safety, and launch behavior; the Ask explorer registry becomes a validated **binding layer** holding only Ask-specific facts, with groups and aliases derived from the capability registry. This makes CAP-FR-033 and CAP-FR-038 hold as written and the 1.3 build a non-conforming first shape. (11) **Telemetry:** the `ask_discovery_*` events stay for exposure and the canonical lifecycle stages are added for what the selected capability then did, joined by bounded identifiers; an answered execution is not a completed capability. (12) **Pickers:** "Add a missing detail" and "Continue a project" wait for a reusable, domain-owned Ask target-selection contract with an area selector and a project selector. New requirements CAP-FR-039G–039I record these. Implementation obstacles found while reading the registries are in §7.5.1.
 
@@ -458,10 +460,20 @@ Differences from this document found in the 1.3 build, and how the owner closed 
 
 | Difference | Built in 1.3 | Decision (1.4) | Work still owed |
 | --- | --- | --- | --- |
-| Inventory source | A dedicated Ask explorer registry holds each entry's group, label, message, operation, launch policy, aliases, and consequence; the capability catalog only decides which outcome groups appear. | Derive from the canonical registries. The explorer registry becomes a validated binding layer (CAP-FR-039G). CAP-FR-038 stands as written. | Rebuild; the 1.3 shape does not conform. |
-| Approved aliases | Declared per entry in the explorer registry. | Derived from the capability definition's intent aliases; CAP-FR-033 stands as written. | Remove the duplicated aliases. |
+| Inventory source | A dedicated Ask explorer registry holds each entry's group, label, message, operation, launch policy, aliases, and consequence; the capability catalog only decides which outcome groups appear. | Derive from the canonical registries. The explorer registry becomes a validated binding layer (CAP-FR-039G). CAP-FR-038 stands as written. | **Done (1.5).** The explorer registry derives from the canonical registries; see below. |
+| Approved aliases | Declared per entry in the explorer registry. | Derived from the capability definition's intent aliases; CAP-FR-033 stands as written. | **Done (1.5).** Aliases come from the capability definitions (one reviewed map merged by the factory). |
 | Selection telemetry | `ask_discovery_*` and `ask_explorer_search` events with bounded identifiers. | Keep them, and add the canonical lifecycle stages joined by bounded identifiers (CAP-FR-039H). | Build the correlation and an authoritative outcome signal. |
 | Ideas needing a chosen entity | "Add a missing detail" and "Continue a project" are not offered. | Enable only through reusable, domain-owned target selectors (CAP-FR-039I); omit until then. | Build the selector contract, the area selector, and the project selector. |
+
+**Built in 1.5 (Phase 5).** The binding layer is `askCapabilityBindings.ts` (the discovery bindings and the capability-card entry reads, one source) and the derivation and validators are in `askExplorerRegistry.ts`; both validators run at startup. A binding is rejected for an unknown capability or operation, for restating canonical metadata, for a label that merely repeats the capability's own, for a workflow-only capability, and when the guidance bridge assigns its operation to a different capability. Findings while building it:
+
+- A registered capability is a tool-catalog commitment: dashboard route, rollout key, lifecycle id, parity-inventory row (regenerated by script), Knowledge Hub product tool, and regenerated seed SQL, and it appears in Explore Tools. The seed SQL embeds the registry version, so any capability metadata change, including aliases, makes it stale until regenerated and run.
+- `seasonal-maintenance` was added; the Knowledge Hub's explicit entry for the same page was removed so the projection supplies it with the same key and slug.
+- "What changed recently" binds to the existing `home-briefing` capability, not a new one.
+- The guidance bridge was extended for `MAINTENANCE_FORECAST`, `HOME_CHANGE_SUMMARY`, `SEASONAL_HOME_CARE`, and `SEASONAL_CHECKLIST_SETUP`. A capability that now owns exactly one operation becomes that capability's unique launch operation, so `home-briefing` now routes a capability-id launch to the change summary.
+- Three existing card bindings disagree with the bridge and are pinned in a tested allowlist rather than changed: `documents` (no bridge entry for `DOCUMENT_LOOKUP`), `home-records` (the bridge assigns `PROPERTY_SUMMARY` to `property-brief`), and `reserve-fund` (the bridge assigns `CAPITAL_RESERVE_PLAN` to `capital-timeline`).
+- Deriving groups moved DIY under Plan and monitor and coverage gaps under Compare and decide. "Compare contractor quotes" was dropped because `quote-comparison` is workflow-only (CAP-FR-035).
+- The six explorer group titles remain Ask wording over the canonical outcome categories; the frontend Explore Tools catalog restates the same titles, so there is no single backend home for them yet.
 
 Obstacles to the rebuild, found by reading the registries on October 9, 2026:
 
