@@ -1106,7 +1106,7 @@ export async function maintenanceResult(
     // "urgent" here is the existing canonical interpretation (URGENT or HIGH
     // priority, not URGENT alone), so it is labeled accurately rather than
     // implying a narrower or newly-invented urgency score.
-    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing ${MAX_RESULT_ITEMS}-item server pages when a section exceeds that size.${
+    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone.replace(/_/g, ' ')}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing ${MAX_RESULT_ITEMS}-item server pages when a section exceeds that size.${
       // ASK_COZY_INTERACTION_MODEL_UI_FRD HAND-002: the Maintenance page
       // now receives priority/overdue/due-soon/system, but has no
       // date-range or room filter UI at all -- disclose that explicitly

@@ -159,3 +159,20 @@ test('the answer checker passes the shelves answer through intact: chips, patter
   assert.deepEqual(list.sections.map((section) => section.id), ['overdue', 'due-soon']);
   assert.deepEqual(list.sections[0].items[0].actions.map((action) => action.id), ['why-important', 'complete', 'reschedule', 'remove']);
 });
+
+// Field report: "What maintenance tasks are due this month?" answered "I couldn't verify this answer". The date-filter line named the property's IANA zone
+// ("America/New_York"), and the answer checker reads `New_York` as a leaked internal token. Zones with an underscore (New_York, Los_Angeles, ...) failed.
+test('a date-filtered answer for an underscore time zone passes the answer checker, with the zone written for a person', async () => {
+  install([task('flush', { title: 'Flush water heater', nextDueDate: relative(5) })]);
+  const question = 'What maintenance tasks are due this month?';
+  const result = await invoke(question);
+  const list = result.blocks.find((block) => block.id === 'maintenance-groups');
+  assert.match(list.description, /Date filter: .+ in America\/New York\./);
+  assert.doesNotMatch(list.description, /_/);
+  const checked = validateAskAnswerTrustPipeline({
+    question, operationId: 'MAINTENANCE_STATUS', propertyId: 'p1', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')]),
+  });
+  assert.equal(checked.result.status, result.status);
+  assert.ok(!checked.trust.reasonCodes.includes('INTERNAL_PRESENTATION_TOKEN'));
+});
