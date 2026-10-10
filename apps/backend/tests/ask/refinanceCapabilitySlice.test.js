@@ -99,7 +99,7 @@ test('the monitor block survives the answer-trust validator and whitelist for RE
   // Action applicability needs the source evidence the pipeline attaches later, so the whitelist is checked directly.
   const block = result.blocks.find((candidate) => candidate.type === 'MONITOR');
   for (const operationId of ['REFINANCE_ANALYSIS', 'REFINANCE_RATE_MONITOR']) {
-    assert.equal(isAskActionApplicable({ action: block.actions[0], operationId, propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, operationId);
+    assert.equal(isAskActionApplicable({ action: block.actions[0], operationId, propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false, operationId);
   }
 });
 

@@ -106,7 +106,7 @@ test('every block and the boundary survive the answer-trust validator, and the p
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'property-brief.briefs', operationId: 'PROPERTY_BRIEFS_LIST', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: NOW.toISOString() }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my property briefs', operationId: 'PROPERTY_BRIEFS_LIST', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PROPERTY_BRIEFS_LIST', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PROPERTY_BRIEFS_LIST', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
 });
 
 test('saved-brief questions route here; preparing, sharing or revoking a brief and a brief home summary are not claimed', () => {

@@ -278,7 +278,7 @@ test('the review actions, the receipt action and the empty-state link survive th
   assert.deepEqual(list.blocks.flatMap((block) => block.actions ?? []).map((action) => action.id), ['habits-review-first', 'habits-show-maintenance'], 'the list\'s next steps must be allowlisted');
   assert.ok(list.blocks.some((block) => block.id === 'home-habits-boundary'));
   const empty = validate('HOME_HABITS', homeHabitsFromView({ habits: [], hasMore: false, nextCursor: null }, 'p1', NOW));
-  assert.deepEqual(empty.blocks[0].actions.map((action) => action.id), ['open-home-habit-coach']);
+  assert.deepEqual(empty.blocks[0].actions.map((action) => action.id), []);
   const { result: receipt } = await confirm(await proposed('ADOPT'));
   assert.deepEqual(validate('HOME_HABIT_UPDATE', receipt).blocks[0].actions.map((action) => action.id), ['habits-back-to-list']);
   const boundary = validate('HOME_HABIT_UPDATE', await propose('COMPLETE', { surface: 'ASK_REFRESH' }));

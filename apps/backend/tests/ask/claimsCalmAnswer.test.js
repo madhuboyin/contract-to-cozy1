@@ -96,6 +96,6 @@ test('the answer survives the answer-trust validator with its boundary and the n
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my incidents and claims', operationId: 'INCIDENT_CLAIM_STATUS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
   for (const id of ['open-incidents-list', 'open-claims-list']) {
-    assert.equal(isAskActionApplicable({ action: { id, label: 'x', href: '/x', style: 'SECONDARY' }, operationId: 'INCIDENT_CLAIM_STATUS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true, id);
+    assert.equal(isAskActionApplicable({ action: { id, label: 'x', href: '/x', style: 'SECONDARY' }, operationId: 'INCIDENT_CLAIM_STATUS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false, id);
   }
 });

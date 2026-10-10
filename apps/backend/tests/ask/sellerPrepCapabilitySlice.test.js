@@ -114,12 +114,12 @@ test('a checklist with only pursued or waived items still lists them, so Stop pu
   assert.deepEqual(block.sections.map((section) => section.id), ['seller-prep-pursuing', 'seller-prep-waived']);
 });
 
-test('the decision actions and the checklist link survive the answer-trust whitelist (neither seller-prep operation had an entry)', () => {
+test('the typed decision actions are whitelisted and the desktop checklist link is not', () => {
   const link = { id: 'open-seller-prep', label: 'Open sale readiness checklist', href: '/dashboard/properties/p1/tools/sale-case', style: 'SECONDARY' };
   for (const action of [...sellerPrepItemActions('OWNER'), link]) {
-    assert.equal(isAskActionApplicable({ action, operationId: 'SELLER_PREP_CHECKLIST', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, action.id);
+    assert.equal(isAskActionApplicable({ action, operationId: 'SELLER_PREP_CHECKLIST', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), !action.href, action.id);
   }
-  assert.equal(isAskActionApplicable({ action: link, operationId: 'SELLER_PREP_ITEM_DECISION', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: link, operationId: 'SELLER_PREP_ITEM_DECISION', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
 });
 
 test('the seller-prep capability card launches inline, and the bridge registry now maps it to both operations', () => {

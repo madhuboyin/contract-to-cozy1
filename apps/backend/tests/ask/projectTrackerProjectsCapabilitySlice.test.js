@@ -105,7 +105,7 @@ test('every block and the boundary survive the answer-trust validator, and the p
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'project-tracker.projects', operationId: 'PROJECT_TRACKER_PROJECTS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my project tracker', operationId: 'PROJECT_TRACKER_PROJECTS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PROJECT_TRACKER_PROJECTS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PROJECT_TRACKER_PROJECTS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
 });
 
 test('project phrasing routes here; DIY projects and renovation permit readiness do not', () => {

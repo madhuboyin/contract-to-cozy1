@@ -195,7 +195,7 @@ test('every block survives the answer-trust validator, and each page link the wh
     const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId, operationId, status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
     const { result: validated } = validateAskAnswerTrust({ question: message, operationId, result, propertyId: 'p1' });
     assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id), operationId);
-    assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId, propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, operationId);
+    assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId, propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false, operationId);
   }
 });
 
@@ -244,7 +244,8 @@ test('the full answer checker, with answer relevance on, keeps the lifespan answ
     assert.equal(checked.result.status, 'ANSWERED', `${question}: ${JSON.stringify(checked.semantic)} ${JSON.stringify(checked.trust.reasonCodes)}`);
     const lifespan = checked.result.blocks.find((block) => block.id === 'appliance-oracle-items');
     assert.deepEqual(lifespan.missingAge[0].actions.map((action) => action.id), ['correct-purchasedOn'], question);
-    assert.equal(checked.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'), false, JSON.stringify(checked.trust.reasonCodes));
+    // The in-Ask capture stays; only the desktop Appliance Oracle link is removed.
+    assert.equal(checked.trust.reasonCodes.includes('DISALLOWED_BLOCK_REMOVED'), false, JSON.stringify(checked.trust.reasonCodes));
   }
 });
 

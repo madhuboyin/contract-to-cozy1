@@ -64,7 +64,7 @@ test('with no renovation case, "Start renovation planning" opens the Renovations
 
 test('the reserve-allocations "Open Reserve Fund" link survives the whitelist (it was always stripped)', () => {
   const action = { id: 'open-reserve-fund', label: 'Open Reserve Fund', href: '/dashboard/properties/p1/tools/reserve-fund', style: 'SECONDARY' };
-  assert.equal(isAskActionApplicable({ action, operationId: 'CAPITAL_RESERVE_PLAN', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action, operationId: 'CAPITAL_RESERVE_PLAN', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
 });
 
 test('reserve-fund and the renovation advisor launch inline, and their messages route to those operations', () => {

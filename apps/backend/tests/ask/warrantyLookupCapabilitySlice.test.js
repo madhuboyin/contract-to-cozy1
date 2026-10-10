@@ -186,7 +186,7 @@ test('every block survives the answer-trust validator and the page links the act
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my warranties', operationId: 'WARRANTY_LOOKUP', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
   for (const id of ['open-warranties', 'open-warranties-list']) {
-    assert.equal(isAskActionApplicable({ action: { id, label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' }, operationId: 'WARRANTY_LOOKUP', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true, id);
+    assert.equal(isAskActionApplicable({ action: { id, label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' }, operationId: 'WARRANTY_LOOKUP', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false, id);
   }
 });
 

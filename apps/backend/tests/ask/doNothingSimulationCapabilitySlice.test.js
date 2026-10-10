@@ -120,7 +120,7 @@ test('every block and the boundary survive the answer-trust validator, and the p
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'do-nothing-simulator.latest', operationId: 'DO_NOTHING_SIMULATION', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my do-nothing simulation', operationId: 'DO_NOTHING_SIMULATION', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'DO_NOTHING_SIMULATION', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'DO_NOTHING_SIMULATION', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
 });
 
 test('cost-of-waiting questions route here; running or editing a simulation and one item\'s decision are not claimed', () => {

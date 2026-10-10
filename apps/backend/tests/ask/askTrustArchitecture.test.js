@@ -267,14 +267,17 @@ test('confirmed command completions receive audience presentation, source eviden
     },
   });
   assert.equal(checked.result.status, 'COMPLETED');
-  assert.equal(checked.trust.outcome, 'PASS');
+  // The receipt stays; its desktop links do not (Ask is the product surface), which makes the result REPAIRABLE.
+  assert.equal(checked.trust.outcome, 'REPAIRABLE');
+  assert.deepEqual(checked.result.blocks.find((block) => block.type === 'WORKFLOW_PROGRESS').actions, []);
+  assert.equal(checked.result.blocks.find((block) => block.type === 'OUTPUT_ARTIFACTS').items[0].navigation, null);
   assert.equal(checked.result.blocks.find((block) => block.type === 'OUTPUT_ARTIFACTS').items[0].artifactId, 'task-1');
   assert.equal(checked.trust.checks.sourceIntegrity, 'PASS');
   assert.equal(checked.result.parameters.audiencePresentation.householdRole, 'CONTRIBUTOR');
   assert.equal(checked.result.parameters.answerTrustEvidence.sources[0].sourceId, 'maintenance.create');
 });
 
-test('quote workspace output keeps the no-selection receipt visible and property-checks canonical navigation', () => {
+test('quote workspace output keeps the no-selection receipt visible and carries no desktop navigation', () => {
   const result = {
     status: 'COMPLETED', reasonCode: 'QUOTE_COMPARISON_REUSED',
     blocks: [{
@@ -291,9 +294,9 @@ test('quote workspace output keeps the no-selection receipt visible and property
   const checked = validateAskConfirmedCompletion({
     question: 'Create a quote comparison workspace for plumbing bids', operationId: 'QUOTE_COMPARISON_CREATE', propertyId: 'home-1', householdRole: 'CONTRIBUTOR', result,
   });
-  assert.equal(checked.trust.outcome, 'PASS');
+  assert.equal(checked.trust.outcome, 'REPAIRABLE');
   assert.match(checked.result.blocks.find((block) => block.type === 'WORKFLOW_PROGRESS').description, /No provider or quote was selected/);
-  assert.equal(checked.result.blocks.find((block) => block.type === 'OUTPUT_ARTIFACTS').items[0].navigation.href, '/dashboard/properties/home-1/tools/quote-comparison?workspaceId=workspace-1');
+  assert.equal(checked.result.blocks.find((block) => block.type === 'OUTPUT_ARTIFACTS').items[0].navigation, null);
 
   const wrongProperty = validateAskConfirmedCompletion({
     question: 'Create a quote comparison workspace for plumbing bids', operationId: 'QUOTE_COMPARISON_CREATE', propertyId: 'home-2', householdRole: 'CONTRIBUTOR', result,
@@ -303,7 +306,7 @@ test('quote workspace output keeps the no-selection receipt visible and property
   assert.match(wrongProperty.result.blocks.find((block) => block.type === 'WORKFLOW_PROGRESS').description, /No provider or quote was selected/);
 });
 
-test('related-record navigation is preserved only for the authorized property', () => {
+test('related-record navigation to a desktop page is removed, for the authorized property too', () => {
   const result = {
     status: 'COMPLETED', reasonCode: 'EVIDENCE_ATTACHED',
     blocks: [{ type: 'SUMMARY', id: 'attached', title: 'Attached to your home timeline', body: 'The document is now attached.', tone: 'POSITIVE', actions: [] }, {
@@ -318,8 +321,8 @@ test('related-record navigation is preserved only for the authorized property', 
   const checked = validateAskConfirmedCompletion({
     question: 'Attach the roof invoice to that event', operationId: 'CAPTURE_EVIDENCE_CONFIRM', propertyId: 'home-1', householdRole: 'CONTRIBUTOR', result,
   });
-  assert.equal(checked.trust.outcome, 'PASS');
-  assert.equal(checked.result.blocks.find((block) => block.type === 'RELATED_RECORDS').relationships[0].navigation.href, '/dashboard/properties/home-1/timeline');
+  assert.equal(checked.trust.outcome, 'REPAIRABLE');
+  assert.equal(checked.result.blocks.find((block) => block.type === 'RELATED_RECORDS').relationships[0].navigation, null);
 
   const mismatched = validateAskConfirmedCompletion({
     question: 'Attach the roof invoice to that event', operationId: 'CAPTURE_EVIDENCE_CONFIRM', propertyId: 'home-2', householdRole: 'CONTRIBUTOR', result,
@@ -417,7 +420,7 @@ test('buyer "is anything putting my closing at risk" answer passes the semantic 
   assert.equal(noBlockers.result.status, 'ANSWERED');
 });
 
-test('every BUYER_* operation keeps its navigation action and professional boundary through the trust filter', () => {
+test('every BUYER_* operation keeps its professional boundary through the trust filter and loses its desktop navigation action', () => {
   const cases = [
     { operationId: 'BUYER_PLAN_STATUS', actionId: 'open-next-buyer-task', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/buyer-plan?taskId=t1' },
     { operationId: 'BUYER_DEADLINES', actionId: 'open-buyer-plan', boundaryId: 'buyer-professional-boundary', href: '/dashboard/properties/property-1/buyer-plan' },
@@ -443,8 +446,8 @@ test('every BUYER_* operation keeps its navigation action and professional bound
       question: 'test question', operationId, semanticEnabled: false, propertyId: 'property-1',
       result: attachAskAuthoritativeSourceEvidence({ status: 'ANSWERED', blocks, suggestions: [] }, operationId),
     });
-    assert.equal(result.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'), false, `${operationId}: action ${actionId} was stripped`);
-    assert.equal(result.result.blocks[0].actions.length, 1, `${operationId}: expected the navigation action to survive`);
+    assert.equal(result.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'), true, `${operationId}: action ${actionId} should be removed`);
+    assert.equal(result.result.blocks[0].actions.length, 0, `${operationId}: no desktop navigation action may survive`);
     if (boundaryId) {
       assert.equal(result.trust.reasonCodes.includes('INAPPLICABLE_BOUNDARY_REMOVED'), false, `${operationId}: boundary ${boundaryId} was stripped`);
       assert.equal(result.result.blocks.some((block) => block.type === 'BOUNDARY'), true, `${operationId}: expected the boundary block to survive`);
@@ -452,7 +455,7 @@ test('every BUYER_* operation keeps its navigation action and professional bound
   }
 });
 
-test('every read-oriented BUYER_* operation\'s realistic answer states pass the semantic trust pipeline with a working navigation action', () => {
+test('every read-oriented BUYER_* operation\'s realistic answer states pass the semantic trust pipeline with no desktop navigation action', () => {
   const planHref = '/dashboard/properties/prop-1/buyer-plan';
   const cases = [
     { operationId: 'BUYER_DOCUMENT_READINESS', question: 'Which transaction documents are missing before closing?', status: 'READY_WITH_LIMITATIONS', title: '2 transaction documents still need review', body: '5 documents recorded, 3 verified, 2 needing review. This reflects only what has been uploaded — it is not a guarantee that every closing document has been requested.', actionId: 'open-documents', href: '/dashboard/properties/prop-1/documents' },
@@ -485,11 +488,11 @@ test('every read-oriented BUYER_* operation\'s realistic answer states pass the 
     });
     const label = `${c.operationId} / "${c.title}"`;
     assert.ok(['PASS', 'REPAIRABLE'].includes(result.trust.outcome), `${label}: expected trust PASS/REPAIRABLE, got ${result.trust.outcome} (${JSON.stringify(result.trust.reasonCodes)})`);
-    assert.equal(result.result.blocks[0].actions.length, 1, `${label}: expected the navigation action to survive`);
+    assert.equal(result.result.blocks[0].actions.length, 0, `${label}: no desktop navigation action may survive`);
   }
 });
 
-test('NOT_APPLICABLE, BLOCKED, NEEDS_ENTITY, and NEEDS_CONFIRMATION results keep their navigation action once evidence is attached', () => {
+test('NOT_APPLICABLE, BLOCKED, NEEDS_ENTITY, and NEEDS_CONFIRMATION results keep their status and lose a desktop navigation action', () => {
   for (const status of ['NOT_APPLICABLE', 'BLOCKED', 'NEEDS_ENTITY', 'NEEDS_CONFIRMATION']) {
     const result = validateAskAnswerTrustPipeline({
       question: 'Complete this closing checklist item', operationId: 'BUYER_TASK_COMPLETE', semanticEnabled: false, propertyId: 'prop-1',
@@ -500,7 +503,7 @@ test('NOT_APPLICABLE, BLOCKED, NEEDS_ENTITY, and NEEDS_CONFIRMATION results keep
       }, 'BUYER_TASK_COMPLETE'),
     });
     assert.equal(result.result.status, status, `status should pass through unchanged for ${status}`);
-    assert.equal(result.result.blocks[0].actions.length, 1, `${status}: navigation action should survive once evidence is attached`);
+    assert.equal(result.result.blocks[0].actions.length, 0, `${status}: a desktop navigation action may not survive`);
   }
 });
 

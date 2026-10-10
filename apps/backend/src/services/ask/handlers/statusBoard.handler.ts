@@ -70,7 +70,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
       ? `${count('ACTION_NEEDED')} need action, ${count('MONITOR')} to monitor, ${count('GOOD')} in good shape`
       : 'Nothing is on the Status Board yet',
     body: total
-      ? `Across ${total} recorded appliance${total === 1 ? '' : 's'} and system${total === 1 ? '' : 's'}${truncated ? ` (counts cover the ${items.length} shown)` : ''}.`
+      ? `On your Status Board, across ${total} recorded appliance${total === 1 ? '' : 's'} and system${total === 1 ? '' : 's'}${truncated ? ` (counts cover the ${items.length} shown)` : ''}.`
       : 'The Status Board tracks appliances and systems recorded in Inventory. Add them there to see their condition here.',
     tone: count('ACTION_NEEDED') ? 'CAUTION' : 'DEFAULT',
     actions: [{ id: 'open-status-board', label: 'Open Status Board', href: pageHref, style: 'PRIMARY' }],

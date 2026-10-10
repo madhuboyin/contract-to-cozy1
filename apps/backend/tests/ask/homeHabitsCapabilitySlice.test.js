@@ -126,7 +126,7 @@ test('every block and the boundary survive the answer-trust validator, and the e
   // With habits listed the summary carries no page link; only the empty state does, and that link stays allowlisted.
   assert.deepEqual(result.blocks[0].actions, []);
   const emptyLink = homeHabitsFromView(view({ habits: [] }), 'p1', NOW).blocks[0].actions[0];
-  assert.equal(isAskActionApplicable({ action: emptyLink, operationId: 'HOME_HABITS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: emptyLink, operationId: 'HOME_HABITS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
 });
 
 test('habit phrasing routes here; maintenance due, next actions and the status board do not', () => {

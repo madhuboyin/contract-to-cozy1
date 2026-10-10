@@ -162,7 +162,7 @@ export function validateAskAnswerTrust(input: {
     return !actionApplicable(action);
   })) || blocks.some((block) => nestedAskHrefs(block).some((href) => source === 'UNAVAILABLE' || !isAskHrefSafeForProperty(href, input.propertyId)));
   if (invalidAction) {
-    blocks = blocks.map((block) => {
+    const repairBlock = (block: AskPresentationBlock): AskPresentationBlock => {
       if (block.type === 'PRIORITY_LIST') {
         return { ...block, items: block.items.map((item) => ({
           ...item, cta: item.cta && isAskActionApplicable({
@@ -209,6 +209,15 @@ export function validateAskAnswerTrust(input: {
       return 'actions' in block && Array.isArray(block.actions)
         ? { ...block, actions: block.actions.filter(actionApplicable) } as AskPresentationBlock
         : block;
+    };
+    // A block's own actions lose a link that leaves Ask whatever else its type repairs (a list or priority list keeps no desktop button after its
+    // items lose their links). Only the link is judged here: a typed in-Ask action on those blocks was never subject to the allowlist and stays so.
+    const leavesAsk = (action: ReturnType<typeof actionsForAskBlock>[number]) => Boolean(action.href) && !isAskHrefSafeForProperty(action.href as string, input.propertyId);
+    blocks = blocks.map((block) => {
+      const repaired = repairBlock(block);
+      return 'actions' in repaired && Array.isArray(repaired.actions)
+        ? { ...repaired, actions: repaired.actions.filter((action) => !leavesAsk(action)) } as AskPresentationBlock
+        : repaired;
     }).filter((block) => block.type !== 'CAPABILITY_LIST' || block.capabilities.length > 0);
     repaired = true;
     reasonCodes.push('INAPPLICABLE_ACTION_REMOVED');

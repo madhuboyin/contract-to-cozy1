@@ -105,7 +105,7 @@ test('every block type and the boundary survive the answer-trust validator, and 
   const { result: validated } = validateAskAnswerTrust({ question: 'When will my home break even?', operationId: 'BREAK_EVEN_ANALYSIS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
   for (const action of result.blocks[0].actions) {
-    assert.equal(isAskActionApplicable({ action, operationId: 'BREAK_EVEN_ANALYSIS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true, action.id);
+    assert.equal(isAskActionApplicable({ action, operationId: 'BREAK_EVEN_ANALYSIS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), !action.href, action.id);
   }
 });
 

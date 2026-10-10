@@ -92,7 +92,9 @@ test('record-owned enum-like maintenance titles do not invalidate the answer', (
       [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')],
     ),
   });
-  assert.equal(validation.trust.outcome, 'PASS');
+  // Record-owned titles are not internal tokens; the only repair is the removed desktop task link.
+  assert.ok(!validation.trust.reasonCodes.includes('INTERNAL_PRESENTATION_TOKEN'));
+  assert.notEqual(validation.trust.outcome, 'BLOCK');
   assert.equal(validation.result.status, 'ANSWERED');
 });
 

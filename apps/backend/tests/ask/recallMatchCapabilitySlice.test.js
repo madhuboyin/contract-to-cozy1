@@ -160,9 +160,9 @@ test('match rows carry every live-state action for contributors; viewers get rea
   assert.deepEqual((await list()).sections[0].items[0].actions, []);
 });
 
-test('the match actions and the recalls link survive the answer-trust whitelist', () => {
+test('the typed match actions are whitelisted and the desktop recalls link is not', () => {
   for (const action of [...recallMatchItemActions('OWNER'), { id: 'open-recalls', label: 'Open Recalls & Safety Alerts', href: '/dashboard/properties/p1/recalls', style: 'SECONDARY' }]) {
-    assert.equal(isAskActionApplicable({ action, operationId: 'RECALL_REVIEW', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, action.id);
+    assert.equal(isAskActionApplicable({ action, operationId: 'RECALL_REVIEW', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), !action.href, action.id);
   }
 });
 

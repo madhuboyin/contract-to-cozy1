@@ -80,20 +80,20 @@ test('with no legacy rows the answer says nothing about an older vault', async (
   assert.doesNotMatch(summary(result).supportLine ?? '', /older Documents vault/);
 });
 
-test('the Open Home Records link and the boundary survive the trust validator', async () => {
+test('the boundary survives the trust validator and the desktop Open Home Records links do not', async () => {
   install([record('r1', 'INVOICE', '2026-09-03')]);
   const raw = await run();
   const validated = validateAskAnswerTrust({
     question: 'Show my documents', operationId: 'DOCUMENT_LOOKUP', propertyId: 'p1',
     result: attachAskAuthoritativeSourceEvidence(raw, [completedAskAuthoritativeSourceEvidence('DOCUMENT_LOOKUP')]),
   });
-  assert.deepEqual(summary(validated.result).actions.map((action) => action.id), ['open-documents']);
-  assert.deepEqual(list(validated.result).actions.map((action) => action.id), ['open-documents-list']);
+  assert.deepEqual(summary(validated.result).actions.map((action) => action.id), []);
+  assert.deepEqual(list(validated.result).actions.map((action) => action.id), []);
   assert.ok(validated.result.blocks.some((block) => block.id === 'document-lookup-boundary'));
-  assert.ok(!validated.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'));
+  assert.ok(validated.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'));
 });
 
-test('an empty record is not read as "nothing exists", keeps its page link and states what the answer shows', async () => {
+test('an empty record is not read as "nothing exists", offers no desktop link and states what the answer shows', async () => {
   install([], []);
   const result = await run();
   assert.equal(result.blocks[0].id, 'document-lookup-empty');
@@ -102,5 +102,5 @@ test('an empty record is not read as "nothing exists", keeps its page link and s
     question: 'Show my documents', operationId: 'DOCUMENT_LOOKUP', propertyId: 'p1',
     result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('DOCUMENT_LOOKUP')]),
   });
-  assert.deepEqual(validated.result.blocks[0].actions.map((action) => action.id), ['open-documents']);
+  assert.deepEqual(validated.result.blocks[0].actions.map((action) => action.id), []);
 });

@@ -92,7 +92,8 @@ test('audience explanation remains visible instead of becoming a blank card', ()
   });
   assert.equal(validation.result.blocks.length, 1);
   assert.equal(validation.result.blocks[0].id, 'ask-audience-applicability');
-  assert.equal(validation.result.blocks[0].actions.length, 1);
+  // The explanation stays; its desktop "Confirm home journey" link does not.
+  assert.equal(validation.result.blocks[0].actions.length, 0);
 });
 
 test('ownership-cost contract rejects unrelated operation blocks', () => {

@@ -103,7 +103,7 @@ test('every block and the boundary survive the answer-trust validator, and the p
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'negotiation-shield.cases', operationId: 'NEGOTIATION_SHIELD_CASES', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my negotiation shield cases', operationId: 'NEGOTIATION_SHIELD_CASES', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'NEGOTIATION_SHIELD_CASES', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'NEGOTIATION_SHIELD_CASES', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
 });
 
 test('naming the tool routes here even about a quote; purchase negotiation and new comparisons do not', () => {

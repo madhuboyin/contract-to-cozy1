@@ -58,7 +58,7 @@ test('both links survive the whitelist, with the AI troubleshooter labelled as a
     ['open-emergency-help', 'Open Emergency Help (AI troubleshooter)', '/dashboard/emergency?propertyId=p1'],
   ]);
   for (const action of actions) {
-    assert.equal(isAskActionApplicable({ action, operationId: 'INCIDENT_CONTINUATION', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true, action.id);
+    assert.equal(isAskActionApplicable({ action, operationId: 'INCIDENT_CONTINUATION', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false, action.id);
   }
 });
 

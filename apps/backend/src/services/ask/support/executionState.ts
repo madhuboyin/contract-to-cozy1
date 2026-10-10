@@ -9,8 +9,11 @@ import { getSkillLineageMetadata } from '../../skills/skillLineageRegistry';
 import { requiredAskTargetEntity } from '../askEntityResolution';
 import { logger } from '../../../lib/logger';
 import { captureFallbackHref } from './capture';
+import { isAskInConversationHref } from '../askAnswerTrustPolicy';
+
 import { propertySummary } from './propertyContext';
 import { readStoredSuggestedNextActions } from '../suggestedActions/suggestedNextAction.contract';
+const inConversationOrNull = (href: string | null): string | null => (href && isAskInConversationHref(href) ? href : null);
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005/FRESH-001: an explicit
 // representation of "what the homeowner is currently looking at," separate
@@ -167,9 +170,10 @@ export function mapPersistedExecution(execution: {
       ? stored.captureRequests.map((request) => request && typeof request === 'object' && !Array.isArray(request)
         ? {
           ...request,
-          fallbackHref: typeof (request as { fallbackHref?: unknown }).fallbackHref === 'string'
+          // A capture is answered inside Ask. The desktop-form escape hatch is dropped for new and stored executions alike.
+          fallbackHref: inConversationOrNull(typeof (request as { fallbackHref?: unknown }).fallbackHref === 'string'
             ? (request as { fallbackHref: string }).fallbackHref
-            : captureFallbackHref(execution.operationId, execution.propertyId),
+            : captureFallbackHref(execution.operationId, execution.propertyId)),
         }
         : request)
       : [],

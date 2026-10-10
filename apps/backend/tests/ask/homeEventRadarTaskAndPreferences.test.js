@@ -134,7 +134,7 @@ test('the new feed and receipt actions survive the answer-trust whitelist', () =
     assert.equal(isAskActionApplicable({ action: item, operationId: 'HOME_EVENT_RADAR_FEED', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, item.id);
   }
   const openTask = { id: 'open-task', label: 'Open task', href: task.href, style: 'PRIMARY' };
-  assert.equal(isAskActionApplicable({ action: openTask, operationId: 'HOME_EVENT_RADAR_TASK', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: openTask, operationId: 'HOME_EVENT_RADAR_TASK', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
 });
 
 // ───────────────────────────── HOME_EVENT_RADAR_TASK ─────────────────────────────

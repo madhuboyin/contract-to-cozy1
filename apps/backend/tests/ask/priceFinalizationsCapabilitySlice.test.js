@@ -107,7 +107,7 @@ test('every block and the boundary survive the answer-trust validator, and the p
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'price-finalization.records', operationId: 'PRICE_FINALIZATIONS_LIST', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my price finalizations', operationId: 'PRICE_FINALIZATIONS_LIST', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PRICE_FINALIZATIONS_LIST', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PRICE_FINALIZATIONS_LIST', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
 });
 
 test('agreed-price questions route here; finalizing, comparing, checking or booking is not claimed', () => {

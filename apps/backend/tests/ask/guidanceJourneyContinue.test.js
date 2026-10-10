@@ -189,7 +189,7 @@ test('every block survives the answer-trust validator and the page link the acti
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'guidance-overview.continue', operationId: 'GUIDANCE_JOURNEY_CONTINUE', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-30T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Continue this guided journey.', operationId: 'GUIDANCE_JOURNEY_CONTINUE', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((b) => b.id), result.blocks.map((b) => b.id));
-  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['open-guidance-overview', 'dismiss-guided-journey']);
+  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['dismiss-guided-journey']);
 });
 
 test('every tool key the template registry launches is classified, and tool keys stay NAVIGATE (only named steps are IN_ASK)', () => {
@@ -289,7 +289,7 @@ test('the in-Ask action survives the answer-trust validator', async () => {
   const raw = await invoke(launch());
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'guidance-overview.continue', operationId: 'GUIDANCE_JOURNEY_CONTINUE', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-30T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Continue this guided journey.', operationId: 'GUIDANCE_JOURNEY_CONTINUE', result, propertyId: 'p1' });
-  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['continue-step-in-ask', 'open-guidance-overview', 'dismiss-guided-journey']);
+  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['continue-step-in-ask', 'dismiss-guided-journey']);
 });
 
 // ───────────────────────────── Phase 3: skip a step, dismiss a journey ─────────────────────────────

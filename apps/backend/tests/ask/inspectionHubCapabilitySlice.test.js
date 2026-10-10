@@ -125,9 +125,9 @@ test('finding rows carry identity, their report, a working report link and every
   assert.equal(inspectionHubHref('p1'), '/dashboard/properties/p1/inspection-hub/open-items');
 });
 
-test('the finding actions and the hub link survive the answer-trust whitelist', () => {
+test('the typed finding actions are whitelisted and the desktop hub link is not', () => {
   for (const action of [...inspectionFindingItemActions('OWNER'), { id: 'open-inspection', label: 'Open Inspection Hub', href: '/dashboard/properties/p1/inspection-hub/open-items', style: 'SECONDARY' }]) {
-    assert.equal(isAskActionApplicable({ action, operationId: 'INSPECTION_FINDINGS', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, action.id);
+    assert.equal(isAskActionApplicable({ action, operationId: 'INSPECTION_FINDINGS', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), !action.href, action.id);
   }
 });
 
