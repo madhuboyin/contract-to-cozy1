@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; Phases 1-4 implemented and pushed; governing FRDs updated (Inline Workspace FRD v1.238, Appendix C.12; Capability Discovery FRD v1.3)
+**Status:** Approved product direction; Phases 1-4 implemented and pushed; Phases 5-7 decided, not started (Inline Workspace FRD v1.239, Appendix C.12; Capability Discovery FRD v1.4)
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -257,6 +257,21 @@ Exit: additional capabilities are discoverable without expanding the persistent 
 - **Copy.** A count of one reads "1 needs attention".
 - **Open:** "Completed" is request-settled, not a business outcome; the explorer has no entity picker, so entity-bound ideas
   (repair-or-replace for one item, continue a DIY project) stay out until the canonical pickers exist.
+
+## 5.1 Follow-up phases (decided October 9, 2026; not started)
+
+Phases 1-4 shipped a first shape. The owner then closed three questions (Inline Workspace FRD v1.239, IW-SHELL-020-022; Capability
+Discovery FRD v1.4, CAP-FR-039G-039I). The work below is owed and has not begun.
+
+- **Phase 5 - Binding layer.** Rebuild the explorer registry as a validated binding layer: groups, labels, and aliases derived from the capability
+  registry; operation facts from the Ask operation registry; one binding source shared with `askCapabilityCardLaunch.ts`. Prerequisites: a
+  capability for seasonal care and a decision for "what changed recently", which have none today; per-entry bindings because one capability has
+  several entry points.
+- **Phase 6 - Lifecycle telemetry.** Join the `ask_discovery_*` events to the canonical lifecycle stages by capability id, operation id, entry id,
+  and surface. Needs an authoritative outcome signal; an answered, needs-context, needs-confirmation, proposal, or informational result never emits
+  COMPLETED by itself.
+- **Phase 7 - Target selectors.** A reusable Ask target-selection contract, then the area selector (Property Context completeness) and the project
+  selector (DIY service), then "Add a missing detail" and "Continue a project". Both stay omitted until then.
 
 ## 6. Validation
 

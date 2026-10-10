@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.3 |
+| Version | 1.4 |
 | Date | October 9, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
@@ -14,6 +14,8 @@
 | Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
+
+**Revision 1.4 — Open questions 10–12 closed (owner decisions, 2026-10-09; nothing built yet):** (10) **Canonical sources:** the capability registry stays canonical for identity and version, outcome group, homeowner label and description, approved intent aliases, and the completion definition; the Ask operation registry stays canonical for availability, audience, authorization, safety, and launch behavior; the Ask explorer registry becomes a validated **binding layer** holding only Ask-specific facts, with groups and aliases derived from the capability registry. This makes CAP-FR-033 and CAP-FR-038 hold as written and the 1.3 build a non-conforming first shape. (11) **Telemetry:** the `ask_discovery_*` events stay for exposure and the canonical lifecycle stages are added for what the selected capability then did, joined by bounded identifiers; an answered execution is not a completed capability. (12) **Pickers:** "Add a missing detail" and "Continue a project" wait for a reusable, domain-owned Ask target-selection contract with an area selector and a project selector. New requirements CAP-FR-039G–039I record these. Implementation obstacles found while reading the registries are in §7.5.1.
 
 **Revision 1.3 — Ask discovery built; reviewed inventory, search and measurement requirements added; deviations recorded (owner decisions, 2026-10-09):** the Ask Cozy projection in §7.5 is implemented and pushed (`1ad59c68`, `ff61885a`, `7a8ea1a6`, `6fb88f93`); its requirement-by-requirement status is in the Ask Cozy Inline Workspace FRD, Appendix C.12, which separates executed evidence from code-traced claims and records that nothing was live-verified. New requirements CAP-FR-039D–039F fix the reviewed-discovery rule, the search contract, and the measurement contract. **Where the build differs from this document, the requirement text is deliberately left as written and the difference is listed in §7.5.1 for an owner decision:** the starters, groups, and approved aliases live in a dedicated Ask explorer registry validated against the Ask operation registry, not in the canonical capability definitions (CAP-FR-033, CAP-FR-038); discovery events are their own bounded events, not the tool lifecycle telemetry of §15; and two named ideas are not offered until a canonical area or project picker exists.
 
@@ -452,14 +454,23 @@ is; a count of one reads "1 needs attention"; the projection loads for the whole
 topics persist mid-conversation; and a starter that fails an access, role, or availability check is
 shown disabled with its reason or omitted, never linked elsewhere.
 
-Differences from this document that need an owner decision:
+Differences from this document found in the 1.3 build, and how the owner closed them (October 9, 2026; the decisions are not yet built):
 
-| Difference | Built | This document says | Decision needed |
+| Difference | Built in 1.3 | Decision (1.4) | Work still owed |
 | --- | --- | --- | --- |
-| Inventory source | A dedicated Ask explorer registry holds each entry's group, label, message, operation, launch policy, aliases, and consequence; the capability catalog only decides which outcome groups appear. | CAP-FR-038: starters resolve from canonical capability and Ask-operation metadata and no independent inventory is kept. | Accept the explorer registry as the canonical Ask discovery metadata, or derive its entries from the capability registry. |
-| Approved aliases | Declared per entry in the explorer registry. | CAP-FR-033: search matches approved homeowner intent aliases of the capability. | Same decision as above; aliases should have one home. |
-| Selection telemetry | `ask_discovery_*` and `ask_explorer_search` events with bounded identifiers. | §7.5: starter selections use the canonical lifecycle telemetry of §15. | Keep separate events, or also record the lifecycle stages. |
-| Ideas needing a chosen entity | "Add a missing detail" and "Continue a project" are not offered. | §7.5 and CAP-FR-036: an unavailable capability is omitted or explained honestly. | Design the canonical area and project pickers; until then omission stands. |
+| Inventory source | A dedicated Ask explorer registry holds each entry's group, label, message, operation, launch policy, aliases, and consequence; the capability catalog only decides which outcome groups appear. | Derive from the canonical registries. The explorer registry becomes a validated binding layer (CAP-FR-039G). CAP-FR-038 stands as written. | Rebuild; the 1.3 shape does not conform. |
+| Approved aliases | Declared per entry in the explorer registry. | Derived from the capability definition's intent aliases; CAP-FR-033 stands as written. | Remove the duplicated aliases. |
+| Selection telemetry | `ask_discovery_*` and `ask_explorer_search` events with bounded identifiers. | Keep them, and add the canonical lifecycle stages joined by bounded identifiers (CAP-FR-039H). | Build the correlation and an authoritative outcome signal. |
+| Ideas needing a chosen entity | "Add a missing detail" and "Continue a project" are not offered. | Enable only through reusable, domain-owned target selectors (CAP-FR-039I); omit until then. | Build the selector contract, the area selector, and the project selector. |
+
+Obstacles to the rebuild, found by reading the registries on October 9, 2026:
+
+- The capability registry holds 49 capabilities, each with a label, short and long description, intent aliases, an outcome category, and a lifecycle completion kind, so deriving groups and aliases is possible.
+- Some current entries have no capability to bind to: there is no seasonal-care capability and no clear capability for "what changed recently". Each needs a capability defined or the entry set revisited; an entry must not be bound to an unrelated capability.
+- One capability has several entry points (maintenance: due, forecast, and a governed create; home records: summary and completeness; DIY: projects and start), so a binding is per entry and names its capability.
+- `askCapabilityCardLaunch.ts` already binds capabilities to operations and messages for capability cards. The rebuilt binding layer and that allowlist must become one source.
+- The current entry labels are question-shaped Ask phrasings; they become the optional Ask-specific presentation override, and the capability's own label and description remain canonical.
+- Mapping an Ask execution to a lifecycle stage needs an authoritative outcome. The lifecycle stages are `DISCOVERED`, `CLICKED`, `STARTED`, `OUTPUT_GENERATED`, `COMPLETED`, `ABANDONED`, `DISMISSED`, `NOT_RELEVANT`, and `SNOOZED`; the completion kinds are `OUTPUT_VIEWED`, `OUTPUT_GENERATED`, `ARTIFACT_CREATED`, `DECISION_RECORDED`, `ACTION_INITIATED`, `ACTION_COMPLETED`, `PLAN_CREATED`, and `OUTCOME_VERIFIED`.
 
 ### 7.6 Post-completion suggestions
 
@@ -875,6 +886,9 @@ Inspection Hub
 | CAP-FR-039D | The Ask discovery inventory shall admit only reviewed entries: an Ask-native read, or a workflow whose selection only begins a capture, proposal, or review flow, is a registered confirmation-gated domain command, and states that nothing is saved until the homeowner confirms. It shall reject at startup a command that could write immediately, an entry without reviewed copy or aliases, an operation that needs an entity chosen first, a phrase that resolves to the grounded-guidance model fallback, and an operation without an audience policy. |
 | CAP-FR-039E | Ask discovery search shall run over the already-authorized corpus and match homeowner label, question, group wording, and approved aliases only; it shall rank deterministically (exact, prefix, token, group wording; ties in server order), shall never match operation identifiers, and shall never fall back to a traditional page or a model answer. |
 | CAP-FR-039F | Ask discovery measurement shall use bounded identifiers; record visibility only after an element is rendered on screen and once per home; record search as one interaction with a bucketed result count and whether a result was chosen; never record a search phrase, label, message, or free text; and stay separate from Suggested Next Action events. |
+| CAP-FR-039G | The Ask explorer registry shall be a validated binding layer, not an independent inventory. It may hold only Ask-specific information: the capability-to-operation binding, the reviewed Ask launch message, the interaction type, consequence copy for a governed workflow, and an optional Ask-specific presentation override. Outcome groups and search aliases shall be derived from the capability registry; availability, audience, authorization, safety, and launch behavior shall come from the Ask operation registry. Topic starters shall reference these bindings. Startup validation shall reject an unknown capability or operation and any binding that duplicates canonical metadata, and there shall be one binding source for capability-card launches and discovery. |
+| CAP-FR-039H | Ask discovery shall record both its own exposure events and the canonical capability lifecycle stages, joined only by bounded identifiers (capability id, operation id, discovery entry id, source surface) and never by prompt or search text. A lifecycle COMPLETED shall follow the capability registry's declared completion kind and an authoritative outcome; an Ask execution in `NEEDS_CONTEXT` or `NEEDS_CONFIRMATION`, a proposal, or an informational response shall not emit COMPLETED by itself. |
+| CAP-FR-039I | An Ask discovery idea that needs a chosen target shall use a reusable, domain-owned Ask target-selection contract and not a discovery-only client picker. Options are assembled and authorized by the owning domain with a stable id, homeowner label, summary, availability, and reason codes. Opening a selector writes nothing; even one option requires an explicit selection; Cancel returns to the focused topic; zero eligible options is explained honestly; a source failure is never shown as zero options; and selection revalidates access, current target state, and eligibility. The area selector shall read the Property Context completeness projection and offer only areas with missing, conflicted, or stale askable fields; the project selector shall read the DIY project service and offer only planning or in-progress projects eligible for the DIY project guide. Until both exist, the dependent ideas shall be omitted. |
 
 ### 12.5 Inline and post-completion suggestions
 
@@ -1402,6 +1416,9 @@ capabilities.
 - Discovery search returns only prompts the server already authorized, matches approved aliases and group wording, never matches operation identifiers, and reports at most one bucketed search event per interaction without the phrase.
 - Discovery visibility events fire only for an element that is on screen, once per home; no discovery event carries a label, message, or search phrase.
 - Every discovery entry is a reviewed read or a confirmation-gated workflow; the startup validator rejects the excluded kinds.
+- Discovery groups and aliases are derived from the capability registry; the explorer registry holds only Ask-specific bindings, and startup rejects an unknown capability or operation or a binding that restates canonical metadata.
+- A selected discovery idea records the exposure events and the lifecycle stages with the same bounded identifiers; a needs-context, needs-confirmation, proposal, or informational result emits no COMPLETED.
+- A target selector writes nothing on open, requires an explicit selection even for one option, explains zero options, never shows a source failure as zero options, and revalidates on selection.
 - Explore Tools preserves the selected property.
 - Homeowner-language search terms return expected capabilities.
 - Actual-view impressions fire only after visibility thresholds.
@@ -1459,13 +1476,14 @@ A future tool is complete only when:
    aliases remain code-reviewed only?
 8. What minimum sample and outcome evidence are required before changing ranking weights?
 9. Which feedback controls should contributors and viewers have on shared properties?
-10. Should the Ask explorer registry become the canonical home for Ask discovery metadata (entries,
-    outcome groups, approved aliases), or should those be derived from the capability registry
-    (§7.5.1)?
-11. Should Ask discovery selections also record the lifecycle stages of §15, or keep their own
-    bounded events (§7.5.1)?
-12. What canonical area and project pickers are needed before "Add a missing detail" and
-    "Continue a project" can be offered from Ask discovery (§7.5.1)?
+10. **Closed (1.4).** Should the Ask explorer registry become the canonical home for Ask discovery
+    metadata, or should it be derived from the capability registry? Decision: derive; the explorer
+    registry is a validated binding layer (CAP-FR-039G).
+11. **Closed (1.4).** Should discovery selections also record the lifecycle stages of §15? Decision:
+    yes, in addition to the discovery events, joined by bounded identifiers (CAP-FR-039H).
+12. **Closed (1.4).** What pickers are needed before "Add a missing detail" and "Continue a project"
+    can be offered? Decision: a reusable, domain-owned target-selection contract with an area
+    selector and a project selector (CAP-FR-039I).
 
 ---
 
