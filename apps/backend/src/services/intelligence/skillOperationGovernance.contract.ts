@@ -77,6 +77,10 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   // Seasonal checklist setup (owner-only, confirmation-gated, declared-action only): skill-less like SEASONAL_HOME_CARE, which launches it.
   // It must stay in this list or the boot-time governance check fails.
   'SEASONAL_CHECKLIST_SETUP',
+  // Property settings written inside Ask (the purchase date, the home journey): owner-declared actions, confirmation-gated, skill-less. They must
+  // stay in this list or the boot-time governance check fails.
+  'PROPERTY_PURCHASE_DATE_SET',
+  'HOME_JOURNEY_SET',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like SEASONAL_HOME_CARE.
   'HOME_BASICS_GUIDE',
   // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like the two above.

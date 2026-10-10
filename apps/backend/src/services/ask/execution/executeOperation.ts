@@ -690,6 +690,10 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   ROOM_RENAME: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // A new room appears in the Property Summary rooms collection and can be chosen for inventory items.
   ROOM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
+  // A recorded purchase date changes a "since I bought the home" maintenance answer, which was unbounded without it.
+  PROPERTY_PURCHASE_DATE_SET: ['MAINTENANCE_STATUS'],
+  // The home journey frames every audience-aware answer; the property summary is the one that states it.
+  HOME_JOURNEY_SET: ['PROPERTY_SUMMARY'],
   // A new item appears in the Property Summary inventory collection and the inventory lookup lists.
   INVENTORY_ITEM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // Answering an area question changes the completeness rows and percentage the Property Summary shows.

@@ -4,6 +4,7 @@
 import { HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { maintenanceTaskVersion } from '../suggestedActions/domainVersions';
+import { PURCHASE_DATE_SET_MESSAGE } from '../support/homeSettingsConstants';
 import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
 import { resolveTypedActionTarget } from '../suggestedActions/typedTarget';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
@@ -1072,7 +1073,7 @@ export async function maintenanceResult(
       ]
       : [
         { id: 'open-maintenance', label: 'Open maintenance', href: maintenanceHref, style: 'PRIMARY' },
-        ...(missingPurchaseDate ? [{ id: 'add-purchase-date', label: 'Add purchase date', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'SECONDARY' as const }] : []),
+        ...(missingPurchaseDate && canManage ? [{ id: 'add-purchase-date', label: 'Add purchase date', interactionType: 'START_WORKFLOW' as const, message: PURCHASE_DATE_SET_MESSAGE, operationId: 'PROPERTY_PURCHASE_DATE_SET', style: 'SECONDARY' as const }] : []),
       ],
   }];
   if (!creationFocus) blocks.push({
@@ -1144,7 +1145,7 @@ export async function maintenanceResult(
   });
   if (missingPurchaseDate) blocks.push({
     type: 'BOUNDARY', id: 'maintenance-purchase-date-missing', title: 'Purchase date is not recorded',
-    body: 'Ask could not apply “since I bought the home,” so the list is unbounded by purchase date. Add the property purchase date in the financing profile, then run this question again.',
+    body: 'Ask could not apply “since I bought the home,” so the list is unbounded by purchase date. Add the purchase date here, and this answer refreshes with it applied.',
     severity: 'CAUTION', suggestions: [],
   });
   blocks.push({

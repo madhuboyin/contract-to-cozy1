@@ -2,6 +2,7 @@ import type { HouseholdRole, OnboardingOwnershipState } from '@prisma/client';
 import type { AskPresentationBlock } from '../../productFramework/ask/ask.contract';
 import type { PropertyJourneyContext } from '../skills/context/propertyJourneyContext.contract';
 import type { AskOperationResult } from './askOperationRegistry';
+import { HOME_JOURNEY_SET_MESSAGE } from './support/homeSettingsConstants';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
 
@@ -123,7 +124,9 @@ export function applyAskAudiencePresentation(input: {
     ? {
       id: 'review-home-journey',
       label: 'Confirm home journey',
-      href: `/dashboard/properties/${encodeURIComponent(input.propertyId)}/onboarding#home-journey`,
+      interactionType: 'START_WORKFLOW',
+      message: HOME_JOURNEY_SET_MESSAGE,
+      operationId: 'HOME_JOURNEY_SET',
       style: 'SECONDARY',
     }
     : null;

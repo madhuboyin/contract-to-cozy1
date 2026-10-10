@@ -61,6 +61,9 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'ROOM_RENAME',
     // Added only from the declared "Add a room" action; no message pattern.
     'ROOM_CREATE',
+    // Property settings written inside Ask (the purchase date, the home journey): reached only by their declared action.
+    'PROPERTY_PURCHASE_DATE_SET',
+    'HOME_JOURNEY_SET',
     'INVENTORY_ITEM_CREATE',
     'PROPERTY_CONTEXT_AREA_CAPTURE',
     'HOME_EVENT_VISIBILITY',

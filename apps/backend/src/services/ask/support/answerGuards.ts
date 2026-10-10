@@ -16,6 +16,7 @@ import { skillRuntimeUnavailableReason } from '../capabilityHandlerRegistry';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { synthesizeAskResult } from '../askResultSynthesis.service';
 import { mapPersistedExecution } from './executionState';
+import { HOME_JOURNEY_SET_MESSAGE } from './homeSettingsConstants';
 
 export function audienceApplicabilityResult(
   decision: AskAudienceApplicabilityDecision,
@@ -28,7 +29,9 @@ export function audienceApplicabilityResult(
     ? [{
       id: 'review-home-journey',
       label: 'Confirm home journey',
-      href: `/dashboard/properties/${encodeURIComponent(propertyId)}/onboarding#home-journey`,
+      interactionType: 'START_WORKFLOW' as const,
+      message: HOME_JOURNEY_SET_MESSAGE,
+      operationId: 'HOME_JOURNEY_SET',
       style: 'SECONDARY' as const,
     }]
     : [];

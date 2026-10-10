@@ -8,6 +8,7 @@ import { RADAR_FEEDBACK_COMMENT_MAX_LENGTH } from '../../../modules/homeEventRad
 import { RADAR_ACTION_CODES } from '../../../modules/homeEventRadar/domain/radarActionRegistry';
 import { INVENTORY_CATEGORY_VALUES, ROOM_TYPE_VALUES } from './capture';
 import { askContextFingerprint } from './propertyContext';
+import { HOME_JOURNEY_OPTIONS } from './homeSettingsConstants';
 
 export const MaintenanceTaskWorkflowInputSchema = z.object({
   title: z.string().trim().min(3).max(160).refine(isMeaningfulMaintenanceTaskTitle, {
@@ -215,3 +216,22 @@ export function homeDeadlineSourceVersion(source: { id: string; expiryDate: Date
 // broader entityRef-on-Radar-producers gap (Phase 0 §4.6, tracked
 // separately into Phase 7) ever coming into play.
 export type RadarEnvelopeQuerySuppliedInput = { radarMatchId?: string | null; radarEventId?: string | null };
+
+// Property purchase date (PROPERTY_PURCHASE_DATE_SET). The inline form answers with the shared APPROXIMATE_DATE value limited to an exact day;
+// the stored and confirmed input is the plain day. A purchase date is a past or present day, never a future one.
+const PURCHASE_DATE_DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return false;
+  return parsed.getTime() >= Date.UTC(1800, 0, 1) && parsed.getTime() <= Date.now() + 24 * 60 * 60 * 1000;
+}, { message: 'Enter a real date on or before today.' });
+
+export const PurchaseDateAnswerSchema = z.object({
+  purchaseDate: z.object({ precision: z.literal('EXACT_DATE'), value: PURCHASE_DATE_DAY }).strict(),
+}).strict().transform((answer) => ({ purchaseDate: answer.purchaseDate.value }));
+
+export const PurchaseDateInputSchema = z.object({ purchaseDate: PURCHASE_DATE_DAY }).strict();
+
+// Home journey (HOME_JOURNEY_SET): the same five confirmed choices the onboarding page offers (UNKNOWN is not a choice).
+export const HomeJourneyInputSchema = z.object({
+  ownershipState: z.enum(HOME_JOURNEY_OPTIONS.map((option) => option.value) as [string, ...string[]]),
+}).strict();

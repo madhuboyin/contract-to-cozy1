@@ -176,3 +176,28 @@ test('a date-filtered answer for an underscore time zone passes the answer check
   assert.equal(checked.result.status, result.status);
   assert.ok(!checked.trust.reasonCodes.includes('INTERNAL_PRESENTATION_TOKEN'));
 });
+
+// "Since I bought the home" needs the purchase date. The answer used to link to the desktop financing profile; it now offers the Ask command that records it.
+test('a "since I bought" answer without a purchase date offers the in-Ask command, not a desktop link, and survives the answer checker', async () => {
+  install([task('flush', { title: 'Flush water heater', nextDueDate: relative(5) })]);
+  const question = 'What maintenance have I done since I bought the home?';
+  const result = await invoke(question);
+  const summary = result.blocks.find((block) => block.id === 'maintenance-summary');
+  const action = summary.actions.find((candidate) => candidate.id === 'add-purchase-date');
+  assert.deepEqual({ interactionType: action.interactionType, message: action.message, operationId: action.operationId, href: action.href },
+    { interactionType: 'START_WORKFLOW', message: 'Record when I bought this home.', operationId: 'PROPERTY_PURCHASE_DATE_SET', href: undefined });
+  const boundary = result.blocks.find((block) => block.id === 'maintenance-purchase-date-missing');
+  assert.doesNotMatch(boundary.body, /financing profile/i);
+  const checked = validateAskAnswerTrustPipeline({
+    question, operationId: 'MAINTENANCE_STATUS', propertyId: 'p1', semanticEnabled: true,
+    // The audience step has already established the household role by the time the answer is checked.
+    result: attachAskAuthoritativeSourceEvidence({ ...result, parameters: { ...(result.parameters ?? {}), audiencePresentation: { householdRole: 'OWNER' } } }, [completedAskAuthoritativeSourceEvidence('MAINTENANCE_STATUS')]),
+  });
+  const kept = checked.result.blocks.find((block) => block.id === 'maintenance-summary');
+  assert.ok(kept.actions.some((candidate) => candidate.id === 'add-purchase-date'), 'the in-Ask action is not removed as a link out of Ask');
+  assert.ok(!kept.actions.some((candidate) => candidate.href), 'and no desktop link remains on the summary');
+
+  install([task('flush', { title: 'Flush water heater', nextDueDate: relative(5) })], 'VIEWER');
+  const viewer = await invoke(question, 'VIEWER');
+  assert.ok(!viewer.blocks.find((block) => block.id === 'maintenance-summary').actions.some((candidate) => candidate.id === 'add-purchase-date'), 'a viewer is not offered a write');
+});

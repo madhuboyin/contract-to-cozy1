@@ -34,6 +34,9 @@ import { INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY, INVENTORY_CREATE_CAPTURE_KEY, i
 import { claimFileResult, ClaimFileWorkflowInputSchema } from '../handlers/claims.handler';
 import { RADAR_PREFERENCES_CAPTURE_KEY, RADAR_TASK_CAPTURE_KEY, radarCaptureError, radarPreferencesBodyFromAnswer, radarPreferencesContextVersion, radarPreferencesFormResult, radarTaskContextVersion, radarTaskFormResult } from '../handlers/homeEventRadar.handler';
 import { executeOperation } from '../execution/executeOperation';
+import { homeJourneyContextVersion, homeJourneyResult, purchaseDateContextVersion, purchaseDateResult } from '../handlers/homeSettingsWrites.handler';
+import { HOME_JOURNEY_CAPTURE_KEY, PURCHASE_DATE_CAPTURE_KEY } from '../support/homeSettingsConstants';
+import { HomeJourneyInputSchema, PurchaseDateAnswerSchema } from '../support/commandInputs';
 import { maintenanceTaskCompleteResult, maintenanceTaskCreateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import { getSkillForOperation } from '../../skills/skillRegistry';
 import { ASK_OPERATION_CAPABILITY } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
@@ -320,7 +323,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -622,6 +625,41 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryRoom';
+  } else if (execution.operationId === 'PROPERTY_PURCHASE_DATE_SET' || execution.operationId === 'HOME_JOURNEY_SET') {
+    const purchaseDate = execution.operationId === 'PROPERTY_PURCHASE_DATE_SET';
+    if (input.captureKey !== (purchaseDate ? PURCHASE_DATE_CAPTURE_KEY : HOME_JOURNEY_CAPTURE_KEY)) {
+      const error = new Error('This capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error(purchaseDate ? 'A contributor or owner is required to record the purchase date.' : 'A contributor or owner is required to confirm how the home is used.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const currentVersion = purchaseDate ? await purchaseDateContextVersion(execution.propertyId) : await homeJourneyContextVersion(execution.propertyId);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error(purchaseDate ? 'The purchase date changed while this form was open. Start again from the Add purchase date button.' : 'The home journey changed while this form was open. Start again from the Confirm home journey button.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const answer = purchaseDate ? PurchaseDateAnswerSchema.safeParse(input.answer) : HomeJourneyInputSchema.safeParse(input.answer);
+    if (!answer.success) {
+      const error = new Error(purchaseDate ? 'Enter a real date on or before today.' : 'Choose one of the listed options.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const sourceExecutionId = typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null;
+    result = purchaseDate
+      ? await purchaseDateResult(userId, execution.propertyId, answer.data as { purchaseDate: string }, sourceExecutionId)
+      : await homeJourneyResult(userId, execution.propertyId, answer.data as { ownershipState: string }, sourceExecutionId);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = purchaseDate ? 'PropertyFinancingProfile' : 'PropertyOnboarding';
   } else if (execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES') {
     const isTask = execution.operationId === 'HOME_EVENT_RADAR_TASK';
     if (input.captureKey !== (isTask ? RADAR_TASK_CAPTURE_KEY : RADAR_PREFERENCES_CAPTURE_KEY)) {

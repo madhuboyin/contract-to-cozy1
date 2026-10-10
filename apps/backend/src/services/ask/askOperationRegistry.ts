@@ -189,6 +189,9 @@ export type AskOperationId =
   | 'ROOM_RENAME'
   // Phase 3 add slice: create an InventoryRoom from a declared "Add a room" action (form -> confirmation -> write).
   | 'ROOM_CREATE'
+  // Property settings written inside Ask (no desktop form): the purchase date and the home journey, each reached only by its declared action.
+  | 'PROPERTY_PURCHASE_DATE_SET'
+  | 'HOME_JOURNEY_SET'
   // Phase 3 add slice: create an InventoryItem from a declared "Add an item" action (form -> confirmation -> write).
   | 'INVENTORY_ITEM_CREATE'
   // Phase 3 add slice 5: fill in the missing facts of one Property Summary area, one confirmed answer at a time.
@@ -309,6 +312,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'ROOM_RENAME',
   // Reached only by the declared "Add a room" action: there is no message pattern for it and no fuzzy retrieval.
   'ROOM_CREATE',
+  'PROPERTY_PURCHASE_DATE_SET',
+  'HOME_JOURNEY_SET',
   // Excluded from fuzzy retrieval. It is reached by the declared "Add an item" action or the narrow,
   // deterministic inventoryCreatePattern below; both paths still require form review and confirmation.
   'INVENTORY_ITEM_CREATE',
@@ -398,7 +403,7 @@ export interface AskOperationResult {
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
-  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY', 'WARRANTY_CORRECT', 'ROOM_RENAME', 'ROOM_CREATE',
+  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY', 'WARRANTY_CORRECT', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -590,6 +595,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   WARRANTY_CORRECT: definition('WARRANTY_CORRECT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'warranty.correct', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   ROOM_RENAME: definition('ROOM_RENAME', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.rename', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   ROOM_CREATE: definition('ROOM_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.create', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  PROPERTY_PURCHASE_DATE_SET: definition('PROPERTY_PURCHASE_DATE_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'property-purchase-date.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  HOME_JOURNEY_SET: definition('HOME_JOURNEY_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-journey.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   INVENTORY_ITEM_CREATE: definition('INVENTORY_ITEM_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inventory.create', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   PROPERTY_CONTEXT_AREA_CAPTURE: definition('PROPERTY_CONTEXT_AREA_CAPTURE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'property-context.area-capture', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   MAJOR_EVENT_ENTRY: definition('MAJOR_EVENT_ENTRY', 'WORKFLOW_GUIDANCE', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'major-event.entry', ['SUMMARY', 'CAPABILITY_LIST', 'BOUNDARY']),

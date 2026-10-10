@@ -270,6 +270,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   SELLER_PREP_CHECKLIST: 'Open seller-prep checklist items are listed by category with estimated cost ranges.',
   ROOM_RENAME: 'The selected room has a corrected name after your confirmation.',
   ROOM_CREATE: 'The new room is reviewed and then added to your home record after your confirmation.',
+  PROPERTY_PURCHASE_DATE_SET: 'The purchase date is reviewed and then recorded for this home after your confirmation.',
+  HOME_JOURNEY_SET: 'How you are using this home is reviewed and then recorded after your confirmation.',
   INVENTORY_ITEM_CREATE: 'The new inventory item is reviewed and then added to your home record after your confirmation.',
   PROPERTY_CONTEXT_AREA_CAPTURE: 'Each missing home detail is reviewed and then saved to your home record after your confirmation.',
   WARRANTY_CORRECT: 'The selected warranty has a corrected provider name or expiry date after your confirmation.',
