@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
-import { deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
+import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
 router.use('/ask', authenticate, requireAskEligibleAccount);
 router.get('/ask/concierge-home', getAskConciergeHome);
+router.get('/ask/target-selectors/:selectorId', getAskTargetSelectionHandler);
 router.post('/ask/executions', postAskExecution);
 router.post('/ask/executions/:executionId/retry', postAskExecutionRetry);
 router.post('/ask/executions/:executionId/captures', postAskCapture);

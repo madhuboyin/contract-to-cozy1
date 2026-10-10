@@ -28,7 +28,8 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'savings-benefits': ['SAVINGS_OPPORTUNITIES'],
   'ownership-costs': ['OWNERSHIP_COSTS'],
   'home-records': ['INVENTORY_LOOKUP'],
-  'property-brief': ['PROPERTY_BRIEFS_LIST', 'PROPERTY_SUMMARY', 'MAJOR_EVENT_ENTRY'],
+  // Capability discovery Phase 7: the per-area detail capture is reached from the home record summary, so it belongs with it.
+  'property-brief': ['PROPERTY_BRIEFS_LIST', 'PROPERTY_SUMMARY', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'MAJOR_EVENT_ENTRY'],
   'home-operations': ['HOME_ACTIONS', 'OPERATIONAL_WORK_UPDATE'],
   'replace-repair': ['REPLACEMENT_GUIDANCE'],
   'mortgage-refinance-radar': ['REFINANCE_ANALYSIS', 'REFINANCE_RATE_MONITOR'],

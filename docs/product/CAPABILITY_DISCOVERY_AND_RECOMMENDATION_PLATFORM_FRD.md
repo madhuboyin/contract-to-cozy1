@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.7 |
+| Version | 1.8 |
 | Date | October 9, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
@@ -14,6 +14,8 @@
 | Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
+
+**Revision 1.8 — Target selectors built (CAP-FR-039I):** the reusable, domain-owned selection contract (`GET /api/ask/target-selectors/:selectorId`) and its two selectors are built: the area selector reads the Property Context completeness projection and offers only areas with askable missing, conflicted, or stale facts; the project selector reads the DIY service and applies the project guide's own eligibility, available only against the current reviewed guide. "Add a missing detail" and "Continue a project" are now offered from Ask discovery, bound through the registries (the guidance bridge assigns the area capture to Property Brief). Opening a selector writes nothing; one option still requires an explicit choice; a source that cannot be read is never shown as empty; the target operation revalidates on choice. Selectors are hosted by the focused topic view only, and no routing or Suggested Next Action consumer exists yet.
 
 **Revision 1.7 — Phase 6 gaps closed (CAP-FR-039H):** continuation results are recorded against the original discovery execution; a server-owned CronJob applies the existing stored proposal expiry (30 minutes for every current pending interaction) and records ABANDONED idempotently, with no discovery-specific timer; the metric is OUTPUT_GENERATED (delivered), never "viewed", and an `OUTPUT_VIEWED` capability is not completed by delivery; and the DIY project completion is recorded by `diyService`, below the transport layer, so the page and Ask share it. Of 12 controller lifecycle emit sites only DIY has an Ask counterpart today.
 
@@ -467,7 +469,7 @@ Differences from this document found in the 1.3 build, and how the owner closed 
 | Inventory source | A dedicated Ask explorer registry holds each entry's group, label, message, operation, launch policy, aliases, and consequence; the capability catalog only decides which outcome groups appear. | Derive from the canonical registries. The explorer registry becomes a validated binding layer (CAP-FR-039G). CAP-FR-038 stands as written. | **Done (1.5).** The explorer registry derives from the canonical registries; see below. |
 | Approved aliases | Declared per entry in the explorer registry. | Derived from the capability definition's intent aliases; CAP-FR-033 stands as written. | **Done (1.5).** Aliases come from the capability definitions (one reviewed map merged by the factory). |
 | Selection telemetry | `ask_discovery_*` and `ask_explorer_search` events with bounded identifiers. | Keep them, and add the canonical lifecycle stages joined by bounded identifiers (CAP-FR-039H). | **Done (1.6).** Server-side lifecycle events with an explicit authoritative-outcome table; see below. |
-| Ideas needing a chosen entity | "Add a missing detail" and "Continue a project" are not offered. | Enable only through reusable, domain-owned target selectors (CAP-FR-039I); omit until then. | Build the selector contract, the area selector, and the project selector. |
+| Ideas needing a chosen entity | "Add a missing detail" and "Continue a project" are not offered. | Enable only through reusable, domain-owned target selectors (CAP-FR-039I); omit until then. | **Done (1.8).** Selector contract, area selector, and project selector built; see below. |
 
 **Built in 1.5 (Phase 5).** The binding layer is `askCapabilityBindings.ts` (the discovery bindings and the capability-card entry reads, one source) and the derivation and validators are in `askExplorerRegistry.ts`; both validators run at startup. A binding is rejected for an unknown capability or operation, for restating canonical metadata, for a label that merely repeats the capability's own, for a workflow-only capability, and when the guidance bridge assigns its operation to a different capability. Findings while building it:
 
@@ -480,6 +482,8 @@ Differences from this document found in the 1.3 build, and how the owner closed 
 - The six explorer group titles remain Ask wording over the canonical outcome categories; the frontend Explore Tools catalog restates the same titles, so there is no single backend home for them yet.
 
 **Built in 1.6 (Phase 6).** `askCapabilityLifecycle.ts` plans and records the events; the hooks are in `createAskExecution` (STARTED and the first result) and in the confirm, cancel, and confirmation-expiry paths. The attribution is `launchContext.discovery` (entry id, surface, topic), validated against the reviewed entry's operation and exact message. Idempotency is one `AskExecutionEvent` marker per stage, so there is no schema change. Gaps recorded in 1.6 and closed in 1.7: clarification, property-choice, and capture continuations are hooked; the `ask-pending-expiry` CronJob (`reconcile:ask-pending`, every 15 minutes) expires discovery-launched interactions from their stored expiry and records ABANDONED; the recorded metric is OUTPUT_GENERATED (delivered), never "viewed" (true viewing is unmeasured until client visibility telemetry exists); and the DIY project completion moved from the controller into `diyService`. Still open: the other 11 controller emit sites have no Ask counterpart yet and must be recorded at the service when one appears.
+
+**Built in 1.8 (Phase 7).** `askTargetSelection.contract.ts` (the shared shape), `askTargetSelectors.ts` (the two selectors and `loadAskTargetSelection`), the `GET /api/ask/target-selectors/:selectorId` route, and the focused-view picker. Bindings use `launch: 'SELECTOR'` with a `selectorId`; the startup validator requires a registered selector for exactly the binding's operation. Starters for such ideas have the interaction `SELECT_TARGET`; their `message` is only the idea's prompt and is never sent. A governed workflow may be a topic starter only behind a selector. Recorded gaps: "More ideas" does not host selectors; no routing or Suggested Next Action consumer yet; the project selector examines the newest twelve eligible projects.
 
 Obstacles to the rebuild, found by reading the registries on October 9, 2026:
 

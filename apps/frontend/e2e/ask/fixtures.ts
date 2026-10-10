@@ -2666,11 +2666,12 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { selectorState?: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE'; slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
+  const selectorReads: string[] = [];
   const correctionEditBodies: Array<{ confirmationVersion: number; edits: Record<string, string> }> = [];
   const correctionConfirmBodies: Array<Record<string, unknown>> = [];
   let askFailedOnce = false;
@@ -2893,6 +2894,16 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     };
     return fulfill(route, { success: true, data: { items: options.pendingWork && !pendingDismissed ? [{ pendingKind: 'CONTEXT_CAPTURE', actionLabel: 'Add the missing detail', execution: pendingExecution }] : [] } });
   });
+  // Target selectors (IW-SHELL-022): a read that writes nothing. `options.selectorState` lets a spec exercise the honest empty and unavailable states.
+  await page.route(`${apiOrigin}/api/ask/target-selectors/*`, (route) => {
+    selectorReads.push(new URL(route.request().url()).pathname.split('/').pop() ?? '');
+    const base = { selectorId: 'PROPERTY_AREA', propertyId, title: 'Which part of your home record?', generatedAt: new Date().toISOString(), truncated: false };
+    if (options.selectorState === 'NONE_ELIGIBLE') return fulfill(route, { success: true, data: { ...base, state: 'NONE_ELIGIBLE', options: [], explanation: 'Nothing is missing in any area right now, so there is nothing to add.' } });
+    if (options.selectorState === 'UNAVAILABLE') return fulfill(route, { success: true, data: { ...base, state: 'UNAVAILABLE', options: [], explanation: 'Your home record could not be checked right now. Nothing has changed. Try again in a moment.' } });
+    return fulfill(route, { success: true, data: { ...base, state: 'OPTIONS', explanation: null, options: [
+      { targetId: 'SYSTEMS', label: 'Home systems', summary: '3 details to add', availability: 'AVAILABLE', reasonCodes: [], launch: { operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', message: 'Fill in the missing home systems details.', entityType: 'PROPERTY_CONTEXT_AREA', entityId: 'SYSTEMS' } },
+    ] } });
+  });
   await page.route(`${apiOrigin}/api/ask/concierge-home*`, (route) => fulfill(route, { success: true, data: {
     propertyId, generatedAt: new Date().toISOString(),
     priorityList: {
@@ -2927,6 +2938,7 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
       { id: 'DIY_PROJECTS', label: 'DIY & Projects', order: 2, indicator: null, starters: [] },
       { id: 'HOME_RECORD', label: 'My Home Record', order: 3, indicator: { label: 'complete', value: '72%', sourceVersion: 'acceptance', freshness: 'CURRENT' }, starters: [
         { id: 'home-record-summary', entryId: 'understand-summary', capabilityId: 'property-brief', label: 'Summarize my home record', message: 'Give me a summary of my home record', operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
+        { id: 'home-record-add-detail', entryId: 'understand-add-detail', capabilityId: 'property-brief', label: 'Add a missing detail', message: 'Help me add a missing detail', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', interactionType: 'SELECT_TARGET', selectorId: 'PROPERTY_AREA', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
       ] },
     ],
     featuredPrompts: [
@@ -3602,7 +3614,7 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, captureAttempts: () => captureAttempts };
+  return { selectorReads, captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

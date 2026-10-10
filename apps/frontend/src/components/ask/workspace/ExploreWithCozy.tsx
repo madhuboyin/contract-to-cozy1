@@ -7,7 +7,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ArrowRight, ChevronDown, ChevronRight, Compass } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { AskDiscoveryStarter, AskDiscoveryTopic, AskDiscoveryTopicId } from '@/features/ask/types';
+import type { AskDiscoveryStarter, AskDiscoveryTopic, AskDiscoveryTopicId, AskTargetOption } from '@/features/ask/types';
+import type { ExploreSelectorState } from './useExploreWithCozy';
 
 export interface ExploreState {
   topics: AskDiscoveryTopic[];
@@ -17,6 +18,8 @@ export interface ExploreState {
 
 const REASON_COPY: Record<string, string> = {
   ASK_PERMISSION_REQUIRED: 'Needs more access to this home.',
+  GUIDE_SUPERSEDED: 'The reviewed guide for this project has changed.',
+  GUIDE_WITHDRAWN: 'The reviewed guide for this project was withdrawn.',
 };
 
 /**
@@ -31,9 +34,9 @@ export function indicatorText(indicator: AskDiscoveryTopic['indicator']): string
   return `${indicator.value} ${label}`.trim();
 }
 
-function reasonCopy(starter: AskDiscoveryStarter): string {
-  if (starter.availability === 'NEEDS_CONTEXT') return 'Needs a little more information first.';
-  return starter.reasonCodes.map((code) => REASON_COPY[code]).find(Boolean) ?? 'Not available right now.';
+function reasonCopy(item: { availability: string; reasonCodes: string[] }): string {
+  if (item.availability === 'NEEDS_CONTEXT') return 'Needs a little more information first.';
+  return item.reasonCodes.map((code) => REASON_COPY[code]).find(Boolean) ?? 'Not available right now.';
 }
 
 /**
@@ -169,12 +172,17 @@ export function ExploreDisclosure({ state, activeTopicId, onOpen, moreIdeas, onP
 }
 
 /** The focused view: a small set of starters written as homeowner outcomes, and one quiet way back. It submits nothing until a starter is chosen. */
-export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onStart, onClose, onStartersVisible }: {
+export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onStart, onClose, onStartersVisible, selector = null, onChooseTarget, onCancelSelector, onRetrySelector }: {
   topics: AskDiscoveryTopic[];
   topicId: AskDiscoveryTopicId;
   busy: boolean;
   /** Fired once per topic, only after its starters are on screen. */
   onStartersVisible?: (topicId: AskDiscoveryTopicId, starters: AskDiscoveryStarter[]) => void;
+  /** The target selector open for one of this topic's starters, if any (IW-SHELL-022). */
+  selector?: ExploreSelectorState;
+  onChooseTarget?: (option: AskTargetOption) => void;
+  onCancelSelector?: () => void;
+  onRetrySelector?: () => void;
   onSelectTopic: (topicId: AskDiscoveryTopicId) => void;
   onStart: (starter: AskDiscoveryStarter) => void;
   onClose: () => void;
@@ -198,6 +206,9 @@ export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onSta
       </div>
       <h2 id="ask-explore-focus-title" ref={headingRef} tabIndex={-1} className="mt-5 text-xl font-semibold tracking-tight text-slate-950 focus:outline-none">{topic.label}</h2>
       {indicatorText(topic.indicator) && <p className="mt-0.5 text-sm text-slate-500" data-explore-indicator="">{indicatorText(topic.indicator)}</p>}
+      {selector && onChooseTarget && onCancelSelector && onRetrySelector
+        ? <ExploreTargetPicker selector={selector} topicLabel={topic.label} busy={busy} onChoose={onChooseTarget} onCancel={onCancelSelector} onRetry={onRetrySelector} />
+        : <>
       {topic.starters.length === 0
         ? <p className="mt-3 text-sm text-slate-600" role="status">Nothing to suggest here right now. You can still ask anything about your home.</p>
         : <ul ref={startersRef} className="mt-3 space-y-1.5">{topic.starters.map((starter) => {
@@ -212,7 +223,59 @@ export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onSta
             </li>
           );
         })}</ul>}
+        </>}
       <button type="button" onClick={onClose} className="mt-5 min-h-10 rounded-xl px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">Not now</button>
+    </section>
+  );
+}
+
+/**
+ * A domain-owned target selector shown inside the focused view (IW-SHELL-022). Opening it wrote nothing. Every option is an explicit choice, even a
+ * single one; an option the caller cannot use is shown disabled with its reason; a list that could not be read says so and offers a retry, and is
+ * never shown as "nothing to choose".
+ */
+export function ExploreTargetPicker({ selector, topicLabel, busy, onChoose, onCancel, onRetry }: {
+  selector: NonNullable<ExploreSelectorState>;
+  topicLabel: string;
+  busy: boolean;
+  onChoose: (option: AskTargetOption) => void;
+  onCancel: () => void;
+  onRetry: () => void;
+}) {
+  const back = <button type="button" onClick={onCancel} className="mt-3 min-h-10 rounded-xl px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">Back to {topicLabel}</button>;
+  const heading = <h3 id="ask-explore-picker-title" className="mt-4 text-base font-semibold text-slate-900">{selector.status === 'ready' ? selector.selection.title : selector.starter.label}</h3>;
+  if (selector.status === 'loading') return <section aria-labelledby="ask-explore-picker-title" data-ask-explore="picker">{heading}<p className="mt-2 text-sm text-slate-500" role="status">Checking your home…</p>{back}</section>;
+  const unreadable = selector.status === 'failed' || selector.selection.state === 'UNAVAILABLE';
+  if (unreadable) {
+    return (
+      <section aria-labelledby="ask-explore-picker-title" data-ask-explore="picker">
+        {heading}
+        <p className="mt-2 text-sm text-slate-600" role="status" data-explore-picker-state="unavailable">{selector.status === 'ready' ? selector.selection.explanation : 'We could not check that right now. Nothing has changed.'}</p>
+        <div className="flex flex-wrap gap-2"><button type="button" onClick={onRetry} className="mt-3 min-h-10 rounded-xl border border-slate-300 px-3.5 text-sm font-medium text-slate-800 hover:border-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">Try again</button>{back}</div>
+      </section>
+    );
+  }
+  const { selection } = selector;
+  if (selection.state === 'NONE_ELIGIBLE') {
+    return <section aria-labelledby="ask-explore-picker-title" data-ask-explore="picker">{heading}<p className="mt-2 text-sm text-slate-600" role="status" data-explore-picker-state="none">{selection.explanation}</p>{back}</section>;
+  }
+  return (
+    <section aria-labelledby="ask-explore-picker-title" data-ask-explore="picker">
+      {heading}
+      <ul className="mt-2 space-y-1.5">{selection.options.map((option) => {
+        const available = option.availability === 'AVAILABLE';
+        return (
+          <li key={option.targetId}>
+            <button type="button" disabled={!available || busy} aria-describedby={`ask-explore-option-${option.targetId}`} onClick={() => onChoose(option)}
+              className="group flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-left text-sm font-medium text-slate-800 shadow-sm transition hover:border-teal-300 hover:text-teal-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-slate-200 disabled:hover:text-slate-800">
+              <span>{option.label}<span id={`ask-explore-option-${option.targetId}`} className="mt-0.5 block text-xs font-normal text-slate-500">{available ? option.summary : reasonCopy(option)}</span></span>
+              {available && <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-teal-700" aria-hidden="true" />}
+            </button>
+          </li>
+        );
+      })}</ul>
+      {selection.truncated && <p className="mt-2 text-xs text-slate-500">Showing the most recent ones.</p>}
+      {back}
     </section>
   );
 }

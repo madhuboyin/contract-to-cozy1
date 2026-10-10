@@ -1,14 +1,14 @@
 import React, { useRef } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup, indicatorText, useExploreFocus, type ExploreState } from '../workspace/ExploreWithCozy';
+import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup, ExploreTargetPicker, indicatorText, useExploreFocus, type ExploreState } from '../workspace/ExploreWithCozy';
 import { CollapsedConversationRail } from '../workspace/CollapsedConversationRail';
 import { ConversationHistoryNav } from '../workspace/ConversationHistoryNav';
-import type { AskDiscoveryStarter, AskDiscoveryTopic } from '@/features/ask/types';
+import type { AskDiscoveryStarter, AskDiscoveryTopic, AskTargetOption, AskTargetSelection } from '@/features/ask/types';
 
 // Explore with Cozy, Phase 2 (docs/product/ASK_COZY_LIGHTWEIGHT_CAPABILITY_DISCOVERY_IMPLEMENTATION_PLAN.md). The real components and hook run;
 // the harness stands in for AskWorkspace's wiring (a hidden-not-unmounted conversation, one `send` per starter).
 const starter = (id: string, operationId: string, overrides: Partial<AskDiscoveryStarter> = {}): AskDiscoveryStarter => ({
-  id, entryId: `entry-${id}`, capabilityId: `cap-${id}`, label: `Label ${id}`, message: `Message ${id}`, operationId, interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId: 'home-1' }, ...overrides,
+  id, entryId: `entry-${id}`, capabilityId: `cap-${id}`, selectorId: null, label: `Label ${id}`, message: `Message ${id}`, operationId, interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId: 'home-1' }, ...overrides,
 });
 const topics: AskDiscoveryTopic[] = [
   { id: 'DIY_PROJECTS', label: 'DIY & Projects', order: 2, indicator: null, starters: [starter('diy-active', 'DIY_PROJECTS')] },
@@ -229,5 +229,88 @@ describe('Explore with Cozy visibility', () => {
     io.show();
     expect(onStartersVisible).toHaveBeenLastCalledWith('DIY_PROJECTS', topics.find((t) => t.id === 'DIY_PROJECTS')!.starters);
     expect(onStartersVisible).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ExploreTargetPicker (IW-SHELL-022)', () => {
+  const starterForPicker = starter('add-detail', 'PROPERTY_CONTEXT_AREA_CAPTURE', { interactionType: 'SELECT_TARGET', selectorId: 'PROPERTY_AREA' });
+  const option = (targetId: string, over: Partial<AskTargetOption> = {}): AskTargetOption => ({
+    targetId, label: `Area ${targetId}`, summary: '2 details to add', availability: 'AVAILABLE', reasonCodes: [],
+    launch: { operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', message: `Fill in ${targetId}.`, entityType: 'PROPERTY_CONTEXT_AREA', entityId: targetId }, ...over,
+  });
+  const selection = (over: Partial<AskTargetSelection> = {}): AskTargetSelection => ({
+    selectorId: 'PROPERTY_AREA', propertyId: 'home-1', state: 'OPTIONS', title: 'Which part of your home record?', options: [option('SYSTEMS')], explanation: null, truncated: false, generatedAt: '2026-10-10T00:00:00.000Z', ...over,
+  });
+  const mount = (selector: Parameters<typeof ExploreTargetPicker>[0]['selector'], busy = false) => {
+    const handlers = { onChoose: jest.fn(), onCancel: jest.fn(), onRetry: jest.fn() };
+    render(<ExploreTargetPicker selector={selector} topicLabel="My Home Record" busy={busy} {...handlers} />);
+    return handlers;
+  };
+
+  it('a single option is still an explicit choice: showing it launches nothing, and clicking it launches that option once', () => {
+    const handlers = mount({ starter: starterForPicker, status: 'ready', selection: selection() });
+    expect(screen.getByRole('heading', { name: 'Which part of your home record?' })).toBeInTheDocument();
+    expect(handlers.onChoose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Area SYSTEMS/ }));
+    expect(handlers.onChoose).toHaveBeenCalledTimes(1);
+    expect(handlers.onChoose).toHaveBeenCalledWith(expect.objectContaining({ targetId: 'SYSTEMS' }));
+  });
+
+  it('an unavailable option is disabled and says why; an available one beside it still works', () => {
+    const handlers = mount({ starter: starterForPicker, status: 'ready', selection: selection({ options: [option('SAFETY', { availability: 'UNAVAILABLE', reasonCodes: ['ASK_PERMISSION_REQUIRED'] }), option('CORE')] }) });
+    const locked = screen.getByRole('button', { name: /Area SAFETY/ });
+    expect(locked).toBeDisabled();
+    expect(locked).toHaveAccessibleDescription('Needs more access to this home.');
+    fireEvent.click(locked);
+    expect(handlers.onChoose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Area CORE/ }));
+    expect(handlers.onChoose).toHaveBeenCalledTimes(1);
+  });
+
+  it('options are disabled while a request is in flight', () => {
+    mount({ starter: starterForPicker, status: 'ready', selection: selection() }, true);
+    expect(screen.getByRole('button', { name: /Area SYSTEMS/ })).toBeDisabled();
+  });
+
+  it('nothing eligible is an honest explanation with a way back, not a failure', () => {
+    const handlers = mount({ starter: starterForPicker, status: 'ready', selection: selection({ state: 'NONE_ELIGIBLE', options: [], explanation: 'Nothing is missing in any area right now, so there is nothing to add.' }) });
+    expect(document.querySelector('[data-explore-picker-state="none"]')).toHaveTextContent('nothing to add');
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to My Home Record' }));
+    expect(handlers.onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('a source that could not be read, and a request that failed, are each shown as unavailable with a retry, never as "nothing to choose"', () => {
+    for (const selector of [
+      { starter: starterForPicker, status: 'ready' as const, selection: selection({ state: 'UNAVAILABLE', options: [], explanation: 'Your home record could not be checked right now. Nothing has changed. Try again in a moment.' }) },
+      { starter: starterForPicker, status: 'failed' as const },
+    ]) {
+      const { unmount } = render(<ExploreTargetPicker selector={selector} topicLabel="My Home Record" busy={false} onChoose={jest.fn()} onCancel={jest.fn()} onRetry={jest.fn()} />);
+      expect(document.querySelector('[data-explore-picker-state="unavailable"]')).not.toBeNull();
+      expect(document.querySelector('[data-explore-picker-state="none"]')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('loading is announced, offers no options, and still allows going back; a truncated list says so', () => {
+    const handlers = mount({ starter: starterForPicker, status: 'loading' });
+    expect(screen.getByRole('status')).toHaveTextContent('Checking your home');
+    expect(screen.queryAllByRole('button').map((button) => button.textContent)).toEqual(['Back to My Home Record']);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to My Home Record' }));
+    expect(handlers.onCancel).toHaveBeenCalled();
+    render(<ExploreTargetPicker selector={{ starter: starterForPicker, status: 'ready', selection: selection({ truncated: true }) }} topicLabel="X" busy={false} onChoose={jest.fn()} onCancel={jest.fn()} onRetry={jest.fn()} />);
+    expect(screen.getByText('Showing the most recent ones.')).toBeInTheDocument();
+  });
+
+  it('the focused view shows the picker in place of the starters while a selector is open, and Not now still closes everything', () => {
+    const onClose = jest.fn();
+    const withSelector: AskDiscoveryTopic[] = [{ ...topics[2], starters: [starterForPicker] }];
+    render(<ExploreFocusedView topics={withSelector} topicId="HOME_RECORD" busy={false} onSelectTopic={jest.fn()} onStart={jest.fn()} onClose={onClose}
+      selector={{ starter: starterForPicker, status: 'ready', selection: selection() }} onChooseTarget={jest.fn()} onCancelSelector={jest.fn()} onRetrySelector={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Label add-detail' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Area SYSTEMS/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

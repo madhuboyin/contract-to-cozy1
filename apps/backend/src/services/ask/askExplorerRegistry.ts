@@ -19,6 +19,8 @@ import { getAskAudiencePolicy } from './askAudiencePolicy';
 import { ASK_DISCOVERY_BINDINGS, CARD_ENTRY_BINDINGS, KNOWN_CARD_BRIDGE_DISAGREEMENTS, type AskCapabilityBinding } from './askCapabilityBindings';
 import { getAskDomainCommandByOperation } from './askDomainCommandRegistry';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, resolveAskOperation, type AskOperationId } from './askOperationRegistry';
+import { getAskTargetSelector } from './askTargetSelectors';
+import type { AskTargetSelectorId } from '../../productFramework/ask/askTargetSelection.contract';
 
 export type AskExplorerGroupId = 'UNDERSTAND' | 'MAINTAIN' | 'PROTECT' | 'SAVE' | 'DECIDE' | 'PLAN_MONITOR';
 
@@ -45,6 +47,8 @@ export interface AskExplorerEntry {
   kind: AskCapabilityBinding['kind'];
   interactionType: AskCapabilityBinding['interactionType'];
   launch: AskCapabilityBinding['launch'];
+  /** Set when `launch` is SELECTOR: the domain-owned selector that supplies the target. */
+  selectorId?: AskTargetSelectorId;
   /** The capability's approved intent aliases (canonical), searched as text only. */
   aliases: readonly string[];
   consequence?: string;
@@ -78,6 +82,7 @@ export function deriveAskExplorerEntries(
       kind: binding.kind,
       interactionType: binding.interactionType,
       launch: binding.launch,
+      ...(binding.selectorId ? { selectorId: binding.selectorId } : {}),
       aliases: [...new Set(capability.presentation.intentAliases)],
       ...(binding.consequence ? { consequence: binding.consequence } : {}),
     }];
@@ -94,7 +99,8 @@ export const ASK_EXPLORER_ENTRIES: readonly AskExplorerEntry[] = Object.freeze(d
 export function buildAskExplorerGroups(capabilities: ReadonlyArray<Pick<CapabilityCatalogItem, 'id' | 'outcomeCategory'>>): ConciergeHomeView['capabilityGroups'] {
   return ASK_EXPLORER_GROUPS.flatMap((group) => {
     const capabilityIds = capabilities.filter((capability) => capability.outcomeCategory === group.outcomeCategory).map((capability) => capability.id);
-    const prompts = ASK_EXPLORER_ENTRIES.filter((entry) => entry.groupId === group.id).map((entry) => ({
+    // An entry that needs a target chosen first is hosted by the focused topic view, which owns the selector and its Cancel; the explorer dialog does not (yet).
+    const prompts = ASK_EXPLORER_ENTRIES.filter((entry) => entry.groupId === group.id && entry.launch !== 'SELECTOR').map((entry) => ({
       id: entry.id, categoryId: group.id, categoryLabel: group.categoryLabel, question: entry.question, label: entry.label,
       operationId: entry.operationId, aliases: [...entry.aliases], ...(entry.consequence ? { note: entry.consequence } : {}),
     }));
@@ -103,7 +109,7 @@ export function buildAskExplorerGroups(capabilities: ReadonlyArray<Pick<Capabili
 }
 
 const NON_ASK_DESTINATION = /^(?:https?:|\/|#|mailto:)|\b(?:href|navigate to)\b/i;
-const ALLOWED_BINDING_KEYS: ReadonlySet<string> = new Set(['id', 'capabilityId', 'operationId', 'question', 'interactionType', 'launch', 'kind', 'consequence', 'label']);
+const ALLOWED_BINDING_KEYS: ReadonlySet<string> = new Set(['id', 'capabilityId', 'operationId', 'question', 'interactionType', 'launch', 'selectorId', 'kind', 'consequence', 'label']);
 
 export function explorerEntryById(id: string): AskExplorerEntry | undefined {
   return ASK_EXPLORER_ENTRIES.find((entry) => entry.id === id);
@@ -168,7 +174,15 @@ export function validateAskExplorerRegistry(
       if (!binding.consequence?.trim() || !/confirm/i.test(binding.consequence)) issues.push(`${where}: a GOVERNED_WORKFLOW must state that nothing happens until the homeowner confirms`);
       if (binding.interactionType !== 'START_WORKFLOW') issues.push(`${where}: a GOVERNED_WORKFLOW starts a workflow`);
     }
-    if (binding.launch === 'MESSAGE') {
+    if (binding.launch === 'SELECTOR') {
+      // The explorer has no picker of its own: an idea that needs a chosen target must name a domain-owned selector for exactly this operation.
+      const selector = binding.selectorId ? getAskTargetSelector(binding.selectorId) : undefined;
+      if (!selector) issues.push(`${where}: a SELECTOR launch must name a registered target selector`);
+      else if (selector.operationId !== binding.operationId) issues.push(`${where}: selector ${selector.id} launches ${selector.operationId}, not ${binding.operationId}`);
+      if (binding.interactionType !== 'START_WORKFLOW') issues.push(`${where}: a SELECTOR launch starts a workflow`);
+    } else if (binding.selectorId) {
+      issues.push(`${where}: selectorId is only valid with a SELECTOR launch`);
+    } else if (binding.launch === 'MESSAGE') {
       if (!definition.messageRoutable) issues.push(`${where}: ${binding.operationId} is internal-only, so it needs DECLARED_OPERATION launch`);
       else if (resolveAskOperation(binding.question).operationId !== binding.operationId) issues.push(`${where}: question does not resolve to ${binding.operationId}`);
     } else if (definition.messageRoutable) {

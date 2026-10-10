@@ -21,9 +21,13 @@ export function areaCaptureFallbackHref(propertyId: string, scope: string): stri
   return anchor ? `${base}/edit#${anchor}` : base;
 }
 
-export async function areaCaptureProgress(userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, excluded: ReadonlySet<string> = new Set()) {
-  // Every area scope is loaded: fact applicability (for example a condo not owning a private fence) reads facts from other areas.
-  const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] });
+/**
+ * The askable, skipped, and other-surface facts of ONE area, from a snapshot that was already read. Pure, so a caller that needs several areas (the
+ * Ask target selector) reads the Property Context once instead of once per area.
+ */
+export function areaCaptureProgressFromSnapshot(
+  snapshot: Parameters<typeof getContextCompleteness>[0], scope: PropertyAreaCaptureScope, skip: Set<string>, excluded: ReadonlySet<string> = new Set(),
+) {
   const entry = getContextCompleteness(snapshot).scopes.find((candidate) => candidate.scope === scope);
   const unmet = entry ? [...entry.missingFactKeys, ...entry.conflictedFactKeys, ...entry.staleFactKeys] : [];
   const writable = new Set<string>(PROPERTY_FACT_CATALOG.filter((fact) => fact.scope === scope && fact.writable).map((fact) => fact.key));
@@ -33,7 +37,16 @@ export async function areaCaptureProgress(userId: string, propertyId: string, sc
     askable: unmet.filter((key) => writable.has(key) && !skip.has(key) && !excluded.has(key)),
     skipped: unmet.filter((key) => writable.has(key) && skip.has(key)),
     otherSurface: unmet.filter((key) => !writable.has(key)),
+    missing: unmet.filter((key) => entry?.missingFactKeys.includes(key)).filter((key) => writable.has(key)),
+    conflicted: unmet.filter((key) => entry?.conflictedFactKeys.includes(key)).filter((key) => writable.has(key)),
+    stale: unmet.filter((key) => entry?.staleFactKeys.includes(key)).filter((key) => writable.has(key)),
   };
+}
+
+export async function areaCaptureProgress(userId: string, propertyId: string, scope: PropertyAreaCaptureScope, skip: Set<string>, excluded: ReadonlySet<string> = new Set()) {
+  // Every area scope is loaded: fact applicability (for example a condo not owning a private fence) reads facts from other areas.
+  const snapshot = await getPropertyContext(propertyId, { userId }, { scopes: [...PROPERTY_AREA_CAPTURE_SCOPES] });
+  return areaCaptureProgressFromSnapshot(snapshot, scope, skip, excluded);
 }
 
 export const PROPERTY_SCOPE_LABELS: Record<string, string> = {

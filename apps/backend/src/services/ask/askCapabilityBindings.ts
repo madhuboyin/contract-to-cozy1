@@ -6,6 +6,7 @@
 // definition belong to the capability registry; availability, audience, authorization, safety and launch behaviour belong to the Ask
 // operation registry; and operation-to-capability ownership is the validated skill guidance bridge. askExplorerRegistry.ts derives the rest
 // and rejects any binding that restates it.
+import type { AskTargetSelectorId } from '../../productFramework/ask/askTargetSelection.contract';
 import { DIY_TEMPLATE_BROWSE_ACTION } from '../diy/projectGuide';
 import type { AskOperationId } from './askOperationRegistry';
 import { PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, PROPERTY_SUMMARY_STARTER_MESSAGE } from './suggestedActions/starterCandidates';
@@ -99,8 +100,14 @@ export interface AskCapabilityBinding {
   /** The reviewed message a selection sends. */
   question: string;
   interactionType: 'CONVERSATION_CONTINUE' | 'START_WORKFLOW';
-  /** MESSAGE: the question resolves to the operation by itself. DECLARED_OPERATION: an internal operation reached only through the launch context. */
-  launch: 'MESSAGE' | 'DECLARED_OPERATION';
+  /**
+   * MESSAGE: the question resolves to the operation by itself. DECLARED_OPERATION: an internal operation reached only through the launch context.
+   * SELECTOR: the operation needs a target chosen first; the homeowner picks it from a domain-owned selector (`selectorId`), and `question` is only the
+   * prompt that names the idea, never a message that is sent. The chosen option carries the real launch.
+   */
+  launch: 'MESSAGE' | 'DECLARED_OPERATION' | 'SELECTOR';
+  /** Required when `launch` is SELECTOR: the target selector that supplies the choice. */
+  selectorId?: AskTargetSelectorId;
   /** READ is an Ask-native read; GOVERNED_WORKFLOW only begins a confirmation-gated capture, proposal or review. */
   kind: 'READ' | 'GOVERNED_WORKFLOW';
   /** Required for GOVERNED_WORKFLOW: what selecting it does and that nothing is saved until the homeowner confirms. */
@@ -111,16 +118,22 @@ export interface AskCapabilityBinding {
 
 const read = (
   id: string, capabilityId: string, operationId: AskOperationId, question: string, label: string,
-  options: { launch?: AskCapabilityBinding['launch']; interactionType?: AskCapabilityBinding['interactionType'] } = {},
+  options: { launch?: AskCapabilityBinding['launch']; interactionType?: AskCapabilityBinding['interactionType']; selectorId?: AskTargetSelectorId } = {},
 ): AskCapabilityBinding => ({
   id, capabilityId, operationId, question, label, kind: 'READ',
   launch: options.launch ?? 'MESSAGE', interactionType: options.interactionType ?? 'CONVERSATION_CONTINUE',
+  ...(options.selectorId ? { selectorId: options.selectorId } : {}),
 });
 
 // Entry ids are stable identifiers (telemetry, topic starters), so they keep their original names even where the derived group differs from the
 // id's prefix (for example `protect-coverage` now sits with its capability's outcome, Compare and decide).
 export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.freeze([
   read('understand-summary', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_SUMMARY_STARTER_MESSAGE, 'Summarize my home record'),
+  {
+    id: 'understand-add-detail', capabilityId: 'property-brief', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', question: 'Help me add a missing detail', label: 'Add a missing detail',
+    kind: 'GOVERNED_WORKFLOW', interactionType: 'START_WORKFLOW', launch: 'SELECTOR', selectorId: 'PROPERTY_AREA',
+    consequence: 'Cozy asks about the area you pick and shows a review first. Nothing is saved until you confirm.',
+  },
   read('understand-completeness', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, 'How complete is my home record?'),
 
   read('maintain-attention', 'home-operations', 'HOME_ACTIONS', 'What needs my attention at home?', 'What needs attention?'),
@@ -130,6 +143,7 @@ export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.fr
   read('maintain-next-season', 'seasonal-maintenance', 'SEASONAL_HOME_CARE', SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE, 'Get ready for next season', { launch: 'DECLARED_OPERATION', interactionType: 'START_WORKFLOW' }),
   read('maintain-diy', 'diy', 'DIY_PROJECTS', 'Show my DIY projects', 'Show my DIY projects'),
   read('maintain-diy-start', 'diy', 'DIY_TEMPLATE_BROWSE', DIY_TEMPLATE_BROWSE_ACTION.message, 'Find a project I can start', { launch: 'DECLARED_OPERATION', interactionType: 'START_WORKFLOW' }),
+  read('maintain-diy-continue', 'diy', 'DIY_PROJECT_GUIDE', 'Continue a DIY project', 'Continue a project', { launch: 'SELECTOR', interactionType: 'START_WORKFLOW', selectorId: 'DIY_PROJECT' }),
   {
     id: 'maintain-create-task', capabilityId: 'maintenance', operationId: 'MAINTENANCE_TASK_CREATE', question: 'Create a maintenance task', label: 'Add a maintenance task',
     kind: 'GOVERNED_WORKFLOW', interactionType: 'START_WORKFLOW', launch: 'MESSAGE',

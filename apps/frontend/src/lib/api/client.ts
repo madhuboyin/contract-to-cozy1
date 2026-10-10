@@ -160,7 +160,7 @@ import type {
   CapabilityContextType,
   RelatedCapabilitiesResponse,
 } from '@/features/tools/capabilityTypes';
-import type { AskExecutionResponse, ConciergeHomeView, CreateAskExecutionPayload, SubmitAskCapturePayload } from '@/features/ask/types';
+import type { AskExecutionResponse, AskTargetSelection, AskTargetSelectorId, ConciergeHomeView, CreateAskExecutionPayload, SubmitAskCapturePayload } from '@/features/ask/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
 
@@ -1073,6 +1073,9 @@ class APIClient {
   }
   async getConciergeHome(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<ConciergeHomeView>> {
     return this.request<ConciergeHomeView>(`/api/ask/concierge-home?propertyId=${encodeURIComponent(propertyId)}`, options);
+  }
+  async getAskTargetSelection(selectorId: AskTargetSelectorId, propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<AskTargetSelection>> {
+    return this.request<AskTargetSelection>(`/api/ask/target-selectors/${encodeURIComponent(selectorId)}?propertyId=${encodeURIComponent(propertyId)}`, options);
   }
   async getAskSession(sessionId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<{ executions: AskExecutionResponse[] }>> {
     return this.request<{ executions: AskExecutionResponse[] }>(`/api/ask/sessions/${encodeURIComponent(sessionId)}`, options);

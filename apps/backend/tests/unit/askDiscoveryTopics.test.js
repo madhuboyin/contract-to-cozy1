@@ -46,15 +46,19 @@ test('every starter is registry-backed, property-scoped and AVAILABLE for an own
   }
 });
 
-test('a viewer sees the same read-only starters (all viewer-floor operations)', () => {
-  assert.deepEqual(startersOf(project({ householdRole: 'VIEWER' })).map((s) => [s.id, s.availability]), startersOf(project()).map((s) => [s.id, 'AVAILABLE']));
+test('a viewer sees the same starters, except the one that begins a write, which is honestly unavailable to them', () => {
+  const viewer = startersOf(project({ householdRole: 'VIEWER' })).map((s) => [s.id, s.availability]);
+  const owner = startersOf(project()).map((s) => [s.id, 'AVAILABLE']);
+  assert.deepEqual(viewer.filter(([id]) => id !== 'home-record-add-detail'), owner.filter(([id]) => id !== 'home-record-add-detail'));
+  assert.deepEqual(viewer.find(([id]) => id === 'home-record-add-detail'), ['home-record-add-detail', 'UNAVAILABLE']);
+  assert.deepEqual(startersOf(project({ householdRole: 'VIEWER' })).find((s) => s.id === 'home-record-add-detail').reasonCodes, ['ASK_PERMISSION_REQUIRED']);
 });
 
 test('a disabled operation is not advertised, and its topic stays', () => {
   const controls = readAskOperationalControls();
   const topics = project({ controls: { ...controls, operationEnabled: (id) => id !== 'DIY_TEMPLATE_BROWSE' && controls.operationEnabled(id) } });
   const diy = topics.find((t) => t.id === 'DIY_PROJECTS');
-  assert.deepEqual(diy.starters.map((s) => s.id), ['diy-active']);
+  assert.deepEqual(diy.starters.map((s) => s.id), ['diy-active', 'diy-continue']);
   assert.equal(topics.length, 3);
 });
 

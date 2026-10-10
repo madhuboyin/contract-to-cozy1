@@ -28,7 +28,7 @@ test('the bindings, the derived entries, the topics and the card bindings all va
 });
 
 test('a binding holds only Ask-specific facts: no group, alias, description or outcome of its own', () => {
-  const allowed = new Set(['id', 'capabilityId', 'operationId', 'question', 'interactionType', 'launch', 'kind', 'consequence', 'label']);
+  const allowed = new Set(['id', 'capabilityId', 'operationId', 'question', 'interactionType', 'launch', 'selectorId', 'kind', 'consequence', 'label']);
   for (const binding of ASK_DISCOVERY_BINDINGS) for (const key of Object.keys(binding)) assert.ok(allowed.has(key), `${binding.id}: ${key}`);
 });
 
@@ -93,11 +93,25 @@ test('no binding is a phrase that falls to the grounded-guidance fallback, a mon
   }
 });
 
-test('the only write-oriented binding begins a confirmation-gated workflow and states its consequence', () => {
+test('the write-oriented bindings begin confirmation-gated workflows and state their consequence; the area one is reached only through a selector', () => {
   const governed = ASK_DISCOVERY_BINDINGS.filter((binding) => binding.kind === 'GOVERNED_WORKFLOW');
-  assert.deepEqual(governed.map((binding) => binding.id), ['maintain-create-task']);
-  assert.match(governed[0].consequence, /confirm/i);
-  assert.equal(governed[0].interactionType, 'START_WORKFLOW');
+  assert.deepEqual(governed.map((binding) => binding.id), ['understand-add-detail', 'maintain-create-task']);
+  for (const binding of governed) { assert.match(binding.consequence, /confirm/i, binding.id); assert.equal(binding.interactionType, 'START_WORKFLOW', binding.id); }
+  assert.deepEqual(ASK_DISCOVERY_BINDINGS.filter((binding) => binding.launch === 'SELECTOR').map((binding) => [binding.id, binding.selectorId]), [['understand-add-detail', 'PROPERTY_AREA'], ['maintain-diy-continue', 'DIY_PROJECT']]);
+});
+
+test('an idea that needs a chosen target must name a registered selector for exactly its operation, and the explorer dialog does not host it', () => {
+  const selectorBinding = ASK_DISCOVERY_BINDINGS.find((binding) => binding.id === 'maintain-diy-continue');
+  const cases = [
+    [{ ...selectorBinding, id: 'x-no-selector', selectorId: undefined }, /x-no-selector: a SELECTOR launch must name a registered target selector/],
+    [{ ...selectorBinding, id: 'x-wrong-selector', selectorId: 'PROPERTY_AREA' }, /x-wrong-selector: selector PROPERTY_AREA launches PROPERTY_CONTEXT_AREA_CAPTURE, not DIY_PROJECT_GUIDE/],
+    [{ ...selectorBinding, id: 'x-stray-selector', launch: 'MESSAGE', operationId: 'DIY_PROJECTS', question: 'Show my DIY projects' }, /x-stray-selector: selectorId is only valid with a SELECTOR launch/],
+    [{ ...selectorBinding, id: 'x-not-workflow', interactionType: 'CONVERSATION_CONTINUE' }, /x-not-workflow: a SELECTOR launch starts a workflow/],
+  ];
+  for (const [binding, expected] of cases) assert.match(issuesFor(binding), expected, binding.id);
+  const capabilities = ASK_EXPLORER_GROUPS.map((group) => ({ id: `cap-${group.id}`, outcomeCategory: group.outcomeCategory }));
+  const ids = buildAskExplorerGroups(capabilities).flatMap((group) => group.prompts.map((prompt) => prompt.id));
+  assert.ok(!ids.includes('maintain-diy-continue') && !ids.includes('understand-add-detail'), 'selector entries are not explorer prompts');
 });
 
 test('reviewed out: the fallback repair/replace prompt, the mis-routed reserve plan, the task-picking deadline monitor, and the workflow-only quote review', () => {
@@ -143,7 +157,7 @@ test('the Concierge Home groups come from the derivation: only groups with catal
   assert.deepEqual(groups.map((group) => group.id), ['UNDERSTAND', 'MAINTAIN', 'PROTECT', 'SAVE', 'DECIDE', 'PLAN_MONITOR']);
   for (const group of groups) ConciergeHomeCapabilityGroupSchema.parse(group);
   const prompts = groups.flatMap((group) => group.prompts);
-  assert.equal(prompts.length, ASK_EXPLORER_ENTRIES.length);
+  assert.equal(prompts.length, ASK_EXPLORER_ENTRIES.filter((entry) => entry.launch !== 'SELECTOR').length);
   const create = prompts.find((prompt) => prompt.id === 'maintain-create-task');
   assert.equal(create.operationId, 'MAINTENANCE_TASK_CREATE');
   assert.match(create.note, /Nothing is saved until you confirm/);

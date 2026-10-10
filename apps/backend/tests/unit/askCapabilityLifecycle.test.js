@@ -14,6 +14,7 @@ const { CreateAskExecutionRequestSchema } = require('../../src/productFramework/
 const { buildAskDiscoveryTopics } = require('../../src/services/ask/askDiscoveryTopics.ts');
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
 const { explorerEntryById } = require('../../src/services/ask/askExplorerRegistry.ts');
+const { getAskTargetSelector } = require('../../src/services/ask/askTargetSelectors.ts');
 
 const { planAskCapabilityLifecycle, resolveDiscoveryAttribution, readStoredDiscoveryClaim, recordAskCapabilityLifecycle, validateAskCompletionOutcomes, ASK_COMPLETION_OUTCOMES } = lifecycle;
 const capability = (id) => canonicalCapabilityRegistry.getById(id);
@@ -114,7 +115,9 @@ test('readStoredDiscoveryClaim reads the claim and the declared operation from t
 
 test('every discovery entry builds a valid canonical lifecycle event for every stage it can emit', () => {
   for (const binding of ASK_DISCOVERY_BINDINGS) {
-    const attribution = resolveDiscoveryAttribution({ claim: { entryId: binding.id, surface: 'EXPLORER' }, declaredOperationId: binding.operationId, message: binding.question });
+    // An idea behind a selector sends the chosen option's message, not its own prompt.
+    const message = binding.launch === 'SELECTOR' ? getAskTargetSelector(binding.selectorId).messages[0] : binding.question;
+    const attribution = resolveDiscoveryAttribution({ claim: { entryId: binding.id, surface: 'EXPLORER' }, declaredOperationId: binding.operationId, message });
     assert.ok(attribution, binding.id);
     for (const stage of ['STARTED', 'OUTPUT_GENERATED', 'ABANDONED']) {
       const events = buildToolLifecycleAnalyticsEvents({ userId: 'u', propertyId: 'p', events: [{ toolId: attribution.capabilityId, stage, surface: 'ask_discovery', sourceKind: 'CATALOG', sourceId: binding.id, manifestVersion: capability(attribution.capabilityId).version, metadata: {} }] });

@@ -82,6 +82,7 @@ export type CtcEventName =
   | 'ask_discovery_started'
   | 'ask_discovery_completed'
   | 'ask_discovery_abandoned'
+  | 'ask_discovery_selector_opened'
   | 'ask_explorer_search'
   // Property record
   | 'property_record_viewed'
@@ -402,7 +403,9 @@ export interface CtcEventProperties {
   ask_discovery_starter_selected: { propertyId?: string | null; topicId: string; starterId: string; entryId: string; capabilityId: string; operationId: string };
   ask_discovery_started: { propertyId?: string | null; topicId: string; starterId: string; entryId: string; capabilityId: string; operationId: string };
   ask_discovery_completed: { propertyId?: string | null; topicId: string; starterId: string; entryId: string; capabilityId: string; operationId: string; executionId?: string; status: string; succeeded: boolean };
-  ask_discovery_abandoned: { propertyId?: string | null; topicId: string; reason: 'DISMISSED' | 'PROPERTY_CHANGED' };
+  ask_discovery_abandoned: { propertyId?: string | null; topicId: string; reason: 'DISMISSED' | 'PROPERTY_CHANGED' | 'SELECTOR_CANCELLED' };
+  // A target selector was read. selectorId and the bucketed option count are bounded; no target id, label, or summary is ever recorded.
+  ask_discovery_selector_opened: { propertyId?: string | null; topicId: string; starterId: string; entryId: string; selectorId: string; state: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE' | 'REQUEST_FAILED'; optionBucket: '0' | '1' | '2-5' | '6+' };
   ask_explorer_search: { propertyId?: string | null; resultBucket: '0' | '1' | '2-5' | '6+'; selected: boolean };
   property_record_viewed: {
     propertyId: string;

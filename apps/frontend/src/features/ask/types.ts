@@ -509,10 +509,37 @@ export interface AskDiscoveryStarter {
   label: string;
   message: string;
   operationId: string;
-  interactionType: 'CONVERSATION_CONTINUE' | 'START_WORKFLOW';
+  // SELECT_TARGET: choosing it opens the domain-owned target selector named by `selectorId`; `message` is then only the idea's prompt and is never sent.
+  interactionType: 'CONVERSATION_CONTINUE' | 'START_WORKFLOW' | 'SELECT_TARGET';
+  selectorId: AskTargetSelectorId | null;
   availability: 'AVAILABLE' | 'NEEDS_CONTEXT' | 'UNAVAILABLE';
   reasonCodes: string[];
   entityContext: Record<string, string> | null;
+}
+
+export type AskTargetSelectorId = 'PROPERTY_AREA' | 'DIY_PROJECT';
+
+// Mirrors AskTargetOption/AskTargetSelection in backend askTargetSelection.contract.ts (IW-SHELL-022). A selection is a READ; choosing an option launches
+// the target operation through the ordinary Ask path, which revalidates everything itself.
+export interface AskTargetOption {
+  targetId: string;
+  label: string;
+  summary: string | null;
+  availability: 'AVAILABLE' | 'UNAVAILABLE';
+  reasonCodes: string[];
+  launch: { operationId: string; message: string; entityType: string; entityId: string };
+}
+
+export interface AskTargetSelection {
+  selectorId: AskTargetSelectorId;
+  propertyId: string;
+  // UNAVAILABLE means the source could not be read; it is never an empty result.
+  state: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE';
+  title: string;
+  options: AskTargetOption[];
+  explanation: string | null;
+  truncated: boolean;
+  generatedAt: string;
 }
 
 export interface AskDiscoveryTopic {

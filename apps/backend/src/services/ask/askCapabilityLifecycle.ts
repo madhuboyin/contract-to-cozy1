@@ -29,6 +29,7 @@ import { canonicalizeToolLifecycleId } from '../analytics/toolLifecycle.contract
 import { ASK_OPERATION_CAPABILITY } from '../intelligence/capabilitySkillGuidanceBridge.registry';
 import { ASK_DISCOVERY_TOPICS } from './askDiscoveryTopics';
 import { explorerEntryById } from './askExplorerRegistry';
+import { getAskTargetSelector } from './askTargetSelectors';
 import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from './askOperationRegistry';
 import { asInputJson } from './support/executionState';
 
@@ -125,7 +126,11 @@ export function resolveDiscoveryAttribution(input: {
   const entry = explorerEntryById(claim.entryId);
   if (!entry) return null;
   if (input.declaredOperationId !== entry.operationId) return null;
-  if (input.message.trim() !== entry.question.trim()) return null;
+  // An idea that needs a chosen target sends the CHOSEN OPTION's message, which only its own selector can produce; any other idea sends its own question.
+  if (entry.launch === 'SELECTOR') {
+    const selector = entry.selectorId ? getAskTargetSelector(entry.selectorId) : undefined;
+    if (!selector || selector.operationId !== entry.operationId || !selector.messages.includes(input.message.trim())) return null;
+  } else if (input.message.trim() !== entry.question.trim()) return null;
   if (!(entry.operationId in ASK_OPERATION_DEFINITIONS)) return null;
   const capability = (input.registry ?? canonicalCapabilityRegistry).getById(entry.capabilityId);
   if (!capability || canonicalizeToolLifecycleId(capability.id) !== capability.id) return null;

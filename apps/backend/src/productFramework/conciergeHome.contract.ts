@@ -14,6 +14,7 @@
 // source of truth, only a read composition of three existing ones.
 
 import { z } from 'zod';
+import { ASK_TARGET_SELECTOR_IDS } from './ask/askTargetSelection.contract';
 
 export const ConciergeHomeSubjectSchema = z.object({
   kind: z.enum(['INVENTORY_ITEM', 'CHECKLIST', 'PROPERTY', 'EVENT', 'SALE_READINESS_ITEM', 'GUIDANCE_JOURNEY', 'WORK_ITEM']),
@@ -154,7 +155,9 @@ export const AskDiscoveryStarterSchema = z.object({
   label: z.string().trim().min(1).max(120),
   message: z.string().trim().min(1).max(300),
   operationId: z.string().trim().min(1).max(120),
-  interactionType: z.enum(['CONVERSATION_CONTINUE', 'START_WORKFLOW']),
+  // SELECT_TARGET: choosing the starter opens a domain-owned target selector (`selectorId`) instead of sending `message`, which is then only the idea's prompt.
+  interactionType: z.enum(['CONVERSATION_CONTINUE', 'START_WORKFLOW', 'SELECT_TARGET']),
+  selectorId: z.enum(ASK_TARGET_SELECTOR_IDS).nullable(),
   availability: z.enum(['AVAILABLE', 'NEEDS_CONTEXT', 'UNAVAILABLE']),
   reasonCodes: z.array(z.string().max(80)),
   entityContext: z.record(z.string(), z.string()).nullable(),

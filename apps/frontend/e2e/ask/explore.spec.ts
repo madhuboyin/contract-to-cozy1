@@ -76,3 +76,51 @@ test('More ideas: a search with no match says so and clears back to browsing', a
   await box.fill('');
   await expect(dialog.getByRole('heading', { name: 'Reduce costs' })).toBeVisible();
 });
+
+// Target selectors (IW-SHELL-022): the area chooser lives inside the focused topic view. Reading it writes nothing and a single option still waits.
+async function openAddDetail(page: import('@playwright/test').Page) {
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByRole('navigation', { name: 'Conversation actions' }).getByRole('button', { name: 'Explore with Cozy' }).click();
+  await page.getByRole('group', { name: 'Topics' }).getByRole('button', { name: 'My Home Record' }).click();
+  await page.getByRole('button', { name: 'Add a missing detail' }).click();
+}
+
+test('Add a missing detail: the chooser reads options without sending, a single option waits, and choosing it sends one request with its area', async ({ context, page }) => {
+  await installAskContext(context, { calm: 'default' });
+  const api = await installAskApi(page);
+  await openAddDetail(page);
+  const option = page.getByRole('button', { name: /Home systems/ });
+  await expect(option).toBeVisible();
+  expect(api.selectorReads).toEqual(['PROPERTY_AREA']);
+  expect(api.executionBodies).toHaveLength(0);
+  await option.click();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  expect(api.executionBodies[0]).toMatchObject({
+    message: 'Fill in the missing home systems details.', propertyId,
+    launchContext: { operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', entityType: 'PROPERTY_CONTEXT_AREA', entityId: 'SYSTEMS', discovery: { entryId: 'understand-add-detail', surface: 'TOPIC', topicId: 'HOME_RECORD' } },
+  });
+});
+
+test('Add a missing detail: Back returns to the topic and sends nothing', async ({ context, page }) => {
+  await installAskContext(context, { calm: 'default' });
+  const api = await installAskApi(page);
+  await openAddDetail(page);
+  await page.getByRole('button', { name: 'Back to My Home Record' }).click();
+  await expect(page.getByRole('button', { name: 'Add a missing detail' })).toBeVisible();
+  expect(api.executionBodies).toHaveLength(0);
+});
+
+test('Add a missing detail: nothing missing is explained, and an unreadable record offers a retry instead of claiming nothing is missing', async ({ context, page }) => {
+  await installAskContext(context, { calm: 'default' });
+  await installAskApi(page, { selectorState: 'NONE_ELIGIBLE' });
+  await openAddDetail(page);
+  await expect(page.getByText(/nothing to add/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+
+  const second = await context.newPage();
+  await installAskApi(second, { selectorState: 'UNAVAILABLE' });
+  await openAddDetail(second);
+  await expect(second.getByText(/could not be checked/i)).toBeVisible();
+  await expect(second.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(second.getByText(/nothing to add/i)).toHaveCount(0);
+});

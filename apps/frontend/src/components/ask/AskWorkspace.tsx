@@ -377,7 +377,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         <div className="flex min-w-0 flex-1 flex-col">
       {mode === 'page' && !askUnavailable && <ExploreDisclosure state={explore.state} activeTopicId={explore.focus} onOpen={explore.openFrom('DISCLOSURE')} moreIdeas={moreIdeas} onPanelVisible={explore.topicsVisible('DISCLOSURE')} />}
       <main ref={conversationScrollRef} data-ask-scroll-container="" className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
-        {explore.focus && <ExploreFocusedView topics={explore.state.topics} topicId={explore.focus} busy={loading || !sessionId} onSelectTopic={explore.openFrom('FOCUSED_VIEW')} onStart={explore.start} onClose={explore.close} onStartersVisible={explore.startersVisible} />}
+        {explore.focus && <ExploreFocusedView topics={explore.state.topics} topicId={explore.focus} busy={loading || !sessionId} onSelectTopic={explore.openFrom('FOCUSED_VIEW')} onStart={explore.start} onClose={explore.close} onStartersVisible={explore.startersVisible} selector={explore.selector} onChooseTarget={explore.chooseTarget} onCancelSelector={explore.cancelSelector} onRetrySelector={explore.retrySelector} />}
         <div className={explore.focus ? 'hidden' : 'contents'}>
         {calm && mode === 'page' && <h1 className="sr-only hidden lg:block">Ask Cozy</h1>}
         {historyLoading ? <div className="flex h-32 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading conversation</div> : askUnavailable ? (

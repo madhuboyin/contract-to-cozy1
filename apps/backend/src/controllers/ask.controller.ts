@@ -1,3 +1,4 @@
+import { loadAskTargetSelection } from '../services/ask/askTargetSelectors';
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
@@ -138,6 +139,22 @@ export async function getAskConciergeHome(req: AuthRequest, res: Response, next:
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(403).json({ success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'That home is not available for your account.' } });
+    return next(error);
+  }
+}
+
+// Capability discovery Phase 7: a read of one domain-owned target selector. Writes nothing; a source failure is a 200 with state UNAVAILABLE, never an empty list.
+export async function getAskTargetSelectionHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const propertyId = z.string().trim().min(1).max(120).safeParse(req.query.propertyId);
+    if (!propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required.' } });
+    return res.json({ success: true, data: await loadAskTargetSelection(req.params.selectorId, user.userId, propertyId.data) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_TARGET_SELECTOR_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'That selector does not exist.' } });
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(403).json({ success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'That home is not available to you.' } });
     return next(error);
   }
 }

@@ -13,13 +13,13 @@ jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }));
 jest.mock('@/lib/api/client', () => ({
   api: {
     getConciergeHome: jest.fn(), createAskExecution: jest.fn(), getRecentAskSessions: jest.fn(), searchAskSessions: jest.fn(), getAskPendingWork: jest.fn(),
-    getAskSession: jest.fn(), getProperties: jest.fn(),
+    getAskSession: jest.fn(), getProperties: jest.fn(), getAskTargetSelection: jest.fn(),
   },
 }));
 
 const mocked = api as unknown as Record<string, jest.Mock>;
 const ok = (data: unknown) => Promise.resolve({ success: true, data });
-const starter = (id: string, operationId: string, extra = {}) => ({ id, entryId: `entry-${id}`, capabilityId: `cap-${id}`, label: `Label ${id}`, message: `Message ${id}`, operationId, interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId: 'home-1' }, ...extra });
+const starter = (id: string, operationId: string, extra = {}) => ({ id, entryId: `entry-${id}`, capabilityId: `cap-${id}`, selectorId: null, label: `Label ${id}`, message: `Message ${id}`, operationId, interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId: 'home-1' }, ...extra });
 const conciergeView = (propertyId = 'home-1') => ({
   propertyId, generatedAt: '2026-10-09T00:00:00.000Z',
   journeyContext: { state: 'UNKNOWN', ownershipState: null, operatingMode: 'UNKNOWN', entryPath: null, propertyOrigin: null, contextVersion: null, capturedAt: null },
@@ -37,7 +37,7 @@ const conciergeView = (propertyId = 'home-1') => ({
   discoveryTopics: [
     { id: 'HOME_CARE', label: 'Home care', order: 1, indicator: null, starters: [starter('care-seasonal', 'SEASONAL_HOME_CARE', { interactionType: 'START_WORKFLOW' })] },
     { id: 'DIY_PROJECTS', label: 'DIY & Projects', order: 2, indicator: null, starters: [] },
-    { id: 'HOME_RECORD', label: 'My Home Record', order: 3, indicator: null, starters: [starter('record-summary', 'PROPERTY_SUMMARY')] },
+    { id: 'HOME_RECORD', label: 'My Home Record', order: 3, indicator: null, starters: [starter('record-summary', 'PROPERTY_SUMMARY'), starter('record-add-detail', 'PROPERTY_CONTEXT_AREA_CAPTURE', { interactionType: 'SELECT_TARGET', selectorId: 'PROPERTY_AREA' })] },
   ],
 });
 const execution = {
@@ -208,5 +208,97 @@ describe('AskWorkspace Explore with Cozy wiring', () => {
     expect(events().filter(([name]) => name === 'ask_explorer_search').map(([, props]) => props)).toEqual([{ propertyId: 'home-1', resultBucket: '1', selected: true }]);
     expect(JSON.stringify(events())).not.toMatch(/winter/);
     expect(events().find(([name]) => name === 'ask_prompt_selected')![1]).toEqual({ propertyId: 'home-1', promptId: 'maintain-seasonal', categoryId: 'MAINTAIN', source: 'EXPLORER' });
+  });
+
+  // ---- target selectors (IW-SHELL-022) ----------------------------------------------------------------------------------------------------------
+  const areaOption = (targetId: string, over = {}) => ({
+    targetId, label: `Area ${targetId}`, summary: '3 details to add', availability: 'AVAILABLE', reasonCodes: [],
+    launch: { operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', message: `Fill in the missing ${targetId.toLowerCase()} details.`, entityType: 'PROPERTY_CONTEXT_AREA', entityId: targetId }, ...over,
+  });
+  const selectionOf = (over = {}) => ({
+    selectorId: 'PROPERTY_AREA', propertyId: 'home-1', state: 'OPTIONS', title: 'Which part of your home record?', options: [areaOption('SYSTEMS')],
+    explanation: null, truncated: false, generatedAt: '2026-10-10T00:00:00.000Z', ...over,
+  });
+  const openSelectorStarter = async () => {
+    mount();
+    await openTopicViaDisclosure('My Home Record');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Label record-add-detail' })); });
+  };
+
+  it('choosing a selector starter reads the options and sends nothing; even a single option waits for an explicit choice', async () => {
+    mocked.getAskTargetSelection.mockImplementation(() => ok(selectionOf()));
+    await openSelectorStarter();
+    expect(mocked.getAskTargetSelection).toHaveBeenCalledTimes(1);
+    expect(mocked.getAskTargetSelection.mock.calls[0].slice(0, 2)).toEqual(['PROPERTY_AREA', 'home-1']);
+    expect(await screen.findByRole('button', { name: /Area SYSTEMS/ })).toBeInTheDocument();
+    expect(mocked.createAskExecution).not.toHaveBeenCalled();
+  });
+
+  it('choosing the option launches the target operation once, with its entity and the discovery claim', async () => {
+    mocked.getAskTargetSelection.mockImplementation(() => ok(selectionOf()));
+    await openSelectorStarter();
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Area SYSTEMS/ })); });
+    expect(mocked.createAskExecution).toHaveBeenCalledTimes(1);
+    const request = mocked.createAskExecution.mock.calls[0][0];
+    expect(request.message).toBe('Fill in the missing systems details.');
+    expect(request.propertyId).toBe('home-1');
+    expect(request.launchContext).toEqual(expect.objectContaining({
+      operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', entityType: 'PROPERTY_CONTEXT_AREA', entityId: 'SYSTEMS',
+      discovery: { entryId: 'entry-record-add-detail', surface: 'TOPIC', topicId: 'HOME_RECORD' },
+    }));
+    expect(screen.queryByRole('heading', { name: 'My Home Record' })).toBeNull();
+  });
+
+  it('Back returns to the topic\'s starters without sending anything, and records the cancellation without any target', async () => {
+    mocked.getAskTargetSelection.mockImplementation(() => ok(selectionOf()));
+    await openSelectorStarter();
+    fireEvent.click(await screen.findByRole('button', { name: 'Back to My Home Record' }));
+    expect(screen.getByRole('button', { name: 'Label record-summary' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Area SYSTEMS/ })).toBeNull();
+    expect(mocked.createAskExecution).not.toHaveBeenCalled();
+    expect(events().filter(([name]) => name === 'ask_discovery_abandoned').map(([, props]) => props)).toEqual([{ propertyId: 'home-1', topicId: 'HOME_RECORD', reason: 'SELECTOR_CANCELLED' }]);
+  });
+
+  it('nothing eligible is explained honestly', async () => {
+    mocked.getAskTargetSelection.mockImplementation(() => ok(selectionOf({ state: 'NONE_ELIGIBLE', options: [], explanation: 'Nothing is missing in any area right now, so there is nothing to add.' })));
+    await openSelectorStarter();
+    expect(await screen.findByText(/nothing to add/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it('a failed request and an unreadable source are both "could not check" with a retry that works, never "nothing to choose"', async () => {
+    mocked.getAskTargetSelection.mockImplementationOnce(() => Promise.reject(new Error('network down')));
+    await openSelectorStarter();
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(document.querySelector('[data-explore-picker-state="none"]')).toBeNull();
+    mocked.getAskTargetSelection.mockImplementationOnce(() => ok(selectionOf({ state: 'UNAVAILABLE', options: [], explanation: 'Your home record could not be checked right now. Nothing has changed. Try again in a moment.' })));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Try again' })); });
+    expect(await screen.findByText(/could not be checked/i)).toBeInTheDocument();
+    expect(document.querySelector('[data-explore-picker-state="none"]')).toBeNull();
+    mocked.getAskTargetSelection.mockImplementationOnce(() => ok(selectionOf()));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Try again' })); });
+    expect(await screen.findByRole('button', { name: /Area SYSTEMS/ })).toBeInTheDocument();
+    expect(mocked.createAskExecution).not.toHaveBeenCalled();
+  });
+
+  it('an unavailable option cannot be launched', async () => {
+    mocked.getAskTargetSelection.mockImplementation(() => ok(selectionOf({ options: [areaOption('SAFETY', { availability: 'UNAVAILABLE', reasonCodes: ['ASK_PERMISSION_REQUIRED'] })] })));
+    await openSelectorStarter();
+    const locked = await screen.findByRole('button', { name: /Area SAFETY/ });
+    expect(locked).toBeDisabled();
+    fireEvent.click(locked);
+    expect(mocked.createAskExecution).not.toHaveBeenCalled();
+  });
+
+  it('selector events carry the selector, a bucketed count and bounded ids, and never a target, label or summary', async () => {
+    mocked.getAskTargetSelection.mockImplementation(() => ok(selectionOf({ options: [areaOption('SYSTEMS'), areaOption('SAFETY')] })));
+    await openSelectorStarter();
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Area SYSTEMS/ })); });
+    await waitFor(() => expect(names()).toContain('ask_discovery_completed'));
+    expect(events().find(([name]) => name === 'ask_discovery_selector_opened')![1]).toEqual({
+      propertyId: 'home-1', topicId: 'HOME_RECORD', starterId: 'record-add-detail', entryId: 'entry-record-add-detail', selectorId: 'PROPERTY_AREA', state: 'OPTIONS', optionBucket: '2-5',
+    });
+    const json = JSON.stringify(events());
+    expect(json).not.toMatch(/Area SYSTEMS|SYSTEMS|3 details to add|Fill in the missing/);
   });
 });

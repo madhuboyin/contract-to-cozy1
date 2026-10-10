@@ -50,6 +50,7 @@ export const ASK_DISCOVERY_TOPICS: readonly AskDiscoveryTopicDefinition[] = Obje
     starters: [
       { id: 'diy-active', entryId: 'maintain-diy' },
       { id: 'diy-start', entryId: 'maintain-diy-start' },
+      { id: 'diy-continue', entryId: 'maintain-diy-continue' },
     ],
   },
   {
@@ -57,15 +58,21 @@ export const ASK_DISCOVERY_TOPICS: readonly AskDiscoveryTopicDefinition[] = Obje
     starters: [
       { id: 'home-record-summary', entryId: 'understand-summary' },
       { id: 'home-record-completeness', entryId: 'understand-completeness' },
+      { id: 'home-record-add-detail', entryId: 'understand-add-detail' },
     ],
   },
 ]);
 
-interface ResolvedStarter { id: string; entryId: string; capabilityId: string; label: string; message: string; operationId: AskOperationId; interactionType: AskDiscoveryStarter['interactionType'] }
+interface ResolvedStarter {
+  id: string; entryId: string; capabilityId: string; label: string; message: string; operationId: AskOperationId;
+  interactionType: AskDiscoveryStarter['interactionType']; selectorId: AskDiscoveryStarter['selectorId'];
+}
 
 function resolveStarter(definition: AskDiscoveryStarterDefinition): ResolvedStarter | null {
   const entry = explorerEntryById(definition.entryId);
-  return entry ? { id: definition.id, entryId: entry.id, capabilityId: entry.capabilityId, label: entry.label, message: entry.question, operationId: entry.operationId, interactionType: entry.interactionType } : null;
+  return entry ? { id: definition.id, entryId: entry.id, capabilityId: entry.capabilityId, label: entry.label, message: entry.question, operationId: entry.operationId,
+    // A SELECTOR entry opens its selector; its message is only the idea's prompt and is never sent.
+    interactionType: entry.launch === 'SELECTOR' ? 'SELECT_TARGET' : entry.interactionType, selectorId: entry.selectorId ?? null } : null;
 }
 
 const ROLE_RANK: Record<HouseholdRole, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
@@ -99,7 +106,9 @@ export function validateAskDiscoveryTopics(): string[] {
       if (starterLaunches.has(launchKey)) issues.push(`${where}: duplicate discovery starter launch`);
       starterLaunches.add(launchKey);
       const entry = explorerEntryById(reference.entryId)!;
-      if (entry.kind !== 'READ') issues.push(`${where}: topic starters are reads; ${entry.id} is a governed workflow`);
+      // A governed workflow may be a topic starter only behind a target selector: nothing is sent until the homeowner explicitly picks a target, and the
+      // write the target operation then begins is still confirmation-gated.
+      if (entry.kind !== 'READ' && entry.launch !== 'SELECTOR') issues.push(`${where}: topic starters are reads, or a governed workflow behind a target selector; ${entry.id} is neither`);
     }
   }
   return issues;
@@ -119,7 +128,7 @@ function projectStarter(definition: ResolvedStarter, input: AskDiscoveryProjecti
   const operation = getAskOperationDefinition(definition.operationId);
   const base = {
     id: definition.id, entryId: definition.entryId, capabilityId: definition.capabilityId, label: definition.label, message: definition.message, operationId: definition.operationId,
-    interactionType: definition.interactionType, entityContext: { propertyId: input.propertyId },
+    interactionType: definition.interactionType, selectorId: definition.selectorId, entityContext: { propertyId: input.propertyId },
   };
   // Fail closed and quiet, like every other Concierge Home discovery surface: a disabled, runtime-unavailable or audience-hidden
   // operation is not advertised at all.
