@@ -6,6 +6,7 @@ import { PROPERTY_FACT_CATALOG } from '../../../modules/propertyContext/catalog/
 import { getContextCompleteness } from '../../../modules/propertyContext/application/getContextCompleteness';
 import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
 import { readablePropertyValue } from './homeEventCorrection';
+import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 export const isAreaCaptureScope = (value: unknown): value is PropertyAreaCaptureScope => (PROPERTY_AREA_CAPTURE_SCOPES as readonly string[]).includes(String(value));
 
@@ -176,7 +177,6 @@ export function areaProgressBlock(_propertyId: string, scope: PropertyAreaCaptur
 }
 
 export function captureEventResult(propertyId: string, event: { id: string; title: string }, corrected: boolean): AskOperationResult {
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
   return {
     status: 'COMPLETED', reasonCode: corrected ? 'EVENT_CORRECTED' : 'EVENT_CAPTURED',
     blocks: [{
@@ -185,7 +185,7 @@ export function captureEventResult(propertyId: string, event: { id: string; titl
         ? 'A new revision replaces the prior entry on your home\'s canonical timeline; the original is preserved as history.'
         : 'This event is now part of your home\'s canonical timeline.',
       details: [{ label: 'Event', value: event.title }],
-      actions: [{ id: 'open-timeline', label: 'Open timeline', href: timelineHref, style: 'PRIMARY' }],
+      actions: [receiptFollowUpAction('TIMELINE')],
     }],
     confirmation: null, suggestions: [],
   };

@@ -16,6 +16,7 @@ import { homeEventFollowUpCandidates, homeEventsServiceForCapture } from '../han
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { inventoryViewItemAction } from './inventoryAskActions';
 import { captureEventResult } from '../askHandlerSupport';
+import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, command } = ctx;
@@ -75,13 +76,12 @@ async function confirmCaptureFact(ctx: ConfirmCapabilityContext): Promise<Confir
     throw error;
   }
   const evidenceId = capture.evidenceIds[0] ?? '';
-  const propertyRecordHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/edit`;
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'FACT_CAPTURED',
     blocks: [{
       type: 'SUMMARY', id: `fact-captured-${evidenceId}`, title: 'Recorded to your property record', tone: 'POSITIVE',
       body: `"${factKey}" is now saved to your Living Home Record.`,
-      actions: [{ id: 'open-property-record', label: 'Open property record', href: propertyRecordHref, style: 'PRIMARY' }],
+      actions: [receiptFollowUpAction('PROPERTY_RECORD')],
     }],
     confirmation: null, suggestions: [],
   };
@@ -281,13 +281,12 @@ async function confirmCaptureWarranty(ctx: ConfirmCapabilityContext): Promise<Co
     }
     throw error;
   }
-  const propertyRecordHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/edit`;
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'WARRANTY_CAPTURED',
     blocks: [{
       type: 'SUMMARY', id: `warranty-captured-${warranty.id}`, title: 'Recorded to your property record', tone: 'POSITIVE',
       body: `Your ${providerName} warranty is now saved to your Living Home Record.`,
-      actions: [{ id: 'open-property-record', label: 'Open property record', href: propertyRecordHref, style: 'PRIMARY' }],
+      actions: [receiptFollowUpAction('PROPERTY_RECORD')],
     }],
     confirmation: null, suggestions: [],
     // A brand-new warranty has no reminder yet, so no existing-reminder lookup is needed.
@@ -373,20 +372,19 @@ async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<Co
     }
     throw error;
   }
-  const homeTimelineHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/timeline`;
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'EVIDENCE_ATTACHED',
     blocks: [{
       type: 'SUMMARY', id: `evidence-attached-${link.id}`, title: 'Attached to your home timeline', tone: 'POSITIVE',
       body: `${link.document?.name ?? 'The document'} is now attached as evidence on your home timeline.`,
-      actions: [],
+      actions: [receiptFollowUpAction('TIMELINE')],
     }, {
       type: 'RELATED_RECORDS', id: `evidence-related-records-${link.id}`, title: 'Related records',
       relationships: [{
         relationshipType: 'DOCUMENT_EVIDENCE_FOR_HOME_EVENT',
         source: { recordType: 'DOCUMENT', recordId: link.documentId, label: link.document?.name ?? 'Attached document' },
         target: { recordType: 'HOME_EVENT', recordId: link.eventId, label: link.event.title },
-        navigation: { label: 'Open home timeline', href: homeTimelineHref },
+        navigation: null,
       }],
     }],
     confirmation: null, suggestions: [],
@@ -427,17 +425,17 @@ async function confirmEvidenceRecordLink(ctx: ConfirmCapabilityContext, targetTy
     throw Object.assign(new Error('That document is already filed under another record, or is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   }
   const document = await prisma.document.findFirst({ where: { id: documentId, propertyId: execution.propertyId }, select: { id: true, name: true } });
-  const href = '/dashboard/warranties';
   const where = targetType === 'INVENTORY_ITEM' ? 'inventory item' : 'warranty';
+  // An inventory item has an in-Ask view action; a warranty is followed up with the in-Ask warranties answer instead of a link to its page.
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'EVIDENCE_ATTACHED',
     blocks: [{
       type: 'SUMMARY', id: `evidence-attached-${documentId}`, title: `Attached to "${title}"`, tone: 'POSITIVE',
-      body: `${document?.name ?? 'The document'} is now filed with this ${where}.`, actions: [],
-    }, {
-      type: 'SUMMARY', id: `evidence-attached-open-${documentId}`, title: 'Open the record', tone: 'DEFAULT', body: 'See the document with the record it now belongs to.',
-      actions: [targetType === 'INVENTORY_ITEM' ? inventoryViewItemAction(title, 'SECONDARY') : { id: 'open-attached-record', label: 'Open Warranties', href, style: 'SECONDARY' as const }],
-    }],
+      body: `${document?.name ?? 'The document'} is now filed with this ${where}.`, actions: targetType === 'INVENTORY_ITEM' ? [] : [receiptFollowUpAction('WARRANTIES')],
+    }, ...(targetType === 'INVENTORY_ITEM' ? [{
+      type: 'SUMMARY' as const, id: `evidence-attached-open-${documentId}`, title: 'Open the record', tone: 'DEFAULT' as const, body: 'See the document with the record it now belongs to.',
+      actions: [inventoryViewItemAction(title, 'SECONDARY')],
+    }] : [])],
     confirmation: null, suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);

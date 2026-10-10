@@ -13,7 +13,7 @@ import { radarNotificationPreferenceService } from '../../../modules/homeEventRa
 import { updateRadarNotificationPreferencesBodySchema } from '../../../validators/homeEventRadar.validators';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../../analytics';
 import { asInputJson, loadRadarMatchForWrite, mapPersistedExecution, preservedExecutionHistory, propertySummary, RadarFeedbackInputSchema, RadarTaskInputSchema } from '../askHandlerSupport';
-import { RADAR_FEEDBACK_OPTIONS, RADAR_FEEDBACK_REVIEW_BODY, RADAR_TASK_CONFIRM_ERRORS, RADAR_USER_STATE_LABEL, radarConfirmError, radarDateTimeLabel, radarEventHref, radarFeedbackConfirmation, radarPreferenceLabels, radarPreferencesContextVersion, radarStateContextVersion, radarWriteReceipt } from '../handlers/homeEventRadar.handler';
+import { RADAR_FEEDBACK_OPTIONS, RADAR_FEEDBACK_REVIEW_BODY, RADAR_TASK_CONFIRM_ERRORS, RADAR_USER_STATE_LABEL, radarConfirmError, radarDateTimeLabel, radarFeedbackConfirmation, radarPreferenceLabels, radarPreferencesContextVersion, radarStateContextVersion, radarWriteReceipt } from '../handlers/homeEventRadar.handler';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 
 async function confirmHomeEventRadarMarkDone(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
@@ -39,7 +39,7 @@ async function confirmHomeEventRadarMarkDone(ctx: ConfirmCapabilityContext): Pro
     type: 'WORKFLOW_PROGRESS', id: `radar-mark-done-${matchId}`, title: alreadyApplied ? 'Already marked done' : 'Marked done', status: 'COMPLETED',
     description: alreadyApplied ? 'Nothing was changed.' : 'Home Event Radar will recheck this home\'s radar risk to reflect it.',
     details: [{ label: 'Event', value: String(detail.title) }, { label: 'Previous state', value: alreadyApplied ? 'Already done' : RADAR_USER_STATE_LABEL[current] ?? current }],
-    actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(execution.propertyId!, matchId), style: 'SECONDARY' }],
+    actions: [],
   }, alreadyApplied ? 'HOME_EVENT_RADAR_ALREADY_DONE' : 'HOME_EVENT_RADAR_MARKED_DONE', 'PROPERTY_RADAR_STATE');
 }
 
@@ -65,7 +65,7 @@ async function confirmHomeEventRadarFeedback(ctx: ConfirmCapabilityContext): Pro
       { label: 'Reason', value: RADAR_FEEDBACK_OPTIONS.find((option) => option.value === feedbackType)?.label ?? feedbackType },
       ...(comment ? [{ label: 'Comment', value: comment }] : []),
     ],
-    actions: [{ id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(execution.propertyId!, matchId), style: 'SECONDARY' }],
+    actions: [],
   }, 'HOME_EVENT_RADAR_FEEDBACK_SENT', 'PROPERTY_RADAR_FEEDBACK');
 }
 
@@ -149,7 +149,7 @@ async function confirmHomeEventRadarTask(ctx: ConfirmCapabilityContext): Promise
       { label: 'Task', value: task.title },
       ...(task.nextDueDate ? [{ label: 'Due', value: radarDateTimeLabel(task.nextDueDate, getAskPropertyTimezone()) }] : []),
     ],
-    actions: [{ id: 'open-task', label: 'Open task', href: task.href, style: 'PRIMARY' }, { id: 'open-radar', label: 'Open in Home Event Radar', href: radarEventHref(propertyId, matchId), style: 'SECONDARY' }],
+    actions: [],
   }, outcome.deduped ? 'HOME_EVENT_RADAR_TASK_ALREADY_LINKED' : 'HOME_EVENT_RADAR_TASK_LINKED', 'PROPERTY_RADAR_TASK_LINK');
 }
 
@@ -171,7 +171,7 @@ async function confirmHomeEventRadarPreferences(ctx: ConfirmCapabilityContext): 
     type: 'WORKFLOW_PROGRESS', id: 'radar-preferences-saved', title: 'Notification settings saved', status: 'COMPLETED',
     description: 'Home Event Radar uses these for your notifications about this home. Other household members keep their own.',
     details: radarPreferenceLabels(body.data).map(({ label, value }) => ({ label, value })),
-    actions: [{ id: 'open-radar', label: 'Open Home Event Radar', href: radarEventHref(propertyId), style: 'SECONDARY' }],
+    actions: [],
   }, 'HOME_EVENT_RADAR_PREFERENCES_SAVED', 'PROPERTY_RADAR_NOTIFICATION_PREFERENCE').then((result) => ({ ...result, artifactId: `${saved.propertyId}:${saved.userId}` }));
 }
 

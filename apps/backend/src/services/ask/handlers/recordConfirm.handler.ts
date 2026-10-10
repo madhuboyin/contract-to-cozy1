@@ -40,6 +40,7 @@ import { approveMaterialWorkItem, recordWorkEvent } from '../../../modules/homeO
 import { assertMaterialApprovalEvidenceSatisfiesPolicy } from '../../homeOperationsMaterialApprovalEvidence.service';
 import { completeAcceptedOperationalWorkItem } from '../../homeActionCompletion.service';
 import { resolveWorkItemRecommendationSnapshotId } from '../../decisionPlatform/homeActionDecisionLineage';
+import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 const materialSpecService = new MaterialSpecService();
 
@@ -78,7 +79,7 @@ async function confirmDocumentPromotionConfirm(ctx: ConfirmCapabilityContext): P
       await recordDocumentPromotionOutcome({ propertyId: execution.propertyId, promotedEntityType: 'INSPECTION_REPORT', promotedEntityId: report.id, userId });
       artifactType = 'INSPECTION_REPORT'; artifactId = report.id;
     } else throw Object.assign(new Error('This document-promotion action must be reviewed again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-    result = { status: 'COMPLETED', reasonCode: decision === 'CONFIRM' ? 'DOCUMENT_PROMOTION_CONFIRMED' : 'DOCUMENT_PROMOTION_REJECTED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `document-promotion-${candidateId}`, title: decision === 'CONFIRM' ? 'Document-derived record promoted' : 'Document candidate rejected', status: 'COMPLETED', description: decision === 'CONFIRM' ? 'The canonical domain adapter applied the reviewed values and recorded a promotion outcome.' : 'The source evidence remains available, but its candidate values were not promoted.', details: [{ label: 'Candidate id', value: candidateId }, { label: 'Decision', value: String(decision).toLowerCase() }], actions: [{ id: 'open-documents', label: 'Open Documents', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/documents`, style: 'PRIMARY' }] }], suggestions: [] };
+    result = { status: 'COMPLETED', reasonCode: decision === 'CONFIRM' ? 'DOCUMENT_PROMOTION_CONFIRMED' : 'DOCUMENT_PROMOTION_REJECTED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `document-promotion-${candidateId}`, title: decision === 'CONFIRM' ? 'Document-derived record promoted' : 'Document candidate rejected', status: 'COMPLETED', description: decision === 'CONFIRM' ? 'The canonical domain adapter applied the reviewed values and recorded a promotion outcome.' : 'The source evidence remains available, but its candidate values were not promoted.', details: [{ label: 'Candidate id', value: candidateId }, { label: 'Decision', value: String(decision).toLowerCase() }], actions: [receiptFollowUpAction('DOCUMENTS')] }], suggestions: [] };
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
     // all -- see ASK_MUTATION_IMPACT_MAP's DOCUMENT_PROMOTION_CONFIRM entry.
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -150,8 +151,7 @@ async function confirmOperationalWorkUpdate(ctx: ConfirmCapabilityContext): Prom
     }
     artifactType = 'OPERATIONAL_WORK_ITEM'; artifactId = item.id;
     const workReasonCode = action === 'ACCEPT' ? 'OPERATIONAL_WORK_ACCEPTED' : action === 'DEFER' ? 'OPERATIONAL_WORK_DEFERRED' : action === 'SNOOZE' ? 'OPERATIONAL_WORK_SNOOZED' : action === 'VERIFY' ? 'OPERATIONAL_WORK_VERIFIED' : action === 'REOPEN' ? 'OPERATIONAL_WORK_REOPENED' : 'OPERATIONAL_WORK_COMPLETED';
-    const completionDecision = ['VERIFY', 'REOPEN'].includes(String(action));
-    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: action === 'VERIFY' ? 'Completion verified' : action === 'REOPEN' ? 'Action reopened' : 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : action === 'VERIFY' ? 'Your attestation was saved as verified evidence and this action is now complete.' : action === 'REOPEN' ? 'The reported completion was rejected and this action is active again.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: completionDecision ? [] : [{ id: 'open-work', label: 'Open Home Actions', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/home-actions`, style: 'PRIMARY' }] }], suggestions: [] };
+    result = { status: 'COMPLETED', reasonCode: workReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `operational-work-updated-${item.id}`, title: action === 'VERIFY' ? 'Completion verified' : action === 'REOPEN' ? 'Action reopened' : 'Operational Work updated', status: 'COMPLETED', description: action === 'COMPLETE' ? 'The authoritative maintenance execution, Operational Work lifecycle, evidence, and outcome were reconciled.' : action === 'VERIFY' ? 'Your attestation was saved as verified evidence and this action is now complete.' : action === 'REOPEN' ? 'The reported completion was rejected and this action is active again.' : 'The governed Operational Work command was applied to the canonical shared item.', details: [{ label: 'Work', value: item.title }, { label: 'Action', value: String(action).toLowerCase() }], actions: [receiptFollowUpAction('HOME_ACTIONS')] }], suggestions: [] };
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
     // all -- see ASK_MUTATION_IMPACT_MAP's OPERATIONAL_WORK_UPDATE entry.
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -408,7 +408,7 @@ async function confirmHomeEventVisibility(ctx: ConfirmCapabilityContext): Promis
       type: 'WORKFLOW_PROGRESS', id: `home-event-visibility-${current.id}`, title: alreadyApplied ? 'Visibility already set' : 'Visibility changed', status: 'COMPLETED',
       description: 'The canonical timeline event was updated in place.',
       details: [{ label: 'Event', value: current.title }, { label: 'Previous visibility', value: alreadyApplied ? 'Already set' : HOME_EVENT_VISIBILITY_LABELS[current.visibility] ?? current.visibility }, { label: 'New visibility', value: HOME_EVENT_VISIBILITY_LABELS[proposed] ?? proposed }],
-      actions: [{ id: 'open-timeline', label: 'Open home timeline', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/timeline`, style: 'PRIMARY' }],
+      actions: [receiptFollowUpAction('TIMELINE')],
     }],
     suggestions: [],
   };
@@ -458,7 +458,7 @@ async function confirmWarrantyCorrect(ctx: ConfirmCapabilityContext): Promise<Co
       type: 'WORKFLOW_PROGRESS', id: `warranty-corrected-${warranty.id}`, title: 'Warranty updated', status: 'COMPLETED',
       description: 'The warranty record was updated and dependent coverage analysis was marked for refresh.',
       details: [{ label: 'Warranty', value: updated.providerName }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : correctionDisplay(meta, previous) }, { label: 'New value', value: correctionDisplay(meta, next) }],
-      actions: [{ id: 'open-warranties', label: 'Open Warranties', href: '/dashboard/warranties', style: 'PRIMARY' }],
+      actions: [receiptFollowUpAction('WARRANTIES')],
     }],
     suggestions: [],
     // The reminder deadline follows the expiry date, so only an expiry-date correction can make a reminder worth offering.
@@ -519,7 +519,7 @@ async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<Confirm
       details: renamed
         ? [{ label: 'Previous name', value: alreadyApplied ? 'Already renamed' : room.name }, { label: 'New name', value: proposed }]
         : [{ label: 'Room', value: room.name }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : roomFieldDisplay(field, previous) }, { label: 'New value', value: roomFieldDisplay(field, proposed) }],
-      actions: [{ id: 'open-rooms', label: 'Open Rooms', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId!)}/rooms`, style: 'PRIMARY' }],
+      actions: [receiptFollowUpAction('ROOMS')],
     }],
     suggestions: [],
     suggestedNextActionCandidates: roomAddItemCandidates({ id: room.id, name: renamed ? proposed : room.name }, { propertyId: execution.propertyId!, sourceOperationId: 'ROOM_RENAME' }),

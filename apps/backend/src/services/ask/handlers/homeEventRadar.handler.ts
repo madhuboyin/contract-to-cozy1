@@ -26,6 +26,7 @@ import { getAskPropertyTimezone } from '../askExecutionContext';
 import { containsFilterContinuation } from '../askFollowUpContext';
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
+import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 const RADAR_SOURCE_FAMILY_LABEL: Record<string, string> = {
   weather: 'Weather', air_quality: 'Air quality', disaster: 'Disaster', utility: 'Utility', tax: 'Tax', insurance: 'Insurance', other: 'Other',
@@ -584,7 +585,7 @@ export function radarConfirmError(message: string, code: string): Error {
 }
 
 export async function radarWriteReceipt(ctx: ConfirmCapabilityContext, matchId: string, block: Extract<AskPresentationBlock, { type: 'WORKFLOW_PROGRESS' }>, reasonCode: string, artifactType: string): Promise<ConfirmCapabilityResult> {
-  const result: AskOperationResult = { status: 'COMPLETED', reasonCode, blocks: [block], suggestions: [] };
+  const result: AskOperationResult = { status: 'COMPLETED', reasonCode, blocks: [{ ...block, actions: [...block.actions, receiptFollowUpAction('RADAR')] }], suggestions: [] };
   const refresh = await reconcileAskExecutionSideEffects(ctx.userId, ctx.execution, ctx.parameters);
   if (refresh.attemptedAndFailed) {
     result.blocks.push({ type: 'LIMITATION', id: `radar-refresh-failed-${matchId}`, severity: 'CAUTION', title: 'Saved; view could not refresh', body: 'This was saved to Home Event Radar. The feed you were viewing could not refresh automatically -- ask "Show my home event radar feed" to see its current state.' });

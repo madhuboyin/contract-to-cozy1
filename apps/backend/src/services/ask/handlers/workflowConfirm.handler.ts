@@ -18,17 +18,18 @@ import { getOrCreateQuoteComparisonWorkspace } from '../../quoteComparison.servi
 import { upsertNotificationPreference } from '../../notificationPreference.service';
 import { asInputJson, GuidanceJourneyCommandInputSchema, guidanceJourneyContextVersion, HomeDeadlineMonitorInputSchema, homeDeadlineSourceVersion, InspectionResolution, InspectionResolutionSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, QuoteWorkspaceCommandInputSchema, RecallResolution, RecallResolutionSchema } from '../askHandlerSupport';
 import { INSPECTION_RESOLUTION_DEFAULT, inspectionFindingVersion, inspectionResolutionEditableFields } from '../handlers/inspection.handler';
-import { RECALL_RESOLUTION_DEFAULT, recallMatchVersion, recallReviewHref, recallResolutionEditableFields } from '../handlers/recallReview.handler';
+import { RECALL_RESOLUTION_DEFAULT, recallMatchVersion, recallResolutionEditableFields } from '../handlers/recallReview.handler';
 import { confirmRecallMatch, dismissRecallMatch, resolveRecallMatch } from '../../recalls.service';
 import { quoteWorkspaceContextVersion } from '../handlers/quotes.handler';
 import { refinanceMonitorBlock, refinanceMonitorContextVersion } from '../handlers/refinance.handler';
-import { SALE_READINESS_ITEM_STATUS_LABELS, saleCaseHref, sellerPrepItemContextVersion } from '../handlers/sellHoldRent.handler';
+import { SALE_READINESS_ITEM_STATUS_LABELS, sellerPrepItemContextVersion } from '../handlers/sellHoldRent.handler';
 import { CLAIM_TYPE_PATTERNS, claimConflictDescription } from '../handlers/claims.handler';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { maintenanceTaskVersion } from '../handlers/maintenance.handler';
 import { ClaimsService } from '../../claims/claims.service';
 import type { ClaimStatus, ClaimType } from '../../../types/claims.types';
 import { acceptFindingAsWork, dismissFinding, resolveFinding } from '../../inspectionHub.service';
+import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 export function saleReadinessItemConflictDescription(item: { title: string; status: string }): string {
   const statusLabel = SALE_READINESS_ITEM_STATUS_LABELS[item.status] ?? item.status.toLowerCase().replace(/_/g, ' ');
@@ -122,14 +123,13 @@ export async function editRecallMatchResolveConfirmation(
   if (!match) throw Object.assign(new Error('This recall match is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const href = recallReviewHref(execution.propertyId!);
   const newConfirmation = {
     confirmationId: `recall-match-${match.id}-${nextVersion}`, version: nextVersion, title: 'Resolve this recall match?', description: match.recall.title,
     fields: [{ label: 'Recall', value: match.recall.title }, { label: 'Severity', value: String(match.recall.severity).toLowerCase() }, { label: 'Action', value: 'resolve' }],
     editableFields: recallResolutionEditableFields(resolution), confirmLabel: 'Resolve match',
     consentText: 'I reviewed this recall match and authorize updating its canonical disposition.', expiresAt: expiresAt.toISOString(),
   };
-  const reviewBlock = { type: 'SUMMARY' as const, id: 'recall-match-review', title: 'Review resolve action', body: 'Resolving records how this recall was handled on the canonical recall match.', tone: 'CAUTION' as const, actions: [{ id: 'open-recalls', label: 'Review in Recalls & Safety Alerts', href, style: 'SECONDARY' as const }] };
+  const reviewBlock = { type: 'SUMMARY' as const, id: 'recall-match-review', title: 'Review resolve action', body: 'Resolving records how this recall was handled on the canonical recall match.', tone: 'CAUTION' as const, actions: [] };
   const editWrite = await prisma.askExecution.updateMany({
     where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
     data: {
@@ -180,7 +180,7 @@ async function confirmClaimFile(ctx: ConfirmCapabilityContext): Promise<ConfirmC
       generateChecklist: true,
     });
     artifactType = 'CLAIM'; artifactId = claim.id;
-    result = { status: 'COMPLETED', reasonCode: 'CLAIM_DRAFT_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-created-${claim.id}`, title: 'Draft claim created', status: 'COMPLETED', description: 'The canonical draft claim, checklist, timeline event, and linked Operational Work were created. Nothing was submitted to an insurer or warranty provider.', details: [{ label: 'Claim', value: claim.title }, { label: 'Status', value: String(claim.status).toLowerCase() }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: [] };
+    result = { status: 'COMPLETED', reasonCode: 'CLAIM_DRAFT_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-created-${claim.id}`, title: 'Draft claim created', status: 'COMPLETED', description: 'The canonical draft claim, checklist, timeline event, and linked Operational Work were created. Nothing was submitted to an insurer or warranty provider.', details: [{ label: 'Claim', value: claim.title }, { label: 'Status', value: String(claim.status).toLowerCase() }], actions: [receiptFollowUpAction('CLAIMS')] }], suggestions: [] };
     // P05 fix: previously never called any reconciliation mechanism -- a
     // durable receipt existed, but the incidents/claims list the homeowner
     // may have been viewing (INCIDENT_CONTINUATION) had no read-retry path
@@ -219,7 +219,7 @@ async function confirmClaimTransition(ctx: ConfirmCapabilityContext): Promise<Co
       throw Object.assign(new Error(`This claim cannot be submitted yet. Finish its checklist first${items.length ? `: ${items.join('; ')}` : ''}. Nothing was changed.`), { code: 'CLAIM_SUBMIT_BLOCKED' });
     }
     artifactType = 'CLAIM'; artifactId = claim.id;
-    result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [{ id: 'open-claim', label: 'Open claim', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/claims/${claim.id}`, style: 'PRIMARY' }] }], suggestions: [] };
+    result = { status: 'COMPLETED', reasonCode: 'CLAIM_STATUS_UPDATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `claim-updated-${claim.id}`, title: 'Claim status updated', status: 'COMPLETED', description: 'The canonical claim lifecycle and linked Operational Work/outcome reconciliation were updated through the Claims service.', details: [{ label: 'Claim', value: updated.title }, { label: 'Status', value: String(updated.status).toLowerCase().replace(/_/g, ' ') }], actions: [receiptFollowUpAction('CLAIMS')] }], suggestions: [] };
     // P05 fix: see confirmClaimFile's identical fix above -- same missing
     // reconciliation mechanism, same INCIDENT_CONTINUATION sibling.
     const claimTransitionRefresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -317,7 +317,7 @@ async function confirmInspectionFindingUpdate(ctx: ConfirmCapabilityContext): Pr
     }
     artifactType = 'INSPECTION_FINDING'; artifactId = finding.id;
     const findingReasonCode = action === 'ACCEPT' ? 'INSPECTION_FINDING_ACCEPTED' : action === 'DISMISS' ? 'INSPECTION_FINDING_DISMISSED' : 'INSPECTION_FINDING_RESOLVED';
-    result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [{ id: 'open-inspection', label: 'Open Inspection Hub', href: `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection`, style: 'PRIMARY' }] }], suggestions: [] };
+    result = { status: 'COMPLETED', reasonCode: findingReasonCode, blocks: [{ type: 'WORKFLOW_PROGRESS', id: `inspection-finding-updated-${finding.id}`, title: 'Inspection finding updated', status: 'COMPLETED', description: action === 'ACCEPT' ? 'The finding is now routed through canonical Operational Work and its appropriate execution workflow.' : 'The canonical finding and any linked work reconciliation were updated.', details: [{ label: 'System', value: finding.homeSystem }, { label: 'Action', value: String(action).toLowerCase() }], actions: [receiptFollowUpAction('INSPECTION_FINDINGS')] }], suggestions: [] };
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
     // all -- see ASK_MUTATION_IMPACT_MAP's INSPECTION_FINDING_UPDATE entry.
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -370,7 +370,6 @@ async function confirmRecallMatchUpdate(ctx: ConfirmCapabilityContext): Promise<
   await reportRecallMatchStep(execution.propertyId, action as RecallMatchReportAction, reportRow, userId);
   const artifactType = 'RECALL_MATCH';
   const artifactId = match.id;
-  const href = recallReviewHref(execution.propertyId);
   const matchReasonCode = action === 'CONFIRM' ? 'RECALL_MATCH_CONFIRMED' : action === 'DISMISS' ? 'RECALL_MATCH_DISMISSED' : 'RECALL_MATCH_RESOLVED';
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: matchReasonCode,
@@ -378,7 +377,7 @@ async function confirmRecallMatchUpdate(ctx: ConfirmCapabilityContext): Promise<
       type: 'WORKFLOW_PROGRESS', id: `recall-match-updated-${match.id}`, title: 'Recall match updated', status: 'COMPLETED',
       description: action === 'CONFIRM' ? 'The canonical recall match now reflects a confirmed product identity.' : action === 'DISMISS' ? 'The canonical recall match and any linked maintenance task were updated.' : 'The canonical recall match now records how this recall was handled.',
       details: [{ label: 'Recall', value: match.recall.title }, { label: 'Action', value: String(action).toLowerCase() }],
-      actions: [{ id: 'open-recalls', label: 'Open Recalls & Safety Alerts', href, style: 'PRIMARY' }],
+      actions: [receiptFollowUpAction('RECALLS')],
     }], suggestions: [],
   };
   // Same reconciliation this whole arc's writes already use -- see ASK_MUTATION_IMPACT_MAP's RECALL_MATCH_UPDATE entry.
@@ -432,7 +431,7 @@ async function confirmSellerPrepItemDecision(ctx: ConfirmCapabilityContext): Pro
       status: 'COMPLETED',
       description: 'The shared seller-prep checklist was updated.',
       details: [{ label: 'Item', value: item.title }, { label: 'Decision', value: String(action).toLowerCase() }],
-      actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: saleCaseHref(execution.propertyId, item.id), style: 'PRIMARY' }],
+      actions: [receiptFollowUpAction('SELLER_PREP')],
     }],
     suggestions: [],
   };
@@ -474,8 +473,7 @@ async function confirmGuidanceJourneyCreate(ctx: ConfirmCapabilityContext): Prom
       customIssueLabel: candidate.data.label,
       sourceAskExecutionId: execution.id,
     }, userId);
-    const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`;
-    result = { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-${journey.id}`, title: 'Guided plan started', status: 'COMPLETED', description: 'The resumable guidance journey is now linked to this home.', details: [{ label: 'Scope', value: candidate.data.label }, { label: 'Plan', value: candidate.data.issueType.replace(/_/g, ' ') }], actions: [{ id: 'open-journey', label: 'Open guided plan', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
+    result = { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_CREATED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-${journey.id}`, title: 'Guided plan started', status: 'COMPLETED', description: 'The resumable guidance journey is now linked to this home.', details: [{ label: 'Scope', value: candidate.data.label }, { label: 'Plan', value: candidate.data.issueType.replace(/_/g, ' ') }], actions: [receiptFollowUpAction('GUIDED_PLANS')] }], confirmation: null, suggestions: [] };
     artifactType = command.artifactType;
     artifactId = journey.id;
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at
@@ -510,7 +508,6 @@ async function confirmQuoteComparisonCreate(ctx: ConfirmCapabilityContext): Prom
       throw error;
     }
     const created = await getOrCreateQuoteComparisonWorkspace(execution.propertyId, userId, candidate.data);
-    const href = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/tools/quote-comparison?workspaceId=${encodeURIComponent(created.workspace.id)}`;
     const workspaceLabel = created.workspace.scopeSummary?.trim()
       || `${String(created.workspace.serviceCategory ?? candidate.data.serviceCategory).toLowerCase().replace(/_/g, ' ')} quote comparison`;
     result = {
@@ -519,14 +516,14 @@ async function confirmQuoteComparisonCreate(ctx: ConfirmCapabilityContext): Prom
         type: 'WORKFLOW_PROGRESS', id: `quote-workspace-${created.workspace.id}`, title: created.reused ? 'Existing comparison workspace opened' : 'Quote comparison workspace created', status: 'COMPLETED',
         description: 'No provider or quote was selected. Add comparable proposals in the governed workspace.',
         details: [{ label: 'Service', value: candidate.data.serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Status', value: created.workspace.status.toLowerCase() }],
-        actions: [],
+        actions: [receiptFollowUpAction('QUOTES')],
       }, {
         type: 'OUTPUT_ARTIFACTS', id: `quote-workspace-output-${created.workspace.id}`, title: 'Workspace record',
         items: [{
           artifactType: 'QUOTE_COMPARISON_WORKSPACE', artifactId: created.workspace.id,
           relationship: created.reused ? 'REUSED' : 'CREATED', label: workspaceLabel,
           status: created.workspace.status, createdAt: created.workspace.createdAt.toISOString(),
-          navigation: { label: 'Open comparison', href },
+          navigation: null,
         }],
       }],
       confirmation: null, suggestions: [],

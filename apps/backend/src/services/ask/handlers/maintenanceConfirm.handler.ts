@@ -12,6 +12,7 @@ import { asInputJson, isValidDateEditInput, MaintenanceTaskUpdateInputSchema, Ma
 import { householdService } from '../handlers/homeRecordWrites.handler';
 import { reconcileAskExecutionSideEffects, refreshAskSourceExecution } from '../execution/executeOperation';
 import { maintenanceConflictDescription, maintenanceMoney, maintenanceTaskVersion, maintenanceUndoCandidates, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
+import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -71,7 +72,6 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
         projectOutcomeRequired ? outcomeHealth as 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' : undefined,
         completionIdempotencyKey,
       );
-    const taskHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(updated.id)}&from=ask`;
     result = {
       status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_COMPLETED', contextVersion: maintenanceTaskVersion(updated),
       blocks: [{
@@ -86,7 +86,7 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
           ...(updated.isRecurring ? [{ label: 'Next due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' }] : []),
           ...(projectOutcomeRequired ? [{ label: 'Project outcome', value: String(outcomeHealth).toLowerCase().replace(/_/g, ' ') }] : []),
         ],
-        actions: [{ id: 'open-task', label: 'Open completed task', href: taskHref, style: 'PRIMARY' }],
+        actions: [receiptFollowUpAction('MAINTENANCE')],
       }],
       confirmation: null,
       suggestions: [],
@@ -163,7 +163,6 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
         if (!task) throw error;
       }
     }
-    const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
     result = {
       status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_CREATED', contextVersion: await maintenanceWorkflowVersion(execution.propertyId),
       blocks: [{
@@ -176,13 +175,13 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
           { label: 'Due', value: task.nextDueDate ? humanDate(task.nextDueDate) ?? task.nextDueDate.toISOString() : 'Not scheduled' },
           { label: 'Recurrence', value: task.isRecurring && task.frequency ? task.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
         ],
-        actions: [],
+        actions: [receiptFollowUpAction('MAINTENANCE')],
       }, {
         type: 'OUTPUT_ARTIFACTS', id: `maintenance-output-${task.id}`, title: 'Created record',
         items: [{
           artifactType: 'PROPERTY_MAINTENANCE_TASK', artifactId: task.id, relationship: 'CREATED',
           label: task.title, status: task.status, createdAt: task.createdAt.toISOString(),
-          navigation: { label: 'Open task in Maintenance', href: maintenanceHref },
+          navigation: null,
         }],
       }],
       confirmation: null,
@@ -359,7 +358,6 @@ export async function editMaintenanceTaskUpdateConfirmation(
   const updatedInput = MaintenanceTaskUpdateInputSchema.parse({ ...existingUpdate.data, nextDueDate: nextDueDateEdit });
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  const taskHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId!)}&taskId=${encodeURIComponent(task.id)}`;
   const newConfirmation = {
     confirmationId: `maintenance-update-${task.id}-${nextVersion}`, version: nextVersion, title: `Reschedule ${task.title}?`,
     description: 'This command writes through the canonical Maintenance service and preserves downstream reconciliation.',
@@ -396,7 +394,7 @@ export async function editMaintenanceTaskUpdateConfirmation(
       parametersJson: asInputJson({ ...parameters, maintenanceUpdate: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
       resultJson: asInputJson({
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
-        blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: taskHref, style: 'SECONDARY' }] }],
+        blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [] }],
         captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
         ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY', id: 'maintenance-update-review', title: 'Review this reschedule', body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [] }]),
       }),

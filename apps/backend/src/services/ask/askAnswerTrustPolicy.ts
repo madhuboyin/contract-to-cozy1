@@ -4,6 +4,7 @@ import type { ComposedSkillContextEntry } from '../skills/context/skillContext.c
 import { isAskActionAllowedForHouseholdRole } from './askAudiencePresentation';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import type { AskAnswerTrustEvidence, AskAuthoritativeSourceEvidence } from './askTrust.contract';
+import { isReceiptFollowUpAction } from './support/receiptFollowUps';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
 
@@ -372,6 +373,8 @@ export function isAskActionApplicable(input: {
   // loophole while still allowing safe navigation actions.
   const mutation = /^(?:add|archive|cancel|change|complete|confirm|create|delete|disable|edit|enable|forget|invite|manage|mark|monitor|notify|pause|recalculate|record|remove|report|reschedule|run|save|schedule|send|set|start|stop|submit|unlink|update|upload)(?:[-_]|$)/i.test(action.id);
   if (getAskOperationDefinition(operationId).requiresProperty && mutation && !householdRole) return false;
+  // A receipt's own "show me that record" question (exact match to receiptFollowUpAction) needs no per-operation entry.
+  if (isReceiptFollowUpAction(action)) return true;
   const focusedHomeAction = operationId === 'HOME_ACTIONS' && action.id.startsWith('home-action-primary-');
   if (!input.trustedDynamicAction && !audienceAction && !focusedHomeAction
     && !(OPERATION_ACTION_IDS[operationId]?.has(action.id) ?? false)) return false;

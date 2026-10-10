@@ -11,7 +11,8 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { humanDate } from '../askFormatting';
 import { asInputJson, BUYER_FINDING_DISPOSITION_LABELS, isValidDateEditInput, mapPersistedExecution, preservedExecutionHistory, propertySummary } from '../askHandlerSupport';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
-import { buyerFindingConflictDescription, buyerPlanHref, buyerTaskConflictDescription, buyerTaskVersion } from '../handlers/buyerPlan.handler';
+import { buyerFindingConflictDescription, buyerTaskConflictDescription, buyerTaskVersion } from '../handlers/buyerPlan.handler';
+import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access, command } = ctx;
@@ -54,7 +55,6 @@ async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<
         status: 'COMPLETED',
         completionEvidenceJson: { proofType: 'USER_ATTESTATION', confirmedByUserId: userId, confirmedAt: new Date().toISOString(), completionIdempotencyKey },
       });
-    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(updated.id)}&from=ask`;
     result = {
       status: 'COMPLETED', reasonCode: 'BUYER_TASK_COMPLETED', contextVersion: buyerTaskVersion(updated),
       blocks: [{
@@ -64,7 +64,7 @@ async function confirmBuyerTaskComplete(ctx: ConfirmCapabilityContext): Promise<
           { label: 'Task', value: updated.title },
           { label: 'Completion method', value: 'User attestation' },
         ],
-        actions: [{ id: 'open-task', label: 'Open completed task', href: buyerTaskHref, style: 'PRIMARY' }],
+        actions: [receiptFollowUpAction('BUYER_PLAN')],
       }],
       confirmation: null,
       suggestions: [],
@@ -117,7 +117,6 @@ async function confirmBuyerTaskCreate(ctx: ConfirmCapabilityContext): Promise<Co
         if (!created) throw error;
       }
     }
-    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(created.id)}&from=ask`;
     result = {
       status: 'COMPLETED', reasonCode: 'BUYER_TASK_CREATED', contextVersion: buyerTaskVersion(created),
       blocks: [{
@@ -127,7 +126,7 @@ async function confirmBuyerTaskCreate(ctx: ConfirmCapabilityContext): Promise<Co
           { label: 'Task', value: created.title },
           { label: 'Due', value: created.dueAt ? humanDate(created.dueAt) ?? 'Not scheduled' : 'Not scheduled' },
         ],
-        actions: [{ id: 'open-task', label: 'Open new task', href: buyerTaskHref, style: 'PRIMARY' }],
+        actions: [receiptFollowUpAction('BUYER_PLAN')],
       }],
       confirmation: null,
       suggestions: [],
@@ -176,7 +175,6 @@ async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<Co
       ...(buyerAction === 'RESCHEDULE' && dueAt ? { dueAt } : {}),
       ...(buyerAction === 'ASSIGN' || buyerAction === 'UNASSIGN' ? { assignedToUserId: assigneeUserId } : {}),
     });
-    const buyerTaskHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan?taskId=${encodeURIComponent(updated.id)}&from=ask`;
     result = {
       status: 'COMPLETED', reasonCode: 'BUYER_TASK_UPDATED', contextVersion: buyerTaskVersion(updated),
       blocks: [{
@@ -186,7 +184,7 @@ async function confirmBuyerTaskUpdate(ctx: ConfirmCapabilityContext): Promise<Co
           { label: 'Task', value: updated.title },
           ...(dueAt ? [{ label: 'New due date', value: dueAt }] : []),
         ],
-        actions: [{ id: 'open-task', label: 'Open updated task', href: buyerTaskHref, style: 'PRIMARY' }],
+        actions: [receiptFollowUpAction('BUYER_PLAN')],
       }],
       confirmation: null,
       suggestions: [],
@@ -247,7 +245,6 @@ async function confirmBuyerFindingDisposition(ctx: ConfirmCapabilityContext): Pr
       disposition: disposition as Exclude<BuyerFindingDisposition, 'PENDING_REVIEW'>,
     });
     const dispositionLabel = BUYER_FINDING_DISPOSITION_LABELS[disposition] ?? disposition;
-    const inspectionHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/inspection-hub`;
     result = {
       status: 'COMPLETED', reasonCode: 'BUYER_FINDING_DISPOSITIONED', contextVersion: dispositionResult.finding.buyerDispositionAt?.toISOString() ?? null,
       blocks: [{
@@ -257,7 +254,7 @@ async function confirmBuyerFindingDisposition(ctx: ConfirmCapabilityContext): Pr
           { label: 'Finding', value: [finding.homeSystem, finding.subsystem].filter(Boolean).join(' ') },
           { label: 'Disposition', value: dispositionLabel },
         ],
-        actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }],
+        actions: [receiptFollowUpAction('BUYER_INSPECTION')],
       }],
       confirmation: null,
       suggestions: [],
@@ -283,7 +280,6 @@ async function confirmBuyerLifecycleUpdate(ctx: ConfirmCapabilityContext): Promi
   let artifactType: string;
   let artifactId: string;
     const lifecycleAction = parameters.buyerLifecycleAction;
-    const buyerPlanHrefValue = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/buyer-plan`;
     if (lifecycleAction === 'PAUSE' || lifecycleAction === 'RESUME') {
       if (access.role !== HouseholdRole.OWNER) {
         const error = new Error(`Only the property owner can ${lifecycleAction === 'RESUME' ? 'resume' : 'pause'} this purchase.`);
@@ -299,7 +295,7 @@ async function confirmBuyerLifecycleUpdate(ctx: ConfirmCapabilityContext): Promi
           type: 'WORKFLOW_PROGRESS', id: `buyer-lifecycle-${lifecycleAction.toLowerCase()}`, title: lifecycleAction === 'RESUME' ? 'Purchase resumed' : 'Purchase paused', status: 'COMPLETED',
           description: lifecycleAction === 'RESUME' ? 'Deadline reminders and active tasks are reactivated.' : 'Deadline reminders are stopped. Recorded work, documents, findings, and evidence are preserved.',
           details: [],
-          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
+          actions: [receiptFollowUpAction('BUYER_PLAN')],
         }],
         confirmation: null,
         suggestions: [],
@@ -325,7 +321,7 @@ async function confirmBuyerLifecycleUpdate(ctx: ConfirmCapabilityContext): Promi
           type: 'WORKFLOW_PROGRESS', id: 'buyer-lifecycle-cancelled', title: 'Purchase cancelled', status: 'COMPLETED',
           description: 'Reminders are stopped and open work is archived. Completed work, documents, findings, and evidence are preserved.',
           details: [{ label: 'Reason', value: cancelReason }],
-          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
+          actions: [receiptFollowUpAction('BUYER_PLAN')],
         }],
         confirmation: null,
         suggestions: [],
@@ -355,7 +351,7 @@ async function confirmBuyerLifecycleUpdate(ctx: ConfirmCapabilityContext): Promi
           type: 'WORKFLOW_PROGRESS', id: 'buyer-lifecycle-date-updated', title: lifecycleAction === 'RESCHEDULE_MOVE_IN' ? 'Move-in date updated' : 'Target closing date updated', status: 'COMPLETED',
           description: 'Unedited task due dates were recalculated from the new date.',
           details: [{ label: 'New date', value: newDate }],
-          actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: buyerPlanHrefValue, style: 'PRIMARY' }],
+          actions: [receiptFollowUpAction('BUYER_PLAN')],
         }],
         confirmation: null,
         suggestions: [],
@@ -428,7 +424,6 @@ export async function editBuyerTaskUpdateConfirmation(
   }
   const nextVersion = input.confirmationVersion + 1;
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-  const taskHref = `${buyerPlanHref(execution.propertyId!)}?${new URLSearchParams({ taskId: task.id }).toString()}`;
   const newConfirmation = {
     confirmationId: `buyer-task-update-${task.id}-${nextVersion}`, version: nextVersion, title: `Reschedule ${task.title}?`,
     description: 'This command writes through the canonical Buyer Plan and preserves closing readiness.',
@@ -448,7 +443,7 @@ export async function editBuyerTaskUpdateConfirmation(
       parametersJson: asInputJson({ ...parameters, buyerTaskDueAt: dueAtEdit, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
       resultJson: asInputJson({
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
-        blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: 'Review this reschedule', body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: taskHref, style: 'SECONDARY' }] }],
+        blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: 'Review this reschedule', body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [] }],
         captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
         ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: 'Review this reschedule', body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [] }]),
       }),

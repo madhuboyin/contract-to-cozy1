@@ -83,12 +83,12 @@ test('every declared decision\'s canned message proposes exactly its own decisio
   }
 });
 
-test('confirming writes the decision through the same service the sale-case route calls, and links to the item on the sale-case page', async () => {
+test('confirming writes the decision through the same service the sale-case route calls, and follows up inside Ask instead of linking to the sale-case page', async () => {
   const item = items.find((candidate) => candidate.id === 'item-pursuing');
   const { result } = await confirm({ saleReadinessItemId: item.id, saleReadinessItemAction: 'UNPURSUE', saleReadinessItemReason: null, saleReadinessItemContextVersion: version(item) });
   assert.equal(calls.decisions.length, 1);
   assert.deepEqual(calls.decisions[0].slice(0, 4), ['u1', 'p1', 'item-pursuing', 'UNPURSUE']);
-  assert.equal(result.blocks[0].actions[0].href, '/dashboard/properties/p1/tools/sale-case?focusItemId=item-pursuing');
+  assert.deepEqual(result.blocks[0].actions.map((action) => [action.id, action.href, action.operationId]), [['receipt-show-seller-prep', undefined, 'SELLER_PREP_CHECKLIST']]);
 });
 
 test('the checklist lists open, pursuing and waived items (not resolved ones) with identity, a sale-case link and every decision for contributors; viewers get read-only rows', async () => {
