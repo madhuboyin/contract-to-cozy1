@@ -64,21 +64,50 @@ export function useVisibleOnce<T extends HTMLElement>(key: string, onVisible?: (
   return ref;
 }
 
-/** Which topic's focused view is open (null = Ask home). Keeps the conversation mounted-but-hidden by the caller, and restores scroll and focus on return. */
+/**
+ * Which topic's focused view is open (null = Ask home). Keeps the conversation mounted-but-hidden by the caller, and restores scroll and focus on return.
+ * Opening a topic pushes ONE browser-history entry (same URL, so the session restore ignores it); Back closes the view and Forward reopens it.
+ * Switching topics inside the view replaces that entry instead of stacking another, and a Forward entry from a different home is never reopened.
+ */
 export function useExploreFocus(scrollRef: RefObject<HTMLElement | null>, resetKey: string) {
   const [focus, setFocus] = useState<AskDiscoveryTopicId | null>(null);
   const savedScroll = useRef(0);
   const trigger = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
+  const homeKey = useRef(resetKey);
+  homeKey.current = resetKey;
 
   const open = (topicId: AskDiscoveryTopicId, from?: HTMLElement | null) => {
+    const entry = { topicId, homeKey: resetKey };
     if (!wasOpen.current) {
       savedScroll.current = scrollRef.current?.scrollTop ?? 0;
       trigger.current = from ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+      window.history.pushState({ ...window.history.state, askExploreFocus: entry }, '');
+    } else if (window.history.state?.askExploreFocus) {
+      window.history.replaceState({ ...window.history.state, askExploreFocus: entry }, '');
     }
     setFocus(topicId);
   };
-  const close = () => setFocus(null);
+  /**
+   * "Not now" pops the entry this view pushed, so Back does not land on a closed view. A launch must not: `history.back()` is asynchronous and the
+   * launch is about to write the conversation's own URL, so the entry is only stripped of the topic in place (one extra Back step, to the same Ask home).
+   */
+  const close = (options?: { launched?: boolean }) => {
+    setFocus(null);
+    const { askExploreFocus, ...rest } = window.history.state ?? {};
+    if (!askExploreFocus) return;
+    if (options?.launched) window.history.replaceState(rest, '');
+    else window.history.back();
+  };
+
+  useEffect(() => {
+    const restore = (event: PopStateEvent) => {
+      const entry = event.state?.askExploreFocus;
+      setFocus(entry && entry.homeKey === homeKey.current ? entry.topicId : null);
+    };
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, []);
 
   useLayoutEffect(() => {
     if (focus === null && wasOpen.current && scrollRef.current) scrollRef.current.scrollTop = savedScroll.current;

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup, ExploreTargetPicker, indicatorText, useExploreFocus, type ExploreState } from '../workspace/ExploreWithCozy';
 import { CollapsedConversationRail } from '../workspace/CollapsedConversationRail';
 import { ConversationHistoryNav } from '../workspace/ConversationHistoryNav';
@@ -20,7 +20,7 @@ const loaded: ExploreState = { topics, loading: false, failed: false };
 function Harness({ state = loaded, send, navigate }: { state?: ExploreState; send: (request: unknown) => void; navigate: () => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const explore = useExploreFocus(scrollRef, 'home-1');
-  const start = (s: AskDiscoveryStarter) => { explore.close(); send({ message: s.message, operationId: s.operationId, propertyId: s.entityContext?.propertyId }); };
+  const start = (s: AskDiscoveryStarter) => { explore.close({ launched: true }); send({ message: s.message, operationId: s.operationId, propertyId: s.entityContext?.propertyId }); };
   return (
     <div>
       <nav aria-label="rail"><ExploreRailGroup state={state} activeTopicId={explore.focus} onOpen={explore.open} moreIdeas={<button type="button">More ideas</button>} /></nav>
@@ -129,6 +129,70 @@ describe('Explore with Cozy', () => {
     const slot = children.findIndex((child) => child.textContent === 'discovery group');
     expect(slot).toBeGreaterThan(0);
     expect(children[slot - 1]).toContainElement(screen.getByRole('button', { name: 'New Ask Cozy session' }));
+  });
+
+  describe('browser history', () => {
+    const rail = () => within(screen.getByRole('region', { name: 'Explore with Cozy' }));
+    const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    beforeEach(() => { window.history.replaceState(null, '', '/dashboard/ask'); });
+
+    it('opening a topic adds one history entry, and Back closes the view without leaving the page', async () => {
+      render(<Harness send={jest.fn()} navigate={jest.fn()} />);
+      const before = window.history.length;
+      fireEvent.click(rail().getByRole('button', { name: 'Home care' }));
+      expect(window.history.length).toBe(before + 1);
+      act(() => { window.history.back(); });
+      await settle();
+      expect(screen.queryByRole('heading', { name: 'Home care' })).toBeNull();
+      expect(window.location.pathname).toBe('/dashboard/ask');
+    });
+
+    it('Forward reopens the topic that Back closed', async () => {
+      render(<Harness send={jest.fn()} navigate={jest.fn()} />);
+      fireEvent.click(rail().getByRole('button', { name: 'DIY & Projects' }));
+      act(() => { window.history.back(); });
+      await settle();
+      act(() => { window.history.forward(); });
+      await settle();
+      expect(screen.getByRole('heading', { name: 'DIY & Projects' })).toBeInTheDocument();
+    });
+
+    it('switching topics inside the view replaces the entry, so one Back closes the view', async () => {
+      render(<Harness send={jest.fn()} navigate={jest.fn()} />);
+      fireEvent.click(rail().getByRole('button', { name: 'Home care' }));
+      const afterOpen = window.history.length;
+      fireEvent.click(rail().getByRole('button', { name: 'DIY & Projects' }));
+      expect(window.history.length).toBe(afterOpen);
+      act(() => { window.history.back(); });
+      await settle();
+      expect(screen.queryByRole('heading', { name: 'DIY & Projects' })).toBeNull();
+    });
+
+    it('"Not now" pops the entry it pushed, leaving no closed-view entry behind', async () => {
+      render(<Harness send={jest.fn()} navigate={jest.fn()} />);
+      fireEvent.click(rail().getByRole('button', { name: 'Home care' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      await settle();
+      expect(screen.queryByRole('heading', { name: 'Home care' })).toBeNull();
+      expect(window.history.state?.askExploreFocus).toBeUndefined();
+    });
+
+    it('a starter launch never calls history.back (the launch writes its own URL) and strips the topic from the entry in place', async () => {
+      const back = jest.spyOn(window.history, 'back');
+      render(<Harness send={jest.fn()} navigate={jest.fn()} />);
+      fireEvent.click(rail().getByRole('button', { name: 'Home care' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Label care-a' }));
+      await settle();
+      expect(back).not.toHaveBeenCalled();
+      expect(window.history.state?.askExploreFocus).toBeUndefined();
+      back.mockRestore();
+    });
+
+    it('does not reopen a topic from an entry that belongs to a different home', () => {
+      render(<Harness send={jest.fn()} navigate={jest.fn()} />);
+      act(() => { window.dispatchEvent(new PopStateEvent('popstate', { state: { askExploreFocus: { topicId: 'HOME_CARE', homeKey: 'home-2' } } })); });
+      expect(screen.queryByRole('heading', { name: 'Home care' })).toBeNull();
+    });
   });
 });
 

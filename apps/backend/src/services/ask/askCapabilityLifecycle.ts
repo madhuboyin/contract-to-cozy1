@@ -11,8 +11,8 @@
 //                       capability registry's declared completion kind AND any output entity type is verified for that capability (the same two
 //                       checks recordCapabilityCompletionAndResolveNext applies). There is no default: a capability whose kind is "a decision was
 //                       recorded" is not completed by reading about it.
-//   - ABANDONED         the homeowner cancelled the pending proposal, or it expired. There is no timer, so an unanswered proposal is not abandoned
-//                       until someone touches it again.
+//   - ABANDONED         the homeowner cancelled the pending proposal, or it expired. An unanswered proposal is expired by the `ask-pending-expiry` CronJob
+//                       (`npm run reconcile:ask-pending`, every 15 minutes) or, sooner, the next time someone touches it.
 //
 // Attribution is untrusted input. It is honoured only when the declared operation and the message match the reviewed entry exactly, and everything
 // that becomes an event field is derived here from the registries.

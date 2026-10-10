@@ -110,7 +110,7 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
     chosen.current = true;
     track('ask_discovery_starter_selected', ids);
     clearSelector();
-    focus.close();
+    focus.close({ launched: true });
     track('ask_discovery_started', ids);
     const result = await ask(option.launch.message, undefined, {
       operationId: option.launch.operationId, entityType: option.launch.entityType, entityId: option.launch.entityId, propertyId,
@@ -128,7 +128,7 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
     const ids = { propertyId: home, topicId, starterId: starter.id, entryId: starter.entryId, capabilityId: starter.capabilityId, operationId: starter.operationId };
     chosen.current = true;
     track('ask_discovery_starter_selected', ids);
-    focus.close();
+    focus.close({ launched: true });
     track('ask_discovery_started', ids);
     const result = await ask(starter.message, undefined, {
       operationId: starter.operationId, propertyId: starter.entityContext?.propertyId ?? propertyId,

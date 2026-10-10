@@ -5,8 +5,8 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.8 |
-| Date | October 9, 2026 |
+| Version | 1.9 |
+| Date | October 10, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
 | Primary framework dependency | ContractToCozy Product Framework v1.0 |
@@ -14,6 +14,8 @@
 | Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
+
+**Revision 1.9 — Focused discovery view is browser-history aware (Inline Workspace FRD v1.244, IW-SHELL-016):** no change to capability, binding or telemetry requirements; Back/Forward now close and reopen the focused topic view client-side. Recorded here because the discovery events (`ask_discovery_topic_opened`, `ask_discovery_abandoned`) are unchanged: a Back that closes the view is not separately reported, and a Forward that reopens it does not re-fire `topic_opened`.
 
 **Revision 1.8 — Target selectors built (CAP-FR-039I):** the reusable, domain-owned selection contract (`GET /api/ask/target-selectors/:selectorId`) and its two selectors are built: the area selector reads the Property Context completeness projection and offers only areas with askable missing, conflicted, or stale facts; the project selector reads the DIY service and applies the project guide's own eligibility, available only against the current reviewed guide. "Add a missing detail" and "Continue a project" are now offered from Ask discovery, bound through the registries (the guidance bridge assigns the area capture to Property Brief). Opening a selector writes nothing; one option still requires an explicit choice; a source that cannot be read is never shown as empty; the target operation revalidates on choice. Selectors are hosted by the focused topic view only, and no routing or Suggested Next Action consumer exists yet.
 

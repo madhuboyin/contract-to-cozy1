@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; Phases 1-7 built (Phase 7 uncommitted) (Inline Workspace FRD v1.239, Appendix C.12; Capability Discovery FRD v1.4)
+**Status:** Approved product direction; Phases 1-7 built and pushed (last commit e47dde76); browser back/forward added after (Inline Workspace FRD v1.244, Appendix C.12; Capability Discovery FRD v1.9)
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -255,13 +255,13 @@ Exit: additional capabilities are discoverable without expanding the persistent 
   selected, started and completed (bounded status, no raw error); abandoned on Not now or a property change. One search event per interaction with a
   bucketed result count (`0`, `1`, `2-5`, `6+`) and whether a result was picked; never the phrase, a label or a message.
 - **Copy.** A count of one reads "1 needs attention".
-- **Open:** "Completed" is request-settled, not a business outcome; the explorer has no entity picker, so entity-bound ideas
-  (repair-or-replace for one item, continue a DIY project) stay out until the canonical pickers exist.
+- **Open:** "Completed" is request-settled, not a business outcome; the explorer had no entity picker at Phase 4; Phase 7 added canonical target
+  selectors, so "Add a missing detail" and "Continue a project" are offered from the focused topic view (the explorer dialog still does not host them).
 
-## 5.1 Follow-up phases (decided October 9, 2026; not started)
+## 5.1 Follow-up phases (decided October 9, 2026; all built)
 
 Phases 1-4 shipped a first shape. The owner then closed three questions (Inline Workspace FRD v1.239, IW-SHELL-020-022; Capability
-Discovery FRD v1.4, CAP-FR-039G-039I). The work below is owed and has not begun.
+Discovery FRD v1.4, CAP-FR-039G-039I). Phases 5-7 below are built; each entry records what shipped, followed by its original scope.
 
 - **Phase 5 - Binding layer. DONE (October 9, 2026; FRD v1.240 / v1.5).** Built as described, plus: the `seasonal-maintenance` capability,
   aliases in the capability definitions, a startup validator for the card bindings with three pinned bridge disagreements, and the bridge extended

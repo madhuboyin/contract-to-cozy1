@@ -176,6 +176,7 @@ describe('AskWorkspace Explore with Cozy wiring', () => {
     await openTopicViaDisclosure('Home care');
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(events().filter(([name]) => name === 'ask_discovery_abandoned').map(([, props]) => props)).toEqual([{ propertyId: 'home-1', topicId: 'HOME_CARE', reason: 'DISMISSED' }]);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); }); // the browser finishes Back before a person can click again
     await openTopicViaDisclosure('Home care');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Label care-seasonal' })); });
     await waitFor(() => expect(names()).toContain('ask_discovery_completed'));
