@@ -138,6 +138,8 @@ describe('Explore with Cozy indicators', () => {
   it('formats the three approved indicators and leaves out zero, stale, unavailable and absent ones', () => {
     expect(indicatorText(indicator(3, 'need attention'))).toBe('3 need attention');
     expect(indicatorText(indicator(2, 'active'))).toBe('2 active');
+    expect(indicatorText(indicator(1, 'need attention'))).toBe('1 needs attention');
+    expect(indicatorText(indicator(1, 'active'))).toBe('1 active');
     expect(indicatorText(indicator('72%', 'complete'))).toBe('72% complete');
     expect(indicatorText(indicator('0%', 'complete'))).toBe('0% complete');
     expect(indicatorText(indicator(0, 'need attention'))).toBeNull();
@@ -163,5 +165,69 @@ describe('Explore with Cozy indicators', () => {
     fireEvent.click(within(screen.getByRole('group', { name: 'Topics' })).getByRole('button', { name: 'My Home Record' }));
     expect(screen.getByRole('heading', { name: 'My Home Record' })).toBeInTheDocument();
     expect(document.querySelector('[data-ask-explore="focused"] p[data-explore-indicator]')).toBeNull();
+  });
+});
+
+describe('Explore with Cozy visibility', () => {
+  const originalObserver = (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
+  afterEach(() => { (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = originalObserver; });
+
+  function installObserver() {
+    const observers: Array<{ callback: (entries: Array<{ isIntersecting: boolean }>) => void; disconnected: boolean }> = [];
+    (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = class {
+      record: { callback: (entries: Array<{ isIntersecting: boolean }>) => void; disconnected: boolean };
+      constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) { this.record = { callback, disconnected: false }; observers.push(this.record); }
+      observe() {}
+      disconnect() { this.record.disconnected = true; }
+    };
+    return { observers, show: () => observers.filter((o) => !o.disconnected).forEach((o) => o.callback([{ isIntersecting: true }])), hide: () => observers.filter((o) => !o.disconnected).forEach((o) => o.callback([{ isIntersecting: false }])) };
+  }
+
+  it('reports the rail topics only once they are on screen, and only once', () => {
+    const io = installObserver();
+    const onVisible = jest.fn();
+    const { rerender } = render(<ExploreRailGroup state={loaded} activeTopicId={null} onOpen={jest.fn()} onVisible={onVisible} />);
+    expect(onVisible).not.toHaveBeenCalled();
+    io.hide();
+    expect(onVisible).not.toHaveBeenCalled();
+    io.show();
+    expect(onVisible).toHaveBeenCalledTimes(1);
+    rerender(<ExploreRailGroup state={{ ...loaded }} activeTopicId={null} onOpen={jest.fn()} onVisible={onVisible} />);
+    io.show();
+    expect(onVisible).toHaveBeenCalledTimes(1);
+  });
+
+  it('never reports topics that were not returned (loading or failed) or a collapsed disclosure', () => {
+    installObserver();
+    const onVisible = jest.fn();
+    render(<ExploreRailGroup state={{ topics: [], loading: true, failed: false }} activeTopicId={null} onOpen={jest.fn()} onVisible={onVisible} />);
+    const onPanelVisible = jest.fn();
+    render(<ExploreDisclosure state={loaded} activeTopicId={null} onOpen={jest.fn()} onPanelVisible={onPanelVisible} />);
+    expect(onVisible).not.toHaveBeenCalled();
+    expect(onPanelVisible).not.toHaveBeenCalled();
+  });
+
+  it('reports the disclosure topics only after it is expanded and on screen', () => {
+    const io = installObserver();
+    const onPanelVisible = jest.fn();
+    render(<ExploreDisclosure state={loaded} activeTopicId={null} onOpen={jest.fn()} onPanelVisible={onPanelVisible} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Explore with Cozy' }));
+    expect(onPanelVisible).not.toHaveBeenCalled();
+    io.show();
+    expect(onPanelVisible).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a topic\'s starters once they are on screen, per topic', () => {
+    const io = installObserver();
+    const onStartersVisible = jest.fn();
+    const { rerender } = render(<ExploreFocusedView topics={topics} topicId="HOME_CARE" busy={false} onSelectTopic={jest.fn()} onStart={jest.fn()} onClose={jest.fn()} onStartersVisible={onStartersVisible} />);
+    expect(onStartersVisible).not.toHaveBeenCalled();
+    io.show();
+    expect(onStartersVisible).toHaveBeenCalledTimes(1);
+    expect(onStartersVisible).toHaveBeenCalledWith('HOME_CARE', topics.find((t) => t.id === 'HOME_CARE')!.starters);
+    rerender(<ExploreFocusedView topics={topics} topicId="DIY_PROJECTS" busy={false} onSelectTopic={jest.fn()} onStart={jest.fn()} onClose={jest.fn()} onStartersVisible={onStartersVisible} />);
+    io.show();
+    expect(onStartersVisible).toHaveBeenLastCalledWith('DIY_PROJECTS', topics.find((t) => t.id === 'DIY_PROJECTS')!.starters);
+    expect(onStartersVisible).toHaveBeenCalledTimes(2);
   });
 });

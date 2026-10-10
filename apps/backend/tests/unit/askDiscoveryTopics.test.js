@@ -77,22 +77,22 @@ test('a caller below an operation\'s role floor gets an honest UNAVAILABLE start
   }
 });
 
-test('the validator rejects an unknown operation, a duplicate launch, a non-Ask destination and a drifting message', () => {
+test('the validator rejects an unknown entry reference, a duplicate id, a duplicate launch and a governed workflow', () => {
   const topic = ASK_DISCOVERY_TOPICS[0];
   const saved = [...topic.starters];
   const bad = [
-    { id: 'x-unknown', label: 'Unknown', message: 'Do a thing', operationId: 'NOT_AN_OPERATION', interactionType: 'CONVERSATION_CONTINUE' },
-    { ...saved[0], id: 'x-duplicate' },
-    { id: 'x-link', label: 'Open the page', message: '/dashboard/maintenance', operationId: 'MAINTENANCE_STATUS', interactionType: 'CONVERSATION_CONTINUE' },
-    { id: 'x-drift', label: 'Drift', message: 'Find a DIY project I can start', operationId: 'DIY_PROJECTS', interactionType: 'CONVERSATION_CONTINUE' },
+    { id: 'x-unknown', entryId: 'not-an-entry' },
+    { id: saved[0].id, entryId: saved[0].entryId },
+    { id: 'x-duplicate-launch', entryId: saved[0].entryId },
+    { id: 'x-governed', entryId: 'maintain-create-task' },
   ];
   topic.starters.splice(0, topic.starters.length, ...saved, ...bad);
   try {
     const issues = validateAskDiscoveryTopics().join('\n');
-    assert.match(issues, /x-unknown: unknown operation/);
-    assert.match(issues, /x-duplicate: duplicate discovery starter launch/);
-    assert.match(issues, /x-link: starter text reads as a non-Ask destination/);
-    assert.match(issues, /x-drift: message does not resolve to DIY_PROJECTS/);
+    assert.match(issues, /x-unknown: unknown explorer entry not-an-entry/);
+    assert.match(issues, new RegExp(`${saved[0].id}: duplicate discovery starter id`));
+    assert.match(issues, /x-duplicate-launch: duplicate discovery starter launch/);
+    assert.match(issues, /x-governed: topic starters are reads/);
   } finally {
     topic.starters.splice(0, topic.starters.length, ...saved);
   }

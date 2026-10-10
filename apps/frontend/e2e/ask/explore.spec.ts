@@ -42,3 +42,35 @@ test('the expanded rail carries the Explore group apart from history', async ({ 
   // Indicators come from the server: present for two topics, omitted (not zero) for the third.
   await expect(group.getByRole('button')).toHaveText(['Home care3 need attention', 'DIY & Projects', 'My Home Record72% complete', 'More ideas']);
 });
+
+test('More ideas: search finds a reviewed idea by an approved alias, a pick launches it once with its operation, and nothing else is sent', async ({ context, page }) => {
+  await installAskContext(context);
+  const api = await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByRole('button', { name: /Explore everything Ask Cozy can do/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'What Ask Cozy can help with' });
+  await dialog.getByRole('searchbox', { name: 'Search what Ask Cozy can help with' }).fill('rebates');
+  const results = dialog.getByRole('list', { name: 'Matching ideas' });
+  await expect(results.getByRole('button')).toHaveCount(1);
+  await expect(results).toContainText('Where could I save money?');
+  await expect(results).toContainText('Reduce costs');
+  expect(api.executionBodies).toHaveLength(0);
+  await results.getByRole('button').click();
+  await expect.poll(() => api.executionBodies.length).toBe(1);
+  expect(api.executionBodies[0]).toMatchObject({
+    message: 'Where could I save money on this home?', propertyId, launchContext: { operationId: 'SAVINGS_OPPORTUNITIES' },
+  });
+});
+
+test('More ideas: a search with no match says so and clears back to browsing', async ({ context, page }) => {
+  await installAskContext(context);
+  await installAskApi(page);
+  await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
+  await page.getByRole('button', { name: /Explore everything Ask Cozy can do/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'What Ask Cozy can help with' });
+  const box = dialog.getByRole('searchbox');
+  await box.fill('SAVINGS_OPPORTUNITIES');
+  await expect(dialog.getByText(/Nothing matches that yet/)).toBeVisible();
+  await box.fill('');
+  await expect(dialog.getByRole('heading', { name: 'Reduce costs' })).toBeVisible();
+});

@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; Phases 1-3 implemented; Phase 4 not started
+**Status:** Approved product direction; Phases 1-4 implemented (Phase 4 and the singular-copy fix not yet committed)
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -232,6 +232,31 @@ Exit: indicators are correct, optional, and honestly degraded.
 6. Verify that response-level Suggested Next Action analytics remain separate.
 
 Exit: additional capabilities are discoverable without expanding the persistent topic set.
+
+**Phase 4 as built** (`apps/backend/src/services/ask/askExplorerRegistry.ts`, `apps/frontend/src/features/ask/explorerSearch.ts`,
+`useExploreWithCozy.ts`; tests `askExplorerRegistry.test.js`, `explorerSearch.test.ts`, `capabilityExplorer.test.tsx`,
+`exploreWithCozyWorkspace.test.tsx`, `e2e/ask/explore.spec.ts`):
+
+- **One reviewed inventory.** The static `CONCIERGE_CAPABILITY_GROUPS` table is gone. `ASK_EXPLORER_ENTRIES` declares, per entry: group, homeowner
+  label, question, operation, launch policy (`MESSAGE` or `DECLARED_OPERATION`), approved aliases, and for a workflow its consequence. Topic starters
+  are references to entries (`entryId`); they no longer define any inventory. `validateAskExplorerRegistry` runs at startup.
+- **Reviewed-discovery rule, enforced.** `READ` entries cannot be commands or monitors. A `GOVERNED_WORKFLOW` must be a registered, confirmation-gated
+  domain command, must state that nothing happens until the homeowner confirms, and must start a workflow. No entry may resolve to the
+  grounded-guidance fallback or need an entity chosen first.
+- **Static prompts reviewed, not preserved.** Dropped: "Help me compare repair and replacement options..." (fell to the grounded-guidance fallback);
+  "Monitor my important home deadlines." (opens by asking which task); "Create a capital reserve plan..." (resolves to the inventory-create command,
+  a pre-existing routing defect also visible in `askRoutingCalibration.test.js`; replaced by the reserve-fund read). Kept: "Add a maintenance task"
+  as the only governed workflow. Added: seasonal care, DIY, forecast, attention, quotes and the topic starters.
+- **Search.** Client-side over the already-authorized corpus: label/question, group label/description, and server aliases. Deterministic: exact,
+  prefix, token, then group-wording tiers, ties by server order. Operation ids are never indexed. Queries under two characters return nothing.
+- **Launch.** A prompt carrying `operationId` sends it in `launchContext.operationId` (internal operations are reachable no other way).
+- **Telemetry** (`ask_discovery_*`, `ask_explorer_search`; separate from Suggested Next Action events): topic and starter visibility fire once per home,
+  only after the element is on screen (IntersectionObserver; a collapsed or `display:none` element never fires); topic opened with its surface; starter
+  selected, started and completed (bounded status, no raw error); abandoned on Not now or a property change. One search event per interaction with a
+  bucketed result count (`0`, `1`, `2-5`, `6+`) and whether a result was picked; never the phrase, a label or a message.
+- **Copy.** A count of one reads "1 needs attention".
+- **Open:** "Completed" is request-settled, not a business outcome; the explorer has no entity picker, so entity-bound ideas
+  (repair-or-replace for one item, continue a DIY project) stay out until the canonical pickers exist.
 
 ## 6. Validation
 

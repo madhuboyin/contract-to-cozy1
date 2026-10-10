@@ -74,6 +74,15 @@ export type CtcEventName =
   | 'ask_prompt_selected'
   | 'ask_prompt_outcome'
   | 'ask_capability_explorer_opened'
+  // Explore with Cozy / capability explorer discovery (separate from Suggested Next Action impressions and selections)
+  | 'ask_discovery_topic_visible'
+  | 'ask_discovery_topic_opened'
+  | 'ask_discovery_starter_visible'
+  | 'ask_discovery_starter_selected'
+  | 'ask_discovery_started'
+  | 'ask_discovery_completed'
+  | 'ask_discovery_abandoned'
+  | 'ask_explorer_search'
   // Property record
   | 'property_record_viewed'
   | 'property_record_section_opened'
@@ -385,6 +394,15 @@ export interface CtcEventProperties {
     groupCount: number;
     capabilityCount: number;
   };
+  // Bounded identifiers only: never a message, a search phrase or a label. Counts are bucketed, never raw.
+  ask_discovery_topic_visible: { propertyId?: string | null; topicId: string; surface: 'RAIL' | 'DISCLOSURE'; hasIndicator: boolean };
+  ask_discovery_topic_opened: { propertyId?: string | null; topicId: string; surface: 'RAIL' | 'DISCLOSURE' | 'COLLAPSED_RAIL' | 'FOCUSED_VIEW' };
+  ask_discovery_starter_visible: { propertyId?: string | null; topicId: string; starterId: string; operationId: string };
+  ask_discovery_starter_selected: { propertyId?: string | null; topicId: string; starterId: string; operationId: string };
+  ask_discovery_started: { propertyId?: string | null; topicId: string; starterId: string; operationId: string };
+  ask_discovery_completed: { propertyId?: string | null; topicId: string; starterId: string; operationId: string; status: string; succeeded: boolean };
+  ask_discovery_abandoned: { propertyId?: string | null; topicId: string; reason: 'DISMISSED' | 'PROPERTY_CHANGED' };
+  ask_explorer_search: { propertyId?: string | null; resultBucket: '0' | '1' | '2-5' | '6+'; selected: boolean };
   property_record_viewed: {
     propertyId: string;
     completenessPercent: number;

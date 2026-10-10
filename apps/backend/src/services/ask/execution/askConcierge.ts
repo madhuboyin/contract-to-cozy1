@@ -12,7 +12,7 @@ import { type AskAccountRole } from '../askAccountEligibility';
 import { evaluateAskAudienceApplicability, getAskAudiencePolicy } from '../askAudiencePolicy';
 import { buildCapabilityCatalog, canonicalCapabilityRegistry, type CapabilityCatalogItem } from '../../../productFramework/capabilities';
 import { createToolDiscoveryCapabilityAvailabilityAdapter } from '../../toolDiscoveryAvailability.service';
-import { getAskOperationDefinition, resolveAskOperation, type AskOperationId } from '../askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, resolveAskOperation, type AskOperationId } from '../askOperationRegistry';
 import { skillRuntimeUnavailableReason } from '../capabilityHandlerRegistry';
 import { getHomeActionFeed, getHomeContinuityProjection } from '../../homeActions.service';
 import { money } from '../askFormatting';
@@ -27,67 +27,13 @@ import { conciergeLandingSubjectKey, inventoryDecisionQuestion, selectConciergeL
 import { getSkillDefinition } from '../../skills/skillRegistry';
 import { focusedHomeActionCategory, focusedHomeActionQuestion } from '../askFocusedGuidance';
 import { buildAskDiscoveryTopics } from '../askDiscoveryTopics';
+import { buildAskExplorerGroups } from '../askExplorerRegistry';
 import { loadAskDiscoveryIndicators } from '../askDiscoveryIndicators';
 import { lifecyclePromptsFor } from '../askLifecyclePromptPolicy';
 import {
   dashboardSectionRepresentativeActions,
   projectHomeActionDashboardSections,
 } from '../../homeActionDashboardProjection';
-
-type ConciergeCapabilityGroupDefinition = Omit<ConciergeHomeView['capabilityGroups'][number], 'capabilityIds'> & {
-  outcomeCategory: CapabilityCatalogItem['outcomeCategory'];
-};
-
-const CONCIERGE_CAPABILITY_GROUPS: readonly ConciergeCapabilityGroupDefinition[] = [
-  {
-    id: 'UNDERSTAND', label: 'Understand your home', outcomeCategory: 'UNDERSTAND_HOME',
-    description: 'Turn home records into a clear, useful picture.',
-    prompts: [
-      { id: 'understand-summary', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'Give me a summary of my home record.' },
-      { id: 'understand-completeness', categoryId: 'UNDERSTAND', categoryLabel: 'Understand', question: 'How complete is my home record?' },
-    ],
-  },
-  {
-    id: 'MAINTAIN', label: 'Maintain and prevent', outcomeCategory: 'MAINTAIN_PREVENT',
-    description: 'Stay ahead of maintenance and prevent avoidable problems.',
-    prompts: [
-      { id: 'maintain-due', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'What maintenance tasks are due this month?' },
-      { id: 'maintain-create', categoryId: 'MAINTAIN', categoryLabel: 'Maintain', question: 'Create a maintenance task for changing my HVAC filter.' },
-    ],
-  },
-  {
-    id: 'PROTECT', label: 'Protect your home', outcomeCategory: 'PROTECT_MONITOR',
-    description: 'Find coverage gaps, risks, and important changes.',
-    prompts: [
-      { id: 'protect-coverage', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'Which items are missing coverage?' },
-      { id: 'protect-changes', categoryId: 'PROTECT', categoryLabel: 'Protect', question: 'What changed recently for this home?' },
-    ],
-  },
-  {
-    id: 'SAVE', label: 'Reduce costs', outcomeCategory: 'SAVE_OPTIMIZE',
-    description: 'Understand spending and uncover relevant savings.',
-    prompts: [
-      { id: 'save-opportunities', categoryId: 'SAVE', categoryLabel: 'Save', question: 'Where could I save money on this home?' },
-      { id: 'save-costs', categoryId: 'SAVE', categoryLabel: 'Save', question: 'What are my biggest ownership costs?' },
-    ],
-  },
-  {
-    id: 'DECIDE', label: 'Compare and decide', outcomeCategory: 'DECIDE_COMPARE',
-    description: 'Compare options with the relevant home context.',
-    prompts: [
-      { id: 'decide-replace', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me compare repair and replacement options for a home system or appliance.' },
-      { id: 'decide-quotes', categoryId: 'DECIDE', categoryLabel: 'Decide', question: 'Help me compare contractor quotes.' },
-    ],
-  },
-  {
-    id: 'PLAN_MONITOR', label: 'Plan and monitor', outcomeCategory: 'PLAN_BUDGET',
-    description: 'Build plans and keep watch on important deadlines.',
-    prompts: [
-      { id: 'plan-reserve', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'Create a capital reserve plan for future replacements.' },
-      { id: 'plan-deadlines', categoryId: 'PLAN_MONITOR', categoryLabel: 'Plan', question: 'Monitor my important home deadlines.' },
-    ],
-  },
-] as const;
 
 // Ask Intelligence FRD §18.4, Phase 9B "Concierge Home" deliverable. A
 // read-only composition of three already-governed sources -- never a
@@ -110,18 +56,8 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
         propertyId,
         includeWorkflowContext: false,
       });
-      return CONCIERGE_CAPABILITY_GROUPS.flatMap((group) => {
-        const capabilityIds = capabilityCatalog.capabilities
-          .filter((capability) => capability.outcomeCategory === group.outcomeCategory)
-          .map((capability) => capability.id);
-        return capabilityIds.length ? [{
-          id: group.id,
-          label: group.label,
-          description: group.description,
-          capabilityIds,
-          prompts: [...group.prompts],
-        }] : [];
-      });
+      // Membership is the reviewed explorer registry, never a static prompt table.
+      return buildAskExplorerGroups(capabilityCatalog.capabilities);
     } catch (error) {
       logger.warn({ err: error, propertyId, userId }, 'Concierge Home capability discovery failed closed');
       return [];
@@ -351,7 +287,8 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
         : prompt.context?.entityType === 'HOME_ACTION'
           ? 'HOME_ACTIONS'
         : null;
-    return contextualOperation ?? resolveAskOperation(prompt.question).operationId;
+    const declared = prompt.operationId && prompt.operationId in ASK_OPERATION_DEFINITIONS ? prompt.operationId as AskOperationId : null;
+    return contextualOperation ?? declared ?? resolveAskOperation(prompt.question).operationId;
   };
   const operationIsDiscoverable = (operationId: AskOperationId): boolean => {
     if (!controls.operationEnabled(operationId)) return false;

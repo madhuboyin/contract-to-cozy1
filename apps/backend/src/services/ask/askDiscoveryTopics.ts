@@ -11,28 +11,19 @@ import type { HouseholdRole } from '@prisma/client';
 import type { AskOperationalControls } from '../../config/askOperationalControls';
 import { evaluateAskAudienceApplicability, getAskAudiencePolicy } from './askAudiencePolicy';
 import { skillRuntimeUnavailableReason } from './capabilityHandlerRegistry';
-import {
-  ASK_OPERATION_DEFINITIONS,
-  getAskOperationDefinition,
-  resolveAskOperation,
-  type AskOperationId,
-} from './askOperationRegistry';
+import { getAskOperationDefinition, type AskOperationId } from './askOperationRegistry';
 import {
   ASK_DISCOVERY_TOPIC_IDS,
   type AskDiscoveryStarter,
   type AskDiscoveryTopic,
   type AskDiscoveryTopicId,
 } from '../../productFramework/conciergeHome.contract';
-import { DIY_TEMPLATE_BROWSE_ACTION } from '../diy/projectGuide';
-import { PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, PROPERTY_SUMMARY_STARTER_MESSAGE } from './suggestedActions/starterCandidates';
-import { SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE, SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE } from './support/seasonalHomeCare';
+import { explorerEntryById } from './askExplorerRegistry';
 
+/** A topic starter is a REFERENCE to a reviewed explorer entry: label, message, operation and interaction come from the registry, so the topics never define the inventory. */
 interface AskDiscoveryStarterDefinition {
   id: string;
-  label: string;
-  message: string;
-  operationId: AskOperationId;
-  interactionType: AskDiscoveryStarter['interactionType'];
+  entryId: string;
 }
 
 interface AskDiscoveryTopicDefinition {
@@ -42,34 +33,40 @@ interface AskDiscoveryTopicDefinition {
   starters: readonly AskDiscoveryStarterDefinition[];
 }
 
-// Reviewed Ask-native starters only. A message-routable operation's message must resolve to that operation (validated below); an
-// internal operation (SEASONAL_HOME_CARE, DIY_TEMPLATE_BROWSE) is reached by the launch hint and the exact message. The plan's example
-// "Add a missing detail" is deliberately absent: PROPERTY_CONTEXT_AREA_CAPTURE needs a chosen area, and no reviewed generic launch exists.
+// Reviewed Ask-native starters only. The plan's example "Add a missing detail" is deliberately absent: PROPERTY_CONTEXT_AREA_CAPTURE needs a
+// chosen area, and no reviewed generic launch exists.
 export const ASK_DISCOVERY_TOPICS: readonly AskDiscoveryTopicDefinition[] = Object.freeze([
   {
     id: 'HOME_CARE', label: 'Home care', order: 1,
     starters: [
-      { id: 'home-care-attention', label: 'What needs attention?', message: 'What needs my attention at home?', operationId: 'HOME_ACTIONS', interactionType: 'CONVERSATION_CONTINUE' },
-      { id: 'home-care-maintenance-due', label: 'What maintenance is coming due?', message: 'What maintenance tasks are due this month?', operationId: 'MAINTENANCE_STATUS', interactionType: 'CONVERSATION_CONTINUE' },
-      { id: 'home-care-seasonal', label: 'Home care for this season', message: SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE, operationId: 'SEASONAL_HOME_CARE', interactionType: 'START_WORKFLOW' },
-      { id: 'home-care-next-season', label: 'Get ready for next season', message: SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE, operationId: 'SEASONAL_HOME_CARE', interactionType: 'START_WORKFLOW' },
+      { id: 'home-care-attention', entryId: 'maintain-attention' },
+      { id: 'home-care-maintenance-due', entryId: 'maintain-due' },
+      { id: 'home-care-seasonal', entryId: 'maintain-seasonal' },
+      { id: 'home-care-next-season', entryId: 'maintain-next-season' },
     ],
   },
   {
     id: 'DIY_PROJECTS', label: 'DIY & Projects', order: 2,
     starters: [
-      { id: 'diy-active', label: 'Show my DIY projects', message: 'Show my DIY projects', operationId: 'DIY_PROJECTS', interactionType: 'CONVERSATION_CONTINUE' },
-      { id: 'diy-start', label: 'Find a project I can start', message: DIY_TEMPLATE_BROWSE_ACTION.message, operationId: 'DIY_TEMPLATE_BROWSE', interactionType: 'START_WORKFLOW' },
+      { id: 'diy-active', entryId: 'maintain-diy' },
+      { id: 'diy-start', entryId: 'maintain-diy-start' },
     ],
   },
   {
     id: 'HOME_RECORD', label: 'My Home Record', order: 3,
     starters: [
-      { id: 'home-record-summary', label: 'Summarize my home record', message: PROPERTY_SUMMARY_STARTER_MESSAGE, operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE' },
-      { id: 'home-record-completeness', label: 'How complete is it?', message: PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE' },
+      { id: 'home-record-summary', entryId: 'understand-summary' },
+      { id: 'home-record-completeness', entryId: 'understand-completeness' },
     ],
   },
 ]);
+
+interface ResolvedStarter { id: string; label: string; message: string; operationId: AskOperationId; interactionType: AskDiscoveryStarter['interactionType'] }
+
+function resolveStarter(definition: AskDiscoveryStarterDefinition): ResolvedStarter | null {
+  const entry = explorerEntryById(definition.entryId);
+  return entry ? { id: definition.id, label: entry.label, message: entry.question, operationId: entry.operationId, interactionType: entry.interactionType } : null;
+}
 
 const ROLE_RANK: Record<HouseholdRole, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
 const NON_ASK_DESTINATION = /^(?:https?:|\/|#|mailto:)|\b(?:href|navigate to)\b/i;
@@ -88,26 +85,21 @@ export function validateAskDiscoveryTopics(): string[] {
     topicOrders.add(topic.order);
     if (!(ASK_DISCOVERY_TOPIC_IDS as readonly string[]).includes(topic.id)) issues.push(`${topic.id}: unknown discovery topic id`);
     if (!topic.starters.length) issues.push(`${topic.id}: discovery topic has no starters`);
-    for (const starter of topic.starters) {
-      const where = `${topic.id}/${starter.id}`;
-      if (starterIds.has(starter.id)) issues.push(`${where}: duplicate discovery starter id`);
-      starterIds.add(starter.id);
+    for (const reference of topic.starters) {
+      const where = `${topic.id}/${reference.id}`;
+      if (starterIds.has(reference.id)) issues.push(`${where}: duplicate discovery starter id`);
+      starterIds.add(reference.id);
+      const starter = resolveStarter(reference);
+      if (!starter) {
+        issues.push(`${where}: unknown explorer entry ${reference.entryId}`);
+        continue;
+      }
+      // Label, wording, operation, aliases, consequence and routing are validated once, on the entry (validateAskExplorerRegistry).
       const launchKey = `${starter.operationId}\u0000${starter.message.trim().toLowerCase()}`;
       if (starterLaunches.has(launchKey)) issues.push(`${where}: duplicate discovery starter launch`);
       starterLaunches.add(launchKey);
-      if (!(starter.operationId in ASK_OPERATION_DEFINITIONS)) {
-        issues.push(`${where}: unknown operation ${starter.operationId}`);
-        continue;
-      }
-      const definition = getAskOperationDefinition(starter.operationId);
-      if (NON_ASK_DESTINATION.test(starter.message) || NON_ASK_DESTINATION.test(starter.label)) issues.push(`${where}: starter text reads as a non-Ask destination`);
-      if (!definition.requiresProperty) issues.push(`${where}: discovery starters are property-scoped, ${starter.operationId} is not`);
-      if (!getAskAudiencePolicy(starter.operationId, definition.version)) issues.push(`${where}: ${starter.operationId} has no audience policy`);
-      // A message-routable operation must be what the message actually resolves to, otherwise the starter would drift to another answer
-      // (or to the grounded-guidance fallback). An internal operation is only reachable through the launch hint, so there is nothing to resolve.
-      if (definition.messageRoutable && resolveAskOperation(starter.message).operationId !== starter.operationId) {
-        issues.push(`${where}: message does not resolve to ${starter.operationId}`);
-      }
+      const entry = explorerEntryById(reference.entryId)!;
+      if (entry.kind !== 'READ') issues.push(`${where}: topic starters are reads; ${entry.id} is a governed workflow`);
     }
   }
   return issues;
@@ -123,7 +115,7 @@ export interface AskDiscoveryProjectionInput {
   indicators?: Partial<Record<AskDiscoveryTopicId, AskDiscoveryTopic['indicator']>>;
 }
 
-function projectStarter(definition: AskDiscoveryStarterDefinition, input: AskDiscoveryProjectionInput): AskDiscoveryStarter | null {
+function projectStarter(definition: ResolvedStarter, input: AskDiscoveryProjectionInput): AskDiscoveryStarter | null {
   const operation = getAskOperationDefinition(definition.operationId);
   const base = {
     id: definition.id, label: definition.label, message: definition.message, operationId: definition.operationId,
@@ -159,8 +151,9 @@ export function buildAskDiscoveryTopics(input: AskDiscoveryProjectionInput): Ask
       label: topic.label,
       order: topic.order,
       indicator: input.indicators?.[topic.id] ?? null,
-      starters: topic.starters.flatMap((starter) => {
-        const projected = projectStarter(starter, input);
+      starters: topic.starters.flatMap((reference) => {
+        const starter = resolveStarter(reference);
+        const projected = starter ? projectStarter(starter, input) : null;
         return projected ? [projected] : [];
       }),
     }));

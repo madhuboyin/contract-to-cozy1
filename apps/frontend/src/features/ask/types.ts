@@ -452,6 +452,12 @@ export interface AskCapabilityPrompt {
   categoryId: AskCapabilityCategoryId;
   categoryLabel: string;
   question: string;
+  // Capability explorer entries (server-owned, reviewed): a homeowner label, the registered operation a selection launches, approved
+  // search aliases, and for a governed workflow the consequence stated before anything is confirmed. Absent on personalized prompts.
+  label?: string;
+  operationId?: string;
+  aliases?: string[];
+  note?: string;
   subject?: AskConciergeSubject;
   context?: {
     propertyId?: string;

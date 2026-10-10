@@ -28,7 +28,7 @@ describe('AskWorkspace split guardrails', () => {
   });
 
   it('no workspace file imports AskWorkspace, and each stays below 700 lines', () => {
-    expect(workspaceFiles.sort()).toEqual(['AskShellHeader.tsx', 'CaptureCards.tsx', 'CollapsedConversationRail.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'ExploreWithCozy.tsx', 'support.ts', 'useAskAccount.ts', 'useAskRequest.ts', 'useComposerKeys.ts', 'useConversationHistory.ts', 'usePendingWork.ts', 'useResponseContextPanel.ts', 'useResultRefresh.ts', 'useSelectedPropertyLabel.ts', 'useSessionHistoryActions.ts', 'useSessionLifecycle.ts', 'useStarterDismissal.ts']);
+    expect(workspaceFiles.sort()).toEqual(['AskShellHeader.tsx', 'CaptureCards.tsx', 'CollapsedConversationRail.tsx', 'ConciergeHome.tsx', 'ConversationHistoryNav.tsx', 'ExecutionCard.tsx', 'ExploreWithCozy.tsx', 'support.ts', 'useAskAccount.ts', 'useAskRequest.ts', 'useComposerKeys.ts', 'useConversationHistory.ts', 'useExploreWithCozy.ts', 'usePendingWork.ts', 'useResponseContextPanel.ts', 'useResultRefresh.ts', 'useSelectedPropertyLabel.ts', 'useSessionHistoryActions.ts', 'useSessionLifecycle.ts', 'useStarterDismissal.ts']);
     for (const name of workspaceFiles) {
       const source = read(path.join(workspaceDir, name));
       expect(source).not.toMatch(/from '(\.\.\/)?(\.\/)?AskWorkspace'/);
@@ -50,8 +50,9 @@ describe('AskWorkspace split guardrails', () => {
     // Independence: the group reads only the server's discoveryTopics, never follow-up or dismissal state.
     expect(source).not.toMatch(/followUp|suggestedNextAction|SuggestedNextAction|starterDismissal|useStarterDismissal/);
     const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
-    expect(workspace).toContain('topics: concierge.view?.discoveryTopics ?? []');
+    expect(read(path.join(workspaceDir, 'useExploreWithCozy.ts'))).toContain('view?.discoveryTopics ?? []');
     expect(workspace).not.toMatch(/discoveryTopics[^\n]*(followUps|starterDismissal)/);
+    expect(read(path.join(workspaceDir, 'useExploreWithCozy.ts'))).not.toMatch(/followUp|suggestedNextAction|starterDismissal/);
   });
 
   it('pins footer follow-ups to the answer that declared them', () => {

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowRight, BellRing, BookOpen, CircleDollarSign, ClipboardCheck, Loader2, ShieldCheck, Wrench } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ArrowRight, BellRing, BookOpen, CircleDollarSign, ClipboardCheck, Loader2, Search, ShieldCheck, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskCapabilityCategoryId, AskCapabilityGroup, AskCapabilityPrompt, ConciergeHomeView } from '@/features/ask/types';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { resolveConciergeLandingSpotlight } from '@/features/ask/conciergeLandingPolicy';
 import { humanizeReason } from './support';
+import { EXPLORER_SEARCH_MIN_LENGTH, normalizeSearchText, searchExplorerGroups } from '@/features/ask/explorerSearch';
 
 export function CapabilityCategoryIcon({ categoryId, className = 'h-4 w-4' }: { categoryId: AskCapabilityCategoryId; className?: string }) {
   const icons = {
@@ -21,7 +22,25 @@ export function CapabilityCategoryIcon({ categoryId, className = 'h-4 w-4' }: { 
   return <Icon className={className} aria-hidden="true" />;
 }
 
-export function CapabilityExplorer({ groups, onSelect, onOpen, chip = false, row = false }: {
+/** What a prompt shows: the reviewed homeowner label when the server sent one, otherwise the question itself. */
+const promptText = (prompt: AskCapabilityPrompt) => prompt.label ?? prompt.question;
+
+function ExplorerPrompt({ prompt, groupLabel, onPick }: { prompt: AskCapabilityPrompt; groupLabel?: string; onPick: (prompt: AskCapabilityPrompt) => void }) {
+  return (
+    <button type="button" onClick={() => onPick(prompt)} className="group flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-slate-700 hover:bg-white hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">
+      <span>
+        {promptText(prompt)}
+        {groupLabel && <span className="ml-2 text-xs font-normal text-slate-500">{groupLabel}</span>}
+        {prompt.note && <span className="mt-0.5 block text-xs font-normal text-slate-500" data-explorer-note="">{prompt.note}</span>}
+      </span>
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+    </button>
+  );
+}
+
+export function CapabilityExplorer({ groups, onSelect, onOpen, onSearchInteraction, chip = false, row = false }: {
+  /** One call per search interaction when the explorer closes or a result is chosen: how many results the last query had, and whether one was picked. Never the phrase. */
+  onSearchInteraction?: (interaction: { resultCount: number; selected: boolean }) => void;
   /** The Explore with Cozy rail lists "More ideas" as one more row beside its topics. */
   row?: boolean;
   /** The calm landing shows the entry as one more suggestion chip instead of a text link. */
@@ -31,9 +50,21 @@ export function CapabilityExplorer({ groups, onSelect, onOpen, chip = false, row
   onOpen: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  // The interaction is remembered here, not emitted per keystroke: it is reported once, when the explorer closes or a result is chosen.
+  const searched = useRef<{ resultCount: number } | null>(null);
+  const searching = normalizeSearchText(query).length >= EXPLORER_SEARCH_MIN_LENGTH;
+  const results = searching ? searchExplorerGroups(groups, query) : [];
+  if (searching) searched.current = { resultCount: results.length };
+  const finish = (selected: boolean) => {
+    if (searched.current) onSearchInteraction?.({ resultCount: searched.current.resultCount, selected });
+    searched.current = null;
+    setQuery('');
+  };
+  const pick = (prompt: AskCapabilityPrompt) => { finish(true); setOpen(false); onSelect(prompt); };
   if (!groups.length) return null;
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) onOpen(); }}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) finish(false); setOpen(nextOpen); if (nextOpen) onOpen(); }}>
       <DialogTrigger asChild>
         {row
           ? <button type="button" className="flex min-h-10 w-full items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"><span>More ideas</span><ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" /></button>
@@ -48,20 +79,32 @@ export function CapabilityExplorer({ groups, onSelect, onOpen, chip = false, row
           <DialogTitle className="text-xl leading-7 text-slate-950">What Ask Cozy can help with</DialogTitle>
           <DialogDescription className="mt-1 max-w-3xl text-sm leading-5 text-slate-600">Choose an example to start a conversation grounded in your selected home record.</DialogDescription>
         </DialogHeader>
+        <div className="shrink-0 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <label className="relative block">
+            <span className="sr-only">Search what Ask Cozy can help with</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={80} placeholder="Search ideas, like “insurance” or “winter”" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
+          </label>
+          <p className="sr-only" role="status" aria-live="polite">{searching ? `${results.length} ${results.length === 1 ? 'idea matches' : 'ideas match'}` : ''}</p>
+        </div>
+        {searching ? (
+          <div className="min-h-0 overflow-y-auto p-3 sm:p-4">
+            {results.length === 0
+              ? <p className="px-2 py-3 text-sm text-slate-600" data-explorer-empty="">Nothing matches that yet. Try different words, or clear the search to browse everything Ask Cozy can help with.</p>
+              : <ul className="space-y-0.5" aria-label="Matching ideas">{results.map(({ prompt, group }) => <li key={prompt.id}><ExplorerPrompt prompt={prompt} groupLabel={group.label} onPick={pick} /></li>)}</ul>}
+          </div>
+        ) : (
         <div className="grid min-h-0 items-start gap-3 overflow-y-auto p-3 sm:grid-cols-2 sm:p-4">
           {groups.map((group) => (
             <section key={group.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3" aria-labelledby={`ask-capability-${group.id}`}>
               <div className="flex items-start gap-2.5"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-teal-700 shadow-sm"><CapabilityCategoryIcon categoryId={group.id} /></span><div><h3 id={`ask-capability-${group.id}`} className="text-sm font-semibold leading-5 text-slate-950">{group.label}</h3><p className="mt-0.5 text-xs leading-4 text-slate-600">{group.description}</p></div></div>
               <div className="mt-2 space-y-0.5">
-                {group.prompts.map((prompt) => (
-                  <button key={prompt.id} type="button" onClick={() => { setOpen(false); onSelect(prompt); }} className="group flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-slate-700 hover:bg-white hover:text-teal-800">
-                    <span>{prompt.question}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
-                  </button>
-                ))}
+                {group.prompts.map((prompt) => <ExplorerPrompt key={prompt.id} prompt={prompt} onPick={pick} />)}
               </div>
             </section>
           ))}
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

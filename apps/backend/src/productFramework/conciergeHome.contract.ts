@@ -113,6 +113,12 @@ export const ConciergeHomeCapabilityPromptSchema = z.object({
   categoryId: z.enum(['UNDERSTAND', 'MAINTAIN', 'PROTECT', 'SAVE', 'DECIDE', 'PLAN_MONITOR']),
   categoryLabel: z.string(),
   question: z.string(),
+  // Capability explorer entries (askExplorerRegistry): a homeowner label, the registered operation the selection launches, approved search
+  // aliases, and -- for a governed workflow -- the consequence stated before anything is confirmed. All optional so personalized prompts are unchanged.
+  label: z.string().optional(),
+  operationId: z.string().optional(),
+  aliases: z.array(z.string()).optional(),
+  note: z.string().optional(),
   subject: ConciergeHomeSubjectSchema.optional(),
   context: z.object({
     entityType: z.enum(['HOME_ACTION', 'DECISION_THREAD', 'INVENTORY_ITEM']),

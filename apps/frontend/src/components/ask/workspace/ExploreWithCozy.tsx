@@ -26,12 +26,39 @@ const REASON_COPY: Record<string, string> = {
 export function indicatorText(indicator: AskDiscoveryTopic['indicator']): string | null {
   if (!indicator || indicator.freshness !== 'CURRENT') return null;
   if (typeof indicator.value === 'number' && indicator.value === 0) return null;
-  return `${indicator.value} ${indicator.label}`.trim();
+  // The server owns the label ("need attention"); only the verb agrees with a count of one.
+  const label = indicator.value === 1 && indicator.label === 'need attention' ? 'needs attention' : indicator.label;
+  return `${indicator.value} ${label}`.trim();
 }
 
 function reasonCopy(starter: AskDiscoveryStarter): string {
   if (starter.availability === 'NEEDS_CONTEXT') return 'Needs a little more information first.';
   return starter.reasonCodes.map((code) => REASON_COPY[code]).find(Boolean) ?? 'Not available right now.';
+}
+
+/**
+ * Calls `onVisible` once per `key`, only after the element is actually on screen (IntersectionObserver). An element that is display:none, or
+ * a panel that is collapsed, never fires. Without IntersectionObserver (old browsers, jsdom) a mounted element counts as visible.
+ */
+export function useVisibleOnce<T extends HTMLElement>(key: string, onVisible?: () => void) {
+  const ref = useRef<T>(null);
+  const latest = useRef(onVisible);
+  latest.current = onVisible;
+  const fired = useRef<string | null>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || !latest.current || fired.current === key) return;
+    const fire = () => {
+      if (fired.current === key) return;
+      fired.current = key;
+      latest.current?.();
+    };
+    if (typeof IntersectionObserver === 'undefined') { fire(); return; }
+    const observer = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) { fire(); observer.disconnect(); } });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [key]);
+  return ref;
 }
 
 /** Which topic's focused view is open (null = Ask home). Keeps the conversation mounted-but-hidden by the caller, and restores scroll and focus on return. */
@@ -93,14 +120,17 @@ function ExploreStatus({ state }: { state: ExploreState }) {
 }
 
 /** Desktop rail group: near the top of the conversation rail, quieter than the composer and the current response. */
-export function ExploreRailGroup({ state, activeTopicId, onOpen, moreIdeas }: {
+export function ExploreRailGroup({ state, activeTopicId, onOpen, moreIdeas, onVisible }: {
   state: ExploreState;
   activeTopicId: AskDiscoveryTopicId | null;
   onOpen: (topicId: AskDiscoveryTopicId, from: HTMLElement) => void;
   moreIdeas?: ReactNode;
+  /** Fired once, only after the topics are on screen. */
+  onVisible?: () => void;
 }) {
+  const ref = useVisibleOnce<HTMLElement>(state.topics.length ? 'topics' : 'none', state.topics.length ? onVisible : undefined);
   return (
-    <section className="mt-3 border-y border-stone-200 py-3" aria-labelledby="ask-explore-rail-title" data-ask-explore="rail">
+    <section ref={ref} className="mt-3 border-y border-stone-200 py-3" aria-labelledby="ask-explore-rail-title" data-ask-explore="rail">
       <h3 id="ask-explore-rail-title" className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Explore with Cozy</h3>
       <div className="mt-1">
         <ExploreStatus state={state} />
@@ -111,13 +141,16 @@ export function ExploreRailGroup({ state, activeTopicId, onOpen, moreIdeas }: {
 }
 
 /** Narrow screens: one compact disclosure above the conversation. It is not a drawer and never overlays the page. */
-export function ExploreDisclosure({ state, activeTopicId, onOpen, moreIdeas }: {
+export function ExploreDisclosure({ state, activeTopicId, onOpen, moreIdeas, onPanelVisible }: {
   state: ExploreState;
   activeTopicId: AskDiscoveryTopicId | null;
   onOpen: (topicId: AskDiscoveryTopicId, from: HTMLElement) => void;
   moreIdeas?: ReactNode;
+  /** Fired once, only after the expanded panel's topics are on screen (a collapsed disclosure shows no topics). */
+  onPanelVisible?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const panelRef = useVisibleOnce<HTMLDivElement>(expanded && state.topics.length ? 'topics' : 'none', expanded && state.topics.length ? onPanelVisible : undefined);
   const toggleRef = useRef<HTMLButtonElement>(null);
   return (
     <div className="shrink-0 border-b border-slate-200 bg-[#f7f7f5] px-4 py-1.5 lg:hidden" data-ask-explore="disclosure">
@@ -126,7 +159,7 @@ export function ExploreDisclosure({ state, activeTopicId, onOpen, moreIdeas }: {
         <span className="inline-flex items-center gap-2"><Compass className="h-4 w-4 text-teal-700" aria-hidden="true" />Explore with Cozy</span>
         <ChevronDown className={cn('h-4 w-4 text-slate-400 transition', expanded && 'rotate-180')} aria-hidden="true" />
       </button>
-      {expanded && <div id="ask-explore-disclosure-panel" className="pb-2">
+      {expanded && <div ref={panelRef} id="ask-explore-disclosure-panel" className="pb-2">
         <ExploreStatus state={state} />
         {state.topics.length > 0 && <TopicButtons topics={state.topics} activeTopicId={activeTopicId} moreIdeas={moreIdeas}
           onOpen={(topicId) => onOpen(topicId, toggleRef.current as HTMLElement)} onAfterOpen={() => setExpanded(false)} />}
@@ -136,10 +169,12 @@ export function ExploreDisclosure({ state, activeTopicId, onOpen, moreIdeas }: {
 }
 
 /** The focused view: a small set of starters written as homeowner outcomes, and one quiet way back. It submits nothing until a starter is chosen. */
-export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onStart, onClose }: {
+export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onStart, onClose, onStartersVisible }: {
   topics: AskDiscoveryTopic[];
   topicId: AskDiscoveryTopicId;
   busy: boolean;
+  /** Fired once per topic, only after its starters are on screen. */
+  onStartersVisible?: (topicId: AskDiscoveryTopicId, starters: AskDiscoveryStarter[]) => void;
   onSelectTopic: (topicId: AskDiscoveryTopicId) => void;
   onStart: (starter: AskDiscoveryStarter) => void;
   onClose: () => void;
@@ -148,6 +183,7 @@ export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onSta
   useEffect(() => { headingRef.current?.focus(); }, [topicId]);
   const ordered = [...topics].sort((a, b) => a.order - b.order);
   const topic = ordered.find((candidate) => candidate.id === topicId);
+  const startersRef = useVisibleOnce<HTMLUListElement>(`starters:${topicId}`, topic?.starters.length ? () => onStartersVisible?.(topicId, topic.starters) : undefined);
   if (!topic) return null;
   return (
     <section className="mx-auto w-full max-w-[720px] pt-2" aria-labelledby="ask-explore-focus-title" data-ask-explore="focused">
@@ -164,7 +200,7 @@ export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onSta
       {indicatorText(topic.indicator) && <p className="mt-0.5 text-sm text-slate-500" data-explore-indicator="">{indicatorText(topic.indicator)}</p>}
       {topic.starters.length === 0
         ? <p className="mt-3 text-sm text-slate-600" role="status">Nothing to suggest here right now. You can still ask anything about your home.</p>
-        : <ul className="mt-3 space-y-1.5">{topic.starters.map((starter) => {
+        : <ul ref={startersRef} className="mt-3 space-y-1.5">{topic.starters.map((starter) => {
           const available = starter.availability === 'AVAILABLE';
           return (
             <li key={starter.id}>
