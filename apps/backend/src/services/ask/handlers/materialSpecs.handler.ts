@@ -25,8 +25,6 @@ const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function materialSpecsFromView(view: MaterialSpecListView, propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/materials`;
-  const openAction = { id: 'open-material-specs', label: 'Open Material Specs', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'material-specs-boundary', title: 'As recorded, not checked against the product',
     body: 'Products, colours and suppliers are what was recorded for this home. Confirm a colour or product with the supplier before buying a match, since formulas and product lines change.',
@@ -38,8 +36,8 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
       status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'material-specs-summary', title: 'No materials recorded yet',
-        body: 'Material Specs keeps the paint colours, tile, flooring, fixtures and suppliers used in this home so you can match them later. Open it to add one.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: 'Material Specs keeps the paint colours, tile, flooring, fixtures and suppliers used in this home so you can match them later. None have been recorded for this home yet.',
+        tone: 'DEFAULT', actions: [],
       }, boundary],
       suggestions: [],
     };
@@ -55,16 +53,16 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
       discontinued ? `${discontinued} ${discontinued === 1 ? 'is' : 'are'} marked discontinued by the supplier.` : null,
     ].filter(Boolean).join(' '),
     tone: discontinued ? 'CAUTION' : 'DEFAULT',
-    actions: [openAction],
+    actions: [],
   }];
   if (view.hasMore) {
     blocks.push({
       type: 'LIMITATION', id: 'material-specs-limit', title: `Showing the first ${specs.length} materials`,
-      body: 'This home has more recorded materials than this. The rest are in Material Specs, which can filter by category.', severity: 'INFO',
+      body: 'This home has more recorded materials than this. Ask about one category, such as paint or flooring, to narrow it.', severity: 'INFO',
     });
   }
   blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'material-specs-items', title: 'Recorded materials', description: 'By category, as on the page. Open a material for photos, purchase details and notes.',
+    type: 'GROUPED_LIST', filters: [], id: 'material-specs-items', title: 'Recorded materials', description: 'By category. Select a material to see its details.',
     sections: [...categories.entries()].map(([category, rows]) => ({
       id: `material-specs-${category.toLowerCase()}`, title: MATERIAL_CATEGORY_LABELS[category] ?? readableCode(category), count: rows.length,
       items: rows.map((spec) => ({
@@ -80,7 +78,6 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
           spec.isActive ? null : 'No longer in use',
         ].filter((value): value is string => Boolean(value)),
         status: spec.lifecycleStatus.replace(/_/g, ' '),
-        href: `${pageHref}/${encodeURIComponent(spec.id)}`,
       })),
     })),
     actions: [],

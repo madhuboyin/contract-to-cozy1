@@ -18,7 +18,6 @@ const { getSkillForOperation } = require('../../src/services/skills/skillRegistr
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 const { MaterialSpecService } = require('../../src/services/materialSpec.service.ts');
 
-const PAGE = '/dashboard/properties/p1/materials';
 const NOTE = 'Touch-up can is in the garage, left shelf';
 const originals = { prisma: prismaModule.prisma, list: MaterialSpecService.prototype.listSpecs };
 let calls;
@@ -88,7 +87,7 @@ test('materials are grouped by category with product, room, colour, finish, supp
   assert.equal(dining.description, 'Sherwin-Williams · Alabaster');
   assert.deepEqual(dining.meta, ['Dining room', 'Colour SW 7008', 'Finish Eggshell', 'Supplier Local paint store']);
   assert.equal(dining.status, 'AS BUILT');
-  assert.equal(dining.href, `${PAGE}/dining`);
+  assert.equal(dining.href, undefined);
   assert.deepEqual(trim.meta, ['Whole home', 'Discontinued']);
   assert.deepEqual(list.sections[1].items[0].meta, ['Primary bath', 'No longer in use']);
   assert.equal(JSON.stringify(result).includes(NOTE), false);
@@ -105,12 +104,14 @@ test('a second page is disclosed; nothing recorded is not an all-clear', () => {
   assert.equal(none.blocks.at(-1).title, 'As recorded, not checked against the product');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and the answer carries no page link', () => {
   const raw = materialSpecsFromView(view({ hasMore: true }), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'material-specs.list', operationId: 'MATERIAL_SPECS_LIST', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my material specs', operationId: 'MATERIAL_SPECS_LIST', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'MATERIAL_SPECS_LIST', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  // Nothing in the answer takes the homeowner to the desktop page: no summary action, no per-item link.
+  assert.equal(result.blocks[0].actions.length, 0);
+  assert.doesNotMatch(JSON.stringify(result.blocks), /\/dashboard\/|"href"/);
 });
 
 test('recorded-material questions route here; choosing, buying or adding a material is not claimed by the pattern', () => {

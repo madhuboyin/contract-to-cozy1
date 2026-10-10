@@ -147,7 +147,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker']),
   SERVICE_PRICE_CHECKS: new Set(['open-service-price-radar']),
   HOME_TIMELINE_EVENTS: new Set(),
-  MATERIAL_SPECS_LIST: new Set(['open-material-specs']),
+  MATERIAL_SPECS_LIST: new Set(),
   GUIDANCE_JOURNEYS_LIST: new Set(['open-guidance-overview']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview', 'continue-step-in-ask', 'dismiss-guided-journey']),
   // The answer's next steps (each opens a confirmation, an inline answer, or the home-record check) and the walkthrough's way on and back.
