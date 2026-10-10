@@ -146,7 +146,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   DIY_COMPLETION_RECOVER: new Set(['diy-show-projects']),
   PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker']),
   SERVICE_PRICE_CHECKS: new Set(['open-service-price-radar']),
-  HOME_TIMELINE_EVENTS: new Set(['open-home-timeline']),
+  HOME_TIMELINE_EVENTS: new Set(),
   MATERIAL_SPECS_LIST: new Set(['open-material-specs']),
   GUIDANCE_JOURNEYS_LIST: new Set(['open-guidance-overview']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview', 'continue-step-in-ask', 'dismiss-guided-journey']),

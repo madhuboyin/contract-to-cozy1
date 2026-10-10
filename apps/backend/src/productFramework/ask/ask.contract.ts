@@ -405,6 +405,12 @@ const TimelineBlockSchema = z.object({
     actions: z.array(GroupedListItemActionSchema).max(4).optional(),
     // FRD v1.77: short record facts shown in the selected item's detail (for example type, "Highlight", a date range).
     meta: z.array(z.string().trim().min(1).max(80)).max(6).optional(),
+    // In-Ask record detail (no navigation): labelled facts and the evidence behind the record, written by the server from the record the answer
+    // already read, so the privacy rule that chose the item also bounds what is shown.
+    detail: z.object({
+      facts: z.array(z.object({ label: z.string().trim().min(1).max(40), value: z.string().trim().min(1).max(200) })).max(12),
+      evidence: z.array(z.object({ label: z.string().trim().min(1).max(120), meta: z.string().trim().min(1).max(160).nullable().optional() })).max(12),
+    }).nullable().optional(),
   })).max(100),
 });
 

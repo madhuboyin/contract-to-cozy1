@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { resolveTimelineTrack } from '@/features/ask/displayPatterns';
 import { AskContextLink } from '../blocks/context';
 import { TimelineBlock, TimelineList } from '../blocks/CoreBlocks';
+import { TimelineEventDetail } from './TimelineEventDetail';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import type { AskBlockRenderer } from '../blocks/types';
 import { CapitalWindowDetail } from '../CapitalWindowDetail';
@@ -24,7 +25,9 @@ const CAPITAL_WINDOWS_BLOCK_ID = 'capital-timeline-table';
 
 export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   const { block, onItemAction, itemActionsDisabled, propertyId, onAccessLost } = props;
-  const hasWindowDetail = block.id === CAPITAL_WINDOWS_BLOCK_ID;
+  const isCapitalWindows = block.id === CAPITAL_WINDOWS_BLOCK_ID;
+  // A record that carries its own detail (home events) opens in place; the capital windows keep their live re-read. Neither navigates away.
+  const hasWindowDetail = isCapitalWindows || block.items.some((item) => item.detail);
   const points = useMemo(() => resolveTimelineTrack(block), [block]);
   const categories = useMemo(() => {
     const seen = new Map<string, string>();
@@ -50,7 +53,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-ask-detail-trigger="${CSS.escape(closingId ?? '')}"][data-ask-detail-block="${CSS.escape(block.id)}"]`)?.focus());
   };
   const windowDetail = detailItem
-    ? <CapitalWindowDetail key={detailItem.id} windowId={detailItem.id} expectedPropertyId={propertyId} fallbackTitle={detailItem.label} onAccessLost={onAccessLost} onClose={closeDetail} />
+    ? !isCapitalWindows ? <TimelineEventDetail key={detailItem.id} item={detailItem} onClose={closeDetail} /> : <CapitalWindowDetail key={detailItem.id} windowId={detailItem.id} expectedPropertyId={propertyId} fallbackTitle={detailItem.label} onAccessLost={onAccessLost} onClose={closeDetail} />
     : null;
   // A single window, or one whose date cannot be read, has no track; the list keeps its detail.
   if (!points && !hasWindowDetail) return <TimelineBlock {...props} />;

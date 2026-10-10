@@ -2391,9 +2391,9 @@ function quoteReviewStripExecution() {
 
 // IW-PRES-017 (FRD v1.77): the Home Timeline answer on the track, with one undated event listed under it.
 function homeTimelineTrackExecution() {
-  const page = `/dashboard/properties/${propertyId}/timeline`;
   const item = (id: string, label: string, date: string, datePrecision: 'DAY' | 'MONTH' | 'YEAR', category: { id: string; label: string }, meta: string[], status = 'Unverified', description: string | null = null) => ({
-    id, label, date, datePrecision, description, status, href: `${page}?eventId=${id}`, category, entityType: 'HOME_EVENT', meta,
+    id, label, date, datePrecision, description, status, category, entityType: 'HOME_EVENT', meta,
+    detail: { facts: [{ label: 'Verification', value: status }], evidence: [] },
   });
   const work = { id: 'work', label: 'Work done' };
   return {
@@ -2404,10 +2404,10 @@ function homeTimelineTrackExecution() {
     blocks: [{
       type: 'SUMMARY', id: 'home-timeline-summary', title: '6 events on the home timeline', tone: 'DEFAULT',
       body: '3 confirmed or verified by evidence. Most recent event: Jun 15, 2024.',
-      actions: [{ id: 'open-home-timeline', label: 'Open Home Timeline', href: page, style: 'PRIMARY' }],
+      actions: [],
     }, {
       type: 'TIMELINE', id: 'home-timeline-events', title: 'Home timeline',
-      description: 'Each event sits at its recorded date; a month or a year is shown as recorded, and a range at its start. Open an event on the timeline for its evidence and revisions.',
+      description: 'Each event sits at its recorded date; a month or a year is shown as recorded, and a range at its start. Open an event on the timeline for its details and evidence.',
       items: [
         item('kitchen', 'Kitchen remodel', '2024-06-15', 'DAY', work, ['Improvement', 'Highlight'], 'Evidence Verified', 'New cabinets and counters.'),
         item('paint', 'Paint colours chosen', '2024-02', 'MONTH', { id: 'records', label: 'Records and notes' }, ['Note']),
@@ -2417,7 +2417,7 @@ function homeTimelineTrackExecution() {
       ],
     }, {
       type: 'GROUPED_LIST', id: 'home-timeline-undated', title: 'Date unknown', description: 'These events have no recorded date, so they are not placed on the timeline.', filters: [], actions: [],
-      sections: [{ id: 'home-timeline-date-unknown', title: 'Date unknown', count: 1, items: [{ id: 'roof', title: 'Old roof work', description: null, meta: ['Date unknown', 'Repair'], status: 'Disputed', href: `${page}?eventId=roof` }] }],
+      sections: [{ id: 'home-timeline-date-unknown', title: 'Date unknown', count: 1, items: [{ id: 'roof', title: 'Old roof work', description: null, meta: ['Date unknown', 'Repair'], status: 'Disputed' }] }],
     }, {
       type: 'BOUNDARY', id: 'home-timeline-boundary', title: 'History as recorded', severity: 'INFO', suggestions: [],
       body: 'Events are shown as they were recorded, with how well each is verified and how precise its date is. Unverified and inferred events have not been confirmed. Private events recorded by other household members are not shown.',

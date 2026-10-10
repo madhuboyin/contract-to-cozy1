@@ -35,6 +35,41 @@ function timelineEventDate(event: TimelineEventView): string {
   }
 }
 
+const EVIDENCE_LIMIT = 12;
+function moneyLabel(value: unknown, currency: unknown): string | null {
+  const amount = Number(String(value ?? ''));
+  if (value == null || !Number.isFinite(amount)) return null;
+  try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: typeof currency === 'string' && currency ? currency : 'USD', maximumFractionDigits: 0 }).format(amount); } catch { return null; }
+}
+/**
+ * The record's own facts and the evidence behind it, for the in-Ask detail (the homeowner never has to leave Ask to see how an event is known).
+ * Built only from the event this answer already read, after the privacy rule, and only from labelled fields: no file names, URLs or free-form
+ * notes by other people beyond the evidence note the household recorded.
+ */
+function eventDetail(event: TimelineEventView) {
+  const facts: Array<{ label: string; value: string }> = [];
+  const add = (label: string, value: string | null | undefined) => { if (value && value.trim()) facts.push({ label, value: value.trim().slice(0, 200) }); };
+  add('Type', [TIMELINE_LABEL(event.type), event.subtype && event.subtype !== event.type ? TIMELINE_LABEL(event.subtype) : ''].filter(Boolean).join(' · '));
+  add('Date', timelineEventDate(event));
+  add('Verification', TIMELINE_LABEL(event.verificationStatus));
+  add('Provider', event.providerName);
+  add('Amount', moneyLabel(event.amount, event.currency));
+  add('Value change', moneyLabel(event.valueDelta, event.currency));
+  add('Importance', event.importance === 'HIGHLIGHT' ? 'Highlight' : null);
+  add('Visible to', event.visibility === 'PRIVATE' ? 'Only the person who recorded it' : null);
+  add('Recorded', event.createdAt ? humanDate(new Date(event.createdAt)) : null);
+  const evidence = [
+    ...((event.evidence ?? []) as Array<{ evidenceType?: string; note?: string | null; observedAt?: Date | string | null }>).map((row) => ({
+      label: TIMELINE_LABEL(row.evidenceType) || 'Evidence',
+      meta: [row.observedAt ? humanDate(new Date(row.observedAt)) : null, row.note?.trim() || null].filter(Boolean).join(' · ') || null,
+    })),
+    ...((event.documents ?? []) as Array<{ kind?: string; caption?: string | null }>).map((row) => ({
+      label: `Document · ${TIMELINE_LABEL(row.kind) || 'Other'}`, meta: row.caption?.trim() || null,
+    })),
+  ].slice(0, EVIDENCE_LIMIT).map((row) => ({ label: row.label.slice(0, 120), meta: row.meta ? row.meta.slice(0, 160) : null }));
+  return { facts, evidence };
+}
+
 // FRD v1.77 (homeowner decision): five colour categories for the timeline track instead of the twelve event types.
 const HOME_TIMELINE_CATEGORIES: Record<string, { id: string; label: string }> = {
   REPAIR: { id: 'work', label: 'Work done' }, MAINTENANCE: { id: 'work', label: 'Work done' },
@@ -65,8 +100,6 @@ export function homeTimelinePlacement(event: { occurredAt: Date | string; datePr
 }
 
 export function homeTimelineFromView(allEvents: readonly TimelineEventView[], propertyId: string, userId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
-  const openAction = { id: 'open-home-timeline', label: 'Open Home Timeline', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'home-timeline-boundary', title: 'History as recorded',
     body: 'Events are shown as they were recorded, with how well each is verified and how precise its date is. Unverified and inferred events have not been confirmed. Private events recorded by other household members are not shown.',
@@ -78,8 +111,8 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
       status: 'ANSWERED', reasonCode: 'HOME_TIMELINE_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'home-timeline-summary', title: 'No events on the timeline yet',
-        body: 'The Home Timeline keeps a history of what happened to this home: repairs, improvements, purchases, inspections and claims. Open it to log an event.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: 'The Home Timeline keeps a history of what happened to this home: repairs, improvements, purchases, inspections and claims. Events you record will appear here.',
+        tone: 'DEFAULT', actions: [],
       }, boundary],
       suggestions: [],
     };
@@ -95,19 +128,18 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
       `Most recent event: ${timelineEventDate(events[0])}.`,
     ].filter(Boolean).join(' '),
     tone: disputed ? 'CAUTION' : 'DEFAULT',
-    actions: [openAction],
+    actions: [],
   }];
   if (allEvents.length >= HOME_TIMELINE_ASK_LIMIT) {
     blocks.push({
       type: 'LIMITATION', id: 'home-timeline-limit', title: `Showing the ${HOME_TIMELINE_ASK_LIMIT} most recent events`,
-      body: 'Older history is on the Home Timeline page, which can filter by date and event type.', severity: 'INFO',
+      body: 'Ask about a specific year or kind of event to see older history.', severity: 'INFO',
     });
   }
   // IW-PRES-017 (FRD v1.77): dated events go on a timeline track; events whose date is unknown are listed under it.
   const dated = events.map((event) => ({ event, placement: homeTimelinePlacement(event) }));
   const onTrack = dated.filter((entry): entry is { event: TimelineEventView; placement: HomeTimelinePlacement } => entry.placement !== null);
   const undated = dated.filter((entry) => entry.placement === null).map((entry) => entry.event);
-  const eventHref = (event: TimelineEventView) => (Boolean((event.meta as { synthetic?: boolean } | null)?.synthetic) ? pageHref : `${pageHref}?eventId=${encodeURIComponent(event.id)}`);
   const eventMeta = (event: TimelineEventView) => [
     TIMELINE_LABEL(event.type),
     ...(event.subtype && event.subtype !== event.type ? [TIMELINE_LABEL(event.subtype)] : []),
@@ -117,7 +149,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
   if (onTrack.length) {
     blocks.push({
       type: 'TIMELINE', id: 'home-timeline-events', title: 'Home timeline',
-      description: 'Each event sits at its recorded date; a month or a year is shown as recorded, and a range at its start. Open an event on the timeline for its evidence and revisions.',
+      description: 'Each event sits at its recorded date; a month or a year is shown as recorded, and a range at its start. Open an event on the timeline for its details and evidence.',
       items: onTrack.map(({ event, placement }) => {
         const category = homeTimelineCategory(event.type);
         return {
@@ -127,7 +159,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
           datePrecision: placement.precision,
           description: event.summary ?? null,
           status: TIMELINE_LABEL(event.verificationStatus),
-          href: eventHref(event),
+          detail: eventDetail(event),
           category,
           entityType: 'HOME_EVENT',
           meta: [...(event.datePrecision === 'RANGE' ? [timelineEventDate(event)] : []), ...eventMeta(event)].slice(0, 6),
@@ -143,7 +175,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
         items: undated.map((event) => ({
           id: event.id, title: event.title, description: event.summary ?? null,
           meta: ['Date unknown', ...eventMeta(event)],
-          status: TIMELINE_LABEL(event.verificationStatus), href: eventHref(event),
+          status: TIMELINE_LABEL(event.verificationStatus),
         })),
       }],
       actions: [],

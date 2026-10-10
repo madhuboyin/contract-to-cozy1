@@ -30,7 +30,7 @@ const event = (id, overrides = {}) => ({
   verificationStatus: 'UNVERIFIED', meta: null, ...overrides,
 });
 const events = () => [
-  event('kitchen', { title: 'Kitchen remodel', type: 'IMPROVEMENT', importance: 'HIGHLIGHT', verificationStatus: 'EVIDENCE_VERIFIED', summary: 'New cabinets and counters.' }),
+  event('kitchen', { title: 'Kitchen remodel', type: 'IMPROVEMENT', importance: 'HIGHLIGHT', verificationStatus: 'EVIDENCE_VERIFIED', summary: 'New cabinets and counters.', providerName: 'Oak & Co', amount: '18500.00', currency: 'USD', createdAt: new Date('2024-06-20T12:00:00.000Z'), evidence: [{ evidenceType: 'INVOICE', note: 'Final invoice', observedAt: new Date('2024-06-16T12:00:00.000Z') }], documents: [{ kind: 'PHOTO', caption: 'After' }] }),
   event('mine', { title: 'My private note', type: 'NOTE', visibility: 'PRIVATE', createdById: 'u1', occurredAt: new Date('2024-02-15T12:00:00.000Z'), datePrecision: 'MONTH' }),
   event('theirs', { title: 'Someone else private note', type: 'NOTE', visibility: 'PRIVATE', createdById: 'u2' }),
   event('inspection', { title: 'Home inspection', type: 'INSPECTION', occurredAt: new Date('2023-05-01T12:00:00.000Z'), datePrecision: 'YEAR', verificationStatus: 'HOMEOWNER_CONFIRMED' }),
@@ -97,14 +97,24 @@ test('dated events go on the timeline track at their recorded precision, with ca
   assert.deepEqual(kitchen.meta, ['Improvement', 'Highlight']);
   assert.equal(kitchen.status, 'Evidence Verified');
   assert.equal(kitchen.description, 'New cabinets and counters.');
-  assert.equal(kitchen.href, `${PAGE}?eventId=kitchen`);
+  // No navigation: the record is read inside Ask from the detail the answer carries.
+  assert.equal(kitchen.href, undefined);
+  assert.deepEqual(kitchen.detail.facts.map((fact) => [fact.label, fact.value]), [
+    ['Type', 'Improvement'], ['Date', 'Jun 15, 2024'], ['Verification', 'Evidence Verified'], ['Provider', 'Oak & Co'], ['Amount', '$18,500'], ['Importance', 'Highlight'], ['Recorded', 'Jun 20, 2024'],
+  ]);
+  assert.deepEqual(kitchen.detail.evidence, [{ label: 'Invoice', meta: 'Jun 16, 2024 · Final invoice' }, { label: 'Document · Photo', meta: 'After' }]);
+  assert.deepEqual(mine.detail.facts.find((fact) => fact.label === 'Visible to'), { label: 'Visible to', value: 'Only the person who recorded it' });
+  assert.deepEqual(inspection.detail.evidence, []);
   assert.equal(kitchen.entityType, 'HOME_EVENT');
   assert.deepEqual(mine.meta, ['Note', 'Private']);
   assert.deepEqual(inspection.category, { id: 'inspections', label: 'Inspections' });
   assert.deepEqual(synthetic.meta, ['Purchase', 'Appliance Inventory']);
-  assert.equal(synthetic.href, PAGE);
+  assert.equal(synthetic.href, undefined);
   const undated = result.blocks.find((block) => block.id === 'home-timeline-undated');
-  assert.deepEqual(undated.sections[0].items.map((item) => [item.title, item.meta, item.status, item.href]), [['Old roof work', ['Date unknown', 'Repair'], 'Disputed', `${PAGE}?eventId=roof`]]);
+  assert.deepEqual(undated.sections[0].items.map((item) => [item.title, item.meta, item.status, item.href]), [['Old roof work', ['Date unknown', 'Repair'], 'Disputed', undefined]]);
+  // Nothing in the answer takes the homeowner to the desktop page, including the summary action and every other block.
+  assert.doesNotMatch(JSON.stringify(result.blocks), /\/dashboard\/|"href"/);
+  assert.deepEqual(result.blocks[0].actions, []);
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
 });
 
@@ -150,12 +160,12 @@ test('a range keeps its range; a full page fits the track and is disclosed; an e
   assert.equal(onlyOthersPrivate.blocks.at(-1).title, 'History as recorded');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and the answer carries no page link', () => {
   const raw = homeTimelineFromView(events(), 'p1', 'u1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-timeline.events', operationId: 'HOME_TIMELINE_EVENTS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home timeline', operationId: 'HOME_TIMELINE_EVENTS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'HOME_TIMELINE_EVENTS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  assert.equal(result.blocks[0].actions.length, 0);
 });
 
 test('timeline phrasing routes here; recent changes, past hazards and logging an event are not claimed by the pattern', () => {
