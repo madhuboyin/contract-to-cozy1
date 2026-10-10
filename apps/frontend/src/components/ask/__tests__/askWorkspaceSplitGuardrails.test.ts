@@ -71,6 +71,15 @@ describe('AskWorkspace split guardrails', () => {
     expect(source).toContain('compact={compactWorkflow}');
   });
 
+  it('keeps the material-spec workflow compact without narrow inputs in empty full-width cards', () => {
+    const source = read(path.join(workspaceDir, 'CaptureCards.tsx'));
+    const controls = read(path.join(askDir, '..', 'property-context', 'CaptureFieldControl.tsx'));
+    expect(source).toContain("request.captureKey === 'MATERIAL_SPEC_INPUTS'");
+    expect(source).toContain("compactMaterialSpec ? 'material-spec'");
+    expect(source).toContain("['category', 'label', 'roomId', 'supplier', 'notes'].includes(field.key)");
+    expect(controls).toContain("compact ? 'w-full' : ''");
+  });
+
   it('pins the full-page composer to a stable dynamic viewport without sticky positioning', () => {
     const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
     const layout = read(dashboardLayout);
