@@ -38,7 +38,13 @@ import { homeJourneyContextVersion, homeJourneyResult, purchaseDateContextVersio
 import { HOME_JOURNEY_CAPTURE_KEY, PURCHASE_DATE_CAPTURE_KEY } from '../support/homeSettingsConstants';
 import { HOME_PLANT_CAPTURE_KEY, MATERIAL_SPEC_CAPTURE_KEY } from '../support/homeRecordAddConstants';
 import { HomePlantAddInputSchema, MaterialSpecAddInputSchema } from '../support/commandInputs';
+import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, materialSpecAddResult, materialSpecContextVersion } from '../handlers/homeRecordAdds.handler';
+import { plantRecommendationContextVersion, roomPlantRecommendationResult } from '../handlers/plantRecommendations.handler';
+import { PLANT_RECOMMENDATIONS_CAPTURE_KEY } from '../support/plantRecommendationConstants';
+import { doNothingRunContextVersion, doNothingRunResult, priceCheckVersion, servicePriceCheckResult } from '../handlers/homeToolRuns.handler';
+import { DO_NOTHING_RUN_CAPTURE_KEY, SERVICE_PRICE_CHECK_CAPTURE_KEY } from '../support/homeToolRunConstants';
+import { DoNothingRunInputSchema, ServicePriceCheckInputSchema } from '../support/commandInputs';
 import { HomeJourneyInputSchema, PurchaseDateAnswerSchema } from '../support/commandInputs';
 import { maintenanceTaskCompleteResult, maintenanceTaskCreateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import { getSkillForOperation } from '../../skills/skillRegistry';
@@ -326,7 +332,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -700,6 +706,72 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = material ? 'MaterialSpec' : 'HomePlant';
+  } else if (execution.operationId === 'DO_NOTHING_SIMULATION_RUN' || execution.operationId === 'SERVICE_PRICE_CHECK_RUN') {
+    const simulation = execution.operationId === 'DO_NOTHING_SIMULATION_RUN';
+    if (input.captureKey !== (simulation ? DO_NOTHING_RUN_CAPTURE_KEY : SERVICE_PRICE_CHECK_CAPTURE_KEY)) {
+      const error = new Error('This capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error(simulation ? 'A contributor or owner is required to run the simulation.' : 'A contributor or owner is required to check a quote.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const currentVersion = simulation ? await doNothingRunContextVersion(userId, execution.propertyId) : priceCheckVersion(execution.propertyId);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('This form is out of date. Start again from the button on the answer.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const answer = simulation ? DoNothingRunInputSchema.safeParse(input.answer) : ServicePriceCheckInputSchema.safeParse(input.answer);
+    if (!answer.success) {
+      const error = new Error(simulation ? 'Choose 6, 12, 24 or 36 months.' : 'Choose a service and enter a quote amount greater than zero and up to $250,000.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const sourceExecutionId = typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null;
+    result = simulation
+      ? await doNothingRunResult(userId, execution.propertyId, answer.data as ReturnType<typeof DoNothingRunInputSchema.parse>, sourceExecutionId)
+      : await servicePriceCheckResult(userId, execution.propertyId, answer.data as ReturnType<typeof ServicePriceCheckInputSchema.parse>, sourceExecutionId);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = simulation ? 'DoNothingSimulationRun' : 'ServiceRadarCheck';
+  } else if (execution.operationId === 'ROOM_PLANT_RECOMMENDATIONS') {
+    if (input.captureKey !== PLANT_RECOMMENDATIONS_CAPTURE_KEY) {
+      const error = new Error('This capture is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to generate plant recommendations.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const currentVersion = await plantRecommendationContextVersion(execution.propertyId);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('The rooms or Plant Advisor profiles changed while this form was open. Start again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const answer = RoomPlantRecommendationInputSchema.safeParse(input.answer);
+    if (!answer.success) {
+      const error = new Error('Choose a room and its light level, then review the other preferences.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    result = await roomPlantRecommendationResult(userId, execution.propertyId, answer.data, typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'RoomPlantProfile';
   } else if (execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES') {
     const isTask = execution.operationId === 'HOME_EVENT_RADAR_TASK';
     if (input.captureKey !== (isTask ? RADAR_TASK_CAPTURE_KEY : RADAR_PREFERENCES_CAPTURE_KEY)) {

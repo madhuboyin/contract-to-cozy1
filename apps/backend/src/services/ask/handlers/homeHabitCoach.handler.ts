@@ -12,6 +12,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../../analytics';
 import { HomeHabitCoachService } from '../../homeHabitCoach/homeHabitCoachService';
+import { HOME_HABITS_GENERATE_ACTION_ID, HOME_HABITS_GENERATE_MESSAGE } from '../support/homeToolRunConstants';
 
 // Home Habit Coach capability-card slice (FRD v1.53): the fifth new operation for a capability with none. Reads
 // listActiveHabits with the page's own options (snoozed included, first 50, ranked by rankHabits). A pure read: it
@@ -86,7 +87,7 @@ const aboutHabitsBoundary = (id: string, body: string): AskPresentationBlock => 
 // The habits list in the plan layout shared with the seasonal answers (see SeasonalPlanResultList): habits whose suggested date has passed
 // first, then the rest in the coach's ranked order, then the routine and snoozed ones; numbered across groups, each opening to its facts
 // and to its inline review. Nothing links to the desktop page except the empty state, where generating habits is the only way forward.
-export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now: Date = new Date()): AskOperationResult {
+export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now: Date = new Date(), canGenerate = false): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-habit-coach`;
   const habits: any[] = view.habits ?? [];
   const asDate = (value: unknown) => (value ? new Date(value as any) : null);
@@ -161,10 +162,12 @@ export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now
       : 'No home habits are suggested yet',
     body: habits.length
       ? `Ranked by the Home Habit Coach for this home${adopted.length ? `; ${adopted.length} already in your maintenance routine` : ''}${snoozed.length ? `; ${snoozed.length} snoozed` : ''}.${focusSentence} Choose Review on a habit to see why it was suggested and what you can do with it.`
-      : 'The Home Habit Coach suggests small routines from your home\'s systems, age, climate and season. None are suggested yet, and Ask cannot generate them yet; this does not mean nothing needs care.',
+      : canGenerate
+        ? 'The Home Habit Coach suggests small routines from your home\'s systems, age, climate and season. None are suggested yet. Ask can suggest some from what is recorded, and nothing is added until you confirm; this does not mean nothing needs care.'
+        : 'The Home Habit Coach suggests small routines from your home\'s systems, age, climate and season. None are suggested yet, and a contributor or owner of this home can ask for some; this does not mean nothing needs care.',
     tone: 'DEFAULT',
-    // Generating habits is not an Ask action yet, so the empty state offers none rather than a link out of Ask.
-    actions: [],
+    // A contributor or owner can ask for suggestions from the empty answer, inside Ask; with habits listed there is nothing to add here.
+    actions: !habits.length && canGenerate ? [{ id: HOME_HABITS_GENERATE_ACTION_ID, label: 'Suggest habits', interactionType: 'START_WORKFLOW' as const, message: HOME_HABITS_GENERATE_MESSAGE, operationId: 'HOME_HABITS_GENERATE', style: 'PRIMARY' as const }] : [],
   }];
   if (view.hasMore) {
     blocks.push({ type: 'LIMITATION', id: 'home-habits-limits', title: 'What this does not cover', body: `Showing the first ${habits.length} habits in ranked order; the rest are in the Home Habit Coach.`, severity: 'INFO' });
@@ -287,15 +290,18 @@ export async function homeHabitReviewResult(userId: string, propertyId: string, 
   };
 }
 
-async function homeHabitsResult(userId: string, propertyId: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+async function homeHabitsResult(userId: string, propertyId: string, launchContext: CreateAskExecutionRequest['launchContext'] | undefined, canGenerate: boolean): Promise<AskOperationResult> {
   if (launchContext?.entityType === HOME_HABIT_ENTITY_TYPE && launchContext.entityId) {
     return homeHabitReviewResult(userId, propertyId, launchContext.entityId);
   }
   const view = await new HomeHabitCoachService().listActiveHabits(propertyId, { includeSnoozed: true, limit: HOME_HABITS_ASK_LIMIT });
-  return homeHabitsFromView(view, propertyId);
+  return homeHabitsFromView(view, propertyId, new Date(), canGenerate);
 }
 
-registerCapabilityHandler('home-habits.read', async (envelope) => homeHabitsResult(envelope.userId, envelope.propertyId!, envelope.launchContext));
+registerCapabilityHandler('home-habits.read', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return homeHabitsResult(envelope.userId, envelope.propertyId!, envelope.launchContext, access.role !== HouseholdRole.VIEWER);
+});
 
 // ── Writes ───────────────────────────────────────────────────────────────────────────────────────────────────────
 

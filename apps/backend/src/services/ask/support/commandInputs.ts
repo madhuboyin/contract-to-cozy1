@@ -1,5 +1,5 @@
 // Ask handler support: commandInputs. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
-import { HouseholdRole, MaintenanceTaskPriority, MaterialCategory, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
+import { HouseholdRole, MaintenanceTaskPriority, MaterialCategory, PlantGoalType, PlantLightLevel, PlantMaintenanceLevel, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { z } from 'zod';
 import { isMeaningfulMaintenanceTaskTitle } from '../askMaintenanceTaskInput';
 import { prisma } from '../../../lib/prisma';
@@ -10,6 +10,8 @@ import { INVENTORY_CATEGORY_VALUES, ROOM_TYPE_VALUES } from './capture';
 import { askContextFingerprint } from './propertyContext';
 import { HOME_JOURNEY_OPTIONS } from './homeSettingsConstants';
 import { WHOLE_HOME_VALUE } from './homeRecordAddConstants';
+import { DO_NOTHING_HORIZONS, NO_SAVED_SCENARIO_VALUE, SERVICE_PRICE_MAX_QUOTE, SERVICE_PRICE_UNSUPPORTED_CATEGORIES } from './homeToolRunConstants';
+import { SERVICE_RADAR_CATEGORY_VALUES } from '../../servicePriceRadar.types';
 
 export const MaintenanceTaskWorkflowInputSchema = z.object({
   title: z.string().trim().min(3).max(160).refine(isMeaningfulMaintenanceTaskTitle, {
@@ -259,3 +261,31 @@ export const HomePlantAddInputSchema = z.object({
   nickname: optionalText(120),
   notes: optionalText(1000),
 }).strict();
+
+// Room Plant Advisor generation. Light is the one required growing-context fact; the remaining preferences refine the deterministic ranking.
+export const RoomPlantRecommendationInputSchema = z.object({
+  roomId: z.string().trim().min(1).max(160),
+  lightLevel: z.nativeEnum(PlantLightLevel),
+  maintenancePreference: z.nativeEnum(PlantMaintenanceLevel).nullable().optional().default(null),
+  hasPets: z.boolean().default(false),
+  goals: z.array(z.nativeEnum(PlantGoalType)).max(5).default([]),
+  notes: optionalText(1000),
+}).strict();
+
+// Do-Nothing run (DO_NOTHING_SIMULATION_RUN): one of the four horizons the simulator accepts, and optionally one saved scenario. The form answers with
+// text; the stored input holds the number.
+export const DoNothingRunInputSchema = z.object({
+  horizonMonths: z.coerce.number().pipe(z.union([z.literal(6), z.literal(12), z.literal(24), z.literal(36)])),
+  scenarioId: z.string().trim().max(160).nullish().transform((value) => (!value || value === NO_SAVED_SCENARIO_VALUE ? null : value)),
+}).strict();
+export { DO_NOTHING_HORIZONS };
+
+// Service price check (SERVICE_PRICE_CHECK_RUN): a supported category, a quote amount the radar accepts, and optionally the vendor and a label.
+const SUPPORTED_PRICE_CATEGORIES = SERVICE_RADAR_CATEGORY_VALUES.filter((value) => !(SERVICE_PRICE_UNSUPPORTED_CATEGORIES as readonly string[]).includes(value));
+export const ServicePriceCheckInputSchema = z.object({
+  serviceCategory: z.enum(SUPPORTED_PRICE_CATEGORIES as [string, ...string[]]),
+  quoteAmount: z.coerce.number().positive().max(SERVICE_PRICE_MAX_QUOTE).transform((value) => Math.round(value * 100) / 100),
+  quoteVendorName: optionalText(120),
+  serviceLabelRaw: optionalText(200),
+}).strict();
+export const SERVICE_PRICE_CATEGORY_CHOICES: readonly string[] = SUPPORTED_PRICE_CATEGORIES;

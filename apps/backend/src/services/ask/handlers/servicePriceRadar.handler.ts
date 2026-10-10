@@ -7,6 +7,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { APIError } from '../../../middleware/error.middleware';
 import { humanDate, readableCode } from '../askFormatting';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
+import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_MESSAGE } from '../support/homeToolRunConstants';
 
 // Service Price Radar capability-card slice (FRD v1.60): the twelfth new operation for a capability with none. Reads
 // ServicePriceRadarService.listChecks with the page's own limit (12), the call GET
@@ -24,7 +25,8 @@ const servicePriceMoney = (value: number | null | undefined) => (value == null ?
 
 export function servicePriceChecksFromView(checks: readonly ServicePriceCheckView[] | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/service-price-radar`;
-  const openAction = { id: 'open-service-price-radar', label: 'Open Service Price Radar', href: pageHref, style: 'PRIMARY' as const };
+  // The answer reaches only the home's primary account holder, who can check a quote from it, inside Ask.
+  const checkAction = (label: string) => ({ id: SERVICE_PRICE_CHECK_ACTION_ID, label, interactionType: 'START_WORKFLOW' as const, message: SERVICE_PRICE_CHECK_MESSAGE, operationId: 'SERVICE_PRICE_CHECK_RUN', style: 'PRIMARY' as const });
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'service-price-radar-boundary', title: 'A price check, not a quote review',
     body: 'Expected ranges come from typical local prices for the service, not an inspection of the job. Scope, materials and access can move a fair price, so ask the contractor about a quote that falls outside the range before deciding.',
@@ -46,8 +48,8 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
       status: 'ANSWERED', reasonCode: 'SERVICE_PRICE_RADAR_NO_CHECKS',
       blocks: [{
         type: 'SUMMARY', id: 'service-price-radar-summary', title: 'No quote checks yet',
-        body: 'Service Price Radar compares a contractor quote with typical local prices for the service. None has been checked for this home yet, and Ask cannot run a check yet.',
-        tone: 'DEFAULT', actions: [],
+        body: 'Service Price Radar compares a contractor quote with typical local prices for the service. None has been checked for this home yet. Check one below; nothing is checked until you confirm.',
+        tone: 'DEFAULT', actions: [checkAction('Check a quote')],
       }, boundary],
       suggestions: [],
     };
@@ -61,7 +63,7 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
       `Latest checked ${humanDate(new Date(checks[0].createdAt))}.`,
     ].join(' '),
     tone: above ? 'CAUTION' : 'DEFAULT',
-    actions: [openAction],
+    actions: [checkAction('Check another quote')],
   }];
   if (checks.length >= SERVICE_PRICE_RADAR_ASK_LIMIT) {
     blocks.push({

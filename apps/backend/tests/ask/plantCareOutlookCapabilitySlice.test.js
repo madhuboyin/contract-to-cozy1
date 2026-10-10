@@ -148,26 +148,25 @@ test('getOutlook reports which condition sources answered', async () => {
   assert.deepEqual((await service.getOutlook('p1', 'u1')).sourceStatus, { weather: 'NO_LOCATION', airQuality: 'NO_LOCATION', drought: 'NO_LOCATION', hardiness: 'NO_LOCATION' });
 });
 
-test('every block and the boundary survive the answer-trust validator, and the in-Ask Add a plant action the whitelist for an owner but not a viewer', () => {
+test('every block and the boundary survive the answer-trust validator, and the in-Ask advisor actions are owner-only', () => {
   const raw = plantCareOutlookFromView(outlook({ sourceStatus: { ...allOk, drought: 'UNAVAILABLE' } }), 'p1', true);
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'plant-advisor.care-outlook', operationId: 'PLANT_CARE_OUTLOOK', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my plant care outlook', operationId: 'PLANT_CARE_OUTLOOK', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  const add = result.blocks[0].actions[0];
-  assert.equal(add.id, 'add-home-plant');
-  assert.equal(isAskActionApplicable({ action: add, operationId: 'PLANT_CARE_OUTLOOK', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
-  assert.equal(isAskActionApplicable({ action: add, operationId: 'PLANT_CARE_OUTLOOK', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions.map((action) => action.id), ['find-plants-for-room', 'add-home-plant']);
+  for (const action of result.blocks[0].actions) {
+    assert.equal(isAskActionApplicable({ action, operationId: 'PLANT_CARE_OUTLOOK', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
+  }
+  assert.deepEqual(plantCareOutlookFromView(outlook(), 'p1', false).blocks[0].actions, []);
 });
 
-test('plant care phrasing routes here; buying plants for a room and a power plant do not', () => {
+test('plant care phrasing routes here; room recommendations route to their advisor operation', () => {
   const route = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation?.operationId;
   for (const message of ['Show my plant care outlook', 'Do my house plants need anything with this weather?', 'Open my plant advisor', 'How should I care for my garden zones this week?']) {
     assert.equal(route(message), 'PLANT_CARE_OUTLOOK', message);
   }
-  // Each of these mentions "my garden"/"our garden", so only the exclusion keeps them off this operation.
-  for (const message of ['Which plants should I add to my garden?', 'Recommend plants for my garden', 'What plants would do well in my garden?', 'Is the power plant near our garden a problem?']) {
-    assert.notEqual(route(message), 'PLANT_CARE_OUTLOOK', message);
-  }
+  for (const message of ['Which plants should I buy for my living room?', 'Recommend plants for the bedroom', 'Find plants for my office']) assert.equal(route(message), 'ROOM_PLANT_RECOMMENDATIONS', message);
+  assert.notEqual(route('Is the power plant near our garden a problem?'), 'PLANT_CARE_OUTLOOK');
 });
 
 test('the operation is fully registered: its own skill, the bridge, and the card launch', () => {

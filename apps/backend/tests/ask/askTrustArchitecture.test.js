@@ -83,6 +83,9 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'MAINTENANCE_TEMPLATES_BROWSE',
     'MATERIAL_SPEC_ADD',
     'HOME_PLANT_ADD',
+    'HOME_HABITS_GENERATE',
+    'DO_NOTHING_SIMULATION_RUN',
+    'SERVICE_PRICE_CHECK_RUN',
     'DIY_PROJECT_START',
     // Seasonal home care (exact-four starter source): launch-only; seasonal questions route to MAINTENANCE_STATUS.
     'SEASONAL_HOME_CARE',

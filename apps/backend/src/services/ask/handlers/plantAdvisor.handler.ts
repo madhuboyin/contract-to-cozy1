@@ -9,6 +9,7 @@ import { PlantCarePlannerService } from '../../plantCarePlanner.service';
 import { HouseholdRole } from '@prisma/client';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { HOME_PLANT_ADD_ACTION_ID, HOME_PLANT_ADD_MESSAGE } from '../support/homeRecordAddConstants';
+import { PLANT_RECOMMENDATIONS_ACTION_ID, PLANT_RECOMMENDATIONS_MESSAGE } from '../support/plantRecommendationConstants';
 
 // Plant Advisor capability-card slice (FRD v1.55): the seventh new operation for a capability with none. Reads
 // PlantCarePlannerService.getOutlook, the same call GET /properties/:id/plant-advisor/care-outlook (the page's Care
@@ -32,6 +33,7 @@ const PLANT_OUTDOOR_REASON_LABELS: Record<string, string> = {
 export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId: string, canAdd = false): AskOperationResult {
   // A contributor or owner can add an indoor plant from here, inside Ask; a viewer reads the outlook only.
   const addActions = canAdd ? [{ id: HOME_PLANT_ADD_ACTION_ID, label: 'Add a plant', interactionType: 'START_WORKFLOW' as const, message: HOME_PLANT_ADD_MESSAGE, operationId: 'HOME_PLANT_ADD', style: 'PRIMARY' as const }] : [];
+  const advisorActions = canAdd ? [{ id: PLANT_RECOMMENDATIONS_ACTION_ID, label: 'Find plants for a room', interactionType: 'START_WORKFLOW' as const, message: PLANT_RECOMMENDATIONS_MESSAGE, operationId: 'ROOM_PLANT_RECOMMENDATIONS', style: 'PRIMARY' as const }, ...addActions.map((action) => ({ ...action, style: 'SECONDARY' as const }))] : [];
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'plant-care-boundary', title: 'General care guidance, not a plant diagnosis',
     body: 'Care changes come from the forecast and each plant\'s recorded needs. Check the soil and the plant before acting, and follow local watering restrictions.',
@@ -51,7 +53,7 @@ export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId:
       body: canAdd
         ? 'Plant care follows the forecast for the plants you add. Add an indoor plant to start.'
         : 'Plant care follows the forecast for the plants a household member adds.',
-      tone: 'DEFAULT', actions: addActions,
+      tone: 'DEFAULT', actions: advisorActions,
     });
   } else {
     const counts = [
@@ -69,7 +71,7 @@ export function plantCareOutlookFromView(view: PlantCareOutlookView, propertyId:
           : null,
       ].filter(Boolean).join(' '),
       tone: urgent || !weatherChecked ? 'CAUTION' : 'DEFAULT',
-      actions: addActions,
+      actions: advisorActions,
     });
   }
   if (unavailable.length) {

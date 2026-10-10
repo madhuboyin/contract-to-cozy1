@@ -123,12 +123,16 @@ test('every block and the boundary survive the answer-trust validator, and the e
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-habits.read', operationId: 'HOME_HABITS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home habits', operationId: 'HOME_HABITS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  // Ask cannot generate habits yet, so neither the listed nor the empty summary carries an action, and the empty one says so instead of pointing at a page.
+  // The listed summary carries no action. The empty one offers Suggest habits to someone who can change the home (and says who can, to a viewer), never a page.
   assert.deepEqual(result.blocks[0].actions, []);
-  const empty = homeHabitsFromView(view({ habits: [] }), 'p1', NOW).blocks[0];
-  assert.deepEqual(empty.actions, []);
-  assert.match(empty.body, /Ask cannot generate them yet/);
-  assert.doesNotMatch(empty.body, /open it/i);
+  const viewer = homeHabitsFromView(view({ habits: [] }), 'p1', NOW, false).blocks[0];
+  assert.deepEqual(viewer.actions, []);
+  assert.match(viewer.body, /contributor or owner of this home can ask for some/);
+  const contributor = homeHabitsFromView(view({ habits: [] }), 'p1', NOW, true).blocks[0];
+  assert.deepEqual(contributor.actions.map((action) => [action.id, action.interactionType, action.operationId, action.href]), [['generate-home-habits', 'START_WORKFLOW', 'HOME_HABITS_GENERATE', undefined]]);
+  assert.match(contributor.body, /nothing is added until you confirm/);
+  assert.doesNotMatch(contributor.body, /open it/i);
+  assert.deepEqual(homeHabitsFromView(view({ habits: [{ ...view().habits?.[0] }].filter(Boolean) }), 'p1', NOW, true).blocks[0].actions.filter((action) => action.id === 'generate-home-habits'), [], 'with habits listed there is nothing to generate here');
 });
 
 test('habit phrasing routes here; maintenance due, next actions and the status board do not', () => {

@@ -700,6 +700,13 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   MATERIAL_SPEC_ADD: ['MATERIAL_SPECS_LIST'],
   // A new plant changes the care outlook, which was empty or shorter before it.
   HOME_PLANT_ADD: ['PLANT_CARE_OUTLOOK'],
+  ROOM_PLANT_RECOMMENDATIONS: ['PLANT_CARE_OUTLOOK'],
+  // Suggested habits fill the home habits answer that was empty when they were suggested.
+  HOME_HABITS_GENERATE: ['HOME_HABITS'],
+  // A run becomes the latest simulation that the do-nothing answer shows.
+  DO_NOTHING_SIMULATION_RUN: ['DO_NOTHING_SIMULATION'],
+  // A check joins the list of recent quote checks.
+  SERVICE_PRICE_CHECK_RUN: ['SERVICE_PRICE_CHECKS'],
   // A new item appears in the Property Summary inventory collection and the inventory lookup lists.
   INVENTORY_ITEM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // Answering an area question changes the completeness rows and percentage the Property Summary shows.

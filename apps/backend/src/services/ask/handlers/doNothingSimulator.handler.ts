@@ -6,6 +6,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
 import { humanDate } from '../askFormatting';
+import { DO_NOTHING_RUN_ACTION_ID, DO_NOTHING_RUN_MESSAGE } from '../support/homeToolRunConstants';
 
 // Do-Nothing Simulator capability-card slice (FRD v1.68): the nineteenth new operation for a capability with none (the
 // v1.47 "needs a product decision" label did not hold: runs and scenarios are stored and no model is called). Reads
@@ -24,8 +25,8 @@ export function doNothingSimulationFromView(
   view: { run: DoNothingRunView | null; scenarios: readonly DoNothingScenarioView[] } | 'PRIMARY_OWNER_ONLY' | 'COVERAGE_CONFLICT',
   propertyId: string,
 ): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/do-nothing`;
-  const openAction = { id: 'open-do-nothing-simulator', label: 'Open Do-Nothing Simulator', href: pageHref, style: 'PRIMARY' as const };
+  // The answer reaches only the home's primary account holder, who can run the simulation from it, inside Ask.
+  const runAction = (label: string) => ({ id: DO_NOTHING_RUN_ACTION_ID, label, interactionType: 'START_WORKFLOW' as const, message: DO_NOTHING_RUN_MESSAGE, operationId: 'DO_NOTHING_SIMULATION_RUN', style: 'PRIMARY' as const });
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'do-nothing-boundary', title: 'An estimate, not a prediction',
     body: 'The simulation models likely costs and risks from what is recorded for this home. Actual outcomes depend on weather, wear and prices, so treat the ranges as a guide to what to act on first.',
@@ -68,8 +69,8 @@ export function doNothingSimulationFromView(
   if (!run) {
     const blocks: AskPresentationBlock[] = [{
       type: 'SUMMARY', id: 'do-nothing-summary', title: 'No do-nothing simulation run yet',
-      body: `The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months.${scenarios.length ? ` ${scenarios.length} scenario${scenarios.length === 1 ? ' is' : 's are'} saved.` : ''} Ask cannot run one yet.`,
-      tone: 'DEFAULT', actions: [],
+      body: `The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months.${scenarios.length ? ` ${scenarios.length} scenario${scenarios.length === 1 ? ' is' : 's are'} saved.` : ''} Run one below; nothing runs until you confirm.`,
+      tone: 'DEFAULT', actions: [runAction('Run a simulation')],
     }];
     if (scenarioItems.length) {
       blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'Saved scenarios', description: 'Saved with their assumptions; none has been run yet.', sections: [{ id: 'do-nothing-scenarios', title: 'Saved scenarios', count: scenarioItems.length, items: scenarioItems }], actions: [] });
@@ -91,14 +92,14 @@ export function doNothingSimulationFromView(
       `Run ${humanDate(new Date(run.computedAt))}${scenarioName ? ` for "${scenarioName}"` : ''}.`,
     ].filter(Boolean).join(' '),
     tone: run.incidentLikelihood === 'HIGH' ? 'CAUTION' : 'DEFAULT',
-    actions: [openAction],
+    actions: [runAction('Run it again')],
   }];
   if (run.status !== 'READY') {
     blocks.push({
       type: 'LIMITATION', id: 'do-nothing-status', title: run.status === 'STALE' ? 'This run is out of date' : 'This run did not finish cleanly',
       body: run.status === 'STALE'
-        ? 'Something recorded for the home has changed since it ran. Run it again on the Do-Nothing Simulator for current figures.'
-        : 'The last simulation ended with an error, so these figures may be incomplete. Run it again on the Do-Nothing Simulator.',
+        ? 'Something recorded for the home has changed since it ran. Run it again for current figures.'
+        : 'The last simulation ended with an error, so these figures may be incomplete. Run it again.',
       severity: 'CAUTION',
     });
   } else if (run.confidence === 'LOW') {
@@ -123,7 +124,7 @@ export function doNothingSimulationFromView(
     { id: 'do-nothing-scenarios', title: 'Saved scenarios', items: scenarioItems },
   ].filter((section) => section.items.length > 0).map((section) => ({ ...section, count: section.items.length }));
   if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'What drives the estimate', description: 'From the latest run, as on the page. Open the simulator to change the horizon or run a scenario.', sections, actions: [] });
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'What drives the estimate', description: 'From the latest run. Run it again to change the horizon or use a saved scenario.', sections, actions: [] });
   }
   blocks.push(boundary);
   return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_READY', blocks, suggestions: [] };

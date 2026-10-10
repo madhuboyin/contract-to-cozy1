@@ -195,6 +195,11 @@ export type AskOperationId =
   | 'HOME_JOURNEY_SET'
   | 'MATERIAL_SPEC_ADD'
   | 'HOME_PLANT_ADD'
+  | 'ROOM_PLANT_RECOMMENDATIONS'
+  // Tool starts written inside Ask (the empty-state sweep): suggest habits, run the do-nothing simulation, check a contractor quote.
+  | 'HOME_HABITS_GENERATE'
+  | 'DO_NOTHING_SIMULATION_RUN'
+  | 'SERVICE_PRICE_CHECK_RUN'
   // Phase 3 add slice: create an InventoryItem from a declared "Add an item" action (form -> confirmation -> write).
   | 'INVENTORY_ITEM_CREATE'
   // Phase 3 add slice 5: fill in the missing facts of one Property Summary area, one confirmed answer at a time.
@@ -319,6 +324,9 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'HOME_JOURNEY_SET',
   'MATERIAL_SPEC_ADD',
   'HOME_PLANT_ADD',
+  'HOME_HABITS_GENERATE',
+  'DO_NOTHING_SIMULATION_RUN',
+  'SERVICE_PRICE_CHECK_RUN',
   // Excluded from fuzzy retrieval. It is reached by the declared "Add an item" action or the narrow,
   // deterministic inventoryCreatePattern below; both paths still require form review and confirmation.
   'INVENTORY_ITEM_CREATE',
@@ -411,7 +419,7 @@ export interface AskOperationResult {
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
-  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY', 'WARRANTY_CORRECT', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD',
+  'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY', 'WARRANTY_CORRECT', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -572,6 +580,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   HOME_UPGRADE_SCENARIOS: definition('HOME_UPGRADE_SCENARIOS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-digital-twin.scenarios', ['SUMMARY', 'GROUPED_LIST', 'COMPARISON', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASES: definition('NEGOTIATION_SHIELD_CASES', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'negotiation-shield.cases', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PLANT_CARE_OUTLOOK: definition('PLANT_CARE_OUTLOOK', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'plant-advisor.care-outlook', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  ROOM_PLANT_RECOMMENDATIONS: definition('ROOM_PLANT_RECOMMENDATIONS', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'plant-advisor.room-recommendations', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   HOME_DIGITAL_WILL: definition('HOME_DIGITAL_WILL', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-digital-will.read', ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_HABITS: definition('HOME_HABITS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-habits.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY', 'TASK_GUIDE']),
   HOME_HABIT_UPDATE: definition('HOME_HABIT_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-habits.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
@@ -606,6 +615,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   ROOM_CREATE: definition('ROOM_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.create', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   PROPERTY_PURCHASE_DATE_SET: definition('PROPERTY_PURCHASE_DATE_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'property-purchase-date.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  HOME_HABITS_GENERATE: definition('HOME_HABITS_GENERATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-habits.generate', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  DO_NOTHING_SIMULATION_RUN: definition('DO_NOTHING_SIMULATION_RUN', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'do-nothing-simulator.run', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  SERVICE_PRICE_CHECK_RUN: definition('SERVICE_PRICE_CHECK_RUN', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'service-price-radar.check', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   HOME_PLANT_ADD: definition('HOME_PLANT_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-plant.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   HOME_JOURNEY_SET: definition('HOME_JOURNEY_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-journey.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   INVENTORY_ITEM_CREATE: definition('INVENTORY_ITEM_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inventory.create', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
@@ -1102,6 +1114,7 @@ const negotiationShieldOtherIntentPattern = /\b(?:closing|purchase|seller|agent|
 // page's recommendation flow, and "plant" as a verb or a power plant is not this.
 const plantCareOutlookPattern = /\bplant advisor\b|\bplant care\b|\b(?:my|our) (?:house ?|indoor |outdoor |potted )?plants\b|\bwater(?:ing)? (?:my|our|the) plants\b|\bgarden zones?\b|\b(?:my|our) garden\b/i;
 const plantCareOtherIntentPattern = /\b(?:buy|get|add|recommend|suggest|pick|choose|which|what)\b.{0,20}\bplants? (?:should|to|for|would)\b|\bpower plant|\bplants? (?:for|in) (?:my|the|our) (?:\w+ )?(?:room|bedroom|kitchen|office|bathroom)\b/i;
+const roomPlantRecommendationPattern = /\b(?:recommend|suggest|find|pick|choose|which|what)\b.{0,35}\bplants?\b.{0,25}\b(?:room|bedroom|kitchen|office|bathroom|living room|dining room|laundry|basement)\b|\bplants? (?:for|in) (?:my|the|our) (?:\w+ )?(?:room|bedroom|kitchen|office|bathroom|living room|dining room|laundry|basement)\b/i;
 // The household's Home Continuity Plan (Home Digital Will). A legal will or estate plan is not this.
 const homeDigitalWillPattern = /\b(?:home )?continuity plan\b|\bdigital will\b|\bhome (?:handoff|hand-off|hand off) plan\b|\btrusted contacts?\b.{0,30}\b(?:home|house|plan)\b|\b(?:if|when) (?:someone|somebody|anyone) (?:else )?(?:takes? over|has to take over|needs to run)\b.{0,30}\b(?:home|house|place)\b/i;
 const homeDigitalWillOtherIntentPattern = /\b(?:estate|probate|attorney|lawyer|legal will|last will|testament|inherit(?:ance)?)\b/i;
@@ -1368,6 +1381,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (negotiationShieldCasesPattern.test(message) && !negotiationShieldOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('NEGOTIATION_SHIELD_CASES', 0.96);
   }
+  if (roomPlantRecommendationPattern.test(message) && !explicitCapabilityPattern.test(message)) return resolved('ROOM_PLANT_RECOMMENDATIONS', 0.98);
   if (plantCareOutlookPattern.test(message) && !plantCareOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PLANT_CARE_OUTLOOK', 0.96);
   }

@@ -82,7 +82,7 @@ test('the latest run is summarized with cost range, risk change, likelihood, con
   assert.equal(summary.title, 'If upkeep is put off for 12 months');
   assert.equal(summary.body, 'Estimated extra cost: $3,200 to $7,800. Risk score rises by 14. Incident likelihood: High. Confidence: Medium. Run Sep 15, 2026 for "Skip a year".');
   assert.equal(summary.tone, 'CAUTION');
-  assert.equal(summary.actions[0].href, PAGE);
+  assert.deepEqual(summary.actions.map((action) => [action.id, action.operationId, action.interactionType, action.href]), [['run-do-nothing', 'DO_NOTHING_SIMULATION_RUN', 'START_WORKFLOW', undefined]], 'run it again, inside Ask');
   assert.equal(result.blocks.some((block) => block.id === 'do-nothing-status'), false);
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((item) => item.title)]), [
     ['Biggest avoidable losses', ['Leak damage']],
@@ -103,7 +103,7 @@ test('a stale, failed or low-data run is disclosed; no run is not an all-clear',
   assert.equal(view({ confidence: 'LOW' }).blocks.find((block) => block.id === 'do-nothing-status').title, 'Low-data run');
   const none = doNothingSimulationFromView({ run: null, scenarios: [scenario('s2')] }, 'p1');
   assert.equal(none.reasonCode, 'DO_NOTHING_NO_RUN');
-  assert.equal(none.blocks[0].body, 'The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months. 1 scenario is saved. Ask cannot run one yet.');
+  assert.equal(none.blocks[0].body, 'The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months. 1 scenario is saved. Run one below; nothing runs until you confirm.');
   assert.equal(none.blocks.at(-1).title, 'An estimate, not a prediction');
 });
 
@@ -115,12 +115,15 @@ test('conflicting coverage records block the run the same way the page does, wit
   assert.equal(result.blocks[0].title, 'Resolve conflicting coverage records first');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', async () => {
+test('every block and the boundary survive the answer-trust validator, and the in-Ask Run it again action the whitelist for an owner but not a viewer', async () => {
   const raw = doNothingSimulationFromView({ run: { ...dto(), status: 'STALE' }, scenarios: [scenario('s1')] }, 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'do-nothing-simulator.latest', operationId: 'DO_NOTHING_SIMULATION', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my do-nothing simulation', operationId: 'DO_NOTHING_SIMULATION', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'DO_NOTHING_SIMULATION', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
+  const run = result.blocks[0].actions[0];
+  assert.equal(run.id, 'run-do-nothing');
+  assert.equal(isAskActionApplicable({ action: run, operationId: 'DO_NOTHING_SIMULATION', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
+  assert.equal(isAskActionApplicable({ action: run, operationId: 'DO_NOTHING_SIMULATION', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
 });
 
 test('cost-of-waiting questions route here; running or editing a simulation and one item\'s decision are not claimed', () => {

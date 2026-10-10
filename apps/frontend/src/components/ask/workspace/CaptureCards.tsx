@@ -494,7 +494,8 @@ export function InlineCaptureCard({
   const compactInventoryCreate = schema.type === 'GROUP' && request.captureKey === 'INVENTORY_ITEM_CREATE_INPUTS';
   const compactInventoryCompletion = schema.type === 'GROUP' && request.captureKey === 'INVENTORY_ITEM_COMPLETE_DETAILS';
   const compactMaterialSpec = schema.type === 'GROUP' && request.captureKey === 'MATERIAL_SPEC_INPUTS';
-  const compactWorkflow = compactMaintenanceTask || compactInventoryCreate || compactInventoryCompletion || compactMaterialSpec;
+  const compactPlantAdvisor = schema.type === 'GROUP' && request.captureKey === 'ROOM_PLANT_RECOMMENDATION_INPUTS';
+  const compactWorkflow = compactMaintenanceTask || compactInventoryCreate || compactInventoryCompletion || compactMaterialSpec || compactPlantAdvisor;
   const missingRequired = activeFields.some((field) => {
     if (!field.required) return false;
     const value = values[field.key];
@@ -558,12 +559,14 @@ export function InlineCaptureCard({
       {request.helpText && <p className="mt-1 text-xs leading-5 text-slate-500">{request.helpText}</p>}
       {policy.note && <p className="mt-2 text-xs font-semibold leading-5 text-slate-700">{policy.note}</p>}
       {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel} after you continue.</p>}
-      <div className={compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : undefined}>
+      <div className={compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : undefined}>
         {activeFields.map((field) => {
           const inventoryCreateFullWidth = compactInventoryCreate && (field.key === 'name' || field.key === 'category');
           const fullWidth = compactMaintenanceTask
             ? field.key === 'title' || field.key === 'description'
-            : inventoryCreateFullWidth || (compactMaterialSpec && ['category', 'label', 'roomId', 'supplier', 'notes'].includes(field.key));
+            : inventoryCreateFullWidth
+              || (compactMaterialSpec && ['category', 'label', 'roomId', 'supplier', 'notes'].includes(field.key))
+              || (compactPlantAdvisor && ['goals', 'notes'].includes(field.key));
           return <div key={field.key} className={fullWidth ? 'md:col-span-2' : undefined}><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>;
         })}
       </div>

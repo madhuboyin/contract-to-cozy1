@@ -31,9 +31,10 @@ const NOW = new Date('2026-10-10T12:00:00.000Z');
 const NO_LINK_OUT = /\/dashboard\/|"href"/;
 const INVITES_A_PAGE = /\bopen (?:it|the (?:page|simulator|tool)|home|project|negotiation|service|guidance|around)\b/i;
 
+// The first three answers now start an Ask command (each is covered in homeToolRuns.test.js); the Habit Coach offers it only to someone who can change the home.
 const empties = () => ({
   'Service Price Radar': servicePriceChecksFromView([], 'p1'),
-  'Home Habit Coach': homeHabitsFromView({ habits: [], hasMore: false, nextCursor: null }, 'p1', NOW),
+  'Home Habit Coach (viewer)': homeHabitsFromView({ habits: [], hasMore: false, nextCursor: null }, 'p1', NOW, false),
   'Home Continuity Plan': digitalWillFromView(null, 'p1'),
   'Around Your Home': neighborhoodChangeFeedFromView({ property: { id: 'p1' }, coverage: { state: 'UNAVAILABLE', comprehensive: false, sources: [], limitations: ['No reviewed source covers this home.'] }, items: [], interpretationBoundary: 'x' }, 'p1'),
   'Guidance Overview (viewer)': guidanceJourneysFromView({ journeys: [], next: [] }, new Set(), 'p1', false),
@@ -41,21 +42,25 @@ const empties = () => ({
   'Do-Nothing Simulator': doNothingSimulationFromView({ run: null, scenarios: [] }, 'p1'),
   'Negotiation Shield': negotiationShieldCasesFromView([], 'p1'),
 });
+// The only actions an empty state may carry: a typed Ask command for the primary account holder's tools (the answer reaches no one else).
+const EXPECTED_ACTION_OPERATIONS = { 'Service Price Radar': ['SERVICE_PRICE_CHECK_RUN'], 'Do-Nothing Simulator': ['DO_NOTHING_SIMULATION_RUN'] };
 
-test('every empty state links nowhere, invites no page, and offers no action Ask cannot perform', () => {
+test('every empty state links nowhere, invites no page, and offers only a typed Ask command it really has', () => {
   for (const [name, result] of Object.entries(empties())) {
     assert.ok(['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(result.status), `${name}: ${result.status}`);
     assert.doesNotMatch(JSON.stringify(result.blocks), NO_LINK_OUT, `${name}: no link out of Ask`);
     assert.doesNotMatch(JSON.stringify(result.blocks), INVITES_A_PAGE, `${name}: no "open it" invitation`);
-    assert.deepEqual(result.blocks[0].actions ?? [], [], `${name}: no action`);
+    assert.deepEqual((result.blocks[0].actions ?? []).map((action) => action.operationId), EXPECTED_ACTION_OPERATIONS[name] ?? [], `${name}: actions`);
+    for (const action of result.blocks[0].actions ?? []) assert.equal(action.interactionType, 'START_WORKFLOW', `${name}: a command, not a link`);
     for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
   }
 });
 
 test('where Ask cannot do the thing yet, the empty state says so plainly', () => {
-  const cannot = ['Service Price Radar', 'Home Habit Coach', 'Home Continuity Plan', 'Project Tracker', 'Do-Nothing Simulator', 'Negotiation Shield'];
+  // Service Price Radar, Home Habit Coach and Do-Nothing Simulator now start in Ask; these three are still product decisions (audit section 3).
+  const cannot = ['Home Continuity Plan', 'Project Tracker', 'Negotiation Shield'];
   const all = empties();
-  for (const name of cannot) assert.match(all[name].blocks[0].body, /Ask cannot (?:run a check|generate them|start or edit one|start one|run one)/, name);
+  for (const name of cannot) assert.match(all[name].blocks[0].body, /Ask cannot start(?: or edit)? one/, name);
   // Around Your Home is a read of reviewed sources: there is nothing a homeowner adds, so it says what the sources cover and promises no Ask action.
   assert.doesNotMatch(all['Around Your Home'].blocks[0].body, /Ask cannot/);
 });
