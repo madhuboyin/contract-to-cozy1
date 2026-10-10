@@ -27,6 +27,7 @@ import { conciergeLandingSubjectKey, inventoryDecisionQuestion, selectConciergeL
 import { getSkillDefinition } from '../../skills/skillRegistry';
 import { focusedHomeActionCategory, focusedHomeActionQuestion } from '../askFocusedGuidance';
 import { buildAskDiscoveryTopics } from '../askDiscoveryTopics';
+import { loadAskDiscoveryIndicators } from '../askDiscoveryIndicators';
 import { lifecyclePromptsFor } from '../askLifecyclePromptPolicy';
 import {
   dashboardSectionRepresentativeActions,
@@ -128,6 +129,8 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
   })();
 
   const feedPromise = getHomeActionFeed(propertyId, userId);
+  // Explore with Cozy indicators: each is read from its owning domain and omitted, never defaulted, when it cannot be (this never rejects).
+  const discoveryIndicatorsPromise = loadAskDiscoveryIndicators({ userId, propertyId, feed: feedPromise });
   const priorityListPromise = (async (): Promise<ConciergeHomeView['priorityList']> => {
     try {
       const feed = await feedPromise;
@@ -327,13 +330,14 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
     }
   })();
 
-  const [priorityList, changes, decisions, inventoryDecisionCandidate, journeyContext, homeContinuity] = await Promise.all([
+  const [priorityList, changes, decisions, inventoryDecisionCandidate, journeyContext, homeContinuity, discoveryIndicators] = await Promise.all([
     priorityListPromise,
     changesPromise,
     decisionsPromise,
     inventoryDecisionCandidatePromise,
     journeyContextPromise,
     homeContinuityPromise,
+    discoveryIndicatorsPromise,
   ]);
   const audienceDiscoveryActive = controls.audienceDiscoveryEnabled && controls.audiencePolicyEnabled;
   const discoveryOperatingMode = audienceDiscoveryActive && journeyContext.state === 'AVAILABLE'
@@ -371,7 +375,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
   // Independently degradable (plan §3): a projection failure leaves the topics empty of starters, never the rest of the shell.
   const discoveryTopics: ConciergeHomeView['discoveryTopics'] = (() => {
     try {
-      return buildAskDiscoveryTopics({ controls, householdRole: conciergeAccess.role, operatingMode: discoveryOperatingMode, propertyId });
+      return buildAskDiscoveryTopics({ controls, householdRole: conciergeAccess.role, operatingMode: discoveryOperatingMode, propertyId, indicators: discoveryIndicators });
     } catch (error) {
       logger.warn({ err: error, propertyId, userId }, 'Concierge Home discovery topics failed closed');
       return [];

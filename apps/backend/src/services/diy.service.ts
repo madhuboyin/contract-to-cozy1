@@ -541,6 +541,11 @@ export class DiyService {
     return { items, hasMore: applicable.length > limit };
   }
 
+  /** The number of this home's DIY projects in planning or in progress -- the same open set the DIY projects card lists, without its page limit. */
+  async countActiveProjects(propertyId: string): Promise<number> {
+    return prisma.diyProject.count({ where: { propertyId, status: { in: OPEN_PROJECT_STATUSES } } });
+  }
+
   async listProjects(
     propertyId: string,
     params: { status?: string | string[]; category?: string | string[]; limit?: number; cursor?: string },

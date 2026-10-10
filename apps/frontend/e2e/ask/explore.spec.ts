@@ -39,5 +39,6 @@ test('the expanded rail carries the Explore group apart from history', async ({ 
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
   const group = page.getByRole('region', { name: 'Explore with Cozy' });
   await expect(group).toBeVisible();
-  await expect(group.getByRole('button')).toHaveText(['Home care', 'DIY & Projects', 'My Home Record', 'More ideas']);
+  // Indicators come from the server: present for two topics, omitted (not zero) for the third.
+  await expect(group.getByRole('button')).toHaveText(['Home care3 need attention', 'DIY & Projects', 'My Home Record72% complete', 'More ideas']);
 });

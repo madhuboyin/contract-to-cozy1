@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; Phases 1-2 implemented; Phases 3-4 not started
+**Status:** Approved product direction; Phases 1-3 implemented; Phase 4 not started
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -201,6 +201,20 @@ Exit: all four controls are reachable by pointer, keyboard, touch, and assistive
    sections.
 
 Exit: indicators are correct, optional, and honestly degraded.
+
+**Phase 3 as built** (`apps/backend/src/services/ask/askDiscoveryIndicators.ts`, tests `tests/unit/askDiscoveryIndicators.test.js`):
+
+- **Home care — "N need attention":** the dashboard attention section (`NOW`/`SOON`, coverage-correction group counted once) from the Home Actions
+  feed Concierge Home already fetched, minus suppressed (snoozed, deferred, fatigue), completed, unavailable, stale and watch-only items.
+  It is **uncapped**: the dashboard and the landing chip show at most three cards, the indicator states the real number, so the two can differ
+  when more than three items qualify.
+- **DIY & Projects — "N active":** `DiyService.countActiveProjects`, the `PLANNING`/`IN_PROGRESS` set the DIY projects card lists, without its page limit.
+- **My Home Record — "N% complete":** `getPropertyContext` over `PROPERTY_RECORD_CONTEXT_SCOPES` then `getContextCompleteness`, the meaning `PROPERTY_SUMMARY` exposes.
+- **Degradation:** each source is read independently; an error, no access or an unavailable source yields `indicator: null` for that topic only.
+  Every value returned was computed in the request, so `freshness` is `CURRENT`; a value that cannot be computed is omitted rather than labelled stale.
+  A fatigue-lookup failure omits the Home care indicator instead of overstating it.
+- **Rendering:** the rail row and the focused heading show "3 need attention", "2 active", "72% complete". A numeric zero is left out so the
+  rail stays quiet (a `0%` completeness still shows). Absent never means zero.
 
 ### Phase 4 — More ideas and measurement
 

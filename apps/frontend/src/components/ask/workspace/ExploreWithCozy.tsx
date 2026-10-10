@@ -19,6 +19,16 @@ const REASON_COPY: Record<string, string> = {
   ASK_PERMISSION_REQUIRED: 'Needs more access to this home.',
 };
 
+/**
+ * "3 need attention", "2 active", "72% complete". Shown only when the server vouches for it (CURRENT) and only when it says something: a
+ * count of zero is left out so the rail stays quiet, while a percentage always shows. Absent never means zero.
+ */
+export function indicatorText(indicator: AskDiscoveryTopic['indicator']): string | null {
+  if (!indicator || indicator.freshness !== 'CURRENT') return null;
+  if (typeof indicator.value === 'number' && indicator.value === 0) return null;
+  return `${indicator.value} ${indicator.label}`.trim();
+}
+
 function reasonCopy(starter: AskDiscoveryStarter): string {
   if (starter.availability === 'NEEDS_CONTEXT') return 'Needs a little more information first.';
   return starter.reasonCodes.map((code) => REASON_COPY[code]).find(Boolean) ?? 'Not available right now.';
@@ -67,7 +77,7 @@ function TopicButtons({ topics, activeTopicId, onOpen, onAfterOpen, moreIdeas }:
         <li key={topic.id}>
           <button type="button" aria-pressed={activeTopicId === topic.id} onClick={(event) => { onOpen(topic.id, event.currentTarget); onAfterOpen?.(); }}
             className={cn('flex min-h-10 w-full items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600', activeTopicId === topic.id && 'bg-white font-semibold text-teal-900 shadow-sm')}>
-            <span>{topic.label}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+            <span>{topic.label}{indicatorText(topic.indicator) && <span className="ml-2 text-xs font-normal text-slate-500" data-explore-indicator="">{indicatorText(topic.indicator)}</span>}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
           </button>
         </li>
       ))}
@@ -151,6 +161,7 @@ export function ExploreFocusedView({ topics, topicId, busy, onSelectTopic, onSta
         ))}
       </div>
       <h2 id="ask-explore-focus-title" ref={headingRef} tabIndex={-1} className="mt-5 text-xl font-semibold tracking-tight text-slate-950 focus:outline-none">{topic.label}</h2>
+      {indicatorText(topic.indicator) && <p className="mt-0.5 text-sm text-slate-500" data-explore-indicator="">{indicatorText(topic.indicator)}</p>}
       {topic.starters.length === 0
         ? <p className="mt-3 text-sm text-slate-600" role="status">Nothing to suggest here right now. You can still ask anything about your home.</p>
         : <ul className="mt-3 space-y-1.5">{topic.starters.map((starter) => {

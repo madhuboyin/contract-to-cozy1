@@ -119,6 +119,8 @@ export interface AskDiscoveryProjectionInput {
   /** Already resolved by Concierge Home: UNKNOWN unless audience discovery is active and the journey context is available. */
   operatingMode: Parameters<typeof evaluateAskAudienceApplicability>[0]['operatingMode'];
   propertyId: string;
+  /** Owning-domain indicators (Phase 3); a topic with no entry, or null, renders without one. */
+  indicators?: Partial<Record<AskDiscoveryTopicId, AskDiscoveryTopic['indicator']>>;
 }
 
 function projectStarter(definition: AskDiscoveryStarterDefinition, input: AskDiscoveryProjectionInput): AskDiscoveryStarter | null {
@@ -156,7 +158,7 @@ export function buildAskDiscoveryTopics(input: AskDiscoveryProjectionInput): Ask
       id: topic.id,
       label: topic.label,
       order: topic.order,
-      indicator: null,
+      indicator: input.indicators?.[topic.id] ?? null,
       starters: topic.starters.flatMap((starter) => {
         const projected = projectStarter(starter, input);
         return projected ? [projected] : [];

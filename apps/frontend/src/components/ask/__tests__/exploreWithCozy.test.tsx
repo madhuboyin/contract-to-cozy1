@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup, useExploreFocus, type ExploreState } from '../workspace/ExploreWithCozy';
+import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup, indicatorText, useExploreFocus, type ExploreState } from '../workspace/ExploreWithCozy';
 import { CollapsedConversationRail } from '../workspace/CollapsedConversationRail';
 import { ConversationHistoryNav } from '../workspace/ConversationHistoryNav';
 import type { AskDiscoveryStarter, AskDiscoveryTopic } from '@/features/ask/types';
@@ -129,5 +129,39 @@ describe('Explore with Cozy', () => {
     const slot = children.findIndex((child) => child.textContent === 'discovery group');
     expect(slot).toBeGreaterThan(0);
     expect(children[slot - 1]).toContainElement(screen.getByRole('button', { name: 'New Ask Cozy session' }));
+  });
+});
+
+describe('Explore with Cozy indicators', () => {
+  const indicator = (value: number | string, label: string, freshness: 'CURRENT' | 'STALE' | 'UNAVAILABLE' = 'CURRENT') => ({ label, value, sourceVersion: 'v1', freshness });
+
+  it('formats the three approved indicators and leaves out zero, stale, unavailable and absent ones', () => {
+    expect(indicatorText(indicator(3, 'need attention'))).toBe('3 need attention');
+    expect(indicatorText(indicator(2, 'active'))).toBe('2 active');
+    expect(indicatorText(indicator('72%', 'complete'))).toBe('72% complete');
+    expect(indicatorText(indicator('0%', 'complete'))).toBe('0% complete');
+    expect(indicatorText(indicator(0, 'need attention'))).toBeNull();
+    expect(indicatorText(indicator(3, 'need attention', 'STALE'))).toBeNull();
+    expect(indicatorText(indicator(3, 'need attention', 'UNAVAILABLE'))).toBeNull();
+    expect(indicatorText(null)).toBeNull();
+  });
+
+  it('shows an indicator beside its topic in the rail and under its heading, and an omitted one never removes the topic or its starters', () => {
+    const withIndicators: ExploreState = { ...loaded, topics: [
+      { ...topics[1], indicator: indicator(3, 'need attention') },
+      { ...topics[0], indicator: indicator(2, 'active') },
+      { ...topics[2], indicator: null },
+    ] };
+    render(<Harness state={withIndicators} send={jest.fn()} navigate={jest.fn()} />);
+    const rail = screen.getByRole('region', { name: 'Explore with Cozy' });
+    expect(within(rail).getByRole('button', { name: /^Home care/ })).toHaveTextContent('Home care3 need attention');
+    expect(within(rail).getByRole('button', { name: /^DIY & Projects/ })).toHaveTextContent('DIY & Projects2 active');
+    expect(within(rail).getByRole('button', { name: /^My Home Record/ })).not.toHaveTextContent(/complete|active|attention/);
+    fireEvent.click(within(rail).getByRole('button', { name: /^Home care/ }));
+    expect(document.querySelector('[data-ask-explore="focused"] p[data-explore-indicator]')).toHaveTextContent('3 need attention');
+    expect(screen.getByRole('button', { name: 'Label care-a' })).toBeEnabled();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Topics' })).getByRole('button', { name: 'My Home Record' }));
+    expect(screen.getByRole('heading', { name: 'My Home Record' })).toBeInTheDocument();
+    expect(document.querySelector('[data-ask-explore="focused"] p[data-explore-indicator]')).toBeNull();
   });
 });
