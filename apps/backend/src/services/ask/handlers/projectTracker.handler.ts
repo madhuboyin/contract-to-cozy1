@@ -40,8 +40,8 @@ export function trackedProjectsFromView(projects: readonly TrackedProjectView[],
       status: 'ANSWERED', reasonCode: 'PROJECT_TRACKER_NO_PROJECTS',
       blocks: [{
         type: 'SUMMARY', id: 'project-tracker-summary', title: 'No projects yet',
-        body: 'Project Tracker follows a contractor project from signed contract through completion and warranty: milestones, payments, change orders and progress photos. Open it to start one.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: 'Project Tracker follows a contractor project from signed contract through completion and warranty: milestones, payments, change orders and progress photos. None has been started for this home, and Ask cannot start one yet.',
+        tone: 'DEFAULT', actions: [],
       }, boundary],
       suggestions: [],
     };

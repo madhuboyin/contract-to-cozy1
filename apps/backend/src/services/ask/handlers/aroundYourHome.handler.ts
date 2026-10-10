@@ -31,7 +31,8 @@ export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propert
       ? `From ${sourceCount} reviewed source${sourceCount === 1 ? '' : 's'} (coverage ${readableCode(view.coverage.state)}).${setAside ? ` ${setAside} item${setAside === 1 ? '' : 's'} you dismissed or marked not relevant ${setAside === 1 ? 'is' : 'are'} not listed.` : ''} These are source facts matched to the home's geography, not a judgment of their effect.`
       : 'Around Your Home only reports changes from reviewed local sources, and none covers this home yet.',
     tone: 'DEFAULT',
-    actions: [{ id: 'open-around-your-home', label: 'Open Around Your Home', href: pageHref, style: 'PRIMARY' }],
+    // Around Your Home is a read of reviewed sources: there is nothing for the homeowner to add, so no action is offered.
+    actions: [],
   }];
   if (!coverageCurrent) {
     blocks.push({ type: 'LIMITATION', id: 'neighborhood-change-coverage', title: 'Coverage is limited', body: view.coverage.limitations.join(' '), severity: 'CAUTION' });

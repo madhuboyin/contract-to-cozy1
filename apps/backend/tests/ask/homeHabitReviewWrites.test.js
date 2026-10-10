@@ -102,9 +102,10 @@ test('a habit row opens the review inside Ask: no link, an entity type, and a Re
   AskPresentationBlockSchema.parse(result.blocks.find((block) => block.id === 'home-habits-items'));
 });
 
-test('only the empty state keeps the page link, because generating habits is not an Ask action', () => {
+test('the empty state offers no action, because generating habits is not an Ask action yet, and says so', () => {
   const empty = homeHabitsFromView({ habits: [], hasMore: false, nextCursor: null }, 'p1', NOW);
-  assert.deepEqual(empty.blocks[0].actions.map((action) => action.id), ['open-home-habit-coach']);
+  assert.deepEqual(empty.blocks[0].actions, []);
+  assert.match(empty.blocks[0].body, /Ask cannot generate them yet/);
 });
 
 test('an unadopted suggestion is "suggested for" a date, never "overdue"', () => {

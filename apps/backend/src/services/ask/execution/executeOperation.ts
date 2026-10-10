@@ -754,13 +754,11 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   // document vault) is the direct sibling; PROPERTY_SUMMARY as the general
   // one, matching the other three CAPTURE_*_CONFIRM operations.
   CAPTURE_EVIDENCE_CONFIRM: ['DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY'],
-  // GUIDANCE_JOURNEY_CREATE and HOUSEHOLD_INVITATION have no still-visible
-  // Ask read operation whose membership/status they plausibly affect (no
-  // "list my guidance journeys" or "list household members" read exists) --
-  // deliberately left out of this map. Their confirm handlers still call
-  // reconcileAskExecutionSideEffects for the explicit sourceExecutionId
-  // refresh (the one result a launched-from row-action would refresh), just
-  // with zero declared siblings.
+  // A started guided plan joins the journeys list, which was empty ("No guided journeys in progress") when the plan was started from it.
+  GUIDANCE_JOURNEY_CREATE: ['GUIDANCE_JOURNEYS_LIST'],
+  // HOUSEHOLD_INVITATION has no still-visible Ask read operation whose membership it plausibly affects (no "list household members" read
+  // exists) -- deliberately left out of this map. Its confirm handler still calls reconcileAskExecutionSideEffects for the explicit
+  // sourceExecutionId refresh (the one result a launched-from row-action would refresh), just with zero declared siblings.
 };
 
 // Pure decision core, extracted for direct unit testing (same convention as

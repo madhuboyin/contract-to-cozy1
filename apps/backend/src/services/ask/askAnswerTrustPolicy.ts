@@ -154,7 +154,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   SERVICE_PRICE_CHECKS: new Set(['open-service-price-radar']),
   HOME_TIMELINE_EVENTS: new Set(),
   MATERIAL_SPECS_LIST: new Set(['add-material-spec']),
-  GUIDANCE_JOURNEYS_LIST: new Set(['open-guidance-overview']),
+  GUIDANCE_JOURNEYS_LIST: new Set(['start-guided-plan']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview', 'continue-step-in-ask', 'dismiss-guided-journey']),
   // The answer's next steps (each opens a confirmation, an inline answer, or the home-record check) and the walkthrough's way on and back.
   SEASONAL_HOME_CARE: new Set(['seasonal-add-tasks', 'seasonal-walkthrough', 'seasonal-show-checklist', 'seasonal-update-home-details', 'seasonal-next-task', 'seasonal-back-to-plan']),

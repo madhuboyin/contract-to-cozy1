@@ -46,8 +46,8 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
       status: 'ANSWERED', reasonCode: 'SERVICE_PRICE_RADAR_NO_CHECKS',
       blocks: [{
         type: 'SUMMARY', id: 'service-price-radar-summary', title: 'No quote checks yet',
-        body: 'Service Price Radar compares a contractor quote with typical local prices for the service. Open it to check a quote.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: 'Service Price Radar compares a contractor quote with typical local prices for the service. None has been checked for this home yet, and Ask cannot run a check yet.',
+        tone: 'DEFAULT', actions: [],
       }, boundary],
       suggestions: [],
     };

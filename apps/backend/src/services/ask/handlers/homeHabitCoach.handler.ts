@@ -161,10 +161,10 @@ export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now
       : 'No home habits are suggested yet',
     body: habits.length
       ? `Ranked by the Home Habit Coach for this home${adopted.length ? `; ${adopted.length} already in your maintenance routine` : ''}${snoozed.length ? `; ${snoozed.length} snoozed` : ''}.${focusSentence} Choose Review on a habit to see why it was suggested and what you can do with it.`
-      : 'The Home Habit Coach suggests small routines from your home\'s systems, age, climate and season. Open it to generate suggestions; this does not mean nothing needs care.',
+      : 'The Home Habit Coach suggests small routines from your home\'s systems, age, climate and season. None are suggested yet, and Ask cannot generate them yet; this does not mean nothing needs care.',
     tone: 'DEFAULT',
-    // Generating habits is not an Ask action, so only the empty state needs the page; with habits listed it would only repeat them.
-    actions: habits.length ? [] : [{ id: 'open-home-habit-coach', label: 'Open Home Habit Coach', href: pageHref, style: 'PRIMARY' }],
+    // Generating habits is not an Ask action yet, so the empty state offers none rather than a link out of Ask.
+    actions: [],
   }];
   if (view.hasMore) {
     blocks.push({ type: 'LIMITATION', id: 'home-habits-limits', title: 'What this does not cover', body: `Showing the first ${habits.length} habits in ranked order; the rest are in the Home Habit Coach.`, severity: 'INFO' });

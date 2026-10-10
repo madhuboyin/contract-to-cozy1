@@ -48,7 +48,7 @@ export function doNothingSimulationFromView(
       blocks: [{
         type: 'SUMMARY', id: 'do-nothing-summary', title: 'Resolve conflicting coverage records first',
         body: 'Some insurance records for this home disagree with each other, and the simulation depends on them. Once the conflicting coverage is resolved, the latest simulation can be shown.',
-        tone: 'CAUTION', actions: [openAction],
+        tone: 'CAUTION', actions: [],
       }, boundary],
       suggestions: [],
     };
@@ -68,11 +68,11 @@ export function doNothingSimulationFromView(
   if (!run) {
     const blocks: AskPresentationBlock[] = [{
       type: 'SUMMARY', id: 'do-nothing-summary', title: 'No do-nothing simulation run yet',
-      body: `The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months.${scenarios.length ? ` ${scenarios.length} saved scenario${scenarios.length === 1 ? ' is' : 's are'} ready to run.` : ''} Open it to run one.`,
-      tone: 'DEFAULT', actions: [openAction],
+      body: `The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months.${scenarios.length ? ` ${scenarios.length} scenario${scenarios.length === 1 ? ' is' : 's are'} saved.` : ''} Ask cannot run one yet.`,
+      tone: 'DEFAULT', actions: [],
     }];
     if (scenarioItems.length) {
-      blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'Saved scenarios', description: 'Open the simulator to run one.', sections: [{ id: 'do-nothing-scenarios', title: 'Saved scenarios', count: scenarioItems.length, items: scenarioItems }], actions: [] });
+      blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'Saved scenarios', description: 'Saved with their assumptions; none has been run yet.', sections: [{ id: 'do-nothing-scenarios', title: 'Saved scenarios', count: scenarioItems.length, items: scenarioItems }], actions: [] });
     }
     blocks.push(boundary);
     return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_NO_RUN', blocks, suggestions: [] };

@@ -103,7 +103,7 @@ test('a stale, failed or low-data run is disclosed; no run is not an all-clear',
   assert.equal(view({ confidence: 'LOW' }).blocks.find((block) => block.id === 'do-nothing-status').title, 'Low-data run');
   const none = doNothingSimulationFromView({ run: null, scenarios: [scenario('s2')] }, 'p1');
   assert.equal(none.reasonCode, 'DO_NOTHING_NO_RUN');
-  assert.equal(none.blocks[0].body, 'The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months. 1 saved scenario is ready to run. Open it to run one.');
+  assert.equal(none.blocks[0].body, 'The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months. 1 scenario is saved. Ask cannot run one yet.');
   assert.equal(none.blocks.at(-1).title, 'An estimate, not a prediction');
 });
 

@@ -45,12 +45,17 @@ const GUIDANCE_DOMAIN_FOCUS_LABELS: Record<string, string> = {
 };
 const GUIDANCE_READINESS_LABELS: Record<string, string> = { NOT_READY: 'Blocked', NEEDS_CONTEXT: 'Needs info', READY: 'Ready', TRACKING_ONLY: 'Monitoring' };
 
-export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journeys' | 'next'>, suppressedSignalIds: ReadonlySet<string>, propertyId: string): AskOperationResult {
+/** The declared action on an empty journeys list. It starts the existing GUIDANCE_JOURNEY_CREATE, which asks which recorded item or approved service the plan covers and confirms before anything is created. */
+export const GUIDANCE_START_ACTION = { id: 'start-guided-plan', label: 'Start a guided plan', message: 'Start a guided plan.' } as const;
+
+export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journeys' | 'next'>, suppressedSignalIds: ReadonlySet<string>, propertyId: string, canStart = false): AskOperationResult {
+  // Starting a journey is the existing confirmation-gated GUIDANCE_JOURNEY_CREATE; it asks which recorded item or service the plan should cover. A viewer is offered nothing.
+  const startActions = canStart ? [{ id: GUIDANCE_START_ACTION.id, label: GUIDANCE_START_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_START_ACTION.message, operationId: 'GUIDANCE_JOURNEY_CREATE', style: 'PRIMARY' as const }] : [];
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview`;
   const openAction = { id: 'open-guidance-overview', label: 'Open Guidance Overview', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'guidance-journeys-boundary', title: 'Guidance, not a professional assessment',
-    body: 'Each journey is a suggested path built from what is recorded for this home. Completing, skipping or dismissing a step happens on Guidance Overview, and a professional should confirm anything safety-related.',
+    body: 'Each journey is a suggested path built from what is recorded for this home. A professional should confirm anything safety-related.',
     severity: 'INFO', suggestions: [],
   };
   const journeys = (payload.journeys as any[]).filter((journey) => journey.status !== 'DISMISSED' && !suppressedSignalIds.has(journey.primarySignalId));
@@ -59,8 +64,10 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
       status: 'ANSWERED', reasonCode: 'GUIDANCE_JOURNEYS_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'guidance-journeys-summary', title: 'No guided journeys in progress',
-        body: 'Guidance Overview walks through a home issue step by step, such as an aging system, a coverage gap or an inspection follow-up. Open it to pick what you need help with.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: canStart
+          ? 'A guided journey walks through a home issue step by step, such as an aging system, a coverage gap or an inspection follow-up. Start one and say which recorded item or service it should cover; nothing is started until you confirm.'
+          : 'A guided journey walks through a home issue step by step, such as an aging system, a coverage gap or an inspection follow-up. None is in progress, and a contributor or owner of this home can start one.',
+        tone: 'DEFAULT', actions: startActions,
       }, boundary],
       suggestions: [],
     };
@@ -124,15 +131,18 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
   };
 }
 
-async function guidanceJourneysResult(propertyId: string, userId: string): Promise<AskOperationResult> {
+async function guidanceJourneysResult(propertyId: string, userId: string, canStart: boolean): Promise<AskOperationResult> {
   const [payload, protectionContext] = await Promise.all([
     guidanceJourneyService.getPropertyGuidance(propertyId, {}),
     getProtectionContextDecisions(propertyId, userId),
   ]);
-  return guidanceJourneysFromView(payload, new Set(protectionContext.reconciliation.suppressedGuidanceSignalIds), propertyId);
+  return guidanceJourneysFromView(payload, new Set(protectionContext.reconciliation.suppressedGuidanceSignalIds), propertyId, canStart);
 }
 
-registerCapabilityHandler('guidance-overview.journeys', async (envelope) => guidanceJourneysResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('guidance-overview.journeys', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return guidanceJourneysResult(envelope.propertyId!, envelope.userId, access.role !== HouseholdRole.VIEWER);
+});
 
 // Guided journey continuation, Phase 1 (docs/product/ASK_COZY_GUIDED_JOURNEY_CONTINUATION_FRD.md). A read of ONE journey:
 // where it is, the current step and why it matters, what blocks it, what has been done and with what evidence. Reached

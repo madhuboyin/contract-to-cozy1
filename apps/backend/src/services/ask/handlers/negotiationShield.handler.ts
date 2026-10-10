@@ -39,8 +39,8 @@ export function negotiationShieldCasesFromView(cases: readonly NegotiationShield
       status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_NO_CASES',
       blocks: [{
         type: 'SUMMARY', id: 'negotiation-shield-summary', title: 'No Negotiation Shield reviews yet',
-        body: 'Negotiation Shield reviews a contractor quote, a premium increase, a claim settlement, contractor urgency pressure or a buyer inspection request before you respond. Open it to start one.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: 'Negotiation Shield reviews a contractor quote, a premium increase, a claim settlement, contractor urgency pressure or a buyer inspection request before you respond. None has been started for this home, and Ask cannot start one yet.',
+        tone: 'DEFAULT', actions: [],
       }, boundary],
       suggestions: [],
     };
