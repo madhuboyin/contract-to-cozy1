@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; Phases 1-4 implemented (Phase 4 and the singular-copy fix not yet committed)
+**Status:** Approved product direction; Phases 1-4 implemented and pushed; governing FRDs updated (Inline Workspace FRD v1.238, Appendix C.12; Capability Discovery FRD v1.3)
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -298,3 +298,6 @@ The work is complete when:
 - desktop and narrow-screen experiences provide equivalent outcomes; and
 - governing FRD, capability-discovery FRD, implementation plan, generated requirement index, and
   architecture documentation agree.
+
+**Documentation check (October 9, 2026):** the Inline Workspace FRD, the Capability Discovery FRD, this plan, and the architecture
+explainer were updated to agree. The repository has no generated requirement index, so none exists to update.

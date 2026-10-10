@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.2 |
+| Version | 1.3 |
 | Date | October 9, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
@@ -14,6 +14,8 @@
 | Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
+
+**Revision 1.3 — Ask discovery built; reviewed inventory, search and measurement requirements added; deviations recorded (owner decisions, 2026-10-09):** the Ask Cozy projection in §7.5 is implemented and pushed (`1ad59c68`, `ff61885a`, `7a8ea1a6`, `6fb88f93`); its requirement-by-requirement status is in the Ask Cozy Inline Workspace FRD, Appendix C.12, which separates executed evidence from code-traced claims and records that nothing was live-verified. New requirements CAP-FR-039D–039F fix the reviewed-discovery rule, the search contract, and the measurement contract. **Where the build differs from this document, the requirement text is deliberately left as written and the difference is listed in §7.5.1 for an owner decision:** the starters, groups, and approved aliases live in a dedicated Ask explorer registry validated against the Ask operation registry, not in the canonical capability definitions (CAP-FR-033, CAP-FR-038); discovery events are their own bounded events, not the tool lifecycle telemetry of §15; and two named ideas are not offered until a canonical area or project picker exists.
 
 **Revision 1.2 — Ask discovery ownership clarified (owner decision, 2026-10-09):** the existing property-scoped Concierge Home view carries Ask discovery; a parallel bootstrap endpoint is not required. The existing Ask-native capability explorer is extended for **More ideas** with registry-backed membership and homeowner-language search rather than duplicating the explorer or returning to traditional Explore Tools. Home care, DIY & Projects, and My Home Record indicators now have explicit owning-domain definitions and may disappear independently when stale or unavailable.
 
@@ -436,6 +438,29 @@ exact-count, continuation ranking, cooldown, dismissal, or cross-response exhaus
 visible topics do not count as Suggested Next Action impressions. Capability and starter selections
 still use the canonical lifecycle telemetry described in §15.
 
+#### 7.5.1 Implementation status and recorded deviations (October 9, 2026)
+
+The projection is implemented for Ask Cozy only; Unified Home and Explore Tools are unchanged. The
+topics, their order, the single-request starter launch, the focused view and its escape, the three
+indicators with the definitions above, the collapsed-rail and narrow-screen routes, the explorer
+search, and the measurement are built. Evidence is recorded in the Ask Cozy Inline Workspace FRD,
+Appendix C.12; nothing has been live-verified.
+
+Behavior fixed during the build: Home care states the complete filtered count, so it can exceed the
+three-card cap of a landing preview; a count of zero is not shown while a measured 0% completeness
+is; a count of one reads "1 needs attention"; the projection loads for the whole page session so the
+topics persist mid-conversation; and a starter that fails an access, role, or availability check is
+shown disabled with its reason or omitted, never linked elsewhere.
+
+Differences from this document that need an owner decision:
+
+| Difference | Built | This document says | Decision needed |
+| --- | --- | --- | --- |
+| Inventory source | A dedicated Ask explorer registry holds each entry's group, label, message, operation, launch policy, aliases, and consequence; the capability catalog only decides which outcome groups appear. | CAP-FR-038: starters resolve from canonical capability and Ask-operation metadata and no independent inventory is kept. | Accept the explorer registry as the canonical Ask discovery metadata, or derive its entries from the capability registry. |
+| Approved aliases | Declared per entry in the explorer registry. | CAP-FR-033: search matches approved homeowner intent aliases of the capability. | Same decision as above; aliases should have one home. |
+| Selection telemetry | `ask_discovery_*` and `ask_explorer_search` events with bounded identifiers. | §7.5: starter selections use the canonical lifecycle telemetry of §15. | Keep separate events, or also record the lifecycle stages. |
+| Ideas needing a chosen entity | "Add a missing detail" and "Continue a project" are not offered. | §7.5 and CAP-FR-036: an unavailable capability is omitted or explained honestly. | Design the canonical area and project pickers; until then omission stands. |
+
 ### 7.6 Post-completion suggestions
 
 After meaningful completion, the platform may show the most useful next capability when:
@@ -847,6 +872,9 @@ Inspection Hub
 | CAP-FR-039A | Ask discovery shall be projected through the existing property-scoped Concierge Home view; a discovery or indicator-source failure shall not fail unrelated shell sections. |
 | CAP-FR-039B | Home care, DIY & Projects, and My Home Record indicators shall use the exact owning-domain definitions in §7.5; a stale, unauthorized, or unavailable indicator shall be omitted without removing its topic. |
 | CAP-FR-039C | More ideas shall extend the existing Ask-native capability explorer with registry-backed membership and homeowner-language search; it shall not use a second explorer or the traditional Explore Tools page. |
+| CAP-FR-039D | The Ask discovery inventory shall admit only reviewed entries: an Ask-native read, or a workflow whose selection only begins a capture, proposal, or review flow, is a registered confirmation-gated domain command, and states that nothing is saved until the homeowner confirms. It shall reject at startup a command that could write immediately, an entry without reviewed copy or aliases, an operation that needs an entity chosen first, a phrase that resolves to the grounded-guidance model fallback, and an operation without an audience policy. |
+| CAP-FR-039E | Ask discovery search shall run over the already-authorized corpus and match homeowner label, question, group wording, and approved aliases only; it shall rank deterministically (exact, prefix, token, group wording; ties in server order), shall never match operation identifiers, and shall never fall back to a traditional page or a model answer. |
+| CAP-FR-039F | Ask discovery measurement shall use bounded identifiers; record visibility only after an element is rendered on screen and once per home; record search as one interaction with a bucketed result count and whether a result was chosen; never record a search phrase, label, message, or free text; and stay separate from Suggested Next Action events. |
 
 ### 12.5 Inline and post-completion suggestions
 
@@ -1371,6 +1399,9 @@ capabilities.
 - A stale, unauthorized, or unavailable indicator disappears without removing its stable topic or independently available starters.
 - More ideas uses the existing Ask-native explorer, canonical registry and Ask-operation metadata, and homeowner-language search; it never opens the traditional Explore Tools page.
 - Narrow layouts expose the same topics through an accessible compact disclosure without obscuring the composer or active conversation.
+- Discovery search returns only prompts the server already authorized, matches approved aliases and group wording, never matches operation identifiers, and reports at most one bucketed search event per interaction without the phrase.
+- Discovery visibility events fire only for an element that is on screen, once per home; no discovery event carries a label, message, or search phrase.
+- Every discovery entry is a reviewed read or a confirmation-gated workflow; the startup validator rejects the excluded kinds.
 - Explore Tools preserves the selected property.
 - Homeowner-language search terms return expected capabilities.
 - Actual-view impressions fire only after visibility thresholds.
@@ -1428,6 +1459,13 @@ A future tool is complete only when:
    aliases remain code-reviewed only?
 8. What minimum sample and outcome evidence are required before changing ranking weights?
 9. Which feedback controls should contributors and viewers have on shared properties?
+10. Should the Ask explorer registry become the canonical home for Ask discovery metadata (entries,
+    outcome groups, approved aliases), or should those be derived from the capability registry
+    (§7.5.1)?
+11. Should Ask discovery selections also record the lifecycle stages of §15, or keep their own
+    bounded events (§7.5.1)?
+12. What canonical area and project pickers are needed before "Add a missing detail" and
+    "Continue a project" can be offered from Ask discovery (§7.5.1)?
 
 ---
 
