@@ -214,7 +214,7 @@ export async function executeOperationCore(input: { userId: string; sessionId: s
     askRemoteGenerationTotal.inc({ outcome: 'disabled' });
     return operationalUnavailableResult('REMOTE_GENERATION_DISABLED');
   }
-  if (input.operation.requiresProperty && !input.propertyId) return needsPropertyResult();
+  if (input.operation.requiresProperty && !input.propertyId) return needsPropertyResult(input.userId);
   const authorizationFloor = effectivePolicy?.authorizationFloor ?? definition.propertyRoleFloor;
   let householdRole: HouseholdRole | null = null;
   let propertyAccess: PropertyAccess | null = null;

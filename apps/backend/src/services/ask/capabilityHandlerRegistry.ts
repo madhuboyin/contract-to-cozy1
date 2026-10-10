@@ -1,4 +1,5 @@
 import type { HouseholdRole } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
 import { askRemoteGenerationTotal } from '../../lib/metrics';
 import { resolvePropertyAccess, type PropertyAccess } from '../propertyAccess.service';
@@ -104,17 +105,37 @@ export function operationalUnavailableResult(reason:
   };
 }
 
-export function needsPropertyResult(): AskOperationResult {
+/** Whether the person has any home to choose from. A lookup that fails counts as "has homes", so the ordinary choose-a-home wording is the fallback. */
+async function userHasHomes(userId: string): Promise<boolean> {
+  try {
+    const [memberships, owned] = await Promise.all([
+      prisma.householdMember.count({ where: { userId } }),
+      prisma.property.count({ where: { homeownerProfile: { userId } } }),
+    ]);
+    return memberships + owned > 0;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * The question names no home. Ask never links out (owner decision 2026-10-10): with homes, the workspace shows its own home picker under this answer
+ * and the question continues from there; with none, the answer says so and points at the home menu in the Ask header, where a home is added.
+ */
+export async function needsPropertyResult(userId?: string): Promise<AskOperationResult> {
+  const hasHomes = userId ? await userHasHomes(userId) : true;
   return {
     status: 'NEEDS_PROPERTY',
     reasonCode: 'ASK_PROPERTY_REQUIRED',
     blocks: [{
       type: 'SUMMARY',
       id: 'property-required',
-      title: 'Select a home to continue',
-      body: 'This question needs a specific Living Home Record. Select a home, then Ask will continue with the same question.',
+      title: hasHomes ? 'Choose a home to continue' : 'Add a home to continue',
+      body: hasHomes
+        ? 'This question is about one specific home. Choose which one below, and Ask will continue with the same question.'
+        : 'Ask answers questions about a specific home, and there is no home on your account yet. Use the home menu at the top of Ask to add your first home, then ask again.',
       tone: 'CAUTION',
-      actions: [{ id: 'select-property', label: 'Select a home', href: '/dashboard/properties', style: 'PRIMARY' }],
+      actions: [],
     }],
     suggestions: [],
   };
@@ -195,7 +216,7 @@ async function invokeGuarded(
 
   // Property scope + authorization floor: the second half of the reported
   // gap -- an "unverified user/property" must never reach a handler.
-  if (definition.requiresProperty && !envelope.propertyId) return needsPropertyResult();
+  if (definition.requiresProperty && !envelope.propertyId) return needsPropertyResult(envelope.userId);
   const skill = getSkillForOperation(operationId);
   const effectivePolicy = skill ? resolveEffectiveSkillOperationPolicy(skill.id, operationId, 'ASK') : null;
   const authorizationFloor = effectivePolicy?.authorizationFloor ?? definition.propertyRoleFloor;
