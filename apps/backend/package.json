@@ -49,6 +49,8 @@
     "report:home-intelligence-phase0": "ts-node scripts/generate-home-intelligence-phase0-report.ts",
     "retention:ask": "node dist/scripts/askRetentionCleanup.js",
     "retention:ask:dev": "ts-node src/scripts/askRetentionCleanup.ts",
+    "reconcile:ask-pending": "node dist/scripts/askPendingExpiryReconcile.js",
+    "reconcile:ask-pending:dev": "ts-node src/scripts/askPendingExpiryReconcile.ts",
     "report:service-price-benchmarks": "ts-node src/scripts/reportServicePriceBenchmarkHealth.ts",
     "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts",
     "bootstrap:admin-capabilities": "ts-node scripts/adminCapabilityBootstrap.ts"

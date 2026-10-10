@@ -14,6 +14,7 @@ import { evaluateAskAudienceApplicability, getAskAudiencePolicy } from '../askAu
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { operationalUnavailableResult, skillRuntimeUnavailableReason } from '../capabilityHandlerRegistry';
 import { confirmCapabilityInvoke } from '../confirmCapabilityHandlerRegistry';
+import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { asInputJson, assertSkillResultBlocksAllowed, audienceApplicabilityResult, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, journeyContextFrom, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus } from '../askHandlerSupport';
 import { reconcileAskExecutionSideEffects, resolveAskSkillHandoff } from '../execution/executeOperation';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
@@ -196,6 +197,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       },
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'EXPIRED', metadataJson: asInputJson({ reason: 'CONFIRMATION_EXPIRED' }) } });
+    void recordAskCapabilityLifecycle(executionId, 'EXPIRED');
     return mapPersistedExecution(expired, await propertySummary(execution.propertyId));
   }
   if (expectedVersion !== input.confirmationVersion) {
@@ -437,6 +439,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     if (!completed) throw error;
     saved = completed;
   }
+  void recordAskCapabilityLifecycle(executionId, 'CONFIRMED');
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId), refreshedExecutions);
 }
 
@@ -535,6 +538,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
       return mapPersistedExecution(current, await propertySummary(current.propertyId));
     }
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CANCELLED', metadataJson: asInputJson({ reason: 'USER_DISMISSED_PENDING_REQUEST', previousStatus: execution.status }) } });
+    void recordAskCapabilityLifecycle(executionId, 'CANCELLED');
     const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
     return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
   }
@@ -571,6 +575,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     return mapPersistedExecution(current, await propertySummary(current.propertyId));
   }
   await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CANCELLED' } });
+  void recordAskCapabilityLifecycle(executionId, 'CANCELLED');
   const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
 }

@@ -148,6 +148,9 @@ export type AskDiscoveryTopicId = (typeof ASK_DISCOVERY_TOPIC_IDS)[number];
 
 export const AskDiscoveryStarterSchema = z.object({
   id: z.string().trim().min(1).max(80),
+  // Join keys for lifecycle telemetry (IW-SHELL-021): the reviewed explorer entry this starter references and the capability it belongs to.
+  entryId: z.string().trim().min(1).max(80),
+  capabilityId: z.string().trim().min(1).max(120),
   label: z.string().trim().min(1).max(120),
   message: z.string().trim().min(1).max(300),
   operationId: z.string().trim().min(1).max(120),

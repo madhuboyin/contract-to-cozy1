@@ -397,10 +397,11 @@ export interface CtcEventProperties {
   // Bounded identifiers only: never a message, a search phrase or a label. Counts are bucketed, never raw.
   ask_discovery_topic_visible: { propertyId?: string | null; topicId: string; surface: 'RAIL' | 'DISCLOSURE'; hasIndicator: boolean };
   ask_discovery_topic_opened: { propertyId?: string | null; topicId: string; surface: 'RAIL' | 'DISCLOSURE' | 'COLLAPSED_RAIL' | 'FOCUSED_VIEW' };
-  ask_discovery_starter_visible: { propertyId?: string | null; topicId: string; starterId: string; operationId: string };
-  ask_discovery_starter_selected: { propertyId?: string | null; topicId: string; starterId: string; operationId: string };
-  ask_discovery_started: { propertyId?: string | null; topicId: string; starterId: string; operationId: string };
-  ask_discovery_completed: { propertyId?: string | null; topicId: string; starterId: string; operationId: string; status: string; succeeded: boolean };
+  // entryId and capabilityId are the join keys to the server's capability lifecycle events (askExecutionId joins an execution): bounded, from the server.
+  ask_discovery_starter_visible: { propertyId?: string | null; topicId: string; starterId: string; entryId: string; capabilityId: string; operationId: string };
+  ask_discovery_starter_selected: { propertyId?: string | null; topicId: string; starterId: string; entryId: string; capabilityId: string; operationId: string };
+  ask_discovery_started: { propertyId?: string | null; topicId: string; starterId: string; entryId: string; capabilityId: string; operationId: string };
+  ask_discovery_completed: { propertyId?: string | null; topicId: string; starterId: string; entryId: string; capabilityId: string; operationId: string; executionId?: string; status: string; succeeded: boolean };
   ask_discovery_abandoned: { propertyId?: string | null; topicId: string; reason: 'DISMISSED' | 'PROPERTY_CHANGED' };
   ask_explorer_search: { propertyId?: string | null; resultBucket: '0' | '1' | '2-5' | '6+'; selected: boolean };
   property_record_viewed: {

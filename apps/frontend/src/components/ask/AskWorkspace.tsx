@@ -49,6 +49,7 @@ import { useAskAccount } from './workspace/useAskAccount';
 import { CollapsedConversationRail } from './workspace/CollapsedConversationRail';
 import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup } from './workspace/ExploreWithCozy';
 import { useExploreWithCozy } from './workspace/useExploreWithCozy';
+import { discoveryClaimFor } from '@/features/ask/exploreTelemetry';
 // Re-exported for existing test imports; ./blocks/registry.tsx is the implementation.
 export { BlockView };
 // The history rail and the draft key moved to ./workspace/; re-exported for existing imports.
@@ -282,7 +283,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     const attribution = { promptId: prompt.id, categoryId: prompt.categoryId, source } satisfies AskPromptAttribution;
     track('ask_prompt_selected', { propertyId: selectedPropertyId ?? null, ...attribution });
     // A reviewed explorer entry declares its operation; it rides in launchContext like any declared action (createAskExecution validates it).
-    void ask(prompt.question, attribution, prompt.operationId ? { ...prompt.context, operationId: prompt.operationId } : prompt.context);
+    // A reviewed explorer entry also names itself, so the server can join its capability lifecycle to this selection.
+    const discovery = discoveryClaimFor(prompt, source);
+    void ask(prompt.question, attribution, prompt.operationId ? { ...prompt.context, operationId: prompt.operationId, ...(discovery ? { discovery } : {}) } : prompt.context);
   };
   // Explore with Cozy: topic selection is view state only; only a starter sends, once, with its declared operation and this property.
   const explore = useExploreWithCozy({ view: concierge.view, loading: concierge.loading, failed: concierge.failed, propertyId: selectedPropertyId, sessionId, busy: loading || !sessionId, scrollRef: conversationScrollRef, ask });

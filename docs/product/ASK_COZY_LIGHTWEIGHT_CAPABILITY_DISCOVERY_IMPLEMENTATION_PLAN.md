@@ -1,7 +1,7 @@
 # Ask Cozy Lightweight Capability Discovery — Implementation Plan
 
 **Date:** October 9, 2026
-**Status:** Approved product direction; Phases 1-5 built (Phase 5 uncommitted); Phases 6-7 decided, not started (Inline Workspace FRD v1.239, Appendix C.12; Capability Discovery FRD v1.4)
+**Status:** Approved product direction; Phases 1-6 built (Phase 6 and its follow-up uncommitted); Phase 7 decided, not started (Inline Workspace FRD v1.239, Appendix C.12; Capability Discovery FRD v1.4)
 **Governing requirement:** `ASK_COZY_INLINE_WORKSPACE_FRD.md` v1.237, especially IW-SHELL-009 and IW-SHELL-014–016
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
@@ -270,6 +270,9 @@ Discovery FRD v1.4, CAP-FR-039G-039I). The work below is owed and has not begun.
   registry; operation facts from the Ask operation registry; one binding source shared with `askCapabilityCardLaunch.ts`. Prerequisites: a
   capability for seasonal care and a decision for "what changed recently", which have none today; per-entry bindings because one capability has
   several entry points.
+- **Phase 6 - Lifecycle telemetry. DONE (October 9, 2026; FRD v1.241 / v1.6).** Server-side STARTED, OUTPUT_GENERATED, ABANDONED, and rule-gated
+  COMPLETED, joined to the discovery events by bounded ids; no schema change. Follow-up (FRD v1.242 / v1.7): continuation hooks, a server-owned
+  expiry CronJob reusing the stored 30-minute rule, "viewed" removed from the metric, and DIY completion centralized in `diyService`. Original scope follows.
 - **Phase 6 - Lifecycle telemetry.** Join the `ask_discovery_*` events to the canonical lifecycle stages by capability id, operation id, entry id,
   and surface. Needs an authoritative outcome signal; an answered, needs-context, needs-confirmation, proposal, or informational result never emits
   COMPLETED by itself.

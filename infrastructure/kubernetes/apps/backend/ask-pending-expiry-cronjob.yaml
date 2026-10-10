@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ask-pending-expiry
+  namespace: production
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: ask-pending-expiry
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: ask-pending-expiry
+              image: ghcr.io/madhuboyin/contract-to-cozy/backend:latest
+              imagePullPolicy: Always
+              command: ["npm", "run", "reconcile:ask-pending"]
+              envFrom:
+                - configMapRef:
+                    name: app-config
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: app-secrets
+                      key: DATABASE_URL
+              resources:
+                requests: { cpu: "50m", memory: "128Mi" }
+                limits: { cpu: "500m", memory: "512Mi" }

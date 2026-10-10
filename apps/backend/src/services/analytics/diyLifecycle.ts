@@ -1,5 +1,6 @@
 import type { DiyDecisionVerdict } from '@prisma/client';
-import type { ToolLifecycleEventInput } from './toolLifecycle';
+import { logger } from '../../lib/logger';
+import { recordToolLifecycleEvents, type ToolLifecycleEventInput } from './toolLifecycle';
 
 export function diyDecisionCompletionEvent(input: {
   propertyId: string;
@@ -50,3 +51,22 @@ export function diyProjectCompletionEvent(input: {
   };
 }
 
+
+/**
+ * Records the DIY capability completion for a project that was just created. Called by the SERVICE that creates it (diyService), below the
+ * transport layer, so the page's HTTP route and Ask's confirmed "start this project" share one completion rule instead of each controller or
+ * handler carrying its own hook (capability discovery plan, Phase 6 follow-up). Fire-and-forget: analytics never fails or delays the write, and a
+ * rejection is logged, not left unhandled.
+ */
+export function recordDiyProjectCreated(
+  input: { userId: string; propertyId: string; project: { id: string; category: string; decisionVerdict?: DiyDecisionVerdict | null } },
+  record: typeof recordToolLifecycleEvents = recordToolLifecycleEvents,
+): void {
+  void Promise.resolve()
+    .then(() => record({
+      userId: input.userId,
+      propertyId: input.propertyId,
+      events: [diyProjectCompletionEvent({ projectId: input.project.id, category: input.project.category, decisionVerdict: input.project.decisionVerdict })],
+    }))
+    .catch((error) => logger.warn({ err: error, propertyId: input.propertyId, projectId: input.project.id }, 'DIY project lifecycle event not recorded; the project was created'));
+}

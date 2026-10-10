@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { readStoredSuggestedNextActions } from '../suggestedActions/suggestedNextAction.contract';
 import { getCaptureDefinitionForFact } from '../../../modules/propertyContext/catalog/captureRegistry';
 import { PROPERTY_AREA_CAPTURE_SCOPES, type PropertyAreaCaptureScope } from '../../../modules/propertyContext/catalog/featureRequirementRegistry';
@@ -204,7 +205,15 @@ async function submitNextActionMissingFactCapture(
   return mapPersistedExecution(saved, await propertySummary(propertyId));
 }
 
+// Capability discovery lifecycle (IW-SHELL-021): a continuation that finishes with delivered output counts for the discovery-launched turn it continues.
+// Idempotent and fire-and-forget; the recorder reads the persisted status, so a continuation that is still pending emits nothing.
 export async function submitAskCapture(userId: string, executionId: string, input: SubmitAskCaptureRequest): Promise<AskExecutionResponse> {
+  const response = await submitAskCaptureCore(userId, executionId, input);
+  void recordAskCapabilityLifecycle(executionId, 'RESULT');
+  return response;
+}
+
+async function submitAskCaptureCore(userId: string, executionId: string, input: SubmitAskCaptureRequest): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution || !execution.propertyId) {
     const error = new Error('Ask execution not found.');

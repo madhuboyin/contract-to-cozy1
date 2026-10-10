@@ -10,7 +10,6 @@ import { evaluateDiyApplicability } from '../services/diy/applicabilityPolicy';
 import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
 import {
   diyDecisionCompletionEvent,
-  diyProjectCompletionEvent,
 } from '../services/analytics/diyLifecycle';
 
 // ── Skill Profile ─────────────────────────────────────────────────────────────
@@ -109,15 +108,7 @@ export async function createProject(req: Request, res: Response, next: NextFunct
       featureKey: AnalyticsFeature.DIY_DECISION,
       metadataJson: { actionType: 'create_project', category: (project as any)?.category },
     });
-    void recordToolLifecycleEvents({
-      userId: req.user!.userId,
-      propertyId: req.params.propertyId,
-      events: [diyProjectCompletionEvent({
-        projectId: project.id,
-        category: project.category,
-        decisionVerdict: project.decisionVerdict,
-      })],
-    });
+    // The DIY completion is recorded by diyService where the project is created, so this route and Ask's confirmed start share it.
 
     res.status(201).json({ success: true, data: { project } });
   } catch (err) { next(err); }

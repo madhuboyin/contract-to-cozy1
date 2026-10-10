@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
 import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type ResolveAskExecutionProperty, type SubmitAskClarification } from '../../../productFramework/ask/ask.contract';
@@ -13,7 +14,15 @@ import { getSkillForOperation } from '../../skills/skillRegistry';
 import { buildSkillExecutionBinding } from '../../skills/skillExecutionBinding';
 import { validateAskAnswerTrustPipeline } from '../askAnswerTrustValidator';
 
+// Capability discovery lifecycle (IW-SHELL-021): a continuation that finishes with delivered output counts for the discovery-launched turn it continues.
+// Idempotent and fire-and-forget; the recorder reads the persisted status, so a continuation that is still pending emits nothing.
 export async function submitAskClarification(userId: string, executionId: string, input: SubmitAskClarification): Promise<AskExecutionResponse> {
+  const response = await submitAskClarificationCore(userId, executionId, input);
+  void recordAskCapabilityLifecycle(executionId, 'RESULT');
+  return response;
+}
+
+async function submitAskClarificationCore(userId: string, executionId: string, input: SubmitAskClarification): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution) {
     const error = new Error('Ask execution not found.');
@@ -206,7 +215,15 @@ export async function submitAskClarification(userId: string, executionId: string
 // discovering it requires a property; the only missing input is which home.
 // This resumes the SAME execution once a property is supplied, instead of
 // forcing the homeowner to restate the question as a brand-new execution.
+// Capability discovery lifecycle (IW-SHELL-021): a continuation that finishes with delivered output counts for the discovery-launched turn it continues.
+// Idempotent and fire-and-forget; the recorder reads the persisted status, so a continuation that is still pending emits nothing.
 export async function resolveAskExecutionProperty(userId: string, executionId: string, input: ResolveAskExecutionProperty): Promise<AskExecutionResponse> {
+  const response = await resolveAskExecutionPropertyCore(userId, executionId, input);
+  void recordAskCapabilityLifecycle(executionId, 'RESULT');
+  return response;
+}
+
+async function resolveAskExecutionPropertyCore(userId: string, executionId: string, input: ResolveAskExecutionProperty): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution) {
     const error = new Error('Ask execution not found.');

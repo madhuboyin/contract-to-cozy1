@@ -20,7 +20,7 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
   /** A request is in flight, or no session exists yet. */
   busy: boolean;
   scrollRef: RefObject<HTMLElement | null>;
-  ask: (message: string, attribution: undefined, context: AskCapabilityPrompt['context']) => Promise<{ status: string } | undefined | void>;
+  ask: (message: string, attribution: undefined, context: AskCapabilityPrompt['context']) => Promise<{ status: string; executionId?: string } | undefined | void>;
 }) {
   const topics = view?.discoveryTopics ?? [];
   const state: ExploreState = { topics, loading, failed };
@@ -54,14 +54,17 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
     const topicId = focusNow.current;
     // Refuse a stale overview: the starter belongs to the home it was loaded for, which must still be the selected one.
     if (!topicId || !sessionId || busy || starter.availability !== 'AVAILABLE' || view?.propertyId !== propertyId) return;
-    const ids = { propertyId: home, topicId, starterId: starter.id, operationId: starter.operationId };
+    const ids = { propertyId: home, topicId, starterId: starter.id, entryId: starter.entryId, capabilityId: starter.capabilityId, operationId: starter.operationId };
     chosen.current = true;
     track('ask_discovery_starter_selected', ids);
     focus.close();
     track('ask_discovery_started', ids);
-    const result = await ask(starter.message, undefined, { operationId: starter.operationId, propertyId: starter.entityContext?.propertyId ?? propertyId });
+    const result = await ask(starter.message, undefined, {
+      operationId: starter.operationId, propertyId: starter.entityContext?.propertyId ?? propertyId,
+      discovery: { entryId: starter.entryId, surface: 'TOPIC', topicId },
+    });
     const status = result ? result.status : 'REQUEST_FAILED';
-    track('ask_discovery_completed', { ...ids, status, succeeded: Boolean(result) && !status.startsWith('FAILED') });
+    track('ask_discovery_completed', { ...ids, ...(result?.executionId ? { executionId: result.executionId } : {}), status, succeeded: Boolean(result) && !status.startsWith('FAILED') });
   };
 
   const topicsVisible = (surface: 'RAIL' | 'DISCLOSURE') => () => {
@@ -71,7 +74,7 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
   };
   const startersVisible = (topicId: AskDiscoveryTopicId, starters: AskDiscoveryStarter[]) => {
     for (const starter of starters) {
-      if (once(`${home}:starter:${topicId}:${starter.id}`)) track('ask_discovery_starter_visible', { propertyId: home, topicId, starterId: starter.id, operationId: starter.operationId });
+      if (once(`${home}:starter:${topicId}:${starter.id}`)) track('ask_discovery_starter_visible', { propertyId: home, topicId, starterId: starter.id, entryId: starter.entryId, capabilityId: starter.capabilityId, operationId: starter.operationId });
     }
   };
   /** One event per explorer search interaction, however many keystrokes it took: a bucketed result count and whether a result was picked. */

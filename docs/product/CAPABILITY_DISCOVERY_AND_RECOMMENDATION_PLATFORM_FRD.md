@@ -5,7 +5,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Version | 1.5 |
+| Version | 1.7 |
 | Date | October 9, 2026 |
 | Accountable product area | Homeowner Product |
 | Technical owners | Product Framework, Unified Home, Personalization, Frontend Platform |
@@ -14,6 +14,10 @@
 | Implementation plan | [Capability Discovery and Recommendation Platform — Implementation Plan](./CAPABILITY_DISCOVERY_AND_RECOMMENDATION_IMPLEMENTATION_PLAN.md) |
 
 ---
+
+**Revision 1.7 — Phase 6 gaps closed (CAP-FR-039H):** continuation results are recorded against the original discovery execution; a server-owned CronJob applies the existing stored proposal expiry (30 minutes for every current pending interaction) and records ABANDONED idempotently, with no discovery-specific timer; the metric is OUTPUT_GENERATED (delivered), never "viewed", and an `OUTPUT_VIEWED` capability is not completed by delivery; and the DIY project completion is recorded by `diyService`, below the transport layer, so the page and Ask share it. Of 12 controller lifecycle emit sites only DIY has an Ask counterpart today.
+
+**Revision 1.6 — Lifecycle telemetry built (CAP-FR-039H):** discovery selections now carry a bounded, server-validated claim and the server records STARTED, OUTPUT_GENERATED, ABANDONED, and, only when an explicit table declares an authoritative outcome that matches the capability's declared completion kind and verified output entity types, COMPLETED, joined to the `ask_discovery_*` events by capability id, operation id, discovery entry id, source surface, and execution id. An answered execution does not complete a capability. Verified while building it: none of the ten capabilities reachable from Ask discovery declares an output-style completion kind, so discovery reads stop at OUTPUT_GENERATED. §7.5.1 lists the recorded gaps; CAP-FR-039I (target selectors) remains unbuilt.
 
 **Revision 1.5 — Binding layer built (CAP-FR-039G); two capabilities' status recorded (owner decision "option 1", 2026-10-09):** the Ask explorer registry now derives each entry's outcome group, label, and search aliases from the capability registry, takes operation facts from the Ask operation registry, and keeps only Ask-specific facts in a single binding file shared with the capability-card launches. CAP-FR-033 and CAP-FR-038 now hold as written. **Capability changes made to do it:** `seasonal-maintenance` is registered (route `/dashboard/seasonal`, replacing the Knowledge Hub's explicit "Seasonal Maintenance" entry under the same key and slug), and the approved Ask-discovery aliases are merged into existing capabilities' intent aliases from one reviewed map; they are noun phrases, because question-shaped aliases made the Explore Tools goal matcher misread generic messages. **Departure from the decision as worded:** "what changed recently" was not given a new capability, since the registered `home-briefing` capability reads the same canonical property-change store, and a duplicate capability would have been wrong. The registration also repaired pre-existing drift (the Environment Report lacked a parity-inventory row, a lifecycle id, and updated pinned counts). §7.5.1 records what remains: the lifecycle telemetry (CAP-FR-039H) and the target selectors (CAP-FR-039I) are still unbuilt.
 
@@ -462,7 +466,7 @@ Differences from this document found in the 1.3 build, and how the owner closed 
 | --- | --- | --- | --- |
 | Inventory source | A dedicated Ask explorer registry holds each entry's group, label, message, operation, launch policy, aliases, and consequence; the capability catalog only decides which outcome groups appear. | Derive from the canonical registries. The explorer registry becomes a validated binding layer (CAP-FR-039G). CAP-FR-038 stands as written. | **Done (1.5).** The explorer registry derives from the canonical registries; see below. |
 | Approved aliases | Declared per entry in the explorer registry. | Derived from the capability definition's intent aliases; CAP-FR-033 stands as written. | **Done (1.5).** Aliases come from the capability definitions (one reviewed map merged by the factory). |
-| Selection telemetry | `ask_discovery_*` and `ask_explorer_search` events with bounded identifiers. | Keep them, and add the canonical lifecycle stages joined by bounded identifiers (CAP-FR-039H). | Build the correlation and an authoritative outcome signal. |
+| Selection telemetry | `ask_discovery_*` and `ask_explorer_search` events with bounded identifiers. | Keep them, and add the canonical lifecycle stages joined by bounded identifiers (CAP-FR-039H). | **Done (1.6).** Server-side lifecycle events with an explicit authoritative-outcome table; see below. |
 | Ideas needing a chosen entity | "Add a missing detail" and "Continue a project" are not offered. | Enable only through reusable, domain-owned target selectors (CAP-FR-039I); omit until then. | Build the selector contract, the area selector, and the project selector. |
 
 **Built in 1.5 (Phase 5).** The binding layer is `askCapabilityBindings.ts` (the discovery bindings and the capability-card entry reads, one source) and the derivation and validators are in `askExplorerRegistry.ts`; both validators run at startup. A binding is rejected for an unknown capability or operation, for restating canonical metadata, for a label that merely repeats the capability's own, for a workflow-only capability, and when the guidance bridge assigns its operation to a different capability. Findings while building it:
@@ -474,6 +478,8 @@ Differences from this document found in the 1.3 build, and how the owner closed 
 - Three existing card bindings disagree with the bridge and are pinned in a tested allowlist rather than changed: `documents` (no bridge entry for `DOCUMENT_LOOKUP`), `home-records` (the bridge assigns `PROPERTY_SUMMARY` to `property-brief`), and `reserve-fund` (the bridge assigns `CAPITAL_RESERVE_PLAN` to `capital-timeline`).
 - Deriving groups moved DIY under Plan and monitor and coverage gaps under Compare and decide. "Compare contractor quotes" was dropped because `quote-comparison` is workflow-only (CAP-FR-035).
 - The six explorer group titles remain Ask wording over the canonical outcome categories; the frontend Explore Tools catalog restates the same titles, so there is no single backend home for them yet.
+
+**Built in 1.6 (Phase 6).** `askCapabilityLifecycle.ts` plans and records the events; the hooks are in `createAskExecution` (STARTED and the first result) and in the confirm, cancel, and confirmation-expiry paths. The attribution is `launchContext.discovery` (entry id, surface, topic), validated against the reviewed entry's operation and exact message. Idempotency is one `AskExecutionEvent` marker per stage, so there is no schema change. Gaps recorded in 1.6 and closed in 1.7: clarification, property-choice, and capture continuations are hooked; the `ask-pending-expiry` CronJob (`reconcile:ask-pending`, every 15 minutes) expires discovery-launched interactions from their stored expiry and records ABANDONED; the recorded metric is OUTPUT_GENERATED (delivered), never "viewed" (true viewing is unmeasured until client visibility telemetry exists); and the DIY project completion moved from the controller into `diyService`. Still open: the other 11 controller emit sites have no Ask counterpart yet and must be recorded at the service when one appears.
 
 Obstacles to the rebuild, found by reading the registries on October 9, 2026:
 

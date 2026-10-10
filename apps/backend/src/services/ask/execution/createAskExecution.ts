@@ -4,6 +4,7 @@
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
 import { logger } from '../../../lib/logger';
+import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
@@ -257,6 +258,11 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       // Telemetry must never fail the answer the user asked for.
     }
   }
+
+  // Capability discovery lifecycle (IW-SHELL-021). Like the handoff block above, reached only for a genuinely new execution. Fire-and-forget: it
+  // reads the persisted attribution back and ignores anything that does not match a reviewed entry exactly. Held as a promise so the result
+  // event is recorded after it.
+  const lifecycleStarted = input.launchContext?.discovery ? recordAskCapabilityLifecycle(execution.id, 'LAUNCHED') : null;
 
   // Bounded, durable follow-up resolution: reads the most recent typed
   // execution in this session (not raw chat history) and, only for a
@@ -590,6 +596,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       },
     });
     askExecutionsTotal.inc({ operation: operation.operationId, status: result.status, generation_mode: generationMode });
+    if (lifecycleStarted) void lifecycleStarted.then(() => recordAskCapabilityLifecycle(execution.id, 'RESULT'));
     if (handoffAttribution) {
       const launchedOutcome = classifyLaunchedOutcome(handoffAttribution, operation.operationId, result.status);
       if (launchedOutcome) recordHandoffOutcome(launchedOutcome, handoffAttribution);

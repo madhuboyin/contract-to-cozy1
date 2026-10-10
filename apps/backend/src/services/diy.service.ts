@@ -13,6 +13,7 @@ import { evaluateDiyApplicability } from './diy/applicabilityPolicy';
 import { evaluateDiyEligibility } from './diy/eligibilityPolicy';
 import { evaluateTemplateStart } from './diy/templateStartPolicy';
 import { logger } from '../lib/logger';
+import { recordDiyProjectCreated } from './analytics/diyLifecycle';
 import { evaluateStepTransition, openStepsForCompletion, type DiyStepStatusValue } from './diy/stepTransitions';
 import { evaluateAskProjectPolicy, evaluateAskStepPolicy, type AskStepPolicyName } from './diy/askStepPolicy';
 import { buildRevisionContent, checkRevisionIntegrity, computeContentHash, shareLockGovernanceRows } from './diyTemplateRevision.service';
@@ -272,7 +273,7 @@ export class DiyService {
       const materialsJson = (guide.materialsJson as any[]) ?? [];
       const toolsJson = (guide.toolsJson as any[]) ?? [];
 
-      return prisma.$transaction(async (tx) => {
+      const created = await prisma.$transaction(async (tx) => {
         const project = await tx.diyProject.create({
           data: {
             propertyId,
@@ -335,6 +336,9 @@ export class DiyService {
 
         return this.getProjectDetail(project.id, propertyId, tx);
       });
+      // After the transaction commits. The template branch above records the same event inside startProjectFromTemplate.
+      if (created) recordDiyProjectCreated({ userId, propertyId, project: created });
+      return created;
     }
 
     throw new APIError('templateId or aiGuideId required', 400);
@@ -370,7 +374,7 @@ export class DiyService {
     },
   ): Promise<{ outcome: 'CREATED' | 'ALREADY_OPEN'; project: NonNullable<Awaited<ReturnType<DiyService['getProjectDetail']>>> }> {
     const extras = ctx.extras ?? {};
-    return prisma.$transaction(async (tx) => {
+    const started = await prisma.$transaction(async (tx) => {
       if (!(await hasPropertyRoleWithin(tx, ctx.actorUserId, propertyId, 'CONTRIBUTOR'))) {
         throw new APIError('You do not have access to start a project on this property.', 403, 'DIY_ACCESS_REVOKED');
       }
@@ -497,6 +501,10 @@ export class DiyService {
       const detail = await this.getProjectDetail(project.id, propertyId, tx);
       return { outcome: 'CREATED' as const, project: detail! };
     }, { timeout: 15000 });
+    // After the transaction commits, for a project this call actually created (not an ALREADY_OPEN replay). The page and Ask share this authority, so
+    // they share this completion; the controller no longer records it (capability discovery plan, Phase 6 follow-up).
+    if (started.outcome === 'CREATED') recordDiyProjectCreated({ userId: ctx.actorUserId, propertyId, project: started.project });
+    return started;
   }
 
   /**

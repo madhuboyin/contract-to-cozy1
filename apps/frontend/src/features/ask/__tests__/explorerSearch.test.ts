@@ -1,5 +1,5 @@
 import { searchExplorerGroups, normalizeSearchText } from '../explorerSearch';
-import { bucketResultCount, createOnceGate } from '../exploreTelemetry';
+import { bucketResultCount, createOnceGate, discoveryClaimFor } from '../exploreTelemetry';
 import type { AskCapabilityGroup, AskCapabilityPrompt } from '../types';
 
 const prompt = (id: string, categoryId: AskCapabilityPrompt['categoryId'], extra: Partial<AskCapabilityPrompt>): AskCapabilityPrompt => ({
@@ -78,5 +78,15 @@ describe('explore telemetry helpers', () => {
   it('lets a visibility key through once', () => {
     const once = createOnceGate();
     expect([once('p1:topic:HOME_CARE'), once('p1:topic:HOME_CARE'), once('p2:topic:HOME_CARE')]).toEqual([true, false, true]);
+  });
+});
+
+describe('discovery claims', () => {
+  it('names a reviewed entry from More ideas or a landing prompt, and nothing else', () => {
+    expect(discoveryClaimFor({ id: 'maintain-due', operationId: 'MAINTENANCE_STATUS' }, 'EXPLORER')).toEqual({ entryId: 'maintain-due', surface: 'EXPLORER' });
+    expect(discoveryClaimFor({ id: 'maintain-due', operationId: 'MAINTENANCE_STATUS' }, 'DISCOVERY')).toEqual({ entryId: 'maintain-due', surface: 'LANDING_PROMPT' });
+    for (const source of ['PERSONALIZED', 'FALLBACK', 'ATTENTION', 'DECISION']) expect(discoveryClaimFor({ id: 'maintain-due', operationId: 'MAINTENANCE_STATUS' }, source)).toBeUndefined();
+    // A prompt with no declared operation is not a reviewed entry.
+    expect(discoveryClaimFor({ id: 'attention-1' }, 'EXPLORER')).toBeUndefined();
   });
 });

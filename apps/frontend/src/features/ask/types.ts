@@ -346,6 +346,9 @@ export interface CreateAskExecutionPayload {
     sourceExecutionId?: string | null;
     /** Telemetry only (FRD v1.168): the execution whose Skill-handoff card was clicked. Distinct from sourceExecutionId, which drives in-place refresh. */
     handoffFromExecutionId?: string | null;
+    // Capability discovery lifecycle (IW-SHELL-021): which reviewed discovery entry started this turn, and from where. Bounded identifiers; the server
+    // derives the capability and operation and ignores a claim that does not match the entry's operation and message.
+    discovery?: AskDiscoveryClaim | null;
     operationId?: string | null;
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3, evidence upload design (approved 2026-09-22): the id of a Document
     // already uploaded via POST /api/documents/property/:propertyId/evidence-upload, carried the same way
@@ -476,6 +479,8 @@ export interface AskCapabilityPrompt {
     sourceExecutionId?: string;
     // Mirrors CreateAskExecutionPayload.launchContext.handoffFromExecutionId, above.
     handoffFromExecutionId?: string;
+    // Mirrors CreateAskExecutionPayload.launchContext.discovery, above.
+    discovery?: AskDiscoveryClaim;
     // ACT-001/ACT-003: a declared item action's own registered operation,
     // routing directly instead of relying on free-text pattern matching.
     operationId?: string;
@@ -488,10 +493,19 @@ export interface AskCapabilityPrompt {
 
 export type AskDiscoveryTopicId = 'HOME_CARE' | 'DIY_PROJECTS' | 'HOME_RECORD';
 
+export interface AskDiscoveryClaim {
+  entryId: string;
+  surface: 'TOPIC' | 'EXPLORER' | 'LANDING_PROMPT';
+  topicId?: AskDiscoveryTopicId | null;
+}
+
 // Mirrors AskDiscoveryTopic/AskDiscoveryStarter in backend conciergeHome.contract.ts. A starter launches through the ordinary Ask path:
 // its message is the turn and its operationId rides in launchContext.operationId. Selecting a topic is client view state only.
 export interface AskDiscoveryStarter {
   id: string;
+  // Join keys for lifecycle telemetry: the reviewed entry this starter references and its capability, both from the server.
+  entryId: string;
+  capabilityId: string;
   label: string;
   message: string;
   operationId: string;

@@ -2921,12 +2921,12 @@ export async function installAskApi(page: Page, options: { slowAnswerMs?: number
     // Explore with Cozy (capability discovery plan, Phase 2): server-owned topics and starters.
     discoveryTopics: [
       { id: 'HOME_CARE', label: 'Home care', order: 1, indicator: { label: 'need attention', value: 3, sourceVersion: 'acceptance', freshness: 'CURRENT' }, starters: [
-        { id: 'home-care-attention', label: 'What needs attention?', message: 'What needs my attention at home?', operationId: 'HOME_ACTIONS', interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
-        { id: 'home-care-seasonal', label: 'Home care for this season', message: 'What home care should I do this season?', operationId: 'SEASONAL_HOME_CARE', interactionType: 'START_WORKFLOW', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
+        { id: 'home-care-attention', entryId: 'maintain-attention', capabilityId: 'home-operations', label: 'What needs attention?', message: 'What needs my attention at home?', operationId: 'HOME_ACTIONS', interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
+        { id: 'home-care-seasonal', entryId: 'maintain-seasonal', capabilityId: 'seasonal-maintenance', label: 'Home care for this season', message: 'What home care should I do this season?', operationId: 'SEASONAL_HOME_CARE', interactionType: 'START_WORKFLOW', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
       ] },
       { id: 'DIY_PROJECTS', label: 'DIY & Projects', order: 2, indicator: null, starters: [] },
       { id: 'HOME_RECORD', label: 'My Home Record', order: 3, indicator: { label: 'complete', value: '72%', sourceVersion: 'acceptance', freshness: 'CURRENT' }, starters: [
-        { id: 'home-record-summary', label: 'Summarize my home record', message: 'Give me a summary of my home record', operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
+        { id: 'home-record-summary', entryId: 'understand-summary', capabilityId: 'property-brief', label: 'Summarize my home record', message: 'Give me a summary of my home record', operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId } },
       ] },
     ],
     featuredPrompts: [

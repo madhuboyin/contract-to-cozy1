@@ -1003,6 +1003,14 @@ export const CreateAskExecutionRequestSchema = z.object({
       entityId: z.string().trim().min(1).max(160),
       actionId: z.string().trim().min(1).max(160),
     })).min(1).max(30).nullable().optional(),
+    // Capability discovery Phase 6 (Inline Workspace FRD IW-SHELL-021): which reviewed discovery entry started this turn, and from where. Bounded
+    // identifiers only. The server derives the capability and operation from the entry and ignores the attribution unless the declared operation
+    // and the message match that entry exactly, so it is a join key for lifecycle telemetry and nothing more.
+    discovery: z.object({
+      entryId: z.string().trim().min(1).max(80),
+      surface: z.enum(['TOPIC', 'EXPLORER', 'LANDING_PROMPT']),
+      topicId: z.string().trim().min(1).max(40).nullable().optional(),
+    }).strict().nullable().optional(),
   }).optional(),
 }).strict();
 

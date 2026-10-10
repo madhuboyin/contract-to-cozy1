@@ -29,7 +29,8 @@ test('the collapsed rail opens Explore; a topic click sends nothing; Not now kee
   await page.getByRole('button', { name: 'Home care for this season' }).click();
   await expect.poll(() => api.executionBodies.length).toBe(1);
   expect(api.executionBodies[0]).toMatchObject({
-    message: 'What home care should I do this season?', propertyId, launchContext: { operationId: 'SEASONAL_HOME_CARE' },
+    message: 'What home care should I do this season?', propertyId,
+    launchContext: { operationId: 'SEASONAL_HOME_CARE', discovery: { entryId: 'maintain-seasonal', surface: 'TOPIC', topicId: 'HOME_CARE' } },
   });
 });
 
@@ -58,7 +59,8 @@ test('More ideas: search finds a reviewed idea by an approved alias, a pick laun
   await results.getByRole('button').click();
   await expect.poll(() => api.executionBodies.length).toBe(1);
   expect(api.executionBodies[0]).toMatchObject({
-    message: 'Where could I save money on this home?', propertyId, launchContext: { operationId: 'SAVINGS_OPPORTUNITIES' },
+    message: 'Where could I save money on this home?', propertyId,
+    launchContext: { operationId: 'SAVINGS_OPPORTUNITIES', discovery: { entryId: 'save-opportunities', surface: 'EXPLORER' } },
   });
 });
 

@@ -12,6 +12,7 @@ resources:
   - ../../apps/backend/deployment.yaml
   - ../../apps/workers/deployment.yaml
   - ../../apps/backend/ask-retention-cronjob.yaml
+  - ../../apps/backend/ask-pending-expiry-cronjob.yaml
   - ../../ingress/cloudflare-tunnel/deployment.yaml
 
 patchesStrategicMerge:

@@ -8,7 +8,7 @@ import type { AskDiscoveryStarter, AskDiscoveryTopic } from '@/features/ask/type
 // Explore with Cozy, Phase 2 (docs/product/ASK_COZY_LIGHTWEIGHT_CAPABILITY_DISCOVERY_IMPLEMENTATION_PLAN.md). The real components and hook run;
 // the harness stands in for AskWorkspace's wiring (a hidden-not-unmounted conversation, one `send` per starter).
 const starter = (id: string, operationId: string, overrides: Partial<AskDiscoveryStarter> = {}): AskDiscoveryStarter => ({
-  id, label: `Label ${id}`, message: `Message ${id}`, operationId, interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId: 'home-1' }, ...overrides,
+  id, entryId: `entry-${id}`, capabilityId: `cap-${id}`, label: `Label ${id}`, message: `Message ${id}`, operationId, interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId: 'home-1' }, ...overrides,
 });
 const topics: AskDiscoveryTopic[] = [
   { id: 'DIY_PROJECTS', label: 'DIY & Projects', order: 2, indicator: null, starters: [starter('diy-active', 'DIY_PROJECTS')] },

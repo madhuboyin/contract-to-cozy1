@@ -19,7 +19,7 @@ jest.mock('@/lib/api/client', () => ({
 
 const mocked = api as unknown as Record<string, jest.Mock>;
 const ok = (data: unknown) => Promise.resolve({ success: true, data });
-const starter = (id: string, operationId: string, extra = {}) => ({ id, label: `Label ${id}`, message: `Message ${id}`, operationId, interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId: 'home-1' }, ...extra });
+const starter = (id: string, operationId: string, extra = {}) => ({ id, entryId: `entry-${id}`, capabilityId: `cap-${id}`, label: `Label ${id}`, message: `Message ${id}`, operationId, interactionType: 'CONVERSATION_CONTINUE', availability: 'AVAILABLE', reasonCodes: [], entityContext: { propertyId: 'home-1' }, ...extra });
 const conciergeView = (propertyId = 'home-1') => ({
   propertyId, generatedAt: '2026-10-09T00:00:00.000Z',
   journeyContext: { state: 'UNKNOWN', ownershipState: null, operatingMode: 'UNKNOWN', entryPath: null, propertyOrigin: null, contextVersion: null, capturedAt: null },
@@ -91,6 +91,8 @@ describe('AskWorkspace Explore with Cozy wiring', () => {
     expect(request.message).toBe('Message care-seasonal');
     expect(request.propertyId).toBe('home-1');
     expect(request.launchContext).toEqual(expect.objectContaining({ operationId: 'SEASONAL_HOME_CARE', surface: 'ASK_PAGE' }));
+    // The server derives the capability from this entry; the claim carries only bounded identifiers.
+    expect(request.launchContext.discovery).toEqual({ entryId: 'entry-care-seasonal', surface: 'TOPIC', topicId: 'HOME_CARE' });
   });
 
   it('the collapsed rail button opens the first topic without sending anything', async () => {
@@ -151,10 +153,10 @@ describe('AskWorkspace Explore with Cozy wiring', () => {
       'ask_discovery_starter_selected', 'ask_discovery_started', 'ask_discovery_completed',
     ]);
     expect(discovery.filter(([name]) => name === 'ask_discovery_topic_visible').map(([, props]) => props.topicId)).toEqual(['HOME_CARE', 'DIY_PROJECTS', 'HOME_RECORD']);
-    const ids = { propertyId: 'home-1', topicId: 'HOME_CARE', starterId: 'care-seasonal', operationId: 'SEASONAL_HOME_CARE' };
+    const ids = { propertyId: 'home-1', topicId: 'HOME_CARE', starterId: 'care-seasonal', entryId: 'entry-care-seasonal', capabilityId: 'cap-care-seasonal', operationId: 'SEASONAL_HOME_CARE' };
     expect(discovery.find(([name]) => name === 'ask_discovery_topic_opened')![1]).toEqual({ propertyId: 'home-1', topicId: 'HOME_CARE', surface: 'DISCLOSURE' });
     expect(discovery.find(([name]) => name === 'ask_discovery_started')![1]).toEqual(ids);
-    expect(discovery.find(([name]) => name === 'ask_discovery_completed')![1]).toEqual({ ...ids, status: 'ANSWERED', succeeded: true });
+    expect(discovery.find(([name]) => name === 'ask_discovery_completed')![1]).toEqual({ ...ids, executionId: 'ex-1', status: 'ANSWERED', succeeded: true });
     // Privacy: no label, message or phrase appears in any event.
     expect(JSON.stringify(events())).not.toMatch(/Label care-seasonal|Message care-seasonal|Home care for this season/);
   });
@@ -201,7 +203,7 @@ describe('AskWorkspace Explore with Cozy wiring', () => {
     await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: /Home care for this season/ })); });
     expect(mocked.createAskExecution).toHaveBeenCalledTimes(1);
     expect(mocked.createAskExecution.mock.calls[0][0]).toEqual(expect.objectContaining({
-      message: 'What home care should I do this season?', launchContext: expect.objectContaining({ operationId: 'SEASONAL_HOME_CARE' }),
+      message: 'What home care should I do this season?', launchContext: expect.objectContaining({ operationId: 'SEASONAL_HOME_CARE', discovery: { entryId: 'maintain-seasonal', surface: 'EXPLORER' } }),
     }));
     expect(events().filter(([name]) => name === 'ask_explorer_search').map(([, props]) => props)).toEqual([{ propertyId: 'home-1', resultBucket: '1', selected: true }]);
     expect(JSON.stringify(events())).not.toMatch(/winter/);

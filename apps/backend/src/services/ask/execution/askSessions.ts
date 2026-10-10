@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
 import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
@@ -167,7 +168,7 @@ function pendingActionLabel(status: AskExecutionStatus): string {
   return 'Answer one question';
 }
 
-function pendingInteractionExpiresAt(execution: { resultJson: Prisma.JsonValue | null }): Date | null {
+export function pendingInteractionExpiresAt(execution: { resultJson: Prisma.JsonValue | null }): Date | null {
   if (!execution.resultJson || typeof execution.resultJson !== 'object' || Array.isArray(execution.resultJson)) return null;
   const result = execution.resultJson as { clarification?: unknown; confirmation?: unknown };
   const interaction = result.clarification && typeof result.clarification === 'object' && !Array.isArray(result.clarification)
@@ -217,7 +218,7 @@ export async function reclaimOrphanedRunningExecution(execution: AskExecution): 
   return prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
 }
 
-async function expirePendingInteraction(execution: AskExecution): Promise<AskExecution> {
+export async function expirePendingInteraction(execution: AskExecution): Promise<AskExecution> {
   if (execution.status === 'RUNNING') return reclaimOrphanedRunningExecution(execution);
   const interactionExpiresAt = pendingInteractionExpiresAt(execution);
   if (!interactionExpiresAt || interactionExpiresAt > new Date()) return execution;
@@ -239,6 +240,8 @@ async function expirePendingInteraction(execution: AskExecution): Promise<AskExe
   });
   if (updated.count === 1) {
     await prisma.askExecutionEvent.create({ data: { executionId: execution.id, eventType: 'EXPIRED', metadataJson: asInputJson({ reason: 'PENDING_INTERACTION_EXPIRED' }) } });
+    // The authoritative expiry of a pending proposal or question. Lazy expiry (someone opens it) and the reconciliation sweep both land here.
+    void recordAskCapabilityLifecycle(execution.id, 'EXPIRED');
   }
   return prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
 }

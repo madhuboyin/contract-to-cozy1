@@ -61,11 +61,11 @@ export const ASK_DISCOVERY_TOPICS: readonly AskDiscoveryTopicDefinition[] = Obje
   },
 ]);
 
-interface ResolvedStarter { id: string; label: string; message: string; operationId: AskOperationId; interactionType: AskDiscoveryStarter['interactionType'] }
+interface ResolvedStarter { id: string; entryId: string; capabilityId: string; label: string; message: string; operationId: AskOperationId; interactionType: AskDiscoveryStarter['interactionType'] }
 
 function resolveStarter(definition: AskDiscoveryStarterDefinition): ResolvedStarter | null {
   const entry = explorerEntryById(definition.entryId);
-  return entry ? { id: definition.id, label: entry.label, message: entry.question, operationId: entry.operationId, interactionType: entry.interactionType } : null;
+  return entry ? { id: definition.id, entryId: entry.id, capabilityId: entry.capabilityId, label: entry.label, message: entry.question, operationId: entry.operationId, interactionType: entry.interactionType } : null;
 }
 
 const ROLE_RANK: Record<HouseholdRole, number> = { VIEWER: 1, CONTRIBUTOR: 2, OWNER: 3 };
@@ -118,7 +118,7 @@ export interface AskDiscoveryProjectionInput {
 function projectStarter(definition: ResolvedStarter, input: AskDiscoveryProjectionInput): AskDiscoveryStarter | null {
   const operation = getAskOperationDefinition(definition.operationId);
   const base = {
-    id: definition.id, label: definition.label, message: definition.message, operationId: definition.operationId,
+    id: definition.id, entryId: definition.entryId, capabilityId: definition.capabilityId, label: definition.label, message: definition.message, operationId: definition.operationId,
     interactionType: definition.interactionType, entityContext: { propertyId: input.propertyId },
   };
   // Fail closed and quiet, like every other Concierge Home discovery surface: a disabled, runtime-unavailable or audience-hidden
