@@ -145,7 +145,6 @@ export async function homeDeadlineMonitorResult(userId: string, propertyId: stri
       ? { warrantyId: warranty.id }
       : { insurancePolicyId: policy!.id });
   } catch (error) {
-    const details = (error as { details?: { resolutionPath?: string } }).details;
     return {
       status: 'NEEDS_CONTEXT',
       reasonCode: 'COVERAGE_CONFLICT_REVIEW_REQUIRED',
@@ -153,9 +152,11 @@ export async function homeDeadlineMonitorResult(userId: string, propertyId: stri
       parameters: {},
       blocks: [{
         type: 'SUMMARY', id: 'coverage-conflict', title: 'Resolve the coverage conflict first',
-        body: 'Two records disagree, so Ask will not choose one for an expiration reminder. Review both sources and select the correct record.',
+        body: warranty
+          ? 'Two warranty records disagree, so Ask will not choose one for an expiration reminder. Ask cannot resolve warranty disagreements yet.'
+          : 'A newly extracted insurance value disagrees with the one you confirmed, so Ask will not choose one for an expiration reminder. Review the pending values and confirm or reject each one.',
         tone: 'CAUTION',
-        actions: [{ id: 'resolve-coverage-conflict', label: 'Resolve coverage conflict', href: details?.resolutionPath ?? '/dashboard/insurance', style: 'PRIMARY' }],
+        actions: warranty ? [] : [{ id: 'resolve-coverage-conflict', label: 'Review pending policy values', interactionType: 'START_WORKFLOW' as const, message: 'Show my pending document reviews', operationId: 'DOCUMENT_PROMOTION_REVIEW' as const, style: 'PRIMARY' as const }],
       }],
       captureRequests: [], suggestions: [],
     };
