@@ -4,6 +4,8 @@
 
 Live Project Execution Tracker gives homeowners a structured workspace for managing a contractor-executed home project from signed contract through final payment and warranty period. It covers the gap in the current platform: Contract to Cozy handles everything before a renovation (risk assessment, permits, quotes, price finalization, financing) and everything after (material specs, home timeline, Digital Twin update, capital plan), but nothing during the weeks or months the work is actually happening.
 
+Ask Cozy channel parity, implementation mapping, and residual conversational gaps are tracked in [`ASK_COZY_PROJECT_TRACKER_PARITY_IMPLEMENTATION.md`](../product/ASK_COZY_PROJECT_TRACKER_PARITY_IMPLEMENTATION.md). This FRD remains the authoritative source for Project Tracker product behavior.
+
 That gap is where homeowners lose the most money. Scope creep goes untracked. Payments are made before milestones are verified. Permit inspections are missed. Progress photos vanish in text threads. Contractor disputes have no paper trail.
 
 **Core differentiation from generic project management tools.** A spreadsheet or Notion board can track milestones. What no generic tool can do is connect project execution to the homeowner's live property record: permit inspection checkpoints from the Permit Tracker surface automatically as project milestones; when work is complete, the Digital Twin condition scores update, Capital Timeline replacement clocks reset, Material Specs populate, and the completed project becomes part of the property's resale documentation in the Vault. The project record is not a standalone document — it is a transaction in the home's living data.
