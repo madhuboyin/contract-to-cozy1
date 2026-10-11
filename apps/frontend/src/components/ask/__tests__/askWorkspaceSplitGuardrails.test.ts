@@ -81,6 +81,18 @@ describe('AskWorkspace split guardrails', () => {
     expect(controls).toContain("compact ? 'w-full' : ''");
   });
 
+  it('keeps timeline-event capture compact and removes nested field cards', () => {
+    const source = read(path.join(workspaceDir, 'CaptureCards.tsx'));
+    const controls = read(path.join(askDir, '..', 'property-context', 'CaptureFieldControl.tsx'));
+    expect(source).toContain("request.captureKey === 'CAPTURE_EVENT_ADD'");
+    expect(source).toContain("compactEventAdd ? 'timeline-event'");
+    expect(source).toContain("['title', 'type', 'summary'].includes(field.key)");
+    expect(source).toContain("'md:col-span-6'");
+    expect(source).toContain("'md:col-span-2'");
+    expect(controls).toContain("compact ? 'h-full min-w-0 border-0 p-0'");
+    expect(controls).not.toContain("compact ? 'h-full min-w-0 rounded-xl border");
+  });
+
   it('pins the full-page composer to a stable dynamic viewport without sticky positioning', () => {
     const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
     const layout = read(dashboardLayout);

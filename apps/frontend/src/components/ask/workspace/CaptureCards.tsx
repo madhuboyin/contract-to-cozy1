@@ -496,7 +496,8 @@ export function InlineCaptureCard({
   const compactMaterialSpec = schema.type === 'GROUP' && request.captureKey === 'MATERIAL_SPEC_INPUTS';
   const compactPlantAdvisor = schema.type === 'GROUP' && request.captureKey === 'ROOM_PLANT_RECOMMENDATION_INPUTS';
   const compactOwnershipScenario = schema.type === 'GROUP' && request.captureKey === 'OWNERSHIP_COST_SCENARIO_INPUTS';
-  const compactWorkflow = compactMaintenanceTask || compactInventoryCreate || compactInventoryCompletion || compactMaterialSpec || compactPlantAdvisor || compactOwnershipScenario;
+  const compactEventAdd = schema.type === 'GROUP' && request.captureKey === 'CAPTURE_EVENT_ADD';
+  const compactWorkflow = compactMaintenanceTask || compactInventoryCreate || compactInventoryCompletion || compactMaterialSpec || compactPlantAdvisor || compactOwnershipScenario || compactEventAdd;
   const missingRequired = activeFields.some((field) => {
     if (!field.required) return false;
     const value = values[field.key];
@@ -553,14 +554,23 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border p-4', policy.border)} aria-busy={saving}>
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">{policy.eyebrow}</p>
-      <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
-      <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
-      {request.helpText && <p className="mt-1 text-xs leading-5 text-slate-500">{request.helpText}</p>}
-      {policy.note && <p className="mt-2 text-xs font-semibold leading-5 text-slate-700">{policy.note}</p>}
-      {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel} after you continue.</p>}
-      <div className={compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : undefined}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactEventAdd ? 'p-3 sm:p-4' : 'p-4', policy.border)} aria-busy={saving} aria-label={request.title}>
+      {compactEventAdd ? (
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="text-sm font-semibold text-slate-950">Event details</p>
+          <p className="text-xs leading-4 text-slate-600">Required: title, type and date (YYYY-MM-DD). You’ll review before anything is saved.</p>
+        </div>
+      ) : (
+        <>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">{policy.eyebrow}</p>
+          <h3 className="mt-1 font-semibold text-slate-950">{request.title}</h3>
+          <p className="mt-1 text-sm leading-5 text-slate-700">{request.question}</p>
+          {request.helpText && <p className="mt-1 text-xs leading-5 text-slate-500">{request.helpText}</p>}
+          {policy.note && <p className="mt-2 text-xs font-semibold leading-5 text-slate-700">{policy.note}</p>}
+          {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel} after you continue.</p>}
+        </>
+      )}
+      <div className={compactEventAdd ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : undefined}>
         {activeFields.map((field) => {
           const inventoryCreateFullWidth = compactInventoryCreate && (field.key === 'name' || field.key === 'category');
           const fullWidth = compactMaintenanceTask
@@ -568,8 +578,12 @@ export function InlineCaptureCard({
             : inventoryCreateFullWidth
               || (compactMaterialSpec && ['category', 'label', 'roomId', 'supplier', 'notes'].includes(field.key))
               || (compactPlantAdvisor && ['goals', 'notes'].includes(field.key))
-              || (compactOwnershipScenario && field.key === 'name');
-          return <div key={field.key} className={fullWidth ? 'md:col-span-2' : undefined}><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>;
+              || (compactOwnershipScenario && field.key === 'name')
+              || (compactEventAdd && ['title', 'type', 'summary'].includes(field.key));
+          const fieldLayout = compactEventAdd
+            ? fullWidth ? 'md:col-span-6' : 'md:col-span-2'
+            : fullWidth ? 'md:col-span-2' : undefined;
+          return <div key={field.key} className={fieldLayout}><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>;
         })}
       </div>
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
@@ -579,7 +593,7 @@ export function InlineCaptureCard({
           <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
         </label>
       )}
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className={cn('flex flex-wrap gap-2', compactEventAdd ? 'mt-3' : 'mt-4')}>
         <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>
         {request.skippable && <button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, true)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Skip for now</button>}
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
