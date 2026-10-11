@@ -9,6 +9,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 import { getFinancialContextDecisions } from '../../financialContext/context';
 import { homeReserveFundService } from '../../homeReserveFund.service';
+import { homeReserveFundReconciliationService } from '../../homeReserveFundReconciliation.service';
 import { humanDate, money } from '../askFormatting';
 import { inventoryAddItemAction } from './inventoryAskActions';
 import { askCaptureRequest, capabilityResult, ensurePropertyAccess, isCapitalTimelineAnalysisStale, parseCapitalTimelineHorizonRequest } from '../askHandlerSupport';
@@ -18,6 +19,7 @@ import { listRenovationCases } from '../../renovationCase.service';
 import { getReadiness as getRenovationReadiness } from '../../renovationReadiness.service';
 import { PermitTrackerService } from '../../permitTracker.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
+import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE } from '../support/reserveFundConstants';
 
 const homeCapitalTimelineService = new HomeCapitalTimelineService();
 
@@ -113,8 +115,18 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
     const priorAssumptionSetId = typeof analysis?.inputsSnapshot?.assumptionSetId === 'string' ? analysis.inputsSnapshot.assumptionSetId : undefined;
     analysis = await homeCapitalTimelineService.runTimeline(propertyId, property.homeownerProfileId, requestedHorizon ?? analysis?.horizonYears ?? 10, { assumptionSetId: priorAssumptionSetId, createdByUserId: userId, propertyContextVersion: capitalContext.contextVersion, awaitReserveFundSync: true });
   }
-  const fund: any = await homeReserveFundService.getSummary(propertyId);
-  const lineItems: any[] = await homeReserveFundService.listLineItems(propertyId, { status: 'ACTIVE' });
+  const [fund, allLineItems, contributionPage, reconciliationSuggestions]: any[] = await Promise.all([
+    homeReserveFundService.getSummary(propertyId),
+    homeReserveFundService.listLineItems(propertyId),
+    homeReserveFundService.listContributions(propertyId, { limit: 20 }),
+    homeReserveFundReconciliationService.findMatchSuggestions(propertyId),
+  ]);
+  const lineItems: any[] = allLineItems.filter((line: any) => line.status === 'ACTIVE');
+  const retiredLineItems: any[] = allLineItems.filter((line: any) => line.status !== 'ACTIVE');
+  const contributions: any[] = contributionPage.items ?? [];
+  const canManage = access.role !== HouseholdRole.VIEWER;
+  type ReserveItemAction = NonNullable<Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number]['items'][number]['actions']>[number];
+  const commandAction = (id: string, label: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY'): ReserveItemAction => ({ id, label, interactionType: 'MUTATE_RECORD', message: RESERVE_FUND_COMMAND_MESSAGE, operationId: 'RESERVE_FUND_COMMAND', style });
   if (!analysis || !Array.isArray(analysis.items) || analysis.items.length === 0) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'CAPITAL_PLAN_INVENTORY_REQUIRED', contextVersion: capitalContext.contextVersion, parameters: { phase5CaptureFeature: captureFeature }, captureRequests,
     blocks: [{ type: 'SUMMARY', id: 'capital-plan-empty', title: 'Add at least one major appliance or system to build a capital plan', body: 'A reserve target without recorded systems would be a generic guess. Add the roof, HVAC, water heater, appliances, or other capital items and Ask will calculate a property-specific timeline.', tone: 'CAUTION', actions: [{ ...inventoryAddItemAction(), label: 'Add home systems' }] }],
@@ -124,18 +136,20 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
   const upcoming = items.slice().sort((a, b) => new Date(a.windowStart).getTime() - new Date(b.windowStart).getTime()).slice(0, 12);
   const totalLow = upcoming.reduce((sum, item) => sum + (item.estimatedCostMinCents ?? 0), 0);
   const totalHigh = upcoming.reduce((sum, item) => sum + (item.estimatedCostMaxCents ?? 0), 0);
+  const targetTotalCents = lineItems.reduce((sum, line) => sum + (line.targetCostCents ?? 0), 0);
+  const progress = targetTotalCents > 0 ? Math.min(100, Math.max(0, ((fund.currentBalanceCents ?? 0) / targetTotalCents) * 100)) : 0;
   const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'capital-reserve-summary', title: `${upcoming.length} upcoming capital event${upcoming.length === 1 ? '' : 's'} are in the current plan`,
-    body: `The modeled cost range for the displayed ${analysis.horizonYears ?? 10}-year horizon is ${money(totalLow / 100)}–${money(totalHigh / 100)}. The canonical reserve plan currently suggests ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month and records a ${money((fund.currentShortfallCents ?? 0) / 100)} shortfall.`,
+    type: 'SUMMARY', id: 'capital-reserve-summary', title: `${money((fund.currentBalanceCents ?? 0) / 100)} saved toward a ${money(targetTotalCents / 100)} reserve target`,
+    body: `${progress.toFixed(0)}% funded. The current ${String(fund.posture).toLowerCase()} plan suggests ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month and records a ${money((fund.currentShortfallCents ?? 0) / 100)} near-term shortfall. The modeled cost range for the displayed ${analysis.horizonYears ?? 10}-year horizon is ${money(totalLow / 100)}–${money(totalHigh / 100)}.`,
     tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT', actions: [
-      { id: 'open-timeline', label: 'Open capital timeline', href, style: 'PRIMARY' }, { id: 'open-reserve', label: 'Open reserve fund', href: reserveHref, style: 'SECONDARY' },
       // Horizon re-run (FRD Appendix D planning/refinement follow-up): re-invokes this same CAPITAL_RESERVE_PLAN
       // operation with an explicit horizon in the message, mirroring the traditional page's own 5yr/10yr toggle --
       // only offers the horizon NOT currently shown, same as a two-state toggle rather than two redundant buttons.
-      ...(analysis.horizonYears !== 5 ? [{ id: 'rerun-horizon-5', label: 'Show 5-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 5-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
-      ...(analysis.horizonYears !== 10 ? [{ id: 'rerun-horizon-10', label: 'Show 10-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 10-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
+      ...(analysis.horizonYears !== 5 ? [{ id: 'rerun-horizon-5', label: 'Show 5-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 5-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : analysis.horizonYears !== 10 ? [{ id: 'rerun-horizon-10', label: 'Show 10-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 10-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
     ],
-  }, capitalTimelineBlock(upcoming, items.length, href),
+  },
+  { type: 'GROUPED_LIST', filters: [], id: 'reserve-planning-controls', title: 'Manage the reserve plan', description: `The current posture is ${String(fund.posture).toLowerCase()}. Conservative uses the high estimate, moderate uses the midpoint, and aggressive uses the low estimate. Recommended monthly funding is the sum of each smoothable target divided by its months remaining; needs due within six months are shown as shortfall instead.`, sections: [{ id: 'fund-actions', title: 'Balance and calculation', count: 2, items: [{ id: 'add-contribution', title: 'Log a balance change', description: 'Record a deposit, withdrawal, or balance correction. No money is transferred.', meta: ['Self-reported ledger'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, 'Log contribution', 'PRIMARY')] } : {}) }, { id: 'recalculate', title: 'Recalculate from current records', description: 'Refresh targets and allocations from the canonical Capital Timeline and property context.', meta: [fund.lastRecalculatedAt ? `Last recalculated ${humanDate(new Date(fund.lastRecalculatedAt))}` : 'Not recalculated yet'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.RECALCULATE, 'Recalculate plan')] } : {}) }] }, { id: 'postures', title: 'Choose how estimates are planned', count: 3, items: (['CONSERVATIVE', 'MODERATE', 'AGGRESSIVE'] as const).map((posture) => ({ id: posture, title: posture[0] + posture.slice(1).toLowerCase(), description: posture === 'CONSERVATIVE' ? 'Plans from the high end of each cost range.' : posture === 'MODERATE' ? 'Plans from the midpoint of each cost range.' : 'Plans from the low end of each cost range.', meta: [fund.posture === posture ? 'Current posture' : 'Available'], status: fund.posture === posture ? 'CURRENT' : 'AVAILABLE', entityType: 'RESERVE_FUND_POSTURE', ...(canManage && fund.posture !== posture ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS[`POSTURE_${posture}`], `Use ${posture.toLowerCase()}`)] } : {}) })) }], actions: [] },
+  capitalTimelineBlock(upcoming, items.length, href),
   // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: entityType routes these
   // through ReserveAllocationResultList (GroupedListBlock.tsx) instead of the generic href-only renderer, opening
   // canonical detail inline -- a fresh re-fetch via the existing GET .../reserve-fund/line-items list endpoint
@@ -147,6 +161,9 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
     // A footer link to the same Reserve Fund read is redundant; the summary's
     // top-level action remains available to jump down to this section.
     actions: [] },
+  ...(retiredLineItems.length ? [{ type: 'GROUPED_LIST' as const, filters: [], id: 'reserve-retired-items', title: 'Retired reserve items', description: 'These items no longer contribute to the active monthly recommendation.', sections: [{ id: 'retired', title: 'Retired items', count: retiredLineItems.length, items: retiredLineItems.slice(0, 20).map((line: any) => ({ id: String(line.id), title: String(line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' ')), description: line.retiredReason ? `Retired: ${String(line.retiredReason).toLowerCase().replace(/_/g, ' ')}` : 'Retired', meta: [line.retiredAt ? humanDate(new Date(line.retiredAt)) : 'Date not recorded'], status: String(line.status), entityType: 'RESERVE_LINE_ITEM' })) }], actions: [] }] : []),
+  { type: 'GROUPED_LIST', filters: [], id: 'reserve-contribution-ledger', title: 'Contribution ledger', description: `Current balance: ${money((fund.currentBalanceCents ?? 0) / 100)}. This ledger is self-reported; it is not connected to a bank and does not move money.${contributionPage.nextCursor ? ' Showing the 20 most recent entries.' : ''}`, sections: [{ id: 'contributions', title: 'Recent entries', count: contributions.length + (contributionPage.nextCursor ? 1 : 0), items: contributions.map((entry: any) => ({ id: String(entry.id), title: `${entry.amountCents >= 0 ? '+' : '−'}${money(Math.abs(entry.amountCents) / 100)} · ${String(entry.type).toLowerCase().replace(/_/g, ' ')}`, description: entry.note == null ? null : String(entry.note), meta: [humanDate(new Date(entry.occurredAt))], status: 'RECORDED', entityType: 'RESERVE_FUND_CONTRIBUTION', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.REMOVE_CONTRIBUTION, 'Remove entry', 'QUIET')] } : {}) })) }], actions: [] },
+  ...(reconciliationSuggestions.length ? [{ type: 'GROUPED_LIST' as const, filters: [], id: 'reserve-reconciliation-suggestions', title: 'Expenses that may complete a reserve item', description: 'These are suggestions based on category, amount, and timing. Nothing is retired automatically.', sections: [{ id: 'matches', title: 'Review matches', count: reconciliationSuggestions.length, items: reconciliationSuggestions.map((suggestion: any) => ({ id: `${suggestion.lineItemId}:${suggestion.expenseId}`, title: String(suggestion.expenseDescription), description: `${money(suggestion.expenseAmount)} on ${humanDate(new Date(suggestion.expenseDate))}`, meta: ['Possible reserve match'], status: 'REVIEW', entityType: 'RESERVE_RECONCILIATION', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.ACCEPT_RECONCILIATION, 'Mark item retired', 'PRIMARY')] } : {}) })) }], actions: [] }] : []),
   { type: 'EVIDENCE', id: 'capital-plan-evidence', title: 'Planning sources and freshness', items: upcoming.map((item) => ({ label: item.inventoryItem?.name ?? String(item.category), source: `Home Capital Timeline · ${String(item.confidence).toLowerCase()} confidence`, observedAt: analysis.computedAt?.toISOString?.() ?? String(analysis.computedAt) })) },
   { type: 'BOUNDARY', id: 'capital-plan-boundary', title: 'Planning range—not a guaranteed expense schedule', body: 'Actual condition, inspections, maintenance, local labor and material prices, financing, insurance, and homeowner choices can move timing and cost. Keep emergency savings and capital reserves conceptually separate.', severity: 'INFO', suggestions: [] }];
   const firstNamedItem = upcoming.find((item) => item.inventoryItem?.name)?.inventoryItem?.name;

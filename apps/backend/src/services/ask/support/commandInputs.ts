@@ -294,6 +294,17 @@ export const OwnershipCostScenarioRenameInputSchema = z.object({
   name: z.string().trim().min(1).max(80),
 }).strict();
 
+export const ReserveFundContributionInputSchema = z.object({
+  type: z.enum(['DEPOSIT', 'WITHDRAWAL', 'BALANCE_CORRECTION']),
+  amountDollars: z.coerce.number().positive().max(100_000_000),
+  direction: z.enum(['INCREASE', 'DECREASE']).default('INCREASE'),
+  occurredAt: z.union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    z.object({ precision: z.literal('EXACT_DATE'), value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict().transform((value) => value.value),
+  ]).nullable().optional().default(null),
+  note: z.string().trim().max(500).nullable().optional().default(null),
+}).strict();
+
 // Do-Nothing run (DO_NOTHING_SIMULATION_RUN): one of the four horizons the simulator accepts, and optionally one saved scenario. The form answers with
 // text; the stored input holds the number.
 export const DoNothingRunInputSchema = z.object({

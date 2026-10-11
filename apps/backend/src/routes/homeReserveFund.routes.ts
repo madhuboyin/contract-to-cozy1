@@ -1,7 +1,7 @@
 // apps/backend/src/routes/homeReserveFund.routes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
@@ -38,6 +38,7 @@ router.get('/properties/:propertyId/reserve-fund', propertyAuthMiddleware, getFu
 router.patch(
   '/properties/:propertyId/reserve-fund',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updateFundBodySchema),
   updateFund,
 );
@@ -45,6 +46,7 @@ router.patch(
 router.post(
   '/properties/:propertyId/reserve-fund/recalculate',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   recalculateFund,
 );
 
@@ -59,6 +61,7 @@ router.get(
 router.post(
   '/properties/:propertyId/reserve-fund/line-items/:lineItemId/retire',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(retireLineItemBodySchema),
   retireLineItem,
 );
@@ -74,6 +77,7 @@ router.get(
 router.post(
   '/properties/:propertyId/reserve-fund/contributions',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(addContributionBodySchema),
   addContribution,
 );
@@ -81,6 +85,7 @@ router.post(
 router.delete(
   '/properties/:propertyId/reserve-fund/contributions/:contributionId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   removeContribution,
 );
 
@@ -95,6 +100,7 @@ router.get(
 router.post(
   '/properties/:propertyId/reserve-fund/reconciliation-suggestions/accept',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(acceptReconciliationMatchBodySchema),
   acceptReconciliationMatch,
 );

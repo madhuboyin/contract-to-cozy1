@@ -1135,6 +1135,15 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     reconciliation: { status: 'TRACED', notes: 'Completion links back to the current Ownership Costs read; the next read always refreshes canonical sources.' },
     handoff: { status: 'TRACED', notes: 'The workflow remains in Ask; downstream category owners are launched as registered Ask operations.' },
   },
+  RESERVE_FUND_COMMAND: {
+    track: 'Financial and ownership', rollClass: 'CONFIRMED_MUTATION', canonicalOwner: 'reserve-fund.command', roleFloor: 'CONTRIBUTOR', messageRoutable: false, confirmationCapable: true, correctionModes: ['EDIT'],
+    note: 'Declared actions manage the self-reported contribution ledger, reserve posture, recalculation, and expense-match retirement through the same canonical services as the Reserve Fund Planner.',
+    uiSurface: { status: 'TRACED', notes: 'Shared capture, confirmation and workflow-progress renderers; actions launch from the reserve summary, planning controls, ledger, and reconciliation suggestions.' },
+    freshnessSource: { status: 'TRACED', notes: 'Confirmation re-scopes every target to the property; recalculation and posture changes use the current financial context version.' },
+    idempotency: { status: 'TRACED', notes: 'The shared confirmation receipt prevents replay; contribution and reconciliation writes retain canonical record identities.' },
+    reconciliation: { status: 'TRACED', notes: 'The mutation impact map refreshes CAPITAL_RESERVE_PLAN after completion.' },
+    handoff: { status: 'TRACED', notes: 'The complete reserve workflow remains in Ask.' },
+  },
   HOME_HABITS_GENERATE: {
     track: 'Records and capture',
     rollClass: 'CONFIRMED_MUTATION',

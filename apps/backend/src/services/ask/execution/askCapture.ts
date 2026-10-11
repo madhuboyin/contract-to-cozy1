@@ -37,7 +37,7 @@ import { executeOperation } from '../execution/executeOperation';
 import { homeJourneyContextVersion, homeJourneyResult, purchaseDateContextVersion, purchaseDateResult } from '../handlers/homeSettingsWrites.handler';
 import { HOME_JOURNEY_CAPTURE_KEY, PURCHASE_DATE_CAPTURE_KEY } from '../support/homeSettingsConstants';
 import { HOME_PLANT_CAPTURE_KEY, MATERIAL_SPEC_CAPTURE_KEY } from '../support/homeRecordAddConstants';
-import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecisionInputSchema, OwnershipCostScenarioInputSchema, OwnershipCostScenarioRenameInputSchema } from '../support/commandInputs';
+import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecisionInputSchema, OwnershipCostScenarioInputSchema, OwnershipCostScenarioRenameInputSchema, ReserveFundContributionInputSchema } from '../support/commandInputs';
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, materialSpecAddResult, materialSpecContextVersion } from '../handlers/homeRecordAdds.handler';
 import { plantRecommendationContextVersion, roomPlantRecommendationResult } from '../handlers/plantRecommendations.handler';
@@ -52,6 +52,8 @@ import { ASK_OPERATION_CAPABILITY } from '../../intelligence/capabilitySkillGuid
 import { homeDeadlineMonitorResult } from '../handlers/miscHandlers.handler';
 import { ownershipCostCommandResult } from '../handlers/ownershipCostCommands.handler';
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_DECISION_CAPTURE_KEY, OWNERSHIP_COST_SCENARIO_CAPTURE_KEY } from '../support/ownershipCostConstants';
+import { reserveFundCommandResult } from '../handlers/reserveFundCommands.handler';
+import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -311,7 +313,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     // anything.
     // The Home Event Radar forms (FRD v1.41) are the same: their canned message is only honored with its declared
     // launchContext, which a replay does not have, so re-executing would replace the review card with a boundary.
-    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES' || execution.operationId === 'OWNERSHIP_COST_COMMAND') {
+    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES' || execution.operationId === 'OWNERSHIP_COST_COMMAND' || execution.operationId === 'RESERVE_FUND_COMMAND') {
       askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
       return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
     }
@@ -334,7 +336,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -821,6 +823,21 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = 'ownership-cost-live';
     canonicalOwner = 'OwnershipCostPlanning';
+  } else if (execution.operationId === 'RESERVE_FUND_COMMAND') {
+    if (input.captureKey !== RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY || input.expectedContextVersion !== 'reserve-fund-live') {
+      throw Object.assign(new Error('This reserve-fund form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the Reserve Fund.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const launch = storedParameters.reserveFundLaunch && typeof storedParameters.reserveFundLaunch === 'object' && !Array.isArray(storedParameters.reserveFundLaunch) ? storedParameters.reserveFundLaunch as { actionId?: string; entityId?: string; sourceExecutionId?: string } : null;
+    if (launch?.actionId !== RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION) throw Object.assign(new Error('This reserve-fund action is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const answer = ReserveFundContributionInputSchema.safeParse(input.answer);
+    if (!answer.success) throw Object.assign(new Error('Choose a valid entry type and enter a positive amount.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await reserveFundCommandResult(userId, execution.propertyId, launch, answer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = 'reserve-fund-live';
+    canonicalOwner = 'HomeReserveFundContribution';
   } else if (execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES') {
     const isTask = execution.operationId === 'HOME_EVENT_RADAR_TASK';
     if (input.captureKey !== (isTask ? RADAR_TASK_CAPTURE_KEY : RADAR_PREFERENCES_CAPTURE_KEY)) {
