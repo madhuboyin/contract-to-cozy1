@@ -39,3 +39,21 @@ test('Cards/List choice persists without dropping item identity or status', asyn
   await waitFor(() => expect(screen.getByRole('button', { name: 'Cards' })).toHaveAttribute('aria-pressed', 'true'));
   expect(restored.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(5);
 });
+
+test('each section independently honors its declared initial visible count', () => {
+  const bounded: GroupedList = {
+    ...block,
+    sections: [
+      { ...block.sections[0], initialVisibleCount: 2 },
+      { id: 'older', title: 'Older', count: 4, initialVisibleCount: 1, items: Array.from({ length: 4 }, (_, index) => ({ id: `older-${index}`, title: `Older ${index}`, meta: [] })) },
+    ],
+  };
+  const view = render(<GenericGroupedListBlock block={bounded} executionId="execution" propertyId="home" onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
+
+  expect(view.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(3);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Show 3 more' })[0]);
+  expect(view.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(6);
+  expect(screen.getByRole('button', { name: 'Show 3 more' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Show 3 more' }));
+  expect(view.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(9);
+});

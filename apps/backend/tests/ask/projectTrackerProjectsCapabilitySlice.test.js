@@ -121,6 +121,7 @@ test('review project shows the desktop execution record inline', () => {
   assert.match(detail.blocks[0].body, /0 of 1 milestones complete; 1 open issue/);
   assert.deepEqual(detail.blocks[1].rows.map((row) => row.values.amount), ['$45,000.00', '$28,000.00', '$17,000.00']);
   assert.deepEqual(detail.blocks[2].sections.map((section) => section.title), ['Milestones', 'Payments', 'Change orders', 'Issues', 'Progress log']);
+  assert.deepEqual(detail.blocks[2].sections.map((section) => section.initialVisibleCount), [3, 3, 3, 3, 3]);
   assert.deepEqual(detail.blocks[0].actions.slice(0, 3).map((action) => action.label), ['Add milestone', 'Log progress', 'Log issue']);
   assert.deepEqual(detail.blocks[2].sections[0].items[0].actions.map((action) => action.label), ['Complete milestone']);
   assert.deepEqual(detail.blocks[2].sections[1].items[0].actions.map((action) => action.label), ['Mark paid']);

@@ -79,10 +79,12 @@ Project creation and follow-on Project Tracker command forms now use the shared 
 The following presentation work should be treated as the remaining compact-UI follow-up rather than functional parity work:
 
 - add progressive disclosure for long record descriptions and secondary metadata;
-- cap and continue each execution-record collection independently instead of loading the latest 100 log entries into one response;
+- replace the initial independent per-section disclosure now used by execution-record collections with server-backed continuation, so the latest 100 log entries are not all included in one response;
 - give the completion workflow a grouped/stepped conversational form instead of one long field stack;
 - verify the implemented responsive two/three-column density and action overflow behavior in a real desktop and mobile browser;
 - add Project Tracker-specific visual regression coverage for blank footer suppression, content-driven height, and the 920/1140 px width policy.
+
+Implementation started October 11, 2026: each non-empty execution-record section now declares a three-row initial window, and the shared grouped-list renderer expands or collapses each section independently without dropping canonical records or row actions. Server-backed collection paging remains pending.
 
 ## Gaps identified and implementation mapping
 

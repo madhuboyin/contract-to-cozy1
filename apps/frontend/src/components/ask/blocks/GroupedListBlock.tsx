@@ -35,6 +35,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   const controls = useContext(ResultViewContext);
   const workflowControls = useContext(AskBlockActionContext);
   const [focusedDisclosure, setFocusedDisclosure] = useState<'DETAILS' | 'SNOOZE' | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   if (block.id === 'focused-home-action-guidance') {
     const next = block.sections.find((section) => section.id === 'next-step');
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];
@@ -206,15 +207,25 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
         )}
       </div>
       <div className="divide-y divide-slate-100">
-        {block.sections.map((section) => (
+        {block.sections.map((section) => {
+          const declaredVisibleCount = section.initialVisibleCount;
+          const canExpand = Boolean(declaredVisibleCount && declaredVisibleCount < section.items.length);
+          const expanded = Boolean(expandedSections[section.id]);
+          const visibleItems = canExpand && !expanded ? section.items.slice(0, declaredVisibleCount) : section.items;
+          const hiddenItemCount = canExpand ? section.items.length - declaredVisibleCount! : 0;
+          const listId = `${block.id}-${section.id}-items`;
+          return (
           <div key={section.id} className="p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
+                {section.caption && <p className="mt-0.5 text-xs text-slate-500">{section.caption}</p>}
+              </div>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{section.count}</span>
             </div>
             {section.items.length === 0 ? <p className="text-sm text-slate-500">None recorded.</p> : (
-              <ul className={presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'}>
-                {section.items.map((sourceItem) => {
+              <ul id={listId} className={presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'}>
+                {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
                   const selected = controls?.view.selectedTaskId === item.id;
                   return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border outline-offset-2', presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3', selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
@@ -248,13 +259,25 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                 })}
               </ul>
             )}
+            {canExpand && (
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={listId}
+                onClick={() => setExpandedSections((current) => ({ ...current, [section.id]: !expanded }))}
+                className="mt-3 inline-flex min-h-9 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-teal-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+              >
+                {expanded ? 'Show fewer' : `Show ${hiddenItemCount} more`}
+              </button>
+            )}
             {section.count > section.items.length && (
               block.actions[0]?.href
                 ? <AskContextLink href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{section.count - section.items.length} more · {block.actions[0].label}</AskContextLink>
                 : <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more not shown here.</p>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
       {block.actions.length > 0 && (
         <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3">
