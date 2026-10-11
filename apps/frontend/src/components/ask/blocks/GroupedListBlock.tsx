@@ -31,7 +31,7 @@ import type { AskBlockRenderer } from './types';
 // own BlockView) so the generic GROUPED_LIST renderer's selection
 // marker/highlight can be tested directly, same convention as
 // MaintenanceResultList's own export.
-export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
+export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
   const workflowControls = useContext(AskBlockActionContext);
   const [focusedDisclosure, setFocusedDisclosure] = useState<'DETAILS' | 'SNOOZE' | null>(null);
@@ -289,7 +289,13 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                 {expanded ? 'Show fewer' : `Show ${hiddenItemCount} more`}
               </button>
             )}
-            {section.count > section.items.length && (
+            {block.id === 'project-detail-records' && section.offset !== undefined && (section.offset > 0 || section.offset + section.items.length < section.count) && (
+              <div className="mt-3 flex gap-2">
+                {section.offset > 0 && <button type="button" disabled={itemActionsDisabled} onClick={() => onCollectionPage(section.id, 'PREVIOUS')} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-50">Previous page<span className="sr-only"> of {section.title}</span></button>}
+                {section.offset + section.items.length < section.count && <button type="button" disabled={itemActionsDisabled} onClick={() => onCollectionPage(section.id, 'NEXT')} className="min-h-9 rounded-lg bg-teal-700 px-3 text-xs font-semibold text-white disabled:opacity-50">Next page<span className="sr-only"> of {section.title}</span></button>}
+              </div>
+            )}
+            {section.offset === undefined && section.count > section.items.length && (
               block.actions[0]?.href
                 ? <AskContextLink href={block.actions[0].href} className="mt-3 inline-block text-sm font-semibold text-teal-700 hover:underline">+{section.count - section.items.length} more · {block.actions[0].label}</AskContextLink>
                 : <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more not shown here.</p>

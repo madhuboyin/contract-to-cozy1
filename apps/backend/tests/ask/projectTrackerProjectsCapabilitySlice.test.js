@@ -19,7 +19,7 @@ const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/ca
 const projectTrackerModule = require('../../src/services/projectTracker.service.ts');
 
 const PAGE = '/dashboard/properties/p1/projects';
-const originals = { prisma: prismaModule.prisma, list: projectTrackerModule.listProjects };
+const originals = { prisma: prismaModule.prisma, list: projectTrackerModule.listProjects, logs: projectTrackerModule.listLogEntries };
 let calls;
 
 const project = (id, overrides = {}) => ({
@@ -69,6 +69,18 @@ test('the real list query is the page\'s: this property, newest first', async ()
   assert.deepEqual(queries[0].orderBy, { createdAt: 'desc' });
 });
 
+test('progress-log pages use a bounded database offset instead of loading the latest 100 entries', async () => {
+  const queries = [];
+  prismaModule.prisma = {
+    projectRecord: { findUnique: async () => ({ id: 'kitchen', propertyId: 'p1' }) },
+    projectProgressLog: { findMany: async (query) => { queries.push(query); return []; } },
+  };
+  await originals.logs('kitchen', 'p1', { limit: 3, offset: 6 });
+  assert.equal(queries[0].take, 4);
+  assert.equal(queries[0].skip, 6);
+  assert.deepEqual(queries[0].orderBy, [{ entryDate: 'desc' }, { createdAt: 'desc' }]);
+});
+
 test('projects are grouped active, completed, cancelled with the page\'s labels, amounts and dates', () => {
   const result = trackedProjectsFromView(projects(), 'p1');
   assert.equal(result.blocks[0].title, '3 active projects, 1 completed');
@@ -115,13 +127,14 @@ test('review project shows the desktop execution record inline', () => {
     payments: [{ id: 'pay1', description: 'Deposit', notes: null, amountCents: 1_000_000, status: 'DUE', dueDate: new Date('2026-09-01T12:00:00.000Z'), paidDate: null }],
     changeOrders: [{ id: 'co1', changeNumber: 1, title: 'Add backsplash', description: 'Extend tile scope', costDeltaCents: 500_000, complianceStatus: 'RECHECK_COMPLETE', status: 'APPROVED' }],
     issues: [{ id: 'i1', title: 'Cabinet delay', description: 'Delivery moved', severity: 'MAJOR', blocksPayment: false, resolutionNotes: null, status: 'OPEN', sourceEntityType: null }],
+    _count: { progressLogs: 1, writeBacks: 0 },
   }, [{ id: 'l1', entryType: 'PROGRESS', notes: 'Framing complete', entryDate: new Date('2026-10-11T12:00:00.000Z'), milestoneId: 'm1', photoKeys: ['photo'] }], true);
   assert.equal(detail.reasonCode, 'PROJECT_TRACKER_DETAIL_READY');
   assert.deepEqual(detail.blocks.map((block) => block.type), ['SUMMARY', 'TABLE', 'GROUPED_LIST', 'BOUNDARY']);
   assert.match(detail.blocks[0].body, /0 of 1 milestones complete; 1 open issue/);
   assert.deepEqual(detail.blocks[1].rows.map((row) => row.values.amount), ['$45,000.00', '$28,000.00', '$17,000.00']);
   assert.deepEqual(detail.blocks[2].sections.map((section) => section.title), ['Milestones', 'Payments', 'Change orders', 'Issues', 'Progress log']);
-  assert.deepEqual(detail.blocks[2].sections.map((section) => section.initialVisibleCount), [3, 3, 3, 3, 3]);
+  assert.deepEqual(detail.blocks[2].sections.map((section) => section.offset), [0, 0, 0, 0, 0]);
   assert.deepEqual(detail.blocks[0].actions.slice(0, 3).map((action) => action.label), ['Edit project', 'Add milestone', 'Add payment']);
   assert.deepEqual(detail.blocks[2].sections[0].items[0].actions.map((action) => action.label), ['Complete milestone', 'Edit', 'Delete']);
   assert.deepEqual(detail.blocks[2].sections[0].items[0].meta, ['Scheduled Oct 20, 2026']);

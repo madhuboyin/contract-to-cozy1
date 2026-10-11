@@ -1,7 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition phase 1, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { type AskCaptureRequest, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
@@ -15,6 +15,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { ProjectTrackerChangeOrderInputSchema, ProjectTrackerCompletionInputSchema, ProjectTrackerComplianceReviewInputSchema, ProjectTrackerCreateInputSchema, ProjectTrackerEditInputSchema, ProjectTrackerIssueInputSchema, ProjectTrackerIssueResolveInputSchema, ProjectTrackerMilestoneCompleteInputSchema, ProjectTrackerMilestoneInputSchema, ProjectTrackerPaymentCreateInputSchema, ProjectTrackerPaymentPaidInputSchema, ProjectTrackerProgressInputSchema } from '../support/commandInputs';
 import { PROJECT_TRACKER_ACTION_IDS, PROJECT_TRACKER_COMMAND_CAPTURE_KEY, PROJECT_TRACKER_COMMAND_MESSAGE, PROJECT_TRACKER_CREATE_ACTION_ID, PROJECT_TRACKER_CREATE_CAPTURE_KEY, PROJECT_TRACKER_CREATE_MESSAGE } from '../support/projectTrackerConstants';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
+import type { AskViewState } from '../support/executionState';
 
 // Project Tracker capability-card slice (FRD v1.59): the eleventh new operation for a capability with none. Reads
 // projectTracker.service listProjects, the call GET /properties/:id/projects makes for the Project Tracker page (the
@@ -109,13 +110,23 @@ async function trackedProjectsResult(userId: string, propertyId: string, knownRo
 }
 
 type ProjectDetailView = Awaited<ReturnType<typeof getProjectDetail>>;
+type ProjectCollectionPageRequest = { sectionId: string; direction: 'NEXT' | 'PREVIOUS' };
+const PROJECT_COLLECTION_PAGE_SIZE = 3;
+
+function projectCollectionOffset(totalCount: number, currentOffset: number, direction: 'CURRENT' | 'NEXT' | 'PREVIOUS'): number {
+  const requested = direction === 'NEXT' ? currentOffset + PROJECT_COLLECTION_PAGE_SIZE
+    : direction === 'PREVIOUS' ? currentOffset - PROJECT_COLLECTION_PAGE_SIZE
+      : currentOffset;
+  const lastPageOffset = Math.max(0, Math.floor(Math.max(0, totalCount - 1) / PROJECT_COLLECTION_PAGE_SIZE) * PROJECT_COLLECTION_PAGE_SIZE);
+  return Math.min(Math.max(0, requested), lastPageOffset);
+}
 
 function moneyWithCents(cents: number | null | undefined): string {
   if (cents == null) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 }
 
-export function projectDetailFromView(project: ProjectDetailView, logs: Awaited<ReturnType<typeof listLogEntries>>['entries'], canManage: boolean, alignment?: Awaited<ReturnType<typeof getProjectExecutionAlignment>>): AskOperationResult {
+export function projectDetailFromView(project: ProjectDetailView, logs: Awaited<ReturnType<typeof listLogEntries>>['entries'], canManage: boolean, alignment?: Awaited<ReturnType<typeof getProjectExecutionAlignment>>, collectionOffsets: Record<string, number> = {}): AskOperationResult {
   const remaining = project.currentContractAmountCents - project.paidToDateCents;
   const openIssues = project.issues.filter((issue) => issue.status !== 'RESOLVED');
   const completedMilestones = project.milestones.filter((milestone) => milestone.status === 'COMPLETE').length;
@@ -128,17 +139,19 @@ export function projectDetailFromView(project: ProjectDetailView, logs: Awaited<
     const detail = [description, ...secondaryMeta].filter((value): value is string => Boolean(value?.trim())).join('\n');
     return { id, title, description: null, meta: primaryMeta ? [primaryMeta] : [], ...(detail ? { detail } : {}), ...(status ? { status } : {}), ...(actions?.length ? { actions } : {}) };
   };
-  const initialVisibleCount = 3;
-  const sections = [
-    { id: 'project-detail-milestones', title: 'Milestones', count: project.milestones.length, initialVisibleCount, items: project.milestones.map((milestone) => item(milestone.id, milestone.name, milestone.description, [milestone.scheduledDate ? `Scheduled ${humanDate(milestone.scheduledDate)}` : 'No scheduled date', milestone.requiresPhotoEvidence ? 'Photo evidence required' : 'No photo requirement'], readableCode(milestone.status), !canManage || milestone.executionSourceType !== 'MANUAL' ? [] : [...(!['COMPLETE', 'DISPUTED'].includes(milestone.status) ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.COMPLETE_MILESTONE, 'Complete milestone', 'PROJECT_MILESTONE', milestone.id, 'PRIMARY')] : []), itemCommandAction(PROJECT_TRACKER_ACTION_IDS.EDIT_MILESTONE, 'Edit', 'PROJECT_MILESTONE', milestone.id), ...(!['COMPLETE', 'DISPUTED'].includes(milestone.status) ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.DELETE_MILESTONE, 'Delete', 'PROJECT_MILESTONE', milestone.id, 'QUIET')] : [])])) },
-    { id: 'project-detail-payments', title: 'Payments', count: project.payments.length, initialVisibleCount, items: project.payments.map((payment) => item(payment.id, payment.description, payment.notes, [moneyWithCents(payment.amountCents), payment.dueDate ? `Due ${humanDate(payment.dueDate)}` : 'No due date', payment.paidDate ? `Paid ${humanDate(payment.paidDate)}` : 'Not paid'], readableCode(payment.status), !canManage ? [] : [...(paymentCanBeMarkedPaid(payment) ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.MARK_PAYMENT_PAID, 'Mark paid', 'PROJECT_PAYMENT', payment.id, 'PRIMARY')] : []), ...(payment.status !== 'PAID' ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.EDIT_PAYMENT, 'Edit', 'PROJECT_PAYMENT', payment.id), itemCommandAction(PROJECT_TRACKER_ACTION_IDS.DELETE_PAYMENT, 'Delete', 'PROJECT_PAYMENT', payment.id, 'QUIET')] : [])])) },
-    { id: 'project-detail-change-orders', title: 'Change orders', count: project.changeOrders.length, initialVisibleCount, items: project.changeOrders.map((order) => item(order.id, `#${order.changeNumber} ${order.title}`, order.description, [`Cost change ${moneyWithCents(order.costDeltaCents)}`, `Compliance ${readableCode(order.complianceStatus)}`], readableCode(order.status), !canManage ? [] : order.status === 'PROPOSED' ? [
+  const sectionRecords = [
+    { id: 'project-detail-milestones', title: 'Milestones', count: project.milestones.length, items: project.milestones.map((milestone) => item(milestone.id, milestone.name, milestone.description, [milestone.scheduledDate ? `Scheduled ${humanDate(milestone.scheduledDate)}` : 'No scheduled date', milestone.requiresPhotoEvidence ? 'Photo evidence required' : 'No photo requirement'], readableCode(milestone.status), !canManage || milestone.executionSourceType !== 'MANUAL' ? [] : [...(!['COMPLETE', 'DISPUTED'].includes(milestone.status) ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.COMPLETE_MILESTONE, 'Complete milestone', 'PROJECT_MILESTONE', milestone.id, 'PRIMARY')] : []), itemCommandAction(PROJECT_TRACKER_ACTION_IDS.EDIT_MILESTONE, 'Edit', 'PROJECT_MILESTONE', milestone.id), ...(!['COMPLETE', 'DISPUTED'].includes(milestone.status) ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.DELETE_MILESTONE, 'Delete', 'PROJECT_MILESTONE', milestone.id, 'QUIET')] : [])])) },
+    { id: 'project-detail-payments', title: 'Payments', count: project.payments.length, items: project.payments.map((payment) => item(payment.id, payment.description, payment.notes, [moneyWithCents(payment.amountCents), payment.dueDate ? `Due ${humanDate(payment.dueDate)}` : 'No due date', payment.paidDate ? `Paid ${humanDate(payment.paidDate)}` : 'Not paid'], readableCode(payment.status), !canManage ? [] : [...(paymentCanBeMarkedPaid(payment) ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.MARK_PAYMENT_PAID, 'Mark paid', 'PROJECT_PAYMENT', payment.id, 'PRIMARY')] : []), ...(payment.status !== 'PAID' ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.EDIT_PAYMENT, 'Edit', 'PROJECT_PAYMENT', payment.id), itemCommandAction(PROJECT_TRACKER_ACTION_IDS.DELETE_PAYMENT, 'Delete', 'PROJECT_PAYMENT', payment.id, 'QUIET')] : [])])) },
+    { id: 'project-detail-change-orders', title: 'Change orders', count: project.changeOrders.length, items: project.changeOrders.map((order) => item(order.id, `#${order.changeNumber} ${order.title}`, order.description, [`Cost change ${moneyWithCents(order.costDeltaCents)}`, `Compliance ${readableCode(order.complianceStatus)}`], readableCode(order.status), !canManage ? [] : order.status === 'PROPOSED' ? [
       ...(order.complianceStatus === 'RECHECK_REQUIRED' ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.REVIEW_CHANGE_ORDER, 'Record authority review', 'PROJECT_CHANGE_ORDER', order.id)] : []),
       ...(!['NOT_EVALUATED', 'RECHECK_REQUIRED'].includes(order.complianceStatus) && !['REQUIRED', 'REQUESTED'].includes(order.amendedPermitStatus) && !['REQUIRED', 'REQUESTED'].includes(order.hoaReapprovalStatus) ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.APPROVE_CHANGE_ORDER, 'Approve', 'PROJECT_CHANGE_ORDER', order.id, 'PRIMARY')] : []),
       itemCommandAction(PROJECT_TRACKER_ACTION_IDS.EDIT_CHANGE_ORDER, 'Edit', 'PROJECT_CHANGE_ORDER', order.id), itemCommandAction(PROJECT_TRACKER_ACTION_IDS.REJECT_CHANGE_ORDER, 'Reject', 'PROJECT_CHANGE_ORDER', order.id, 'QUIET'),
     ] : order.status !== 'VOIDED' ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.VOID_CHANGE_ORDER, 'Void change order', 'PROJECT_CHANGE_ORDER', order.id, 'QUIET')] : [])) },
-    { id: 'project-detail-issues', title: 'Issues', count: project.issues.length, initialVisibleCount, items: project.issues.map((issue) => item(issue.id, issue.title, issue.description, [`${readableCode(issue.severity)} severity`, issue.blocksPayment ? 'Blocks payment' : 'Does not block payment', issue.resolutionNotes ? `Resolution: ${issue.resolutionNotes}` : 'Unresolved'], readableCode(issue.status), canManage && issue.status !== 'RESOLVED' && !issue.sourceEntityType ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.RESOLVE_ISSUE, 'Resolve issue', 'PROJECT_ISSUE', issue.id, 'PRIMARY'), itemCommandAction(PROJECT_TRACKER_ACTION_IDS.EDIT_ISSUE, 'Edit', 'PROJECT_ISSUE', issue.id)] : [])) },
-    { id: 'project-detail-log', title: 'Progress log', count: logs.length, initialVisibleCount, items: logs.map((log) => item(log.id, readableCode(log.entryType), log.notes, [humanDate(log.entryDate) ?? 'Unknown date', log.milestoneId ? 'Linked to a milestone' : 'Project-wide', log.photoKeys.length ? `${log.photoKeys.length} photo${log.photoKeys.length === 1 ? '' : 's'}` : 'No photos'], undefined, canManage ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.DELETE_LOG, 'Delete entry', 'PROJECT_PROGRESS_LOG', log.id, 'QUIET')] : [])) },
+    { id: 'project-detail-issues', title: 'Issues', count: project.issues.length, items: project.issues.map((issue) => item(issue.id, issue.title, issue.description, [`${readableCode(issue.severity)} severity`, issue.blocksPayment ? 'Blocks payment' : 'Does not block payment', issue.resolutionNotes ? `Resolution: ${issue.resolutionNotes}` : 'Unresolved'], readableCode(issue.status), canManage && issue.status !== 'RESOLVED' && !issue.sourceEntityType ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.RESOLVE_ISSUE, 'Resolve issue', 'PROJECT_ISSUE', issue.id, 'PRIMARY'), itemCommandAction(PROJECT_TRACKER_ACTION_IDS.EDIT_ISSUE, 'Edit', 'PROJECT_ISSUE', issue.id)] : [])) },
+  ];
+  const sections = [
+    ...sectionRecords.map((section) => ({ ...section, offset: collectionOffsets[section.id] ?? 0, items: section.items.slice(collectionOffsets[section.id] ?? 0, (collectionOffsets[section.id] ?? 0) + PROJECT_COLLECTION_PAGE_SIZE) })),
+    { id: 'project-detail-log', title: 'Progress log', count: project._count.progressLogs, offset: collectionOffsets['project-detail-log'] ?? 0, items: logs.map((log) => item(log.id, readableCode(log.entryType), log.notes, [humanDate(log.entryDate) ?? 'Unknown date', log.milestoneId ? 'Linked to a milestone' : 'Project-wide', log.photoKeys.length ? `${log.photoKeys.length} photo${log.photoKeys.length === 1 ? '' : 's'}` : 'No photos'], undefined, canManage ? [itemCommandAction(PROJECT_TRACKER_ACTION_IDS.DELETE_LOG, 'Delete entry', 'PROJECT_PROGRESS_LOG', log.id, 'QUIET')] : [])) },
   ].filter((section) => section.count > 0);
   const lifecycleActions = !canManage || ['COMPLETED', 'CANCELLED'].includes(project.status) ? [] : [
     commandAction(PROJECT_TRACKER_ACTION_IDS.EDIT_PROJECT, 'Edit project'),
@@ -155,7 +168,8 @@ export function projectDetailFromView(project: ProjectDetailView, logs: Awaited<
   if (canManage && !['COMPLETED', 'CANCELLED'].includes(project.status)) lifecycleActions.push(commandAction(PROJECT_TRACKER_ACTION_IDS.COMPLETE_PROJECT, 'Complete project', 'PROJECT_RECORD', project.id, 'PRIMARY'));
   if (canManage && project.status === 'COMPLETED') lifecycleActions.push(commandAction(PROJECT_TRACKER_ACTION_IDS.SHARE_CLOSEOUT, 'Create closeout share link', 'PROJECT_RECORD', project.id));
   if (canManage && alignment?.hasErrors) lifecycleActions.push(commandAction(PROJECT_TRACKER_ACTION_IDS.RETRY_ALIGNMENT, 'Retry execution alignment', 'PROJECT_RECORD', project.id));
-  return { status: 'ANSWERED', reasonCode: 'PROJECT_TRACKER_DETAIL_READY', parameters: { projectId: project.id }, blocks: [
+  const viewState: AskViewState = { resultId: randomUUID(), domainScopePhrase: null, dateScopePhrase: null, statusFilter: 'PROJECT_DETAIL', selectedTaskId: null, collectionOffsets, revision: 1 };
+  return { status: 'ANSWERED', reasonCode: 'PROJECT_TRACKER_DETAIL_READY', parameters: { projectId: project.id, viewState }, blocks: [
     { type: 'SUMMARY', id: 'project-detail-summary', title: project.name, body: `${PROJECT_TYPE_LABELS[project.projectType] ?? readableCode(project.projectType)} · ${project.contractorName ?? (project.fulfillmentMode === 'DIY' ? 'DIY / household' : 'Provider not recorded')}. ${completedMilestones} of ${project.milestones.length} milestones complete; ${openIssues.length} open issue${openIssues.length === 1 ? '' : 's'}.`, tone: openIssues.some((issue) => issue.severity === 'BLOCKING') ? 'CAUTION' : 'DEFAULT', actions: lifecycleActions },
     { type: 'TABLE', id: 'project-detail-financials', title: 'Contract and payment position', description: 'Recorded project amounts; approved change orders are included in the current contract.', columns: [{ key: 'metric', label: 'Metric' }, { key: 'amount', label: 'Amount' }], rows: [
       { id: 'contract', values: { metric: 'Current contract', amount: moneyWithCents(project.currentContractAmountCents) } },
@@ -167,13 +181,33 @@ export function projectDetailFromView(project: ProjectDetailView, logs: Awaited<
   ], suggestions: [] };
 }
 
-async function trackedProjectDetailResult(userId: string, propertyId: string, projectId: string, knownRole?: HouseholdRole): Promise<AskOperationResult> {
+async function trackedProjectDetailResult(userId: string, propertyId: string, projectId: string, knownRole?: HouseholdRole, priorViewState?: AskViewState | null, pageRequest?: ProjectCollectionPageRequest | null): Promise<AskOperationResult> {
   const role = knownRole ?? (await ensurePropertyAccess(userId, propertyId)).role;
-  const [project, logResult, alignment] = await Promise.all([getProjectDetail(projectId, propertyId), listLogEntries(projectId, propertyId, { limit: 100 }), getProjectExecutionAlignment(projectId, propertyId)]);
-  return projectDetailFromView(project, logResult.entries, role !== HouseholdRole.VIEWER, alignment);
+  const project = await getProjectDetail(projectId, propertyId);
+  const counts: Record<string, number> = { 'project-detail-milestones': project.milestones.length, 'project-detail-payments': project.payments.length, 'project-detail-change-orders': project.changeOrders.length, 'project-detail-issues': project.issues.length, 'project-detail-log': project._count.progressLogs };
+  const collectionOffsets = { ...(priorViewState?.collectionOffsets ?? {}) };
+  for (const [sectionId, count] of Object.entries(counts)) {
+    const direction = pageRequest?.sectionId === sectionId ? pageRequest.direction : 'CURRENT';
+    collectionOffsets[sectionId] = projectCollectionOffset(count, collectionOffsets[sectionId] ?? 0, direction);
+  }
+  const [logResult, alignment] = await Promise.all([listLogEntries(projectId, propertyId, { limit: PROJECT_COLLECTION_PAGE_SIZE, offset: collectionOffsets['project-detail-log'] }), getProjectExecutionAlignment(projectId, propertyId)]);
+  const result = projectDetailFromView(project, logResult.entries, role !== HouseholdRole.VIEWER, alignment, collectionOffsets);
+  const viewState = (result.parameters as { viewState: AskViewState }).viewState;
+  viewState.resultId = priorViewState?.resultId ?? viewState.resultId;
+  viewState.revision = (priorViewState?.revision ?? 0) + 1;
+  return result;
 }
 
 registerCapabilityHandler('project-tracker.projects', async (envelope, deps) => {
+  const pageRequest = envelope.launchContext?.entityType === 'ASK_COLLECTION_SECTION' && envelope.launchContext.entityId
+    && (envelope.launchContext.actionId === 'NEXT_PAGE' || envelope.launchContext.actionId === 'PREVIOUS_PAGE')
+    ? { sectionId: envelope.launchContext.entityId, direction: envelope.launchContext.actionId === 'NEXT_PAGE' ? 'NEXT' as const : 'PREVIOUS' as const }
+    : null;
+  if (pageRequest && envelope.launchContext?.sourceExecutionId) {
+    const source = await prisma.askExecution.findFirst({ where: { id: envelope.launchContext.sourceExecutionId, userId: envelope.userId, propertyId: envelope.propertyId!, operationId: 'PROJECT_TRACKER_PROJECTS' }, select: { parametersJson: true } });
+    const parameters = source?.parametersJson && typeof source.parametersJson === 'object' && !Array.isArray(source.parametersJson) ? source.parametersJson as { projectId?: unknown; viewState?: unknown } : null;
+    if (typeof parameters?.projectId === 'string') return trackedProjectDetailResult(envelope.userId, envelope.propertyId!, parameters.projectId, deps.propertyAccess?.role, parameters.viewState as AskViewState | null, pageRequest);
+  }
   if (envelope.launchContext?.entityType === 'PROJECT_RECORD' && envelope.launchContext.entityId) {
     return trackedProjectDetailResult(envelope.userId, envelope.propertyId!, envelope.launchContext.entityId, deps.propertyAccess?.role);
   }

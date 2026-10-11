@@ -1564,7 +1564,7 @@ export async function voidChangeOrder(
 
 export async function listLogEntries(projectId: string, propertyId: string, params: any) {
   await assertProject(projectId, propertyId);
-  const { milestoneId, entryType, from, to, limit = 50, cursor } = params;
+  const { milestoneId, entryType, from, to, limit = 50, cursor, offset = 0 } = params;
 
   const where: Prisma.ProjectProgressLogWhereInput = {
     projectId,
@@ -1583,6 +1583,7 @@ export async function listLogEntries(projectId: string, propertyId: string, para
     orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
     take: limit + 1,
     ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    ...(!cursor && offset > 0 ? { skip: offset } : {}),
     include: {
       milestone: { select: { id: true, name: true } },
       room: { select: { id: true, name: true } },

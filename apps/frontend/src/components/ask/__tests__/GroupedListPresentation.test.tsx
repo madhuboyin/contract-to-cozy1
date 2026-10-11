@@ -76,3 +76,22 @@ test('Project Tracker rows progressively disclose descriptions and secondary met
   fireEvent.click(screen.getByRole('button', { name: 'Hide details for Rough-in inspection' }));
   expect(screen.queryByText(/Inspect framing and rough-ins/)).not.toBeInTheDocument();
 });
+
+test('Project Tracker sections expose independent server-page controls', () => {
+  const onCollectionPage = jest.fn();
+  const paged: GroupedList = {
+    ...block,
+    id: 'project-detail-records',
+    sections: [
+      { id: 'project-detail-milestones', title: 'Milestones', count: 7, offset: 3, items: Array.from({ length: 3 }, (_, index) => ({ id: `m-${index + 3}`, title: `Milestone ${index + 4}`, meta: [] })) },
+      { id: 'project-detail-payments', title: 'Payments', count: 2, offset: 0, items: Array.from({ length: 2 }, (_, index) => ({ id: `p-${index}`, title: `Payment ${index + 1}`, meta: [] })) },
+    ],
+  };
+  render(<GenericGroupedListBlock block={paged} executionId="execution" propertyId="home" onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={onCollectionPage} onAccessLost={() => undefined} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Previous page of Milestones' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next page of Milestones' }));
+  expect(onCollectionPage).toHaveBeenNthCalledWith(1, 'project-detail-milestones', 'PREVIOUS');
+  expect(onCollectionPage).toHaveBeenNthCalledWith(2, 'project-detail-milestones', 'NEXT');
+  expect(screen.queryByRole('button', { name: /page of Payments/ })).not.toBeInTheDocument();
+});
