@@ -606,6 +606,7 @@ export async function refreshAskSourceExecution(userId: string, currentExecution
 // list would be untrusted and would still need the server to know which
 // operations are even eligible siblings.
 export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly AskOperationId[]>> = {
+  OWNERSHIP_COST_COMMAND: ['OWNERSHIP_COSTS'],
   BUYER_TASK_UPDATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
   // Guided journey continuation Phase 3: the continuation view and the journey list both show what these change.
   GUIDANCE_STEP_SKIP: ['GUIDANCE_JOURNEY_CONTINUE', 'GUIDANCE_JOURNEYS_LIST'],

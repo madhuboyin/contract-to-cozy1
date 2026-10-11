@@ -37,7 +37,7 @@ import { executeOperation } from '../execution/executeOperation';
 import { homeJourneyContextVersion, homeJourneyResult, purchaseDateContextVersion, purchaseDateResult } from '../handlers/homeSettingsWrites.handler';
 import { HOME_JOURNEY_CAPTURE_KEY, PURCHASE_DATE_CAPTURE_KEY } from '../support/homeSettingsConstants';
 import { HOME_PLANT_CAPTURE_KEY, MATERIAL_SPEC_CAPTURE_KEY } from '../support/homeRecordAddConstants';
-import { HomePlantAddInputSchema, MaterialSpecAddInputSchema } from '../support/commandInputs';
+import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecisionInputSchema, OwnershipCostScenarioInputSchema, OwnershipCostScenarioRenameInputSchema } from '../support/commandInputs';
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, materialSpecAddResult, materialSpecContextVersion } from '../handlers/homeRecordAdds.handler';
 import { plantRecommendationContextVersion, roomPlantRecommendationResult } from '../handlers/plantRecommendations.handler';
@@ -50,6 +50,8 @@ import { maintenanceTaskCompleteResult, maintenanceTaskCreateResult, maintenance
 import { getSkillForOperation } from '../../skills/skillRegistry';
 import { ASK_OPERATION_CAPABILITY } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
 import { homeDeadlineMonitorResult } from '../handlers/miscHandlers.handler';
+import { ownershipCostCommandResult } from '../handlers/ownershipCostCommands.handler';
+import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_DECISION_CAPTURE_KEY, OWNERSHIP_COST_SCENARIO_CAPTURE_KEY } from '../support/ownershipCostConstants';
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -309,7 +311,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     // anything.
     // The Home Event Radar forms (FRD v1.41) are the same: their canned message is only honored with its declared
     // launchContext, which a replay does not have, so re-executing would replace the review card with a boundary.
-    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES') {
+    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES' || execution.operationId === 'OWNERSHIP_COST_COMMAND') {
       askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
       return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
     }
@@ -332,7 +334,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -772,6 +774,53 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'RoomPlantProfile';
+  } else if (execution.operationId === 'OWNERSHIP_COST_COMMAND') {
+    if (input.captureKey !== OWNERSHIP_COST_SCENARIO_CAPTURE_KEY && input.captureKey !== OWNERSHIP_COST_DECISION_CAPTURE_KEY) {
+      const error = new Error('This ownership-cost form is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to change ownership-cost planning records.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    if (input.expectedContextVersion !== 'ownership-cost-live') {
+      const error = new Error('This ownership-cost form is out of date. Start again from the action on the answer.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown> : {};
+    const launch = storedParameters.ownershipCostLaunch && typeof storedParameters.ownershipCostLaunch === 'object' && !Array.isArray(storedParameters.ownershipCostLaunch)
+      ? storedParameters.ownershipCostLaunch as { actionId?: string; entityId?: string; entityType?: string; sourceExecutionId?: string }
+      : null;
+    if (!launch?.actionId) {
+      const error = new Error('This ownership-cost action is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    if (input.captureKey === OWNERSHIP_COST_SCENARIO_CAPTURE_KEY) {
+      if (launch.actionId === OWNERSHIP_COST_ACTION_IDS.CREATE_SCENARIO) {
+        const answer = OwnershipCostScenarioInputSchema.safeParse(input.answer);
+        if (!answer.success) throw Object.assign(new Error('Name the scenario and choose a valid lens, horizon, category, and bounded assumption.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+        result = await ownershipCostCommandResult(userId, execution.propertyId, launch, { kind: 'SCENARIO', value: answer.data });
+      } else if (launch.actionId === OWNERSHIP_COST_ACTION_IDS.RENAME_SCENARIO) {
+        const answer = OwnershipCostScenarioRenameInputSchema.safeParse(input.answer);
+        if (!answer.success) throw Object.assign(new Error('Enter a scenario name between 1 and 80 characters.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+        result = await ownershipCostCommandResult(userId, execution.propertyId, launch, { kind: 'RENAME', value: answer.data });
+      } else {
+        throw Object.assign(new Error('This ownership-cost scenario form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+      }
+    } else {
+      const answer = OwnershipCostDecisionInputSchema.safeParse(input.answer);
+      if (!answer.success) throw Object.assign(new Error('Enter the requested reason or a valid revisit date.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      result = await ownershipCostCommandResult(userId, execution.propertyId, launch, { kind: 'DECISION', value: answer.data });
+    }
+    captureId = input.idempotencyKey;
+    capturedContextVersion = 'ownership-cost-live';
+    canonicalOwner = 'OwnershipCostPlanning';
   } else if (execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES') {
     const isTask = execution.operationId === 'HOME_EVENT_RADAR_TASK';
     if (input.captureKey !== (isTask ? RADAR_TASK_CAPTURE_KEY : RADAR_PREFERENCES_CAPTURE_KEY)) {

@@ -1126,6 +1126,15 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     reconciliation: { status: 'TRACED', notes: 'The mutation map refreshes a still-visible plant care outlook after recommendation actions that add a HomePlant.' },
     handoff: { status: 'TRACED', notes: 'The complete advisor workflow stays inside Ask; no desktop navigation is emitted.' },
   },
+  OWNERSHIP_COST_COMMAND: {
+    track: 'Financial and ownership', rollClass: 'CONFIRMED_MUTATION', canonicalOwner: 'ownership-costs.command', roleFloor: 'CONTRIBUTOR', messageRoutable: false, confirmationCapable: true, correctionModes: ['EDIT', 'STOP'],
+    note: 'Declared-action command for the canonical Ownership Costs workspace: forecast persistence, scenario create/rename/archive/delete, observed-change decisions, reminder preferences, and monthly-buffer or capital-reserve planning decisions. Every action re-reads its property-scoped target and writes through the same service used by the traditional UI.',
+    uiSurface: { status: 'TRACED', notes: 'Shared capture, confirmation and workflow-progress renderers launched from Ownership Costs rows and planning cards.' },
+    freshnessSource: { status: 'TRACED', notes: 'Targets are property-scoped and re-read by the canonical service at confirmation; stale changes and scenarios are refused.' },
+    idempotency: { status: 'TRACED', notes: 'The shared confirmation receipt prevents replay; canonical ownership-cost transition services preserve their own source identities.' },
+    reconciliation: { status: 'TRACED', notes: 'Completion links back to the current Ownership Costs read; the next read always refreshes canonical sources.' },
+    handoff: { status: 'TRACED', notes: 'The workflow remains in Ask; downstream category owners are launched as registered Ask operations.' },
+  },
   HOME_HABITS_GENERATE: {
     track: 'Records and capture',
     rollClass: 'CONFIRMED_MUTATION',

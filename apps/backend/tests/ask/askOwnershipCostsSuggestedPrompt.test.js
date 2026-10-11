@@ -103,10 +103,14 @@ test('ownership-cost contract rejects unrelated operation blocks', () => {
   }), false);
 });
 
-test('ownership-cost answers stay in Ask and render both recorded and missing categories as tables', () => {
+test('ownership-cost answers stay in Ask and make missing categories and all four desktop views actionable', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/savingsOwnership.handler.ts'), 'utf8');
   assert.doesNotMatch(source, /label: 'Review Ownership Costs'/);
   assert.match(source, /id: 'ownership-cost-categories'[\s\S]{0,300}preferredPresentation: 'TABLE'/);
-  assert.match(source, /type: 'TABLE', id: 'ownership-cost-missing'/);
-  assert.doesNotMatch(source, /type: 'GROUPED_LIST'[^\n]+id: 'ownership-cost-missing'/);
+  assert.match(source, /type: 'GROUPED_LIST', id: 'ownership-cost-missing'/);
+  assert.match(source, /Review property tax/);
+  assert.match(source, /Show my current ownership costs/);
+  assert.match(source, /What changed in my ownership costs\?/);
+  assert.match(source, /What may change in my ownership costs\?/);
+  assert.match(source, /Help me plan an ownership cost buffer/);
 });

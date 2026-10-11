@@ -25,7 +25,7 @@ test('every one of the 86 Ask operations has a coverage-matrix entry with no reg
   // + HOME_EVENT_RADAR_TASK/PREFERENCES (FRD v1.41).
   // + RECALL_REVIEW (Home Action focused-guidance CTA audit, Group B recall-review slice, gap audit §17; FRD v1.161).
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
-  assert.equal(operationIds.length, 139); // + ROOM_PLANT_RECOMMENDATIONS and the current governed home-tool operations
+  assert.equal(operationIds.length, 140); // + OWNERSHIP_COST_COMMAND
   for (const operationId of operationIds) {
     assert.ok(ASK_INTERACTION_COVERAGE_MATRIX[operationId], `${operationId}: missing coverage-matrix entry`);
   }
@@ -116,7 +116,7 @@ const STAGE_2_TRACED_OPERATIONS = new Set([
   'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW',
   'RENOVATION_PERMIT_READINESS', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'INCIDENT_CLAIM_STATUS', 'CLAIM_FILE', 'CLAIM_TRANSITION', 'INCIDENT_CONTINUATION',
-  'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'REFINANCE_RATE_MONITOR',
+  'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'REFINANCE_RATE_MONITOR',
   'EMERGENCY_BOUNDARY', 'UNSAFE_RESTRICTED_BOUNDARY', 'OUT_OF_SCOPE_BOUNDARY',
   'HOUSEHOLD_INVITATION', 'CAPABILITY_DISCOVERY', 'GROUNDED_GUIDANCE',
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE',
@@ -168,7 +168,7 @@ test('Phase 0 Stage 2 is fully traced: every one of the 77 operations is TRACED,
       assert.equal(entry[field].status, 'TRACED', `${operationId}.${field}: Stage 2 claims completion but this field is still PENDING`);
     }
   }
-  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 139); // + ROOM_PLANT_RECOMMENDATIONS and the current governed home-tool operations
+  assert.equal(STAGE_2_TRACED_OPERATIONS.size, 140); // + OWNERSHIP_COST_COMMAND
 });
 const STAGE_2_FIELDS = ['uiSurface', 'freshnessSource', 'idempotency', 'reconciliation', 'handoff'];
 
@@ -180,7 +180,7 @@ test('Stage 2 fields are TRACED with real notes only for operations actually tra
   // + RECALL_MATCH_UPDATE (Group B recall-mutation follow-up, gap audit §17; FRD v1.163).
   // + GUIDANCE_JOURNEY_CONTINUE (guided journey continuation Phase 1), GUIDANCE_STEP_SKIP and GUIDANCE_JOURNEY_DISMISS (Phase 3).
   // + DIY_PROJECT_GUIDE (step 5 of the stateful GUIDE: a read-only, launch-only walk through one DIY project).
-  assert.equal(operationIds.length, 139); // + ROOM_PLANT_RECOMMENDATIONS and the current governed home-tool operations
+  assert.equal(operationIds.length, 140); // + OWNERSHIP_COST_COMMAND
   for (const operationId of operationIds) {
     const entry = ASK_INTERACTION_COVERAGE_MATRIX[operationId];
     const shouldBeTraced = STAGE_2_TRACED_OPERATIONS.has(operationId);

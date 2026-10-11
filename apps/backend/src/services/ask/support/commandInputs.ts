@@ -12,6 +12,7 @@ import { HOME_JOURNEY_OPTIONS } from './homeSettingsConstants';
 import { WHOLE_HOME_VALUE } from './homeRecordAddConstants';
 import { DO_NOTHING_HORIZONS, NO_SAVED_SCENARIO_VALUE, SERVICE_PRICE_MAX_QUOTE, SERVICE_PRICE_UNSUPPORTED_CATEGORIES } from './homeToolRunConstants';
 import { SERVICE_RADAR_CATEGORY_VALUES } from '../../servicePriceRadar.types';
+import { OWNERSHIP_COST_CATEGORIES } from '../../ownershipCosts/ownershipCost.contract';
 
 export const MaintenanceTaskWorkflowInputSchema = z.object({
   title: z.string().trim().min(3).max(160).refine(isMeaningfulMaintenanceTaskTitle, {
@@ -270,6 +271,27 @@ export const RoomPlantRecommendationInputSchema = z.object({
   hasPets: z.boolean().default(false),
   goals: z.array(z.nativeEnum(PlantGoalType)).max(5).default([]),
   notes: optionalText(1000),
+}).strict();
+
+export const OwnershipCostScenarioInputSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  lens: z.enum(['OPERATING_EXPENSE', 'CASH_OUTFLOW']).default('OPERATING_EXPENSE'),
+  horizonYears: z.coerce.number().pipe(z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(10)])),
+  category: z.enum(OWNERSHIP_COST_CATEGORIES),
+  growthPercent: z.preprocess((value) => value === '' ? null : value, z.coerce.number().min(-25).max(50).nullable().optional().default(null)),
+  annualAdjustmentDollars: z.preprocess((value) => value === '' ? null : value, z.coerce.number().min(-1_000_000).max(1_000_000).nullable().optional().default(null)),
+}).strict();
+
+export const OwnershipCostDecisionInputSchema = z.object({
+  reason: z.string().trim().min(1).max(1000).nullable().optional().default(null),
+  revisitAt: z.union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    z.object({ precision: z.literal('EXACT_DATE'), value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict().transform((value) => value.value),
+  ]).nullable().optional().default(null),
+}).strict();
+
+export const OwnershipCostScenarioRenameInputSchema = z.object({
+  name: z.string().trim().min(1).max(80),
 }).strict();
 
 // Do-Nothing run (DO_NOTHING_SIMULATION_RUN): one of the four horizons the simulator accepts, and optionally one saved scenario. The form answers with

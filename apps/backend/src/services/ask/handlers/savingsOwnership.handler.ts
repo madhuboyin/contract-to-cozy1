@@ -3,15 +3,21 @@
 // re-exports the names below so existing imports keep working.
 import { HouseholdRole } from '@prisma/client';
 import { type AskCaptureRequest, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
-import { type AskOperationResult } from '../askOperationRegistry';
+import { type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 import { HomeSavingsService } from '../../homeSavings.service';
 import { HiddenAssetService } from '../../hiddenAssets.service';
 import { savingsBenefitsUnifiedService } from '../../savingsBenefitsUnified.service';
 import { ownershipCostReadModelService, type OwnershipCostCurrentLens } from '../../ownershipCosts/ownershipCostReadModel.service';
+import { ownershipCostChangeService } from '../../ownershipCosts/ownershipCostChange.service';
+import { ownershipCostForecastService } from '../../ownershipCosts/ownershipCostForecast.service';
+import { ownershipCostVariabilityService } from '../../ownershipCosts/ownershipCostVariability.service';
+import { ownershipCostDecisionService } from '../../ownershipCosts/ownershipCostDecision.service';
+import type { OwnershipCostCategory } from '../../ownershipCosts/ownershipCost.contract';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
+import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_COMMAND_MESSAGE } from '../support/ownershipCostConstants';
 
 const homeSavingsService = new HomeSavingsService();
 
@@ -238,8 +244,183 @@ function ownershipCostLens(message: string): OwnershipCostCurrentLens {
     : 'OPERATING_EXPENSE';
 }
 
+const ownershipViewMessages = {
+  current: 'Show my current ownership costs',
+  changes: 'What changed in my ownership costs?',
+  forecast: 'What may change in my ownership costs?',
+  variability: 'Help me plan an ownership cost buffer',
+} as const;
+
+function ownershipView(message: string): keyof typeof ownershipViewMessages {
+  if (/\b(?:what changed|changes?|increased?|decreased?|different)\b/i.test(message)) return 'changes';
+  if (/\b(?:what may change|forecast|future|forward|scenario|scenarios|horizon)\b/i.test(message)) return 'forecast';
+  if (/\b(?:plan (?:a )?buffer|buffer|variability|volatile|volatility|cash cushion)\b/i.test(message)) return 'variability';
+  return 'current';
+}
+
+const viewAction = (key: keyof typeof ownershipViewMessages, label: string) => ({
+  id: `ownership-cost-view-${key}`,
+  label,
+  message: ownershipViewMessages[key],
+  operationId: 'OWNERSHIP_COSTS' as const,
+  interactionType: 'CONVERSATION_CONTINUE' as const,
+  style: 'SECONDARY' as const,
+});
+
+function ownershipViewSwitcher(active: keyof typeof ownershipViewMessages): AskPresentationBlock {
+  const definitions = [
+    ['current', 'Current cost', 'Recorded cost, completeness and evidence.'],
+    ['changes', 'What changed', 'Compare observed periods and review material changes.'],
+    ['forecast', 'What may change', 'See forward ranges, drivers and saved scenarios.'],
+    ['variability', 'Plan a buffer', 'Review observed variability and planning buffers.'],
+  ] as const;
+  return {
+    type: 'GROUPED_LIST', id: 'ownership-cost-views', title: 'Explore ownership costs',
+    description: 'Continue with any part of the Ownership Costs workspace without leaving this conversation.', filters: [],
+    sections: [{ id: 'ownership-cost-view-options', title: 'Views', count: definitions.length, items: definitions.map(([key, title, description]) => ({
+      id: key, entityType: 'OWNERSHIP_COST_VIEW', title, description,
+      status: key === active ? 'CURRENT' : undefined, meta: [],
+      actions: key === active ? undefined : [viewAction(key, title)],
+    })) }], actions: [],
+  };
+}
+
+const categoryReview: Record<OwnershipCostCategory, { label: string; operationId: AskOperationId; message: string }> = {
+  PROPERTY_TAX: { label: 'Review property tax', operationId: 'PROPERTY_TAX_APPEAL_READINESS', message: 'Review my property tax details and appeal readiness' },
+  INSURANCE: { label: 'Review insurance', operationId: 'COVERAGE_GAPS', message: 'Review my insurance coverage and premium' },
+  HOA: { label: 'Review HOA records', operationId: 'HOA_COMPLIANCE_STATUS', message: 'Review my HOA records and compliance status' },
+  UTILITIES: { label: 'Review utilities', operationId: 'SAVINGS_OPPORTUNITIES', message: 'Review my utility costs and savings opportunities' },
+  MORTGAGE_PRINCIPAL: { label: 'Review financing', operationId: 'REFINANCE_ANALYSIS', message: 'Review my mortgage financing and refinance outlook' },
+  MORTGAGE_INTEREST: { label: 'Review financing', operationId: 'REFINANCE_ANALYSIS', message: 'Review my mortgage financing and refinance outlook' },
+  PMI: { label: 'Review financing', operationId: 'REFINANCE_ANALYSIS', message: 'Review my mortgage financing and refinance outlook' },
+  RECURRING_HOME_SERVICE: { label: 'Review recurring services', operationId: 'SAVINGS_OPPORTUNITIES', message: 'Review recurring home-service costs and savings opportunities' },
+  ROUTINE_MAINTENANCE: { label: 'Review maintenance', operationId: 'MAINTENANCE_STATUS', message: 'Review my home maintenance plan' },
+  KNOWN_REPAIR: { label: 'Review capital plan', operationId: 'CAPITAL_RESERVE_PLAN', message: 'Review my capital reserve plan and known repairs' },
+  CAPITAL_PROJECT: { label: 'Review capital plan', operationId: 'CAPITAL_RESERVE_PLAN', message: 'Review my capital reserve plan and projects' },
+  RESERVE_CONTRIBUTION: { label: 'Review reserve plan', operationId: 'CAPITAL_RESERVE_PLAN', message: 'Review my capital reserve plan' },
+};
+
+const moneyFromCents = (cents: number | null | undefined) => cents == null ? 'Unknown' : money(cents / 100);
+const codeLabel = (value: string) => value.toLowerCase().replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+const ownershipCommandAction = (id: string, label: string, entityId: string, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({ id, label, interactionType: 'MUTATE_RECORD' as const, message: OWNERSHIP_COST_COMMAND_MESSAGE, operationId: 'OWNERSHIP_COST_COMMAND', style, entityId, entityType: 'OWNERSHIP_COST_ACTION' });
+
+async function ownershipChangesResult(userId: string, propertyId: string, lens: OwnershipCostCurrentLens): Promise<AskOperationResult> {
+  const [changes, decisions, access] = await Promise.all([
+    ownershipCostChangeService.getObservedChanges(propertyId, userId, lens),
+    ownershipCostDecisionService.list(propertyId, userId),
+    ensurePropertyAccess(userId, propertyId),
+  ]);
+  const canChange = access.role !== HouseholdRole.VIEWER;
+  const currentByAction = new Map(decisions.decisions.map((decision) => [decision.sourceActionId, decision]));
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'ownership-cost-changes-summary',
+    title: changes.comparable ? `${changes.changes.length} ownership-cost change${changes.changes.length === 1 ? '' : 's'} found` : 'More history is needed to compare ownership costs',
+    body: changes.comparable ? `Recurring costs changed by ${moneyFromCents(changes.totalRecurringDeltaCents)} and one-time costs changed by ${moneyFromCents(changes.totalOneTimeDeltaCents)} across the compared periods.` : changes.reason ?? 'There are not yet two comparable observed periods.',
+    tone: changes.changes.some((change) => change.materiality.material) ? 'CAUTION' : 'DEFAULT', actions: [],
+  }];
+  if (changes.changes.length) blocks.push({
+    type: 'GROUPED_LIST', id: 'ownership-cost-changes', title: 'What changed', filters: [],
+    description: 'Ranked observed changes; estimates and unsupported explanations remain visibly labeled.',
+    sections: [{ id: 'observed-changes', title: 'Compared periods', count: changes.changes.length, items: changes.changes.map((change, index) => {
+      const sourceActionId = `ownership-cost-change:${change.id}`;
+      const decision = currentByAction.get(sourceActionId);
+      return {
+        id: change.id ?? `${change.category}-${index}`, entityType: 'OWNERSHIP_COST_CHANGE', title: change.label,
+        description: `${change.explanation} Prior: ${moneyFromCents(change.priorAnnualCents)}. Current: ${moneyFromCents(change.currentAnnualCents)}. Change: ${change.deltaCents >= 0 ? '+' : ''}${moneyFromCents(change.deltaCents)}.`,
+        status: decision?.lifecycleState ?? (change.materiality.material ? 'MATERIAL' : 'OBSERVED'),
+        meta: [change.impact.toLowerCase(), change.confidence.toLowerCase() + ' confidence', change.explanationStatus.toLowerCase()],
+        actions: canChange ? [
+          ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CHANGE_ACCEPT, decision?.destination?.label ?? 'Take action', change.id ?? '', 'PRIMARY'),
+          ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CHANGE_SAVE, 'Save', change.id ?? ''),
+          ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CHANGE_SNOOZE, 'Snooze', change.id ?? ''),
+          ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CHANGE_NO_ACTION, 'No action', change.id ?? ''),
+          ...(decision ? [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CHANGE_RESOLVE, 'Resolve', change.id ?? ''), ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CHANGE_DISMISS, 'Dismiss', change.id ?? '')] : []),
+          ...(decision && ['RESOLVED', 'DISMISSED', 'NO_ACTION'].includes(decision.lifecycleState) ? [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CHANGE_REOPEN, 'Reopen', change.id ?? '')] : []),
+          { ...viewAction('current', categoryReview[change.category].label), operationId: categoryReview[change.category].operationId, message: categoryReview[change.category].message, id: `ownership-cost-review-${change.category.toLowerCase()}` },
+        ] : [{ ...viewAction('current', categoryReview[change.category].label), operationId: categoryReview[change.category].operationId, message: categoryReview[change.category].message, id: `ownership-cost-review-${change.category.toLowerCase()}` }],
+      };
+    }) }], actions: [],
+  });
+  blocks.push({
+    type: 'GROUPED_LIST', id: 'ownership-cost-notifications', title: 'Reminders and revisit events', description: decisions.lifecycleRule, filters: [],
+    sections: [{ id: 'ownership-cost-notification-preferences', title: 'Reminder preferences', count: 4, items: (Object.entries(decisions.notificationPreferences) as Array<[keyof typeof decisions.notificationPreferences, boolean]>).map(([type, enabled]) => ({
+      id: type, entityType: 'OWNERSHIP_COST_NOTIFICATION', title: codeLabel(type), description: enabled ? 'Enabled' : 'Disabled', status: enabled ? 'ON' : 'OFF', meta: [],
+      actions: canChange ? [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.TOGGLE_NOTIFICATION, enabled ? 'Turn off' : 'Turn on', `${type}:${String(!enabled)}`)] : undefined,
+    })) }], actions: [],
+  });
+  blocks.push(ownershipViewSwitcher('changes'));
+  blocks.push({ type: 'BOUNDARY', id: 'ownership-cost-change-boundary', title: 'Observed comparison', body: changes.limitations.join(' ') || 'Changes compare recorded periods with stable category definitions; unexplained changes are not presented as facts.', severity: 'INFO', suggestions: [] });
+  return { status: changes.comparable ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: changes.comparable ? undefined : 'OWNERSHIP_COST_HISTORY_LIMITED', blocks, suggestions: [] };
+}
+
+async function ownershipForecastResult(userId: string, propertyId: string, lens: OwnershipCostCurrentLens, message: string): Promise<AskOperationResult> {
+  const requested = Number(message.match(/\b(1|3|5|10)[ -]year\b/i)?.[1] ?? 5);
+  const horizonYears = [1, 3, 5, 10].includes(requested) ? requested : 5;
+  const [forecast, scenarios, access] = await Promise.all([
+    ownershipCostForecastService.getForecast(propertyId, userId, lens, horizonYears),
+    ownershipCostForecastService.listScenarios(propertyId, userId),
+    ensurePropertyAccess(userId, propertyId),
+  ]);
+  const canChange = access.role !== HouseholdRole.VIEWER;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'ownership-cost-forecast-summary', title: `The ${horizonYears}-year base case reaches ${moneyFromCents(forecast.summary.endYear.baseCents)}`,
+    body: `The planning range is ${moneyFromCents(forecast.summary.endYear.lowCents)} to ${moneyFromCents(forecast.summary.endYear.highCents)}. It begins after the latest recorded period and is shown in nominal dollars.`,
+    tone: forecast.stale.isStale ? 'CAUTION' : 'DEFAULT', actions: [],
+  }, {
+    type: 'TABLE', id: 'ownership-cost-forecast-periods', title: 'Annual planning range', description: 'Low, base and high forward scenarios.', preferredPresentation: 'TABLE',
+    columns: [{ key: 'year', label: 'Year' }, { key: 'low', label: 'Low' }, { key: 'base', label: 'Base' }, { key: 'high', label: 'High' }],
+    rows: forecast.periods.map((period) => ({ id: String(period.year), values: { year: String(period.year), low: moneyFromCents(period.lowCents), base: moneyFromCents(period.baseCents), high: moneyFromCents(period.highCents) } })), actions: [],
+  }, {
+    type: 'GROUPED_LIST', id: 'ownership-cost-forecast-drivers', title: 'What drives the range', description: 'Ranked by sensitivity at the selected horizon.', filters: [],
+    sections: [{ id: 'forecast-drivers', title: 'Drivers', count: forecast.drivers.length, items: forecast.drivers.map((driver) => ({ id: driver.category, entityType: 'OWNERSHIP_COST_CATEGORY', title: driver.label, description: `${driver.rateSourceLabel} Annual rate: ${(driver.lowRate * 100).toFixed(1)}% / ${(driver.baseRate * 100).toFixed(1)}% / ${(driver.highRate * 100).toFixed(1)}%. Horizon sensitivity: ${moneyFromCents(driver.sensitivityCents)}.`, status: driver.rateSource.replace(/_/g, ' '), meta: driver.knownEvents.slice(0, 3).map((event) => `${event.year}: ${event.label}`) })) }], actions: [],
+  }];
+  if (canChange) blocks.push({
+    type: 'GROUPED_LIST', id: 'ownership-cost-forecast-actions', title: 'Forecast actions', description: 'Save the current range or create a named scenario with a bounded category assumption.', filters: [],
+    sections: [{ id: 'forecast-actions', title: 'Next steps', count: 2, items: [
+      { id: 'save-forecast', entityType: 'OWNERSHIP_COST_FORECAST', title: forecast.forecastId ? 'Recalculate the saved forecast' : 'Save this forecast', description: `${horizonYears}-year ${lens === 'CASH_OUTFLOW' ? 'cash outflow' : 'operating expense'} range.`, meta: [], actions: [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.SAVE_FORECAST, forecast.forecastId ? 'Recalculate' : 'Save forecast', `${lens}:${horizonYears}`, 'PRIMARY')] },
+      { id: 'create-scenario', entityType: 'OWNERSHIP_COST_SCENARIO', title: 'Save a planning scenario', description: 'Name and compare a bounded category growth or annual adjustment assumption.', meta: [], actions: [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CREATE_SCENARIO, 'Save a scenario', `${lens}:${horizonYears}`, 'PRIMARY')] },
+    ] }], actions: [],
+  });
+  if (scenarios.length) blocks.push({
+    type: 'GROUPED_LIST', id: 'ownership-cost-scenarios', title: 'Saved scenarios', description: 'Saved scenarios retain their base snapshot; stale scenarios are labeled.', filters: [],
+    sections: [{ id: 'saved-scenarios', title: 'Compare', count: scenarios.length, items: scenarios.map((scenario) => ({ id: scenario.id, entityType: 'OWNERSHIP_COST_SCENARIO', title: scenario.name, description: `${scenario.forecast.horizonYears}-year base ${moneyFromCents(scenario.forecast.summary.endYear.baseCents)}; range ${moneyFromCents(scenario.forecast.summary.endYear.lowCents)} – ${moneyFromCents(scenario.forecast.summary.endYear.highCents)}.${scenario.staleReason ? ` ${scenario.staleReason}` : ''}`, status: scenario.isStale ? 'STALE' : scenario.status, meta: [], actions: canChange ? [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.RENAME_SCENARIO, 'Rename', scenario.id), ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.ARCHIVE_SCENARIO, 'Archive', scenario.id), ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.DELETE_SCENARIO, 'Delete', scenario.id)] : undefined })) }], actions: [],
+  });
+  blocks.push(ownershipViewSwitcher('forecast'));
+  blocks.push({ type: 'BOUNDARY', id: 'ownership-cost-forecast-boundary', title: 'Planning range, not a prediction', body: forecast.disclaimer || forecast.limitations.join(' '), severity: 'INFO', suggestions: [] });
+  return { status: forecast.stale.isStale ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: forecast.stale.isStale ? 'OWNERSHIP_COST_FORECAST_STALE' : undefined, blocks, suggestions: [] };
+}
+
+async function ownershipBufferResult(userId: string, propertyId: string, lens: OwnershipCostCurrentLens): Promise<AskOperationResult> {
+  const [variability, access] = await Promise.all([ownershipCostVariabilityService.getVariability(propertyId, userId, lens), ensurePropertyAccess(userId, propertyId)]);
+  const canChange = access.role !== HouseholdRole.VIEWER;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'ownership-cost-buffer-summary', title: `A monthly planning buffer of ${moneyFromCents(variability.planningBuffer.monthlyCashBufferCents)}`,
+    body: `The separately tracked capital reserve is ${moneyFromCents(variability.planningBuffer.capitalReserveCents)}. ${variability.eligibility.reason}`,
+    tone: variability.eligibility.eligible ? 'DEFAULT' : 'CAUTION', actions: [],
+  }];
+  if (variability.measured.periods.length) blocks.push({
+    type: 'TABLE', id: 'ownership-cost-observed-variability', title: 'Observed annual periods', description: 'Recurring and one-time capital amounts remain separate.', preferredPresentation: 'TABLE',
+    columns: [{ key: 'year', label: 'Year' }, { key: 'recurring', label: 'Recurring' }, { key: 'capital', label: 'One-time capital' }],
+    rows: variability.measured.periods.map((period) => ({ id: period.snapshotId, values: { year: String(period.year), recurring: moneyFromCents(period.recurringCents), capital: moneyFromCents(period.oneTimeCents) } })), actions: [],
+  });
+  blocks.push({
+    type: 'GROUPED_LIST', id: 'ownership-cost-buffer-options', title: 'Planning options', description: 'Continue in Ask with the canonical owner of each planning decision.', filters: [],
+    sections: [{ id: 'buffer-options', title: 'Next steps', count: 2, items: [
+      { id: 'monthly-buffer', entityType: 'OWNERSHIP_COST_BUFFER', title: 'Monthly cash buffer', description: `${moneyFromCents(variability.planningBuffer.monthlyCashBufferCents)} based on the forward scenario range.`, meta: [], actions: canChange && variability.planningBuffer.monthlyHandoff.enabled ? [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.MONTHLY_BUFFER, 'Use this monthly buffer', `${lens}:MONTHLY_CASH_BUFFER`, 'PRIMARY')] : undefined },
+      { id: 'capital-reserve', entityType: 'OWNERSHIP_COST_BUFFER', title: 'Capital reserve', description: `${moneyFromCents(variability.planningBuffer.capitalReserveCents)} for supported upcoming capital needs.`, meta: [], actions: canChange && variability.planningBuffer.capitalHandoff.enabled ? [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.CAPITAL_RESERVE, 'Use this capital reserve', `${lens}:CAPITAL_RESERVE`, 'PRIMARY')] : undefined },
+    ] }], actions: [],
+  });
+  blocks.push(ownershipViewSwitcher('variability'));
+  blocks.push({ type: 'BOUNDARY', id: 'ownership-cost-buffer-boundary', title: 'Scenario-based planning support', body: `${variability.planningBuffer.nonDuplicationRule} ${variability.limitations.join(' ')}`, severity: 'INFO', suggestions: [] });
+  return { status: variability.eligibility.eligible ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: variability.eligibility.eligible ? undefined : 'OWNERSHIP_COST_VARIABILITY_LIMITED', blocks, suggestions: [] };
+}
+
 async function ownershipCostsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const lens = ownershipCostLens(message);
+  const view = ownershipView(message);
+  if (view === 'changes') return ownershipChangesResult(userId, propertyId, lens);
+  if (view === 'forecast') return ownershipForecastResult(userId, propertyId, lens, message);
+  if (view === 'variability') return ownershipBufferResult(userId, propertyId, lens);
   const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/ownership-costs?view=current&lens=${lens}`;
   const [access, context] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
@@ -271,6 +452,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
   let costs: Awaited<ReturnType<typeof ownershipCostReadModelService.getCurrent>>;
   try {
     costs = await ownershipCostReadModelService.getCurrent(propertyId, userId, lens, { refresh: true });
+    if (/\brefresh\b/i.test(message)) await ownershipCostChangeService.refreshObservedChanges(propertyId, userId, lens);
   } catch {
     return {
       status: captureRequests.length ? 'NEEDS_CONTEXT' : 'UNAVAILABLE',
@@ -334,16 +516,17 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
 
   if (missing.length) {
     blocks.push({
-      type: 'TABLE', id: 'ownership-cost-missing', title: 'Information that could improve this total',
+      type: 'GROUPED_LIST', id: 'ownership-cost-missing', title: 'Information that could improve this total',
       description: 'These categories are applicable or unresolved, but no amount is currently included.',
-      preferredPresentation: 'TABLE',
-      columns: [{ key: 'category', label: 'Category' }, { key: 'missing', label: 'Missing information' }, { key: 'nextStep', label: 'Suggested next step' }],
-      rows: missing.map((category) => ({ id: category.category, values: {
-        category: category.label,
-        missing: category.missingDependencies.length ? category.missingDependencies.join(' · ') : 'No usable current amount is recorded.',
-        nextStep: category.correction.label,
-      } })),
-      actions: [],
+      filters: [], sections: [{ id: 'missing-cost-categories', title: 'Missing categories', count: missing.length, items: missing.map((category) => {
+        const review = categoryReview[category.category];
+        return {
+          id: category.category, entityType: 'OWNERSHIP_COST_CATEGORY', title: category.label,
+          description: category.missingDependencies.length ? category.missingDependencies.join(' · ') : 'No usable current amount is recorded.',
+          status: 'MISSING', meta: [],
+          actions: [{ id: `ownership-cost-review-${category.category.toLowerCase()}`, label: review.label, interactionType: 'CONVERSATION_CONTINUE', message: review.message, operationId: review.operationId, style: 'PRIMARY' }],
+        };
+      }) }], actions: [],
     });
   }
 
@@ -360,6 +543,12 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
     },
   }));
   if (evidence.length) blocks.push({ type: 'EVIDENCE', id: 'ownership-cost-evidence', title: 'Sources and periods', items: evidence });
+  blocks.push(ownershipViewSwitcher('current'));
+  blocks.push({
+    type: 'SUMMARY', id: 'ownership-cost-refresh', title: 'Refresh source records',
+    body: 'Re-read canonical property-tax, coverage, financing, utility, HOA, maintenance, service, project and reserve sources.', tone: 'DEFAULT',
+    actions: [{ id: 'ownership-cost-refresh-sources', label: 'Refresh sources', interactionType: 'START_WORKFLOW', message: `Refresh my ${lens === 'CASH_OUTFLOW' ? 'cash outflow' : 'operating expense'} ownership cost sources`, operationId: 'OWNERSHIP_COSTS', style: 'SECONDARY' }],
+  });
   blocks.push({
     type: 'BOUNDARY', id: 'ownership-cost-lens-boundary', title: `${lens === 'CASH_OUTFLOW' ? 'Cash outflow' : 'Operating expense'} lens`,
     body: lens === 'CASH_OUTFLOW'

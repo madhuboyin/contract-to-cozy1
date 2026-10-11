@@ -30,7 +30,7 @@ test('every one of the 42 confirmation-required Ask commands resolves to a regis
   // + DIY_PROJECT_COMPLETE and DIY_PROJECT_ABANDON (DIY project commands, step 7B).
   // + DIY_COMPLETION_RECOVER (DIY completion recovery, step 7C).
   // + DIY_PROJECT_START (step 8, project creation from Ask).
-  assert.equal(commandIds.length, 60); // + ROOM_PLANT_RECOMMENDATIONS and the current governed home-tool commands
+  assert.equal(commandIds.length, 61); // + OWNERSHIP_COST_COMMAND
   assert.deepEqual(validateConfirmCapabilityHandlerRegistry(), []);
 });
 

@@ -87,6 +87,7 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   'MATERIAL_SPEC_ADD',
   'HOME_PLANT_ADD',
   'ROOM_PLANT_RECOMMENDATIONS',
+  'OWNERSHIP_COST_COMMAND',
   // Tool starts written inside Ask (declared-action, confirmation-gated, skill-less): suggest habits, run the simulation, check a quote.
   'HOME_HABITS_GENERATE',
   'DO_NOTHING_SIMULATION_RUN',

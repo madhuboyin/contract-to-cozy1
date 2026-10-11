@@ -276,6 +276,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   MATERIAL_SPEC_ADD: 'The material is reviewed and then recorded for this home after your confirmation.',
   HOME_PLANT_ADD: 'The plant is reviewed and then added to this home after your confirmation.',
   ROOM_PLANT_RECOMMENDATIONS: 'Room preferences are reviewed and ranked plant recommendations are generated after your confirmation.',
+  OWNERSHIP_COST_COMMAND: 'An ownership-cost planning choice is reviewed and recorded only after confirmation.',
   HOME_HABITS_GENERATE: 'Habit suggestions for this home are reviewed and then added after your confirmation.',
   DO_NOTHING_SIMULATION_RUN: 'The simulation settings are reviewed and the simulation runs after your confirmation.',
   SERVICE_PRICE_CHECK_RUN: 'The quote details are reviewed and the quote is checked against typical local prices after your confirmation.',
