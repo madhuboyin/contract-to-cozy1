@@ -46,7 +46,28 @@ test('the scenario branch renders the canonical comparison alongside the scenari
   assert.doesNotMatch(scenarioBranch, /id: 'refinance-scenario-current-comparison'/, 'the separate current-comparison table was folded into the strip');
 });
 
-const { refinanceScenarioComparison } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { refinanceScenarioComparison, parseRefinanceScenarioEdit } = require('../../src/services/ask/askOrchestrator.service.ts');
+
+test('the conversational scenario parser accepts the desktop planner assumptions without changing canonical facts', () => {
+  assert.deepEqual(
+    parseRefinanceScenarioEdit('What if I refinanced at 5.25% for 15 years with $6,000 closing costs, 1 discount point, $750 in lender credits, $10,000 extra principal, excellent credit, and a lower monthly payment?'),
+    {
+      targetRatePct: 5.25,
+      targetTerm: 'FIFTEEN_YEAR',
+      closingCostAmount: 6000,
+      discountPoints: 1,
+      additionalFeesAmount: undefined,
+      lenderCreditsAmount: 750,
+      escrowFundingAmount: undefined,
+      prepaymentPenaltyAmount: undefined,
+      extraPrincipalAmount: 10000,
+      recastPrincipalAmount: undefined,
+      cashOutAmount: undefined,
+      borrowerCreditBand: 'EXCELLENT',
+      objective: 'LOWER_PAYMENT',
+    },
+  );
+});
 
 // The strip builder is given deliberately different numbers for the canonical evaluation and the hypothetical, so a
 // value read from the wrong source cannot pass. This replaces the earlier source-shape check that the current

@@ -12,6 +12,8 @@ import { RefinanceRadarService } from '../../../refinanceRadar/refinanceRadar.se
 import { MortgageRateService } from '../../../refinanceRadar/engine/mortgageRate.service';
 import { getRefinanceAlertPreference } from '../../../refinanceRadar/refinanceAlertPreference.service';
 import { listRefinanceRateMonitors, type RefinanceRateMonitorDTO } from '../../../refinanceRadar/refinanceRateMonitor.service';
+import { getCurrentRefinanceDecision } from '../../../refinanceRadar/refinanceDecision.service';
+import { listSavedRefinanceLoanEstimateComparisons } from '../../../refinanceRadar/refinanceLoanEstimateSnapshot.service';
 import { BreakEvenService, type BreakEvenDTO } from '../../breakEven.service';
 import { money } from '../askFormatting';
 import { askContextFingerprint, durableFreeTextClarification } from '../askHandlerSupport';
@@ -19,6 +21,106 @@ import { askContextFingerprint, durableFreeTextClarification } from '../askHandl
 const refinanceRadarService = new RefinanceRadarService();
 
 const mortgageRateService = new MortgageRateService();
+
+type RefinanceScenarioEdit = {
+  targetRatePct: number | null;
+  targetTerm: RefinanceScenarioTerm | null;
+  closingCostAmount?: number;
+  discountPoints?: number;
+  additionalFeesAmount?: number;
+  lenderCreditsAmount?: number;
+  escrowFundingAmount?: number;
+  prepaymentPenaltyAmount?: number;
+  extraPrincipalAmount?: number;
+  recastPrincipalAmount?: number;
+  cashOutAmount?: number;
+  borrowerCreditBand: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'LIMITED' | 'UNKNOWN';
+  objective: 'BALANCED' | 'LOWER_PAYMENT' | 'FASTER_PAYOFF' | 'LOWER_TOTAL_COST';
+};
+
+function refinanceWorkflowAction(id: string, label: string, message: string, operationId = 'REFINANCE_ANALYSIS', style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') {
+  return { id, label, interactionType: 'START_WORKFLOW' as const, message, operationId, style };
+}
+
+function refinanceNextActions(favorable: boolean, triggerRatePct: number | null) {
+  const threshold = triggerRatePct == null ? 5.5 : Number(triggerRatePct.toFixed(3));
+  return favorable
+    ? [
+        refinanceWorkflowAction('refinance-test-scenario', 'Test another scenario', 'What if I refinanced at 5.5% for 15 years with $6,000 closing costs?', 'REFINANCE_ANALYSIS', 'PRIMARY'),
+        refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'),
+        refinanceWorkflowAction('refinance-record-decision', 'Record my decision', 'Help me record what I plan to do about refinancing.'),
+      ]
+    : [
+        refinanceWorkflowAction('refinance-test-scenario', 'Test another scenario', `What if I refinanced at ${threshold}% for 15 years with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
+        refinanceWorkflowAction('refinance-start-monitor', 'Notify me at this rate', `Notify me when 30-year mortgage rates reach ${threshold}%.`, 'REFINANCE_RATE_MONITOR'),
+        refinanceWorkflowAction('refinance-record-decision', 'Keep or revisit this decision', 'Help me record what I plan to do about refinancing.'),
+      ];
+}
+
+function refinanceJourneyIntent(message: string): 'COMPARE_OFFERS' | 'RECORD_DECISION' | 'RATE_HISTORY' | null {
+  if (/\b(?:compare|review|upload|official)\b.*\b(?:loan estimates?|lender offers?|quotes?)\b/i.test(message)) return 'COMPARE_OFFERS';
+  if (/\b(?:record|update|review|help me)\b.*\b(?:refinance )?(?:decision|plan|what i plan)\b/i.test(message)) return 'RECORD_DECISION';
+  if (/\b(?:rate|market)\b.*\b(?:history|trend|movement|changed)\b/i.test(message)) return 'RATE_HISTORY';
+  return null;
+}
+
+async function refinanceJourneyResult(propertyId: string, intent: NonNullable<ReturnType<typeof refinanceJourneyIntent>>): Promise<AskOperationResult> {
+  const page = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`;
+  if (intent === 'COMPARE_OFFERS') {
+    const comparisons = await listSavedRefinanceLoanEstimateComparisons(propertyId);
+    return {
+      status: 'ANSWERED', reasonCode: 'REFINANCE_LOAN_ESTIMATES',
+      blocks: [{
+        type: 'SUMMARY', id: 'refinance-offers-summary', title: comparisons.length ? `${comparisons.length} saved Loan Estimate comparison${comparisons.length === 1 ? '' : 's'}` : 'Compare official Loan Estimates',
+        body: comparisons.length ? 'Choose a saved comparison below, or add reviewed disclosures from two to four lenders. Ask keeps official lender terms separate from modeled scenarios.' : 'Add two to four official lender disclosures. You can upload a PDF or up to three page images for reviewed extraction, or enter the fields manually before comparing.',
+        tone: 'DEFAULT', actions: [{ id: 'open-loan-estimates', label: comparisons.length ? 'Review or add offers' : 'Add Loan Estimates', href: `${page}#refinance-loan-estimates`, style: 'PRIMARY' }],
+      }, ...(comparisons.length ? [{
+        type: 'TABLE' as const, id: 'refinance-saved-offers', title: 'Saved official-offer comparisons',
+        columns: [{ key: 'label', label: 'Comparison' }, { key: 'offers', label: 'Lenders' }, { key: 'updated', label: 'Last updated' }],
+        rows: comparisons.map((comparison) => ({ id: comparison.id, values: { label: comparison.label ?? 'Saved comparison', offers: comparison.offers.map((offer) => offer.lenderName).join(' · '), updated: comparison.updatedAt.slice(0, 10) } })), actions: [],
+      }] : []), {
+        type: 'BOUNDARY', id: 'refinance-offers-boundary', title: 'Official disclosures still require homeowner review',
+        body: 'ContractToCozy compares the disclosures you review; it does not select, endorse, contact, or transmit information to a lender.', severity: 'INFO', suggestions: [],
+      }], suggestions: [],
+    };
+  }
+  if (intent === 'RECORD_DECISION') {
+    const [decision, scenarios, comparisons] = await Promise.all([
+      getCurrentRefinanceDecision(propertyId),
+      refinanceRadarService.getSavedScenarios(propertyId),
+      listSavedRefinanceLoanEstimateComparisons(propertyId),
+    ]);
+    return {
+      status: 'ANSWERED', reasonCode: 'REFINANCE_DECISION_JOURNEY',
+      blocks: [{
+        type: 'SUMMARY', id: 'refinance-decision-summary', title: decision ? `Current refinance decision: ${decision.status.replace(/_/g, ' ').toLowerCase()}` : 'Record what you plan to do',
+        body: decision ? `This decision was updated ${decision.updatedAt.slice(0, 10)}. ${scenarios.length} saved scenario${scenarios.length === 1 ? '' : 's'} and ${comparisons.length} saved offer comparison${comparisons.length === 1 ? '' : 's'} are available to support the next step.` : 'Choose whether to keep the current loan, revisit on a future date, or proceed. A saved scenario or reviewed offer can be linked before you continue.',
+        tone: 'DEFAULT', actions: [{ id: 'open-refinance-decision', label: decision ? 'Review or update decision' : 'Record decision', href: `${page}#refinance-decide-track`, style: 'PRIMARY' }],
+      }, ...(decision?.history?.length ? [{
+        type: 'TABLE' as const, id: 'refinance-decision-history', title: 'Decision history',
+        columns: [{ key: 'date', label: 'Date' }, { key: 'from', label: 'From' }, { key: 'to', label: 'To' }],
+        rows: decision.history.map((item: { id: string; occurredAt: string; fromStatus: string | null; toStatus: string }) => ({ id: item.id, values: { date: item.occurredAt.slice(0, 10), from: item.fromStatus?.replace(/_/g, ' ').toLowerCase() ?? 'Started', to: item.toStatus.replace(/_/g, ' ').toLowerCase() } })), actions: [],
+      }] : []), {
+        type: 'BOUNDARY', id: 'refinance-decision-boundary', title: 'A verified closing is consequential',
+        body: 'Recording a closed refinance updates the canonical Financing Profile only after you review and confirm the new mortgage facts.', severity: 'INFO', suggestions: [],
+      }], suggestions: [],
+    };
+  }
+  const history = await refinanceRadarService.getRateHistory(propertyId, 12);
+  return {
+    status: 'ANSWERED', reasonCode: 'REFINANCE_RATE_HISTORY',
+    blocks: [{
+      type: 'SUMMARY', id: 'refinance-rate-history-summary', title: history.trendSummary.trendLabel,
+      body: `Latest governed benchmarks: ${history.trendSummary.current30yr?.toFixed(3) ?? '—'}% for 30-year fixed and ${history.trendSummary.current15yr?.toFixed(3) ?? '—'}% for 15-year fixed.`, tone: 'DEFAULT', actions: [],
+    }, {
+      type: 'TABLE', id: 'refinance-rate-history', title: 'Recent governed mortgage-rate history',
+      columns: [{ key: 'date', label: 'Date' }, { key: 'thirty', label: '30-year fixed' }, { key: 'fifteen', label: '15-year fixed' }, { key: 'source', label: 'Source' }],
+      rows: history.snapshots.map((snapshot) => ({ id: snapshot.id, values: { date: snapshot.date, thirty: `${snapshot.rate30yr.toFixed(3)}%`, fifteen: `${snapshot.rate15yr.toFixed(3)}%`, source: snapshot.source } })), actions: [],
+    }, {
+      type: 'BOUNDARY', id: 'refinance-rate-history-boundary', title: 'National benchmark—not personalized pricing', body: 'These snapshots describe governed national benchmarks. Eligibility and available lender pricing depend on underwriting.', severity: 'INFO', suggestions: [],
+    }], suggestions: [],
+  };
+}
 
 export async function refinanceMonitorContextVersion(userId: string, propertyId: string): Promise<string> {
   const [preference, snapshot] = await Promise.all([getRefinanceAlertPreference(userId, propertyId), mortgageRateService.getLatestSnapshot()]);
@@ -37,20 +139,49 @@ export async function refinanceMonitorContextVersion(userId: string, propertyId:
 // worth it at 6%" is asking a question about THIS number being relevant,
 // not necessarily requesting a recalculation, so an explicit hypothetical
 // framing is required before this reinterprets the turn as an edit.
-export function parseRefinanceScenarioEdit(message: string): { targetRatePct: number | null; targetTerm: RefinanceScenarioTerm | null } | null {
+export function parseRefinanceScenarioEdit(message: string): RefinanceScenarioEdit | null {
   const isScenarioFraming = /\b(?:what if|suppose|hypothetically|instead of my (?:current|recorded) (?:rate|term|loan)|if i (?:refinanc(?:e|ed)?|got|get|took|take))\b/i.test(message);
   if (!isScenarioFraming) return null;
   const rateMatch = message.match(/(\d{1,2}(?:\.\d{1,3})?)\s*%/);
   const targetRatePct = rateMatch ? Number(rateMatch[1]) : null;
-  const targetTerm = /\b(?:15|fifteen)[- ]?year\b/i.test(message)
+  const targetTerm = /\b(?:15|fifteen)[- ]?years?\b/i.test(message)
     ? RefinanceScenarioTerm.FIFTEEN_YEAR
-    : /\b(?:20|twenty)[- ]?year\b/i.test(message)
+    : /\b(?:20|twenty)[- ]?years?\b/i.test(message)
       ? RefinanceScenarioTerm.TWENTY_YEAR
-      : /\b(?:30|thirty)[- ]?year\b/i.test(message)
+      : /\b(?:30|thirty)[- ]?years?\b/i.test(message)
         ? RefinanceScenarioTerm.THIRTY_YEAR
         : null;
   if (targetRatePct == null && !targetTerm) return null;
-  return { targetRatePct, targetTerm };
+  const amount = (patterns: RegExp[]) => {
+    for (const pattern of patterns) {
+      const match = message.match(pattern);
+      if (match) return Number(match[1].replace(/,/g, ''));
+    }
+    return undefined;
+  };
+  const objective = /lower (?:my )?(?:monthly )?payment/i.test(message)
+    ? 'LOWER_PAYMENT'
+    : /(?:pay off|payoff|faster payoff)/i.test(message)
+      ? 'FASTER_PAYOFF'
+      : /(?:lower|reduce) (?:the )?(?:total )?(?:cost|interest)/i.test(message)
+        ? 'LOWER_TOTAL_COST'
+        : 'BALANCED';
+  const credit = message.match(/\b(excellent|good|fair|limited) credit\b/i)?.[1].toUpperCase() as RefinanceScenarioEdit['borrowerCreditBand'] | undefined;
+  return {
+    targetRatePct,
+    targetTerm,
+    closingCostAmount: amount([/\$([\d,]+(?:\.\d+)?)\s+(?:in\s+)?closing costs?/i, /closing costs?\s+(?:of\s+)?\$([\d,]+(?:\.\d+)?)/i]),
+    discountPoints: amount([/([\d.]+)\s+(?:discount\s+)?points?\b/i]),
+    additionalFeesAmount: amount([/\$([\d,]+(?:\.\d+)?)\s+(?:in\s+)?additional fees?/i]),
+    lenderCreditsAmount: amount([/\$([\d,]+(?:\.\d+)?)\s+(?:in\s+)?lender credits?/i]),
+    escrowFundingAmount: amount([/\$([\d,]+(?:\.\d+)?)\s+(?:for\s+)?escrow/i]),
+    prepaymentPenaltyAmount: amount([/\$([\d,]+(?:\.\d+)?)\s+prepayment penalt(?:y|ies)/i]),
+    extraPrincipalAmount: amount([/\$([\d,]+(?:\.\d+)?)\s+(?:of\s+)?extra principal/i]),
+    recastPrincipalAmount: amount([/recast(?:ing)?\s+\$([\d,]+(?:\.\d+)?)/i]),
+    cashOutAmount: amount([/\$([\d,]+(?:\.\d+)?)\s+cash[ -]?out/i, /cash[ -]?out(?: of)?\s+\$([\d,]+(?:\.\d+)?)/i]),
+    borrowerCreditBand: credit ?? 'UNKNOWN',
+    objective,
+  };
 }
 
 // Mortgage-refinance-radar capability-card slice (FRD v1.45). The MONITOR block both the monitor confirmation and the
@@ -218,6 +349,8 @@ export function refinanceScenarioComparison(
 }
 
 async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const journeyIntent = refinanceJourneyIntent(message);
+  if (journeyIntent) return refinanceJourneyResult(propertyId, journeyIntent);
   const [profile, financialContext, marketSnapshot] = await Promise.all([
     getProfile(propertyId),
     getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR'),
@@ -300,8 +433,17 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
       const scenario = await refinanceRadarService.runScenario(propertyId, {
         targetRate: targetRatePct,
         targetTerm,
-        borrowerCreditBand: 'UNKNOWN',
-        objective: 'BALANCED',
+        closingCostAmount: scenarioEdit.closingCostAmount,
+        discountPoints: scenarioEdit.discountPoints,
+        additionalFeesAmount: scenarioEdit.additionalFeesAmount,
+        lenderCreditsAmount: scenarioEdit.lenderCreditsAmount,
+        escrowFundingAmount: scenarioEdit.escrowFundingAmount,
+        prepaymentPenaltyAmount: scenarioEdit.prepaymentPenaltyAmount,
+        extraPrincipalAmount: scenarioEdit.extraPrincipalAmount,
+        recastPrincipalAmount: scenarioEdit.recastPrincipalAmount,
+        cashOutAmount: scenarioEdit.cashOutAmount,
+        borrowerCreditBand: scenarioEdit.borrowerCreditBand,
+        objective: scenarioEdit.objective,
         saveScenario: false,
         propertyContextVersion: financialContext.contextVersion,
       });
@@ -312,15 +454,31 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
           title: `Illustrative ${termLabel} scenario at ${targetRatePct.toFixed(3)}%`,
           body: 'This is a hypothetical recalculation only. Nothing was saved, and your recorded mortgage rate and term are unchanged. The current comparison is shown below, unchanged, alongside it.',
           tone: 'DEFAULT',
-          actions: [{ id: 'open-radar', label: 'Explore in Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }],
+          actions: [
+            refinanceWorkflowAction('refinance-adjust-scenario', 'Adjust this scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
+            refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'),
+            refinanceWorkflowAction('refinance-record-decision', 'Record my decision', 'Help me record what I plan to do about refinancing.'),
+          ],
         }, refinanceScenarioComparison(
           result, scenario, targetRatePct, termLabel,
         ), {
+          type: 'TABLE', id: 'refinance-scenario-details', title: 'Scenario details and tradeoffs',
+          description: 'The same deterministic scenario engine used by Mortgage Refinance Radar.',
+          columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Scenario' }, { key: 'context', label: 'What it means' }],
+          rows: [
+            { id: 'new-payment', values: { metric: 'New principal and interest', value: money(scenario.newMonthlyPayment), context: `Current estimate: ${money(scenario.currentMonthlyPayment)}` } },
+            { id: 'estimated-apr', values: { metric: 'Modeled APR', value: `${scenario.estimatedAprPct.toFixed(3)}%`, context: 'Includes modeled net upfront costs' } },
+            { id: 'cash-to-close', values: { metric: 'Estimated cash to close', value: money(scenario.cashToCloseUsd), context: 'Planning estimate, not a lender disclosure' } },
+            { id: 'interest', values: { metric: 'Estimated total interest', value: money(scenario.totalInterestNewLoan), context: `Current remaining estimate: ${money(scenario.totalInterestRemainingCurrent)}` } },
+            { id: 'payoff', values: { metric: 'Payoff timing change', value: `${Math.abs(scenario.payoffDeltaMonths)} months ${scenario.payoffDeltaMonths <= 0 ? 'sooner' : 'later'}`, context: scenario.recommendationExplanation } },
+            { id: 'objective', values: { metric: 'Planning objective', value: scenario.objective.replace(/_/g, ' ').toLowerCase(), context: `Recommended term: ${scenario.recommendedTerm.replace(/_/g, ' ').toLowerCase()}` } },
+          ], actions: [],
+        }, {
           type: 'EVIDENCE', id: 'refinance-scenario-evidence', title: 'Sources used',
           items: [{ label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() }],
         }, {
           type: 'BOUNDARY', id: 'refinance-scenario-boundary', title: 'Illustrative scenario—not a lender quote or a saved plan',
-          body: 'This models a hypothetical rate and term only. Actual eligibility, APR, and closing costs depend on lender underwriting. Nothing here changes your recorded mortgage facts or enables rate monitoring.',
+          body: 'This models the rate, term, costs, credits, points, principal, recast, cash-out, credit band, and objective you stated. Actual eligibility, APR, and closing costs depend on lender underwriting. Nothing here changes your recorded mortgage facts or enables rate monitoring.',
           severity: 'INFO', suggestions: [],
         }],
         suggestions: [],
@@ -350,7 +508,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
     blocks: [{
       type: 'SUMMARY', id: 'refinance-analysis-summary', title: favorable ? 'Refinancing may be worth comparing now' : 'Current conditions do not meet the radar’s actionable threshold',
       body: result.radarSummary, tone: favorable ? 'POSITIVE' : 'DEFAULT',
-      actions: [{ id: 'open-radar', label: 'Explore refinance scenarios', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }],
+      actions: refinanceNextActions(favorable, result.triggerRatePct),
     }, {
       type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
       description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',

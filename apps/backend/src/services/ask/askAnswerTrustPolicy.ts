@@ -143,7 +143,12 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),
   REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace', 'show-inventory', 'add-inventory-item']),
   // FRD v1.45: the analysis also shows the homeowner's own rate monitors (MONITOR renders its own pause/resume/stop).
-  REFINANCE_ANALYSIS: new Set(['review-financing', 'open-radar', 'open-profile', 'edit-monitor']),
+  REFINANCE_ANALYSIS: new Set([
+    'review-financing', 'open-radar', 'open-profile', 'edit-monitor',
+    'refinance-test-scenario', 'refinance-start-monitor', 'refinance-compare-offers',
+    'refinance-record-decision', 'refinance-adjust-scenario', 'open-loan-estimates',
+    'open-refinance-decision',
+  ]),
   REFINANCE_RATE_MONITOR: new Set(['open-radar', 'edit-monitor']),
   SELL_HOLD_RENT_ANALYSIS: new Set(['open-sell-hold-rent']),
   BREAK_EVEN_ANALYSIS: new Set(['open-break-even', 'rerun-break-even-5', 'rerun-break-even-10']),

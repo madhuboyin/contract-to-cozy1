@@ -138,6 +138,25 @@ Opportunity recognized
 The capability must remain valuable when no opportunity is open by monitoring quietly and
 explaining the next property-specific threshold without competing with current Home Actions.
 
+### 3.5 Ask Cozy conversational parity
+
+Ask Cozy uses the same governed mortgage profile, market snapshots, scenario engine, saved Loan
+Estimate comparisons, refinance decisions, and rate history as the desktop workspace. A canonical
+analysis now ends with state-aware next actions instead of a dead end: test or adjust a scenario,
+start a threshold monitor, continue to official-offer comparison, or review the durable decision.
+
+Conversational what-if scenarios accept the desktop planner's material assumptions when the
+homeowner states them: rate, term, closing costs, points, additional fees, lender credits, escrow,
+prepayment penalty, extra principal, recast principal, cash-out amount, credit band, and planning
+objective. These runs remain transient and never overwrite the Financing Profile or create a saved
+scenario implicitly. The response shows payment, modeled APR, cash to close, total interest, payoff
+timing, objective, and recommended term alongside the unchanged canonical comparison.
+
+Ask can also read recent governed rate history, saved official-offer comparisons, and the current
+decision plus its history. Document upload/review, durable comparison management, decision changes,
+and verified closing continue in the owning guarded workflow; Ask does not bypass homeowner review,
+confirmation, extraction provenance, or the canonical Financing writeback rules.
+
 ---
 
 ## 4. Current Strengths
