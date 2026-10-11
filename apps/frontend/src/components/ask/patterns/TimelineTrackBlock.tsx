@@ -1,16 +1,17 @@
 'use client';
 
-import { useContext, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, Download, Pause, Play, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { resolveTimelineTrack } from '@/features/ask/displayPatterns';
 import { AskContextLink } from '../blocks/context';
-import { TimelineBlock, TimelineList } from '../blocks/CoreBlocks';
+import { TimelineList } from '../blocks/CoreBlocks';
 import { TimelineEventDetail } from './TimelineEventDetail';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import type { AskBlockRenderer } from '../blocks/types';
 import { CapitalWindowDetail } from '../CapitalWindowDetail';
 import { ItemActionButtons } from './PatternParts';
+import { exportHomeTimelineEvents } from '@/lib/api/homeTimelineApi';
 
 // IW-PRES-017 (FRD v1.72). Dated records on a sideways track with year ticks, a Today marker, category filters
 // with a text legend, and previous/next buttons. The selected record's detail shows below the track. When any
@@ -36,11 +37,25 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   }, [block]);
   const [hidden, setHidden] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [eventType, setEventType] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [displayLimit, setDisplayLimit] = useState(80);
+  const [selectedForExport, setSelectedForExport] = useState<Set<string>>(new Set());
+  const [playbackOn, setPlaybackOn] = useState(false);
+  const [playbackIndex, setPlaybackIndex] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
   const controls = useContext(ResultViewContext);
   const [localDetailId, setLocalDetailId] = useState<string | null>(null);
   const layout = controls?.view.timelineLayouts?.[block.id] ?? 'TRACK';
   const detailId = hasWindowDetail ? (controls ? controls.detailIdFor(block.id) : localDetailId) : null;
   const detailItem = detailId ? block.items.find((item) => item.id === detailId) : undefined;
+  const toggleSelected = (itemId: string) => setSelectedForExport((current) => {
+    const next = new Set(current);
+    if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+    return next;
+  });
   const openDetail = (itemId: string) => {
     setSelectedId(itemId);
     if (controls) controls.openDetail(block.id, itemId);
@@ -53,11 +68,34 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-ask-detail-trigger="${CSS.escape(closingId ?? '')}"][data-ask-detail-block="${CSS.escape(block.id)}"]`)?.focus());
   };
   const windowDetail = detailItem
-    ? !isCapitalWindows ? <TimelineEventDetail key={detailItem.id} item={detailItem} onClose={closeDetail} onItemAction={onItemAction} disabled={itemActionsDisabled} /> : <CapitalWindowDetail key={detailItem.id} windowId={detailItem.id} expectedPropertyId={propertyId} fallbackTitle={detailItem.label} onAccessLost={onAccessLost} onClose={closeDetail} />
+    ? !isCapitalWindows ? <TimelineEventDetail key={detailItem.id} item={detailItem} propertyId={propertyId} onClose={closeDetail} onItemAction={onItemAction} disabled={itemActionsDisabled} /> : <CapitalWindowDetail key={detailItem.id} windowId={detailItem.id} expectedPropertyId={propertyId} fallbackTitle={detailItem.label} onAccessLost={onAccessLost} onClose={closeDetail} />
     : null;
-  // A single window, or one whose date cannot be read, has no track; the list keeps its detail.
-  if (!points && !hasWindowDetail) return <TimelineBlock {...props} />;
   // FRD v1.77: the same records as a vertical list, kept with the result; the track stays the default.
+  const eventTypes = useMemo(() => Array.from(new Set(block.items.map((item) => item.meta?.[0]).filter((value): value is string => Boolean(value)))).sort(), [block.items]);
+  const filteredItems = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return block.items.filter((item) => {
+      const matchesQuery = !normalizedQuery || [item.label, item.description, item.status, item.category?.label, ...(item.meta ?? [])].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery);
+      const value = item.date ?? '';
+      const itemStart = value.length === 4 ? `${value}-01-01` : value.length === 7 ? `${value}-01` : value;
+      const itemEnd = value.length === 4 ? `${value}-12-31` : value.length === 7 ? `${value}-31` : value;
+      const matchesFrom = !fromDate || !value || itemEnd >= fromDate;
+      const matchesTo = !toDate || !value || itemStart <= toDate;
+      const matchesType = !eventType || item.meta?.[0] === eventType;
+      return matchesQuery && matchesFrom && matchesTo && matchesType;
+    }).slice(0, displayLimit);
+  }, [block.items, displayLimit, eventType, fromDate, query, toDate]);
+  const filteredBlock = { ...block, items: filteredItems };
+  useEffect(() => {
+    if (!playbackOn || filteredItems.length === 0) return;
+    setSelectedId(filteredItems[Math.min(playbackIndex, filteredItems.length - 1)].id);
+    const timer = window.setTimeout(() => setPlaybackIndex((current) => current + 1 >= filteredItems.length ? 0 : current + 1), 900);
+    return () => window.clearTimeout(timer);
+  }, [playbackOn, playbackIndex, filteredItems]);
+  const downloadJson = (filename: string, value: unknown) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.click(); URL.revokeObjectURL(url);
+  };
   const layoutSwitch = controls && points && (
     <div className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
       {(['TRACK', 'LIST'] as const).map((choice) => (
@@ -78,9 +116,27 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
       {layoutSwitch}
     </div>
   );
+  const parityControls = block.controls && (
+    <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap gap-2">
+        {block.controls.search && <label className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" aria-hidden="true" /><span className="sr-only">Search timeline events</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search events…" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm" /></label>}
+        {block.controls.typeFilter && <label><span className="sr-only">Event type</span><select value={eventType} onChange={(event) => setEventType(event.target.value)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">All event types</option>{eventTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>}
+        {block.controls.dateFilter && <><label className="text-xs text-slate-500">From<input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} className="ml-2 min-h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800" /></label><label className="text-xs text-slate-500">To<input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} className="ml-2 min-h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800" /></label></>}
+        {block.controls.limitFilter && <label><span className="sr-only">Event limit</span><select value={displayLimit} onChange={(event) => setDisplayLimit(Number(event.target.value))} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value={25}>Last 25 events</option><option value={50}>Last 50 events</option><option value={80}>Last 80 events</option><option value={150}>Last 150 events</option><option value={200}>All events (up to 200)</option></select></label>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {block.controls.selectionExport && <button type="button" disabled={!propertyId || selectedForExport.size === 0} onClick={async () => { try { setActionError(null); const response = await exportHomeTimelineEvents(propertyId!, [...selectedForExport]); downloadJson(`home-timeline-${new Date().toISOString().slice(0, 10)}.json`, response.data); } catch { setActionError('The selected events could not be exported.'); } }} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold disabled:opacity-50"><Download className="h-4 w-4" aria-hidden="true" />Export selected ({selectedForExport.size})</button>}
+        {block.controls.annualRecap && <button type="button" onClick={() => { const year = new Date().getFullYear(); const yearEvents = block.items.filter((item) => item.date?.slice(0, 4) === String(year)); downloadJson(`home-recap-${year}.json`, { generatedAt: new Date().toISOString(), propertyId, year, eventCount: yearEvents.length, verifiedCount: yearEvents.filter((item) => /confirmed|verified/i.test(item.status ?? '')).length, events: yearEvents, limitations: yearEvents.length === 0 ? ['No Ask-visible recorded current events fall within this year; this is not confirmation that nothing occurred.'] : ['This recap reflects current Home Timeline records visible to you in Ask Cozy.'] }); }} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold">Prepare {new Date().getFullYear()} recap</button>}
+        {block.controls.storyPlayback && <button type="button" onClick={() => { setPlaybackOn((current) => !current); setPlaybackIndex(0); }} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold">{playbackOn ? <Pause className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}{playbackOn ? 'Pause story' : 'Play story'}</button>}
+        {(query || eventType || fromDate || toDate || displayLimit !== 80) && <button type="button" onClick={() => { setQuery(''); setEventType(''); setFromDate(''); setToDate(''); setDisplayLimit(80); }} className="min-h-10 px-2 text-sm font-semibold text-teal-800">Clear filters</button>}
+      </div>
+      {(query || eventType || fromDate || toDate || displayLimit !== 80) && <p className="text-xs text-slate-500">Showing {filteredItems.length} of {block.items.length} events.</p>}
+      {actionError && <p className="text-xs text-rose-700" role="alert">{actionError}</p>}
+    </div>
+  );
   if (layout === 'LIST' || !points) {
-    return <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}
-      <TimelineList block={block} onOpenDetail={hasWindowDetail ? openDetail : undefined} openDetailId={detailId} onItemAction={onItemAction} itemActionsDisabled={itemActionsDisabled} />
+    return <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}{parityControls}
+      <TimelineList block={filteredBlock} onOpenDetail={hasWindowDetail ? openDetail : undefined} openDetailId={detailId} onItemAction={onItemAction} itemActionsDisabled={itemActionsDisabled} selectedIds={block.controls?.selectionExport ? selectedForExport : undefined} onToggleSelected={block.controls?.selectionExport ? toggleSelected : undefined} />
       {windowDetail}
     </section>;
   }
@@ -88,7 +144,8 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   const ordered = block.items
     .map((item, index) => ({ item, point: points[index] }))
     .sort((a, b) => a.point.year - b.point.year);
-  const visible = ordered.filter(({ item }) => !item.category || !hidden.includes(item.category.id));
+  const filteredIds = new Set(filteredItems.map((item) => item.id));
+  const visible = ordered.filter(({ item }) => filteredIds.has(item.id) && (!item.category || !hidden.includes(item.category.id)));
   const selected = visible.find(({ item }) => item.id === selectedId) ?? visible[visible.length - 1] ?? null;
   const firstYear = Math.floor(ordered[0].point.year);
   const nowYear = new Date().getFullYear() + new Date().getMonth() / 12;
@@ -100,10 +157,10 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
     const position = visible.findIndex(({ item }) => item.id === selected.item.id);
     setSelectedId(visible[(position + direction + visible.length) % visible.length].item.id);
   };
-
   return (
     <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline">
       {heading}
+      {parityControls}
       {categories.length > 1 && (
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Show types">
           {categories.map((category) => {
@@ -147,6 +204,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
           <div className="min-w-0 flex-1">
             <p className="text-xs text-slate-500">{selected.point.label}{selected.item.category ? ` · ${selected.item.category.label}` : ''}{selected.item.status ? ` · ${selected.item.status}` : ''}</p>
             <p className="font-semibold text-slate-950">{selected.item.label}</p>
+            {block.controls?.selectionExport && <label className="mt-2 inline-flex min-h-8 items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={selectedForExport.has(selected.item.id)} onChange={() => toggleSelected(selected.item.id)} className="h-4 w-4 rounded border-slate-300 text-teal-700" />Select for export</label>}
             {selected.item.meta && selected.item.meta.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{selected.item.meta.join(' · ')}</p>}
             {selected.item.description && <p className="mt-1 text-sm text-slate-600">{selected.item.description}</p>}
             <ItemActionButtons className="mt-2" item={selected.item} actions={selected.item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />

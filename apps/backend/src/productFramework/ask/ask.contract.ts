@@ -396,6 +396,15 @@ const MetricRowBlockSchema = z.object({
 
 const TimelineBlockSchema = z.object({
   type: z.literal('TIMELINE'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  controls: z.object({
+    search: z.boolean().default(false),
+    typeFilter: z.boolean().default(false),
+    dateFilter: z.boolean().default(false),
+    limitFilter: z.boolean().default(false),
+    selectionExport: z.boolean().default(false),
+    annualRecap: z.boolean().default(false),
+    storyPlayback: z.boolean().default(false),
+  }).optional(),
   items: z.array(z.object({
     id: z.string(), label: z.string(), date: z.string().nullable().optional(), description: z.string().nullable().optional(), status: z.string().nullable().optional(), href: z.string().nullable().optional(),
     // IW-PRES-017 (FRD v1.72): optional category (legend and filter), recorded date precision, and item actions.
@@ -410,8 +419,10 @@ const TimelineBlockSchema = z.object({
     detail: z.object({
       facts: z.array(z.object({ label: z.string().trim().min(1).max(40), value: z.string().trim().min(1).max(200) })).max(12),
       evidence: z.array(z.object({ label: z.string().trim().min(1).max(120), meta: z.string().trim().min(1).max(160).nullable().optional() })).max(12),
+      canReviewVerification: z.boolean().optional(),
+      canAttachEvidence: z.boolean().optional(),
     }).nullable().optional(),
-  })).max(100),
+  })).max(200),
 });
 
 const ComparisonBadgeSchema = z.object({

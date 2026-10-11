@@ -13,13 +13,13 @@ import { HOME_EVENT_VISIBILITY_MESSAGE } from '../support/homeEventCorrection';
 import { EVENT_ADD_MESSAGE } from './homeRecordWrites.handler';
 
 // Home Timeline capability-card slice (FRD v1.61): the thirteenth new operation for a capability with none. Reads
-// HomeEventsService.listHomeEvents with the page's default limit (80), the call GET /properties/:id/home-events makes
+// HomeEventsService.listHomeEvents with the desktop page's supported maximum (200), the call GET /properties/:id/home-events makes
 // for the Timeline page (signals stay out of the default view, as on the page). One difference, on purpose: the page
 // shows every current event, including another member's PRIVATE ones; Ask applies the privacy rule its other home-event
 // reads use (a PRIVATE event only for the person who recorded it). Dates keep the recorded precision (month, year,
 // range, unknown) rather than inventing a day. Read-only: logging, correcting, confirming, evidence and visibility stay
 // on the page or their own operations.
-export const HOME_TIMELINE_ASK_LIMIT = 80;
+export const HOME_TIMELINE_ASK_LIMIT = 200;
 type TimelineEventView = Awaited<ReturnType<HomeEventsService['listHomeEvents']>>['events'][number];
 const TIMELINE_LABEL = (value: string | null | undefined) => (value ? readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase()) : '');
 
@@ -50,7 +50,7 @@ function moneyLabel(value: unknown, currency: unknown): string | null {
  * Built only from the event this answer already read, after the privacy rule, and only from labelled fields: no file names, URLs or free-form
  * notes by other people beyond the evidence note the household recorded.
  */
-function eventDetail(event: TimelineEventView) {
+function eventDetail(event: TimelineEventView, canManage = false) {
   const facts: Array<{ label: string; value: string }> = [];
   const add = (label: string, value: string | null | undefined) => { if (value && value.trim()) facts.push({ label, value: value.trim().slice(0, 200) }); };
   add('Type', [TIMELINE_LABEL(event.type), event.subtype && event.subtype !== event.type ? TIMELINE_LABEL(event.subtype) : ''].filter(Boolean).join(' · '));
@@ -71,7 +71,8 @@ function eventDetail(event: TimelineEventView) {
       label: `Document · ${TIMELINE_LABEL(row.kind) || 'Other'}`, meta: row.caption?.trim() || null,
     })),
   ].slice(0, EVIDENCE_LIMIT).map((row) => ({ label: row.label.slice(0, 120), meta: row.meta ? row.meta.slice(0, 160) : null }));
-  return { facts, evidence };
+  const isCanonical = event.meta?.synthetic !== true;
+  return { facts, evidence, canReviewVerification: canManage && isCanonical, canAttachEvidence: canManage && isCanonical };
 }
 
 // FRD v1.77 (homeowner decision): five colour categories for the timeline track instead of the twelve event types.
@@ -170,6 +171,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
     blocks.push({
       type: 'TIMELINE', id: 'home-timeline-events', title: 'Home timeline',
       description: 'Each event sits at its recorded date; a month or a year is shown as recorded, and a range at its start. Open an event on the timeline for its details and evidence.',
+      controls: { search: true, typeFilter: true, dateFilter: true, limitFilter: true, selectionExport: true, annualRecap: true, storyPlayback: true },
       items: onTrack.map(({ event, placement }) => {
         const category = homeTimelineCategory(event.type);
         return {
@@ -179,7 +181,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
           datePrecision: placement.precision,
           description: event.summary ?? null,
           status: TIMELINE_LABEL(event.verificationStatus),
-          detail: eventDetail(event),
+          detail: eventDetail(event, canManage),
           category,
           entityType: 'HOME_EVENT',
           actions: eventActions(canManage && event.meta?.synthetic !== true),

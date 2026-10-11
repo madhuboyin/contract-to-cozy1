@@ -171,12 +171,14 @@ export const TimelineBlock: AskBlockRenderer<'TIMELINE'> = ({ block, onItemActio
 
 // FRD v1.90: `onOpenDetail` lets a domain that keeps a live record detail under its timeline (the capital windows) open it
 // from the list too; the row's button is marked like the other detail triggers so focus returns to it.
-export function TimelineList({ block, onOpenDetail, openDetailId, onItemAction, itemActionsDisabled }: {
+export function TimelineList({ block, onOpenDetail, openDetailId, onItemAction, itemActionsDisabled, selectedIds, onToggleSelected }: {
   block: Extract<AskPresentationBlock, { type: 'TIMELINE' }>;
   onOpenDetail?: (itemId: string) => void;
   openDetailId?: string | null;
   onItemAction?: Parameters<typeof ItemActionButtons>[0]['onItemAction'];
   itemActionsDisabled?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelected?: (itemId: string) => void;
 }) {
   return (
     <ol className="mt-4 border-l-2 border-teal-200 pl-4" data-timeline-list>
@@ -186,6 +188,7 @@ export function TimelineList({ block, onOpenDetail, openDetailId, onItemAction, 
         return (
           <li key={item.id} className="relative pb-4 before:absolute before:-left-[1.34rem] before:top-1 before:h-2.5 before:w-2.5 before:rounded-full before:bg-teal-700">
             <div className="flex flex-wrap items-center gap-2">
+              {onToggleSelected && <input type="checkbox" checked={selectedIds?.has(item.id) ?? false} onChange={() => onToggleSelected(item.id)} aria-label={`Select ${item.label} for export`} className="h-4 w-4 rounded border-slate-300 text-teal-700" />}
               {item.href && !onOpenDetail ? <AskContextLink href={item.href} className="font-semibold text-slate-900 hover:text-teal-700">{item.label}</AskContextLink> : <span className="font-semibold text-slate-900">{item.label}</span>}
               {dateLabel && <span className="text-xs text-slate-500">{dateLabel}</span>}
               {item.status && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{item.status}</span>}

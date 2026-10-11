@@ -57,10 +57,10 @@ function restore() {
 test.beforeEach(install);
 test.afterEach(restore);
 
-test('the operation reads the page\'s event list (limit 80) behind the page\'s viewer floor, for the asking user', async () => {
+test('the operation reads the page\'s full supported event list (limit 200) behind the page\'s viewer floor, for the asking user', async () => {
   const envelope = { userId: 'u1', propertyId: 'p1', message: 'Show my home timeline' };
   const viewer = await capabilityInvoke('HOME_TIMELINE_EVENTS', envelope, { propertyAccess: { role: 'VIEWER', userId: 'u1', propertyId: 'p1' } });
-  assert.deepEqual(calls, [['p1', { limit: 80 }]]);
+  assert.deepEqual(calls, [['p1', { limit: 200 }]]);
   const titles = [...viewer.blocks.find((block) => block.id === 'home-timeline-events').items.map((item) => item.label), ...viewer.blocks.find((block) => block.id === 'home-timeline-undated').sections.flatMap((section) => section.items.map((row) => row.title))];
   assert.equal(titles.includes('My private note'), true);
   assert.equal(titles.includes('Someone else private note'), false);
@@ -73,7 +73,10 @@ test('contributors can log, review and correct real events inline while modeled 
   const add = result.blocks.find((block) => block.id === 'home-timeline-actions').sections[0].items[0].actions[0];
   assert.deepEqual({ label: add.label, operationId: add.operationId, message: add.message }, { label: 'Log an event', operationId: 'CAPTURE_EVENT_CONFIRM', message: 'Add an event to my home timeline.' });
   const track = result.blocks.find((block) => block.id === 'home-timeline-events');
+  assert.deepEqual(track.controls, { search: true, typeFilter: true, dateFilter: true, limitFilter: true, selectionExport: true, annualRecap: true, storyPlayback: true });
   const kitchen = track.items.find((item) => item.id === 'kitchen');
+  assert.equal(kitchen.detail.canReviewVerification, true);
+  assert.equal(kitchen.detail.canAttachEvidence, true);
   assert.deepEqual(kitchen.actions.map((action) => [action.label, action.operationId]), [
     ['Correct title', 'HOME_EVENT_CORRECT'], ['Correct date', 'HOME_EVENT_CORRECT'], ['Correct details', 'HOME_EVENT_CORRECT'], ['Change visibility', 'HOME_EVENT_VISIBILITY'],
   ]);
@@ -90,7 +93,7 @@ test('the real list query is the page\'s (current, not deleted, newest first) an
     inventoryItem: readOnly('inventoryItem', async () => []),
     propertyRecordLink: readOnly('propertyRecordLink', async () => []),
   };
-  await new HomeEventsService().listHomeEvents('p1', { limit: 80 });
+  await new HomeEventsService().listHomeEvents('p1', { limit: 200 });
   assert.deepEqual(queries[0].where, { propertyId: 'p1', isCurrent: true, deletedAt: null });
   assert.deepEqual(queries[0].orderBy, [{ occurredAt: 'desc' }, { id: 'desc' }]);
 });
@@ -161,9 +164,9 @@ test('a range keeps its range; a full page fits the track and is disclosed; an e
   assert.equal(rangedItem.meta[0], 'Apr 1, 2020 – Jun 30, 2020');
   assert.equal(rangedItem.date, '2020-04-01');
   const full = homeTimelineFromView(Array.from({ length: HOME_TIMELINE_ASK_LIMIT }, (_, index) => event(`e${index}`)), 'p1', 'u1');
-  assert.equal(full.blocks.find((block) => block.id === 'home-timeline-limit').title, 'Showing the 80 most recent events');
+  assert.equal(full.blocks.find((block) => block.id === 'home-timeline-limit').title, 'Showing the 200 most recent events');
   const fullTrack = full.blocks.find((block) => block.id === 'home-timeline-events');
-  assert.equal(fullTrack.items.length, 80);
+  assert.equal(fullTrack.items.length, 200);
   AskPresentationBlockSchema.parse(fullTrack);
   assert.equal(full.blocks.some((block) => block.id === 'home-timeline-undated'), false);
   const allUndated = homeTimelineFromView([event('u', { datePrecision: 'UNKNOWN' })], 'p1', 'u1');
