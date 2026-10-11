@@ -36,6 +36,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   const workflowControls = useContext(AskBlockActionContext);
   const [focusedDisclosure, setFocusedDisclosure] = useState<'DETAILS' | 'SNOOZE' | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   if (block.id === 'focused-home-action-guidance') {
     const next = block.sections.find((section) => section.id === 'next-step');
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];
@@ -228,6 +229,9 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                 {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
                   const selected = controls?.view.selectedTaskId === item.id;
+                  const detailKey = `${section.id}:${item.id}`;
+                  const itemDetailsExpanded = Boolean(expandedItems[detailKey]);
+                  const hasInlineDetails = block.id === 'project-detail-records' && Boolean(item.detail);
                   return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border outline-offset-2', presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3', selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -237,6 +241,21 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                       </div>
                       {item.status && <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.status.replace(/_/g, ' ')}</span>}
                     </div>
+                    {hasInlineDetails && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          aria-expanded={itemDetailsExpanded}
+                          aria-controls={`${block.id}-${section.id}-${item.id}-details`}
+                          onClick={() => setExpandedItems((current) => ({ ...current, [detailKey]: !itemDetailsExpanded }))}
+                          className="min-h-8 text-xs font-semibold text-teal-800 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                        >
+                          {itemDetailsExpanded ? 'Hide details' : 'View details'}
+                          <span className="sr-only"> for {item.title}</span>
+                        </button>
+                        {itemDetailsExpanded && <p id={`${block.id}-${section.id}-${item.id}-details`} className="whitespace-pre-line rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600">{item.detail}</p>}
+                      </div>
+                    )}
                     {item.actions && item.actions.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {item.actions.map((itemAction) => (

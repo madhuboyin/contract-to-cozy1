@@ -57,3 +57,22 @@ test('each section independently honors its declared initial visible count', () 
   fireEvent.click(screen.getByRole('button', { name: 'Show 3 more' }));
   expect(view.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(9);
 });
+
+test('Project Tracker rows progressively disclose descriptions and secondary metadata', () => {
+  const projectRecords: GroupedList = {
+    ...block,
+    id: 'project-detail-records',
+    sections: [{ id: 'project-detail-milestones', title: 'Milestones', count: 1, items: [{
+      id: 'milestone-1', title: 'Rough-in inspection', status: 'IN_PROGRESS', description: null,
+      meta: ['Scheduled Oct 20, 2026'], detail: 'Inspect framing and rough-ins\nPhoto evidence required',
+    }] }],
+  };
+  render(<GenericGroupedListBlock block={projectRecords} executionId="execution" propertyId="home" onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
+
+  expect(screen.queryByText('Inspect framing and rough-ins')).not.toBeInTheDocument();
+  expect(screen.getByText('Scheduled Oct 20, 2026')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'View details for Rough-in inspection' }));
+  expect(screen.getByText(/Inspect framing and rough-ins/)).toHaveTextContent('Photo evidence required');
+  fireEvent.click(screen.getByRole('button', { name: 'Hide details for Rough-in inspection' }));
+  expect(screen.queryByText(/Inspect framing and rough-ins/)).not.toBeInTheDocument();
+});

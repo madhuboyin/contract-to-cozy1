@@ -122,10 +122,13 @@ test('review project shows the desktop execution record inline', () => {
   assert.deepEqual(detail.blocks[1].rows.map((row) => row.values.amount), ['$45,000.00', '$28,000.00', '$17,000.00']);
   assert.deepEqual(detail.blocks[2].sections.map((section) => section.title), ['Milestones', 'Payments', 'Change orders', 'Issues', 'Progress log']);
   assert.deepEqual(detail.blocks[2].sections.map((section) => section.initialVisibleCount), [3, 3, 3, 3, 3]);
-  assert.deepEqual(detail.blocks[0].actions.slice(0, 3).map((action) => action.label), ['Add milestone', 'Log progress', 'Log issue']);
-  assert.deepEqual(detail.blocks[2].sections[0].items[0].actions.map((action) => action.label), ['Complete milestone']);
-  assert.deepEqual(detail.blocks[2].sections[1].items[0].actions.map((action) => action.label), ['Mark paid']);
-  assert.deepEqual(detail.blocks[2].sections[3].items[0].actions.map((action) => action.label), ['Resolve issue']);
+  assert.deepEqual(detail.blocks[0].actions.slice(0, 3).map((action) => action.label), ['Edit project', 'Add milestone', 'Add payment']);
+  assert.deepEqual(detail.blocks[2].sections[0].items[0].actions.map((action) => action.label), ['Complete milestone', 'Edit', 'Delete']);
+  assert.deepEqual(detail.blocks[2].sections[0].items[0].meta, ['Scheduled Oct 20, 2026']);
+  assert.equal(detail.blocks[2].sections[0].items[0].description, null);
+  assert.equal(detail.blocks[2].sections[0].items[0].detail, 'Inspect framing and rough-ins\nPhoto evidence required');
+  assert.deepEqual(detail.blocks[2].sections[1].items[0].actions.map((action) => action.label), ['Mark paid', 'Edit', 'Delete']);
+  assert.deepEqual(detail.blocks[2].sections[3].items[0].actions.map((action) => action.label), ['Resolve issue', 'Edit']);
 });
 
 test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
