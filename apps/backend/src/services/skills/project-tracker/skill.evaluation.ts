@@ -17,6 +17,7 @@ export const PROJECT_TRACKER_SKILL_EVALUATION = deepFreezeSkillPackage({
   operationCases: [
     { operationId: 'PROJECT_TRACKER_PROJECTS', expectedAdapter: { id: 'project-tracker.projects', version: '1.0' } },
     { operationId: 'PROJECT_TRACKER_CREATE', expectedAdapter: { id: 'project-tracker.create', version: '1.0' } },
+    { operationId: 'PROJECT_TRACKER_COMMAND', expectedAdapter: { id: 'project-tracker.command', version: '1.0' } },
   ],
   ambiguityCases: [
     {
@@ -28,6 +29,7 @@ export const PROJECT_TRACKER_SKILL_EVALUATION = deepFreezeSkillPackage({
   policyCases: [
     { consumer: 'ASK', operationId: 'PROJECT_TRACKER_PROJECTS', allowed: true },
     { consumer: 'ASK', operationId: 'PROJECT_TRACKER_CREATE', allowed: true },
+    { consumer: 'ASK', operationId: 'PROJECT_TRACKER_COMMAND', allowed: true },
   ],
   contextCases: [
     { state: 'KNOWN', expectedBehavior: 'READY' },
@@ -55,13 +57,13 @@ export const PROJECT_TRACKER_SKILL_EVALUATION = deepFreezeSkillPackage({
       expectedBehavior: 'DEGRADED_OR_UNAVAILABLE',
     },
   ],
-  expectedAdapters: [{ id: 'project-tracker.projects', version: '1.0' }, { id: 'project-tracker.create', version: '1.0' }],
+  expectedAdapters: [{ id: 'project-tracker.projects', version: '1.0' }, { id: 'project-tracker.create', version: '1.0' }, { id: 'project-tracker.command', version: '1.0' }],
   prohibitedAdapters: ['inventory.lookup', 'intelligence-envelope.query'],
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'WORKFLOW_PROGRESS', 'LIMITATION'],
-  expectedCanonicalCalls: [{ id: 'project-tracker.projects', version: '1.0' }, { id: 'project-tracker.create', version: '1.0' }],
+  expectedBlockTypes: ['SUMMARY', 'TABLE', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS', 'LIMITATION'],
+  expectedCanonicalCalls: [{ id: 'project-tracker.projects', version: '1.0' }, { id: 'project-tracker.create', version: '1.0' }, { id: 'project-tracker.command', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {
     message: 'Show my project tracker',

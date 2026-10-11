@@ -8,7 +8,7 @@ require('ts-node/register');
 // one test runs it against a fake prisma to pin the page's own query.
 
 const prismaModule = require('../../src/lib/prisma.ts');
-const { trackedProjectsFromView } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { projectDetailFromView, trackedProjectsFromView } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
@@ -87,7 +87,8 @@ test('projects are grouped active, completed, cancelled with the page\'s labels,
   assert.equal(fence.meta[0], 'Custom Project · Provider not recorded');
   assert.equal(fence.status, 'Disputed');
   assert.deepEqual(list.sections[1].items[0].meta, ['HVAC Replacement · Apex Builders', 'Contract $12,000', 'Paid $11,500', 'Warranty expires Jun 1, 2031']);
-  assert.equal(kitchen.href, `${PAGE}/kitchen`);
+  assert.equal(kitchen.href, undefined);
+  assert.deepEqual(kitchen.actions.map((action) => [action.label, action.operationId, action.entityType, action.entityId]), [['Review project', 'PROJECT_TRACKER_PROJECTS', 'PROJECT_RECORD', 'kitchen']]);
 });
 
 test('no projects is not an all-clear; nothing completed says no spend yet', () => {
@@ -107,12 +108,29 @@ test('a contributor can start a project inline while a viewer gets a read-only e
   assert.deepEqual(viewer.blocks[0].actions, []);
 });
 
+test('review project shows the desktop execution record inline', () => {
+  const detail = projectDetailFromView({
+    ...project('kitchen', { name: 'Kitchen remodel', currentContractAmountCents: 4_500_000, paidToDateCents: 2_800_000 }),
+    milestones: [{ id: 'm1', name: 'Rough-in inspection', description: 'Inspect framing and rough-ins', status: 'IN_PROGRESS', scheduledDate: new Date('2026-10-20T12:00:00.000Z'), requiresPhotoEvidence: true }],
+    payments: [{ id: 'pay1', description: 'Deposit', notes: null, amountCents: 1_000_000, status: 'PAID', dueDate: new Date('2026-09-01T12:00:00.000Z'), paidDate: new Date('2026-09-01T12:00:00.000Z') }],
+    changeOrders: [{ id: 'co1', changeNumber: 1, title: 'Add backsplash', description: 'Extend tile scope', costDeltaCents: 500_000, complianceStatus: 'RECHECK_COMPLETE', status: 'APPROVED' }],
+    issues: [{ id: 'i1', title: 'Cabinet delay', description: 'Delivery moved', severity: 'WARNING', blocksPayment: false, resolutionNotes: null, status: 'OPEN' }],
+  }, [{ id: 'l1', entryType: 'PROGRESS', notes: 'Framing complete', entryDate: new Date('2026-10-11T12:00:00.000Z'), milestoneId: 'm1', photoKeys: ['photo'] }], true);
+  assert.equal(detail.reasonCode, 'PROJECT_TRACKER_DETAIL_READY');
+  assert.deepEqual(detail.blocks.map((block) => block.type), ['SUMMARY', 'TABLE', 'GROUPED_LIST', 'BOUNDARY']);
+  assert.match(detail.blocks[0].body, /0 of 1 milestones complete; 1 open issue/);
+  assert.deepEqual(detail.blocks[1].rows.map((row) => row.values.amount), ['$45,000.00', '$28,000.00', '$17,000.00']);
+  assert.deepEqual(detail.blocks[2].sections.map((section) => section.title), ['Milestones', 'Payments', 'Change orders', 'Issues', 'Progress log']);
+});
+
 test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
   const raw = trackedProjectsFromView(projects(), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'project-tracker.projects', operationId: 'PROJECT_TRACKER_PROJECTS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my project tracker', operationId: 'PROJECT_TRACKER_PROJECTS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
   assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PROJECT_TRACKER_PROJECTS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  const rowAction = result.blocks.find((block) => block.id === 'project-tracker-projects').sections[0].items[0].actions[0];
+  assert.equal(isAskActionApplicable({ action: rowAction, operationId: 'PROJECT_TRACKER_PROJECTS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
 });
 
 test('project phrasing routes here; DIY projects and renovation permit readiness do not', () => {

@@ -241,6 +241,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   DIY_PROJECTS: 'Two of your DIY projects still have steps left: repainting the hallway is 3 of 5 steps done and re-caulking the tub is still in planning.',
   PROJECT_TRACKER_PROJECTS: 'Two contractor projects are still open: the kitchen remodel with Apex Builders is in progress with $12,000 of $40,000 remaining, and the roof replacement is still in planning.',
   PROJECT_TRACKER_CREATE: 'A tracked project and its first milestone are created only after the homeowner reviews and confirms the details.',
+  PROJECT_TRACKER_COMMAND: 'The selected tracked project is started, paused, resumed, or cancelled only after review and confirmation.',
   SERVICE_PRICE_CHECKS: 'The price radar found your $1,450 plumber quote for a water line repair above the expected $900 to $1,200 range.',
   HOME_TIMELINE_EVENTS: 'Your home timeline records a kitchen remodel in 2024, verified by the contract, a home inspection in 2023, and the purchase of the house in 2021.',
   MATERIAL_SPECS_LIST: 'The dining room paint is Sherwin-Williams Alabaster (SW 7008), eggshell finish.',

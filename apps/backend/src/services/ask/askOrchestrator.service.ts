@@ -124,7 +124,7 @@ export { materialSpecsFromView } from './handlers/materialSpecs.handler';
 export { NEGOTIATION_SHIELD_ASK_LIMIT, negotiationShieldCasesFromView } from './handlers/negotiationShield.handler';
 export { plantCareOutlookFromView } from './handlers/plantAdvisor.handler';
 export { PRICE_FINALIZATION_ASK_LIMIT, priceFinalizationsFromView } from './handlers/priceFinalization.handler';
-export { trackedProjectsFromView } from './handlers/projectTracker.handler';
+export { projectDetailFromView, trackedProjectsFromView } from './handlers/projectTracker.handler';
 export { propertyBriefsFromView } from './handlers/propertyBrief.handler';
 export { propertyCompletenessProgress, areaCaptureRowActions, areaCaptureStateFrom, AreaCaptureAnswerSchema, areaCaptureError, areaCapturePrompt, areaCaptureSubmitResult } from './handlers/propertySummary.handler';
 export { areaCaptureFallbackHref } from './askHandlerSupport';
