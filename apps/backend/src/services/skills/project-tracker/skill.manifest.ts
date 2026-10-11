@@ -4,14 +4,14 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 
 // ASK_COZY_INLINE_WORKSPACE_FRD v1.59, capability-card audit (Appendix D): the eleventh new operation for a capability
 // the audit found with no Ask operation. Reads projectTracker.service listProjects, the call GET /properties/:id/projects
-// makes for the Project Tracker page. Read-only; creating projects and recording milestones, payments, change orders and
-// issues stay on the page.
+// makes for the Project Tracker page. Its declared commands create projects and manage the bounded active-execution
+// records that the canonical service owns; final completion and change-order approval retain dedicated governance.
 export const PROJECT_TRACKER_SKILL = Object.freeze({
   id: 'project-tracker',
   version: '1.0.0',
   domain: 'HOME_PROJECTS',
   displayName: 'Project Tracker',
-  description: "Review this home's contractor projects in Project Tracker: which are active, completed or cancelled, with contract, paid and remaining amounts.",
+  description: "Review and manage this home's tracked contractor or DIY projects, including lifecycle, milestones, payments, progress notes, and issues.",
   homeownerJobs: ['STAY_AHEAD'],
   supportedGoals: ['review-tracked-projects'],
   aliases: ['project tracker', 'contractor projects', 'home projects'],

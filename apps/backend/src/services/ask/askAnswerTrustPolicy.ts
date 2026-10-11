@@ -169,7 +169,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   DIY_PROJECT_ABANDON: new Set(['diy-show-projects']),
   DIY_PROJECT_COMPLETE: new Set(['diy-show-projects']),
   DIY_COMPLETION_RECOVER: new Set(['diy-show-projects']),
-  PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker', 'project-tracker-create', 'project-tracker-review', 'project-tracker-start', 'project-tracker-pause', 'project-tracker-resume', 'project-tracker-cancel']),
+  PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker', 'project-tracker-create', 'project-tracker-review', 'project-tracker-start', 'project-tracker-pause', 'project-tracker-resume', 'project-tracker-cancel', 'project-tracker-add-milestone', 'project-tracker-complete-milestone', 'project-tracker-mark-payment-paid', 'project-tracker-log-progress', 'project-tracker-log-issue', 'project-tracker-resolve-issue']),
   PROJECT_TRACKER_CREATE: new Set(['project-tracker-show-projects']),
   PROJECT_TRACKER_COMMAND: new Set(['project-tracker-show-projects']),
   SERVICE_PRICE_CHECKS: new Set(['check-service-quote']),

@@ -111,16 +111,20 @@ test('a contributor can start a project inline while a viewer gets a read-only e
 test('review project shows the desktop execution record inline', () => {
   const detail = projectDetailFromView({
     ...project('kitchen', { name: 'Kitchen remodel', currentContractAmountCents: 4_500_000, paidToDateCents: 2_800_000 }),
-    milestones: [{ id: 'm1', name: 'Rough-in inspection', description: 'Inspect framing and rough-ins', status: 'IN_PROGRESS', scheduledDate: new Date('2026-10-20T12:00:00.000Z'), requiresPhotoEvidence: true }],
-    payments: [{ id: 'pay1', description: 'Deposit', notes: null, amountCents: 1_000_000, status: 'PAID', dueDate: new Date('2026-09-01T12:00:00.000Z'), paidDate: new Date('2026-09-01T12:00:00.000Z') }],
+    milestones: [{ id: 'm1', name: 'Rough-in inspection', description: 'Inspect framing and rough-ins', status: 'IN_PROGRESS', scheduledDate: new Date('2026-10-20T12:00:00.000Z'), requiresPhotoEvidence: true, executionSourceType: 'MANUAL' }],
+    payments: [{ id: 'pay1', description: 'Deposit', notes: null, amountCents: 1_000_000, status: 'DUE', dueDate: new Date('2026-09-01T12:00:00.000Z'), paidDate: null }],
     changeOrders: [{ id: 'co1', changeNumber: 1, title: 'Add backsplash', description: 'Extend tile scope', costDeltaCents: 500_000, complianceStatus: 'RECHECK_COMPLETE', status: 'APPROVED' }],
-    issues: [{ id: 'i1', title: 'Cabinet delay', description: 'Delivery moved', severity: 'WARNING', blocksPayment: false, resolutionNotes: null, status: 'OPEN' }],
+    issues: [{ id: 'i1', title: 'Cabinet delay', description: 'Delivery moved', severity: 'MAJOR', blocksPayment: false, resolutionNotes: null, status: 'OPEN', sourceEntityType: null }],
   }, [{ id: 'l1', entryType: 'PROGRESS', notes: 'Framing complete', entryDate: new Date('2026-10-11T12:00:00.000Z'), milestoneId: 'm1', photoKeys: ['photo'] }], true);
   assert.equal(detail.reasonCode, 'PROJECT_TRACKER_DETAIL_READY');
   assert.deepEqual(detail.blocks.map((block) => block.type), ['SUMMARY', 'TABLE', 'GROUPED_LIST', 'BOUNDARY']);
   assert.match(detail.blocks[0].body, /0 of 1 milestones complete; 1 open issue/);
   assert.deepEqual(detail.blocks[1].rows.map((row) => row.values.amount), ['$45,000.00', '$28,000.00', '$17,000.00']);
   assert.deepEqual(detail.blocks[2].sections.map((section) => section.title), ['Milestones', 'Payments', 'Change orders', 'Issues', 'Progress log']);
+  assert.deepEqual(detail.blocks[0].actions.slice(0, 3).map((action) => action.label), ['Add milestone', 'Log progress', 'Log issue']);
+  assert.deepEqual(detail.blocks[2].sections[0].items[0].actions.map((action) => action.label), ['Complete milestone']);
+  assert.deepEqual(detail.blocks[2].sections[1].items[0].actions.map((action) => action.label), ['Mark paid']);
+  assert.deepEqual(detail.blocks[2].sections[3].items[0].actions.map((action) => action.label), ['Resolve issue']);
 });
 
 test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {

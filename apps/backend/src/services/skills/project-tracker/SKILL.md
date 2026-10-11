@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Review this home's contractor projects in Project Tracker: which are active, completed or cancelled, with contract, paid and remaining amounts, due dates and warranty expirations as recorded.
+Review and manage this home's tracked contractor or DIY projects: lifecycle, milestones, eligible payments, progress notes, and issues, with the recorded financial position and dates.
 
 ## Select this Skill when
 
@@ -12,17 +12,18 @@ Review this home's contractor projects in Project Tracker: which are active, com
 
 ## Do not select this Skill when
 
-- Record a $5,000 payment to the roofer
 - The request is about permit or HOA readiness for a renovation (`renovation`)
 - The request is about DIY projects (`diy`)
 
 ## Operations
 
 - `PROJECT_TRACKER_PROJECTS`
+- `PROJECT_TRACKER_CREATE`
+- `PROJECT_TRACKER_COMMAND`
 
 ## Consumers
 
-- ASK: PROJECT_TRACKER_PROJECTS
+- ASK: PROJECT_TRACKER_PROJECTS, PROJECT_TRACKER_CREATE, PROJECT_TRACKER_COMMAND
 
 ## Canonical ownership and boundaries
 

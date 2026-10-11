@@ -301,6 +301,43 @@ export const ProjectTrackerCreateInputSchema = z.object({
   }
 });
 
+export const ProjectTrackerMilestoneInputSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: optionalText(2000),
+  milestoneType: z.enum(['STANDARD', 'PAYMENT_TRIGGER', 'CUSTOM']).default('STANDARD'),
+  scheduledDate: projectExactDate.nullish().transform((value) => value || null),
+  requiresPhotoEvidence: z.coerce.boolean().default(false),
+}).strict();
+
+export const ProjectTrackerMilestoneCompleteInputSchema = z.object({
+  completionNotes: optionalText(2000),
+  actualCompletedDate: projectExactDate.nullish().transform((value) => value || null),
+}).strict();
+
+export const ProjectTrackerPaymentPaidInputSchema = z.object({
+  paidDate: projectExactDate.nullish().transform((value) => value || null),
+  paymentMethod: optionalText(100),
+}).strict();
+
+export const ProjectTrackerProgressInputSchema = z.object({
+  entryDate: projectExactDate,
+  entryType: z.literal('DAILY_NOTE').default('DAILY_NOTE'),
+  notes: z.string().trim().min(1).max(5000),
+  milestoneId: optionalText(160),
+}).strict();
+
+export const ProjectTrackerIssueInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(5000),
+  severity: z.enum(['MINOR', 'MAJOR', 'BLOCKING']),
+  category: z.enum(['QUALITY_CONCERN', 'SCOPE_DISPUTE', 'TIMELINE_DISPUTE', 'COMMUNICATION', 'SAFETY', 'DAMAGE', 'PAYMENT_DISPUTE', 'OTHER']),
+  blocksPayment: z.coerce.boolean().optional(),
+}).strict();
+
+export const ProjectTrackerIssueResolveInputSchema = z.object({
+  resolutionNotes: z.string().trim().min(1).max(5000),
+}).strict();
+
 // Room Plant Advisor generation. Light is the one required growing-context fact; the remaining preferences refine the deterministic ranking.
 export const RoomPlantRecommendationInputSchema = z.object({
   roomId: z.string().trim().min(1).max(160),
