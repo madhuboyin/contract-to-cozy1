@@ -36,6 +36,13 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
         "id": "capital-reserve.plan",
         "version": "1.0"
       }
+    },
+    {
+      "operationId": "RESERVE_FUND_COMMAND",
+      "expectedAdapter": {
+        "id": "reserve-fund.command",
+        "version": "1.0"
+      }
     }
   ],
   "ambiguityCases": [
@@ -52,6 +59,11 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
     {
       "consumer": "ASK",
       "operationId": "CAPITAL_RESERVE_PLAN",
+      "allowed": true
+    },
+    {
+      "consumer": "ASK",
+      "operationId": "RESERVE_FUND_COMMAND",
       "allowed": true
     }
   ],
@@ -124,6 +136,10 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
     {
       "id": "capital-reserve.plan",
       "version": "1.0"
+    },
+    {
+      "id": "reserve-fund.command",
+      "version": "1.0"
     }
   ],
   "prohibitedAdapters": [
@@ -135,7 +151,10 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   "expectedStatuses": [
     "ANSWERED",
-    "READY_WITH_LIMITATIONS"
+    "READY_WITH_LIMITATIONS",
+    "NEEDS_CONTEXT",
+    "NEEDS_CONFIRMATION",
+    "COMPLETED"
   ],
   "expectedBlockTypes": [
     "SUMMARY",
@@ -144,11 +163,16 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
     "TIMELINE",
     "EVIDENCE",
     "BOUNDARY",
-    "CAPABILITY_LIST"
+    "CAPABILITY_LIST",
+    "WORKFLOW_PROGRESS"
   ],
   "expectedCanonicalCalls": [
     {
       "id": "capital-reserve.plan",
+      "version": "1.0"
+    },
+    {
+      "id": "reserve-fund.command",
       "version": "1.0"
     }
   ],

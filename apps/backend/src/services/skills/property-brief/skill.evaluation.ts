@@ -60,7 +60,7 @@ export const PROPERTY_BRIEF_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'COMPLETED'],
-  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'WORKFLOW_PROGRESS'],
+  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'WORKFLOW_PROGRESS', 'CAPABILITY_LIST'],
   expectedCanonicalCalls: [{ id: 'property-brief.briefs', version: '1.0' }, { id: 'property-brief.command', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {

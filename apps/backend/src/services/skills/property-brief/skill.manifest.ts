@@ -30,7 +30,7 @@ export const PROPERTY_BRIEF_SKILL = Object.freeze({
   allowedAdapters: [{ id: 'property-brief.briefs', version: '1.0' }, { id: 'property-brief.command', version: '1.0' }],
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: ['PROPERTY_BRIEFS_LIST', 'PROPERTY_BRIEF_COMMAND'] }],
-  autonomyLevel: 1,
+  autonomyLevel: 2,
   riskPolicy: {
     effects: ['READ', 'WRITE', 'EXTERNAL_TRANSMISSION'],
     materiality: 'MATERIAL',
@@ -38,7 +38,7 @@ export const PROPERTY_BRIEF_SKILL = Object.freeze({
     reversibility: 'REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'WORKFLOW_PROGRESS'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'WORKFLOW_PROGRESS', 'CAPABILITY_LIST'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

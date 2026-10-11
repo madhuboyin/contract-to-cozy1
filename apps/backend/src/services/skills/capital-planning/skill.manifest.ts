@@ -27,6 +27,12 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
       "version": "1.0",
       "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
       "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
+    },
+    {
+      "operationId": "RESERVE_FUND_COMMAND",
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+      "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
     }
   ],
   "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
@@ -35,6 +41,10 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
     {
       "id": "capital-reserve.plan",
       "version": "1.0"
+    },
+    {
+      "id": "reserve-fund.command",
+      "version": "1.0"
     }
   ],
   "allowedExternalConnectors": [],
@@ -42,14 +52,16 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
     {
       "consumer": "ASK",
       "operations": [
-        "CAPITAL_RESERVE_PLAN"
+        "CAPITAL_RESERVE_PLAN",
+        "RESERVE_FUND_COMMAND"
       ]
     }
   ],
-  "autonomyLevel": 1,
+  "autonomyLevel": 2,
   "riskPolicy": {
     "effects": [
-      "READ"
+      "READ",
+      "WRITE"
     ],
     "materiality": "MATERIAL",
     "riskDomains": [
@@ -66,7 +78,8 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
     "TIMELINE",
     "EVIDENCE",
     "BOUNDARY",
-    "CAPABILITY_LIST"
+    "CAPABILITY_LIST",
+    "WORKFLOW_PROGRESS"
   ],
   "dependencies": [
     { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
@@ -74,6 +87,12 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
     {
       "type": "OPERATION_CONTRACT",
       "id": "CAPITAL_RESERVE_PLAN",
+      "version": "1.0",
+      "required": true
+    },
+    {
+      "type": "OPERATION_CONTRACT",
+      "id": "RESERVE_FUND_COMMAND",
       "version": "1.0",
       "required": true
     }

@@ -18,10 +18,11 @@ Plan major home expenses, reserve needs, and replacement timing from recorded ho
 ## Operations
 
 - `CAPITAL_RESERVE_PLAN`
+- `RESERVE_FUND_COMMAND`
 
 ## Consumers
 
-- ASK: CAPITAL_RESERVE_PLAN
+- ASK: CAPITAL_RESERVE_PLAN, RESERVE_FUND_COMMAND
 
 ## Canonical ownership and boundaries
 
