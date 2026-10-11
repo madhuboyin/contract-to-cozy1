@@ -74,12 +74,14 @@ Functional parity is necessary but not sufficient. Project Tracker must read as 
 
 The shared Ask renderer already supplies the standard readable width, wide-artifact classification, content-driven compact cards, and suppression of empty action footers. The Project Tracker implementation also removes empty execution sections and keeps actions attached to their records.
 
+Project creation and follow-on Project Tracker command forms now use the shared compact workflow renderer. Creation groups project identity, delivery, cost/dates, compliance and first-milestone fields into responsive rows; bounds the long project-type choice set behind progressive disclosure; and removes the nested white field-card treatment. Project command forms use a compact two-column default with long explanations and larger choice sets spanning the available width. Shared capture controls now explicitly render the `NUMBER`, `MONEY` and `LONG_TEXT` schemas used throughout Project Tracker, correcting the previously blank amount and narrative panels while leaving canonical validation and confirmation unchanged.
+
 The following presentation work should be treated as the remaining compact-UI follow-up rather than functional parity work:
 
 - add progressive disclosure for long record descriptions and secondary metadata;
 - cap and continue each execution-record collection independently instead of loading the latest 100 log entries into one response;
 - give the completion workflow a grouped/stepped conversational form instead of one long field stack;
-- verify responsive two/three-column density and action overflow behavior in a real desktop and mobile browser;
+- verify the implemented responsive two/three-column density and action overflow behavior in a real desktop and mobile browser;
 - add Project Tracker-specific visual regression coverage for blank footer suppression, content-driven height, and the 920/1140 px width policy.
 
 ## Gaps identified and implementation mapping

@@ -93,6 +93,22 @@ describe('AskWorkspace split guardrails', () => {
     expect(controls).not.toContain("compact ? 'h-full min-w-0 rounded-xl border");
   });
 
+  it('keeps Project Tracker workflows compact and renders every declared field family', () => {
+    const source = read(path.join(workspaceDir, 'CaptureCards.tsx'));
+    const controls = read(path.join(askDir, '..', 'property-context', 'CaptureFieldControl.tsx'));
+    const captureTypes = read(path.join(askDir, '..', 'property-context', 'featureContextTypes.ts'));
+    expect(source).toContain("request.captureKey === 'PROJECT_TRACKER_CREATE_INPUTS'");
+    expect(source).toContain("request.captureKey === 'PROJECT_TRACKER_COMMAND_INPUTS'");
+    expect(source).toContain("compactProjectCreate ? 'project-create'");
+    expect(source).toContain("compactProjectCommand ? 'project-command'");
+    expect(controls).toContain("schema.type === 'NUMBER' || schema.type === 'MONEY'");
+    expect(controls).toContain("schema.type === 'LONG_TEXT'");
+    expect(controls).toContain('More (${selectOptions.length - visibleSelectOptions.length})');
+    expect(captureTypes).toContain("{ type: 'NUMBER'");
+    expect(captureTypes).toContain("{ type: 'MONEY'");
+    expect(captureTypes).toContain("{ type: 'LONG_TEXT'");
+  });
+
   it('pins the full-page composer to a stable dynamic viewport without sticky positioning', () => {
     const workspace = read(path.join(askDir, 'AskWorkspace.tsx'));
     const layout = read(dashboardLayout);
