@@ -166,7 +166,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   DIY_COMPLETION_RECOVER: new Set(['diy-show-projects']),
   PROJECT_TRACKER_PROJECTS: new Set(['open-project-tracker']),
   SERVICE_PRICE_CHECKS: new Set(['check-service-quote']),
-  HOME_TIMELINE_EVENTS: new Set(),
+  HOME_TIMELINE_EVENTS: new Set(['home-timeline-log-event', 'correct-title', 'correct-occurredAt', 'correct-summary', 'correct-visibility']),
   MATERIAL_SPECS_LIST: new Set(['add-material-spec']),
   GUIDANCE_JOURNEYS_LIST: new Set(['start-guided-plan']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview', 'continue-step-in-ask', 'dismiss-guided-journey']),

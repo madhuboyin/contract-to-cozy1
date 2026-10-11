@@ -80,14 +80,14 @@ test('the List choice shows every event newest first with readable dates and fac
   expect(second.container.querySelector('[data-display-pattern="timeline"]')).toBeInTheDocument();
 });
 
-test('"Details" opens the record in place from the track and from the list, with its facts and evidence, and closes back to the trigger', async () => {
+test('"Review event" opens the record in place from the track and from the list, with its facts and evidence, and closes back to the trigger', async () => {
   const { container } = render(<Harness />);
   const selected = await waitFor(() => {
     const element = container.querySelector('[data-ask-timeline-selected="kitchen"]') as HTMLElement;
     expect(element).toBeInTheDocument();
     return element;
   });
-  fireEvent.click(within(selected).getByRole('button', { name: /Details/ }));
+  fireEvent.click(within(selected).getByRole('button', { name: /Review event/ }));
   const detail = container.querySelector('[data-ask-timeline-detail="kitchen"]') as HTMLElement;
   expect(within(detail).getByRole('heading', { name: 'Kitchen remodel' })).toBeInTheDocument();
   expect(within(detail).getByText('Oak & Co')).toBeInTheDocument();
@@ -99,7 +99,7 @@ test('"Details" opens the record in place from the track and from the list, with
 
   fireEvent.click(screen.getByRole('button', { name: 'List' }));
   const rows = within(container.querySelector('[data-timeline-list]') as HTMLElement).getAllByRole('listitem');
-  fireEvent.click(within(rows[1]).getByRole('button', { name: /Details/ }));
+  fireEvent.click(within(rows[1]).getByRole('button', { name: /Review event/ }));
   const note = container.querySelector('[data-ask-timeline-detail="note"]') as HTMLElement;
   expect(within(note).getByText('Only the person who recorded it')).toBeInTheDocument();
   expect(within(note).getByText('No evidence is attached to this record yet.')).toBeInTheDocument();

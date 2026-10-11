@@ -7,6 +7,10 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { HomeEventsService } from '../../homeEvents.service';
 import { humanDate, readableCode } from '../askFormatting';
 import { getAskPropertyTimezone } from '../askExecutionContext';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { HouseholdRole } from '@prisma/client';
+import { HOME_EVENT_VISIBILITY_MESSAGE } from '../support/homeEventCorrection';
+import { EVENT_ADD_MESSAGE } from './homeRecordWrites.handler';
 
 // Home Timeline capability-card slice (FRD v1.61): the thirteenth new operation for a capability with none. Reads
 // HomeEventsService.listHomeEvents with the page's default limit (80), the call GET /properties/:id/home-events makes
@@ -99,7 +103,22 @@ export function homeTimelinePlacement(event: { occurredAt: Date | string; datePr
   return { date: `${parts.year}-${parts.month}-${parts.day}`, precision: 'DAY' };
 }
 
-export function homeTimelineFromView(allEvents: readonly TimelineEventView[], propertyId: string, userId: string): AskOperationResult {
+const eventActions = (canManage: boolean) => canManage ? [
+  { id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT' },
+  { id: 'correct-occurredAt', label: 'Correct date', message: 'Correct the date of this timeline event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT' },
+  { id: 'correct-summary', label: 'Correct details', message: 'Correct the summary of this timeline event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT' },
+  { id: 'correct-visibility', label: 'Change visibility', message: HOME_EVENT_VISIBILITY_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_VISIBILITY' },
+] : undefined;
+
+const logEventBlock = (propertyId: string): AskPresentationBlock => ({
+  type: 'GROUPED_LIST', id: 'home-timeline-actions', title: 'Add to this history', description: 'Record something that happened at this home without leaving the conversation.', filters: [],
+  sections: [{ id: 'home-timeline-add-actions', title: 'Timeline actions', count: 1, items: [{
+    id: propertyId, entityType: 'PROPERTY', title: 'Log an event', description: 'Add a repair, maintenance visit, improvement, inspection, purchase, claim, milestone or note.', meta: [],
+    actions: [{ id: 'home-timeline-log-event', label: 'Log an event', interactionType: 'MUTATE_RECORD', message: EVENT_ADD_MESSAGE, operationId: 'CAPTURE_EVENT_CONFIRM', style: 'PRIMARY' }],
+  }] }], actions: [],
+});
+
+export function homeTimelineFromView(allEvents: readonly TimelineEventView[], propertyId: string, userId: string, canManage = false): AskOperationResult {
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'home-timeline-boundary', title: 'History as recorded',
     body: 'Events are shown as they were recorded, with how well each is verified and how precise its date is. Unverified and inferred events have not been confirmed. Private events recorded by other household members are not shown.',
@@ -113,7 +132,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
         type: 'SUMMARY', id: 'home-timeline-summary', title: 'No events on the timeline yet',
         body: 'The Home Timeline keeps a history of what happened to this home: repairs, improvements, purchases, inspections and claims. Events you record will appear here.',
         tone: 'DEFAULT', actions: [],
-      }, boundary],
+      }, ...(canManage ? [logEventBlock(propertyId)] : []), boundary],
       suggestions: [],
     };
   }
@@ -130,6 +149,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
     tone: disputed ? 'CAUTION' : 'DEFAULT',
     actions: [],
   }];
+  if (canManage) blocks.push(logEventBlock(propertyId));
   if (allEvents.length >= HOME_TIMELINE_ASK_LIMIT) {
     blocks.push({
       type: 'LIMITATION', id: 'home-timeline-limit', title: `Showing the ${HOME_TIMELINE_ASK_LIMIT} most recent events`,
@@ -162,6 +182,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
           detail: eventDetail(event),
           category,
           entityType: 'HOME_EVENT',
+          actions: eventActions(canManage && event.meta?.synthetic !== true),
           meta: [...(event.datePrecision === 'RANGE' ? [timelineEventDate(event)] : []), ...eventMeta(event)].slice(0, 6),
         };
       }),
@@ -175,7 +196,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
         items: undated.map((event) => ({
           id: event.id, title: event.title, description: event.summary ?? null,
           meta: ['Date unknown', ...eventMeta(event)],
-          status: TIMELINE_LABEL(event.verificationStatus),
+          status: TIMELINE_LABEL(event.verificationStatus), actions: eventActions(canManage && event.meta?.synthetic !== true), entityType: 'HOME_EVENT',
         })),
       }],
       actions: [],
@@ -185,9 +206,12 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
   return { status: 'ANSWERED', reasonCode: 'HOME_TIMELINE_READY', blocks, suggestions: [] };
 }
 
-async function homeTimelineResult(propertyId: string, userId: string): Promise<AskOperationResult> {
-  const { events } = await new HomeEventsService().listHomeEvents(propertyId, { limit: HOME_TIMELINE_ASK_LIMIT });
-  return homeTimelineFromView(events, propertyId, userId);
+async function homeTimelineResult(propertyId: string, userId: string, knownRole?: HouseholdRole): Promise<AskOperationResult> {
+  const [{ events }, access] = await Promise.all([
+    new HomeEventsService().listHomeEvents(propertyId, { limit: HOME_TIMELINE_ASK_LIMIT }),
+    knownRole ? Promise.resolve({ role: knownRole }) : ensurePropertyAccess(userId, propertyId),
+  ]);
+  return homeTimelineFromView(events, propertyId, userId, access.role !== HouseholdRole.VIEWER);
 }
 
-registerCapabilityHandler('home-timeline.events', async (envelope) => homeTimelineResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('home-timeline.events', async (envelope, deps) => homeTimelineResult(envelope.propertyId!, envelope.userId, deps.propertyAccess?.role));

@@ -7,6 +7,7 @@ import { ActionLink, AskContextLink } from './context';
 import { SEASONAL_ABOUT_BLOCK_IDS, SEASONAL_NEXT_STEPS_BLOCK_IDS, SeasonalAboutCard, SeasonalIntroCard, isSeasonalIntroBlockId, SeasonalNextSteps } from '../SeasonalAnswerCards';
 import { useCalmAnswer, useCalmChrome, useCalmReceiptContinuation } from './calmContext';
 import type { AskBlockRenderer } from './types';
+import { ItemActionButtons } from '../patterns/PatternParts';
 
 function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBlock, { type: 'SUMMARY' }>['chips']> }) {
   return (
@@ -161,19 +162,21 @@ export const MetricRowBlock: AskBlockRenderer<'METRIC_ROW'> = ({ block }) => (
 
 // The vertical timeline list: the fallback when a track cannot be drawn, and the List choice beside the track.
 // Dates read as recorded (FRD v1.77): "Feb 2024" for a month, never an invented day; an unreadable date shows as sent.
-export const TimelineBlock: AskBlockRenderer<'TIMELINE'> = ({ block }) => (
+export const TimelineBlock: AskBlockRenderer<'TIMELINE'> = ({ block, onItemAction, itemActionsDisabled }) => (
   <section className="rounded-2xl border border-slate-200 bg-white p-4">
     <h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
-    <TimelineList block={block} />
+    <TimelineList block={block} onItemAction={onItemAction} itemActionsDisabled={itemActionsDisabled} />
   </section>
 );
 
 // FRD v1.90: `onOpenDetail` lets a domain that keeps a live record detail under its timeline (the capital windows) open it
 // from the list too; the row's button is marked like the other detail triggers so focus returns to it.
-export function TimelineList({ block, onOpenDetail, openDetailId }: {
+export function TimelineList({ block, onOpenDetail, openDetailId, onItemAction, itemActionsDisabled }: {
   block: Extract<AskPresentationBlock, { type: 'TIMELINE' }>;
   onOpenDetail?: (itemId: string) => void;
   openDetailId?: string | null;
+  onItemAction?: Parameters<typeof ItemActionButtons>[0]['onItemAction'];
+  itemActionsDisabled?: boolean;
 }) {
   return (
     <ol className="mt-4 border-l-2 border-teal-200 pl-4" data-timeline-list>
@@ -190,7 +193,8 @@ export function TimelineList({ block, onOpenDetail, openDetailId }: {
             {facts.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>}
             {item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}
             {onOpenDetail && <button type="button" data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={openDetailId === item.id} onClick={() => onOpenDetail(item.id)}
-              className="mt-1 min-h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Details<span className="sr-only"> for {item.label}</span></button>}
+              className="mt-1 min-h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Review event<span className="sr-only"> {item.label}</span></button>}
+            {onItemAction && <ItemActionButtons className="mt-2" item={item} actions={item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled ?? false} />}
           </li>
         );
       })}

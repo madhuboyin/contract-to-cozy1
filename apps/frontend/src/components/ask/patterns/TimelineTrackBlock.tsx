@@ -53,7 +53,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-ask-detail-trigger="${CSS.escape(closingId ?? '')}"][data-ask-detail-block="${CSS.escape(block.id)}"]`)?.focus());
   };
   const windowDetail = detailItem
-    ? !isCapitalWindows ? <TimelineEventDetail key={detailItem.id} item={detailItem} onClose={closeDetail} /> : <CapitalWindowDetail key={detailItem.id} windowId={detailItem.id} expectedPropertyId={propertyId} fallbackTitle={detailItem.label} onAccessLost={onAccessLost} onClose={closeDetail} />
+    ? !isCapitalWindows ? <TimelineEventDetail key={detailItem.id} item={detailItem} onClose={closeDetail} onItemAction={onItemAction} disabled={itemActionsDisabled} /> : <CapitalWindowDetail key={detailItem.id} windowId={detailItem.id} expectedPropertyId={propertyId} fallbackTitle={detailItem.label} onAccessLost={onAccessLost} onClose={closeDetail} />
     : null;
   // A single window, or one whose date cannot be read, has no track; the list keeps its detail.
   if (!points && !hasWindowDetail) return <TimelineBlock {...props} />;
@@ -80,7 +80,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   );
   if (layout === 'LIST' || !points) {
     return <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}
-      <TimelineList block={block} onOpenDetail={hasWindowDetail ? openDetail : undefined} openDetailId={detailId} />
+      <TimelineList block={block} onOpenDetail={hasWindowDetail ? openDetail : undefined} openDetailId={detailId} onItemAction={onItemAction} itemActionsDisabled={itemActionsDisabled} />
       {windowDetail}
     </section>;
   }
@@ -151,7 +151,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
             {selected.item.description && <p className="mt-1 text-sm text-slate-600">{selected.item.description}</p>}
             <ItemActionButtons className="mt-2" item={selected.item} actions={selected.item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />
             {hasWindowDetail && <button type="button" data-ask-detail-trigger={selected.item.id} data-ask-detail-block={block.id} aria-expanded={detailId === selected.item.id} onClick={() => openDetail(selected.item.id)}
-              className="mt-2 mr-3 min-h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Details<span className="sr-only"> for {selected.item.label}</span></button>}
+              className="mt-2 mr-3 min-h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Review event<span className="sr-only"> {selected.item.label}</span></button>}
             {selected.item.href && !hasWindowDetail && <AskContextLink href={selected.item.href} className="mt-2 inline-block text-xs font-semibold text-teal-700 hover:underline">Open record</AskContextLink>}
           </div>
           <div className="flex shrink-0 gap-1">

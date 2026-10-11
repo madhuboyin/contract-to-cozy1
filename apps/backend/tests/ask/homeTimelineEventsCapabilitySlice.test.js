@@ -64,6 +64,21 @@ test('the operation reads the page\'s event list (limit 80) behind the page\'s v
   const titles = [...viewer.blocks.find((block) => block.id === 'home-timeline-events').items.map((item) => item.label), ...viewer.blocks.find((block) => block.id === 'home-timeline-undated').sections.flatMap((section) => section.items.map((row) => row.title))];
   assert.equal(titles.includes('My private note'), true);
   assert.equal(titles.includes('Someone else private note'), false);
+  assert.equal(viewer.blocks.some((block) => block.id === 'home-timeline-actions'), false);
+  assert.equal(viewer.blocks.find((block) => block.id === 'home-timeline-events').items.some((item) => item.actions?.length), false);
+});
+
+test('contributors can log, review and correct real events inline while modeled events stay read-only', async () => {
+  const result = await capabilityInvoke('HOME_TIMELINE_EVENTS', { userId: 'u1', propertyId: 'p1', message: 'Show my home timeline' }, { propertyAccess: { role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'p1' } });
+  const add = result.blocks.find((block) => block.id === 'home-timeline-actions').sections[0].items[0].actions[0];
+  assert.deepEqual({ label: add.label, operationId: add.operationId, message: add.message }, { label: 'Log an event', operationId: 'CAPTURE_EVENT_CONFIRM', message: 'Add an event to my home timeline.' });
+  const track = result.blocks.find((block) => block.id === 'home-timeline-events');
+  const kitchen = track.items.find((item) => item.id === 'kitchen');
+  assert.deepEqual(kitchen.actions.map((action) => [action.label, action.operationId]), [
+    ['Correct title', 'HOME_EVENT_CORRECT'], ['Correct date', 'HOME_EVENT_CORRECT'], ['Correct details', 'HOME_EVENT_CORRECT'], ['Change visibility', 'HOME_EVENT_VISIBILITY'],
+  ]);
+  assert.equal(track.items.find((item) => item.id === 'synthetic-appliance-dishwasher').actions, undefined);
+  for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
 });
 
 test('the real list query is the page\'s (current, not deleted, newest first) and the read never writes', async () => {

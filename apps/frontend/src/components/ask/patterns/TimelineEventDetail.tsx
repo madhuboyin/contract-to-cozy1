@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import type { AskPresentationBlock } from '@/features/ask/types';
+import type { AskItemActionInteractionType } from '@/features/ask/types';
+import { ItemActionButtons } from './PatternParts';
 
 type TimelineItem = Extract<AskPresentationBlock, { type: 'TIMELINE' }>['items'][number];
 
@@ -10,7 +12,7 @@ type TimelineItem = Extract<AskPresentationBlock, { type: 'TIMELINE' }>['items']
  * A timeline record read in place: its labelled facts and the evidence behind it, from the detail the answer carries. Nothing here links to a
  * page; the homeowner stays in the conversation.
  */
-export function TimelineEventDetail({ item, onClose }: { item: TimelineItem; onClose: () => void }) {
+export function TimelineEventDetail({ item, onClose, onItemAction, disabled }: { item: TimelineItem; onClose: () => void; onItemAction?: (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void; disabled?: boolean }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => { headingRef.current?.focus(); }, [item.id]);
   const detail = item.detail;
@@ -42,6 +44,7 @@ export function TimelineEventDetail({ item, onClose }: { item: TimelineItem; onC
           </ul>
         ) : <p className="mt-1 text-sm text-slate-600">No evidence is attached to this record yet.</p>}
       </div>
+      {onItemAction && <ItemActionButtons className="mt-4" item={item} actions={item.actions} onItemAction={onItemAction} disabled={disabled ?? false} />}
     </aside>
   );
 }
