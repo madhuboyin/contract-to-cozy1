@@ -41,6 +41,7 @@ export type StructuredCaptureField = {
 export type CaptureInputSchema = ScalarCaptureInputSchema | {
   type: 'GROUP';
   fields: StructuredCaptureField[];
+  groups?: Array<{ id: string; title: string; description?: string; fieldKeys: string[] }>;
 } | {
   type: 'RELATIONAL_SELECT_CREATE';
   entityType: 'INVENTORY_ITEM' | 'INSURANCE_POLICY' | 'WARRANTY';

@@ -395,6 +395,7 @@ export function InlineCaptureCard({
   const [dismissed, setDismissed] = useState(false);
   const [sensitiveDataConfirmed, setSensitiveDataConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeGroupIndex, setActiveGroupIndex] = useState(0);
   useEffect(() => {
     window.localStorage.setItem(captureDraftStorageKey(executionId, request.requirementId), JSON.stringify(values));
   }, [executionId, request.requirementId, values]);
@@ -499,6 +500,8 @@ export function InlineCaptureCard({
   const compactEventAdd = schema.type === 'GROUP' && request.captureKey === 'CAPTURE_EVENT_ADD';
   const compactProjectCreate = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_CREATE_INPUTS';
   const compactProjectCommand = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_COMMAND_INPUTS';
+  const formGroups = schema.type === 'GROUP' ? schema.groups ?? [] : [];
+  const activeGroup = formGroups[activeGroupIndex] ?? null;
   const compactWorkflow = compactMaintenanceTask || compactInventoryCreate || compactInventoryCompletion || compactMaterialSpec || compactPlantAdvisor || compactOwnershipScenario || compactEventAdd || compactProjectCreate || compactProjectCommand;
   const missingRequired = activeFields.some((field) => {
     if (!field.required) return false;
@@ -509,6 +512,16 @@ export function InlineCaptureCard({
     const date = value as { precision?: string; value?: string; rangeEnd?: string };
     if (date.precision === 'UNKNOWN') return !request.allowNotSure;
     return !date.value || (date.precision === 'RANGE' && !date.rangeEnd);
+  });
+  const activeGroupFields = activeGroup ? activeFields.filter((field) => activeGroup.fieldKeys.includes(field.key)) : activeFields;
+  const activeGroupMissingRequired = activeGroupFields.some((field) => {
+    if (!field.required) return false;
+    const value = values[field.key];
+    if (value === undefined || value === '' || (value === null && !request.allowNotSure)) return true;
+    if (field.inputSchema.type !== 'APPROXIMATE_DATE' || value === null) return false;
+    if (typeof value !== 'object' || Array.isArray(value)) return true;
+    const date = value as { precision?: string; value?: string; rangeEnd?: string };
+    return date.precision === 'UNKNOWN' ? !request.allowNotSure : !date.value || (date.precision === 'RANGE' && !date.rangeEnd);
   });
 
   // `skipping` answers the question with the reserved skip marker: the server saves nothing and moves to the next question.
@@ -573,7 +586,14 @@ export function InlineCaptureCard({
         </>
       )}
       <div className={compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : undefined}>
-        {activeFields.map((field) => {
+        {activeGroup && <div className="md:col-span-2">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div><p className="text-sm font-semibold text-slate-950">{activeGroup.title}</p>{activeGroup.description && <p className="mt-0.5 text-xs text-slate-500">{activeGroup.description}</p>}</div>
+            <span className="shrink-0 text-xs font-semibold text-slate-500">Step {activeGroupIndex + 1} of {formGroups.length}</span>
+          </div>
+          <ol className="flex gap-1" aria-label="Completion form progress">{formGroups.map((group, index) => <li key={group.id} aria-current={index === activeGroupIndex ? 'step' : undefined} className={cn('h-1.5 flex-1 rounded-full', index <= activeGroupIndex ? 'bg-teal-700' : 'bg-slate-200')}><span className="sr-only">{group.title}</span></li>)}</ol>
+        </div>}
+        {activeGroupFields.map((field) => {
           const inventoryCreateFullWidth = compactInventoryCreate && (field.key === 'name' || field.key === 'category');
           const fullWidth = compactMaintenanceTask
             ? field.key === 'title' || field.key === 'description'
@@ -602,7 +622,10 @@ export function InlineCaptureCard({
         </label>
       )}
       <div className={cn('flex flex-wrap gap-2', compactEventAdd || compactProjectCreate ? 'mt-3' : 'mt-4')}>
-        <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>
+        {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
+        {activeGroup && activeGroupIndex < formGroups.length - 1
+          ? <button type="button" disabled={saving || activeGroupMissingRequired} onClick={() => setActiveGroupIndex((index) => Math.min(formGroups.length - 1, index + 1))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Next: {formGroups[activeGroupIndex + 1].title}</button>
+          : <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>}
         {request.skippable && <button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, true)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Skip for now</button>}
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
         {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}

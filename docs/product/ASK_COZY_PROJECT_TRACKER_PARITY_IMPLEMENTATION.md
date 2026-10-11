@@ -78,11 +78,10 @@ Project creation and follow-on Project Tracker command forms now use the shared 
 
 The following presentation work should be treated as the remaining compact-UI follow-up rather than functional parity work:
 
-- give the completion workflow a grouped/stepped conversational form instead of one long field stack;
 - verify the implemented responsive two/three-column density and action overflow behavior in a real desktop and mobile browser;
 - add Project Tracker-specific visual regression coverage for blank footer suppression, content-driven height, and the 920/1140 px width policy.
 
-Implemented October 11, 2026: every non-empty execution-record section uses an independent three-record server page with previous/next controls and stable source-execution offsets. Progress logs are fetched from the database at the selected offset instead of serializing the latest 100 entries. Project Tracker rows keep only status plus one date or amount visible; descriptions, evidence, authority state, resolution context, and other secondary metadata open inline through a per-record disclosure.
+Implemented October 11, 2026: every non-empty execution-record section uses an independent three-record server page with previous/next controls and stable source-execution offsets. Progress logs are fetched from the database at the selected offset instead of serializing the latest 100 entries. Project Tracker rows keep only status plus one date or amount visible; descriptions, evidence, authority state, resolution context, and other secondary metadata open inline through a per-record disclosure. Completion is one governed workflow presented in four progressive groups—readiness, verification, closeout declarations, and provider/warranty—with draft values retained between groups and one final review/confirmation boundary.
 
 ## Gaps identified and implementation mapping
 

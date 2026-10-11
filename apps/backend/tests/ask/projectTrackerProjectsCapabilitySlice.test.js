@@ -9,6 +9,8 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 const { projectDetailFromView, trackedProjectsFromView } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { projectCommandCapture } = require('../../src/services/ask/handlers/projectTracker.handler.ts');
+const { PROJECT_TRACKER_ACTION_IDS } = require('../../src/services/ask/support/projectTrackerConstants.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
@@ -25,7 +27,7 @@ let calls;
 const project = (id, overrides = {}) => ({
   id, name: `Project ${id}`, projectType: 'KITCHEN_REMODEL', status: 'IN_PROGRESS', contractorName: 'Apex Builders', fulfillmentMode: 'PROFESSIONAL',
   currentContractAmountCents: 4_000_000, paidToDateCents: 2_800_000, expectedEndDate: new Date('2026-11-15T12:00:00.000Z'), warrantyExpiresAt: null,
-  createdAt: new Date('2026-09-01T12:00:00.000Z'), ...overrides,
+  createdAt: new Date('2026-09-01T12:00:00.000Z'), updatedAt: new Date('2026-10-01T12:00:00.000Z'), ...overrides,
 });
 const projects = () => [
   project('kitchen', { name: 'Kitchen remodel' }),
@@ -142,6 +144,17 @@ test('review project shows the desktop execution record inline', () => {
   assert.equal(detail.blocks[2].sections[0].items[0].detail, 'Inspect framing and rough-ins\nPhoto evidence required');
   assert.deepEqual(detail.blocks[2].sections[1].items[0].actions.map((action) => action.label), ['Mark paid', 'Edit', 'Delete']);
   assert.deepEqual(detail.blocks[2].sections[3].items[0].actions.map((action) => action.label), ['Resolve issue', 'Edit']);
+});
+
+test('project completion is one confirmation workflow presented in four governed groups', () => {
+  const capture = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.COMPLETE_PROJECT, {
+    ...project('kitchen'), milestones: [], payments: [], changeOrders: [], issues: [], _count: { progressLogs: 0, writeBacks: 0 },
+  });
+  assert.deepEqual(capture.inputSchema.groups.map((group) => group.title), ['Readiness', 'Verification', 'Closeout declarations', 'Provider and warranty']);
+  assert.equal(capture.inputSchema.groups.flatMap((group) => group.fieldKeys).length, capture.inputSchema.fields.length);
+  const punchListNotes = capture.inputSchema.fields.find((field) => field.key === 'punchListNotes');
+  assert.deepEqual(punchListNotes.when, { fieldKey: 'punchList', operator: 'EQUALS', value: 'NOT_APPLICABLE' });
+  assert.equal(capture.destinationLabel, 'Completes the verified project and creates its closeout package after confirmation');
 });
 
 test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {

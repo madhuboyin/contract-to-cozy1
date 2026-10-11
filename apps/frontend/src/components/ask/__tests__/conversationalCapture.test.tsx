@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ConversationalCapture } from '../calm/ConversationalCapture';
+import { InlineCaptureCard } from '../workspace/CaptureCards';
 import type { AskCaptureRequest } from '@/features/ask/types';
 import type { StructuredCaptureField } from '@/components/property-context/featureContextTypes';
 
@@ -87,5 +88,40 @@ describe('ConversationalCapture', () => {
   it('keeps the reassurance line and drops the long form copy', () => {
     render(<Harness />);
     expect(screen.getByText('Nothing is saved until you confirm.')).toBeInTheDocument();
+  });
+});
+
+describe('grouped workflow capture', () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it('moves through declared groups while retaining draft values and submits only from the final group', () => {
+    const groupedRequest = {
+      requirementId: 'project-completion', captureKey: 'PROJECT_TRACKER_COMMAND_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+      title: 'Complete this project', question: 'Confirm every closeout category.', helpText: null, allowNotSure: false, sensitivity: 'STANDARD',
+      destinationLabel: 'Completes the project after confirmation', fallbackHref: null, confirmationText: null, expectedContextVersion: 'v1', presentation: 'FORM',
+      inputSchema: { type: 'GROUP', groups: [
+        { id: 'readiness', title: 'Readiness', fieldKeys: ['actualCost'] },
+        { id: 'verification', title: 'Verification', fieldKeys: ['verified'] },
+        { id: 'closeout', title: 'Closeout declarations', fieldKeys: ['closeout'] },
+        { id: 'provider', title: 'Provider and warranty', fieldKeys: ['warranty'] },
+      ], fields: [
+        { key: 'actualCost', label: 'Actual cost', required: true, inputSchema: { type: 'NUMBER', min: 0, max: 1000 } },
+        { key: 'verified', label: 'Verified', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } },
+        { key: 'closeout', label: 'Closeout', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Done', falseLabel: 'Not done' } },
+        { key: 'warranty', label: 'Warranty months', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 1200 } },
+      ] }, currentAnswer: { verified: true, closeout: true },
+    } as unknown as AskCaptureRequest;
+    render(<InlineCaptureCard executionId="completion-execution" request={groupedRequest} onCompleted={jest.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Actual cost'), { target: { value: '450' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Verification' }));
+    expect(screen.getByText('Step 2 of 4')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(screen.getByLabelText('Actual cost')).toHaveValue(450);
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Verification' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Closeout declarations' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Provider and warranty' }));
+    expect(screen.getByRole('button', { name: 'Continue to review' })).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem').filter((item) => item.getAttribute('aria-current') === 'step')).toHaveLength(1);
   });
 });

@@ -176,6 +176,7 @@ export type RelationalCaptureInputSchema = RelationalSelectCreateInputSchema | R
 export type CaptureInputSchema = ScalarCaptureInputSchema | {
   type: 'GROUP';
   fields: StructuredCaptureField[];
+  groups?: Array<{ id: string; title: string; description?: string; fieldKeys: string[] }>;
 } | RelationalCaptureInputSchema;
 
 export interface ContextCaptureDefinition {
