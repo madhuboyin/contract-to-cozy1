@@ -263,6 +263,44 @@ export const HomePlantAddInputSchema = z.object({
   notes: optionalText(1000),
 }).strict();
 
+const projectExactDate = z.union([
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  z.object({ precision: z.literal('EXACT_DATE'), value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict().transform((value) => value.value),
+]);
+
+export const ProjectTrackerCreateInputSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  projectType: z.enum([
+    'ROOF_REPLACEMENT', 'HVAC_REPLACEMENT', 'HVAC_REPAIR', 'KITCHEN_REMODEL', 'BATHROOM_REMODEL',
+    'ELECTRICAL_PANEL', 'PLUMBING_REPIPING', 'WATER_HEATER', 'FOUNDATION_WORK', 'WINDOW_REPLACEMENT',
+    'FLOORING', 'PAINTING_INTERIOR', 'PAINTING_EXTERIOR', 'DECK_PATIO', 'ADDITION', 'SEWER_LINE',
+    'SOLAR_INSTALLATION', 'LANDSCAPING_MAJOR', 'GENERAL_REPAIR', 'CUSTOM',
+  ]),
+  fulfillmentMode: z.enum(['PROVIDER', 'DIY']),
+  contractorName: optionalText(200),
+  contractAmountDollars: z.coerce.number().min(0).max(100_000_000),
+  startDate: projectExactDate,
+  expectedEndDate: projectExactDate.nullish().transform((value) => value || null),
+  permitApplicability: z.enum(['REQUIRED', 'NOT_REQUIRED', 'UNKNOWN']),
+  permitApplicabilityBasis: optionalText(2000),
+  hoaApplicability: z.enum(['REQUIRED', 'NOT_REQUIRED', 'UNKNOWN']),
+  hoaApplicabilityBasis: optionalText(2000),
+  initialMilestoneName: z.string().trim().min(1).max(200),
+  initialMilestoneDate: projectExactDate.nullish().transform((value) => value || null),
+}).strict().superRefine((value, context) => {
+  if (value.fulfillmentMode === 'PROVIDER' && !value.contractorName) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['contractorName'], message: 'Provider-led projects require a contractor or company name.' });
+  }
+  for (const [field, basisField, label] of [
+    ['permitApplicability', 'permitApplicabilityBasis', 'Permit'],
+    ['hoaApplicability', 'hoaApplicabilityBasis', 'HOA'],
+  ] as const) {
+    if (value[field] !== 'UNKNOWN' && !value[basisField]) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: [basisField], message: `${label} applicability requires a source or rationale.` });
+    }
+  }
+});
+
 // Room Plant Advisor generation. Light is the one required growing-context fact; the remaining preferences refine the deterministic ranking.
 export const RoomPlantRecommendationInputSchema = z.object({
   roomId: z.string().trim().min(1).max(160),

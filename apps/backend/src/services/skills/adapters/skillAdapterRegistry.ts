@@ -74,6 +74,7 @@ const DEFINITIONS = [
   adapter('diy.project-start', 'DIY project start from a reviewed template (DiyService.startProjectFromTemplate)', 'DIY_PROJECT_START', 'MUTATION_PREPARATION'),
   adapter('diy.completion-recover', 'DIY completion recovery (DiyService.retryCompletionEffects and retryTaskReconciliation)', 'DIY_COMPLETION_RECOVER', 'MUTATION_PREPARATION'),
   adapter('project-tracker.projects', 'Project Tracker projects (projectTracker.service)', 'PROJECT_TRACKER_PROJECTS'),
+  adapter('project-tracker.create', 'Project Tracker project creation (projectTracker.service)', 'PROJECT_TRACKER_CREATE', 'MUTATION_PREPARATION'),
   adapter('service-price-radar.checks', 'Service Price Radar checks (ServicePriceRadarService)', 'SERVICE_PRICE_CHECKS'),
   adapter('home-timeline.events', 'Home Timeline events (HomeEventsService)', 'HOME_TIMELINE_EVENTS'),
   adapter('material-specs.list', 'Material Specs list (MaterialSpecService)', 'MATERIAL_SPECS_LIST'),

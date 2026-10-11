@@ -100,6 +100,13 @@ test('no projects is not an all-clear; nothing completed says no spend yet', () 
   assert.equal(activeOnly.blocks[0].tone, 'DEFAULT');
 });
 
+test('a contributor can start a project inline while a viewer gets a read-only empty state', () => {
+  const contributor = trackedProjectsFromView([], 'p1', true);
+  assert.deepEqual(contributor.blocks[0].actions.map((action) => [action.label, action.operationId]), [['Start a project', 'PROJECT_TRACKER_CREATE']]);
+  const viewer = trackedProjectsFromView([], 'p1', false);
+  assert.deepEqual(viewer.blocks[0].actions, []);
+});
+
 test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
   const raw = trackedProjectsFromView(projects(), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'project-tracker.projects', operationId: 'PROJECT_TRACKER_PROJECTS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };

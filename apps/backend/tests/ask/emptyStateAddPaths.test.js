@@ -38,12 +38,12 @@ const empties = () => ({
   'Home Continuity Plan': digitalWillFromView(null, 'p1'),
   'Around Your Home': neighborhoodChangeFeedFromView({ property: { id: 'p1' }, coverage: { state: 'UNAVAILABLE', comprehensive: false, sources: [], limitations: ['No reviewed source covers this home.'] }, items: [], interpretationBoundary: 'x' }, 'p1'),
   'Guidance Overview (viewer)': guidanceJourneysFromView({ journeys: [], next: [] }, new Set(), 'p1', false),
-  'Project Tracker': trackedProjectsFromView([], 'p1'),
+  'Project Tracker': trackedProjectsFromView([], 'p1', true),
   'Do-Nothing Simulator': doNothingSimulationFromView({ run: null, scenarios: [] }, 'p1'),
   'Negotiation Shield': negotiationShieldCasesFromView([], 'p1'),
 });
 // The only actions an empty state may carry: a typed Ask command for the primary account holder's tools (the answer reaches no one else).
-const EXPECTED_ACTION_OPERATIONS = { 'Service Price Radar': ['SERVICE_PRICE_CHECK_RUN'], 'Do-Nothing Simulator': ['DO_NOTHING_SIMULATION_RUN'] };
+const EXPECTED_ACTION_OPERATIONS = { 'Service Price Radar': ['SERVICE_PRICE_CHECK_RUN'], 'Project Tracker': ['PROJECT_TRACKER_CREATE'], 'Do-Nothing Simulator': ['DO_NOTHING_SIMULATION_RUN'] };
 
 test('every empty state links nowhere, invites no page, and offers only a typed Ask command it really has', () => {
   for (const [name, result] of Object.entries(empties())) {
@@ -57,8 +57,8 @@ test('every empty state links nowhere, invites no page, and offers only a typed 
 });
 
 test('where Ask cannot do the thing yet, the empty state says so plainly', () => {
-  // Service Price Radar, Home Habit Coach and Do-Nothing Simulator now start in Ask; these three are still product decisions (audit section 3).
-  const cannot = ['Home Continuity Plan', 'Project Tracker', 'Negotiation Shield'];
+  // Service Price Radar, Home Habit Coach, Project Tracker and Do-Nothing Simulator now start in Ask; these remain product decisions (audit section 3).
+  const cannot = ['Home Continuity Plan', 'Negotiation Shield'];
   const all = empties();
   for (const name of cannot) assert.match(all[name].blocks[0].body, /Ask cannot start(?: or edit)? one/, name);
   // Around Your Home is a read of reviewed sources: there is nothing a homeowner adds, so it says what the sources cover and promises no Ask action.
