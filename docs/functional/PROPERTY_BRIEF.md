@@ -51,9 +51,15 @@ acknowledges the limitation statement. A share:
   limitation statement; and
 - does not expose canonical deep links or private application controls.
 
-The current UI creates a 14-day, view-only share. The API contract supports an
-explicit allow-download policy, but no download endpoint is enabled in this
-slice.
+The UI defaults to a 14-day, view-only share. A homeowner may explicitly allow
+the recipient to download the shared snapshot as a PDF.
+
+Ask Cozy supports the same governed lifecycle inline: purpose and section
+selection, verified-document selection, frozen recipient preview, controlled
+sharing, access testing, revocation, and content-diffed republishing. Every
+write is contributor-gated and confirmation-gated. Recipient identity is not
+repeated in the saved conversation transcript, and a raw share token is shown
+only when the link is created because only its hash is stored.
 
 ## Limitation statement
 

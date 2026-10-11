@@ -5,8 +5,9 @@ import { type AskPresentationBlock } from '../../../productFramework/ask/ask.con
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, readableCode } from '../askFormatting';
-import { computeBriefStaleness, listPropertyBriefs } from '../../../propertyBrief/propertyBrief.service';
+import { computeBriefStaleness, getPropertyBriefPreview, listPropertyBriefs } from '../../../propertyBrief/propertyBrief.service';
 import { PROPERTY_BRIEF_TEMPLATES } from '../../../propertyBrief/propertyBrief.contracts';
+import { PROPERTY_BRIEF_ACTION_IDS, PROPERTY_BRIEF_COMMAND_MESSAGE } from '../support/propertyBriefConstants';
 
 // Property Brief capability-card slice (FRD v1.63): the fifteenth new operation for a capability with none. Reads
 // listPropertyBriefs -- the call GET /properties/:id/property-briefs makes for the Property Brief page: every
@@ -20,7 +21,12 @@ import { PROPERTY_BRIEF_TEMPLATES } from '../../../propertyBrief/propertyBrief.c
 type PropertyBriefListView = Awaited<ReturnType<typeof listPropertyBriefs>>[number];
 const PROPERTY_BRIEF_STATUS_LABELS: Record<string, string> = { DRAFT: 'Draft', READY: 'Ready', SHARED: 'Shared', REVOKED: 'Revoked', ARCHIVED: 'Archived' };
 
-export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[], propertyId: string, now: Date = new Date()): AskOperationResult {
+const commandAction = (id: string, label: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') => ({
+  id, label, interactionType: 'MUTATE_RECORD' as const, message: PROPERTY_BRIEF_COMMAND_MESSAGE,
+  operationId: 'PROPERTY_BRIEF_COMMAND', style,
+});
+
+export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[], propertyId: string, now: Date = new Date(), canManage = false): AskOperationResult {
   const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/property-brief`;
   const openAction = { id: 'open-property-brief', label: 'Open Property Brief', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
@@ -34,7 +40,7 @@ export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[],
       blocks: [{
         type: 'SUMMARY', id: 'property-briefs-summary', title: 'No property briefs yet',
         body: 'A Property Brief is a snapshot of chosen home records you can share with a contractor, insurer, buyer or trusted contact through an expiring link. Open Property Brief to prepare one.',
-        tone: 'DEFAULT', actions: [openAction],
+        tone: 'DEFAULT', actions: canManage ? [{ ...commandAction(PROPERTY_BRIEF_ACTION_IDS.PREPARE, 'Prepare a property brief', 'PRIMARY'), interactionType: 'START_WORKFLOW' as const }] : [openAction],
       }, boundary],
       suggestions: [],
     };
@@ -66,6 +72,11 @@ export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[],
         isStale ? `Not refreshed in ${ageDays} days` : null,
       ].filter((value): value is string => Boolean(value)),
       status: PROPERTY_BRIEF_STATUS_LABELS[brief.status] ?? readableCode(brief.status),
+      entityType: 'PROPERTY_BRIEF',
+      actions: [
+        { id: 'property-brief-preview', label: 'Preview', message: 'Preview this property brief.', operationId: 'PROPERTY_BRIEFS_LIST', interactionType: 'CONVERSATION_CONTINUE' as const, style: 'PRIMARY' as const },
+        ...(canManage && liveShares.length ? [commandAction(PROPERTY_BRIEF_ACTION_IDS.REPUBLISH, 'Check for updates')] : []),
+      ],
     };
   };
   const notShared = rows.filter((row) => row.liveShares.length === 0);
@@ -85,18 +96,60 @@ export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[],
         stale ? `${stale} shared ${stale === 1 ? 'brief has' : 'briefs have'} not been refreshed in 90 days or more, so recipients may be seeing out-of-date records.` : null,
       ].filter(Boolean).join(' '),
       tone: stale ? 'CAUTION' : 'DEFAULT',
-      actions: [openAction],
+      actions: canManage ? [{ ...commandAction(PROPERTY_BRIEF_ACTION_IDS.PREPARE, 'Prepare another brief'), interactionType: 'START_WORKFLOW' as const }, openAction] : [openAction],
     }, {
       type: 'GROUPED_LIST', filters: [], id: 'property-briefs-items', title: 'Saved briefs',
-      description: 'Newest first, as on the page. Open Property Brief to preview a brief, share it, test or revoke a link, or check it for updates.',
+      description: 'Newest first. Select Preview to inspect the exact frozen recipient snapshot and manage its controlled links inline.',
       sections, actions: [],
     }, boundary],
     suggestions: [],
   };
 }
 
-async function propertyBriefsResult(propertyId: string): Promise<AskOperationResult> {
-  return propertyBriefsFromView(await listPropertyBriefs(propertyId), propertyId);
+function printable(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'Not recorded';
+  if (Array.isArray(value)) return value.map(printable).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return readableCode(String(value));
 }
 
-registerCapabilityHandler('property-brief.briefs', async (envelope) => propertyBriefsResult(envelope.propertyId!));
+async function previewResult(propertyId: string, userId: string, briefId: string, canManage: boolean): Promise<AskOperationResult> {
+  const preview = await getPropertyBriefPreview(propertyId, userId, briefId);
+  const sections = preview.sections.map((section) => {
+    const payload = section.payload && typeof section.payload === 'object' && !Array.isArray(section.payload) ? section.payload as Record<string, unknown> : {};
+    const evidence = new Map(section.evidenceLinks.map((link) => [link.itemKey, link]));
+    const rows = (Array.isArray(payload.items) ? payload.items : []).map((raw, index) => {
+      const item: Record<string, unknown> = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : { value: raw };
+      const proof = evidence.get(String(item.key ?? ''));
+      const details = Object.entries(item).filter(([key, value]) => !['key', 'asOf', 'source', 'verification'].includes(key) && value != null).map(([key, value]) => `${readableCode(key)}: ${printable(value)}`);
+      return { id: String(item.key ?? `${section.id}-${index}`), title: details[0] ?? 'Recorded item', description: details.slice(1).join(' · ') || null, meta: [`Source: ${proof?.sourceLabel ?? printable(item.source)}`, `As of ${humanDate(new Date(proof?.sourceAsOf ?? String(item.asOf ?? section.asOf)))}`, printable(proof?.verification ?? item.verification)], status: section.sensitive ? 'SENSITIVE' : 'INCLUDED' };
+    });
+    return { id: section.id, title: section.title, count: rows.length, items: rows.length ? rows : [{ id: `${section.id}-empty`, title: 'No eligible records were included', description: null, meta: [`As of ${humanDate(new Date(section.asOf))}`], status: 'EMPTY' }] };
+  });
+  const liveShares = preview.shares.filter((share) => share.status === 'ACTIVE' && new Date(share.expiresAt).getTime() > Date.now());
+  const forBrief = (action: ReturnType<typeof commandAction>) => ({ ...action, interactionType: 'START_WORKFLOW' as const, entityType: 'PROPERTY_BRIEF', entityId: preview.id });
+  const actions = canManage ? [
+    forBrief(commandAction(PROPERTY_BRIEF_ACTION_IDS.SHARE, 'Create controlled share link', 'PRIMARY')),
+    ...(liveShares.length ? [forBrief(commandAction(PROPERTY_BRIEF_ACTION_IDS.REPUBLISH, 'Check for updates'))] : []),
+  ] : [];
+  const shareRows = preview.shares.map((share) => {
+    const isLive = share.status === 'ACTIVE' && new Date(share.expiresAt).getTime() > Date.now();
+    return { id: `${preview.id}:${share.id}`, title: `${isLive ? 'Live' : readableCode(share.status)} controlled link`, description: `Expires ${humanDate(new Date(share.expiresAt))}`, meta: [`${share.accessCount} recipient access${share.accessCount === 1 ? '' : 'es'}`, share.lastTestedAt ? `Last tested ${humanDate(new Date(share.lastTestedAt))}` : 'Not tested yet', share.recipientEmail ? (share.invitationStatus === 'ACCEPTED' ? 'Invited recipient opened it' : 'Invited recipient has not opened it') : 'Copyable link'], status: isLive ? 'ACTIVE' : share.status, entityType: 'PROPERTY_BRIEF_SHARE', actions: canManage && isLive ? [commandAction(PROPERTY_BRIEF_ACTION_IDS.TEST_SHARE, 'Test access'), commandAction(PROPERTY_BRIEF_ACTION_IDS.REVOKE_SHARE, 'Revoke', 'QUIET')] : [] };
+  });
+  return { status: 'ANSWERED', reasonCode: 'PROPERTY_BRIEF_PREVIEW_READY', parameters: { propertyBriefId: preview.id }, blocks: [
+    { type: 'SUMMARY', id: 'property-brief-preview-summary', title: preview.title, body: `${PROPERTY_BRIEF_TEMPLATES[preview.purpose]?.label ?? readableCode(preview.purpose)} · frozen snapshot of ${humanDate(new Date(preview.asOf))}. Explicitly excluded: ${preview.excludedSections.length ? preview.excludedSections.map(readableCode).join(', ') : 'none'}.`, tone: 'DEFAULT', actions },
+    { type: 'GROUPED_LIST', filters: [], id: 'property-brief-preview-sections', title: 'Exact recipient preview', description: 'Every item preserves its recorded source, verification state and as-of date.', sections, actions: [] },
+    ...(shareRows.length ? [{ type: 'GROUPED_LIST' as const, filters: [], id: 'property-brief-preview-shares', title: 'Controlled links', description: 'Recipient names and email addresses are intentionally omitted from the conversation transcript.', sections: [{ id: 'property-brief-share-history', title: 'Share history', count: shareRows.length, items: shareRows }], actions: [] }] : []),
+    { type: 'BOUNDARY', id: 'property-briefs-boundary', title: 'A homeowner-assembled snapshot, not a disclosure', body: preview.limitationStatement, severity: 'INFO', suggestions: [] },
+  ], suggestions: [] };
+}
+
+async function propertyBriefsResult(userId: string, propertyId: string, launch: { entityType?: string | null; entityId?: string | null } | null | undefined): Promise<AskOperationResult> {
+  // The operation registry enforces the viewer floor for this read. Mutation actions
+  // enforce CONTRIBUTOR again in PROPERTY_BRIEF_COMMAND before showing a form or confirmation.
+  const canManage = true;
+  if (launch?.entityType === 'PROPERTY_BRIEF' && launch.entityId) return previewResult(propertyId, userId, launch.entityId, canManage);
+  return propertyBriefsFromView(await listPropertyBriefs(propertyId), propertyId, new Date(), canManage);
+}
+
+registerCapabilityHandler('property-brief.briefs', async (envelope) => propertyBriefsResult(envelope.userId, envelope.propertyId!, envelope.launchContext));

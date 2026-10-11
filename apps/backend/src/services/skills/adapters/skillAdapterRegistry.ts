@@ -78,6 +78,7 @@ const DEFINITIONS = [
   adapter('home-timeline.events', 'Home Timeline events (HomeEventsService)', 'HOME_TIMELINE_EVENTS'),
   adapter('material-specs.list', 'Material Specs list (MaterialSpecService)', 'MATERIAL_SPECS_LIST'),
   adapter('property-brief.briefs', 'Property Brief list (propertyBrief.service)', 'PROPERTY_BRIEFS_LIST'),
+  adapter('property-brief.command', 'Property Brief prepare and controlled-sharing commands (propertyBrief.service)', 'PROPERTY_BRIEF_COMMAND'),
   adapter('guidance-overview.journeys', 'Guidance Overview journeys (guidanceJourneyService)', 'GUIDANCE_JOURNEYS_LIST'),
   adapter('guidance-overview.continue', 'Guidance Overview continuation (guidanceJourneyService)', 'GUIDANCE_JOURNEY_CONTINUE'),
   adapter('guidance-overview.step-skip', 'Guidance Overview (guidanceStepResolverService)', 'GUIDANCE_STEP_SKIP', 'MUTATION_PREPARATION'),

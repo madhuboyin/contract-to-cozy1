@@ -188,7 +188,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   MAINTENANCE_BUDGET_FORECAST: new Set(['open-budget-planner']),
   // FRD v1.64: INCIDENT_CONTINUATION had no entry, so both of its links were stripped from every answer.
   INCIDENT_CONTINUATION: new Set(['open-claims', 'open-emergency-help']),
-  PROPERTY_BRIEFS_LIST: new Set(['open-property-brief']),
+  PROPERTY_BRIEFS_LIST: new Set(['open-property-brief', 'property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.
   SELLER_PREP_CHECKLIST: new Set(['open-seller-prep', 'sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen']),
@@ -201,6 +201,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // FRD v1.47: + open-reserve-fund, the reserve-allocations list's own link, which was always stripped.
   CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'add-inventory-item', 'open-timeline', 'open-timeline-table', 'open-reserve', 'open-reserve-fund', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation']),
   RESERVE_FUND_COMMAND: new Set(['reserve-fund-show-current']),
+  PROPERTY_BRIEF_COMMAND: new Set(['property-brief-show-current', 'property-brief-open-share']),
   // Item actions on the feed's events (FRD v1.40); the inline detail shows the ones valid for the live state.
   HOME_EVENT_RADAR_FEED: new Set(['open-radar', 'radar-include-dismissed', 'radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task', 'radar-notification-settings']),
   HOME_EVENT_RADAR_STATE: new Set(['open-radar']),

@@ -16,6 +16,7 @@ export const PROPERTY_BRIEF_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   operationCases: [
     { operationId: 'PROPERTY_BRIEFS_LIST', expectedAdapter: { id: 'property-brief.briefs', version: '1.0' } },
+    { operationId: 'PROPERTY_BRIEF_COMMAND', expectedAdapter: { id: 'property-brief.command', version: '1.0' } },
   ],
   ambiguityCases: [
     {
@@ -26,6 +27,7 @@ export const PROPERTY_BRIEF_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   policyCases: [
     { consumer: 'ASK', operationId: 'PROPERTY_BRIEFS_LIST', allowed: true },
+    { consumer: 'ASK', operationId: 'PROPERTY_BRIEF_COMMAND', allowed: true },
   ],
   contextCases: [
     { state: 'KNOWN', expectedBehavior: 'READY' },
@@ -53,13 +55,13 @@ export const PROPERTY_BRIEF_SKILL_EVALUATION = deepFreezeSkillPackage({
       expectedBehavior: 'DEGRADED_OR_UNAVAILABLE',
     },
   ],
-  expectedAdapters: [{ id: 'property-brief.briefs', version: '1.0' }],
+  expectedAdapters: [{ id: 'property-brief.briefs', version: '1.0' }, { id: 'property-brief.command', version: '1.0' }],
   prohibitedAdapters: ['inventory.lookup', 'intelligence-envelope.query'],
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
-  expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY'],
-  expectedCanonicalCalls: [{ id: 'property-brief.briefs', version: '1.0' }],
+  expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'COMPLETED'],
+  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'WORKFLOW_PROGRESS'],
+  expectedCanonicalCalls: [{ id: 'property-brief.briefs', version: '1.0' }, { id: 'property-brief.command', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {
     message: 'Show my property briefs',

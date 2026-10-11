@@ -1144,6 +1144,15 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     reconciliation: { status: 'TRACED', notes: 'The mutation impact map refreshes CAPITAL_RESERVE_PLAN after completion.' },
     handoff: { status: 'TRACED', notes: 'The complete reserve workflow remains in Ask.' },
   },
+  PROPERTY_BRIEF_COMMAND: {
+    track: 'Records and capture', rollClass: 'CONFIRMED_MUTATION', canonicalOwner: 'property-brief.command', roleFloor: 'CONTRIBUTOR', messageRoutable: false, confirmationCapable: true, correctionModes: ['EDIT', 'REVOKE'],
+    note: 'Declared actions prepare immutable recipient snapshots, create controlled external links, test access without counting a recipient view, revoke a link, or republish selected sections through propertyBrief.service. The workflow preserves purpose templates, verified-document eligibility, sensitive-section acknowledgements, household-consent checks, expiration, and download policy.',
+    uiSurface: { status: 'TRACED', notes: 'Shared capture, confirmation, grouped-list preview and workflow-progress renderers; no Property Brief-specific frontend is required.' },
+    freshnessSource: { status: 'TRACED', notes: 'Every mutation re-reads the property-scoped brief or share. Republish reassembles from live canonical sources and changes nothing when its section diff is empty.' },
+    idempotency: { status: 'TRACED', notes: 'The shared confirmation receipt prevents replay. Share tokens are random and only returned at creation; only their hashes are stored.' },
+    reconciliation: { status: 'TRACED', notes: 'The mutation impact map refreshes PROPERTY_BRIEFS_LIST after completion.' },
+    handoff: { status: 'TRACED', notes: 'Preparation, preview, sharing, access testing, revocation, and republishing remain in Ask. A newly-created raw share link can be opened from its receipt.' },
+  },
   HOME_HABITS_GENERATE: {
     track: 'Records and capture',
     rollClass: 'CONFIRMED_MUTATION',

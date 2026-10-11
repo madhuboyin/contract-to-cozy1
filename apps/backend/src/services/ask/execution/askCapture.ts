@@ -54,6 +54,8 @@ import { ownershipCostCommandResult } from '../handlers/ownershipCostCommands.ha
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_DECISION_CAPTURE_KEY, OWNERSHIP_COST_SCENARIO_CAPTURE_KEY } from '../support/ownershipCostConstants';
 import { reserveFundCommandResult } from '../handlers/reserveFundCommands.handler';
 import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
+import { propertyBriefCommandResult, PropertyBriefPrepareInputSchema, PropertyBriefShareInputSchema } from '../handlers/propertyBriefCommands.handler';
+import { PROPERTY_BRIEF_ACTION_IDS, PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY } from '../support/propertyBriefConstants';
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -313,7 +315,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     // anything.
     // The Home Event Radar forms (FRD v1.41) are the same: their canned message is only honored with its declared
     // launchContext, which a replay does not have, so re-executing would replace the review card with a boundary.
-    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES' || execution.operationId === 'OWNERSHIP_COST_COMMAND' || execution.operationId === 'RESERVE_FUND_COMMAND') {
+    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES' || execution.operationId === 'OWNERSHIP_COST_COMMAND' || execution.operationId === 'RESERVE_FUND_COMMAND' || execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
       askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
       return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
     }
@@ -336,7 +338,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (!['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -838,6 +840,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = 'reserve-fund-live';
     canonicalOwner = 'HomeReserveFundContribution';
+  } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
+    if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to manage Property Briefs.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const launch = storedParameters.propertyBriefLaunch && typeof storedParameters.propertyBriefLaunch === 'object' && !Array.isArray(storedParameters.propertyBriefLaunch) ? storedParameters.propertyBriefLaunch as { actionId?: string; entityId?: string; sourceExecutionId?: string } : null;
+    if (input.captureKey === PROPERTY_BRIEF_PREPARE_CAPTURE_KEY && launch?.actionId === PROPERTY_BRIEF_ACTION_IDS.PREPARE) {
+      const answer = PropertyBriefPrepareInputSchema.safeParse(input.answer);
+      if (!answer.success) throw Object.assign(new Error('Choose a recipient purpose, at least one allowed section, and acknowledge any sensitive sections.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      result = await propertyBriefCommandResult(userId, execution.propertyId, launch, { kind: 'PREPARE', value: answer.data });
+    } else if (input.captureKey === PROPERTY_BRIEF_SHARE_CAPTURE_KEY && launch?.actionId === PROPERTY_BRIEF_ACTION_IDS.SHARE) {
+      const answer = PropertyBriefShareInputSchema.safeParse(input.answer);
+      if (!answer.success) throw Object.assign(new Error('Choose a 1–90 day expiry and recipient permission, review the snapshot, and enter a valid optional email.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      result = await propertyBriefCommandResult(userId, execution.propertyId, launch, { kind: 'SHARE', value: answer.data });
+    } else throw Object.assign(new Error('This Property Brief action is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    captureId = input.idempotencyKey; capturedContextVersion = 'property-brief-live'; canonicalOwner = 'PropertyBrief';
   } else if (execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES') {
     const isTask = execution.operationId === 'HOME_EVENT_RADAR_TASK';
     if (input.captureKey !== (isTask ? RADAR_TASK_CAPTURE_KEY : RADAR_PREFERENCES_CAPTURE_KEY)) {

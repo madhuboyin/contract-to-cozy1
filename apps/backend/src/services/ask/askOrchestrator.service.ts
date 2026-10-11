@@ -65,6 +65,7 @@ import './handlers/maintenance.handler';
 import './handlers/hoaCompliance.handler';
 import './handlers/guidanceOverview.handler';
 import './handlers/propertyBrief.handler';
+import './handlers/propertyBriefCommands.handler';
 import './handlers/homeTimeline.handler';
 import './handlers/materialSpecs.handler';
 import './handlers/seasonalHomeCare.handler';

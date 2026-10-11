@@ -19,10 +19,11 @@ Review this home's saved Property Briefs: each brief's purpose, snapshot date an
 ## Operations
 
 - `PROPERTY_BRIEFS_LIST`
+- `PROPERTY_BRIEF_COMMAND`
 
 ## Consumers
 
-- ASK: PROPERTY_BRIEFS_LIST
+- ASK: PROPERTY_BRIEFS_LIST, PROPERTY_BRIEF_COMMAND
 
 ## Canonical ownership and boundaries
 
