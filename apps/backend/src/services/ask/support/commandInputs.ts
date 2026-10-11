@@ -309,6 +309,15 @@ export const ProjectTrackerMilestoneInputSchema = z.object({
   requiresPhotoEvidence: z.coerce.boolean().default(false),
 }).strict();
 
+export const ProjectTrackerEditInputSchema = z.object({
+  name: z.string().trim().min(1).max(200), description: optionalText(2000), contractorName: optionalText(200), contractorLicense: optionalText(100), contractorPhone: optionalText(30),
+  contractorEmail: z.preprocess((value) => value === '' ? null : value, z.string().email().nullable().optional()),
+  expectedEndDate: projectExactDate.nullish().transform((value) => value || null),
+  permitApplicability: z.enum(['REQUIRED', 'NOT_REQUIRED', 'UNKNOWN']), permitApplicabilityBasis: optionalText(2000), hoaApplicability: z.enum(['REQUIRED', 'NOT_REQUIRED', 'UNKNOWN']), hoaApplicabilityBasis: optionalText(2000),
+}).strict().superRefine((value, context) => {
+  for (const [field, basisField, label] of [['permitApplicability', 'permitApplicabilityBasis', 'Permit'], ['hoaApplicability', 'hoaApplicabilityBasis', 'HOA']] as const) if (value[field] !== 'UNKNOWN' && !value[basisField]) context.addIssue({ code: z.ZodIssueCode.custom, path: [basisField], message: `${label} applicability requires a source or rationale.` });
+});
+
 export const ProjectTrackerMilestoneCompleteInputSchema = z.object({
   completionNotes: optionalText(2000),
   actualCompletedDate: projectExactDate.nullish().transform((value) => value || null),
@@ -321,9 +330,11 @@ export const ProjectTrackerPaymentPaidInputSchema = z.object({
 
 export const ProjectTrackerProgressInputSchema = z.object({
   entryDate: projectExactDate,
-  entryType: z.literal('DAILY_NOTE').default('DAILY_NOTE'),
+  entryType: z.enum(['DAILY_NOTE', 'PHOTO_UPDATE', 'MILESTONE_UPDATE', 'MATERIAL_DELIVERY', 'INSPECTION', 'ISSUE_NOTE']).default('DAILY_NOTE'),
   notes: z.string().trim().min(1).max(5000),
   milestoneId: optionalText(160),
+  photoKeys: z.string().trim().max(3000).optional().default(''),
+  materialType: optionalText(100), materialBrand: optionalText(100), materialModel: optionalText(100), materialColor: optionalText(100), materialSupplier: optionalText(200), materialQuantity: optionalText(100),
 }).strict();
 
 export const ProjectTrackerIssueInputSchema = z.object({
@@ -337,6 +348,52 @@ export const ProjectTrackerIssueInputSchema = z.object({
 export const ProjectTrackerIssueResolveInputSchema = z.object({
   resolutionNotes: z.string().trim().min(1).max(5000),
 }).strict();
+
+export const ProjectTrackerPaymentCreateInputSchema = z.object({
+  description: z.string().trim().min(1).max(200),
+  amountDollars: z.coerce.number().positive().max(100_000_000),
+  triggerType: z.enum(['MILESTONE', 'DATE', 'MANUAL']),
+  triggerMilestoneId: optionalText(160),
+  dueDate: projectExactDate.nullish().transform((value) => value || null),
+  notes: optionalText(2000),
+}).strict().superRefine((value, context) => {
+  if (value.triggerType === 'MILESTONE' && !value.triggerMilestoneId) context.addIssue({ code: z.ZodIssueCode.custom, path: ['triggerMilestoneId'], message: 'A milestone-triggered payment requires a milestone.' });
+  if (value.triggerType === 'DATE' && !value.dueDate) context.addIssue({ code: z.ZodIssueCode.custom, path: ['dueDate'], message: 'A date-triggered payment requires a due date.' });
+});
+
+export const ProjectTrackerChangeOrderInputSchema = z.object({
+  title: z.string().trim().min(1).max(200), description: z.string().trim().min(1).max(5000),
+  category: z.enum(['HOMEOWNER_REQUEST', 'UNFORESEEN_CONDITION', 'MATERIAL_SUBSTITUTION', 'DESIGN_CHANGE', 'ERROR_CORRECTION', 'OTHER']),
+  costDeltaDollars: z.coerce.number().min(-100_000_000).max(100_000_000), proposedByName: z.string().trim().min(1).max(200), notes: optionalText(2000),
+  workItemsChanged: z.coerce.boolean().default(false), spacesChanged: z.coerce.boolean().default(false), systemsChanged: z.coerce.boolean().default(false),
+  dimensionsChanged: z.coerce.boolean().default(false), structuralEffectsChanged: z.coerce.boolean().default(false), exteriorEffectsChanged: z.coerce.boolean().default(false),
+  regulatedMaterialsChanged: z.coerce.boolean().default(false), scheduleOnly: z.coerce.boolean().default(false), impactExplanation: z.string().trim().min(1).max(2000),
+}).strict().superRefine((value, context) => {
+  const scopeChanged = value.workItemsChanged || value.spacesChanged || value.systemsChanged || value.dimensionsChanged || value.structuralEffectsChanged || value.exteriorEffectsChanged || value.regulatedMaterialsChanged;
+  if (value.scheduleOnly && scopeChanged) context.addIssue({ code: z.ZodIssueCode.custom, path: ['scheduleOnly'], message: 'A schedule-only change cannot also declare a scope change.' });
+});
+
+export const ProjectTrackerComplianceReviewInputSchema = z.object({
+  amendedPermitStatus: z.enum(['REQUIRED', 'REQUESTED', 'CONFIRMED', 'NOT_APPLICABLE']),
+  hoaReapprovalStatus: z.enum(['REQUIRED', 'REQUESTED', 'CONFIRMED', 'NOT_APPLICABLE']),
+  evidenceDocumentIds: z.string().trim().max(3000).optional().default(''),
+  reviewNotes: z.string().trim().min(1).max(3000),
+}).strict();
+
+const completionDisposition = z.enum(['SATISFIED', 'NOT_APPLICABLE']);
+export const ProjectTrackerCompletionInputSchema = z.object({
+  actualEndDate: projectExactDate.nullish().transform((value) => value || null), actualCostDollars: z.coerce.number().min(0).max(100_000_000),
+  commissioningResult: z.enum(['PASSED', 'NOT_REQUIRED']), functionalVerificationResult: z.literal('PASSED'), safetyCheckResult: z.enum(['PASSED', 'NOT_REQUIRED']), inspectionResult: z.enum(['PASSED', 'NOT_REQUIRED']),
+  providerOutcome: z.enum(['SUCCESS', 'PARTIAL', 'FAILED', 'NOT_APPLICABLE']), recommendationComprehensionConfirmed: z.literal(true),
+  punchList: completionDisposition, corrections: completionDisposition, lienWaiver: completionDisposition, payment: completionDisposition, warranty: completionDisposition, commissioning: completionDisposition, safety: completionDisposition, inspection: completionDisposition,
+  punchListNotes: optionalText(2000), correctionsNotes: optionalText(2000), lienWaiverNotes: optionalText(2000), paymentNotes: optionalText(2000), warrantyNotes: optionalText(2000), commissioningNotes: optionalText(2000), safetyNotes: optionalText(2000), inspectionNotes: optionalText(2000),
+  contractorRatingQuality: z.coerce.number().int().min(1).max(5).optional(), contractorRatingTimeline: z.coerce.number().int().min(1).max(5).optional(), contractorRatingComms: z.coerce.number().int().min(1).max(5).optional(), contractorRatingBudget: z.coerce.number().int().min(1).max(5).optional(),
+  contractorReviewText: optionalText(2000), warrantyPeriodMonths: z.coerce.number().int().min(0).max(1200).optional(),
+}).strict().superRefine((value, context) => {
+  for (const key of ['punchList', 'corrections', 'lienWaiver', 'payment', 'warranty', 'commissioning', 'safety', 'inspection'] as const) {
+    if (value[key] === 'NOT_APPLICABLE' && !value[`${key}Notes`]?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: [`${key}Notes`], message: 'Explain why this closeout category is not applicable.' });
+  }
+});
 
 // Room Plant Advisor generation. Light is the one required growing-context fact; the remaining preferences refine the deterministic ranking.
 export const RoomPlantRecommendationInputSchema = z.object({

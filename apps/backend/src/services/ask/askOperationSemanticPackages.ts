@@ -64,7 +64,7 @@ const jobs: Record<AskOperationId, string> = {
   SERVICE_PRICE_CHECKS: "review the quote checks run in Service Price Radar for this home: each quoted price against the expected local range, with the verdict",
   PROJECT_TRACKER_PROJECTS: "review this home's contractor projects in Project Tracker: which are active, completed or cancelled, with contract, paid and remaining amounts",
   PROJECT_TRACKER_CREATE: 'start a tracked contractor or DIY home project with its cost, dates, permit and HOA decisions, and first milestone after confirmation',
-  PROJECT_TRACKER_COMMAND: 'manage one selected tracked project after confirmation: lifecycle, milestones, payments, progress notes, and issues',
+  PROJECT_TRACKER_COMMAND: 'manage one selected tracked project after confirmation: settings, lifecycle, milestones, payments, progress evidence, issues, governed change orders, execution alignment, verified completion, and closeout sharing',
   DIY_PROJECTS: "review this home's active DIY projects in planning or in progress, with how many required steps are done",
   DIY_PROJECT_COMPLETE: "finish a guided DIY project once every step is resolved, after confirmation; this records your own report and cannot be undone in Cozy",
   DIY_COMPLETION_RECOVER: "ask Cozy to try again to record a finished DIY project's home-history record, or to update its linked maintenance task, after confirmation; it only retries and verifies nothing",
