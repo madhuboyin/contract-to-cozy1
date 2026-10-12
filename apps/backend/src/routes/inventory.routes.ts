@@ -3,7 +3,7 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter, ocrRateLimiter } from '../middleware/rateLimiter.middleware';
 import { CustomRequest } from '../types';
@@ -162,22 +162,25 @@ router.get('/properties/:propertyId/inventory/rooms', propertyAuthMiddleware, li
 router.post(
   '/properties/:propertyId/inventory/rooms',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createRoomBodySchema),
   createRoom
 );
 router.patch(
   '/properties/:propertyId/inventory/rooms/:roomId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updateRoomBodySchema),
   updateRoom
 );
-router.delete('/properties/:propertyId/inventory/rooms/:roomId', propertyAuthMiddleware, deleteRoom);
+router.delete('/properties/:propertyId/inventory/rooms/:roomId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), deleteRoom);
 
 // Items
 router.get('/properties/:propertyId/inventory/items', propertyAuthMiddleware, listItems);
 router.post(
   '/properties/:propertyId/inventory/items',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createItemBodySchema),
   createItem
 );
@@ -190,6 +193,7 @@ router.get(
 router.post(
   '/properties/:propertyId/inventory/items/:itemId/coverage-analysis/run',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(runItemCoverageBodySchema),
   runItemCoverageAnalysis
 );
@@ -201,27 +205,31 @@ router.get(
 router.post(
   '/properties/:propertyId/inventory/items/:itemId/replace-repair/run',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(runReplaceRepairBodySchema),
   runReplaceRepairAnalysis
 );
 router.patch(
   '/properties/:propertyId/inventory/items/:itemId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updateItemBodySchema),
   updateItem
 );
-router.delete('/properties/:propertyId/inventory/items/:itemId', propertyAuthMiddleware, deleteItem);
+router.delete('/properties/:propertyId/inventory/items/:itemId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), deleteItem);
 
 // Documents linking
 router.post(
   '/properties/:propertyId/inventory/items/:itemId/documents',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(linkDocumentBodySchema),
   linkDocumentToItem
 );
 router.delete(
   '/properties/:propertyId/inventory/items/:itemId/documents/:documentId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   unlinkDocumentFromItem
 );
 
@@ -440,6 +448,7 @@ router.post(
   '/properties/:propertyId/inventory/import',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   uploadXlsx.single('file'),
   validateXlsxUpload,
   importInventoryFromXlsx
@@ -455,6 +464,7 @@ router.get(
 router.post(
   '/properties/:propertyId/inventory/import-batches/:batchId/rollback',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   rollbackImportBatch
 );
 
@@ -568,6 +578,7 @@ async function barcodeLookupHandler(req: CustomRequest, res: Response) {
 router.post(
   '/properties/:propertyId/inventory/ocr/label',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   ocrRateLimiter,
   //requirePremiumForOcr,
   uploadImage.fields([
@@ -589,6 +600,7 @@ router.get(
 router.post(
   '/properties/:propertyId/inventory/rooms/:roomId/scan-ai',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   uploadRoomScanImages.array('images'),
   validateImageArrayUpload,
   startRoomScan
@@ -609,37 +621,43 @@ router.get(
 
 router.post(
   '/properties/:propertyId/inventory/drafts/:draftId/dismiss', 
-  propertyAuthMiddleware, 
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   dismissDraft
 );
 
 router.post(
   '/properties/:propertyId/inventory/drafts/:draftId/confirm', 
-  propertyAuthMiddleware, 
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   confirmDraft
 );
 
 router.post(
   '/properties/:propertyId/inventory/drafts/bulk/confirm',
-  propertyAuthMiddleware, 
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   bulkConfirmDrafts
 );
 
 router.post(
   '/properties/:propertyId/inventory/drafts/bulk-confirm',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   bulkConfirmDrafts
 );
 
 router.post(
   '/properties/:propertyId/inventory/drafts/bulk/dismiss', 
-  propertyAuthMiddleware, 
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   bulkDismissDrafts
 );
 
 router.post(
   '/properties/:propertyId/inventory/drafts/bulk-dismiss',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   bulkDismissDrafts
 );
 
@@ -652,6 +670,7 @@ router.get(
 router.patch(
   '/properties/:propertyId/inventory/drafts/:draftId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   updateInventoryDraft
 );
 
