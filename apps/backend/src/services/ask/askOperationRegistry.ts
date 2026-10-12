@@ -797,8 +797,10 @@ const buyerTaskCompletePattern = /\b(?:mark|complete|finish|check off)\b.{0,60}\
 const buyerDeadlinesPattern = /\b(?:next deadline|what'?s due|what is due|upcoming deadlines?)\b.{0,40}\b(?:before closing|for closing|closing)\b|\bdeadlines?\b.{0,40}\b(?:before closing|for (?:this|my) (?:purchase|closing))\b|\bwhat could (?:delay|block)\b.{0,40}\b(?:my )?closing\b|\b(?:is|are)\s+anything\b.{0,40}\bclosing\b.{0,20}\bat risk\b|\bclosing\b.{0,40}\b(?:at risk|in jeopardy|in danger)\b|\b(?:at risk|in jeopardy|in danger)\b.{0,40}\bclosing\b/i;
 const buyerDocumentReadinessPattern = /\b(?:transaction|closing)\b.{0,40}\bdocuments?\b.{0,50}\b(?:missing|still need|readiness|received)\b|\bwhich (?:transaction |closing )?documents?\b.{0,50}\b(?:missing|before closing|for (?:this|my) closing)\b|\bdocuments?\b.{0,20}\breadiness\b.{0,40}\bclosing\b/i;
 const buyerInspectionReviewPattern = /\b(?:inspection )?findings?\b.{0,50}\b(?:need(?:s)? a decision|still need(?:s)? a decision|undecided|need(?:s)? classif(?:y|ication))\b|\breview (?:my |the )?(?:inspection )?findings?\b.{0,30}\b(?:before closing|for (?:this|my) (?:purchase|closing))\b/i;
-const buyerPlanStatusPattern = /\b(?:what should i do next|next step)\b.{0,50}\b(?:this purchase|my closing|buying this home|closing plan|buyer plan)\b|\bstatus of (?:my |this )?(?:home )?purchase\b|\bhow close am i\b.{0,40}\bclosing\b|\b(?:closing plan|buyer plan) status\b|\b(?:what should i )?focus on\b.{0,50}\b(?:this week|my closing|this closing|this purchase|closing plan|buyer plan)\b/i;
-const buyerTaskCreatePattern = /\b(?:add|create)\b.{0,60}\b(?:to (?:my |the )?(?:buyer plan|closing plan)|as a (?:buyer plan|closing) task)\b|\b(?:add|create) (?:a |an )?(?:buyer plan|closing plan) task\b/i;
+const buyerPlanStatusPattern = /\b(?:show|list|see|view|what|which)\b.{0,40}\b(?:closing|buyer)(?: plan)? (?:tasks|checklist)\b|\b(?:what should i do next|next step)\b.{0,50}\b(?:this purchase|my closing|buying this home|closing plan|buyer plan)\b|\bstatus of (?:my |this )?(?:home )?purchase\b|\bhow close am i\b.{0,40}\bclosing\b|\b(?:closing plan|buyer plan) status\b|\b(?:what should i )?focus on\b.{0,50}\b(?:this week|my closing|this closing|this purchase|closing plan|buyer plan)\b/i;
+// "Add a closing task to schedule the final walkthrough" names the closing plan by its own noun; before this it matched only "closing plan task",
+// so the plain phrasing became a maintenance task.
+const buyerTaskCreatePattern = /\b(?:add|create)\b.{0,60}\b(?:to (?:my |the )?(?:buyer plan|closing plan)|as a (?:buyer plan|closing) task)\b|\b(?:add|create) (?:a |an |another )?(?:buyer|closing)(?: plan)? (?:task|checklist item)\b/i;
 const buyerTaskUpdatePattern = /\b(?:reschedule|move|assign|unassign|reassign)\b.{0,60}\b(?:buyer plan|closing plan) task\b|\b(?:buyer plan|closing plan) task\b.{0,60}\b(?:reschedule|assign|due date)\b/i;
 const buyerMoveStatusPattern = /\bwhat should i do\b.{0,30}\bbefore (?:i )?move[- ]?in\b|\bmov(?:e|ing)[- ](?:in|out) (?:progress|status|readiness)\b.{0,40}\bpurchase\b|\bmoving\b.{0,40}\b(?:progress|status)\b.{0,30}\b(?:closing|purchase|buyer plan)\b/i;
 const buyerFinancingReadinessPattern = /\b(?:financing|lender|loan|underwriting|appraisal)\b.{0,50}\b(?:delay|block|ready|readiness|status|on track)\b.{0,40}\bclosing\b|\bwhat(?:'s| is)\b.{0,30}\b(?:financing|lender|loan|appraisal)\b.{0,30}\bstatus\b/i;
@@ -1168,6 +1170,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // maintenanceCompletePattern and homeActionsPattern) since buyer phrasing
   // like "closing task ... complete" or "closing plan status" would otherwise
   // be captured by their broader keyword sets.
+  // An explicit add/create of a closing task comes first: "add a closing task to get the survey done" contains "done" but completes nothing.
+  if (buyerTaskCreatePattern.test(message)) {
+    return resolved('BUYER_TASK_CREATE', 0.96);
+  }
   if (buyerTaskCompletePattern.test(message)) {
     return resolved('BUYER_TASK_COMPLETE', 0.97);
   }
@@ -1182,9 +1188,6 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (buyerPlanStatusPattern.test(message)) {
     return resolved('BUYER_PLAN_STATUS', 0.95);
-  }
-  if (buyerTaskCreatePattern.test(message)) {
-    return resolved('BUYER_TASK_CREATE', 0.96);
   }
   if (buyerTaskUpdatePattern.test(message)) {
     return resolved('BUYER_TASK_UPDATE', 0.96);

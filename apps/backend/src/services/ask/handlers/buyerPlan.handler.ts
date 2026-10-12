@@ -515,9 +515,10 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
   };
 }
 
-function extractBuyerTaskTitle(message: string): string | null {
-  let text = message.trim();
-  text = text.replace(/^\s*(?:please\s+)?(?:add|create)\s+(?:a\s+|an\s+)?(?:buyer plan|closing plan)\s+task\s+for\s+/i, '');
+export function extractBuyerTaskTitle(message: string): string | null {
+  let text = message.trim().replace(/[.!?\s]+$/, '');
+  // "add a closing task to schedule the final walkthrough", "create a closing plan task for the title search", "add a closing task: confirm insurance"
+  text = text.replace(/^\s*(?:please\s+)?(?:add|create)\s+(?:a\s+|an\s+|another\s+)?(?:buyer|closing)(?:\s+plan)?\s+(?:task|checklist item)\b\s*(?:(?:to|for|called|named|titled)\b|[:\-\u2013])?\s*/i, '');
   text = text.replace(/^\s*(?:please\s+)?(?:add|create)\s+(?:a\s+|an\s+)?/i, '');
   text = text.replace(/\s+(?:to|as)\s+(?:my|the)\s*(?:buyer plan|closing plan)(?:\s+task)?\s*$/i, '');
   text = text.replace(/^\s*the\s+/i, '').trim();
@@ -537,6 +538,13 @@ async function buyerTaskCreateResult(userId: string, propertyId: string, message
       }],
       suggestions: [],
     };
+  }
+  // A closing task belongs to a Buyer Plan. HomeBuyerTaskService.createTask would create a buyer checklist on any property, so the plan must
+  // already be active here: without one this answers with the not-active explanation and writes nothing.
+  const context = await loadBuyerPlanContext(userId, propertyId);
+  if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s Buyer Plan right now, so no closing task was added. Nothing has changed.');
+  if (context.data.presentationMode === 'CANDIDATE' || !context.data.overview) {
+    return buyerNotActiveResult(propertyId, context.data.contextVersion, 'This property does not have an active Buyer Plan yet, so there is no closing plan to add a task to. Starting a Buyer Plan is not currently available in Ask. Nothing has changed.');
   }
   const title = extractBuyerTaskTitle(message);
   if (!title) {
