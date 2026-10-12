@@ -298,7 +298,7 @@ A static scan of `services/ask` (handlers, support, execution and the top-level 
 
 **Suggested approach, not started:**
 
-1. Add a guard test that scans handler source for emitted non-Ask paths against an explicit, shrinking allowlist, so new handlers cannot reintroduce the pattern.
+1. **Done 2026-10-12:** `tests/ask/askNoDesktopLinksGuard.test.js` scans `services/ask` for desktop paths (98 in 40 files) and page-referencing copy (26 in 12 files) against per-file baselines. It fails if a file gains any, and also if a file loses any without lowering its baseline, so the list can only shrink. It is deliberately conservative on copy and is not a substitute for the batches below.
 2. Fix in batches by tool, each with the Ask-side alternative decided first: where an Ask command exists, point to it as a `START_WORKFLOW`; where none exists, say so and remove the link and the allowlist entry.
 3. Start with tools already on the P0 list (Home Continuity Plan, Price Finalization, Coverage, Claims), since their slices touch those handlers anyway.
 
