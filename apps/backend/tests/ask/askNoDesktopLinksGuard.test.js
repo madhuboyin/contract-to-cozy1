@@ -45,7 +45,6 @@ const PATH_BASELINE = {
   'handlers/homeUpgradePlanner.handler.ts': 1,
   'handlers/hvacDecision.handler.ts': 1,
   'handlers/inspection.handler.ts': 1,
-  'handlers/miscHandlers.handler.ts': 3,
   'handlers/projectTracker.handler.ts': 1,
   'handlers/propertyBrief.handler.ts': 1,
   'handlers/propertySummary.handler.ts': 1,
@@ -55,7 +54,6 @@ const PATH_BASELINE = {
   'handlers/servicePriceRadar.handler.ts': 1,
   'handlers/statusBoard.handler.ts': 1,
   'handlers/warranties.handler.ts': 1,
-  'handlers/workflowConfirm.handler.ts': 1,
   'support/capabilityDiscovery.ts': 2,
   'support/capture.ts': 4,
 };
@@ -68,7 +66,6 @@ const COPY_BASELINE = {
   'handlers/projectTracker.handler.ts': 1,
   'handlers/propertyBrief.handler.ts': 1,
   'handlers/servicePriceRadar.handler.ts': 2,
-  'handlers/workflowConfirm.handler.ts': 1,
 };
 
 function walk(dir) {

@@ -484,7 +484,7 @@ async function confirmGuidanceJourneyCreate(ctx: ConfirmCapabilityContext): Prom
     if (refresh.attemptedAndFailed) {
       result.blocks.push({
         type: 'BOUNDARY', id: `guidance-journey-refresh-failed-${journey.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
-        body: 'The guided plan was started successfully. A result you were viewing could not refresh automatically -- open the guided plan directly to see its current state.',
+        body: 'The guided plan was started successfully. A result you were viewing could not refresh automatically -- show your guided journeys again to see its current state.',
         suggestions: [],
       });
     }
@@ -536,7 +536,7 @@ async function confirmQuoteComparisonCreate(ctx: ConfirmCapabilityContext): Prom
     if (refresh.attemptedAndFailed) {
       result.blocks.push({
         type: 'BOUNDARY', id: `quote-comparison-create-refresh-failed-${created.workspace.id}`, severity: 'CAUTION', title: 'Saved; list could not refresh',
-        body: 'The comparison workspace was saved. A result you were viewing could not refresh automatically -- open the workspace directly to see its current state.',
+        body: 'The comparison workspace was saved. A result you were viewing could not refresh automatically -- show your quote comparison again to see its current state.',
         suggestions: [],
       });
     }
@@ -603,9 +603,8 @@ async function confirmHomeDeadlineMonitor(ctx: ConfirmCapabilityContext): Promis
     const deadlineCategory: 'MAINTENANCE' | 'MATERIAL_DEADLINE' = candidate.data.sourceType === 'MAINTENANCE' ? 'MAINTENANCE' : 'MATERIAL_DEADLINE';
     const property = await prisma.property.findUnique({ where: { id: execution.propertyId }, select: { timezone: true } });
     await upsertNotificationPreference(userId, { propertyId: execution.propertyId!, category: deadlineCategory, channel: 'EMAIL', enabled: true, cadence: 'IMMEDIATE', timezone: property?.timezone ?? 'UTC' });
-    const href = `/dashboard/maintenance?propertyId=${encodeURIComponent(execution.propertyId)}&taskId=${encodeURIComponent(task.id)}&from=ask`;
     const maintenanceSource = candidate.data.sourceType === 'MAINTENANCE';
-    result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [{ id: 'manage-reminder', label: 'Manage reminder', href, style: 'PRIMARY' }] }], confirmation: null, suggestions: [] };
+    result = { status: 'COMPLETED', reasonCode: maintenanceSource ? 'MAINTENANCE_MONITOR_ACTIVE' : 'HOME_DEADLINE_MONITOR_ACTIVE', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-deadline-${task.id}`, title: maintenanceSource ? 'Maintenance reminders are active' : 'Expiration reminder is active', status: 'COMPLETED', description: maintenanceSource ? 'The existing canonical task now has governed in-app and email delivery preferences; no duplicate task was created.' : 'A canonical dated obligation now drives governed in-app and email reminders.', details: [{ label: 'Reminder', value: task.title }, { label: 'Due', value: candidate.data.dueDate }, { label: maintenanceSource ? 'Reminder window' : 'Lead time', value: maintenanceSource ? 'Within 7 days of due date' : `${candidate.data.leadDays} days` }, { label: 'Channel', value: 'In-app plus email' }], actions: [] }], confirmation: null, suggestions: [] };
     artifactType = command.artifactType;
     artifactId = task.id;
     // IW-FRESH-003 fix: previously called no reconciliation mechanism at

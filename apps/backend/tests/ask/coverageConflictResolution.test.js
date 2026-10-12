@@ -57,3 +57,36 @@ test('the review action survives the trust policy for HOME_DEADLINE_MONITOR', as
   }
   assert.equal(isAskActionApplicable({ action, operationId: 'HOME_ACTIONS', propertyId: 'prop1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
 });
+
+// miscHandlers batch of the handler sweep (docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md): the reminder answers carry no
+// Maintenance, task or inventory page link (owner decision, 2026-10-10).
+const { PropertyMaintenanceTaskService } = require('../../src/services/PropertyMaintenanceTask.service.ts');
+
+test('an expiration reminder with no policy or warranty on file says adding a coverage record is not available in Ask, and links nowhere', async () => {
+  conflict.assertCoverageConflictFree = async () => undefined;
+  prisma.insurancePolicy = { findFirst: async () => null, findMany: async () => [] };
+  prisma.warranty = { findFirst: async () => null, findMany: async () => [] };
+  const result = await homeDeadlineMonitorResult('u1', 'prop1', 'Remind me before my insurance policy expires');
+  assert.equal(result.reasonCode, 'EXPIRATION_DATE_REQUIRED');
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.match(result.blocks[0].body, /adding a coverage record is not currently available in Ask/);
+  assert.doesNotMatch(JSON.stringify(result), /\/dashboard/);
+});
+
+test('a maintenance reminder request with no matching dated task lists plain rows and no Maintenance link', async () => {
+  const original = PropertyMaintenanceTaskService.getTasksForProperty;
+  PropertyMaintenanceTaskService.getTasksForProperty = async () => [
+    { id: 't1', title: 'Replace HVAC filter', status: 'PENDING', priority: 'MEDIUM', nextDueDate: future },
+    { id: 't2', title: 'Flush water heater', status: 'PENDING', priority: 'MEDIUM', nextDueDate: future },
+  ];
+  try {
+    const result = await homeDeadlineMonitorResult('u1', 'prop1', 'Remind me about maintenance');
+    assert.equal(result.reasonCode, 'MAINTENANCE_MONITOR_TASK_REQUIRED');
+    const list = result.blocks.find((block) => block.id === 'maintenance-monitor-options');
+    assert.deepEqual(list.actions, []);
+    for (const section of list.sections) for (const item of section.items) assert.equal(item.href, null, item.id);
+    assert.doesNotMatch(JSON.stringify(result), /\/dashboard|Open Maintenance|Open task/);
+  } finally {
+    PropertyMaintenanceTaskService.getTasksForProperty = original;
+  }
+});
