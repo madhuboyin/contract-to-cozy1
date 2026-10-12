@@ -1,4 +1,4 @@
-import { resolvePropertyWriteAccess } from '../propertyWriteAccess';
+import { resolvePropertyOwnerAccess, resolvePropertyWriteAccess } from '../propertyWriteAccess';
 
 // householdRole is present only for household members; the owner's own properties carry none. The server's role floor stays the authority.
 describe('resolvePropertyWriteAccess', () => {
@@ -24,5 +24,26 @@ describe('resolvePropertyWriteAccess', () => {
     expect(resolvePropertyWriteAccess(undefined, 'viewer').canWrite).toBe(true);
     expect(resolvePropertyWriteAccess(properties, '').canWrite).toBe(true);
     expect(resolvePropertyWriteAccess(properties, undefined).isViewer).toBe(false);
+  });
+});
+
+describe('resolvePropertyOwnerAccess', () => {
+  const properties = [
+    { id: 'owned', householdRole: undefined },
+    { id: 'viewer', householdRole: 'VIEWER' as const },
+    { id: 'contributor', householdRole: 'CONTRIBUTOR' as const },
+    { id: 'member-owner', householdRole: 'OWNER' as const },
+  ];
+
+  it('holds for the owner of record and a member with the OWNER role only', () => {
+    expect(resolvePropertyOwnerAccess(properties, 'owned')).toBe(true);
+    expect(resolvePropertyOwnerAccess(properties, 'member-owner')).toBe(true);
+    expect(resolvePropertyOwnerAccess(properties, 'contributor')).toBe(false);
+    expect(resolvePropertyOwnerAccess(properties, 'viewer')).toBe(false);
+  });
+
+  it('leaves an unknown property or a missing list to the server', () => {
+    expect(resolvePropertyOwnerAccess(properties, 'other')).toBe(true);
+    expect(resolvePropertyOwnerAccess(undefined, 'contributor')).toBe(true);
   });
 });

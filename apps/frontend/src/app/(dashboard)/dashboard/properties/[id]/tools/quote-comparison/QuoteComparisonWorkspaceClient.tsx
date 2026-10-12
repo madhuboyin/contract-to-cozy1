@@ -228,7 +228,7 @@ export default function QuoteComparisonWorkspaceClient() {
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const itemId = searchParams.get('itemId');
   // A viewer may read the workspace but not create one: they open the page through the read-only lookup, never the mutating get-or-create route.
-  const { canWrite, isLoading: accessLoading } = usePropertyWriteAccess(propertyId);
+  const { canWrite, canManage, isLoading: accessLoading } = usePropertyWriteAccess(propertyId);
   const contextQuery = buildContextQuery(searchParams);
 
   React.useEffect(() => {
@@ -1367,7 +1367,7 @@ export default function QuoteComparisonWorkspaceClient() {
                 type="checkbox"
                 className="mt-1 h-4 w-4 rounded border-slate-300"
                 checked={outcomeMeasurementConsented}
-                disabled={consentPending || !workspaceId}
+                disabled={consentPending || !workspaceId || !canManage}
                 onChange={(event) => void setOutcomeMeasurementConsent(event.target.checked)}
               />
               <span>
@@ -1376,6 +1376,7 @@ export default function QuoteComparisonWorkspaceClient() {
                 Estimates, contractor notes, and quote text are never included. You can turn this off at any
                 time to stop future capture; this choice does not affect recommendations or booking.
                 {consentPending ? <span className="mt-1 block text-xs">Saving your choice…</span> : null}
+                {!canManage ? <span className="mt-1 block text-xs">Only the home&apos;s owner can change this choice.</span> : null}
               </span>
             </label>
           </ScenarioInputCard>

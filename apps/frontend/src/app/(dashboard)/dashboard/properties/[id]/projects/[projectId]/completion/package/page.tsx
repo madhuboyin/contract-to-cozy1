@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Copy, Download, Share2, TriangleAlert } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import type { ProjectCloseoutPackage } from '@/types';
 import { Button } from '@/components/ui/button';
 import { MobileCard, MobilePageContainer } from '@/components/mobile/dashboard/MobilePrimitives';
@@ -20,6 +21,8 @@ type LedgerRow = {
 
 export default function ProjectCloseoutPackagePage() {
   const { id: propertyId, projectId } = useParams<{ id: string; projectId: string }>();
+  // A public share link is an owner-level disclosure: the server floors create and revoke at OWNER, so a contributor is not offered the button.
+  const { canManage } = usePropertyWriteAccess(propertyId);
   const [closeout, setCloseout] = useState<ProjectCloseoutPackage | null>(null);
   const [writeBacks, setWriteBacks] = useState<LedgerRow[]>([]);
   const [shareUrl, setShareUrl] = useState('');
@@ -129,9 +132,11 @@ export default function ProjectCloseoutPackagePage() {
             <Button variant="outline" onClick={downloadPackage}>
               <Download className="mr-2 h-4 w-4" /> Export JSON
             </Button>
-            <Button onClick={createShare} disabled={sharing}>
-              <Share2 className="mr-2 h-4 w-4" /> {sharing ? 'Creating…' : 'Create 30-day share link'}
-            </Button>
+            {canManage ? (
+              <Button onClick={createShare} disabled={sharing}>
+                <Share2 className="mr-2 h-4 w-4" /> {sharing ? 'Creating…' : 'Create 30-day share link'}
+              </Button>
+            ) : null}
           </div>
           {shareUrl && (
             <button
