@@ -33,21 +33,19 @@ async function pendingDocumentPromotionCandidates(propertyId: string): Promise<D
 
 async function documentPromotionReviewResult(propertyId: string): Promise<AskOperationResult> {
   const candidates = await pendingDocumentPromotionCandidates(propertyId);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
-  if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'PRIMARY' }] }], suggestions: [] };
-  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Open Documents', href, style: 'SECONDARY' }] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: [] };
+  if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [] }], suggestions: [] };
+  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href: null })) }], actions: [] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: [] };
 }
 
 async function documentPromotionConfirmResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   const candidates = await pendingDocumentPromotionCandidates(propertyId);
   const selected = exactEntityMatch(candidates, message, launchContext);
   const decision = /\breject|discard\b/i.test(message) ? 'REJECT' : /\bconfirm|promote|apply\b/i.test(message) ? 'CONFIRM' : null;
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
-  if (!selected || !decision) return { status: 'NEEDS_ENTITY', reasonCode: 'DOCUMENT_PROMOTION_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotion-targets', title: 'Choose an exact candidate and decision', description: 'Use the candidate id or exact title and say confirm or reject.', sections: [{ id: 'pending', title: 'Pending candidates', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [], status: 'NEEDS_REVIEW', href })) }], actions: [{ id: 'open-documents', label: 'Review Documents', href, style: 'SECONDARY' }] }], suggestions: [] };
+  if (!selected || !decision) return { status: 'NEEDS_ENTITY', reasonCode: 'DOCUMENT_PROMOTION_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotion-targets', title: 'Choose an exact candidate and decision', description: 'Use the candidate id or exact title and say confirm or reject.', sections: [{ id: 'pending', title: 'Pending candidates', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [], status: 'NEEDS_REVIEW', href: null })) }], actions: [] }], suggestions: [] };
   if (selected.kind === 'INSPECTION_REPORT' && decision === 'REJECT') return { status: 'BLOCKED', reasonCode: 'INSPECTION_REPORT_REJECTION_REQUIRES_REVIEW_UI', blocks: [{ type: 'BOUNDARY', id: 'inspection-report-rejection-boundary', title: 'Review corrections in Inspection Hub', severity: 'INFO', body: 'Ask can confirm the reviewed report, but rejecting or correcting individual extracted findings requires the report review screen so the exact edits and evidence remain visible.', suggestions: [] }], suggestions: [] };
   const contextVersion = createHash('sha256').update(`${selected.kind}:${selected.id}:${selected.updatedAt.toISOString()}`).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 60_000);
-  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'DOCUMENT_PROMOTION_CONFIRMATION_REQUIRED', contextVersion, parameters: { documentPromotionKind: selected.kind, documentPromotionId: selected.id, documentPromotionParentId: selected.parentId, documentPromotionDecision: decision, documentPromotionCandidateFields: selected.candidateFields ?? null, documentPromotionContextVersion: contextVersion, ...(launchContext?.sourceExecutionId ? { sourceExecutionId: launchContext.sourceExecutionId } : {}), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'document-promotion-confirm-review', title: `Review document ${decision.toLowerCase()}`, body: decision === 'CONFIRM' ? 'Confirming writes the reviewed candidate through its canonical domain adapter and records the promotion outcome.' : 'Rejecting preserves the source evidence but prevents these candidate values from becoming canonical facts.', tone: 'CAUTION', actions: [{ id: 'open-documents', label: 'Review source', href, style: 'SECONDARY' }] }], confirmation: { confirmationId: `document-promotion-${selected.id}-1`, version: 1, title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} ${selected.title}?`, description: selected.description, fields: [{ label: 'Candidate', value: selected.title }, { label: 'Decision', value: decision.toLowerCase() }], editableFields: [], confirmLabel: decision === 'CONFIRM' ? 'Confirm and promote' : 'Reject candidate', consentText: 'I reviewed this exact document-derived candidate and authorize the selected decision.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'DOCUMENT_PROMOTION_CONFIRMATION_REQUIRED', contextVersion, parameters: { documentPromotionKind: selected.kind, documentPromotionId: selected.id, documentPromotionParentId: selected.parentId, documentPromotionDecision: decision, documentPromotionCandidateFields: selected.candidateFields ?? null, documentPromotionContextVersion: contextVersion, ...(launchContext?.sourceExecutionId ? { sourceExecutionId: launchContext.sourceExecutionId } : {}), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() }, blocks: [{ type: 'SUMMARY', id: 'document-promotion-confirm-review', title: `Review document ${decision.toLowerCase()}`, body: decision === 'CONFIRM' ? 'Confirming writes the reviewed candidate through its canonical domain adapter and records the promotion outcome.' : 'Rejecting preserves the source evidence but prevents these candidate values from becoming canonical facts.', tone: 'CAUTION', actions: [] }], confirmation: { confirmationId: `document-promotion-${selected.id}-1`, version: 1, title: `${decision === 'CONFIRM' ? 'Confirm' : 'Reject'} ${selected.title}?`, description: selected.description, fields: [{ label: 'Candidate', value: selected.title }, { label: 'Decision', value: decision.toLowerCase() }], editableFields: [], confirmLabel: decision === 'CONFIRM' ? 'Confirm and promote' : 'Reject candidate', consentText: 'I reviewed this exact document-derived candidate and authorize the selected decision.', expiresAt: expiresAt.toISOString() }, suggestions: [] };
 }
 
 // Ask Cozy Stage 3, Phase 7 (implementation plan §13; FRD §31 "documents" candidate). The document lookup reads the canonical property
@@ -74,7 +72,7 @@ export function documentsCalmCopy(input: {
     newest ? `Most recent: ${newest.name}${newest.addedOn ? `, added ${newest.addedOn}` : ''}.` : null,
     // Transitional: these live in the older Documents vault until their area moves to Home Records.
     legacy > 0 ? `${legacy} ${legacy === 1 ? 'is' : 'are'} still in the older Documents vault.` : null,
-    truncatedKinds > 0 ? 'Showing the most recent of each type; open Home Records for the full record.' : null,
+    truncatedKinds > 0 ? 'Showing the most recent of each type.' : null,
   ].filter((note): note is string => Boolean(note));
   const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
     ...(needsReview > 0 ? [{ label: `${needsReview} need review`, tone: 'CAUTION' as const }] : []),
@@ -182,7 +180,6 @@ const DOCUMENT_LOOKUP_BOUNDARY: AskPresentationBlock = {
 async function documentLookupResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   // Home Records is the canonical page for documents; the legacy vault is reachable only for the rows still in it.
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-records`;
   // The transitional legacy branch is requested by name: it is removed once no domain still needs it.
   const inventory = await listPropertyDocuments({ propertyId, role: access.role, includeLegacy: true });
   const documents = inventory.items;
@@ -191,7 +188,7 @@ async function documentLookupResult(userId: string, propertyId: string, message:
     return {
       status: 'ANSWERED',
       reasonCode: 'NO_DOCUMENTS_ON_FILE',
-      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no documents recorded for this home yet.', actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'PRIMARY' }] }, DOCUMENT_LOOKUP_BOUNDARY],
+      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no documents recorded for this home yet.', actions: [] }, DOCUMENT_LOOKUP_BOUNDARY],
       suggestions: [],
     };
   }
@@ -218,11 +215,11 @@ async function documentLookupResult(userId: string, propertyId: string, message:
         type: 'SUMMARY', id: 'document-lookup-summary', title: 'No recorded documents match these filters', headline: 'No documents match these filters.',
         supportLine: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}. Widen or clear a filter to see them.`,
         body: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}, but none match the selected filters.`, tone: 'DEFAULT',
-        actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }],
+        actions: [],
       }, {
         type: 'GROUPED_LIST', filters: chips, id: 'document-lookup-groups', title: 'Documents by type',
         sections: [{ id: 'documents', title: 'Documents', count: 0, items: [] }],
-        actions: [{ id: 'open-documents-list', label: 'Open Home Records', href, style: 'SECONDARY' }],
+        actions: [],
       }, DOCUMENT_LOOKUP_BOUNDARY],
       suggestions: [],
     };
@@ -234,7 +231,7 @@ async function documentLookupResult(userId: string, propertyId: string, message:
       blocks: [{
         type: 'SUMMARY', id: 'document-lookup-no-match', title: 'No recorded document matches this request',
         body: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}, but none match this request.`,
-        tone: 'DEFAULT', actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }],
+        tone: 'DEFAULT', actions: [],
       }, DOCUMENT_LOOKUP_BOUNDARY],
       suggestions: [],
     };
@@ -269,7 +266,7 @@ async function documentLookupResult(userId: string, propertyId: string, message:
       newest: { name: matched[0].title, addedOn: humanDate(matched[0].addedAt) || null },
       truncatedKinds: [...grouped.values()].filter((group) => group.docs.length > 20).length,
     }),
-    actions: [{ id: 'open-documents', label: 'Open Home Records', href, style: 'SECONDARY' }],
+    actions: [],
   }, {
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType routes each row to its own inline detail. A Home Record is read through the record
     // route (record-level visibility applies); a transitional legacy document through the legacy property-scoped document route.
@@ -294,12 +291,11 @@ async function documentLookupResult(userId: string, propertyId: string, message:
           document.transitional ? 'older vault' : null,
         ].filter((value): value is string => Boolean(value)),
         status: document.verification ?? (document.needsReview ? 'NEEDS_REVIEW' : document.expiry === 'EXPIRED' ? 'EXPIRED' : null),
-        // A transitional legacy document has no page of its own any more (the legacy Documents workspace is retired); its inline detail still works.
-        href: document.transitional ? null : href,
+        // Rows open as inline records (entityType); Ask links to no desktop Home Records page (owner decision 2026-10-10).
+        href: null,
       })),
     })),
-    // Documents D-1: the record page is a quiet text link in the calm answer only (the summary shows the same link in the previous shell).
-    actions: [{ id: 'open-documents-list', label: 'Open Home Records', href, style: 'SECONDARY' }],
+    actions: [],
   }, DOCUMENT_LOOKUP_BOUNDARY];
 
   return {

@@ -63,12 +63,13 @@ test('a real answer reads Home Records with the caller\'s role, marks legacy row
   assert.equal(byId.r1.entityType, 'PROPERTY_RECORD');
   assert.equal(byId.l1.entityType, 'DOCUMENT');
   assert.ok(byId.l1.meta.includes('older vault') && !byId.r1.meta.includes('older vault'));
-  // A Home Record links to Home Records; a transitional legacy document has no page of its own any more, only its inline detail.
-  assert.ok(byId.r1.href.endsWith('/tools/home-records') && byId.l1.href === null);
+  // No row links to a desktop page (owner decision, 2026-10-10): a Home Record and a transitional legacy document both open inline.
+  assert.ok(byId.r1.href === null && byId.l1.href === null);
   assert.equal(byId.r1.status, 'NEEDS_REVIEW');
   // One vocabulary for kinds: a Home Record invoice and a legacy invoice share a section.
   assert.equal(list(result).sections.find((section) => section.title === 'Invoices').count, 2);
-  assert.deepEqual(list(result).actions.map((action) => action.id), ['open-documents-list']);
+  assert.deepEqual(list(result).actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   assert.equal(result.blocks.at(-1).id, 'document-lookup-boundary');
   assert.match(result.blocks.at(-1).body, /Ask has not read or interpreted the documents themselves/);
 });
@@ -80,7 +81,7 @@ test('with no legacy rows the answer says nothing about an older vault', async (
   assert.doesNotMatch(summary(result).supportLine ?? '', /older Documents vault/);
 });
 
-test('the boundary survives the trust validator and the desktop Open Home Records links do not', async () => {
+test('the boundary survives the trust validator, and the handler emits no Open Home Records link for it to remove', async () => {
   install([record('r1', 'INVOICE', '2026-09-03')]);
   const raw = await run();
   const validated = validateAskAnswerTrust({
@@ -90,7 +91,7 @@ test('the boundary survives the trust validator and the desktop Open Home Record
   assert.deepEqual(summary(validated.result).actions.map((action) => action.id), []);
   assert.deepEqual(list(validated.result).actions.map((action) => action.id), []);
   assert.ok(validated.result.blocks.some((block) => block.id === 'document-lookup-boundary'));
-  assert.ok(validated.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'));
+  assert.ok(!validated.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'), 'nothing was left for the trust pass to strip');
 });
 
 test('an empty record is not read as "nothing exists", offers no desktop link and states what the answer shows', async () => {
@@ -103,4 +104,16 @@ test('an empty record is not read as "nothing exists", offers no desktop link an
     result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('DOCUMENT_LOOKUP')]),
   });
   assert.deepEqual(validated.result.blocks[0].actions.map((action) => action.id), []);
+});
+
+test('a request that matches nothing and a full list link to no desktop page, and every row opens inline', async () => {
+  install([record('r1', 'INVOICE', '2026-09-03')]);
+  const ask = (message) => capabilityInvoke('DOCUMENT_LOOKUP', { userId: 'u1', propertyId: 'p1', message });
+  const none = await ask('Show my verified documents');
+  assert.equal(none.reasonCode, 'DOCUMENT_MATCH_NOT_FOUND');
+  assert.deepEqual(none.blocks[0].actions, []);
+  assert.equal(JSON.stringify(none).includes('/dashboard/'), false);
+  const populated = await ask('Show my documents');
+  assert.equal(JSON.stringify(populated).includes('/dashboard/'), false);
+  for (const block of populated.blocks) for (const section of block.sections ?? []) for (const item of section.items) assert.equal(item.href, null, item.id);
 });
