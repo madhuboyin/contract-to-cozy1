@@ -20,10 +20,6 @@ const RECALL_STATUS_LABEL: Record<string, string> = {
   RESOLVED: 'Resolved',
 };
 
-export function recallReviewHref(propertyId: string): string {
-  return `/dashboard/properties/${encodeURIComponent(propertyId)}/recalls`;
-}
-
 // RECALL_MATCH_UPDATE item actions (FRD v1.163). The traditional RecallMatchCard.tsx (read before
 // implementing, not assumed) shows three live-state-gated actions per match, driven by
 // recallsService.ts's own confirmRecallMatch/dismissRecallMatch/resolveRecallMatch: Confirm (item
@@ -93,7 +89,6 @@ async function recallMatchUpdateResult(userId: string, propertyId: string, messa
   const access = await ensurePropertyAccess(userId, propertyId);
   const matches = await listPropertyRecallMatches(propertyId);
   const open = matches.filter((match) => match.status === 'OPEN' || match.status === 'NEEDS_CONFIRMATION');
-  const href = recallReviewHref(propertyId);
   const candidates = open.map((match) => ({ ...match, title: match.inventoryItem?.name ? `${match.recall.title} — ${match.inventoryItem.name}` : match.recall.title }));
   const selected = exactEntityMatch(candidates, message, launchContext);
   const action = recallMatchAction(message);
@@ -107,10 +102,10 @@ async function recallMatchUpdateResult(userId: string, propertyId: string, messa
           id: 'matches', title: 'Open recall matches', count: candidates.length,
           items: candidates.map((match) => ({
             id: match.id, title: match.title, description: String(match.recall.severity).toLowerCase(),
-            meta: [], status: String(match.status), href, actions: recallMatchItemActionsFor(access.role, match),
+            meta: [], status: String(match.status), href: null, actions: recallMatchItemActionsFor(access.role, match),
           })),
         }],
-        actions: [{ id: 'open-recalls', label: 'Open Recalls & Safety Alerts', href, style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -132,7 +127,7 @@ async function recallMatchUpdateResult(userId: string, propertyId: string, messa
         : action === 'DISMISS'
           ? 'Dismissing marks this match not applicable and closes any linked maintenance task.'
           : 'Resolving records how this recall was handled on the canonical recall match.',
-      tone: 'CAUTION', actions: [{ id: 'open-recalls', label: 'Review in Recalls & Safety Alerts', href, style: 'SECONDARY' }],
+      tone: 'CAUTION', actions: [],
     }],
     confirmation: {
       confirmationId: `recall-match-${selected.id}-1`, version: 1, title: `${actionLabel} this recall match?`, description: selected.title,
@@ -149,7 +144,6 @@ async function recallReviewResult(userId: string, propertyId: string): Promise<A
   const access = await ensurePropertyAccess(userId, propertyId);
   const matches = await listPropertyRecallMatches(propertyId);
   const open = matches.filter((match) => match.status === 'OPEN' || match.status === 'NEEDS_CONFIRMATION');
-  const href = recallReviewHref(propertyId);
 
   if (open.length === 0) {
     return {
@@ -157,7 +151,7 @@ async function recallReviewResult(userId: string, propertyId: string): Promise<A
       blocks: [{
         type: 'EMPTY_STATE', id: 'recall-review-empty', title: 'No open recall matches',
         body: 'Ask found no unresolved product recall matches for items recorded in this home.',
-        actions: [{ id: 'open-recalls', label: 'Open Recalls & Safety Alerts', href, style: 'PRIMARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -187,11 +181,11 @@ async function recallReviewResult(userId: string, propertyId: string): Promise<A
             match.recall.remedy ? `Remedy: ${match.recall.remedy}` : null,
           ].filter((value): value is string => Boolean(value)),
           status: String(match.status),
-          href,
+          href: null,
           actions: recallMatchItemActionsFor(access.role, match),
         })),
       }],
-      actions: [{ id: 'open-recalls', label: 'Open Recalls & Safety Alerts', href, style: 'SECONDARY' }],
+      actions: [],
     }, {
       type: 'BOUNDARY', id: 'recall-review-boundary', title: 'Regulator-sourced recall data',
       body: 'Recall details come from official recall records, not a safety inspection of this home.',

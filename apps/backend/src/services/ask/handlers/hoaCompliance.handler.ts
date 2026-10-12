@@ -42,9 +42,6 @@ export function hoaComplianceFromView(
   propertyId: string,
   now: Date = new Date(),
 ): AskOperationResult {
-  const pageHref = `/dashboard/hoa?propertyId=${encodeURIComponent(propertyId)}`;
-  const guidanceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview`;
-  const openAction = { id: 'open-hoa-compliance', label: 'Open HOA Compliance', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'hoa-compliance-boundary', title: 'A reported status is not an approval',
     body: 'Statuses marked "You reported" are what the household entered. Only a decision on record from the association (or its documents) shows what was approved, and the association\'s own records control. Confirm with the association before starting work.',
@@ -56,8 +53,8 @@ export function hoaComplianceFromView(
       status: 'ANSWERED', reasonCode: 'HOA_COMPLIANCE_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'hoa-compliance-summary', title: 'No HOA recorded for this home',
-        body: 'HOA Compliance keeps your association, dues, approval requests and any violation notices in one place. If this home has an HOA, open it to add the association.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: 'HOA Compliance keeps your association, dues, approval requests and any violation notices in one place. If this home has an HOA, adding the association is not currently available in Ask.',
+        tone: 'DEFAULT', actions: [],
       }, boundary],
       suggestions: [],
     };
@@ -77,7 +74,7 @@ export function hoaComplianceFromView(
       violation.resolvedAt ? `Resolved ${hoaDate(violation.resolvedAt)}` : null,
     ].filter((value): value is string => Boolean(value)),
     status: HOA_VIOLATION_STATUS_LABELS[String(violation.status)] ?? readableCode(String(violation.status)),
-    href: violation.journeyId ? `${guidanceHref}?journeyId=${encodeURIComponent(violation.journeyId)}` : guidanceHref,
+    href: null,
   });
   const approvalRow = (record: HoaApprovalView) => {
     const expired = record.expirationDate && new Date(record.expirationDate).getTime() <= now.getTime();
@@ -97,7 +94,7 @@ export function hoaComplianceFromView(
       status: record.decisionStatus && record.decisionTruthLayer !== 'DOCUMENTED'
         ? HOA_APPROVAL_STATUS_LABELS[String(record.decisionStatus)] ?? readableCode(String(record.decisionStatus))
         : 'Not confirmed',
-      href: pageHref,
+      href: null,
     };
   };
   const dues = association?.duesAmountCents != null
@@ -119,7 +116,7 @@ export function hoaComplianceFromView(
       open.length ? `${open.length} open violation${open.length === 1 ? '' : 's'}.` : 'No open violations.',
     ].filter(Boolean).join(' '),
     tone: open.length ? 'CAUTION' : 'DEFAULT',
-    actions: [openAction],
+    actions: [],
   }];
   if (sections.length) {
     blocks.push({

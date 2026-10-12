@@ -24,7 +24,6 @@ const servicePriceCategoryLabel = (value: string) => SERVICE_PRICE_CATEGORY_LABE
 const servicePriceMoney = (value: number | null | undefined) => (value == null ? null : `$${Math.round(value).toLocaleString('en-US')}`);
 
 export function servicePriceChecksFromView(checks: readonly ServicePriceCheckView[] | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/service-price-radar`;
   // The answer reaches only the home's primary account holder, who can check a quote from it, inside Ask.
   const checkAction = (label: string) => ({ id: SERVICE_PRICE_CHECK_ACTION_ID, label, interactionType: 'START_WORKFLOW' as const, message: SERVICE_PRICE_CHECK_MESSAGE, operationId: 'SERVICE_PRICE_CHECK_RUN', style: 'PRIMARY' as const });
   const boundary: AskPresentationBlock = {
@@ -68,11 +67,11 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
   if (checks.length >= SERVICE_PRICE_RADAR_ASK_LIMIT) {
     blocks.push({
       type: 'LIMITATION', id: 'service-price-radar-limit', title: `Showing the ${SERVICE_PRICE_RADAR_ASK_LIMIT} most recent checks`,
-      body: 'Older quote checks are not listed here, as on the page.', severity: 'INFO',
+      body: 'Older quote checks are not listed here.', severity: 'INFO',
     });
   }
   blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'service-price-radar-checks', title: 'Recent quote checks', description: 'Newest first, as on the page. Open Service Price Radar for the full breakdown.',
+    type: 'GROUPED_LIST', filters: [], id: 'service-price-radar-checks', title: 'Recent quote checks', description: 'Newest first.',
     sections: [{
       id: 'service-price-radar-recent', title: 'Recent checks', count: checks.length,
       items: checks.map((check) => {
@@ -89,7 +88,7 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
             `Checked ${humanDate(new Date(check.createdAt))}`,
           ],
           status: check.verdict ? SERVICE_PRICE_VERDICT_LABELS[check.verdict] ?? 'Need more context' : 'Need more context',
-          href: pageHref,
+          href: null,
         };
       }),
     }],

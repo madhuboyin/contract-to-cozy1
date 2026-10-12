@@ -80,7 +80,7 @@ test('changes are grouped by source with relevance, distance, provider and inter
   assert.deepEqual(list.sections[0].items[0].meta.slice(0, 3), ['Possible relevance: possible', '0.4 mi away', 'City Planning Department']);
   assert.ok(list.sections[1].items[0].meta.includes('Updated since you last looked'));
   assert.ok(list.sections[1].items[0].meta.includes('Following'));
-  assert.equal(list.sections[0].items[0].href, '/dashboard/properties/p1/tools/neighborhood-change-radar');
+  assert.equal(list.sections[0].items[0].href, null);
 });
 
 test('coverage that is not current, or not configured, is disclosed rather than reported as an all-clear', () => {

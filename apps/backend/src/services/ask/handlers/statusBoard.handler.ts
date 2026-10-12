@@ -54,7 +54,6 @@ export function statusBoardMeta(item: any): string[] {
 }
 
 export function statusBoardFromView(view: StatusBoardView, propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/status-board`;
   const items: any[] = view.items ?? [];
   const total: number = view.pagination?.total ?? items.length;
   const count = (condition: string) => items.filter((item) => item.condition === condition).length;
@@ -73,7 +72,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
       ? `On your Status Board, across ${total} recorded appliance${total === 1 ? '' : 's'} and system${total === 1 ? '' : 's'}${truncated ? ` (counts cover the ${items.length} shown)` : ''}.`
       : 'The Status Board tracks appliances and systems recorded in Inventory. Add them there to see their condition here.',
     tone: count('ACTION_NEEDED') ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-status-board', label: 'Open Status Board', href: pageHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (limitations.length) blocks.push({ type: 'LIMITATION', id: 'status-board-limits', title: 'What this does not cover', body: limitations.join(' '), severity: 'INFO' });
   const sections = STATUS_BOARD_CONDITIONS.map(({ key, title }) => {
@@ -87,7 +86,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
         // category is the one a card can do without (FRD v1.84: before, such an item failed the contract).
         meta: statusBoardMeta(item),
         status: String(item.condition),
-        href: item.deepLinks?.viewItem ?? pageHref,
+        href: null,
         ...statusBoardShelfFacts(item),
         ...statusBoardCaptureFields(item),
       })),
@@ -96,7 +95,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
   if (sections.length) {
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Appliances and systems by condition', // IW-PRES-014 / IW-PRES-022: the Status Board renders as shelves (FRD v1.84); the cards are read-only.
       presentation: { pattern: 'SHELVES' }, description: 'Each with why, from age, warranty and maintenance records.', sections,
-      actions: [{ id: 'open-status-board', label: 'Open Status Board', href: pageHref, style: 'SECONDARY' }] });
+      actions: [] });
   }
   blocks.push({
     type: 'BOUNDARY', id: 'status-board-boundary', title: 'Estimated condition, not an inspection',

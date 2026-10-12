@@ -88,7 +88,6 @@ const aboutHabitsBoundary = (id: string, body: string): AskPresentationBlock => 
 // first, then the rest in the coach's ranked order, then the routine and snoozed ones; numbered across groups, each opening to its facts
 // and to its inline review. Nothing links to the desktop page except the empty state, where generating habits is the only way forward.
 export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now: Date = new Date(), canGenerate = false): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-habit-coach`;
   const habits: any[] = view.habits ?? [];
   const asDate = (value: unknown) => (value ? new Date(value as any) : null);
   const snoozedNow = (habit: any) => habit.status === 'SNOOZED' && (asDate(habit.snoozedUntil)?.getTime() ?? Infinity) > now.getTime();

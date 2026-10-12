@@ -76,7 +76,7 @@ test('items are grouped by condition with their reasons, age, warranty, maintena
   assert.equal(urgent.description, 'Past expected life (10yr)');
   // Seven facts do not fit a card (six at most), so a fully recorded item drops the category and keeps the rest.
   assert.deepEqual(urgent.meta, ['replace soon', '12.5 yr old', 'Warranty: expired', '1 open maintenance task', 'Kitchen', 'Pinned']);
-  assert.equal(urgent.href, '/dashboard/properties/p1/inventory?openItemId=inv-a');
+  assert.equal(urgent.href, null, 'a status row links to no desktop inventory page');
   assert.equal(list.sections[2].items[0].description, null, 'an all-clear reason is not repeated as a description');
 });
 
@@ -91,12 +91,13 @@ test('a larger board and items missing an install date are disclosed; an empty b
   assert.equal(empty.blocks[0].title, 'Nothing is on the Status Board yet');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', () => {
   const raw = statusBoardFromView(view({ pagination: { page: 1, limit: 100, total: 140, totalPages: 2 } }), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'status-board.read', operationId: 'HOME_STATUS_BOARD', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my status board', operationId: 'HOME_STATUS_BOARD', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'HOME_STATUS_BOARD', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('condition phrasing routes here; maintenance due, next actions, repair-or-replace and the inventory list do not', () => {
@@ -126,13 +127,13 @@ test('shelf facts: only Needs action is a caution; timing is the recorded age, o
   assert.deepEqual(statusBoardShelfFacts({ condition: 'GOOD', ageYears: null }), { tone: 'DEFAULT', timingLabel: null });
 });
 
-test('the condition list declares shelves with card facts and a page link for the part not shown, and satisfies the contract', () => {
+test('the condition list declares shelves with card facts and no page link, and satisfies the contract', () => {
   const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
   const list = statusBoardFromView(view(), 'p1').blocks.find((block) => block.id === 'status-board-items');
   assert.deepEqual(list.presentation, { pattern: 'SHELVES' });
   assert.deepEqual(list.sections.map((section) => section.items[0].tone), ['CAUTION', 'DEFAULT', 'DEFAULT']);
   assert.equal(list.sections[0].items[0].timingLabel, '12.5 yr old');
-  assert.equal(list.actions[0].href, '/dashboard/properties/p1/status-board');
+  assert.deepEqual(list.actions, []);
   AskPresentationBlockSchema.parse(list);
 });
 

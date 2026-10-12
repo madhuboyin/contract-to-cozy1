@@ -11,7 +11,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 const {
-  RECALL_MATCH_ACTIONS, recallMatchItemActions, recallReviewHref, RECALL_RESOLUTION_DEFAULT,
+  RECALL_MATCH_ACTIONS, recallMatchItemActions, RECALL_RESOLUTION_DEFAULT,
 } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
@@ -154,15 +154,15 @@ test('match rows carry every live-state action for contributors; viewers get rea
   const list = async () => (await capabilityInvoke('RECALL_REVIEW', { userId: 'u1', propertyId: 'p1', message: 'Show my open recall matches' })).blocks.find((block) => block.id === 'recall-review-matches');
   const contributor = await list();
   const [row] = contributor.sections[0].items;
-  assert.equal(row.href, recallReviewHref('p1'));
+  assert.equal(row.href, null);
   assert.deepEqual(row.actions.map((action) => action.id), ['recall-confirm', 'recall-dismiss']);
   accessRole = 'VIEWER';
   assert.deepEqual((await list()).sections[0].items[0].actions, []);
 });
 
-test('the typed match actions are whitelisted and the desktop recalls link is not', () => {
-  for (const action of [...recallMatchItemActions('OWNER'), { id: 'open-recalls', label: 'Open Recalls & Safety Alerts', href: '/dashboard/properties/p1/recalls', style: 'SECONDARY' }]) {
-    assert.equal(isAskActionApplicable({ action, operationId: 'RECALL_REVIEW', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), !action.href, action.id);
+test('the typed match actions are whitelisted and no desktop recalls link exists to whitelist', () => {
+  for (const action of recallMatchItemActions('OWNER')) {
+    assert.equal(isAskActionApplicable({ action, operationId: 'RECALL_REVIEW', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, action.id);
   }
 });
 

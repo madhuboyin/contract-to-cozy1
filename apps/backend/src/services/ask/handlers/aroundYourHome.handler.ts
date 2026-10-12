@@ -15,7 +15,6 @@ const NEIGHBORHOOD_FAMILY_LABELS: Record<string, string> = {
 };
 
 export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/neighborhood-change-radar`;
   // The page ranks dismissed and not-relevant items last; Ask counts them rather than listing them.
   const set = (item: AroundYourHomeView['items'][number]) => item.interaction.disposition === 'DISMISSED' || item.interaction.disposition === 'NOT_RELEVANT';
   const active = view.items.filter((item) => !set(item));
@@ -59,7 +58,7 @@ export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propert
               ...(item.interaction.disposition === 'FOLLOWING' ? ['Following'] : []),
             ],
             status: String(item.observation.lifecycleStatus),
-            href: pageHref,
+            href: null,
           })),
         };
       }),

@@ -49,8 +49,6 @@ export function oracleLifespanItem(prediction: OracleReportView['predictions'][n
 }
 
 export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/oracle?propertyId=${encodeURIComponent(propertyId)}`;
-  const openAction = { id: 'open-appliance-oracle', label: 'Open Appliance Oracle for AI replacement picks', href: pageHref, style: 'PRIMARY' as const };
   if (report === 'PRIMARY_OWNER_ONLY') {
     return {
       status: 'BLOCKED', reasonCode: 'APPLIANCE_ORACLE_PRIMARY_OWNER_ONLY',
@@ -90,7 +88,7 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
         body: skipped
           ? 'Appliance Oracle estimates failure risk from each appliance\'s age. Add a purchase date below to include an appliance.'
           : 'Appliance Oracle estimates failure risk from each appliance\'s age. Add appliances with their purchase date to the inventory to see it.',
-        tone: 'DEFAULT', actions: [openAction],
+        tone: 'DEFAULT', actions: [],
       }, ...(missing.length ? [lifespan([])] : []), ...(skippedBlock ? [skippedBlock] : []), boundary],
       suggestions: [],
     };
@@ -101,10 +99,10 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
     body: [
       `${report.criticalCount} critical and ${report.highRiskCount} high risk.`,
       report.criticalCount + report.highRiskCount ? `Replacing those would cost an estimated ${wholeDollars(report.estimatedTotalCost)}.` : null,
-      'Replacement model suggestions are on the Appliance Oracle page.',
+      'Replacement model suggestions are not currently available in Ask.',
     ].filter(Boolean).join(' '),
     tone: report.criticalCount + report.highRiskCount ? 'CAUTION' : 'DEFAULT',
-    actions: [openAction],
+    actions: [],
   }];
   if (skippedBlock) blocks.push(skippedBlock);
   blocks.push(lifespan(report.predictions), boundary);
@@ -121,8 +119,6 @@ async function applianceFailureRiskResult(propertyId: string, userId: string): P
 }
 
 export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/budget?propertyId=${encodeURIComponent(propertyId)}`;
-  const openAction = { id: 'open-budget-planner', label: 'Open Budget Planner for AI tips', href: pageHref, style: 'PRIMARY' as const };
   if (forecast === 'PRIMARY_OWNER_ONLY') {
     return {
       status: 'BLOCKED', reasonCode: 'BUDGET_PLANNER_PRIMARY_OWNER_ONLY',
@@ -137,9 +133,9 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
     body: [
       `That is about ${wholeDollars(forecast.monthlyAverage)} a month on average${busiest ? `, highest in ${busiest.month} (${wholeDollars(busiest.total)})` : ''}.`,
       `Confidence ${forecast.confidenceLevel}%.`,
-      'Money-saving tips are on the Budget Planner page.',
+      'Money-saving tips are not currently available in Ask.',
     ].join(' '),
-    tone: 'DEFAULT', actions: [openAction],
+    tone: 'DEFAULT', actions: [],
   }];
   if (forecast.yearBuiltAssumed) {
     blocks.push({
@@ -150,7 +146,7 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
   }
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'budget-forecast-items', title: 'Where the upkeep budget goes',
-    description: 'By category, then month by month, as on the page.',
+    description: 'By category, then month by month.',
     sections: [
       { id: 'budget-forecast-categories', title: 'By category', count: forecast.categoryBreakdowns.length, items: forecast.categoryBreakdowns.map((category, index) => ({
         id: `category-${index}`, title: category.category, description: `${wholeDollars(category.annualCost)} a year (${category.percentage}%)`, meta: category.items.slice(0, 4), status: `${category.percentage}%`,

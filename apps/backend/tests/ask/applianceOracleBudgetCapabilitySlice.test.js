@@ -65,9 +65,9 @@ test('Appliance Oracle: lifespan bars labelled with the Oracle\'s risk level, no
   assert.deepEqual(result.blocks.map((block) => `${block.type}:${block.id}`), ['SUMMARY:appliance-oracle-summary', 'LIFESPAN:appliance-oracle-items', 'BOUNDARY:appliance-oracle-boundary']);
   const [summary, lifespan] = result.blocks;
   assert.equal(summary.title, '2 appliances analysed');
-  assert.equal(summary.body, '1 critical and 0 high risk. Replacing those would cost an estimated $800. Replacement model suggestions are on the Appliance Oracle page.');
+  assert.equal(summary.body, '1 critical and 0 high risk. Replacing those would cost an estimated $800. Replacement model suggestions are not currently available in Ask.');
   assert.equal(summary.tone, 'CAUTION');
-  assert.deepEqual([summary.actions[0].label, summary.actions[0].href], ['Open Appliance Oracle for AI replacement picks', '/dashboard/oracle?propertyId=p1']);
+  assert.deepEqual(summary.actions, [], 'Ask links to no Appliance Oracle page');
   assert.match(lifespan.basis, /purchase date/);
   assert.deepEqual(lifespan.items.map((item) => [item.id, item.label, item.ageYears, item.typicalLifeYears, item.status, item.statusLabel, item.entityType]), [
     ['item-dishwasher', 'Dishwasher', 12, { min: 8, max: 12 }, 'PAST_RANGE', 'Critical · 64% failure risk', 'INVENTORY_ITEM'],
@@ -161,8 +161,8 @@ test('Budget Planner: the calculated yearly and monthly forecast by category and
   assert.equal(aiCalls, 0);
   const [summary, list] = result.blocks;
   assert.match(summary.title, /^About \$[\d,]+ a year for upkeep$/);
-  assert.match(summary.body, /^That is about \$[\d,]+ a month on average, highest in \w+ \(\$[\d,]+\)\. Confidence 70%\. Money-saving tips are on the Budget Planner page\.$/);
-  assert.equal(summary.actions[0].label, 'Open Budget Planner for AI tips');
+  assert.match(summary.body, /^That is about \$[\d,]+ a month on average, highest in \w+ \(\$[\d,]+\)\. Confidence 70%\. Money-saving tips are not currently available in Ask\.$/);
+  assert.deepEqual(summary.actions, [], 'Ask links to no Budget Planner page');
   assert.equal(result.blocks.some((block) => block.id === 'budget-forecast-assumed-age'), false);
   assert.deepEqual(list.sections.map((section) => section.title), ['By category', 'By month']);
   assert.equal(list.sections[1].count, 12);
@@ -195,7 +195,8 @@ test('every block survives the answer-trust validator, and each page link the wh
     const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId, operationId, status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
     const { result: validated } = validateAskAnswerTrust({ question: message, operationId, result, propertyId: 'p1' });
     assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id), operationId);
-    assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId, propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false, operationId);
+    assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   }
 });
 

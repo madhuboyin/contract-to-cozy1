@@ -33,7 +33,6 @@ function savingsValue(value: number | null, currency: string, basis: string): st
 }
 
 async function savingsOpportunitiesResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/savings-benefits`;
   const realizedFocus = /\b(realized|received|already saved)\b/i.test(message);
   const paybackFocus = /\b(?:fastest|shortest|best) payback\b/i.test(message);
   const [access, homeSavings, benefits, unified, context] = await Promise.all([
@@ -189,10 +188,10 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       : homeSavings.potentialAnnualSavings > 0
       ? `This is the highest single net annual estimate, not a sum across categories. Ask also found ${reviewedBenefits.length} reviewed benefit or rebate match${reviewedBenefits.length === 1 ? '' : 'es'}, ${inProgress.length} item${inProgress.length === 1 ? '' : 's'} in progress, and ${realized.length} recorded realized outcome${realized.length === 1 ? '' : 's'}. Estimates are not provider quotes or eligibility guarantees.`
       : neverAnalyzed
-        ? 'Open Savings and Benefits to run the governed analysis. Ask will not infer that no savings exist from an empty record.'
+        ? 'No savings analysis has been run for this home yet, and running one is not currently available in Ask. Ask will not infer that no savings exist from an empty record.'
         : 'The sections below separate available estimates, actions already in progress, verified or homeowner-recorded outcomes, and opportunities owned by other domain tools.',
     tone: homeSavings.potentialAnnualSavings > 0 || availableCount > 0 ? 'POSITIVE' : 'DEFAULT',
-    actions: neverAnalyzed ? [{ id: 'open-savings', label: 'Run analysis in Savings and Benefits', href: workspaceHref, style: 'SECONDARY' }] : [],
+    actions: [],
   }];
 
   if (hasAnyResult) {
@@ -421,7 +420,6 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
   if (view === 'changes') return ownershipChangesResult(userId, propertyId, lens);
   if (view === 'forecast') return ownershipForecastResult(userId, propertyId, lens, message);
   if (view === 'variability') return ownershipBufferResult(userId, propertyId, lens);
-  const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/ownership-costs?view=current&lens=${lens}`;
   const [access, context] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     evaluateFeatureContext(propertyId, userId, { featureKey: 'OWNERSHIP_COSTS', operationKey: 'VIEW_ANALYSIS' }),
@@ -461,9 +459,9 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
       captureRequests,
       blocks: [{
         type: 'SUMMARY', id: 'ownership-costs-unavailable', title: 'A current ownership-cost total is not ready yet',
-        body: 'Ask could not load a canonical ownership-cost snapshot. Missing categories are not treated as zero. Improve the home context below or open Ownership Costs to review and refresh its source records.',
+        body: 'Ask could not load a canonical ownership-cost snapshot. Missing categories are not treated as zero. Improve the home context below, then ask again.',
         tone: 'CAUTION',
-        actions: [{ id: 'open-ownership-costs', label: 'Open Ownership Costs tool', href: workspaceHref, style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };

@@ -91,7 +91,7 @@ test('past events and long-term context are listed with the household-recorded e
   assert.ok(county.meta.includes('No effect on the home confirmed'));
   assert.ok(exact.meta.includes('2.3 mi away'));
   assert.ok(exact.meta.includes('Household reported an observed effect'));
-  assert.equal(exact.href, '/dashboard/properties/p1/tools/home-risk-replay?focus=HURRICANE_EVENT');
+  assert.equal(exact.href, null);
 });
 
 test('the service\'s bounds are always shown, and nothing matched is never an all-clear', () => {
@@ -105,12 +105,13 @@ test('the service\'s bounds are always shown, and nothing matched is never an al
   assert.equal(stale.blocks[1].severity, 'CAUTION');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', () => {
   const raw = pastHazardExposureFromView(view(), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-risk-replay.exposure', operationId: 'PAST_HAZARD_EXPOSURE', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home risk replay', operationId: 'PAST_HAZARD_EXPOSURE', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PAST_HAZARD_EXPOSURE', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('hazard-history phrasing routes here; current weather, claims and local changes do not', () => {

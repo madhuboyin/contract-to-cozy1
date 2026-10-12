@@ -87,7 +87,7 @@ test('the real listScenarios query is the route\'s: this twin, archived left out
 test('options are grouped by system in the page\'s order, with the page\'s labels and only computed figures', () => {
   const result = homeUpgradeScenariosFromView(scenarios(), 'p1', NOW);
   assert.equal(result.blocks[0].title, '4 saved upgrade options across 3 systems');
-  assert.equal(result.blocks[0].body, '2 with results ready, 1 selected. 1 has results that are out of date because the home\'s records changed; recalculate on the page.');
+  assert.equal(result.blocks[0].body, '2 with results ready, 1 selected. 1 has results that are out of date because the home\'s records changed; recalculating them is not currently available in Ask.');
   assert.equal(result.reasonCode, 'HOME_UPGRADE_RESULTS_STALE');
   // FRD v1.89: the system with two options is a strip; the systems with one option stay in the list, in the page's order.
   const list = result.blocks.find((block) => block.id === 'home-upgrade-options');
@@ -123,12 +123,13 @@ test('a run older than the page\'s five-minute window is not shown as calculatin
   assert.equal(none.blocks.at(-1).title, 'Planning estimates, not quotes');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', () => {
   const raw = homeUpgradeScenariosFromView(scenarios(), 'p1', NOW);
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-digital-twin.scenarios', operationId: 'HOME_UPGRADE_SCENARIOS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my upgrade planner options', operationId: 'HOME_UPGRADE_SCENARIOS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'HOME_UPGRADE_SCENARIOS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('saved-option phrasing routes here; repair-or-replace advice and creating or running options do not', () => {

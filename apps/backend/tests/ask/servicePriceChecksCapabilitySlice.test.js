@@ -18,7 +18,6 @@ const { getSkillForOperation } = require('../../src/services/skills/skillRegistr
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 const { ServicePriceRadarService } = require('../../src/services/servicePriceRadar.service.ts');
 
-const PAGE = '/dashboard/properties/p1/tools/service-price-radar';
 const originals = { prisma: prismaModule.prisma, list: ServicePriceRadarService.prototype.listChecks };
 let calls;
 
@@ -105,7 +104,7 @@ test('checks are listed with the page\'s verdict and category labels, quote and 
     ['Roofing', 'Need more context', ['Quote $3,000', 'Broad range only', 'Flow Pros', 'Checked Sep 1, 2026']],
   ]);
   assert.equal(rows[0].description, 'Above typical local pricing for this repair.');
-  assert.equal(rows[0].href, PAGE);
+  assert.equal(rows[0].href, null);
   assert.equal(result.blocks.some((block) => block.id === 'service-price-radar-limit'), false);
 });
 

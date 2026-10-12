@@ -27,11 +27,9 @@ const commandAction = (id: string, label: string, style: 'PRIMARY' | 'SECONDARY'
 });
 
 export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[], propertyId: string, now: Date = new Date(), canManage = false): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/property-brief`;
-  const openAction = { id: 'open-property-brief', label: 'Open Property Brief', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'property-briefs-boundary', title: 'A snapshot the household assembled, not a disclosure',
-    body: 'Each brief shows the selected records as they were on its snapshot date. It is not an inspection, appraisal or disclosure. Previewing, sharing, revoking and refreshing a brief stay on the Property Brief page.',
+    body: 'Each brief shows the selected records as they were on its snapshot date. It is not an inspection, appraisal or disclosure.',
     severity: 'INFO', suggestions: [],
   };
   if (!briefs.length) {
@@ -39,8 +37,8 @@ export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[],
       status: 'ANSWERED', reasonCode: 'PROPERTY_BRIEFS_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'property-briefs-summary', title: 'No property briefs yet',
-        body: 'A Property Brief is a snapshot of chosen home records you can share with a contractor, insurer, buyer or trusted contact through an expiring link. Open Property Brief to prepare one.',
-        tone: 'DEFAULT', actions: canManage ? [{ ...commandAction(PROPERTY_BRIEF_ACTION_IDS.PREPARE, 'Prepare a property brief', 'PRIMARY'), interactionType: 'START_WORKFLOW' as const }] : [openAction],
+        body: 'A Property Brief is a snapshot of chosen home records you can share with a contractor, insurer, buyer or trusted contact through an expiring link. A contributor or owner can prepare one.',
+        tone: 'DEFAULT', actions: canManage ? [{ ...commandAction(PROPERTY_BRIEF_ACTION_IDS.PREPARE, 'Prepare a property brief', 'PRIMARY'), interactionType: 'START_WORKFLOW' as const }] : [],
       }, boundary],
       suggestions: [],
     };
@@ -96,7 +94,7 @@ export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[],
         stale ? `${stale} shared ${stale === 1 ? 'brief has' : 'briefs have'} not been refreshed in 90 days or more, so recipients may be seeing out-of-date records.` : null,
       ].filter(Boolean).join(' '),
       tone: stale ? 'CAUTION' : 'DEFAULT',
-      actions: canManage ? [{ ...commandAction(PROPERTY_BRIEF_ACTION_IDS.PREPARE, 'Prepare another brief'), interactionType: 'START_WORKFLOW' as const }, openAction] : [openAction],
+      actions: canManage ? [{ ...commandAction(PROPERTY_BRIEF_ACTION_IDS.PREPARE, 'Prepare another brief'), interactionType: 'START_WORKFLOW' as const }] : [],
     }, {
       type: 'GROUPED_LIST', filters: [], id: 'property-briefs-items', title: 'Saved briefs',
       description: 'Newest first. Select Preview to inspect the exact frozen recipient snapshot and manage its controlled links inline.',

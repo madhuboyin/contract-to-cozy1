@@ -73,7 +73,7 @@ test('briefs are grouped by live link with purpose, snapshot, sections, expiry, 
   assert.equal(summary.title, '4 property briefs saved');
   assert.equal(summary.body, '2 are shared through 2 live links. 1 shared brief has not been refreshed in 90 days or more, so recipients may be seeing out-of-date records.');
   assert.equal(summary.tone, 'CAUTION');
-  assert.equal(summary.actions[0].href, '/dashboard/properties/p1/property-brief');
+  assert.equal(JSON.stringify(summary.actions).includes('/dashboard/'), false);
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [
     ['Shared with a live link', ['Insurer brief', 'Buyer brief']],
     ['Not currently shared', ['Contractor brief', 'Reference copy']],
@@ -101,12 +101,13 @@ test('no live link is said plainly; nothing saved is not an all-clear', () => {
   assert.equal(none.blocks.at(-1).title, 'A snapshot the household assembled, not a disclosure');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', () => {
   const raw = propertyBriefsFromView(rows(), 'p1', NOW);
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'property-brief.briefs', operationId: 'PROPERTY_BRIEFS_LIST', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: NOW.toISOString() }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my property briefs', operationId: 'PROPERTY_BRIEFS_LIST', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PROPERTY_BRIEFS_LIST', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('saved-brief questions route here; preparing, sharing or revoking a brief and a brief home summary are not claimed', () => {

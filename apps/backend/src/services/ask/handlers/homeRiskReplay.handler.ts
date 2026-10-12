@@ -19,7 +19,6 @@ const HAZARD_EFFECT_LABELS: Record<string, string> = {
 };
 
 export function pastHazardExposureFromView(view: PastHazardView, propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-risk-replay`;
   const past = view.pastEvents;
   const longTerm = view.longTermContext;
   const withEffect = [...past, ...longTerm].filter((item) => item.propertyEffect.status === 'OBSERVED_EFFECT_CONFIRMED').length;
@@ -36,7 +35,7 @@ export function pastHazardExposureFromView(view: PastHazardView, propertyId: str
       HAZARD_EFFECT_LABELS[item.propertyEffect.status] ?? readableCode(item.propertyEffect.status),
     ],
     status: String(item.propertyEffect.status),
-    href: `${pageHref}?${new URLSearchParams({ focus: item.hazardType }).toString()}`,
+    href: null,
   });
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'past-hazard-summary',
@@ -47,7 +46,7 @@ export function pastHazardExposureFromView(view: PastHazardView, propertyId: str
       ? `${withEffect ? `The household recorded an effect on the home for ${withEffect} of them. ` : ''}Coverage is ${readableCode(view.coverage.state)}. A matched record is not proof of damage.`
       : view.emptyState ?? 'A missing record is not confirmation that no hazard occurred.',
     tone: 'DEFAULT',
-    actions: [{ id: 'open-home-risk-replay', label: 'Open Home Risk Replay', href: pageHref, style: 'PRIMARY' }],
+    actions: [],
   }, {
     // The service always states its bounds, so they are always shown; more strongly when coverage is not current.
     type: 'LIMITATION', id: 'past-hazard-coverage', title: coverageCurrent ? 'What these records can and cannot show' : 'Coverage is limited',

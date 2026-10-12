@@ -18,8 +18,6 @@ const { getSkillForOperation } = require('../../src/services/skills/skillRegistr
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 
 const NOW = new Date('2026-09-24T12:00:00.000Z');
-const PAGE = '/dashboard/hoa?propertyId=p1';
-const GUIDANCE = '/dashboard/properties/p1/tools/guidance-overview';
 const EMAIL = 'manager@hoa.example';
 const NOTE = 'Board meets second Tuesday';
 const original = prismaModule.prisma;
@@ -67,7 +65,7 @@ test('the operation runs the page\'s three reads behind the page\'s viewer floor
   assert.deepEqual(queries.find(([name]) => name === 'approvals')[1].where, { propertyId: 'p1', isActive: true });
   assert.deepEqual(queries.find(([name]) => name === 'incidents')[1].where, { propertyId: 'p1', typeKey: 'HOA_VIOLATION_DETECTED' });
   const open = result.blocks.find((block) => block.id === 'hoa-compliance-items').sections[0];
-  assert.equal(open.items[0].href, `${GUIDANCE}?journeyId=j1`);
+  assert.equal(open.items[0].href, null);
 });
 
 test('reported statuses stay apart from decisions on record; only the association\'s count as approved', async () => {
@@ -81,7 +79,7 @@ test('reported statuses stay apart from decisions on record; only the associatio
   assert.equal(summary.title, 'Maple Ridge HOA');
   assert.equal(summary.body, 'Managed by Summit Management. Dues are $250 monthly, next due Nov 1, 2026. 3 approval requests: 1 approved by the association, 1 awaiting a decision. 2 open violations.');
   assert.equal(summary.tone, 'CAUTION');
-  assert.equal(summary.actions[0].href, PAGE);
+  assert.deepEqual(summary.actions, []);
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((item) => item.title)]), [
     ['Open violations', ['Trash cans visible', 'Mailbox color']],
     ['Approval requests', ['Fence', 'Exterior Paint', 'Deck / Patio']],
@@ -90,7 +88,7 @@ test('reported statuses stay apart from decisions on record; only the associatio
   const [violation] = list.sections[0].items;
   assert.deepEqual(violation.meta, ['Cure by Oct 10, 2026', 'Fine $50']);
   assert.equal(violation.status, 'Needs Attention');
-  assert.equal(violation.href, GUIDANCE);
+  assert.equal(violation.href, null);
   assert.equal(list.sections[0].items[1].status, 'Reported');
   const [fence, paint, deck] = list.sections[1].items;
   assert.deepEqual(fence.meta, ['You reported: Approved', 'Association: Approved (Conditions)', 'Submitted Aug 1, 2026', 'Conditions: Max height 6 ft', 'Expires Feb 1, 2027']);
@@ -111,12 +109,13 @@ test('no HOA recorded is not an all-clear', async () => {
   assert.equal(result.blocks.at(-1).title, 'A reported status is not an approval');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', async () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', async () => {
   const raw = await invoke();
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'hoa-compliance.status', operationId: 'HOA_COMPLIANCE_STATUS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: NOW.toISOString() }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my HOA records', operationId: 'HOA_COMPLIANCE_STATUS', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'HOA_COMPLIANCE_STATUS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('HOA record questions route here; approval requirements, closing and reporting are not claimed', () => {

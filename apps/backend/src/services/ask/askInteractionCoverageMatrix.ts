@@ -632,7 +632,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     confirmationCapable: true,
     correctionModes: ['REVOKE'],
     note: 'HH-001/HH-002/HH-004 all verified true by direct code read, not inferred from safety metadata. HH-002: recipient identity is validated through HouseholdInvitationInputSchema.safeParse (a real Zod schema), not model inference -- both at propose- and confirm-time. HH-004: the confirm-time result\'s own status/reasonCode/copy are all literally \'PENDING\' -- \'The invitation record is ready. Access is not active until the recipient accepts it\' -- this never claims delivery, only creation, exactly matching the requirement\'s own wording. \'Legal ownership: Not changed by this invitation\' is disclosed as its own confirmation field.',
-    uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY (propose/permission), WORKFLOW_PROGRESS (confirm).' }, freshnessSource: { status: 'TRACED', notes: 'Real, dedicated householdWorkflowVersion(propertyId), re-checked atomically at confirm time against the propose-time value (throws ASK_CONTEXT_VERSION_CONFLICT on drift) -- same pattern as REFINANCE_RATE_MONITOR\'s own dedicated version function.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism, PLUS OWNER-role is checked BEFORE any input parsing even happens (both at propose- and confirm-time, independently -- confirm-time re-checks access.role even though propose-time already gated it).' }, reconciliation: { status: 'TRACED', notes: 'FIXED (2026-09-18): confirmHouseholdInvitation now calls reconcileAskExecutionSideEffects. No sibling declared in ASK_MUTATION_IMPACT_MAP (no "list household members" read exists) -- gets the explicit sourceExecutionId refresh only.' }, handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); the correction, visibility, rename and invitation flows, and the add-a-warranty and add-an-event forms, run in the conversation and carry no page action or row link.' },
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY (propose/permission), WORKFLOW_PROGRESS (confirm).' }, freshnessSource: { status: 'TRACED', notes: 'Real, dedicated householdWorkflowVersion(propertyId), re-checked atomically at confirm time against the propose-time value (throws ASK_CONTEXT_VERSION_CONFLICT on drift) -- same pattern as REFINANCE_RATE_MONITOR\'s own dedicated version function.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism, PLUS OWNER-role is checked BEFORE any input parsing even happens (both at propose- and confirm-time, independently -- confirm-time re-checks access.role even though propose-time already gated it).' }, reconciliation: { status: 'TRACED', notes: 'FIXED (2026-09-18): confirmHouseholdInvitation now calls reconcileAskExecutionSideEffects. No sibling declared in ASK_MUTATION_IMPACT_MAP (no "list household members" read exists) -- gets the explicit sourceExecutionId refresh only.' }, handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   HVAC_DECISION_ABANDON: {
     track: 'Decisions and projects',
@@ -786,7 +786,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     confirmationCapable: false,
     correctionModes: [],
     note: 'Home Action focused-guidance CTA audit, Group B recall-review slice (gap audit §17; FRD v1.161). Read-only, same read/write split as INSPECTION_FINDINGS/INSPECTION_FINDING_UPDATE -- confirm/dismiss/resolve mutations are the sibling RECALL_MATCH_UPDATE entry below (FRD v1.163).',
-    uiSurface: { status: 'TRACED', notes: 'Shared AskWorkspace.tsx generic renderer -- SUMMARY (open-match count and critical-severity callout), GROUPED_LIST (filters:[], one "Needs review" section, each item now declaring its live-state RECALL_MATCH_UPDATE actions per recallMatchItemActionsFor -- FRD v1.163), EMPTY_STATE, BOUNDARY (regulator-sourced-data disclosure). Every item and the response-level action link to the bare /recalls page (no per-match anchor -- recallsService.listPropertyRecallMatches has no per-match highlight param the way the traditional page\'s ?matchId= does, and the promoting Home Action\'s own href never carries a matchId either, so this is not a regression in specificity).' }, freshnessSource: { status: 'TRACED', notes: 'N/A -- pure read, recomputed live from recallsService.listPropertyRecallMatches on every call; no cache, no contextVersion concept (same as INSPECTION_FINDINGS\'s read side). Its companion write operation, RECALL_MATCH_UPDATE, DOES compute a real per-match contextVersion at confirmation-prep time -- same gap as INSPECTION_FINDINGS/INSPECTION_FINDING_UPDATE\'s own documented asymmetry.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, no domain command entry, confirmationCapable=false.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. take:20 cap already exists inside listPropertyRecallMatches\'s underlying producer read; this operation itself adds no further cap or truncation disclosure gap beyond what that shared read already has.' }, handoff: { status: 'TRACED', notes: 'Bare href to /dashboard/properties/:id/recalls throughout (response action SECONDARY, EMPTY_STATE action PRIMARY, every item\'s own href).' },
+    uiSurface: { status: 'TRACED', notes: 'Shared AskWorkspace.tsx generic renderer -- SUMMARY (open-match count and critical-severity callout), GROUPED_LIST (filters:[], one "Needs review" section, each item now declaring its live-state RECALL_MATCH_UPDATE actions per recallMatchItemActionsFor -- FRD v1.163), EMPTY_STATE, BOUNDARY (regulator-sourced-data disclosure). Every item and the response-level action link to the bare /recalls page (no per-match anchor -- recallsService.listPropertyRecallMatches has no per-match highlight param the way the traditional page\'s ?matchId= does, and the promoting Home Action\'s own href never carries a matchId either, so this is not a regression in specificity).' }, freshnessSource: { status: 'TRACED', notes: 'N/A -- pure read, recomputed live from recallsService.listPropertyRecallMatches on every call; no cache, no contextVersion concept (same as INSPECTION_FINDINGS\'s read side). Its companion write operation, RECALL_MATCH_UPDATE, DOES compute a real per-match contextVersion at confirmation-prep time -- same gap as INSPECTION_FINDINGS/INSPECTION_FINDING_UPDATE\'s own documented asymmetry.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, no domain command entry, confirmationCapable=false.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. take:20 cap already exists inside listPropertyRecallMatches\'s underlying producer read; this operation itself adds no further cap or truncation disclosure gap beyond what that shared read already has.' }, handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   RECALL_MATCH_UPDATE: {
     track: 'Home intelligence and work',
@@ -797,7 +797,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     confirmationCapable: true,
     correctionModes: ['EDIT', 'REOPEN'],
     note: 'Group B recall-mutation follow-up (gap audit §17; FRD v1.163), the write sibling RECALL_REVIEW\'s own read slice (FRD v1.161) deferred. Mirrors INSPECTION_FINDING_UPDATE\'s shape: recallsService.ts already had the canonical confirmRecallMatch/dismissRecallMatch/resolveRecallMatch writes the traditional RecallMatchCard.tsx uses (read before implementing, not assumed) -- this only wires Ask\'s propose/confirm dispatch to them, no new write logic.',
-    uiSurface: { status: 'TRACED', notes: 'Resolve\'s confirmation carries the traditional ResolveRecallModal\'s two editable fields (resolutionType SELECT of the six RecallResolutionType values, notes TEXTAREA), edited through editRecallMatchResolveConfirmation, the same edit-in-place pattern as editInspectionFindingResolveConfirmation. Confirm and Dismiss have no fields, as on the traditional card. Shared renderer -- SUMMARY (review), WORKFLOW_PROGRESS (completed).' }, freshnessSource: { status: 'TRACED', notes: 'Real per-match contextVersion = sha256({id,status,confirmedAt,dismissedAt,resolvedAt}), the same shape INSPECTION_FINDING_UPDATE\'s own contextVersion uses.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism. exactEntityMatch used for targeting, same disambiguation pattern used throughout the platform.' }, reconciliation: { status: 'TRACED', notes: 'confirmRecallMatchUpdate calls reconcileAskExecutionSideEffects; ASK_MUTATION_IMPACT_MAP declares RECALL_REVIEW as the sibling.' }, handoff: { status: 'TRACED', notes: 'Bare href to /dashboard/properties/:id/recalls throughout, same specificity as its read sibling.' },
+    uiSurface: { status: 'TRACED', notes: 'Resolve\'s confirmation carries the traditional ResolveRecallModal\'s two editable fields (resolutionType SELECT of the six RecallResolutionType values, notes TEXTAREA), edited through editRecallMatchResolveConfirmation, the same edit-in-place pattern as editInspectionFindingResolveConfirmation. Confirm and Dismiss have no fields, as on the traditional card. Shared renderer -- SUMMARY (review), WORKFLOW_PROGRESS (completed).' }, freshnessSource: { status: 'TRACED', notes: 'Real per-match contextVersion = sha256({id,status,confirmedAt,dismissedAt,resolvedAt}), the same shape INSPECTION_FINDING_UPDATE\'s own contextVersion uses.' }, idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism. exactEntityMatch used for targeting, same disambiguation pattern used throughout the platform.' }, reconciliation: { status: 'TRACED', notes: 'confirmRecallMatchUpdate calls reconcileAskExecutionSideEffects; ASK_MUTATION_IMPACT_MAP declares RECALL_REVIEW as the sibling.' }, handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   INSPECTION_FINDING_UPDATE: {
     track: 'Home intelligence and work',
@@ -845,7 +845,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'Warranty rows and their updatedAt are read live; status is derived at read time from the dates.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (an access check and two findMany calls).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Bare href to /dashboard/warranties; the page has no per-warranty deep link.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   MAINTENANCE_FORECAST: {
     track: 'Home intelligence and work',
@@ -944,7 +944,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     confirmationCapable: false,
     correctionModes: [],
     note: 'FIN-004 verified true by code, stated twice: \'Missing categories are not treated as zero\' appears in both the UNAVAILABLE branch and the normal summary body (\'X included category is still missing and not counted as zero\'). Confirmed/estimated split is real and shown: costs.evidenceSummary.confirmedAnnualCents vs estimatedAnnualCents are both surfaced, not just a blended total. The CASH_OUTFLOW/OPERATING_EXPENSE lens boundary explains a genuinely material distinction (mortgage principal treatment) rather than a generic disclaimer.',
-    uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY, TABLE (cost-by-category), GROUPED_LIST (filters:[], missing categories), EVIDENCE, BOUNDARY (lens explainer).' }, freshnessSource: { status: 'TRACED', notes: 'context.contextVersion (shared Property Context Platform mechanism, featureKey OWNERSHIP_COSTS). The underlying read model is called with {refresh:true} -- always recomputed live, not cached, same \'inherently non-stale\' pattern as REFINANCE_ANALYSIS. Per-category EVIDENCE items carry real periodEnd/calculatedAt.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. evidence.slice(0,10) -- the undisclosed-cap pattern again.' }, handoff: { status: 'TRACED', notes: 'REAL EXCEPTION: missing-category items each carry a real category.correction.href (a specific per-category remediation link supplied by the read model itself), not a generic workspace link.' },
+    uiSurface: { status: 'TRACED', notes: 'Shared renderer -- SUMMARY, TABLE (cost-by-category), GROUPED_LIST (filters:[], missing categories), EVIDENCE, BOUNDARY (lens explainer).' }, freshnessSource: { status: 'TRACED', notes: 'context.contextVersion (shared Property Context Platform mechanism, featureKey OWNERSHIP_COSTS). The underlying read model is called with {refresh:true} -- always recomputed live, not cached, same \'inherently non-stale\' pattern as REFINANCE_ANALYSIS. Per-category EVIDENCE items carry real periodEnd/calculatedAt.' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. evidence.slice(0,10) -- the undisclosed-cap pattern again.' }, handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   PROPERTY_SUMMARY: {
     track: 'Records and capture',
@@ -1043,7 +1043,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     confirmationCapable: false,
     correctionModes: [],
     note: 'FIN-001/FIN-004 verified true by code with unusual rigor: realized value is explicitly \'counted only from a recorded RECEIVED outcome; estimates and actions in progress are kept separate,\' and verification labels stay visible so \'homeowner-reported and independently verified values are not conflated.\' related items are explicitly labeled \'Owned by its dedicated ContractToCozy analysis\' -- this operation never claims credit for another domain\'s opportunity (PROPERTY_TAX/COVERAGE/REFINANCE). Empty state is honest: \'No current savings opportunity is recorded -- not the same as zero savings.\'',
-    uiSurface: { status: 'TRACED', notes: 'Shared AskWorkspace.tsx renderer -- SUMMARY, GROUPED_LIST (filters:[], 5 sections: recurring/benefits/in-progress/realized/related), EVIDENCE.' }, freshnessSource: { status: 'TRACED', notes: 'context.contextVersion -- the same shared Property Context Platform mechanism (featureKey HOME_SAVINGS) as PROPERTY_SUMMARY/HOME_ACTIONS/OWNERSHIP_COSTS. EVIDENCE items carry real per-source observedAt (lastVerifiedAt/lastEvaluatedAt/updatedAt).' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. Each of the 5 sections caps independently (.slice(0,8) x3, .slice(0,5) for related) -- the undisclosed-cap pattern, now in a single operation 4 times over.' }, handoff: { status: 'TRACED', notes: 'REAL EXCEPTION: recurring/benefit items carry real ?family=RECURRING_COST&opportunityId= / ?family=BENEFIT&opportunityId= query params; in-progress/realized/related items use item.detailHref supplied directly by their source service -- genuinely targeted throughout, not a bare workspace link.' },
+    uiSurface: { status: 'TRACED', notes: 'Shared AskWorkspace.tsx renderer -- SUMMARY, GROUPED_LIST (filters:[], 5 sections: recurring/benefits/in-progress/realized/related), EVIDENCE.' }, freshnessSource: { status: 'TRACED', notes: 'context.contextVersion -- the same shared Property Context Platform mechanism (featureKey HOME_SAVINGS) as PROPERTY_SUMMARY/HOME_ACTIONS/OWNERSHIP_COSTS. EVIDENCE items carry real per-source observedAt (lastVerifiedAt/lastEvaluatedAt/updatedAt).' }, idempotency: { status: 'TRACED', notes: 'N/A -- pure read, not confirmation-gated.' }, reconciliation: { status: 'TRACED', notes: 'N/A as mutation source. Each of the 5 sections caps independently (.slice(0,8) x3, .slice(0,5) for related) -- the undisclosed-cap pattern, now in a single operation 4 times over.' }, handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   SELLER_PREP_CHECKLIST: {
     track: 'Decisions and projects',
@@ -1287,7 +1287,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'Computed live from the inventory on each request, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read; no model call when recommendations are off.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Bare href to /dashboard/oracle?propertyId=, the page, for the AI replacement picks.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   MAINTENANCE_BUDGET_FORECAST: {
     track: 'Financial and ownership',
@@ -1302,7 +1302,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'Computed live on each request (deterministic for the same inputs), as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read; no model call when recommendations are off.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Bare href to /dashboard/budget?propertyId=, the page, for the AI tips.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   DO_NOTHING_SIMULATION: {
     track: 'Financial and ownership',
@@ -1347,7 +1347,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (three findFirst/findMany queries plus the violations-to-journey join).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'The page is /dashboard/hoa?propertyId=; each violation links to its guidance journey (guidance-overview?journeyId=) as the page does, or to Guidance Overview when none is linked.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   HIRING_GUIDE: {
     track: 'Home intelligence and work',
@@ -1482,7 +1482,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request, as on the page. Link state is computed against the current time.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (listPropertyBriefs is a findMany; it does not expire shares).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Bare href to /dashboard/properties/:id/property-brief; the page has no per-brief deep link.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   MATERIAL_SPECS_LIST: {
     track: 'Records and capture',
@@ -1527,7 +1527,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (listChecks is a findMany after the ownership check).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'The page opens a check in place and has no per-check deep link, so every row links to /dashboard/properties/:id/tools/service-price-radar.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   PROJECT_TRACKER_PROJECTS: {
     track: 'Records and capture',
@@ -1722,7 +1722,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'staleAt marks computed results whose inputs changed; shown as "Results out of date". Read live on each request.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (a findUnique for the twin id and a findMany for scenarios).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'The page has no per-scenario deep link, so every row links to /dashboard/properties/:id/tools/home-digital-twin.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   NEGOTIATION_SHIELD_CASES: {
     track: 'Records and capture',
@@ -1782,7 +1782,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; ranking is computed live on each read, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (findMany and groupBy only); no side effects. The page controller also emits a TOOL_USED analytics event; Ask does not.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Rows open an inline review in Ask; only the empty state links to /dashboard/properties/:id/tools/home-habit-coach, because generating habits is not an Ask action.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   HOME_STATUS_BOARD: {
     track: 'Home intelligence and work',
@@ -1797,7 +1797,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; listBoard recomputes statuses older than 24 hours before reading, as the page does.' },
     idempotency: { status: 'TRACED', notes: 'Not a pure read: the shared listBoard creates missing board rows and recomputes stale derived statuses (idempotent, no homeowner-entered data), exactly as the page GET does.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Each row links to the item in Inventory (the service\'s own viewItem deep link); the summary links to /dashboard/properties/:id/status-board.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   PAST_HAZARD_EXPOSURE: {
     track: 'Protection and claims',
@@ -1812,7 +1812,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; coverage state and checkedThrough are summarized from the service.' },
     idempotency: { status: 'TRACED', notes: 'N/A -- pure read.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'One destination, /dashboard/properties/:id/tools/home-risk-replay, with ?focus=<hazard type> (the page reads it as its hazard-type filter) on each row.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   NEIGHBORHOOD_CHANGE_FEED: {
     track: 'Protection and claims',
@@ -1827,7 +1827,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; coverage freshness is carried per source (checkedThrough) and summarized as the coverage state.' },
     idempotency: { status: 'TRACED', notes: 'N/A -- pure read. getAroundYourHome reads per-user interaction state but writes nothing; marking an item seen is a separate interaction write.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'One destination, /dashboard/properties/:id/tools/neighborhood-change-radar; the page has no per-item deep link, so rows link to the page.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); this answer carries no tool-page action or row link, and what Ask cannot do is stated as not currently available in Ask.' },
   },
   BREAK_EVEN_ANALYSIS: {
     track: 'Decisions and projects',

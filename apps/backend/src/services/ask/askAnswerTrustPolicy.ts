@@ -95,14 +95,13 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // FRD v1.43: INSPECTION_FINDINGS had no entry, so even its "Open Inspection Hub" link was stripped; the finding
   // actions are shown in the inline detail only when the live state allows them.
   INSPECTION_FINDINGS: new Set(['open-inspection', 'finding-accept', 'finding-dismiss', 'finding-resolve']),
-  RECALL_REVIEW: new Set(['open-recalls', 'recall-confirm', 'recall-dismiss', 'recall-resolve']),
+  RECALL_REVIEW: new Set(['recall-confirm', 'recall-dismiss', 'recall-resolve']),
   INSPECTION_FINDING_UPDATE: new Set(['open-inspection', 'open-finding']),
-  RECALL_MATCH_UPDATE: new Set(['open-recalls']),
   // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
   INCIDENT_CLAIM_STATUS: new Set(['claim-file-start', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
-  SAVINGS_OPPORTUNITIES: new Set(['open-savings', 'review-all-savings']),
+  SAVINGS_OPPORTUNITIES: new Set(['review-all-savings']),
   OWNERSHIP_COSTS: new Set([
-    'open-ownership-costs', 'ownership-cost-view-current', 'ownership-cost-view-changes', 'ownership-cost-view-forecast', 'ownership-cost-view-variability', 'ownership-cost-refresh-sources',
+    'ownership-cost-view-current', 'ownership-cost-view-changes', 'ownership-cost-view-forecast', 'ownership-cost-view-variability', 'ownership-cost-refresh-sources',
     'ownership-cost-review-property_tax', 'ownership-cost-review-insurance', 'ownership-cost-review-hoa', 'ownership-cost-review-utilities',
     'ownership-cost-review-mortgage_principal', 'ownership-cost-review-mortgage_interest', 'ownership-cost-review-pmi',
     'ownership-cost-review-recurring_home_service', 'ownership-cost-review-routine_maintenance', 'ownership-cost-review-known_repair',
@@ -138,14 +137,10 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
     'refinance-record-decision', 'refinance-adjust-scenario',
   ]),
   BREAK_EVEN_ANALYSIS: new Set(['rerun-break-even-5', 'rerun-break-even-10']),
-  NEIGHBORHOOD_CHANGE_FEED: new Set(['open-around-your-home']),
-  PAST_HAZARD_EXPOSURE: new Set(['open-home-risk-replay']),
-  HOME_STATUS_BOARD: new Set(['open-status-board']),
   // The review's declared actions (each opens a confirmation) and its way back to the list.
   HOME_HABITS: new Set(['generate-home-habits', 'habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list', 'habits-review-first', 'habits-show-maintenance']),
   HOME_HABIT_UPDATE: new Set(['habits-back-to-list']),
   PLANT_CARE_OUTLOOK: new Set(['find-plants-for-room', 'add-home-plant']),
-  HOME_UPGRADE_SCENARIOS: new Set(['open-home-digital-twin']),
   DIY_PROJECTS: new Set(['diy-template-browse']),
   DIY_PROJECT_GUIDE: new Set(['diy-step-complete', 'diy-step-skip', 'diy-step-previous', 'diy-step-back', 'diy-step-reopen', 'diy-review-last-step', 'diy-project-finish', 'diy-project-more', 'diy-project-stop', 'diy-project-handoff', 'diy-record-again', 'diy-task-record-again']),
   DIY_PROJECT_START: new Set(['diy-start-guide']),
@@ -168,19 +163,16 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_BASICS_GUIDE: new Set(),
   // The attached-document receipt: an inventory item opens inline in Ask; a warranty keeps its page link.
   CAPTURE_EVIDENCE_CONFIRM: new Set(['view-inventory-item', 'open-attached-record']),
-  HOA_COMPLIANCE_STATUS: new Set(['open-hoa-compliance']),
   DO_NOTHING_SIMULATION: new Set(['run-do-nothing']),
-  WARRANTY_LOOKUP: new Set(['open-warranties', 'open-warranties-list', 'add-warranty']),
+  WARRANTY_LOOKUP: new Set(['add-warranty']),
   // FRD v1.78: plus the inline "Add purchase date" capture on appliances with no age.
-  APPLIANCE_FAILURE_RISK: new Set(['open-appliance-oracle', 'correct-purchasedOn']),
-  MAINTENANCE_BUDGET_FORECAST: new Set(['open-budget-planner']),
+  APPLIANCE_FAILURE_RISK: new Set(['correct-purchasedOn']),
   // FRD v1.64 gave INCIDENT_CONTINUATION two page links; Ask no longer links to desktop pages, so it offers starting a claim instead.
   INCIDENT_CONTINUATION: new Set(['claim-file-start']),
-  PROPERTY_BRIEFS_LIST: new Set(['open-property-brief', 'property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
+  PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.
   SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen']),
-  HOUSEHOLD_INVITATION: new Set(['manage-invitation']),
   GUIDANCE_JOURNEY_CREATE: new Set(['open-journey']),
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
   QUOTE_COMPARISON_REVIEW: new Set(['create-comparison']),

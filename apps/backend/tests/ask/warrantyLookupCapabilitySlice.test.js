@@ -109,7 +109,7 @@ test('a viewer sees no write control, a non-owner sees no correction, and only t
   const viewer = build('Show my warranties', records, { canWrite: false, ownedIds: new Set() });
   assert.ok(items(viewer).every((item) => item.actions === undefined));
   assert.ok(!list(viewer).actions.some((action) => action.id === 'add-warranty'));
-  assert.ok(list(viewer).actions.some((action) => action.id === 'open-warranties-list'), 'the page link is always there');
+  assert.ok(!list(viewer).actions.some((action) => action.id === 'open-warranties-list'), 'Ask links to no desktop Warranties page');
   const member = build('Show my warranties', records, { canWrite: true, ownedIds: new Set(['mine']) });
   const byId = Object.fromEntries(items(member).map((item) => [item.id, item]));
   assert.ok(byId.mine.actions.length > 0 && byId.mine.actions.every((action) => action.operationId === 'WARRANTY_CORRECT'));
@@ -179,15 +179,14 @@ test('the handler reads the property-scoped rows the Warranties route reads, nev
   assert.ok(items(viewer).every((item) => item.actions === undefined));
 });
 
-test('every block survives the answer-trust validator and the page links the action whitelist', async () => {
+test('every block survives the answer-trust validator and nothing links to a desktop page', async () => {
   install([warranty('w1', { expiryDate: day(30) })]);
   const raw = await invoke();
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'warranty.lookup', operationId: 'WARRANTY_LOOKUP', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-26T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my warranties', operationId: 'WARRANTY_LOOKUP', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  for (const id of ['open-warranties', 'open-warranties-list']) {
-    assert.equal(isAskActionApplicable({ action: { id, label: 'Open Warranties', href: '/dashboard/warranties', style: 'SECONDARY' }, operationId: 'WARRANTY_LOOKUP', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false, id);
-  }
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
+  assert.ok(!result.blocks.some((block) => (block.actions ?? []).some((action) => action.href)));
 });
 
 test('the questions this operation owns route here; coverage gaps, claims, corrections, adding and reminders keep their own operations', () => {

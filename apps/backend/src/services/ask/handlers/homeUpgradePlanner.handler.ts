@@ -93,8 +93,6 @@ export function homeUpgradeComparison(
 }
 
 export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenarioView[] | null, propertyId: string, now = new Date()): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-digital-twin`;
-  const openAction = { id: 'open-home-digital-twin', label: 'Open Home Upgrade Planner', href: pageHref, style: 'PRIMARY' as const };
   const activeRun = (scenario: UpgradeScenarioView) => Boolean(scenario.latestRun
     && (scenario.latestRun.status === 'QUEUED' || scenario.latestRun.status === 'RUNNING')
     && new Date(scenario.latestRun.startedAt).getTime() >= now.getTime() - UPGRADE_ACTIVE_RUN_WINDOW_MS);
@@ -113,7 +111,7 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
         body: scenarios
           ? 'The Home Upgrade Planner compares repairing, replacing, upgrading or waiting on a home system. Open it to save an option.'
           : 'The Home Upgrade Planner builds a model of your home\'s systems so you can compare repairing, replacing, upgrading or waiting. Open it to set it up.',
-        tone: 'DEFAULT', actions: [openAction],
+        tone: 'DEFAULT', actions: [],
       }, boundary],
       suggestions: [],
     };
@@ -135,10 +133,10 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
     title: `${scenarios.length} saved upgrade option${scenarios.length === 1 ? '' : 's'} across ${ordered.length} ${ordered.length === 1 ? 'system' : 'systems'}`,
     body: [
       `${ready} with results ready${selected ? `, ${selected} selected` : ''}.`,
-      outOfDate ? `${outOfDate} ${outOfDate === 1 ? 'has' : 'have'} results that are out of date because the home's records changed; recalculate on the page.` : null,
+      outOfDate ? `${outOfDate} ${outOfDate === 1 ? 'has' : 'have'} results that are out of date because the home's records changed; recalculating them is not currently available in Ask.` : null,
     ].filter(Boolean).join(' '),
     tone: outOfDate ? 'CAUTION' : 'DEFAULT',
-    actions: [openAction],
+    actions: [],
   }];
   // IW-PRES-016 (FRD v1.89): a system with two to four saved options gets its own comparison strip, in the page's order;
   // the other systems (one option, or five and more) stay in the list below.
@@ -146,7 +144,7 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
   for (const { strip } of strips) if (strip) blocks.push(strip);
   const listed = strips.filter(({ strip }) => !strip).map(({ group }) => group);
   if (listed.length) blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-options', title: 'Upgrade options by system', description: 'Grouped by home system, as on the page. Open the planner for the full comparison.',
+    type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-options', title: 'Upgrade options by system', description: 'Grouped by home system.',
     sections: listed.map((group) => ({
       id: `home-upgrade-${group.key}`, title: group.label, count: group.rows.length,
       items: group.rows.map((scenario) => {
@@ -168,7 +166,7 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
           status: activeRun(scenario)
             ? (scenario.latestRun?.status === 'RUNNING' ? 'Calculating' : 'Queued')
             : scenario.status === 'COMPUTED' && scenario.staleAt ? 'Results out of date' : UPGRADE_SCENARIO_STATUS_LABELS[scenario.status] ?? readableCode(scenario.status),
-          href: pageHref,
+          href: null,
         };
       }),
     })),

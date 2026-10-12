@@ -199,8 +199,6 @@ export function warrantiesFromRecords(input: {
 }): AskOperationResult {
   const { message, propertyId, records, canWrite, ownedIds, priorViewState } = input;
   const now = input.now ?? new Date();
-  const pageHref = '/dashboard/warranties';
-  const openPage = { id: 'open-warranties', label: 'Open Warranties', href: pageHref, style: 'PRIMARY' as const };
   const addAction = { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW' as const, message: WARRANTY_ADD_MESSAGE, operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const };
 
   if (records.length === 0) {
@@ -209,7 +207,7 @@ export function warrantiesFromRecords(input: {
       blocks: [{
         type: 'SUMMARY', id: 'warranty-empty', title: 'No warranties are recorded for this home yet',
         body: 'An empty record does not mean nothing is covered; it only means no warranty has been added here. Add one to see its dates and coverage in this answer.',
-        tone: 'CAUTION', actions: canWrite ? [addAction, { ...openPage, style: 'SECONDARY' as const }] : [openPage],
+        tone: 'CAUTION', actions: canWrite ? [addAction] : [],
       }, BOUNDARY],
       suggestions: [],
     };
@@ -245,11 +243,11 @@ export function warrantiesFromRecords(input: {
       blocks: [{
         type: 'SUMMARY', id: 'warranty-summary', title: 'No recorded warranties match these filters', headline: 'No warranties match these filters.',
         supportLine: `This home has ${records.length} recorded ${records.length === 1 ? 'warranty' : 'warranties'}. Widen or clear a filter to see them.`,
-        body: `This home has ${records.length} recorded ${records.length === 1 ? 'warranty' : 'warranties'}, but none match the selected filters.`, tone: 'DEFAULT', actions: [openPage],
+        body: `This home has ${records.length} recorded ${records.length === 1 ? 'warranty' : 'warranties'}, but none match the selected filters.`, tone: 'DEFAULT', actions: [],
       }, {
         type: 'GROUPED_LIST', filters: chips, id: 'warranty-results', title: 'Recorded warranties',
         sections: [{ id: 'warranties', title: 'Recorded warranties', count: 0, items: [] }],
-        actions: [...(canWrite ? [addAction] : []), { id: 'open-warranties-list', label: 'Open Warranties', href: pageHref, style: 'SECONDARY' as const }],
+        actions: [...(canWrite ? [addAction] : [])],
       }, BOUNDARY],
       suggestions: [],
     };
@@ -262,7 +260,7 @@ export function warrantiesFromRecords(input: {
       blocks: [{
         type: 'SUMMARY', id: 'warranty-no-match', title: focus.item ? `No warranty is recorded for your ${focus.item.label}` : `No recorded warranty matches ${scope}`,
         body: `This home has ${records.length} recorded ${records.length === 1 ? 'warranty' : 'warranties'}, but none match this request. That reflects the Home Record only: it does not mean anything is or is not covered.`,
-        tone: 'DEFAULT', actions: [openPage],
+        tone: 'DEFAULT', actions: [],
       }, BOUNDARY],
       suggestions: [],
     };
@@ -292,8 +290,8 @@ export function warrantiesFromRecords(input: {
   };
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'warranty-summary', title: `${matched.length} recorded ${matched.length === 1 ? 'warranty matches' : 'warranties match'} this request`,
-    body: `${copy.headline} ${WARRANTY_EXPIRING_DAYS} days is the window the Warranties page uses.`, tone: count('EXPIRING') || count('NEEDS_REVIEW') ? 'CAUTION' : 'DEFAULT',
-    ...copy, actions: [openPage],
+    body: `${copy.headline} ${WARRANTY_EXPIRING_DAYS} days is the window used for expiring soon.`, tone: count('EXPIRING') || count('NEEDS_REVIEW') ? 'CAUTION' : 'DEFAULT',
+    ...copy, actions: [],
   }, {
     type: 'GROUPED_LIST', filters: chips, id: 'warranty-results', title: 'Recorded warranties',
     sections: [{
@@ -313,7 +311,6 @@ export function warrantiesFromRecords(input: {
     }],
     actions: [
       ...(canWrite ? [addAction] : []),
-      { id: 'open-warranties-list', label: 'Open Warranties', href: pageHref, style: 'SECONDARY' as const },
     ],
   }, {
     type: 'EVIDENCE', id: 'warranty-evidence', title: 'Record freshness',

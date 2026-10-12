@@ -195,7 +195,6 @@ async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promis
       candidate.data,
       { sourceAskExecutionId: execution.id },
     );
-    const householdHref = `/dashboard/properties/${encodeURIComponent(execution.propertyId)}/household`;
     result = {
       status: 'COMPLETED', reasonCode: 'HOUSEHOLD_INVITATION_PENDING',
       blocks: [{
@@ -207,7 +206,7 @@ async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promis
           { label: 'Expires', value: humanDate(invite.expiresAt) ?? invite.expiresAt.toISOString() },
           { label: 'Access status', value: 'Pending acceptance' },
         ],
-        actions: [{ id: 'manage-invitation', label: 'Manage invitation', href: householdHref, style: 'PRIMARY' }],
+        actions: [],
       }],
       confirmation: null,
       suggestions: [],
