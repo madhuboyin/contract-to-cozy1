@@ -131,7 +131,6 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_SUMMARY: new Set(['open-property-record', 'open-inventory', 'open-household', 'open-warranties', 'open-rooms', 'open-documents', 'open-home-timeline', 'add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),
   CAPTURE_WARRANTY_CONFIRM: new Set(['open-warranties', 'open-property-record']),
   CAPTURE_EVENT_CONFIRM: new Set(['open-timeline', 'open-home-timeline']),
-  HOME_ACTIONS: new Set(['open-home', 'open-home-actions']),
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),
   REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace', 'show-inventory', 'add-inventory-item']),
   // FRD v1.45: the analysis also shows the homeowner's own rate monitors (MONITOR renders its own pause/resume/stop).

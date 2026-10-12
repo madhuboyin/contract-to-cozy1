@@ -117,7 +117,7 @@ export function buildAllPropertyHomeActionSection(
   if (!feed) {
     return {
       id: `property-${property.id}`, title: property.label, count: 1,
-      items: [{ id: `property-${property.id}-unavailable`, title: "This property's actions are temporarily unavailable", description: 'Ask about this property individually to try again.', meta: [property.label], status: 'UNAVAILABLE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
+      items: [{ id: `property-${property.id}-unavailable`, title: "This property's actions are temporarily unavailable", description: 'Ask about this property individually to try again.', meta: [property.label], status: 'UNAVAILABLE', href: null }],
     };
   }
   const degradedItems = feed.diagnostics.unavailableProducers.length ? [{
@@ -126,12 +126,12 @@ export function buildAllPropertyHomeActionSection(
     description: `${formatUnavailableHomeActionProducers(feed.diagnostics.unavailableProducers)} could not be checked for this property right now. The items below still reflect every other source.`,
     meta: [property.label],
     status: 'CAUTION',
-    href: `/dashboard?propertyId=${encodeURIComponent(property.id)}`,
+    href: null,
   }] : [];
   if (!feed.actions.length) {
     return {
       id: `property-${property.id}`, title: property.label, count: 1 + degradedItems.length,
-      items: [...degradedItems, { id: `property-${property.id}-empty`, title: 'No governed actions are currently surfaced', description: null, meta: [property.label], status: 'NONE', href: `/dashboard?propertyId=${encodeURIComponent(property.id)}` }],
+      items: [...degradedItems, { id: `property-${property.id}-empty`, title: 'No governed actions are currently surfaced', description: null, meta: [property.label], status: 'NONE', href: null }],
     };
   }
   return {
@@ -149,7 +149,7 @@ export function buildAllPropertyHomeActionSection(
           `${action.confidence.label.toLowerCase()} confidence`,
         ].filter((value): value is string => Boolean(value)),
         status: action.state,
-        href: action.primaryCta.href,
+        href: null,
       })),
     ],
   };
@@ -191,7 +191,7 @@ async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: st
         truncated ? `Showing the first ${properties.length} of ${totalAccessibleCount} accessible properties.` : null,
       ].filter(Boolean).join(' '),
       tone: unavailableCount > 0 || degradedCount > 0 ? 'CAUTION' : 'DEFAULT',
-      actions: [{ id: 'open-home', label: 'Open Home', href: `/dashboard?propertyId=${encodeURIComponent(anchorPropertyId)}`, style: 'PRIMARY' }],
+      actions: [],
     }, {
       type: 'GROUPED_LIST', filters: [], id: 'home-actions-all-property-list', title: 'By property',
       description: 'Grouped strictly by property. Items from different properties are never combined, deduplicated together, or reranked against each other; opening or acting on an item always applies to the specific property it belongs to.',
@@ -262,7 +262,6 @@ export async function loadOptionalBuyerPlanContext(
 }
 
 async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
-  const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const [access, buyerContextValue] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     loadOptionalBuyerPlanContext({
@@ -321,7 +320,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       blocks: [{
         type: 'SUMMARY', id: 'home-actions-unavailable', title: 'Home Actions are temporarily unavailable',
         body: 'Ask could not load the final governed action feed. It will not substitute raw signals, model memory, or an unfiltered recommendation.',
-        tone: 'CAUTION', actions: [{ id: 'open-home', label: 'Open Home', href: homeHref, style: 'PRIMARY' }],
+        tone: 'CAUTION', actions: [],
       }],
       suggestions: [],
     };
@@ -341,7 +340,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
           title: 'This Home Action is no longer active',
           body: 'The selected action is no longer present in the current governed feed. Ask will not substitute another action or use a stale title match.',
           tone: 'DEFAULT',
-          actions: [{ id: 'open-home-actions', label: 'View current Home Actions', href: homeHref, style: 'PRIMARY' }],
+          actions: [],
         }],
         suggestions: [],
       };
@@ -380,7 +379,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         featureCaptureRequirement,
         captureEvaluation!.contextVersion,
         'Saved to this home’s Property Context',
-        focusedAction.primaryCta.href,
+        null,
       )
       : null;
     // A "Not sure" answer is stored as an explicit UNKNOWN observation, which Property Context still evaluates as
@@ -455,7 +454,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       { label: `${feed.buckets.SOON.length} soon`, tone: feed.buckets.SOON.length ? 'CAUTION' : 'DEFAULT' },
       { label: `${feed.buckets.PLAN.length} to plan`, tone: 'DEFAULT' },
     ] : undefined,
-    actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: homeHref, style: 'PRIMARY' }],
+    actions: [],
   }];
 
   // T08 fix (docs/architecture/ASK_COZY_PHASE5_ATTENTION_ACCEPTANCE_VERIFICATION.md):
@@ -519,7 +518,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
               action.workItem ? `Work ${action.workItem.state.toLowerCase().replace(/_/g, ' ')}` : null,
             ].filter((value): value is string => Boolean(value)),
             status: action.state,
-            href: action.primaryCta.href,
+            href: null,
             ...homeActionShelfFacts(action, (value) => humanDate(value) ?? ''),
           })),
         };

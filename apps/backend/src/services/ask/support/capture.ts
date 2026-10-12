@@ -83,7 +83,7 @@ export const ROOM_TYPE_VALUES = ['KITCHEN', 'LIVING_ROOM', 'BEDROOM', 'BATHROOM'
 
 export const INVENTORY_CATEGORY_VALUES = ['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'SAFETY', 'SMART_HOME', 'FURNITURE', 'ELECTRONICS', 'INTERIOR', 'STRUCTURAL', 'EXTERIOR', 'SITE', 'OTHER'] as const;
 
-export function askCaptureRequest(requirement: any, contextVersion: string, destinationLabel: string, fallbackHref: string): AskCaptureRequest {
+export function askCaptureRequest(requirement: any, contextVersion: string, destinationLabel: string, fallbackHref: string | null): AskCaptureRequest {
   return {
     requirementId: requirement.requirementId,
     captureKey: requirement.capture.captureKey,
@@ -97,7 +97,7 @@ export function askCaptureRequest(requirement: any, contextVersion: string, dest
     allowNotSure: requirement.capture.allowNotSure,
     sensitivity: requirement.capture.sensitivity,
     destinationLabel,
-    fallbackHref,
+    ...(fallbackHref ? { fallbackHref } : {}),
     confirmationText: null,
     expectedContextVersion: contextVersion,
   };
