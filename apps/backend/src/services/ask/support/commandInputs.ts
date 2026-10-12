@@ -287,6 +287,7 @@ export const ProjectTrackerCreateInputSchema = z.object({
   hoaApplicabilityBasis: optionalText(2000),
   initialMilestoneName: z.string().trim().min(1).max(200),
   initialMilestoneDate: projectExactDate.nullish().transform((value) => value || null),
+  contractDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]),
 }).strict().superRefine((value, context) => {
   if (value.fulfillmentMode === 'PROVIDER' && !value.contractorName) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['contractorName'], message: 'Provider-led projects require a contractor or company name.' });
@@ -314,6 +315,7 @@ export const ProjectTrackerEditInputSchema = z.object({
   contractorEmail: z.preprocess((value) => value === '' ? null : value, z.string().email().nullable().optional()),
   expectedEndDate: projectExactDate.nullish().transform((value) => value || null),
   permitApplicability: z.enum(['REQUIRED', 'NOT_REQUIRED', 'UNKNOWN']), permitApplicabilityBasis: optionalText(2000), hoaApplicability: z.enum(['REQUIRED', 'NOT_REQUIRED', 'UNKNOWN']), hoaApplicabilityBasis: optionalText(2000),
+  contractDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]),
 }).strict().superRefine((value, context) => {
   for (const [field, basisField, label] of [['permitApplicability', 'permitApplicabilityBasis', 'Permit'], ['hoaApplicability', 'hoaApplicabilityBasis', 'HOA']] as const) if (value[field] !== 'UNKNOWN' && !value[basisField]) context.addIssue({ code: z.ZodIssueCode.custom, path: [basisField], message: `${label} applicability requires a source or rationale.` });
 });
@@ -326,6 +328,7 @@ export const ProjectTrackerMilestoneCompleteInputSchema = z.object({
 export const ProjectTrackerPaymentPaidInputSchema = z.object({
   paidDate: projectExactDate.nullish().transform((value) => value || null),
   paymentMethod: optionalText(100),
+  receiptDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]),
 }).strict();
 
 export const ProjectTrackerProgressInputSchema = z.object({
@@ -333,7 +336,7 @@ export const ProjectTrackerProgressInputSchema = z.object({
   entryType: z.enum(['DAILY_NOTE', 'PHOTO_UPDATE', 'MILESTONE_UPDATE', 'MATERIAL_DELIVERY', 'INSPECTION', 'ISSUE_NOTE']).default('DAILY_NOTE'),
   notes: z.string().trim().min(1).max(5000),
   milestoneId: optionalText(160),
-  photoKeys: z.string().trim().max(3000).optional().default(''),
+  photoDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]),
   materialType: optionalText(100), materialBrand: optionalText(100), materialModel: optionalText(100), materialColor: optionalText(100), materialSupplier: optionalText(200), materialQuantity: optionalText(100),
 }).strict();
 
@@ -343,6 +346,7 @@ export const ProjectTrackerIssueInputSchema = z.object({
   severity: z.enum(['MINOR', 'MAJOR', 'BLOCKING']),
   category: z.enum(['QUALITY_CONCERN', 'SCOPE_DISPUTE', 'TIMELINE_DISPUTE', 'COMMUNICATION', 'SAFETY', 'DAMAGE', 'PAYMENT_DISPUTE', 'OTHER']),
   blocksPayment: z.coerce.boolean().optional(),
+  attachmentDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]),
 }).strict();
 
 export const ProjectTrackerIssueResolveInputSchema = z.object({
@@ -368,6 +372,7 @@ export const ProjectTrackerChangeOrderInputSchema = z.object({
   workItemsChanged: z.coerce.boolean().default(false), spacesChanged: z.coerce.boolean().default(false), systemsChanged: z.coerce.boolean().default(false),
   dimensionsChanged: z.coerce.boolean().default(false), structuralEffectsChanged: z.coerce.boolean().default(false), exteriorEffectsChanged: z.coerce.boolean().default(false),
   regulatedMaterialsChanged: z.coerce.boolean().default(false), scheduleOnly: z.coerce.boolean().default(false), impactExplanation: z.string().trim().min(1).max(2000),
+  supportingDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]),
 }).strict().superRefine((value, context) => {
   const scopeChanged = value.workItemsChanged || value.spacesChanged || value.systemsChanged || value.dimensionsChanged || value.structuralEffectsChanged || value.exteriorEffectsChanged || value.regulatedMaterialsChanged;
   if (value.scheduleOnly && scopeChanged) context.addIssue({ code: z.ZodIssueCode.custom, path: ['scheduleOnly'], message: 'A schedule-only change cannot also declare a scope change.' });
@@ -376,7 +381,7 @@ export const ProjectTrackerChangeOrderInputSchema = z.object({
 export const ProjectTrackerComplianceReviewInputSchema = z.object({
   amendedPermitStatus: z.enum(['REQUIRED', 'REQUESTED', 'CONFIRMED', 'NOT_APPLICABLE']),
   hoaReapprovalStatus: z.enum(['REQUIRED', 'REQUESTED', 'CONFIRMED', 'NOT_APPLICABLE']),
-  evidenceDocumentIds: z.string().trim().max(3000).optional().default(''),
+  evidenceDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]),
   reviewNotes: z.string().trim().min(1).max(3000),
 }).strict();
 
@@ -389,6 +394,7 @@ export const ProjectTrackerCompletionInputSchema = z.object({
   punchListNotes: optionalText(2000), correctionsNotes: optionalText(2000), lienWaiverNotes: optionalText(2000), paymentNotes: optionalText(2000), warrantyNotes: optionalText(2000), commissioningNotes: optionalText(2000), safetyNotes: optionalText(2000), inspectionNotes: optionalText(2000),
   contractorRatingQuality: z.coerce.number().int().min(1).max(5).optional(), contractorRatingTimeline: z.coerce.number().int().min(1).max(5).optional(), contractorRatingComms: z.coerce.number().int().min(1).max(5).optional(), contractorRatingBudget: z.coerce.number().int().min(1).max(5).optional(),
   contractorReviewText: optionalText(2000), warrantyPeriodMonths: z.coerce.number().int().min(0).max(1200).optional(),
+  proofDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]), warrantyDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]),
 }).strict().superRefine((value, context) => {
   for (const key of ['punchList', 'corrections', 'lienWaiver', 'payment', 'warranty', 'commissioning', 'safety', 'inspection'] as const) {
     if (value[key] === 'NOT_APPLICABLE' && !value[`${key}Notes`]?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: [`${key}Notes`], message: 'Explain why this closeout category is not applicable.' });

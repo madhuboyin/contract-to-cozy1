@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { ApproximateDateCaptureValue, CaptureDatePrecision, ScalarCaptureInputSchema } from './featureContextTypes';
+import { AttachEvidenceControl } from '@/components/ask/AttachEvidenceControl';
 
 const DATE_PRECISION_OPTIONS: Array<{ value: CaptureDatePrecision; label: string }> = [
   { value: 'EXACT_DATE', label: 'Exact date' },
@@ -13,7 +14,7 @@ const DATE_PRECISION_OPTIONS: Array<{ value: CaptureDatePrecision; label: string
 
 export type CaptureField = { key: string; label: string; helpText?: string; required: boolean; inputSchema: ScalarCaptureInputSchema };
 
-export function CaptureFieldControl({ field, value, disabled, allowNotSure = false, onChange, bare = false, compact = false }: {
+export function CaptureFieldControl({ field, value, disabled, allowNotSure = false, onChange, bare = false, compact = false, propertyId }: {
   field: CaptureField;
   value: unknown;
   disabled: boolean;
@@ -24,6 +25,7 @@ export function CaptureFieldControl({ field, value, disabled, allowNotSure = fal
   // Dense workflow groups retain labels and touch targets while avoiding a
   // full-width card for every small field.
   compact?: boolean;
+  propertyId?: string;
 }) {
   const [expandedOptions, setExpandedOptions] = useState(false);
   const schema = field.inputSchema;
@@ -55,6 +57,18 @@ export function CaptureFieldControl({ field, value, disabled, allowNotSure = fal
           onChange(selected ? current.filter((item) => item !== option.value) : [...current, option.value].slice(0, schema.maxItems));
         }} className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${selected ? 'border-teal-700 bg-teal-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50'}`}>{option.label}</button>;
       }) : null}
+      {schema.type === 'DOCUMENT_MULTI_SELECT' ? <div className="w-full space-y-2">
+        {schema.options.map((option) => {
+          const current = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+          const selected = current.includes(option.value);
+          return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled} onClick={() => onChange(selected ? current.filter((item) => item !== option.value) : [...current, option.value].slice(0, schema.maxItems))} className={`mr-2 rounded-xl border px-3 py-2 text-sm font-semibold ${selected ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}>{option.label}</button>;
+        })}
+        {schema.allowUpload ? <AttachEvidenceControl event={{ entityType: 'PROJECT_RECORD', id: field.key, title: field.label }} propertyId={propertyId} disabled={disabled} label="Upload document" onAttached={(documentId) => {
+          const current = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+          onChange([...current.filter((id) => id !== documentId), documentId].slice(0, schema.maxItems));
+        }} /> : null}
+        {Array.isArray(value) && value.length > 0 ? <p className="text-xs text-slate-500">{value.length} document{value.length === 1 ? '' : 's'} selected</p> : null}
+      </div> : null}
       {schema.type === 'INTEGER' || schema.type === 'DECIMAL' ? <input aria-label={field.label} type="number" step={schema.type === 'INTEGER' ? 1 : 'any'} min={schema.min} max={schema.max} value={typeof value === 'number' ? value : ''} disabled={disabled} onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))} className={`${compact ? 'w-full' : ''} rounded-xl border border-slate-200 bg-white px-3 py-2 text-base outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm`} /> : null}
       {schema.type === 'NUMBER' || schema.type === 'MONEY' ? <div className="relative w-full">{schema.type === 'MONEY' && schema.currency === 'USD' ? <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-500">$</span> : null}<input aria-label={field.label} type="number" step="any" min={schema.min} max={schema.max} value={typeof value === 'number' ? value : ''} disabled={disabled} onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))} className={`${schema.type === 'MONEY' && schema.currency === 'USD' ? 'pl-7' : 'pl-3'} w-full rounded-xl border border-slate-200 bg-white py-2 pr-3 text-base outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm`} /></div> : null}
       {schema.type === 'SHORT_TEXT' ? <input aria-label={field.label} value={typeof value === 'string' ? value : ''} maxLength={schema.maxLength} disabled={disabled} onChange={(event) => onChange(event.target.value)} className={`${compact ? 'w-full' : ''} rounded-xl border border-slate-200 bg-white px-3 py-2 text-base outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm`} /> : null}

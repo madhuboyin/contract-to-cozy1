@@ -344,7 +344,7 @@ export function ExecutionCard({
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
         {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void (retryExecution ? retryExecution(execution) : ask(execution.question))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
-        {execution.captureRequests.map((request, index) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} onCompleted={updateExecution} autoFocus={index === 0 && isJustUpdated} />)}
+        {execution.captureRequests.map((request, index) => <InlineCaptureCard key={request.requirementId} executionId={execution.executionId} request={request} propertyId={execution.property?.id} onCompleted={updateExecution} autoFocus={index === 0 && isJustUpdated} />)}
         {execution.clarification && <ClarificationCard executionId={execution.executionId} clarification={execution.clarification} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
         {execution.confirmation && execution.status === 'NEEDS_CONFIRMATION' && <ConfirmationCard executionId={execution.executionId} confirmation={execution.confirmation} onCompleted={updateExecution} autoFocus={isJustUpdated} onAccessLost={() => onAccessLost(execution)} />}
         {/* External review [P2]: status RUNNING with confirmation still

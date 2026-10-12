@@ -155,6 +155,8 @@ test('project completion is one confirmation workflow presented in four governed
   const punchListNotes = capture.inputSchema.fields.find((field) => field.key === 'punchListNotes');
   assert.deepEqual(punchListNotes.when, { fieldKey: 'punchList', operator: 'EQUALS', value: 'NOT_APPLICABLE' });
   assert.equal(capture.destinationLabel, 'Completes the verified project and creates its closeout package after confirmation');
+  assert.equal(capture.inputSchema.fields.find((field) => field.key === 'warrantyDocumentIds').inputSchema.type, 'DOCUMENT_MULTI_SELECT');
+  assert.equal(capture.inputSchema.fields.find((field) => field.key === 'proofDocumentIds').inputSchema.allowUpload, true);
 });
 
 test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {

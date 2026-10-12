@@ -366,11 +366,13 @@ export function InlineCaptureCard({
   request,
   onCompleted,
   autoFocus = false,
+  propertyId,
 }: {
   executionId: string;
   request: AskCaptureRequest;
   onCompleted: (execution: AskExecutionResponse) => void;
   autoFocus?: boolean;
+  propertyId?: string;
 }) {
   const calm = useCalmAnswers();
   const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus && !calm);
@@ -472,7 +474,7 @@ export function InlineCaptureCard({
         <div className="mt-5 border-t border-sky-100 pt-4">
           <p className="text-xs font-semibold text-slate-600">{schema.createLabel}</p>
           <div className="mt-3 space-y-4">
-            {activeCreateFields.map((field) => <CaptureFieldControl key={field.key} field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />)}
+            {activeCreateFields.map((field) => <CaptureFieldControl key={field.key} field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />)}
           </div>
           <button type="button" disabled={saving || missingCreateRequired} onClick={() => void submitRelational({ mode: 'CREATE', values })} className="mt-4 min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : schema.createLabel}</button>
         </div>
@@ -611,7 +613,7 @@ export function InlineCaptureCard({
                 : ['name', 'fulfillmentMode', 'contractorName', 'permitApplicability', 'permitApplicabilityBasis', 'hoaApplicability', 'hoaApplicabilityBasis'].includes(field.key) ? 'md:col-span-3'
                   : field.key === 'initialMilestoneName' ? 'md:col-span-4' : 'md:col-span-2'
             : fullWidth ? 'md:col-span-2' : undefined;
-          return <div key={field.key} className={fieldLayout}><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>;
+          return <div key={field.key} className={fieldLayout}><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>;
         })}
       </div>
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}

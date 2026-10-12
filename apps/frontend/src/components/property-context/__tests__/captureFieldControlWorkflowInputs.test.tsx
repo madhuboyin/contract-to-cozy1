@@ -32,3 +32,10 @@ test('a long compact choice set starts bounded and can be expanded', () => {
   expect(screen.getByRole('button', { name: 'Type 8' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Show fewer' })).toHaveAttribute('aria-expanded', 'true');
 });
+
+test('a project document field selects existing Home Record documents', () => {
+  const onChange = jest.fn();
+  render(<CaptureFieldControl compact propertyId="home-1" field={{ key: 'receiptDocumentIds', label: 'Receipt', required: false, inputSchema: { type: 'DOCUMENT_MULTI_SELECT', options: [{ value: 'doc-1', label: 'Paid invoice.pdf' }], maxItems: 1, allowUpload: false } }} value={[]} disabled={false} onChange={onChange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Paid invoice.pdf' }));
+  expect(onChange).toHaveBeenCalledWith(['doc-1']);
+});
