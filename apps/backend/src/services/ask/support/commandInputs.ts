@@ -1,5 +1,5 @@
 // Ask handler support: commandInputs. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
-import { HouseholdRole, MaintenanceTaskPriority, MaterialCategory, PlantGoalType, PlantLightLevel, PlantMaintenanceLevel, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
+import { HouseholdRole, InventoryItemCategory, MaintenanceTaskPriority, MaterialCategory, PlantGoalType, PlantLightLevel, PlantMaintenanceLevel, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { z } from 'zod';
 import { isMeaningfulMaintenanceTaskTitle } from '../askMaintenanceTaskInput';
 import { prisma } from '../../../lib/prisma';
@@ -319,6 +319,9 @@ export const ProjectTrackerEditInputSchema = z.object({
   expectedEndDate: projectExactDate.nullish().transform((value) => value || null),
   permitApplicability: z.enum(['REQUIRED', 'NOT_REQUIRED', 'UNKNOWN']), permitApplicabilityBasis: optionalText(2000), hoaApplicability: z.enum(['REQUIRED', 'NOT_REQUIRED', 'UNKNOWN']), hoaApplicabilityBasis: optionalText(2000),
   contractDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]),
+  homeSystemsAffected: z.array(z.nativeEnum(InventoryItemCategory)).max(20).default([]),
+  serviceCategory: z.nativeEnum(ServiceCategory).nullable().optional(),
+  contractorId: optionalText(160),
 }).strict().superRefine((value, context) => {
   for (const [field, basisField, label] of [['permitApplicability', 'permitApplicabilityBasis', 'Permit'], ['hoaApplicability', 'hoaApplicabilityBasis', 'HOA']] as const) if (value[field] !== 'UNKNOWN' && !value[basisField]) context.addIssue({ code: z.ZodIssueCode.custom, path: [basisField], message: `${label} applicability requires a source or rationale.` });
 });
@@ -339,6 +342,7 @@ export const ProjectTrackerProgressInputSchema = z.object({
   entryType: z.enum(['DAILY_NOTE', 'PHOTO_UPDATE', 'MILESTONE_UPDATE', 'MATERIAL_DELIVERY', 'INSPECTION', 'ISSUE_NOTE']).default('DAILY_NOTE'),
   notes: z.string().trim().min(1).max(5000),
   milestoneId: optionalText(160),
+  roomId: optionalText(160),
   photoDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]),
   materialType: optionalText(100), materialBrand: optionalText(100), materialModel: optionalText(100), materialColor: optionalText(100), materialSupplier: optionalText(200), materialQuantity: optionalText(100),
 }).strict();

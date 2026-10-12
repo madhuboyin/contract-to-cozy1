@@ -507,6 +507,16 @@ export async function createCloseoutShareLink(req: Request, res: Response, next:
   } catch (err) { next(err); }
 }
 
+export async function listCloseoutShareLinks(req: Request, res: Response, next: NextFunction) {
+  try { res.json({ success: true, data: await svc.listCloseoutShareLinks(req.params.projectId, req.params.propertyId) }); }
+  catch (err) { next(err); }
+}
+
+export async function revokeCloseoutShareLink(req: Request, res: Response, next: NextFunction) {
+  try { res.json({ success: true, data: await svc.revokeCloseoutShareLink(req.params.shareLinkId, req.params.projectId, req.params.propertyId) }); }
+  catch (err) { next(err); }
+}
+
 export async function getPublicCloseoutPackage(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.getPublicCloseoutPackage(req.params.token);

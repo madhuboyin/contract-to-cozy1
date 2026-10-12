@@ -1604,12 +1604,14 @@ export async function voidChangeOrder(
 
 export async function listLogEntries(projectId: string, propertyId: string, params: any) {
   await assertProject(projectId, propertyId);
-  const { milestoneId, entryType, from, to, limit = 50, cursor, offset = 0 } = params;
+  const { milestoneId, entryType, roomId, search, from, to, limit = 50, cursor, offset = 0 } = params;
 
   const where: Prisma.ProjectProgressLogWhereInput = {
     projectId,
     ...(milestoneId && { milestoneId }),
     ...(entryType && { entryType }),
+    ...(roomId && { roomId }),
+    ...(search && { notes: { contains: String(search).trim(), mode: 'insensitive' } }),
     ...(from || to ? {
       entryDate: {
         ...(from && { gte: new Date(from) }),
@@ -1639,6 +1641,10 @@ export async function listLogEntries(projectId: string, propertyId: string, para
 
 export async function createLogEntry(projectId: string, propertyId: string, userId: string, data: any) {
   await assertProject(projectId, propertyId);
+  if (data.roomId) {
+    const room = await prisma.inventoryRoom.findFirst({ where: { id: data.roomId, propertyId }, select: { id: true } });
+    if (!room) throw new APIError('Room does not belong to this property.', 400, 'INVALID_PROJECT_ROOM');
+  }
   const project = await prisma.projectRecord.findFirst({
     where: { id: projectId, propertyId },
     select: { renovationScopeVersionId: true, inventoryItemId: true },
@@ -3071,6 +3077,23 @@ export async function createCloseoutShareLink(
     select: { id: true, expiresAt: true, createdAt: true },
   });
   return { token: rawToken, shareLink };
+}
+
+export async function listCloseoutShareLinks(projectId: string, propertyId: string) {
+  await assertProject(projectId, propertyId);
+  return prisma.projectCloseoutShareLink.findMany({
+    where: { projectId, propertyId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, status: true, expiresAt: true, revokedAt: true, lastViewedAt: true, viewCount: true, createdAt: true },
+  });
+}
+
+export async function revokeCloseoutShareLink(shareLinkId: string, projectId: string, propertyId: string) {
+  await assertProject(projectId, propertyId);
+  const link = await prisma.projectCloseoutShareLink.findFirst({ where: { id: shareLinkId, projectId, propertyId }, select: { id: true, status: true } });
+  if (!link) throw new APIError('Closeout share link was not found.', 404, 'CLOSEOUT_SHARE_NOT_FOUND');
+  if (link.status !== 'ACTIVE') throw new APIError('Closeout share link is no longer active.', 400, 'CLOSEOUT_SHARE_NOT_ACTIVE');
+  return prisma.projectCloseoutShareLink.update({ where: { id: shareLinkId }, data: { status: 'REVOKED', revokedAt: new Date() }, select: { id: true, status: true, revokedAt: true } });
 }
 
 export async function getPublicCloseoutPackage(rawToken: string) {

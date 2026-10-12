@@ -42,6 +42,8 @@ import {
   getCompletionChecklist,
   getCloseoutPackage,
   createCloseoutShareLink,
+  listCloseoutShareLinks,
+  revokeCloseoutShareLink,
   getPublicCloseoutPackage,
   confirmCompletion,
   completeMinorWork,
@@ -304,5 +306,7 @@ router.post(
   validateBody(CreateCloseoutShareSchema),
   createCloseoutShareLink,
 );
+router.get('/properties/:propertyId/projects/:projectId/completion/share-links', propertyAuthMiddleware, listCloseoutShareLinks);
+router.post('/properties/:propertyId/projects/:projectId/completion/share-links/:shareLinkId/revoke', propertyAuthMiddleware, revokeCloseoutShareLink);
 
 export default router;
