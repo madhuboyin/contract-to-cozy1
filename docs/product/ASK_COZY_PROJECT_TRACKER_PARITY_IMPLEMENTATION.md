@@ -8,8 +8,8 @@ The authoritative product requirements remain in [`LIVE_PROJECT_EXECUTION_TRACKE
 
 **Audit baseline:** desktop Project Tracker routes and the Live Project Execution Tracker FRD  
 **Ask operations:** `PROJECT_TRACKER_PROJECTS`, `PROJECT_TRACKER_CREATE`, `PROJECT_TRACKER_COMMAND`  
-**Parity implementation commits:** `4b0ab827` and `e55a1776`  
-**Last reviewed:** October 11, 2026
+**Parity implementation commits:** `4b0ab827`, `e55a1776`, then the compact-UI, pagination and completion work (`87f9e746`–`6ab80ee3`), document capture (`7b1cd58a`), milestone planning (`b90bddf8`), disputes and materials (`458a2316`) and the slice close-out (`4a5209b4`)  
+**Last reviewed:** October 12, 2026 (status verified against the code; see [Status verification](#status-verification-2026-10-12))
 
 ## Parity goal
 
@@ -22,7 +22,7 @@ Parity does not mean duplicating desktop components inside the conversation. It 
 - preserving authorization, lifecycle, payment, compliance, evidence, and closeout safeguards;
 - requiring review and confirmation before material writes;
 - failing closed when the project or selected child record changed;
-- linking to a specialized desktop surface only when the conversational renderer cannot safely perform the task.
+- never sending the user to a desktop page: Ask is the product surface (owner decision, 2026-10-10), so a task the conversational renderer cannot safely perform is explained, not linked. The answer-trust policy removes any href that is not an in-conversation Ask link.
 
 ## Conversational UI and compact-density requirements
 
@@ -68,7 +68,7 @@ Functional parity is necessary but not sufficient. Project Tracker must read as 
 - Successful actions append one concise receipt and refresh the canonical project detail; they do not append both the full proposal and a second full desktop-style result.
 - After mutation, retain the user's project context and return to the relevant section or selected record.
 - Prefer inline continuation actions such as **Add payment**, **Log progress**, or **Review change order** over generic suggestion chips that restate unrelated Ask Cozy starters.
-- The desktop Project Tracker link is a quiet escape hatch for specialized workflows, not the primary answer when Ask supports the action.
+- Ask offers no link to the desktop Project Tracker, Home Records, or any other desktop page. Where an action produces something the user must carry elsewhere (a closeout recipient link, a dispute package), the receipt states it inline as text.
 
 ### Current presentation status
 
@@ -89,13 +89,13 @@ Implemented October 11, 2026: every non-empty execution-record section uses an i
 | Project lifecycle | Start, pause, resume, and cancel were desktop-only. | Valid lifecycle actions are derived from current project status and execute through `updateProject` or `cancelProject`. | Implemented |
 | Project settings | Project identity, contractor details, target date, and approval applicability could not be corrected conversationally. | A prefilled edit form updates the canonical project, home systems, service category, and contractor identity link while retaining permit/HOA rationale validation. | Implemented |
 | Milestones | Ask could display milestones but could not manage them. | Manual milestones support create, edit, complete, and delete. Completion retains photo-evidence and source-authority rules. Permit/HOA projections remain read-only. | Implemented |
-| Payment schedule | Payment rows were static and users could not build or maintain the schedule. | Users can create, edit, delete, and mark eligible payments paid. Milestone gates, payment holds, and paid-record protections remain in `projectTracker.service`. | Implemented |
+| Payment schedule | Payment rows were static and users could not build or maintain the schedule. | Users can create, edit, delete, and mark eligible payments paid. Milestone gates, payment holds, and paid-record protections remain in `projectTracker.service`; the service itself refuses to edit or delete a paid payment (`PAYMENT_PAID`), not only the Ask handler. | Implemented |
 | Change orders | Scope and contract changes had no conversational workflow. | Users can propose and edit a change order, record structured scope impact, complete permit/HOA compliance review, and approve, reject, or void it. Contract totals are recalculated only by canonical services. | Implemented |
 | Progress evidence | Ask supported only a plain text note. | The log form supports canonical entry types, milestone and room association, photo evidence, and material delivery metadata. The archive service supports search, date/type/room filters, cursor pagination, and scoped room validation. | Implemented |
-| Issues | Users could not record or clear execution problems. | Users can create, edit, and resolve household-controlled issues. Blocking severity forces payment hold behavior through the canonical issue service. Source-controlled issues remain protected. | Implemented for core issue lifecycle |
+| Issues | Users could not record or clear execution problems. | Users can create, edit, and resolve household-controlled issues. Blocking severity forces payment hold behavior through the canonical issue service. Source-controlled issues remain protected. | Implemented: create, edit, resolve, escalate, append-only notes with evidence, and immutable dispute packages (see the October 12 entry below) |
 | Execution alignment | Failed permit/HOA projections had no recovery action in Ask. | Ask renders the projection-by-projection source, status, attempt, error, and last-reconciliation ledger and offers canonical reconciliation retry when errors exist. | Implemented |
 | Completion | The conversation had no governed completion workflow. | Ask reads the live completion checklist before presenting completion. It blocks on unresolved permits, HOA approval, disputes, major/blocking issues, final payment, progress photos, or unverified as-built materials. The confirmation captures verification results, eight closeout declarations, actual cost, provider outcome, ratings, review, and warranty duration, then calls `confirmCompletion`. | Implemented |
-| Closeout sharing | Completed projects did not offer the desktop closeout handoff. | Ask previews generated closeout metadata and share history, creates hashed expiring links, and the canonical API lists safe link metadata and revokes active links without exposing token hashes. | Implemented |
+| Closeout sharing | Completed projects did not offer the desktop closeout handoff. | Ask previews generated closeout metadata and share history and creates hashed expiring links. The receipt shows the full recipient link and its expiry as text for the owner to copy; it is not an Ask link and carries no href. The canonical API lists safe link metadata and revokes active links without exposing token hashes. Ask does not offer revoke. | Implemented (revoke is API-only) |
 | Permissions and confirmation | Inline actions risked bypassing desktop authorization or becoming stale. | Reads remain viewer-safe; mutations require at least `CONTRIBUTOR`. Every write is declared-action-only, re-reads the selected record at proposal and confirmation, and uses the shared confirmation receipt flow. | Implemented |
 
 ## Canonical implementation
@@ -122,11 +122,13 @@ Ask Cozy does not maintain a parallel Project Tracker model.
 - Verified completion cannot bypass the live completion checklist.
 - Provider-led verified completion requires all four provider ratings.
 - Closeout declarations cannot silently omit a category; a not-applicable declaration requires a rationale.
-- Share tokens are exposed only in the creation receipt; persisted records retain only the hash.
+- Share tokens are shown only in the creation receipt, as text; the share-link record retains only the hash. The receipt is part of the stored Ask execution result, so the raw token also lives in that conversation record.
+- A paid payment cannot be edited or deleted: the service rejects both (`PAYMENT_PAID`) and the Ask handler also withholds the actions.
+- A progress entry is resolved by its own id within the project, so entries outside the latest page can be deleted.
 
 ## Residual differences and explicit follow-up scope
 
-No documented Project Tracker parity items remain pending in this implementation slice. Future additions should extend the same canonical services and governed Ask workflows rather than introduce an Ask-only data path.
+No documented Project Tracker parity items remain pending in this implementation slice, with one deliberate exception: closeout share-link revocation is available through the canonical API but not as an Ask action. Future additions should extend the same canonical services and governed Ask workflows rather than introduce an Ask-only data path.
 
 Implemented October 12, 2026: the progress archive accepts bounded note search plus date, entry-type, milestone, and room filters with cursor pagination; new progress entries can be room-tagged only to a room owned by the project property. Project detail renders the full execution-alignment diagnostic ledger. Completed-project detail previews closeout generation/write-back state and safe share-link history, while authenticated closeout endpoints list and revoke links without returning raw tokens or hashes. The conversational project editor now maintains home systems, service category, and linked contractor identity.
 
@@ -138,7 +140,9 @@ Implemented October 12, 2026: manual issues can be escalated, receive append-onl
 
 Implemented October 12, 2026: project detail now reads its linked canonical Material Specs and exposes proposal, maintenance, lifecycle verification, and substitution actions. Ask delegates to `MaterialSpecService`, so property-scoped evidence authorization, permit/HOA attribute checks, exact-product identity, receipt, remaining-material, lifecycle, as-built immutability, and compliance-reviewed change-order requirements remain authoritative.
 
-These are documented gaps, not authorization to weaken their canonical rules. If conversational parity is required for any item, extend the existing Project Tracker operations and services rather than adding a separate Ask-only data path.
+Implemented October 12, 2026 (status-verification fixes): the "Open Project Tracker" action and the closeout and dispute-package receipt links were removed because the owner rule allows only in-conversation links and the answer-trust policy strips every other href, which could have hidden the one-time share token. The closeout receipt now shows the recipient link and expiry as text and the dispute receipt states that the package was saved to Home Records. `updatePayment` now rejects a paid payment in the service, and log deletion looks the entry up by id within the project instead of scanning the latest 100.
+
+These rules are not authorization to weaken the canonical rules. If conversational parity is required for further items, extend the existing Project Tracker operations and services rather than adding a separate Ask-only data path.
 
 ## Validation evidence
 
@@ -160,3 +164,22 @@ Validation completed during implementation:
 - lightweight Ask registry tests were executed.
 
 The registry test run also reported repository-wide certification drift unrelated to this parity implementation: stale hard-coded handler counts and existing Property Brief/Reserve Fund governance findings. No database-backed or browser runtime was configured or claimed.
+
+## Status verification (2026-10-12)
+
+The implementation status above was re-checked against the code. Code-traced unless marked executed.
+
+**Confirmed:** all 35 declared action ids are handled and allowlisted; viewers are blocked at proposal and confirmation (the role enum is OWNER/CONTRIBUTOR/VIEWER, so "at least CONTRIBUTOR" holds); mutations run only from a declared launch and never from `ASK_REFRESH`; confirmation re-runs the full proposal path and fails with a context-version conflict if the record changed; the change-order, milestone-template, completion-declaration and provider-rating rules behave as described.
+
+**Corrected in this pass:**
+
+| Finding | Correction |
+|---|---|
+| The "quiet escape hatch" desktop link did not survive the answer-trust policy. | The action and its allowlist entries were removed; the answer no longer claims the link. |
+| The closeout share token appeared only in a receipt href to a non-Ask path, which the policy would strip if the confirm path validates it (not established) and which otherwise broke the owner rule; the dispute receipt linked to a desktop page. | The recipient link and expiry are shown as text; the dispute receipt names Home Records. Both allowlist entries were removed. |
+| `updatePayment` did not reject a paid payment in the service. | The service now throws `PAYMENT_PAID`; no frontend caller of the API edit existed. |
+| Deleting a progress entry resolved the target from the latest 100 entries. | The target is a direct project-scoped lookup. |
+
+**Executed:** `projectTrackerProjectsCapabilitySlice` 19/19 (four new tests cover the share receipt, the dispute receipt, deleting an entry beyond the latest 100, and the service-level paid guard), `projectTrackerCapabilityActivation` 4/4, `startupRegistryValidation` 1/1, backend `npx tsc --noEmit` clean. `askInteractionCoverageMatrix` (144 vs 141 operations) and `askTrustArchitecture` (a 44 vs 41 set of non-retrievable operations) fail on operation-count drift; this pass did not touch the registries and the failures are in the counts, but they were not run on the prior revision to prove they pre-date it.
+
+**Not run:** frontend typecheck, the Playwright baselines, `git diff --check`, the full `tests/ask` suite, and anything against a real database or browser.

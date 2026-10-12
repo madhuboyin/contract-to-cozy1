@@ -1239,7 +1239,10 @@ export async function createPayment(projectId: string, propertyId: string, data:
 
 export async function updatePayment(paymentId: string, projectId: string, propertyId: string, data: any) {
   await assertProject(projectId, propertyId);
-  await assertPayment(paymentId, projectId);
+  const existing = await assertPayment(paymentId, projectId);
+  if (existing.status === 'PAID') {
+    throw new APIError('Cannot edit a paid payment', 400, 'PAYMENT_PAID');
+  }
 
   return prisma.projectPayment.update({
     where: { id: paymentId },
