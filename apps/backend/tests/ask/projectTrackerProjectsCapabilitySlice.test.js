@@ -143,7 +143,7 @@ test('review project shows the desktop execution record inline', () => {
   assert.equal(detail.blocks[2].sections[0].items[0].description, null);
   assert.equal(detail.blocks[2].sections[0].items[0].detail, 'Inspect framing and rough-ins\nPhoto evidence required');
   assert.deepEqual(detail.blocks[2].sections[1].items[0].actions.map((action) => action.label), ['Mark paid', 'Edit', 'Delete']);
-  assert.deepEqual(detail.blocks[2].sections[3].items[0].actions.map((action) => action.label), ['Resolve issue', 'Edit']);
+  assert.deepEqual(detail.blocks[2].sections[3].items[0].actions.map((action) => action.label), ['Add note', 'Resolve issue', 'Edit', 'Escalate']);
 });
 
 test('project completion is one confirmation workflow presented in four governed groups', () => {
@@ -182,6 +182,37 @@ test('planning projects offer governed milestone-template replacement', () => {
     _count: { progressLogs: 0, writeBacks: 0 },
   }, [], true);
   assert.equal(detail.blocks[0].actions.some((action) => action.id === PROJECT_TRACKER_ACTION_IDS.REPLACE_MILESTONE_TEMPLATE), true);
+});
+
+test('escalated issues expose append-only notes and immutable dispute packaging', () => {
+  const record = {
+    ...project('kitchen'), milestones: [], payments: [], changeOrders: [],
+    issues: [{ id: 'i1', title: 'Scope disagreement', description: 'Cabinet scope differs', severity: 'MAJOR', blocksPayment: true, resolutionNotes: null, status: 'ESCALATED', sourceEntityType: null }],
+    _count: { progressLogs: 0, writeBacks: 0 },
+  };
+  const detail = projectDetailFromView(record, [], true);
+  assert.deepEqual(detail.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items[0].actions.map((action) => action.label), ['Add note', 'Resolve issue', 'Edit', 'Package for dispute']);
+  const note = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.ADD_ISSUE_NOTE, record, 'i1');
+  assert.deepEqual(note.inputSchema.fields.map((field) => field.key), ['notes', 'evidenceDocumentIds']);
+  assert.match(note.helpText, /append-only/);
+  const dispute = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.GENERATE_DISPUTE_PACKAGE, record, 'i1');
+  assert.deepEqual(dispute.inputSchema.fields.map((field) => field.key), ['evidenceDocumentIds']);
+  assert.match(dispute.helpText, /immutable version/);
+});
+
+test('project materials expose canonical proposal, lifecycle, maintenance, and substitution actions', () => {
+  const material = { id: 'mat1', label: 'Kitchen backsplash', category: 'TILE', lifecycleStatus: 'PROPOSED', manufacturer: 'Daltile', productLine: null, productName: 'Restore', sku: 'R416', colorCode: null, finish: null, dimensions: '4x16', material: 'Ceramic', supplier: 'Tile Shop', quantityPurchased: '60 sq ft', lotBatch: 'L1', notes: null, careInstructions: null, complianceRelevance: { permitRelevant: false, hoaRelevant: false }, submittalDocumentIds: [] };
+  const record = { ...project('kitchen'), milestones: [], payments: [], changeOrders: [], issues: [], materialSpecs: [material], _count: { progressLogs: 0, writeBacks: 0 } };
+  const detail = projectDetailFromView(record, [], true);
+  assert.equal(detail.blocks[0].actions.some((action) => action.id === PROJECT_TRACKER_ACTION_IDS.ADD_MATERIAL), true);
+  const materials = detail.blocks.find((block) => block.type === 'GROUPED_LIST').sections.find((section) => section.title === 'Materials');
+  assert.deepEqual(materials.items[0].actions.map((action) => action.label), ['Edit', 'Approve', 'Substitute']);
+  const proposal = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.ADD_MATERIAL, record);
+  assert.equal(proposal.inputSchema.fields.some((field) => field.key === 'submittalDocumentIds'), true);
+  const lifecycle = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.ADVANCE_MATERIAL, record, 'mat1');
+  assert.match(lifecycle.destinationLabel, /approved/i);
+  const substitution = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.SUBSTITUTE_MATERIAL, record, 'mat1');
+  assert.equal(substitution.inputSchema.fields.some((field) => field.key === 'sourceChangeOrderId'), true);
 });
 
 test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {

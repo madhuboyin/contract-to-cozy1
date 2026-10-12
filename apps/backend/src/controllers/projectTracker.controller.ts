@@ -453,6 +453,27 @@ export async function resolveIssue(req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 }
 
+export async function escalateIssue(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await svc.escalateIssue(req.params.issueId, req.params.projectId, req.params.propertyId);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function addIssueNote(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await svc.addIssueNote(req.params.issueId, req.params.projectId, req.params.propertyId, req.user!.userId, req.body);
+    res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function generateDisputePackage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await svc.generateDisputePackage(req.params.issueId, req.params.projectId, req.params.propertyId, req.user!.userId, req.body.evidenceDocumentIds);
+    res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 // ── Completion ────────────────────────────────────────────────────────────────
 
 export async function getCompletionChecklist(req: Request, res: Response, next: NextFunction) {

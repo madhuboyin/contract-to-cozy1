@@ -15,5 +15,7 @@ export const PROJECT_TRACKER_ACTION_IDS = {
   EDIT_PAYMENT: 'project-tracker-edit-payment', DELETE_PAYMENT: 'project-tracker-delete-payment', EDIT_CHANGE_ORDER: 'project-tracker-edit-change-order',
   DELETE_LOG: 'project-tracker-delete-log', EDIT_ISSUE: 'project-tracker-edit-issue', RETRY_ALIGNMENT: 'project-tracker-retry-alignment',
   REPLACE_MILESTONE_TEMPLATE: 'project-tracker-replace-milestone-template',
+  ADD_ISSUE_NOTE: 'project-tracker-add-issue-note', ESCALATE_ISSUE: 'project-tracker-escalate-issue', GENERATE_DISPUTE_PACKAGE: 'project-tracker-generate-dispute-package',
+  ADD_MATERIAL: 'project-tracker-add-material', EDIT_MATERIAL: 'project-tracker-edit-material', ADVANCE_MATERIAL: 'project-tracker-advance-material', SUBSTITUTE_MATERIAL: 'project-tracker-substitute-material',
 } as const;
 export const PROJECT_TRACKER_COMMAND_CAPTURE_KEY = 'PROJECT_TRACKER_COMMAND_INPUTS';

@@ -2542,6 +2542,8 @@ model User {
   projectChangeOrdersApproved ProjectChangeOrder[] @relation("ProjectChangeOrderApprovedBy")
   projectChangeOrdersComplianceReviewed ProjectChangeOrder[] @relation("ProjectChangeOrderComplianceReviewedBy")
   projectIssuesResolved       ProjectIssue[]       @relation("ProjectIssueResolvedBy")
+  projectIssueNotesCreated    ProjectIssueNote[]   @relation("ProjectIssueNoteCreatedBy")
+  projectDisputePackagesGenerated ProjectDisputePackage[] @relation("ProjectDisputePackageGeneratedBy")
   projectProgressLogsCreated  ProjectProgressLog[] @relation("ProjectProgressLoggedBy")
   projectWriteBacksApplied    ProjectWriteBack[]   @relation("ProjectWriteBackAppliedBy")
 
@@ -21443,6 +21445,8 @@ model ProjectRecord {
   changeOrders        ProjectChangeOrder[]
   progressLogs        ProjectProgressLog[]
   issues              ProjectIssue[]
+  issueNotes          ProjectIssueNote[]
+  disputePackages     ProjectDisputePackage[]
   writeBacks          ProjectWriteBack[]
   inspectionFindings  InspectionFinding[]  @relation("InspectionFindingResolvedByProject")
   documents           Document[]
@@ -21672,12 +21676,60 @@ model ProjectIssue {
   // Relations
   project    ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
   resolvedBy User?         @relation("ProjectIssueResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  notes      ProjectIssueNote[]
+  disputePackages ProjectDisputePackage[]
 
   @@unique([projectId, sourceEntityType, sourceEntityId])
   @@index([projectId, status])
   @@index([projectId, severity])
   @@index([resolvedByUserId])
   @@map("project_issues")
+}
+
+// Append-only issue timeline entries. Updates and deletes are intentionally unsupported.
+model ProjectIssueNote {
+  id          String @id @default(uuid())
+  issueId     String
+  projectId   String
+  notes       String @db.Text
+  evidenceDocumentIds String[] @default([])
+  createdByUserId String
+  createdAt   DateTime @default(now())
+
+  issue     ProjectIssue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  project   ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User          @relation("ProjectIssueNoteCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([issueId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([createdByUserId])
+  @@map("project_issue_notes")
+}
+
+// Immutable-at-generation dispute export. Every regeneration creates a new version.
+model ProjectDisputePackage {
+  id          String @id @default(uuid())
+  projectId   String
+  propertyId  String
+  issueId     String
+  version     Int
+  documentId  String
+  storageKey  String
+  checksumSha256 String @db.VarChar(64)
+  snapshot    Json
+  generatedByUserId String
+  generatedAt DateTime @default(now())
+
+  project     ProjectRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issue       ProjectIssue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  generatedBy User          @relation("ProjectDisputePackageGeneratedBy", fields: [generatedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([issueId, version])
+  @@index([projectId, generatedAt(sort: Desc)])
+  @@index([propertyId, generatedAt(sort: Desc)])
+  @@index([documentId])
+  @@index([generatedByUserId])
+  @@map("project_dispute_packages")
 }
 
 // Append-only audit log of every write-back applied when a project is marked COMPLETED.

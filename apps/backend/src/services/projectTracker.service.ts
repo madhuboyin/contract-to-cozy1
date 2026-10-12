@@ -41,6 +41,8 @@ import {
   VERIFIED_CLOSEOUT_REFRESH_TARGETS,
 } from './projectCompliance/closeoutPolicy';
 import { createHash, randomBytes } from 'node:crypto';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { uploadPdfBuffer } from './storage/reportStorage';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import {
@@ -960,7 +962,8 @@ export async function getProjectDetail(projectId: string, propertyId: string) {
       milestones: { orderBy: { position: 'asc' } },
       payments: { orderBy: { createdAt: 'asc' } },
       changeOrders: { orderBy: { changeNumber: 'asc' } },
-      issues: { orderBy: { createdAt: 'desc' } },
+      issues: { include: { notes: { orderBy: { createdAt: 'asc' } }, disputePackages: { orderBy: { version: 'desc' }, select: { id: true, version: true, documentId: true, generatedAt: true } } }, orderBy: { createdAt: 'desc' } },
+      materialSpecs: { where: { isActive: true }, orderBy: [{ category: 'asc' }, { label: 'asc' }] },
       _count: { select: { progressLogs: true, writeBacks: true } },
     },
   });
@@ -1724,6 +1727,7 @@ export async function listIssues(projectId: string, propertyId: string) {
   await assertProject(projectId, propertyId);
   return prisma.projectIssue.findMany({
     where: { projectId },
+    include: { notes: { orderBy: { createdAt: 'asc' } }, disputePackages: { orderBy: { version: 'desc' } } },
     orderBy: { createdAt: 'desc' },
   });
 }
@@ -1816,6 +1820,97 @@ export async function resolveIssue(
   }
 
   return updated;
+}
+
+export async function escalateIssue(issueId: string, projectId: string, propertyId: string) {
+  await assertProject(projectId, propertyId);
+  const issue = await assertIssue(issueId, projectId);
+  if (issue.sourceEntityType) throw new APIError('This issue is controlled by a compliance source and cannot be escalated manually.', 409, 'EXECUTION_ISSUE_SOURCE_AUTHORITY_REQUIRED');
+  if (issue.status === 'RESOLVED') throw new APIError('A resolved issue cannot be escalated.', 409, 'PROJECT_ISSUE_ALREADY_RESOLVED');
+  if (issue.status === 'ESCALATED') return prisma.projectIssue.findUniqueOrThrow({ where: { id: issueId } });
+  return prisma.projectIssue.update({ where: { id: issueId }, data: { status: 'ESCALATED' } });
+}
+
+export async function addIssueNote(issueId: string, projectId: string, propertyId: string, userId: string, data: { notes: string; evidenceDocumentIds?: string[] }) {
+  await assertProject(projectId, propertyId);
+  await assertIssue(issueId, projectId);
+  const evidenceDocumentIds = [...new Set(data.evidenceDocumentIds ?? [])];
+  if (evidenceDocumentIds.length) {
+    const count = await prisma.document.count({ where: { id: { in: evidenceDocumentIds }, propertyId, deletedAt: null } });
+    if (count !== evidenceDocumentIds.length) throw new APIError('One or more issue-note documents are unavailable for this property.', 400, 'PROJECT_ISSUE_NOTE_DOCUMENT_INVALID');
+  }
+  return prisma.projectIssueNote.create({ data: { issueId, projectId, notes: data.notes, evidenceDocumentIds, createdByUserId: userId } });
+}
+
+async function renderDisputePackagePdf(snapshot: any): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const lines: Array<{ text: string; heading?: boolean }> = [
+    { text: 'Project Dispute Package', heading: true },
+    { text: `Generated: ${snapshot.generatedAt}` },
+    { text: `Project: ${snapshot.project.name}` },
+    { text: `Contract record: ${snapshot.project.contractDocumentKey ?? 'No contract document recorded'}` },
+    { text: `Escalated issue: ${snapshot.issue.title}` },
+    { text: `Issue details: ${snapshot.issue.description}` },
+    { text: 'Milestones', heading: true },
+    ...snapshot.milestones.map((item: any) => ({ text: `${item.name} - ${item.status}${item.scheduledDate ? ` - ${item.scheduledDate}` : ''}` })),
+    { text: 'Payments', heading: true },
+    ...snapshot.payments.map((item: any) => ({ text: `${item.description} - $${(item.amountCents / 100).toFixed(2)} - ${item.status}` })),
+    { text: 'Change orders', heading: true },
+    ...snapshot.changeOrders.map((item: any) => ({ text: `#${item.changeNumber} ${item.title} - ${item.status} - $${(item.costDeltaCents / 100).toFixed(2)}` })),
+    { text: 'Issues log', heading: true },
+    ...snapshot.issues.map((item: any) => ({ text: `${item.createdAt}: ${item.title} - ${item.status} - ${item.description}` })),
+    { text: 'Issue timeline', heading: true },
+    ...snapshot.issueTimeline.map((item: any) => ({ text: `${item.createdAt}: ${item.notes}` })),
+    { text: 'Selected evidence', heading: true },
+    ...snapshot.evidence.map((item: any) => ({ text: `${item.name} (${item.mimeType}) - document ${item.id}` })),
+  ];
+  let page = pdf.addPage([612, 792]);
+  let y = 756;
+  for (const line of lines) {
+    const size = line.heading ? 14 : 10;
+    const lineFont = line.heading ? bold : font;
+    const words = String(line.text).replace(/[^\x20-\x7E]/g, '?').split(/\s+/);
+    let row = '';
+    const rows: string[] = [];
+    for (const word of words) {
+      const candidate = row ? `${row} ${word}` : word;
+      if (lineFont.widthOfTextAtSize(candidate, size) > 540 && row) { rows.push(row); row = word; } else row = candidate;
+    }
+    if (row) rows.push(row);
+    for (const text of rows) {
+      if (y < 40) { page = pdf.addPage([612, 792]); y = 756; }
+      page.drawText(text, { x: 36, y, size, font: lineFont, color: rgb(0.1, 0.1, 0.1) });
+      y -= line.heading ? 20 : 14;
+    }
+  }
+  return Buffer.from(await pdf.save());
+}
+
+export async function generateDisputePackage(issueId: string, projectId: string, propertyId: string, userId: string, selectedEvidenceDocumentIds: string[] = []) {
+  await assertProject(projectId, propertyId);
+  const issue = await assertIssue(issueId, projectId);
+  if (issue.status !== 'ESCALATED') throw new APIError('Escalate the issue before generating a dispute package.', 409, 'PROJECT_ISSUE_NOT_ESCALATED');
+  const [record, notes, evidence, prior] = await Promise.all([
+    prisma.projectRecord.findUniqueOrThrow({ where: { id: projectId }, include: { milestones: { orderBy: [{ scheduledDate: 'asc' }, { position: 'asc' }] }, payments: { orderBy: { createdAt: 'asc' } }, changeOrders: { orderBy: { changeNumber: 'asc' } }, issues: { orderBy: { createdAt: 'asc' } } } }),
+    prisma.projectIssueNote.findMany({ where: { issueId, projectId }, orderBy: { createdAt: 'asc' } }),
+    prisma.document.findMany({ where: { id: { in: [...new Set(selectedEvidenceDocumentIds)] }, propertyId, deletedAt: null }, select: { id: true, name: true, mimeType: true } }),
+    prisma.projectDisputePackage.findFirst({ where: { issueId }, orderBy: { version: 'desc' }, select: { version: true } }),
+  ]);
+  if (evidence.length !== new Set(selectedEvidenceDocumentIds).size) throw new APIError('One or more selected evidence documents are unavailable for this property.', 400, 'PROJECT_DISPUTE_EVIDENCE_INVALID');
+  const generatedAt = new Date();
+  const issueRecord = record.issues.find((item) => item.id === issueId)!;
+  const snapshot = { schemaVersion: 'project-dispute-package-v1', generatedAt: generatedAt.toISOString(), project: { id: record.id, name: record.name, projectType: record.projectType, contractDocumentKey: record.contractDocumentKey }, issue: issueRecord, milestones: record.milestones, payments: record.payments, changeOrders: record.changeOrders, issues: record.issues, issueTimeline: [{ createdAt: issueRecord.createdAt.toISOString(), notes: issueRecord.description }, ...notes.map((note) => ({ createdAt: note.createdAt.toISOString(), notes: note.notes, evidenceDocumentIds: note.evidenceDocumentIds }))], evidence };
+  const buffer = await renderDisputePackagePdf(snapshot);
+  const checksumSha256 = createHash('sha256').update(buffer).digest('hex');
+  const version = (prior?.version ?? 0) + 1;
+  const fileName = `project-dispute-${projectId}-v${version}.pdf`;
+  const uploaded = await uploadPdfBuffer({ buffer, fileName, checksumSha256, propertyId, userId });
+  return prisma.$transaction(async (tx) => {
+    const document = await tx.document.create({ data: { propertyId, projectId, uploadedBy: userId, type: 'OTHER', name: fileName, description: `Immutable dispute package for ${issueRecord.title}`, fileUrl: uploaded.key, fileSize: uploaded.fileSizeBytes, mimeType: 'application/pdf', sha256: checksumSha256, verificationStatus: 'VERIFIED', verifiedAt: generatedAt, verifiedByUserId: userId, metadata: { immutable: true, issueId, version, generatedAt: generatedAt.toISOString() } } });
+    return tx.projectDisputePackage.create({ data: { projectId, propertyId, issueId, version, documentId: document.id, storageKey: uploaded.key, checksumSha256, snapshot: snapshot as Prisma.InputJsonValue, generatedByUserId: userId, generatedAt } });
+  });
 }
 
 // ── Completion ────────────────────────────────────────────────────────────────

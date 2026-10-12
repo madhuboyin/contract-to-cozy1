@@ -36,6 +36,9 @@ import {
   createIssue,
   updateIssue,
   resolveIssue,
+  escalateIssue,
+  addIssueNote,
+  generateDisputePackage,
   getCompletionChecklist,
   getCloseoutPackage,
   createCloseoutShareLink,
@@ -63,6 +66,8 @@ import {
   CreateIssueSchema,
   UpdateIssueSchema,
   ResolveIssueSchema,
+  AddIssueNoteSchema,
+  GenerateDisputePackageSchema,
   ConfirmCompletionSchema,
   CreateCloseoutShareSchema,
   CompleteMinorWorkSchema,
@@ -257,6 +262,23 @@ router.post(
   propertyAuthMiddleware,
   validateBody(ResolveIssueSchema),
   resolveIssue,
+);
+router.post(
+  '/properties/:propertyId/projects/:projectId/issues/:issueId/escalate',
+  propertyAuthMiddleware,
+  escalateIssue,
+);
+router.post(
+  '/properties/:propertyId/projects/:projectId/issues/:issueId/notes',
+  propertyAuthMiddleware,
+  validateBody(AddIssueNoteSchema),
+  addIssueNote,
+);
+router.post(
+  '/properties/:propertyId/projects/:projectId/issues/:issueId/dispute-packages',
+  propertyAuthMiddleware,
+  validateBody(GenerateDisputePackageSchema),
+  generateDisputePackage,
 );
 
 // ── Completion ────────────────────────────────────────────────────────────────

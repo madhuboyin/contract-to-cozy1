@@ -356,6 +356,32 @@ export const ProjectTrackerIssueResolveInputSchema = z.object({
   resolutionNotes: z.string().trim().min(1).max(5000),
 }).strict();
 
+export const ProjectTrackerIssueNoteInputSchema = z.object({
+  notes: z.string().trim().min(1).max(5000),
+  evidenceDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]),
+}).strict();
+
+export const ProjectTrackerDisputePackageInputSchema = z.object({
+  evidenceDocumentIds: z.array(z.string().min(1).max(160)).max(100).default([]),
+}).strict();
+
+const projectMaterialCategory = z.enum(['PAINT', 'TILE', 'FLOORING', 'GROUT', 'COUNTERTOP', 'CABINET', 'HARDWARE', 'TRIM_MOLDING', 'WALLPAPER', 'ROOFING', 'SIDING', 'WINDOW', 'DOOR', 'INSULATION', 'OTHER']);
+export const ProjectTrackerMaterialInputSchema = z.object({
+  label: z.string().trim().min(1).max(200), category: projectMaterialCategory,
+  manufacturer: optionalText(100), productLine: optionalText(100), productName: optionalText(200), sku: optionalText(100), colorCode: optionalText(50), finish: optionalText(80), dimensions: optionalText(100), material: optionalText(100), supplier: optionalText(150), quantityPurchased: optionalText(80), lotBatch: optionalText(100), notes: optionalText(1000), careInstructions: optionalText(5000),
+  permitRelevant: z.coerce.boolean().default(false), hoaRelevant: z.coerce.boolean().default(false),
+  submittalDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]),
+}).strict();
+
+export const ProjectTrackerMaterialLifecycleInputSchema = z.object({
+  evidenceDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]), approvalDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]), submittalDocumentIds: z.array(z.string().min(1).max(160)).max(50).default([]),
+  receiptDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]), warrantyDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]), manualDocumentIds: z.array(z.string().min(1).max(160)).max(1).default([]), quantityInstalled: optionalText(100), quantityRemaining: z.string().trim().max(100).optional(), remainingStorageLocation: optionalText(300), installedByName: optionalText(200), installedAt: projectExactDate.nullish().transform((value) => value || null), notes: z.string().trim().min(1).max(3000),
+}).strict();
+
+export const ProjectTrackerMaterialSubstitutionInputSchema = z.object({
+  label: z.string().trim().min(1).max(200), manufacturer: optionalText(100), productName: optionalText(200), sku: optionalText(100), identityChanges: z.array(z.string().trim().min(1).max(200)).min(1).max(50), reason: z.string().trim().min(1).max(2000), costDeltaDollars: z.coerce.number().min(-100_000_000).max(100_000_000).optional(), scheduleImpact: optionalText(1000), permitRelevant: z.coerce.boolean().default(false), hoaRelevant: z.coerce.boolean().default(false), evidenceDocumentIds: z.array(z.string().min(1).max(160)).min(1).max(50), sourceChangeOrderId: optionalText(160),
+}).strict();
+
 export const ProjectTrackerPaymentCreateInputSchema = z.object({
   description: z.string().trim().min(1).max(200),
   amountDollars: z.coerce.number().positive().max(100_000_000),

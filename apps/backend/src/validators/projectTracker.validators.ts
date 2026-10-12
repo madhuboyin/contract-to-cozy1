@@ -352,6 +352,15 @@ export const ResolveIssueSchema = z.object({
   resolutionNotes: z.string().min(1).max(5000),
 });
 
+export const AddIssueNoteSchema = z.object({
+  notes: z.string().trim().min(1).max(5000),
+  evidenceDocumentIds: z.array(z.string().min(1)).max(50).default([]),
+});
+
+export const GenerateDisputePackageSchema = z.object({
+  evidenceDocumentIds: z.array(z.string().min(1)).max(100).default([]),
+});
+
 // ── Completion ────────────────────────────────────────────────────────────────
 
 const verificationResult = z.enum(['PASSED', 'FAILED', 'NOT_REQUIRED', 'UNRESOLVED']);
