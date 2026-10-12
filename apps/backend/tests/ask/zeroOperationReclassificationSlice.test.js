@@ -56,11 +56,13 @@ test('the renovation readiness answer links to no desktop page: not the case pag
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
-test('with no renovation case, the answer offers no "Start renovation planning" page link and says Ask cannot start one', async () => {
+test('with no renovation case, the answer offers no "Start renovation planning" page link; starting one is an in-Ask action for a contributor or owner (FRD v1.303)', async () => {
   cases = [];
   const result = await readiness();
-  assert.deepEqual(hrefs(result), []);
-  assert.match(result.blocks[0].body, /Starting a renovation case is not currently available in Ask/);
+  assert.deepEqual(hrefs(result).filter(([, href]) => href), [], 'no action carries a page link');
+  assert.doesNotMatch(result.blocks[0].body, /not currently available in Ask/);
+  assert.match(result.blocks[0].body, /Start a renovation case to describe the work|A contributor or owner can start a renovation case/);
+  for (const action of result.blocks[0].actions ?? []) assert.equal(action.interactionType, 'START_WORKFLOW');
 });
 
 test('the reserve-allocations "Open Reserve Fund" link survives the whitelist (it was always stripped)', () => {

@@ -20,6 +20,7 @@ import { getReadiness as getRenovationReadiness } from '../../renovationReadines
 import { PermitTrackerService } from '../../permitTracker.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE } from '../support/reserveFundConstants';
+import { RENOVATION_CASE_START_ACTION_ID, RENOVATION_CASE_START_MESSAGE } from '../support/renovationCaseStart';
 
 const homeCapitalTimelineService = new HomeCapitalTimelineService();
 
@@ -228,11 +229,11 @@ export function renovationReadinessProgress(
   };
 }
 
-async function renovationPermitReadinessResult(propertyId: string, message: string): Promise<AskOperationResult> {
+async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false): Promise<AskOperationResult> {
   const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
   if (!cases.length) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
-    blocks: [{ type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'No active renovation case is recorded', body: `No active renovation case is recorded, so readiness cannot be checked. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work. Starting a renovation case is not currently available in Ask.`, tone: 'CAUTION', actions: [] }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'No active renovation case is recorded', body: `No active renovation case is recorded, so readiness cannot be checked. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work. ${canStart ? 'Start a renovation case to describe the work, then check its readiness.' : 'A contributor or owner can start a renovation case.'}`, tone: 'CAUTION', actions: canStart ? [{ id: RENOVATION_CASE_START_ACTION_ID, label: 'Start a renovation case', interactionType: 'START_WORKFLOW' as const, message: RENOVATION_CASE_START_MESSAGE, operationId: 'RENOVATION_CASE_START' as const, style: 'PRIMARY' as const }] : [] }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: [],
   };
   const lower = message.toLowerCase();
   const selected = cases.find((candidate) => lower.includes(candidate.name.toLowerCase())) ?? cases[0];
@@ -293,6 +294,9 @@ registerCapabilityHandler('capital-reserve.plan', async (envelope) => capitalRes
 
 registerCapabilityHandler('property-tax.appeal-readiness', async (envelope) => propertyTaxAppealReadinessResult(envelope.userId, envelope.propertyId!, envelope.message));
 
-registerCapabilityHandler('renovation-permit.readiness', async (envelope) => renovationPermitReadinessResult(envelope.propertyId!, envelope.message));
+registerCapabilityHandler('renovation-permit.readiness', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return renovationPermitReadinessResult(envelope.propertyId!, envelope.message, access.role !== HouseholdRole.VIEWER);
+});
 
 registerCapabilityHandler('major-event.entry', async (envelope) => majorEventEntryResult(envelope.userId, envelope.propertyId!, envelope.message));

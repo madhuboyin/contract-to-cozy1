@@ -97,7 +97,9 @@ test('the renovation readiness answer, with a case and without one, links to no 
   renovationCase.listRenovationCases = async () => [];
   const none = await capabilityInvoke('RENOVATION_PERMIT_READINESS', { userId: 'u1', propertyId: 'p1', message: 'Is my renovation ready to start?' });
   assert.equal(none.reasonCode, 'RENOVATION_CASE_REQUIRED');
+  // This fixture is a viewer. Starting a renovation case is available in Ask to a contributor or owner (FRD v1.303; covered in renovationCaseStart.test.js);
+  // a viewer is offered no action and is told who can, with no page.
   assert.deepEqual(none.blocks[0].actions, []);
-  assert.match(none.blocks[0].body, /not currently available in Ask/);
+  assert.match(none.blocks[0].body, /A contributor or owner can start a renovation case/);
   assert.equal(JSON.stringify(none).includes('/dashboard/'), false);
 });

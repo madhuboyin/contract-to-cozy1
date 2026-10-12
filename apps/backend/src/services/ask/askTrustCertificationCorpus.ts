@@ -281,6 +281,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_ANALYZE: 'The analysis runs and its findings and draft are saved only after you confirm; nothing is sent to anyone.',
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
+  RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
   HOME_PLANT_ADD: 'The plant is reviewed and then added to this home after your confirmation.',
   ROOM_PLANT_RECOMMENDATIONS: 'Room preferences are reviewed and ranked plant recommendations are generated after your confirmation.',
   OWNERSHIP_COST_COMMAND: 'An ownership-cost planning choice is reviewed and recorded only after confirmation.',

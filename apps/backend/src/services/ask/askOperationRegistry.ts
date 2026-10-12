@@ -5,6 +5,7 @@ import { createAskOperationSemanticContract, validateAskSemanticContract, type A
 import { validateAskOperationSemanticPackages } from './askOperationSemanticPackages';
 import { parseReserveFundMessage } from './support/reserveFundMessage';
 import { isNegotiationShieldStartRequest } from './support/negotiationShieldStart';
+import { isRenovationCaseStartRequest } from './support/renovationCaseStart';
 
 export type AskIntentFamily =
   | 'RECORD_QUERY'
@@ -121,6 +122,9 @@ export type AskOperationId =
   | 'NEGOTIATION_SHIELD_CASE_UPDATE'
   // Attach an existing Home Record to a review (documents slice 3a): confirmation-gated, reached only by the declared Attach a document action.
   | 'NEGOTIATION_SHIELD_CASE_ATTACH'
+  // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
+  // answer or a typed "start a renovation case"; never by fuzzy retrieval.
+  | 'RENOVATION_CASE_START'
   | 'HOME_UPGRADE_SCENARIOS'
   | 'DIY_PROJECTS'
   // DIY project guide (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md): a read-only, launch-only walk through ONE DIY project, reached from the row action on DIY_PROJECTS.
@@ -347,6 +351,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_UPDATE',
   // Reached only by the declared Attach a document action on a review's Documents block; no message pattern.
   'NEGOTIATION_SHIELD_CASE_ATTACH',
+  // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
+  'RENOVATION_CASE_START',
   'PROJECT_TRACKER_CREATE',
   'PROJECT_TRACKER_COMMAND',
   'HOME_PLANT_ADD',
@@ -648,6 +654,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   PROPERTY_PURCHASE_DATE_SET: definition('PROPERTY_PURCHASE_DATE_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'property-purchase-date.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_ATTACH: definition('NEGOTIATION_SHIELD_CASE_ATTACH', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.attach', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_UPDATE: definition('NEGOTIATION_SHIELD_CASE_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_ANALYZE: definition('NEGOTIATION_SHIELD_CASE_ANALYZE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.analyze', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1362,6 +1369,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (hoaCompliancePattern.test(message) && !hoaComplianceOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOA_COMPLIANCE_STATUS', 0.96);
+  }
+  // "Start a renovation case" is its own command; without this, "start" + "renovation" below reads it as "can I start my renovation".
+  if (isRenovationCaseStartRequest(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('RENOVATION_CASE_START', 0.96);
   }
   if (renovationPermitPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('RENOVATION_PERMIT_READINESS', 0.97);

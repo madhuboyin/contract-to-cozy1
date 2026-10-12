@@ -47,6 +47,8 @@ import { NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY, parseNegotiationEditAnswer } from 
 import { getNegotiationShieldEditableInputForProperty } from '../../negotiationShieldCaseList';
 import { negotiationShieldAttachOffer, negotiationShieldAttachResult } from '../handlers/negotiationShieldAttach.handler';
 import { NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, parseNegotiationAttachAnswer } from '../support/negotiationShieldAttach';
+import { renovationCaseStartContextVersion, renovationCaseStartResult } from '../handlers/renovationCaseStart.handler';
+import { parseRenovationCaseStartAnswer, RENOVATION_CASE_START_CAPTURE_KEY } from '../support/renovationCaseStart';
 import { plantRecommendationContextVersion, roomPlantRecommendationResult } from '../handlers/plantRecommendations.handler';
 import { PLANT_RECOMMENDATIONS_CAPTURE_KEY } from '../support/plantRecommendationConstants';
 import { doNothingRunContextVersion, doNothingRunResult, priceCheckVersion, servicePriceCheckResult } from '../handlers/homeToolRuns.handler';
@@ -347,7 +349,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (execution.operationId !== 'PROJECT_TRACKER_CREATE' && !['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE_ATTACH', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (execution.operationId !== 'PROJECT_TRACKER_CREATE' && !['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE_ATTACH', 'RENOVATION_CASE_START', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -857,6 +859,44 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = offer.contextVersion;
     canonicalOwner = 'NegotiationShieldDocument';
+  } else if (execution.operationId === 'RENOVATION_CASE_START') {
+    if (input.captureKey !== RENOVATION_CASE_START_CAPTURE_KEY) {
+      const error = new Error('This renovation case form is no longer active. Ask to start a renovation case again.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to start a renovation case.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const currentVersion = renovationCaseStartContextVersion(execution.propertyId);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('This renovation case form is out of date. Ask to start a renovation case again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const answer = parseRenovationCaseStartAnswer(input.answer);
+    if (!answer.success) {
+      const error = new Error(answer.reason === 'DATES'
+        ? 'The finish date must be on or after the start date.'
+        : 'Give the case a name, choose the kind of work, and check the budget and dates.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const startLaunch = storedParameters.renovationCaseStartLaunch && typeof storedParameters.renovationCaseStartLaunch === 'object' && !Array.isArray(storedParameters.renovationCaseStartLaunch)
+      ? storedParameters.renovationCaseStartLaunch as { sourceExecutionId?: unknown }
+      : null;
+    result = await renovationCaseStartResult(userId, execution.propertyId, {
+      sourceExecutionId: typeof startLaunch?.sourceExecutionId === 'string' ? startLaunch.sourceExecutionId : null,
+    }, answer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'RenovationCase';
   } else if (execution.operationId === 'DO_NOTHING_SIMULATION_RUN' || execution.operationId === 'SERVICE_PRICE_CHECK_RUN') {
     const simulation = execution.operationId === 'DO_NOTHING_SIMULATION_RUN';
     if (input.captureKey !== (simulation ? DO_NOTHING_RUN_CAPTURE_KEY : SERVICE_PRICE_CHECK_CAPTURE_KEY)) {

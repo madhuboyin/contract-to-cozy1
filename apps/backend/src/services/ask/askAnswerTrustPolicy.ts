@@ -176,6 +176,10 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ANALYZE: new Set(['negotiation-shield-back', 'negotiation-shield-analyze', 'negotiation-shield-edit', 'negotiation-shield-attach']),
   // The receipt of an attached document offers the read of that review and a run of its analysis.
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
+  // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
+  RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // The readiness answer's empty state offers Start a renovation case to a contributor or owner (a SUMMARY action, so a missing id is stripped).
+  RENOVATION_PERMIT_READINESS: new Set(['renovation-case-start']),
   // The receipt of saved details offers the read of that review and a run of its analysis.
   NEGOTIATION_SHIELD_CASE_UPDATE: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
