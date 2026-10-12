@@ -198,6 +198,37 @@ async function validateScope(propertyId: string, input: GetOrCreateQuoteWorkspac
   }
 }
 
+function openWorkspaceWhere(
+  propertyId: string,
+  input: GetOrCreateQuoteWorkspaceInput,
+  exactScope: { inventoryItemId: string | null; serviceCategory: ServiceCategory | null },
+) {
+  return {
+    propertyId,
+    status: { in: OPEN_WORKSPACE_STATUSES },
+    OR: [
+      ...(input.guidanceJourneyId ? [{ guidanceJourneyId: input.guidanceJourneyId }] : []),
+      exactScope,
+    ],
+  };
+}
+
+/**
+ * Read-only counterpart of getOrCreateQuoteComparisonWorkspace: the same match rule, but it never creates a workspace, so a viewer can open the page.
+ * Returns the open workspace for this scope, or null.
+ */
+export async function findQuoteComparisonWorkspace(propertyId: string, input: GetOrCreateQuoteWorkspaceInput) {
+  await validateScope(propertyId, input);
+  const exactScope = {
+    inventoryItemId: input.inventoryItemId ?? null,
+    serviceCategory: input.serviceCategory ?? null,
+  };
+  return database.quoteComparisonWorkspace.findFirst({
+    where: openWorkspaceWhere(propertyId, input, exactScope),
+    orderBy: { updatedAt: 'desc' },
+  });
+}
+
 export async function getOrCreateQuoteComparisonWorkspace(
   propertyId: string,
   userId: string,
@@ -211,14 +242,7 @@ export async function getOrCreateQuoteComparisonWorkspace(
   };
   return withSerializableDedupe(async (tx) => {
     const existing = await tx.quoteComparisonWorkspace.findFirst({
-      where: {
-        propertyId,
-        status: { in: OPEN_WORKSPACE_STATUSES },
-        OR: [
-          ...(input.guidanceJourneyId ? [{ guidanceJourneyId: input.guidanceJourneyId }] : []),
-          exactScope,
-        ],
-      },
+      where: openWorkspaceWhere(propertyId, input, exactScope),
       orderBy: { updatedAt: 'desc' },
     });
     if (existing) return { workspace: existing, reused: true };

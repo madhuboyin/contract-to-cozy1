@@ -1,5 +1,7 @@
 import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
+import { APIError } from '../middleware/error.middleware';
+import { getOrCreateQuoteWorkspaceSchema } from '../validators/quoteComparison.validators';
 import {
   confirmQuoteProposal,
   createQuoteProposal,
@@ -16,6 +18,7 @@ import {
   resolveQuoteClarification,
   setQuoteProposalDisposition,
   setServiceQuoteOutcomeMeasurementConsent,
+  findQuoteComparisonWorkspace,
 } from '../services/quoteComparison.service';
 import {
   emitServiceQuoteDecisionAnalytics,
@@ -75,6 +78,33 @@ export async function getOrCreateWorkspace(req: CustomRequest, res: Response, ne
       success: true,
       data: { ...result, propertyContext },
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /properties/:propertyId/quote-comparison/workspaces/lookup
+ * Read-only: the open workspace for this scope, or null. The page uses it for a viewer, who may not create one.
+ */
+export async function lookupWorkspace(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const parsed = getOrCreateQuoteWorkspaceSchema.safeParse({
+      serviceCategory: req.query.serviceCategory || undefined,
+      inventoryItemId: req.query.inventoryItemId || undefined,
+      guidanceJourneyId: req.query.guidanceJourneyId || undefined,
+    });
+    if (!parsed.success) {
+      throw new APIError(parsed.error.issues[0]?.message ?? 'Invalid workspace scope.', 400, 'QUOTE_SCOPE_INVALID');
+    }
+    const workspace = await findQuoteComparisonWorkspace(req.params.propertyId, parsed.data);
+    const propertyContext = await getProjectComplianceEnvelope(
+      req.params.propertyId,
+      req.user!.userId,
+      'QUOTE_COMPARISON',
+      { serviceCategory: parsed.data.serviceCategory },
+    );
+    res.json({ success: true, data: { workspace, reused: Boolean(workspace), propertyContext } });
   } catch (error) {
     next(error);
   }

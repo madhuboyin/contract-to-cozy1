@@ -22,6 +22,7 @@ import {
   listServicePriceRadarChecks,
   getProjectComplianceContext,
   getOrCreateQuoteComparisonWorkspace,
+  lookupQuoteComparisonWorkspace,
   deleteQuoteProposal,
   resolveQuoteClarification,
   setQuoteDisposition,
@@ -37,6 +38,7 @@ import {
   updateServiceQuoteOutcomeConsent,
 } from '../service-price-radar/servicePriceRadarApi';
 import { api } from '@/lib/api/client';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { createNegotiationShieldCase } from '../negotiation-shield/negotiationShieldApi';
 import { createPriceFinalizationDraft } from '@/lib/api/priceFinalizationApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
@@ -225,6 +227,8 @@ export default function QuoteComparisonWorkspaceClient() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const itemId = searchParams.get('itemId');
+  // A viewer may read the workspace but not create one: they open the page through the read-only lookup, never the mutating get-or-create route.
+  const { canWrite, isLoading: accessLoading } = usePropertyWriteAccess(propertyId);
   const contextQuery = buildContextQuery(searchParams);
 
   React.useEffect(() => {
@@ -296,31 +300,37 @@ export default function QuoteComparisonWorkspaceClient() {
   }, [defaultCategory, defaultQuoteAmount, defaultVendorName]);
 
   const loadQuotes = React.useCallback(async () => {
+    // Wait until the role is known: a viewer must never reach the mutating get-or-create route.
+    if (accessLoading) return;
     setLoading(true);
     setError(null);
     try {
+      const workspaceScope = {
+        serviceCategory: (defaultCategory as ServicePriceRadarCheckSummary['serviceCategory']) || null,
+        inventoryItemId: itemId,
+        guidanceJourneyId,
+      };
       const [checks, context, workspaceResult] = await Promise.all([
         listServicePriceRadarChecks(propertyId, 24),
         getProjectComplianceContext(propertyId, 'QUOTE_COMPARISON'),
-        getOrCreateQuoteComparisonWorkspace(propertyId, {
-          serviceCategory: (defaultCategory as ServicePriceRadarCheckSummary['serviceCategory']) || null,
-          inventoryItemId: itemId,
-          guidanceJourneyId,
-          guidanceStepKey,
-          guidanceSignalIntentFamily,
-        }),
+        canWrite
+          ? getOrCreateQuoteComparisonWorkspace(propertyId, { ...workspaceScope, guidanceStepKey, guidanceSignalIntentFamily })
+          : lookupQuoteComparisonWorkspace(propertyId, workspaceScope),
       ]);
       setPropertyContext(context);
-      setWorkspaceId(workspaceResult.workspace.id);
-      const [savedWorkspace, comparisonResult] = await Promise.all([
-        getQuoteComparisonWorkspace(propertyId, workspaceResult.workspace.id),
-        getQuoteComparability(propertyId, workspaceResult.workspace.id),
-      ]);
+      const resolvedWorkspace = workspaceResult.workspace;
+      setWorkspaceId(resolvedWorkspace?.id ?? null);
+      const [savedWorkspace, comparisonResult] = resolvedWorkspace
+        ? await Promise.all([
+            getQuoteComparisonWorkspace(propertyId, resolvedWorkspace.id),
+            getQuoteComparability(propertyId, resolvedWorkspace.id),
+          ])
+        : [null, null];
       setComparability(comparisonResult);
       setDecisionWorkspace(savedWorkspace);
-
+      // Reads of the saved workspace below tolerate a viewer who has no workspace yet.
       const mappedChecks = checks.map(mapRadarCheckToQuote);
-      const savedQuotes = (savedWorkspace.quotes ?? []).map(mapProposalToQuote);
+      const savedQuotes = (savedWorkspace?.quotes ?? []).map(mapProposalToQuote);
       const merged = prefilledQuote
         ? [prefilledQuote, ...savedQuotes, ...mappedChecks]
         : [...savedQuotes, ...mappedChecks];
@@ -349,6 +359,8 @@ export default function QuoteComparisonWorkspaceClient() {
     guidanceJourneyId,
     guidanceStepKey,
     guidanceSignalIntentFamily,
+    canWrite,
+    accessLoading,
   ]);
 
   React.useEffect(() => {

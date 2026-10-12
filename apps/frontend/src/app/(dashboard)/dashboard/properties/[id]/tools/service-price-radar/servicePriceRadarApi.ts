@@ -412,6 +412,29 @@ export async function getOrCreateQuoteComparisonWorkspace(
   return { workspace: res.data.workspace, reused: res.data.reused };
 }
 
+/**
+ * Read-only counterpart of getOrCreateQuoteComparisonWorkspace, for a viewer (who may not create a workspace). Resolves to the open workspace for the
+ * scope, or null when none exists yet.
+ */
+export async function lookupQuoteComparisonWorkspace(
+  propertyId: string,
+  input: {
+    serviceCategory?: ServiceRadarCategory | null;
+    inventoryItemId?: string | null;
+    guidanceJourneyId?: string | null;
+  }
+): Promise<{ workspace: QuoteComparisonWorkspaceSummary | null; reused: boolean }> {
+  const query = new URLSearchParams();
+  if (input.serviceCategory) query.set('serviceCategory', input.serviceCategory);
+  if (input.inventoryItemId) query.set('inventoryItemId', input.inventoryItemId);
+  if (input.guidanceJourneyId) query.set('guidanceJourneyId', input.guidanceJourneyId);
+  const res = await api.get<{
+    workspace: QuoteComparisonWorkspaceSummary | null;
+    reused: boolean;
+  }>(`/api/properties/${propertyId}/quote-comparison/workspaces/lookup?${query.toString()}`);
+  return { workspace: res.data.workspace, reused: res.data.reused };
+}
+
 export async function getQuoteComparisonWorkspace(
   propertyId: string,
   workspaceId: string
