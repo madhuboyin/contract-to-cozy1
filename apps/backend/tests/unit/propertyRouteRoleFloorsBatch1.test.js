@@ -14,7 +14,7 @@ require('ts-node/register');
 // without a floor fails here instead of shipping open. Classification:
 //   - default            property-scoped mutation that needs CONTRIBUTOR (viewer and no-role get 403, contributor and owner get past)
 //   - VIEWER_CAPABLE     deliberately open to a viewer, with the reason
-//   - PENDING_DECISION   owner has not decided the floor; listed, not asserted (see the report in the session / FRD)
+//   - OWNER_ONLY         needs OWNER (a contributor gets 403), with the reason
 // homeBuyerTask is NOT here: its router has no propertyAuthMiddleware and each service method enforces its own role (asserted in
 // tests/unit/buyerServiceRoleEnforcement.test.js).
 
@@ -83,14 +83,15 @@ const VIEWER_CAPABLE = {
     'POST /inventory/barcode/lookup': 'stateless UPC lookup: reads a third-party catalog and persists nothing on the property',
   },
 };
-const PENDING_DECISION = {
+// Owner rulings (D-R1 batch 1): a public share link is a high-consequence disclosure and its revocation follows the same ownership boundary (vault
+// share-link is OWNER); the outcome-measurement consent authorizes household data use, not ordinary record editing.
+const OWNER_ONLY = {
   projectTracker: {
-    'POST /projects/:projectId/completion/share': 'creates a public share link for the closeout package: CONTRIBUTOR or OWNER (vault share-link is OWNER)',
-    'POST /projects/:projectId/completion/share-links/:shareLinkId/revoke': 'revokes a public share link: follows the create decision',
+    'POST /projects/:projectId/completion/share': 'creates a public tokenized link to the closeout package',
+    'POST /projects/:projectId/completion/share-links/:shareLinkId/revoke': 'revokes a public share link: same ownership boundary as create',
   },
   quoteComparison: {
-    'POST /quote-comparison/workspaces': 'get-or-create called on PAGE LOAD by QuoteComparisonWorkspaceClient.loadQuotes: a plain floor would break the page for a viewer',
-    'POST /quote-comparison/workspaces/:workspaceId/outcome-measurement-consent': 'household data-use consent: CONTRIBUTOR or OWNER',
+    'POST /quote-comparison/workspaces/:workspaceId/outcome-measurement-consent': 'authorizes household data use',
   },
 };
 
@@ -114,10 +115,11 @@ const TOOLS = ROUTER_FILES.map((name) => {
   const router = require(path.join(ROUTES_DIR, `${name}.routes.ts`)).default;
   const mutations = enumerateMutations(router);
   const viewerCapable = VIEWER_CAPABLE[name] ?? {};
-  const pending = PENDING_DECISION[name] ?? {};
+  const ownerOnly = OWNER_ONLY[name] ?? {};
   return {
-    name, router, mutations, viewerCapable, pending,
-    floored: mutations.filter((m) => !(key(m) in viewerCapable) && !(key(m) in pending)),
+    name, router, mutations, viewerCapable, ownerOnly,
+    floored: mutations.filter((m) => !(key(m) in viewerCapable) && !(key(m) in ownerOnly)),
+    ownerRoutes: mutations.filter((m) => key(m) in ownerOnly),
   };
 });
 
@@ -146,7 +148,7 @@ async function call(tool, method, routePath, role) {
 for (const tool of TOOLS) {
   test(`${tool.name}: classification entries all name a real mutating route`, () => {
     const keys = new Set(tool.mutations.map(key));
-    for (const k of [...Object.keys(tool.viewerCapable), ...Object.keys(tool.pending)]) assert.ok(keys.has(k), `${k} is not a mutating route of ${tool.name}`);
+    for (const k of [...Object.keys(tool.viewerCapable), ...Object.keys(tool.ownerOnly)]) assert.ok(keys.has(k), `${k} is not a mutating route of ${tool.name}`);
   });
 
   test(`${tool.name}: every writing route rejects a viewer and a caller with no role`, async () => {
@@ -167,9 +169,27 @@ for (const tool of TOOLS) {
     assert.deepEqual(blocked, []);
   });
 
+  test(`${tool.name}: OWNER-only routes reject a contributor and accept an owner`, async () => {
+    const wrong = [];
+    for (const m of tool.ownerRoutes) {
+      for (const role of ['VIEWER', 'CONTRIBUTOR', undefined]) if ((await call(tool, m.method, m.path, role)) !== 403) wrong.push(`${key(m)}: ${role ?? 'no role'} got in`);
+      if ((await call(tool, m.method, m.path, 'OWNER')) === 403) wrong.push(`${key(m)}: owner refused`);
+    }
+    assert.deepEqual(wrong, []);
+  });
+
   test(`${tool.name}: viewer-capable routes stay open to a viewer`, async () => {
     for (const m of tool.mutations.filter((x) => key(x) in tool.viewerCapable)) {
       assert.notEqual(await call(tool, m.method, m.path, 'VIEWER'), 403, `${key(m)}: viewer`);
     }
   });
 }
+
+test('quoteComparison: the read-only workspace lookup is open to a viewer and is not shadowed by /workspaces/:workspaceId', async () => {
+  const tool = TOOLS.find((t) => t.name === 'quoteComparison');
+  const response = await fetch(`${tool.origin}/properties/11111111-1111-4111-8111-111111111111/quote-comparison/workspaces/lookup?serviceCategory=PLUMBING`, {
+    headers: { 'x-test-role': 'VIEWER' },
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).handled, 'lookupWorkspace');
+});
