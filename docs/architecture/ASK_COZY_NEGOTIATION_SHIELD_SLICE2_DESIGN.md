@@ -1,6 +1,6 @@
 # Ask Cozy — Negotiation Shield slice 2 (write path): design
 
-**Status:** Decisions D1–D7 and D9 accepted and D8 revised by the owner (2026-10-12; section 7). D9 is built and verified (section 8). 2a and 2b are not built.
+**Status:** Decisions D1–D7 and D9 accepted and D8 revised by the owner (2026-10-12; section 7). D9 and D6 are built and verified (sections 8 and 8a). 2a and 2b are not built.
 **Date:** October 12, 2026
 **Parent:** `docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md` ("Negotiation Shield", recommended order item 1); slice 1 shipped as FRD v1.294 (`a416b23f`).
 **Method:** `docs/architecture/AUDIT_METHODOLOGY.md`. Every factual claim below is labelled **code-traced** (read in source, not run), **executed** (run), or **inferred**. Nothing here is executed against a database or browser (this repository has none). The executed checks are the slice 1 tests recorded in the FRD and the D9 router authorization test (section 8).
@@ -129,9 +129,16 @@ Start from selected confirmed inspection findings; request-for-repair vs credit;
 - **Verification (executed):** `tests/unit/negotiationShieldRouteAuthorization.test.js` mounts the real router with the real `requireHouseholdRole` and replaces only authentication, the membership lookup, the rate limiter and the controllers (the real controller loads the OCR stack, `sharp`, which is not installed here). It asserts, for every mutating route, viewer → 403 and no-role → 403 with the controller never reached, and contributor and owner → 200 reaching the right controller; that reads and analytics stay open to a viewer; and that the floor does not replace validation. **Against the pre-change router the viewer and no-role cases fail** (the route let the request through).
 - **Not verified:** the controllers' own behaviour behind the floor (unchanged); a real token and membership lookup.
 
+## 8a. D6 — the shared completion function (built and verified)
+
+- **Change:** the post-analysis journey completion moved from `negotiationShield.controller.ts` to `services/negotiationShieldJourneyCompletion.ts` (`recordNegotiationShieldAnalysisCompletion`, plus `negotiationShieldCompletionSignal`). The controller calls it with the journey, step and signal-family query parameters it already read. Ask's analysis command (2b) will call the same function, so a review run in Ask completes a guided step exactly as the page does. F7 is closed.
+- **Behaviour preserved (executed):** the HEAD controller and the new controller were run over 60 combinations (5 scenarios × 6 query shapes × hook success/failure, collaborators stubbed) and compared: the `recordToolCompletion` input, response status and response body are identical in all 60.
+- **Tests (executed, environment-independent):** `tests/unit/negotiationShieldJourneyCompletion.test.js` (8). `sharp` is stubbed so the controller can load without the native module.
+- **Not verified:** a real guidance journey store, and a page run (not required by the owner's validation rule).
+
 ## 9. Other defects found while reading (not fixed)
 
-1. **F7 — completion hook lives in the controller**, not the service, so any non-HTTP caller skips it.
+1. ~~**F7 — completion hook lives in the controller**~~ — fixed by D6 (section 8a).
 2. **F8 — the non-`documentId` attach branch is dead and would fail on a foreign key.**
 3. **F2 — `createCase` has no idempotency key** (addressed by D8 revised).
 

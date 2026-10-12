@@ -1,7 +1,7 @@
 import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
-import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { recordNegotiationShieldAnalysisCompletion } from '../services/negotiationShieldJourneyCompletion';
 import {
   AttachNegotiationShieldDocumentPayload,
   CreateNegotiationShieldCaseInput,
@@ -11,7 +11,6 @@ import {
   StartBuyerNegotiationInput,
 } from '../services/negotiationShield.types';
 import { NegotiationShieldService } from '../services/negotiationShield.service';
-import { logger } from '../lib/logger';
 import {
   assertProjectComplianceApplicable,
   getProjectComplianceEnvelope,
@@ -225,66 +224,15 @@ export async function analyzeNegotiationShieldCase(
       currentContext.contextVersion,
     );
 
-    const guidanceJourneyId = readQueryString(req.query.guidanceJourneyId);
-    const guidanceStepKey = readQueryString(req.query.guidanceStepKey);
-    const querySignalFamily = readQueryString(req.query.guidanceSignalIntentFamily)?.toLowerCase() ?? null;
-
-    const inferredFromScenario = (() => {
-      if (detail.case.scenarioType === 'INSURANCE_PREMIUM_INCREASE') {
-        return {
-          signalIntentFamily: 'coverage_gap',
-          issueDomain: 'INSURANCE' as const,
-        };
-      }
-
-      if (detail.case.scenarioType === 'BUYER_INSPECTION_NEGOTIATION') {
-        return {
-          signalIntentFamily: 'inspection_followup_needed',
-          issueDomain: 'MAINTENANCE' as const,
-        };
-      }
-
-      if (detail.case.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT') {
-        return {
-          signalIntentFamily: 'financial_exposure',
-          issueDomain: 'FINANCIAL' as const,
-        };
-      }
-
-      return {
-        signalIntentFamily: 'lifecycle_end_or_past_life',
-        issueDomain: 'ASSET_LIFECYCLE' as const,
-      };
-    })();
-
-    try {
-      await guidanceJourneyService.recordToolCompletion({
-        propertyId: req.params.propertyId,
-        actorUserId: userId,
-        journeyId: guidanceJourneyId ?? null,
-        signalIntentFamily: querySignalFamily ?? inferredFromScenario.signalIntentFamily,
-        issueDomain: inferredFromScenario.issueDomain,
-        sourceToolKey: 'negotiation-shield',
-        sourceEntityType: 'NEGOTIATION_SHIELD_CASE',
-        sourceEntityId: detail.case.id,
-        stepKey: guidanceStepKey ?? 'prepare_negotiation',
-        status: 'COMPLETED',
-        producedData: {
-          proofType: 'negotiation_analysis',
-          proofId: detail.case.id,
-          scenarioType: detail.case.scenarioType,
-          caseStatus: detail.case.status,
-          summary: detail.latestAnalysis?.summary ?? null,
-          confidence: detail.latestAnalysis?.confidence ?? null,
-          negotiationLeverage: detail.latestAnalysis?.negotiationLeverage ?? null,
-          recommendedActions: detail.latestAnalysis?.recommendedActions ?? null,
-          pricingAssessment: detail.latestAnalysis?.pricingAssessment ?? null,
-          draftType: detail.latestDraft?.draftType ?? null,
-        },
-      });
-    } catch (guidanceError) {
-      logger.warn({ guidanceError }, '[GUIDANCE] negotiation shield hook failed');
-    }
+    // The journey completion is shared with Ask (negotiationShieldJourneyCompletion.ts) so both surfaces keep identical side effects.
+    await recordNegotiationShieldAnalysisCompletion({
+      propertyId: req.params.propertyId,
+      actorUserId: userId,
+      detail,
+      journeyId: readQueryString(req.query.guidanceJourneyId),
+      stepKey: readQueryString(req.query.guidanceStepKey),
+      signalIntentFamily: readQueryString(req.query.guidanceSignalIntentFamily)?.toLowerCase() ?? null,
+    });
 
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
