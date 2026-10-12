@@ -68,16 +68,16 @@ test('the operation reads BreakEvenService.compute for the horizon asked, defaul
   assert.equal(breakEvenHorizonYears('over five years'), 5);
 });
 
-test('a projected break-even names the year, the range and the page, and offers the other horizon', () => {
+test('a projected break-even names the year and the range, offers the other horizon, and links to no page', () => {
   const result = breakEvenAnalysisFromDto(dto(), 'p1');
   const summary = result.blocks[0];
   assert.equal(result.status, 'ANSWERED');
   assert.equal(summary.title, 'Projected to break even in 2032 (year 6 of 10)');
   assert.match(summary.body, /Year 4 to not within 10 years/);
   assert.deepEqual(summary.actions.map((action) => [action.id, action.href ?? action.message]), [
-    ['open-break-even', '/dashboard/properties/p1/tools/break-even'],
     ['rerun-break-even-5', 'Show my home break-even analysis for a 5-year horizon.'],
   ]);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   const range = result.blocks.find((block) => block.id === 'break-even-sensitivity');
   assert.deepEqual(range.rows.map((row) => row.values.breakEven), ['Not within 10 years', 'Year 6', 'Year 4']);
 });

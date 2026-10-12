@@ -65,15 +65,14 @@ function refinanceJourneyIntent(message: string): 'COMPARE_OFFERS' | 'RECORD_DEC
 }
 
 async function refinanceJourneyResult(propertyId: string, intent: NonNullable<ReturnType<typeof refinanceJourneyIntent>>): Promise<AskOperationResult> {
-  const page = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`;
   if (intent === 'COMPARE_OFFERS') {
     const comparisons = await listSavedRefinanceLoanEstimateComparisons(propertyId);
     return {
       status: 'ANSWERED', reasonCode: 'REFINANCE_LOAN_ESTIMATES',
       blocks: [{
-        type: 'SUMMARY', id: 'refinance-offers-summary', title: comparisons.length ? `${comparisons.length} saved Loan Estimate comparison${comparisons.length === 1 ? '' : 's'}` : 'Compare official Loan Estimates',
-        body: comparisons.length ? 'Choose a saved comparison below, or add reviewed disclosures from two to four lenders. Ask keeps official lender terms separate from modeled scenarios.' : 'Add two to four official lender disclosures. You can upload a PDF or up to three page images for reviewed extraction, or enter the fields manually before comparing.',
-        tone: 'DEFAULT', actions: [{ id: 'open-loan-estimates', label: comparisons.length ? 'Review or add offers' : 'Add Loan Estimates', href: `${page}#refinance-loan-estimates`, style: 'PRIMARY' }],
+        type: 'SUMMARY', id: 'refinance-offers-summary', title: comparisons.length ? `${comparisons.length} saved Loan Estimate comparison${comparisons.length === 1 ? '' : 's'}` : 'No Loan Estimate comparison is saved yet',
+        body: comparisons.length ? 'Your saved comparisons are listed below. Adding or reviewing Loan Estimates is not currently available in Ask. Ask keeps official lender terms separate from modeled scenarios.' : 'No Loan Estimate comparison is saved yet. Adding official lender disclosures to compare is not currently available in Ask.',
+        tone: 'DEFAULT', actions: [],
       }, ...(comparisons.length ? [{
         type: 'TABLE' as const, id: 'refinance-saved-offers', title: 'Saved official-offer comparisons',
         columns: [{ key: 'label', label: 'Comparison' }, { key: 'offers', label: 'Lenders' }, { key: 'updated', label: 'Last updated' }],
@@ -93,9 +92,9 @@ async function refinanceJourneyResult(propertyId: string, intent: NonNullable<Re
     return {
       status: 'ANSWERED', reasonCode: 'REFINANCE_DECISION_JOURNEY',
       blocks: [{
-        type: 'SUMMARY', id: 'refinance-decision-summary', title: decision ? `Current refinance decision: ${decision.status.replace(/_/g, ' ').toLowerCase()}` : 'Record what you plan to do',
-        body: decision ? `This decision was updated ${decision.updatedAt.slice(0, 10)}. ${scenarios.length} saved scenario${scenarios.length === 1 ? '' : 's'} and ${comparisons.length} saved offer comparison${comparisons.length === 1 ? '' : 's'} are available to support the next step.` : 'Choose whether to keep the current loan, revisit on a future date, or proceed. A saved scenario or reviewed offer can be linked before you continue.',
-        tone: 'DEFAULT', actions: [{ id: 'open-refinance-decision', label: decision ? 'Review or update decision' : 'Record decision', href: `${page}#refinance-decide-track`, style: 'PRIMARY' }],
+        type: 'SUMMARY', id: 'refinance-decision-summary', title: decision ? `Current refinance decision: ${decision.status.replace(/_/g, ' ').toLowerCase()}` : 'No refinance decision is recorded yet',
+        body: decision ? `This decision was updated ${decision.updatedAt.slice(0, 10)}. ${scenarios.length} saved scenario${scenarios.length === 1 ? '' : 's'} and ${comparisons.length} saved offer comparison${comparisons.length === 1 ? '' : 's'} are available to support the next step.` : 'No refinance decision is recorded yet. Recording what you plan to do is not currently available in Ask.',
+        tone: 'DEFAULT', actions: [],
       }, ...(decision?.history?.length ? [{
         type: 'TABLE' as const, id: 'refinance-decision-history', title: 'Decision history',
         columns: [{ key: 'date', label: 'Date' }, { key: 'from', label: 'From' }, { key: 'to', label: 'To' }],
@@ -198,7 +197,7 @@ export function refinanceMonitorBlock(monitor: RefinanceRateMonitorDTO, title: s
     channel: 'Email plus in-app', cadence: monitor.cadence,
     quietHours: monitor.quietStart && monitor.quietEnd ? `${monitor.quietStart}–${monitor.quietEnd} (${monitor.timezone})` : null,
     sourceBoundary: 'Evaluates governed national benchmark snapshots; this is not a personalized lender offer.',
-    actions: [{ id: 'edit-monitor', label: 'Alert delivery settings', href: `/dashboard/properties/${encodeURIComponent(monitor.propertyId)}/tools/mortgage-refinance-radar#refinance-evidence-settings`, style: 'SECONDARY' }],
+    actions: [],
   };
 }
 
@@ -217,7 +216,6 @@ export function breakEvenHorizonYears(message: string): 5 | 10 {
 
 export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string): AskOperationResult {
   const years = dto.input.years;
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/break-even`;
   const { breakEven, rollup, sensitivity } = dto;
   const yearLabel = (index: number | null) => index == null ? `Not within ${years} years` : `Year ${index}`;
   const title = breakEven.status === 'ALREADY_BREAKEVEN'
@@ -236,7 +234,6 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string):
     type: 'SUMMARY', id: 'break-even-summary', title, body: `${body} Confidence: ${dto.meta.confidence.toLowerCase()}.`,
     tone: breakEven.status === 'NOT_REACHED' ? 'CAUTION' : 'DEFAULT',
     actions: [
-      { id: 'open-break-even', label: 'Open Break-Even', href: pageHref, style: 'PRIMARY' },
       { id: `rerun-break-even-${otherYears}`, label: `Show ${otherYears}-year horizon`, interactionType: 'START_WORKFLOW' as const, message: `Show my home break-even analysis for a ${otherYears}-year horizon.`, operationId: 'BREAK_EVEN_ANALYSIS', style: 'SECONDARY' as const },
     ],
   }];
@@ -359,7 +356,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
   if (profile?.mortgageStatus === 'NO_MORTGAGE') {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'NO_MORTGAGE',
-      blocks: [{ type: 'SUMMARY', id: 'refinance-not-applicable', title: 'No mortgage is recorded for this home', body: 'A mortgage refinance analysis does not apply unless the financing profile is corrected to show an active mortgage.', tone: 'DEFAULT', actions: [{ id: 'review-financing', label: 'Review financing profile', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'SECONDARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'refinance-not-applicable', title: 'No mortgage is recorded for this home', body: 'A mortgage refinance analysis does not apply unless the financing profile shows an active mortgage, and correcting that profile is not currently available in Ask.', tone: 'DEFAULT', actions: [] }],
       suggestions: [],
     };
   }
@@ -404,14 +401,14 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
   if (!marketSnapshot) {
     return {
       status: 'UNAVAILABLE', reasonCode: 'MARKET_RATE_UNAVAILABLE', contextVersion: financialContext.contextVersion,
-      blocks: [{ type: 'SUMMARY', id: 'refinance-market-unavailable', title: 'A current governed mortgage-rate benchmark is unavailable', body: 'Your loan details are ready, but Ask will not use model knowledge or an undated rate as the market benchmark. Try again after the Mortgage Refinance Radar receives a dated source snapshot.', tone: 'CAUTION', actions: [{ id: 'open-radar', label: 'Open Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'refinance-market-unavailable', title: 'A current governed mortgage-rate benchmark is unavailable', body: 'Your loan details are ready, but Ask will not use model knowledge or an undated rate as the market benchmark. Try again after the benchmark receives a dated source snapshot.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
 
   const result = await refinanceRadarService.evaluateProperty(propertyId, financialContext.contextVersion);
   if (!result.available) {
-    return { status: 'UNAVAILABLE', reasonCode: result.reason, contextVersion: financialContext.contextVersion, blocks: [{ type: 'SUMMARY', id: 'refinance-analysis-unavailable', title: 'The refinance analysis is not ready', body: 'The Mortgage Refinance Radar could not complete a property-specific comparison. Review the financing profile and try again.', tone: 'CAUTION', actions: [{ id: 'open-profile', label: 'Review financing profile', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/financing/profile`, style: 'PRIMARY' }] }], suggestions: [] };
+    return { status: 'UNAVAILABLE', reasonCode: result.reason, contextVersion: financialContext.contextVersion, blocks: [{ type: 'SUMMARY', id: 'refinance-analysis-unavailable', title: 'The refinance analysis is not ready', body: 'Ask could not complete a property-specific comparison. Try again later; reviewing the financing profile is not currently available in Ask.', tone: 'CAUTION', actions: [] }], suggestions: [] };
   }
 
   // F02 fix (see parseRefinanceScenarioEdit above): a real, isolated what-if
@@ -548,7 +545,7 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
   if (!preference.recipientInRolloutCohort || !preference.externalDeliveryEnabled) {
     return {
       status: 'UNAVAILABLE', reasonCode: !preference.recipientInRolloutCohort ? 'REFINANCE_ALERT_ROLLOUT_UNAVAILABLE' : 'REFINANCE_ALERT_DELIVERY_UNAVAILABLE',
-      blocks: [{ type: 'SUMMARY', id: 'rate-monitor-unavailable', title: 'Email rate alerts are not available for this account yet', body: 'Mortgage Refinance Radar can still show the latest governed benchmark and personalized review threshold in the app. Ask will not claim an external notification is active until delivery eligibility is confirmed.', tone: 'CAUTION', actions: [{ id: 'open-radar', label: 'Open Mortgage Refinance Radar', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/mortgage-refinance-radar`, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'rate-monitor-unavailable', title: 'Email rate alerts are not available for this account yet', body: 'Ask can still show the latest governed benchmark and personalized review threshold. Ask will not claim an external notification is active until delivery eligibility is confirmed.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }

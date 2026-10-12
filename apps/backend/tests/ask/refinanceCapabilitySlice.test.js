@@ -10,7 +10,6 @@ require('ts-node/register');
 const prismaModule = require('../../src/lib/prisma.ts');
 const { refinanceMonitorBlock } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
 const { capabilityCardLaunch } = require('../../src/services/ask/askCapabilityCardLaunch.ts');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
@@ -98,14 +97,14 @@ test('the monitor block survives the answer-trust validator and whitelist for RE
   assert.ok(validated.blocks.some((candidate) => candidate.type === 'MONITOR'), 'MONITOR must be an allowed block type for REFINANCE_ANALYSIS');
   // Action applicability needs the source evidence the pipeline attaches later, so the whitelist is checked directly.
   const block = result.blocks.find((candidate) => candidate.type === 'MONITOR');
-  for (const operationId of ['REFINANCE_ANALYSIS', 'REFINANCE_RATE_MONITOR']) {
-    assert.equal(isAskActionApplicable({ action: block.actions[0], operationId, propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false, operationId);
-  }
+  // The block's own pause, resume and stop are rendered by MONITOR itself; it carries no action and no desktop link.
+  assert.deepEqual(block.actions, []);
 });
 
-test('the monitor block links only to the radar page\'s settings section; the dead ?monitorAction= and ?section= links are gone', () => {
+test('the monitor block links to no radar page; the dead ?monitorAction= and ?section= links stay gone', () => {
   const block = refinanceMonitorBlock({ id: 'm1', propertyId: 'p1', product: 'FIXED_30_YEAR', thresholdPct: 5.5, cadence: 'IMMEDIATE', quietStart: null, quietEnd: null, timezone: 'UTC', status: 'ACTIVE' }, 'Mortgage-rate monitor is active');
-  assert.deepEqual(block.actions.map((action) => [action.id, action.href]), [['edit-monitor', '/dashboard/properties/p1/tools/mortgage-refinance-radar#refinance-evidence-settings']]);
+  assert.deepEqual(block.actions, []);
+  assert.equal(JSON.stringify(block).includes('/dashboard/'), false);
   assert.ok(!JSON.stringify(block).includes('monitorAction') && !JSON.stringify(block).includes('section='));
 });
 
@@ -113,4 +112,35 @@ test('the mortgage-refinance-radar card launches inline into the analysis, and i
   const launch = capabilityCardLaunch('mortgage-refinance-radar').inlineLaunch;
   assert.equal(launch.operationId, 'REFINANCE_ANALYSIS');
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'REFINANCE_ANALYSIS');
+});
+
+// Refinance batch of the handler sweep (docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md): Ask links to no Mortgage Refinance
+// Radar, Financing or Break-Even page (owner decision, 2026-10-10). The not-applicable answer and the Loan Estimate and decision
+// journeys say what Ask cannot do instead of pointing at a page.
+const loanEstimates = require('../../src/refinanceRadar/refinanceLoanEstimateSnapshot.service.ts');
+const decisionService = require('../../src/refinanceRadar/refinanceDecision.service.ts');
+const { RefinanceRadarService } = require('../../src/refinanceRadar/refinanceRadar.service.ts');
+
+test('the no-mortgage answer, and the Loan Estimate and decision journeys, link nowhere and say what Ask cannot do', async () => {
+  const originalsLocal = { list: loanEstimates.listSavedRefinanceLoanEstimateComparisons, decision: decisionService.getCurrentRefinanceDecision, scenarios: RefinanceRadarService.prototype.getSavedScenarios };
+  RefinanceRadarService.prototype.getSavedScenarios = async () => [];
+  loanEstimates.listSavedRefinanceLoanEstimateComparisons = async () => [];
+  decisionService.getCurrentRefinanceDecision = async () => null;
+  try {
+    const noMortgage = await analyze();
+    assert.equal(noMortgage.status, 'NOT_APPLICABLE');
+    assert.deepEqual(noMortgage.blocks[0].actions, []);
+    assert.match(noMortgage.blocks[0].body, /not currently available in Ask/);
+    assert.equal(JSON.stringify(noMortgage).includes('/dashboard/'), false);
+    for (const message of ['Compare my Loan Estimates from two lenders', 'Record my refinance decision']) {
+      const result = await capabilityInvoke('REFINANCE_ANALYSIS', { userId: 'u1', propertyId: 'p1', message }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+      const text = JSON.stringify(result);
+      assert.equal(text.includes('/dashboard/'), false, message);
+      assert.equal(/#refinance-|Open Mortgage Refinance Radar/.test(text), false, message);
+    }
+  } finally {
+    loanEstimates.listSavedRefinanceLoanEstimateComparisons = originalsLocal.list;
+    decisionService.getCurrentRefinanceDecision = originalsLocal.decision;
+    RefinanceRadarService.prototype.getSavedScenarios = originalsLocal.scenarios;
+  }
 });
