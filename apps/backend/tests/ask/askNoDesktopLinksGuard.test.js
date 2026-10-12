@@ -38,7 +38,6 @@ const PATH_BASELINE = {
   'execution/askConcierge.ts': 1,
   'handlers/applianceOracleBudget.handler.ts': 2,
   'handlers/aroundYourHome.handler.ts': 1,
-  'handlers/guidanceOverview.handler.ts': 3,
   'handlers/hoaCompliance.handler.ts': 2,
   'handlers/homeEventRadar.handler.ts': 1,
   'handlers/homeHabitCoach.handler.ts': 1,
@@ -62,7 +61,6 @@ const PATH_BASELINE = {
 };
 const COPY_BASELINE = {
   'askCapabilityCardLaunch.ts': 3,
-  'askGuidanceStepHandlers.ts': 3,
   'handlers/applianceOracleBudget.handler.ts': 3,
   'handlers/homeEventRadar.handler.ts': 1,
   'handlers/homeUpgradePlanner.handler.ts': 3,

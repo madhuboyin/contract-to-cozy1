@@ -51,8 +51,6 @@ export const GUIDANCE_START_ACTION = { id: 'start-guided-plan', label: 'Start a 
 export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journeys' | 'next'>, suppressedSignalIds: ReadonlySet<string>, propertyId: string, canStart = false): AskOperationResult {
   // Starting a journey is the existing confirmation-gated GUIDANCE_JOURNEY_CREATE; it asks which recorded item or service the plan should cover. A viewer is offered nothing.
   const startActions = canStart ? [{ id: GUIDANCE_START_ACTION.id, label: GUIDANCE_START_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_START_ACTION.message, operationId: 'GUIDANCE_JOURNEY_CREATE', style: 'PRIMARY' as const }] : [];
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview`;
-  const openAction = { id: 'open-guidance-overview', label: 'Open Guidance Overview', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'guidance-journeys-boundary', title: 'Guidance, not a professional assessment',
     body: 'Each journey is a suggested path built from what is recorded for this home. A professional should confirm anything safety-related.',
@@ -95,7 +93,7 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
           journey.status === 'NOT_STARTED' ? 'Not started' : null,
         ].filter((value): value is string => Boolean(value)),
         status: GUIDANCE_READINESS_LABELS[journey.executionReadiness] ?? 'Updating',
-        href: `${pageHref}?journeyId=${encodeURIComponent(journey.id)}`,
+        href: null,
         // Guided journey continuation Phase 1: the read of this one journey stays in Ask (it completes nothing).
         entityType: 'GUIDANCE_JOURNEY',
         actions: [{
@@ -117,10 +115,10 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
         blocked ? `${blocked} ${blocked === 1 ? 'is' : 'are'} blocked until something else is done first.` : null,
       ].filter(Boolean).join(' '),
       tone: actNow ? 'CAUTION' : 'DEFAULT',
-      actions: [openAction],
+      actions: [],
     }, {
       type: 'GROUPED_LIST', filters: [], id: 'guidance-journeys-items', title: 'Guided journeys',
-      description: 'By urgency, as the page labels it. Open a journey to work through its next step.',
+      description: 'By urgency. Open a journey to work through its next step.',
       sections: GUIDANCE_PRIORITY_GROUPS
         .map(([key, label]) => ({ key, label, items: rows.filter((row) => row.group === key).map((row) => row.item) }))
         .filter((section) => section.items.length > 0)
@@ -160,7 +158,7 @@ const STEP_STATUS_LABELS: Record<string, string> = {
 };
 const ENDED_JOURNEY_TEXT: Record<string, [string, string, string]> = {
   COMPLETED: ['GUIDANCE_JOURNEY_COMPLETED', 'This guided journey is complete', 'Every required step is done. Nothing further is needed here.'],
-  DISMISSED: ['GUIDANCE_JOURNEY_DISMISSED', 'This guided journey was dismissed', 'It was set aside, so Ask will not continue it. A new one can be started from Guidance Overview.'],
+  DISMISSED: ['GUIDANCE_JOURNEY_DISMISSED', 'This guided journey was dismissed', 'It was set aside, so Ask will not continue it. A new one can be started from your guided journeys list.'],
   ABORTED: ['GUIDANCE_JOURNEY_ENDED', 'This guided journey was stopped', 'It is no longer active, so Ask will not continue it.'],
   ARCHIVED: ['GUIDANCE_JOURNEY_ENDED', 'This guided journey is archived', 'It is no longer active, so Ask will not continue it.'],
 };
@@ -184,8 +182,6 @@ function journeyTitleFor(journey: any): string {
 }
 
 export function guidanceJourneyContinuation(journey: any, propertyId: string, options: { requestedJourneyId: string; guard?: ContinueGuard; canContribute?: boolean }): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview?journeyId=${encodeURIComponent(journey.id)}`;
-  const openAction = { id: 'open-guidance-overview', label: 'Open Guidance Overview', href: pageHref, style: 'PRIMARY' as const };
   const boundary = (body: string): AskPresentationBlock => ({
     type: 'BOUNDARY', id: 'guidance-journey-boundary', title: 'Guidance, not a professional assessment', body, severity: 'INFO', suggestions: [],
   });
@@ -194,7 +190,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
   if (ended) {
     return {
       status: 'ANSWERED', reasonCode: ended[0],
-      blocks: [{ type: 'SUMMARY', id: 'guidance-journey-summary', title: ended[1], body: `${title}. ${ended[2]}`, tone: 'DEFAULT', actions: [openAction] }, boundary('Guidance is a suggested path built from what is recorded for this home, not a professional assessment.')],
+      blocks: [{ type: 'SUMMARY', id: 'guidance-journey-summary', title: ended[1], body: `${title}. ${ended[2]}`, tone: 'DEFAULT', actions: [] }, boundary('Guidance is a suggested path built from what is recorded for this home, not a professional assessment.')],
       suggestions: [],
     };
   }
@@ -215,7 +211,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
       `${progress.completedCount} of ${progress.totalCount} steps done.`,
       followedBranch ? 'This plan branched from an earlier one, so this is the plan now in progress.' : null,
       current ? `Current step: ${current.label}.` : 'Every step is done or set aside.',
-      current && !currentInAsk && !blockedReason ? `This step is finished on Guidance Overview${current.toolKey && current.toolKey !== 'frontend' ? ` (${titleCase(current.toolKey)})` : ''}, not in Ask, because Ask cannot record its proof yet.` : null,
+      current && !currentInAsk && !blockedReason ? `Ask cannot record this step's proof yet${current.toolKey && current.toolKey !== 'frontend' ? ` (${titleCase(current.toolKey)})` : ''}, so completing it is not currently available in Ask.` : null,
       blockedReason ? `Blocked: ${blockedReason}` : null,
       GUIDANCE_READINESS_LABELS[journey.executionReadiness] ? `Readiness: ${GUIDANCE_READINESS_LABELS[journey.executionReadiness]}.` : null,
     ].filter(Boolean).join(' '),
@@ -223,8 +219,8 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
       ? [{
         id: 'continue-step-in-ask', label: currentInAsk.label, interactionType: 'START_WORKFLOW' as const, message: currentInAsk.message,
         operationId: currentInAsk.operationId, style: 'PRIMARY' as const,
-      }, { ...openAction, style: 'SECONDARY' as const }]
-      : [current && !blockedReason ? { ...openAction, label: 'Continue on Guidance Overview' } : openAction],
+      }]
+      : [],
   });
   if (options.canContribute === true && ['ACTIVE', 'NOT_STARTED'].includes(String(journey.status))) {
     const summaryBlock = blocks[blocks.length - 1] as Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
@@ -251,7 +247,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
           step.id === current?.id && mode.mode !== 'INLINE_CAPTURE' ? mode.reason : null,
         ].filter((value): value is string => Boolean(value)),
         status: STEP_STATUS_LABELS[step.status] ?? step.status,
-        href: step.id === current?.id ? pageHref : null,
+        href: null,
         // Phase 3: skipping the current step, never when policy forbids it (the confirmation re-checks everything).
         ...(step.id === current?.id && skippable(step) ? {
           entityType: 'GUIDANCE_STEP',
@@ -303,10 +299,9 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
 
 async function guidanceJourneyContinueResult(userId: string, propertyId: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   const journeyId = launchContext?.entityType === 'GUIDANCE_JOURNEY' ? launchContext.entityId : null;
-  const listAction = { id: 'open-guidance-overview', label: 'Open Guidance Overview', href: `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/guidance-overview`, style: 'PRIMARY' as const };
   const gone = (title: string, body: string, reasonCode: string): AskOperationResult => ({
     status: 'NOT_APPLICABLE', reasonCode,
-    blocks: [{ type: 'EMPTY_STATE', id: 'guidance-journey-unavailable', title, body, actions: [listAction] }],
+    blocks: [{ type: 'EMPTY_STATE', id: 'guidance-journey-unavailable', title, body, actions: [] }],
     suggestions: [],
   });
   if (!journeyId) return gone('Choose a guided journey', 'Open a journey from your guided journeys list to see where it stands.', 'GUIDANCE_JOURNEY_REQUIRED');

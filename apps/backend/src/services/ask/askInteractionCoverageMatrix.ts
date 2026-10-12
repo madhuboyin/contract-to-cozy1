@@ -1422,7 +1422,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request. getJourneyById runs the same idempotent self-healing reconciliation the page runs.' },
     idempotency: { status: 'TRACED', notes: 'Read; the reconciliation writes are idempotent repairs.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Links to /tools/guidance-overview?journeyId= for the exact journey; the current step is the only step with a link.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); guided journey answers carry no Guidance Overview link, journeys and steps open as inline records, and a step Ask cannot record proof for says completing it is not currently available in Ask.' },
   },
   GUIDANCE_STEP_SKIP: {
     track: 'Home intelligence and work',
@@ -1467,7 +1467,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'The page GET\'s own reconciliation writes are idempotent repairs; nothing Ask-specific is written.' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Each journey links to /dashboard/properties/:id/tools/guidance-overview?journeyId=, the page\'s own resume link.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); guided journey answers carry no Guidance Overview link, journeys and steps open as inline records, and a step Ask cannot record proof for says completing it is not currently available in Ask.' },
   },
   PROPERTY_BRIEFS_LIST: {
     track: 'Records and capture',

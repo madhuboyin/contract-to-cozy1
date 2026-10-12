@@ -160,7 +160,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_TIMELINE_EVENTS: new Set(['home-timeline-log-event', 'correct-title', 'correct-occurredAt', 'correct-summary', 'correct-visibility']),
   MATERIAL_SPECS_LIST: new Set(['add-material-spec']),
   GUIDANCE_JOURNEYS_LIST: new Set(['start-guided-plan']),
-  GUIDANCE_JOURNEY_CONTINUE: new Set(['open-guidance-overview', 'continue-step-in-ask', 'dismiss-guided-journey']),
+  GUIDANCE_JOURNEY_CONTINUE: new Set(['continue-step-in-ask', 'dismiss-guided-journey']),
   // The answer's next steps (each opens a confirmation, an inline answer, or the home-record check) and the walkthrough's way on and back.
   SEASONAL_HOME_CARE: new Set(['seasonal-add-tasks', 'seasonal-walkthrough', 'seasonal-show-checklist', 'seasonal-update-home-details', 'seasonal-next-task', 'seasonal-back-to-plan']),
   SEASONAL_CHECKLIST_SETUP: new Set(['seasonal-show-checklist', 'seasonal-update-home-details']),
@@ -168,8 +168,6 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_BASICS_GUIDE: new Set(),
   // The attached-document receipt: an inventory item opens inline in Ask; a warranty keeps its page link.
   CAPTURE_EVIDENCE_CONFIRM: new Set(['view-inventory-item', 'open-attached-record']),
-  GUIDANCE_STEP_SKIP: new Set(['open-guidance-overview']),
-  GUIDANCE_JOURNEY_DISMISS: new Set(['open-guidance-overview']),
   HOA_COMPLIANCE_STATUS: new Set(['open-hoa-compliance']),
   DO_NOTHING_SIMULATION: new Set(['run-do-nothing']),
   WARRANTY_LOOKUP: new Set(['open-warranties', 'open-warranties-list', 'add-warranty']),

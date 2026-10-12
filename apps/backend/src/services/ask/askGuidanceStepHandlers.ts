@@ -12,7 +12,7 @@
 
 export type AskGuidanceStepMode = 'IN_ASK' | 'INLINE_CAPTURE' | 'NAVIGATE';
 
-const NOT_YET = 'Ask does not complete this step with recorded proof yet, so it is finished in its own tool.';
+const NOT_YET = 'Ask does not complete this step with recorded proof yet, so completing it is not currently available in Ask.';
 
 export const ASK_GUIDANCE_STEP_TOOL_MODES: Readonly<Record<string, { mode: AskGuidanceStepMode; reason: string }>> = Object.freeze({
   booking: { mode: 'NAVIGATE', reason: 'Booking a provider is an external flow Ask does not run.' },
@@ -20,7 +20,7 @@ export const ASK_GUIDANCE_STEP_TOOL_MODES: Readonly<Record<string, { mode: AskGu
   'coverage-intelligence': { mode: 'NAVIGATE', reason: NOT_YET },
   'do-nothing-simulator': { mode: 'NAVIGATE', reason: NOT_YET },
   documents: { mode: 'NAVIGATE', reason: NOT_YET },
-  frontend: { mode: 'NAVIGATE', reason: 'This step is completed on the page with its own proof.' },
+  frontend: { mode: 'NAVIGATE', reason: 'This step needs its own proof, which Ask cannot record yet, so completing it is not currently available in Ask.' },
   'guidance-overview': { mode: 'NAVIGATE', reason: NOT_YET },
   'history-verify': { mode: 'NAVIGATE', reason: NOT_YET },
   'home-event-radar': { mode: 'NAVIGATE', reason: NOT_YET },
@@ -55,11 +55,11 @@ export type AskGuidanceInAskStep = { operationId: string; message: string; label
 export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAskStep>> = Object.freeze({
   'recalls:safety_alert': {
     operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here',
-    reason: 'You can confirm the recall match here; it is recorded on this journey the same way as on the page.',
+    reason: 'You can confirm the recall match here; it is recorded on this journey.',
   },
   'recalls:recall_resolution': {
     operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here',
-    reason: 'You can dismiss or resolve the recall match here; it is recorded on this journey the same way as on the page.',
+    reason: 'You can dismiss or resolve the recall match here; it is recorded on this journey.',
   },
 });
 

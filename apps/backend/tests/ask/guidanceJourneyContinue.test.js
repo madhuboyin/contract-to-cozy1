@@ -91,12 +91,13 @@ test('reads the named journey without AI advice, behind the viewer floor, and sh
   const current = sections[0].items[0];
   assert.equal(current.description, 'Compare what the policy covers.');
   assert.ok(current.meta.includes('Current step'));
-  assert.ok(current.meta.some((line) => /finished in its own tool/.test(line)), 'a NAVIGATE step says why it is not finished in Ask');
-  assert.equal(current.href, '/dashboard/properties/p1/tools/guidance-overview?journeyId=j1');
-  assert.equal(sections[0].items[1].href, null, 'only the current step links');
-  // A NAVIGATE step says plainly it continues on Guidance Overview (not "open the overview" as if it were a menu).
-  assert.match(summary.body, /finished on Guidance Overview/);
-  assert.equal(summary.actions.find((a) => a.id === 'open-guidance-overview').label, 'Continue on Guidance Overview');
+  assert.ok(current.meta.some((line) => /not currently available in Ask/.test(line)), 'a NAVIGATE step says why it is not completed in Ask');
+  // Ask links to no Guidance Overview page (owner decision, 2026-10-10): no step links, and the summary offers no page action.
+  assert.equal(current.href, null);
+  assert.equal(sections[0].items[1].href, null);
+  assert.match(summary.body, /completing it is not currently available in Ask/);
+  assert.equal(summary.actions.some((a) => a.id === 'open-guidance-overview'), false);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('a BRANCHED journey is followed to its live child and says so', async () => {
@@ -104,7 +105,7 @@ test('a BRANCHED journey is followed to its live child and says so', async () =>
   const result = await invoke(launch('parent'));
   assert.equal(result.reasonCode, 'GUIDANCE_JOURNEY_BRANCH_FOLLOWED');
   assert.match(block(result, 'guidance-journey-summary').body, /branched from an earlier one/);
-  assert.match(block(result, 'guidance-journey-summary').actions[0].href, /journeyId=child$/);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('completed, dismissed and missing journeys are answered plainly and never substituted', async () => {
@@ -210,12 +211,12 @@ test('the operation is launch-only, owned by guidance-overview, and entered from
   assert.equal(focusedOperationForLaunchContext({ entityType: 'GUIDANCE_JOURNEY' }), null);
 });
 
-test('each journey in the list offers the in-Ask read, keeping its page link', () => {
+test('each journey in the list offers the in-Ask read and links to no desktop page', () => {
   const view = { journeys: [{ id: 'j1', status: 'ACTIVE', issueDomain: 'ASSET_LIFECYCLE', executionReadiness: 'READY', primarySignalId: 's', primarySignal: { signalIntentFamily: 'coverage_gap' }, inventoryItem: { name: 'Roof' }, steps: [step('a', 'PENDING', 1)] }], next: [] };
   const item = guidanceJourneysFromView(view, new Set(), 'p1').blocks.find((b) => b.type === 'GROUPED_LIST').sections[0].items[0];
   assert.equal(item.entityType, 'GUIDANCE_JOURNEY');
   assert.deepEqual(item.actions, [{ id: 'continue-guided-journey', label: 'See this journey here', message: 'Continue this guided journey.', style: 'SECONDARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'GUIDANCE_JOURNEY_CONTINUE' }]);
-  assert.match(item.href, /journeyId=j1$/);
+  assert.equal(item.href, null);
 });
 
 function journeyAction(overrides = {}) {
@@ -265,23 +266,23 @@ test('a current recall step offers the in-Ask review as the primary action; bloc
   const recallStep = (status, overrides = {}) => step('safety_alert', status, 1, { toolKey: 'recalls', ...overrides });
   stored = journey({ currentStepKey: 'safety_alert', steps: [recallStep('IN_PROGRESS')] });
   const result = await invoke(launch());
-  const [primary, secondary] = block(result, 'guidance-journey-summary').actions;
+  const summaryActions = block(result, 'guidance-journey-summary').actions;
+  const [primary] = summaryActions;
   assert.deepEqual({ id: primary.id, t: primary.interactionType, o: primary.operationId, m: primary.message, s: primary.style }, { id: 'continue-step-in-ask', t: 'START_WORKFLOW', o: 'RECALL_REVIEW', m: 'Show my open recall matches', s: 'PRIMARY' });
-  assert.equal(secondary.id, 'open-guidance-overview');
-  assert.equal(secondary.style, 'SECONDARY');
-  assert.ok(block(result, 'guidance-journey-steps').sections[0].items[0].meta.some((line) => /recorded on this journey the same way as on the page/.test(line)));
+  assert.equal(summaryActions.some((action) => action.id === 'open-guidance-overview'), false, 'no Guidance Overview page action');
+  assert.ok(block(result, 'guidance-journey-steps').sections[0].items[0].meta.some((line) => /it is recorded on this journey\./.test(line)));
 
   stored = journey({ currentStepKey: 'safety_alert', steps: [recallStep('BLOCKED', { blockedReason: 'Wait' })] });
-  assert.deepEqual(primaryIds(await invoke(launch())), ['open-guidance-overview']);
+  assert.deepEqual(primaryIds(await invoke(launch())), []);
 
   stored = journey({ currentStepKey: 'recall_resolution', steps: [step('recall_resolution', 'PENDING', 1, { toolKey: 'recalls', decisionStage: 'EXECUTION' })] });
   guardResult = { blocked: true, blockedReason: 'Confirm the match first.' };
-  assert.deepEqual(primaryIds(await invoke(launch())), ['open-guidance-overview']);
+  assert.deepEqual(primaryIds(await invoke(launch())), []);
   guardResult = { blocked: false, blockedReason: null };
   assert.equal(block(await invoke(launch()), 'guidance-journey-summary').actions[0].id, 'continue-step-in-ask');
 
   stored = journey();
-  assert.deepEqual(primaryIds(await invoke(launch())), ['open-guidance-overview']);
+  assert.deepEqual(primaryIds(await invoke(launch())), []);
 });
 
 test('the in-Ask action survives the answer-trust validator', async () => {

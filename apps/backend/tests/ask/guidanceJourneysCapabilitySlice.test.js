@@ -10,7 +10,6 @@ require('ts-node/register');
 const prismaModule = require('../../src/lib/prisma.ts');
 const { guidanceJourneysFromView } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
 const { capabilityCardLaunch } = require('../../src/services/ask/askCapabilityCardLaunch.ts');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
@@ -19,7 +18,6 @@ const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/ca
 const { guidanceJourneyService } = require('../../src/services/guidanceEngine/guidanceJourney.service.ts');
 const protectionContext = require('../../src/services/protection/context.ts');
 
-const PAGE = '/dashboard/properties/p1/tools/guidance-overview';
 const originals = { prisma: prismaModule.prisma, guidance: guidanceJourneyService.getPropertyGuidance, protection: protectionContext.getProtectionContextDecisions };
 let calls;
 
@@ -83,7 +81,7 @@ test('journeys are grouped by the page\'s urgency labels with asset, title, step
   assert.equal(heater.description, 'Aging System · 1 of 3 steps done');
   assert.deepEqual(heater.meta, ['Next: Compare replacement quotes']);
   assert.equal(heater.status, 'Ready');
-  assert.equal(heater.href, `${PAGE}?journeyId=heater`);
+  assert.equal(heater.href, null, 'a journey row opens its inline read, not a desktop page');
   assert.equal(coverage.description, 'Coverage Gap · 1 of 3 steps done');
   assert.deepEqual(coverage.meta, ['Blocked: Add your policy renewal date first', 'More home details would sharpen this']);
   assert.equal(coverage.status, 'Needs info');
@@ -99,12 +97,13 @@ test('nothing surfaced is not an all-clear, and dismissed or suppressed journeys
   assert.equal(none.blocks.at(-1).title, 'Guidance, not a professional assessment');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', () => {
   const raw = guidanceJourneysFromView(payload(), new Set(['sig-suppressed']), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'guidance-overview.journeys', operationId: 'GUIDANCE_JOURNEYS_LIST', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my guided journeys', operationId: 'GUIDANCE_JOURNEYS_LIST', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'GUIDANCE_JOURNEYS_LIST', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('questions about journeys under way route here; starting, dismissing or completing one is not claimed', () => {
