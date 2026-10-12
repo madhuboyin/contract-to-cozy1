@@ -258,9 +258,49 @@ Several other handlers still build `/dashboard/properties/...` links. The answer
 | The create phrasing "Create a quote comparison (workspace)" routed to `INVENTORY_ITEM_CREATE` instead of `QUOTE_COMPARISON_CREATE` | Fixed 2026-10-12 | The quote-comparison create match now runs before the generic "create <anything>" inventory match in `askOperationRegistry.ts`; `quoteComparisonCreateRouting.test.js` covers eight phrasings and the unaffected inventory and review phrasings; the `askGovernance` golden prompt passes |
 | Project Tracker: list and receipt links | Fixed | Commit `6c06840b`; appendix |
 | The generic "add/record/create <anything>" inventory match claimed other record types: "Create an insurance claim", "Create a guided plan" and "Add a household member" bypassed their commands, and projects, plants, material specs, briefs, checklists, documents, deposits and similar produced an inventory-item form | Fixed 2026-10-12 | `inventoryCreatePattern` in `askOperationRegistry.ts` now also excludes those nouns within four words of the verb; `inventoryCreateRouting.test.js` (3 tests) fails on the old pattern. Groups still open: the intended command for "Add a closing task" (buyer task or maintenance) and message routes for Reserve Fund contributions are product questions (Needs product decision) |
-| About 30 other files under `services/ask/handlers` contain `/dashboard/properties` strings, among them Refinance, Capital Planning, Claims, Sell/Hold/Rent, Guidance Overview, Documents and Coverage | Needs verification | Counted 2026-10-12 by string search; not individually classified, so some may not be emitted as links |
+| Handler-wide sweep (2026-10-12): see [Handler sweep](#handler-sweep-2026-10-12) | Classified, not fixed | Static scan of `services/ask`; results below |
 
-A repository-wide sweep that classifies each of those handlers is itself a parity-quality task, and should be done before the P0 slices add more Ask surface to them. Separately, `services/ask/support/capture.ts` returns desktop paths for several operations' capture fallbacks (for example `QUOTE_COMPARISON_REVIEW` returns `/tools/quote-comparison`); that path was not examined here.
+The handler-wide sweep that classified the remaining handlers is recorded in [Handler sweep](#handler-sweep-2026-10-12). `services/ask/support/capture.ts` returns desktop fallback paths for several operations' capture fallbacks (for example `QUOTE_COMPARISON_REVIEW` returns `/tools/quote-comparison`); those are included in the sweep's category A.
+
+### Handler sweep (2026-10-12)
+
+A static scan of `services/ask` (handlers, support, execution and the top-level modules) for desktop paths, link actions and copy that sends the user to a page. Counts come from regular-expression matching, so they are indicative; the classification of each category was read from the code.
+
+**What actually reaches the user.** Every answer, including confirmation receipts, passes the answer-trust validator (`validateAskAnswerTrustPipeline`; confirmations through `validateAskConfirmedCompletion`, whose result replaces the receipt before it is stored). It removes any action `href`, list-row `href`, timeline `href`, change-summary link, output-artifact navigation, related-record navigation and capability link that is not an in-conversation Ask link. This closes the open question in FRD 1.264: a confirmation receipt link to a desktop page is stripped, not shown. Structurally, every `href` field in the presentation contract is covered by that pass; text inside copy is not.
+
+| Category | Size | Runtime effect | Status |
+| --- | --- | --- | --- |
+| **A. Link actions and row links to desktop pages** ("Open Maintenance", "Open Claims", "Open home inventory", "Open Buyer Plan", per-row `?taskId=` links, and similar) | About 33 handler files, plus `askBuyerPlanPresentation.ts`, `askFocusedGuidance.ts`, `execution/askConcierge.ts` and `support/capture.ts`; the largest are `buyerPlan` (about 38 link actions), `homeRecordWrites`, `maintenance`, `claims`, `inventory`, `documents`, `homeEventRadar`, `miscHandlers`, `hvacDecision`, `capitalPlanning` | Stripped at runtime. The answer shows no button, so a user whose only next step was that link has none. Dead code, plus stale entries in the trust-policy action allowlist | Residual gap, not fixed |
+| **B. Copy that tells the user to go to a page** | About 22 strings in about 15 files (listed below) | Shown as written, pointing at something that is not offered | Residual gap, not fixed |
+| **C. Copy that only names the page a record shares** ("the same record the Inventory page edits", "as on the page") | About 15 strings | Harmless to function; still describes a desktop surface | Low priority |
+| **D. Intentional** | Project Tracker closeout recipient link (shown as text, by design) | None | Intentional boundary |
+
+**Category B strings that instruct the user (read from the code):**
+
+- `servicePriceRadar`: "Open Service Price Radar for the full breakdown"
+- `coverage`: "open the workspace to record a keep/shop decision"
+- `claims`: "open the page for the full record"
+- `applianceOracleBudget`: "Replacement model suggestions are on the Appliance Oracle page"; "Money-saving tips are on the Budget Planner page"
+- `propertyBrief`: "Previewing, sharing, revoking and refreshing a brief stay on the Property Brief page"
+- `hvacDecision`: "open the Specialist panel" and "open the in-app decision panel" (three strings)
+- `homeEventRadar`: "You can still change yours on the Home Event Radar page"
+- `homeUpgradePlanner`: "recalculate on the page"; "Open the planner for the full comparison"
+- `guidanceOverview`: "Open a journey to work through its next step" (the journey is also a stripped link)
+- `hoaCompliance`: "open it to add the association"
+- `buyerPlan`: "open the plan and complete it directly"
+- `maintenance`: "will not carry over to the Maintenance page"
+- `askGuidanceStepHandlers`: "This step is completed on the page with its own proof"
+- `askCapabilityCardLaunch`: Value Tracker, Energy Audit and Visual Inspector "on its own page"; "may still require opening the full page"
+- `askAnswerTrustValidator`: "open the relevant home record" (the generic unavailable-source answer)
+- `support/seasonalHomeCare`: "the seasonal settings page lets you change it"
+
+**Why this matters.** A and B together are the same defect fixed for Project Tracker, Negotiation Shield and Quote Comparison: the handler built a page link, the policy removed it, and the copy still refers to it. For each affected tool the honest outcome is either an Ask action that does the job or plain text that the capability is not currently available in Ask.
+
+**Suggested approach, not started:**
+
+1. Add a guard test that scans handler source for emitted non-Ask paths against an explicit, shrinking allowlist, so new handlers cannot reintroduce the pattern.
+2. Fix in batches by tool, each with the Ask-side alternative decided first: where an Ask command exists, point to it as a `START_WORKFLOW`; where none exists, say so and remove the link and the allowlist entry.
+3. Start with tools already on the P0 list (Home Continuity Plan, Price Finalization, Coverage, Claims), since their slices touch those handlers anyway.
 
 ## Recommended implementation order (advisory)
 
