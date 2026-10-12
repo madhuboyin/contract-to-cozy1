@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
@@ -89,12 +89,14 @@ router.get('/properties/:propertyId/projects', propertyAuthMiddleware, listProje
 router.post(
   '/properties/:propertyId/projects',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateProjectSchema),
   createProject,
 );
 router.post(
   '/properties/:propertyId/projects/minor-completion',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CompleteMinorWorkSchema),
   completeMinorWork,
 );
@@ -113,15 +115,17 @@ router.get(
 router.post(
   '/properties/:propertyId/projects/:projectId/execution-alignment/reconcile',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   retryProjectExecutionReconciliation,
 );
 router.patch(
   '/properties/:propertyId/projects/:projectId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateProjectSchema),
   updateProject,
 );
-router.delete('/properties/:propertyId/projects/:projectId', propertyAuthMiddleware, cancelProject);
+router.delete('/properties/:propertyId/projects/:projectId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), cancelProject);
 
 // ── Milestones ────────────────────────────────────────────────────────────────
 router.get(
@@ -132,24 +136,28 @@ router.get(
 router.post(
   '/properties/:propertyId/projects/:projectId/milestones',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateMilestoneSchema),
   createMilestone,
 );
 router.patch(
   '/properties/:propertyId/projects/:projectId/milestones/:milestoneId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateMilestoneSchema),
   updateMilestone,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/milestones/:milestoneId/complete',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CompleteMilestoneSchema),
   completeMilestone,
 );
 router.delete(
   '/properties/:propertyId/projects/:projectId/milestones/:milestoneId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   deleteMilestone,
 );
 
@@ -162,24 +170,28 @@ router.get(
 router.post(
   '/properties/:propertyId/projects/:projectId/payments',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreatePaymentSchema),
   createPayment,
 );
 router.patch(
   '/properties/:propertyId/projects/:projectId/payments/:paymentId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdatePaymentSchema),
   updatePayment,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/payments/:paymentId/mark-paid',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(MarkPaymentPaidSchema),
   markPaymentPaid,
 );
 router.delete(
   '/properties/:propertyId/projects/:projectId/payments/:paymentId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   deletePayment,
 );
 
@@ -192,34 +204,40 @@ router.get(
 router.post(
   '/properties/:propertyId/projects/:projectId/change-orders',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateChangeOrderSchema),
   createChangeOrder,
 );
 router.patch(
   '/properties/:propertyId/projects/:projectId/change-orders/:changeOrderId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateChangeOrderSchema),
   updateChangeOrder,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/change-orders/:changeOrderId/compliance-review',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(ReviewChangeOrderComplianceSchema),
   reviewChangeOrderCompliance,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/change-orders/:changeOrderId/approve',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   approveChangeOrder,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/change-orders/:changeOrderId/reject',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   rejectChangeOrder,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/change-orders/:changeOrderId/void',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   voidChangeOrder,
 );
 
@@ -232,12 +250,14 @@ router.get(
 router.post(
   '/properties/:propertyId/projects/:projectId/log',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateLogEntrySchema),
   createLogEntry,
 );
 router.delete(
   '/properties/:propertyId/projects/:projectId/log/:logId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   deleteLogEntry,
 );
 
@@ -250,35 +270,41 @@ router.get(
 router.post(
   '/properties/:propertyId/projects/:projectId/issues',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateIssueSchema),
   createIssue,
 );
 router.patch(
   '/properties/:propertyId/projects/:projectId/issues/:issueId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateIssueSchema),
   updateIssue,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/issues/:issueId/resolve',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(ResolveIssueSchema),
   resolveIssue,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/issues/:issueId/escalate',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   escalateIssue,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/issues/:issueId/notes',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(AddIssueNoteSchema),
   addIssueNote,
 );
 router.post(
   '/properties/:propertyId/projects/:projectId/issues/:issueId/dispute-packages',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(GenerateDisputePackageSchema),
   generateDisputePackage,
 );
@@ -292,6 +318,7 @@ router.get(
 router.post(
   '/properties/:propertyId/projects/:projectId/completion/confirm',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(ConfirmCompletionSchema),
   confirmCompletion,
 );
@@ -303,10 +330,11 @@ router.get(
 router.post(
   '/properties/:propertyId/projects/:projectId/completion/share',
   propertyAuthMiddleware,
+  requireHouseholdRole('OWNER'),
   validateBody(CreateCloseoutShareSchema),
   createCloseoutShareLink,
 );
 router.get('/properties/:propertyId/projects/:projectId/completion/share-links', propertyAuthMiddleware, listCloseoutShareLinks);
-router.post('/properties/:propertyId/projects/:projectId/completion/share-links/:shareLinkId/revoke', propertyAuthMiddleware, revokeCloseoutShareLink);
+router.post('/properties/:propertyId/projects/:projectId/completion/share-links/:shareLinkId/revoke', propertyAuthMiddleware, requireHouseholdRole('OWNER'), revokeCloseoutShareLink);
 
 export default router;
