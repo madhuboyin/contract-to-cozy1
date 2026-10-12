@@ -1763,11 +1763,11 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     confirmationCapable: false,
     correctionModes: [],
     note: 'FRD v1.54 (capability-card audit, sixth new operation for a capability with none). Reads HomeDigitalWillService.getByProperty -- the same call GET /properties/:id/home-digital-will (Home Continuity Plan) makes -- behind the same CONTRIBUTOR floor. Privacy-minimized: entry titles only (never entry content or summaries, which can hold access notes such as gate codes) and trusted contacts by name, role and access level (never email, phone or notes), because Ask keeps its answers in the conversation. Read-only: plan, section, entry and contact edits, publish and the emergency packet are a follow-up. The page route also builds a planning-context envelope and emits TOOL_USED; Ask does neither.',
-    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- SUMMARY (title, readiness, completion, status, counts, last reviewed, the page link), LIMITATION (the service\'s own handoff-readiness gaps), GROUPED_LIST (entry titles by enabled section; trusted contacts), BOUNDARY (not a legal will; details stay on the plan).' },
+    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- SUMMARY (title, readiness, completion, status, counts, last reviewed), LIMITATION (the service\'s own handoff-readiness gaps), GROUPED_LIST (entry titles by enabled section; trusted contacts), BOUNDARY (not a legal will; details stay on the plan).' },
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (getByProperty never creates a plan; the page\'s create is a separate POST).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'The page has no per-entry deep link, so every row and the summary link to /dashboard/properties/:id/tools/home-digital-will.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10). The summary, handoff next steps and rows carry no link; starting and editing a plan are not currently available in Ask and the answer says so.' },
   },
   HOME_HABITS: {
     track: 'Home intelligence and work',

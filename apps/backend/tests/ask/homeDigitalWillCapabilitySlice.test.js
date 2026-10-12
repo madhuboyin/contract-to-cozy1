@@ -9,7 +9,6 @@ require('ts-node/register');
 const prismaModule = require('../../src/lib/prisma.ts');
 const { digitalWillFromView } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
 const { capabilityCardLaunch } = require('../../src/services/ask/askCapabilityCardLaunch.ts');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
@@ -17,7 +16,6 @@ const { getSkillForOperation } = require('../../src/services/skills/skillRegistr
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 const { HomeDigitalWillService } = require('../../src/services/homeDigitalWill.service.ts');
 
-const PAGE = '/dashboard/properties/p1/tools/home-digital-will';
 const SECRET = 'Gate code 4417, spare key under the blue pot';
 const originals = { prisma: prismaModule.prisma, get: HomeDigitalWillService.prototype.getByProperty, create: HomeDigitalWillService.prototype.getOrCreateByProperty };
 let calls;
@@ -88,7 +86,9 @@ test('the plan is summarized with readiness, counts, handoff gaps, entry titles 
   const list = result.blocks.find((block) => block.id === 'digital-will-items');
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [['Emergency Instructions', ['Water shutoff', 'Getting in']]]);
   assert.deepEqual(list.sections[0].items[0].meta, ['location note', 'critical priority', 'Emergency']);
-  assert.equal(list.sections[0].items[0].href, PAGE);
+  assert.equal(list.sections[0].items[0].href, null, 'no row links to a desktop page');
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   const withContact = digitalWillFromView(will(), 'p1').blocks.find((block) => block.id === 'digital-will-items').sections.at(-1);
   assert.deepEqual(withContact.items.map((row) => [row.title, row.meta]), [['Jordan Lee', ['family member', 'emergency only access', 'Primary']]]);
 });
@@ -104,12 +104,13 @@ test('a plan ready to hand off has no gap block; no plan yet is not created and 
   assert.equal(none.blocks.at(-1).title, 'A home knowledge plan, not a legal will');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', () => {
   const raw = digitalWillFromView(will(), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-digital-will.read', operationId: 'HOME_DIGITAL_WILL', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home continuity plan', operationId: 'HOME_DIGITAL_WILL', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'HOME_DIGITAL_WILL', propertyId: 'p1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('continuity-plan phrasing routes here; a legal will and the home habits do not', () => {
@@ -134,19 +135,19 @@ const { digitalWillHandoffProgress } = require('../../src/services/ask/askOrches
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 
 test('the ring is the handoff check\'s three requirements, not the plan\'s self-reported percent; an unreachable primary or none at all lowers it', () => {
-  const ready = digitalWillHandoffProgress([], 4, PAGE);
+  const ready = digitalWillHandoffProgress([], 4);
   assert.equal(ready.percent, 100);
   assert.equal(ready.basis, '3 of 3 handoff requirements met');
   assert.deepEqual(ready.nextSteps, []);
-  const noMethod = digitalWillHandoffProgress(['primary-contact-method'], 4, PAGE);
+  const noMethod = digitalWillHandoffProgress(['primary-contact-method'], 4);
   assert.equal(noMethod.percent, 67);
   assert.deepEqual(noMethod.nextSteps.map((step) => step.title), ['Add an email or phone number for the primary contact.']);
   // No primary contact also means there is no way to reach one, though the check lists only the first.
-  const none = digitalWillHandoffProgress(['emergency-instruction', 'primary-trusted-contact'], 0, PAGE);
+  const none = digitalWillHandoffProgress(['emergency-instruction', 'primary-trusted-contact'], 0);
   assert.equal(none.percent, 0);
   assert.deepEqual(none.metrics.map((entry) => [entry.label, entry.value]), [['Met', '0'], ['Missing', '3'], ['Entries', '0']]);
   assert.deepEqual(none.nextSteps.map((step) => step.id), ['handoff-emergency-instruction', 'handoff-primary-trusted-contact', 'handoff-primary-contact-method']);
-  assert.ok(none.nextSteps.every((step) => step.href === PAGE && (step.actions ?? []).length === 0));
+  assert.ok(none.nextSteps.every((step) => step.href === null && (step.actions ?? []).length === 0));
   AskPresentationBlockSchema.parse(none);
 });
 
@@ -165,4 +166,15 @@ test('PROGRESS is allowed for the operation in the registry and the home digital
   const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
   assert.ok(ASK_OPERATION_DEFINITIONS.HOME_DIGITAL_WILL.allowedBlockTypes.includes('PROGRESS'));
   assert.ok(getSkillForOperation('HOME_DIGITAL_WILL').allowedResultBlocks.includes('PROGRESS'));
+});
+
+test('the not-started answer and the handoff next steps link nowhere and say Ask cannot start or edit a plan', () => {
+  const none = digitalWillFromView(null, 'p1');
+  assert.deepEqual(none.blocks[0].actions, []);
+  assert.match(none.blocks[0].body, /Ask cannot start or edit one yet/);
+  assert.equal(JSON.stringify(none).includes('/dashboard/'), false);
+  const gaps = digitalWillFromView(will({ trustedContacts: [] }), 'p1');
+  const ring = gaps.blocks.find((block) => block.id === 'digital-will-progress');
+  assert.ok(ring.nextSteps.length > 0 && ring.nextSteps.every((step) => step.href === null));
+  assert.equal(/on the plan itself|on the page|Open Home Continuity Plan/.test(JSON.stringify(gaps)), false);
 });

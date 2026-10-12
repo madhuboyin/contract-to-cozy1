@@ -45,7 +45,6 @@ const PATH_BASELINE = {
   'handlers/guidanceOverview.handler.ts': 3,
   'handlers/hoaCompliance.handler.ts': 2,
   'handlers/homeActions.handler.ts': 5,
-  'handlers/homeDigitalWill.handler.ts': 1,
   'handlers/homeEventRadar.handler.ts': 1,
   'handlers/homeHabitCoach.handler.ts': 1,
   'handlers/homeRecordWrites.handler.ts': 7,
