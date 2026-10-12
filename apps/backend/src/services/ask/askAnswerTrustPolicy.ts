@@ -185,7 +185,6 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   GUIDANCE_STEP_SKIP: new Set(['open-guidance-overview']),
   GUIDANCE_JOURNEY_DISMISS: new Set(['open-guidance-overview']),
   HOA_COMPLIANCE_STATUS: new Set(['open-hoa-compliance']),
-  PRICE_FINALIZATIONS_LIST: new Set(['open-price-finalization']),
   DO_NOTHING_SIMULATION: new Set(['run-do-nothing']),
   WARRANTY_LOOKUP: new Set(['open-warranties', 'open-warranties-list', 'add-warranty']),
   // FRD v1.78: plus the inline "Add purchase date" capture on appliances with no age.

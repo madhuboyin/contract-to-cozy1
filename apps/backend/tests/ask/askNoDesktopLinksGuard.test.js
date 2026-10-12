@@ -56,7 +56,6 @@ const PATH_BASELINE = {
   'handlers/inventory.handler.ts': 4,
   'handlers/maintenance.handler.ts': 5,
   'handlers/miscHandlers.handler.ts': 3,
-  'handlers/priceFinalization.handler.ts': 1,
   'handlers/projectTracker.handler.ts': 1,
   'handlers/propertyBrief.handler.ts': 1,
   'handlers/propertySummary.handler.ts': 1,

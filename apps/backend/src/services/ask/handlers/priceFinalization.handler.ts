@@ -15,7 +15,8 @@ import { humanDate, titleCase } from '../askFormatting';
 // floor: the route admits any household member, but the service's ensurePropertyAccess only admits the primary homeowner
 // profile, as Service Price Radar's does (v1.60); Ask says so instead of erroring. The page shows only the first 5 of
 // its 20 and labels an archived record "Draft"; Ask lists all 20, keeps archived ones apart and says when there may be
-// more. Notes and linked-record ids stay on the page. Read-only: saving, finalizing and booking stay on the page.
+// more. Notes and linked-record ids are not shown. Read-only: saving, finalizing and booking are not currently available in Ask, and
+// the answer links to no page (Ask never navigates to a desktop page, owner decision 2026-10-10).
 export const PRICE_FINALIZATION_ASK_LIMIT = 20;
 type PriceFinalizationView = Awaited<ReturnType<typeof priceFinalizationService.listForProperty>>['items'][number];
 const PRICE_FINALIZATION_SOURCE_LABELS: Record<string, string> = {
@@ -26,8 +27,6 @@ const finalizationMoney = (value: number | null | undefined) => (value == null
   : `$${value.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 })}`);
 
 export function priceFinalizationsFromView(records: readonly PriceFinalizationView[] | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/price-finalization`;
-  const openAction = { id: 'open-price-finalization', label: 'Open Price Finalization', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'price-finalization-boundary', title: 'As recorded, not a signed contract',
     body: 'These are the prices and terms the household recorded. The written agreement with the vendor controls, so check it before paying or booking.',
@@ -49,8 +48,8 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
       status: 'ANSWERED', reasonCode: 'PRICE_FINALIZATIONS_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'price-finalization-summary', title: 'No price finalizations yet',
-        body: 'Price Finalization records the price and terms you accept from a vendor before booking the work. Open it to save one.',
-        tone: 'DEFAULT', actions: [openAction],
+        body: 'Price Finalization records the price and terms you accept from a vendor before booking the work. Saving one is not currently available in Ask.',
+        tone: 'DEFAULT', actions: [],
       }, boundary],
       suggestions: [],
     };
@@ -86,17 +85,17 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
     type: 'SUMMARY', id: 'price-finalization-summary',
     title: `${records.length} price finalization${records.length === 1 ? '' : 's'} recorded`,
     body: `${finalized} finalized and ${drafts} still ${drafts === 1 ? 'a draft' : 'drafts'}.`,
-    tone: 'DEFAULT', actions: [openAction],
+    tone: 'DEFAULT', actions: [],
   }];
   if (records.length >= PRICE_FINALIZATION_ASK_LIMIT) {
     blocks.push({
       type: 'LIMITATION', id: 'price-finalization-limit', title: `Showing the ${PRICE_FINALIZATION_ASK_LIMIT} most recent`,
-      body: 'Older records may exist; this is the same list the Price Finalization page loads.', severity: 'INFO',
+      body: 'Older records may exist; Ask lists the most recent ones.', severity: 'INFO',
     });
   }
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'price-finalization-items', title: 'Recorded prices and terms',
-    description: 'Newest first. Open Price Finalization to edit a draft, finalize it or continue to booking.',
+    description: 'Newest first. Editing a draft, finalizing it and continuing to booking are not currently available in Ask.',
     sections: groups
       .map(([status, title]) => ({ status, title, items: records.filter((record) => record.status === status).map(row) }))
       .filter((section) => section.items.length > 0)

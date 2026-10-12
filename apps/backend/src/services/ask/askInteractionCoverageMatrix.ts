@@ -1328,11 +1328,11 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     confirmationCapable: false,
     correctionModes: [],
     note: 'FRD v1.67 (capability-card audit, eighteenth new operation; the v1.47 "needs a product decision" label did not hold on tracing). Reads PriceFinalizationService.listForProperty(propertyId, userId, 20) -- the call GET /properties/:id/price-finalizations makes for the Price Finalization page, with its limit of 20 (the route also attaches a project-compliance envelope and emits TOOL_USED analytics; Ask does neither). OWNER floor: the route admits any household member, but ensurePropertyAccess only admits the primary homeowner profile (PROPERTY_ACCESS_DENIED otherwise), the same pattern as Service Price Radar (v1.60); Ask says so plainly instead of erroring. The page lists only the first 5 of its 20 and labels an archived record "Draft"; Ask lists all 20, groups archived ones apart and says when there may be more.',
-    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- SUMMARY (count, finalized and draft counts, the page link), LIMITATION (20 shown), GROUPED_LIST (Finalized / Drafts / Archived: vendor, service, accepted and quoted price, agreed scope, payment, warranty and timeline terms, finalized date, booked), BOUNDARY (as recorded, not a contract).' },
+    uiSurface: { status: 'TRACED', notes: 'Shared generic renderer -- SUMMARY (count, finalized and draft counts), LIMITATION (20 shown), GROUPED_LIST (Finalized / Drafts / Archived: vendor, service, accepted and quoted price, agreed scope, payment, warranty and timeline terms, finalized date, booked), BOUNDARY (as recorded, not a contract).' },
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (the access check and a findMany).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Bare href to /dashboard/properties/:id/tools/price-finalization; the page has no per-record deep link.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10). The answer says saving, editing, finalizing and booking are not currently available in Ask.' },
   },
   HOA_COMPLIANCE_STATUS: {
     track: 'Records and capture',

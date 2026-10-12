@@ -10,14 +10,12 @@ require('ts-node/register');
 const prismaModule = require('../../src/lib/prisma.ts');
 const { priceFinalizationsFromView } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
 const { capabilityCardLaunch } = require('../../src/services/ask/askCapabilityCardLaunch.ts');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 
-const PAGE = '/dashboard/properties/p1/tools/price-finalization';
 const NOTE = 'Call back after 5pm';
 const originals = { prisma: prismaModule.prisma };
 let queries;
@@ -76,7 +74,8 @@ test('records are grouped by status with vendor, service, accepted and quoted pr
   const [summary, list] = result.blocks;
   assert.equal(summary.title, '3 price finalizations recorded');
   assert.equal(summary.body, '1 finalized and 1 still a draft.');
-  assert.equal(summary.actions[0].href, PAGE);
+  assert.deepEqual(summary.actions, [], 'Ask links to no desktop Price Finalization page');
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((item) => item.title)]), [
     ['Finalized', ['Bright Electric']],
     ['Drafts', ['Pro Painters']],
@@ -99,15 +98,19 @@ test('a full page of 20 is disclosed; nothing recorded is not an all-clear', () 
   const none = priceFinalizationsFromView([], 'p1');
   assert.equal(none.reasonCode, 'PRICE_FINALIZATIONS_EMPTY');
   assert.equal(none.blocks[0].title, 'No price finalizations yet');
+  assert.deepEqual(none.blocks[0].actions, [], 'the empty state links nowhere');
+  assert.match(none.blocks[0].body, /not currently available in Ask/);
+  assert.equal(JSON.stringify(none).includes('Open it to save one'), false);
   assert.equal(none.blocks.at(-1).title, 'As recorded, not a signed contract');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', async () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', async () => {
   const raw = await invoke();
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'price-finalization.records', operationId: 'PRICE_FINALIZATIONS_LIST', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my price finalizations', operationId: 'PRICE_FINALIZATIONS_LIST', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'PRICE_FINALIZATIONS_LIST', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('agreed-price questions route here; finalizing, comparing, checking or booking is not claimed', () => {
@@ -130,4 +133,13 @@ test('the operation is fully registered: its own skill, the owner floor, the bri
   assert.equal(ASK_OPERATION_CAPABILITY.PRICE_FINALIZATIONS_LIST, 'price-finalization');
   const launch = capabilityCardLaunch('price-finalization').inlineLaunch;
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'PRICE_FINALIZATIONS_LIST');
+});
+
+test('the list and every state say what Ask cannot do instead of pointing at the Price Finalization page', async () => {
+  const result = await invoke();
+  const text = JSON.stringify(result);
+  assert.equal(/Open Price Finalization|Price Finalization page|open-price-finalization/.test(text), false);
+  assert.match(result.blocks.find((block) => block.id === 'price-finalization-items').description, /not currently available in Ask/);
+  const blocked = priceFinalizationsFromView('PRIMARY_OWNER_ONLY', 'p1');
+  assert.equal(JSON.stringify(blocked).includes('/dashboard/'), false);
 });
