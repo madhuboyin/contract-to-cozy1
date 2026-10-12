@@ -86,6 +86,9 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   // Material and plant adds written inside Ask (declared-action, confirmation-gated, skill-less).
   'MATERIAL_SPEC_ADD',
   'HOME_PLANT_ADD',
+  // Negotiation Shield review start (declared-action, confirmation-gated, skill-less; the negotiation-shield skill stays a READ skill, the same
+  // precedent as HOME_HABIT_UPDATE above). It must stay in this list or the boot-time governance check fails.
+  'NEGOTIATION_SHIELD_CASE_START',
   'ROOM_PLANT_RECOMMENDATIONS',
   'OWNERSHIP_COST_COMMAND',
   // Tool starts written inside Ask (declared-action, confirmation-gated, skill-less): suggest habits, run the simulation, check a quote.

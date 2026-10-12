@@ -10090,6 +10090,10 @@ model NegotiationShieldCase {
   latestAnalysisAt DateTime?
   quoteDecisionWorkspaceId String?                   @unique
 
+  // Set only by callers that retry the same operation (Ask binds it to the confirming execution), so a retry returns the original case instead of
+  // creating another. Null for the page's own creates; Postgres allows many nulls in a unique index. Not exposed through the HTTP API.
+  idempotencyKey String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -10104,6 +10108,7 @@ model NegotiationShieldCase {
   priceFinalizations PriceFinalization[]
   buyerFindingLinks  NegotiationShieldBuyerFinding[]
 
+  @@unique([propertyId, idempotencyKey])
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([propertyId, status])
   @@index([propertyId, scenarioType])

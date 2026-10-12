@@ -3,7 +3,10 @@
 // re-exports the names below so existing imports keep working.
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
+import { HouseholdRole } from '@prisma/client';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { NEGOTIATION_SHIELD_START_ACTION_ID, NEGOTIATION_SHIELD_START_MESSAGE } from '../support/negotiationShieldStart';
 import { humanDate, money, readableCode } from '../askFormatting';
 import { getNegotiationShieldCaseReviewForProperty, listNegotiationShieldCasesForProperty, type NegotiationShieldCaseReviewDTO } from '../../negotiationShieldCaseList';
 import type { NegotiationShieldCaseSummaryDTO } from '../../negotiationShield.types';
@@ -41,10 +44,16 @@ const NEGOTIATION_PRICING_LABELS: Record<string, string> = {
 };
 const NEGOTIATION_LEVEL_LABELS: Record<string, string> = { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low', INFO: 'Info', MISSING: 'Missing', CAUTION: 'Caution', POSITIVE: 'Positive' };
 
-export function negotiationShieldCasesFromView(cases: readonly NegotiationShieldCaseView[], propertyId: string): AskOperationResult {
+// A contributor or owner can start a review from here, inside Ask (slice 2a); a viewer reads the list only.
+const startReviewAction = {
+  id: NEGOTIATION_SHIELD_START_ACTION_ID, label: 'Start a review', interactionType: 'START_WORKFLOW' as const,
+  message: NEGOTIATION_SHIELD_START_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, style: 'PRIMARY' as const,
+};
+
+export function negotiationShieldCasesFromView(cases: readonly NegotiationShieldCaseView[], propertyId: string, canStart = false): AskOperationResult {
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'negotiation-shield-boundary', title: 'Preparation help, not legal or insurance advice',
-    body: 'Negotiation Shield helps you prepare for a quote, premium, claim or inspection conversation. It is not legal, insurance or pricing advice, and nothing is sent to the other party from here. Ask lists your reviews and shows each one\u2019s analysis and draft; creating, running and sending are not currently available in Ask.',
+    body: 'Negotiation Shield helps you prepare for a quote, premium, claim or inspection conversation. It is not legal, insurance or pricing advice, and nothing is sent to the other party from here. Ask lists your reviews and shows each one\u2019s analysis and draft; starting a review is available to a contributor or owner; running the analysis and sending are not currently available in Ask.',
     severity: 'INFO', suggestions: [],
   };
   if (!cases.length) {
@@ -52,8 +61,10 @@ export function negotiationShieldCasesFromView(cases: readonly NegotiationShield
       status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_NO_CASES',
       blocks: [{
         type: 'SUMMARY', id: 'negotiation-shield-summary', title: 'No Negotiation Shield reviews yet',
-        body: 'Negotiation Shield reviews a contractor quote, a premium increase, a claim settlement, contractor urgency pressure or a buyer inspection request before you respond. None has been started for this home, and Ask cannot start one yet.',
-        tone: 'DEFAULT', actions: [],
+        body: 'Negotiation Shield reviews a contractor quote, a premium increase, a claim settlement, contractor urgency pressure or a buyer inspection request before you respond. ' + (canStart
+          ? 'None has been started for this home. Start one below; you will enter what you know and review it before it is saved.'
+          : 'None has been started for this home. Ask cannot start one for a view-only member; a contributor or owner can.'),
+        tone: 'DEFAULT', actions: canStart ? [startReviewAction] : [],
       }, boundary],
       suggestions: [],
     };
@@ -70,7 +81,7 @@ export function negotiationShieldCasesFromView(cases: readonly NegotiationShield
       `Last updated ${humanDate(new Date(cases[0].updatedAt))}.`,
     ].join(' '),
     tone: 'DEFAULT',
-    actions: [],
+    actions: canStart ? [startReviewAction] : [],
   }];
   if (cases.length > shown.length) {
     blocks.push({
@@ -242,12 +253,15 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   return { status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_REVIEW_READY', blocks, suggestions: [] };
 }
 
-async function negotiationShieldCasesResult(propertyId: string, launch?: { entityType?: string | null; entityId?: string | null } | null): Promise<AskOperationResult> {
+async function negotiationShieldCasesResult(propertyId: string, launch?: { entityType?: string | null; entityId?: string | null } | null, canStart = false): Promise<AskOperationResult> {
   // The operation registry enforces the viewer floor (the canonical read's own floor); the review is scoped to this property.
   if (launch?.entityType === NEGOTIATION_SHIELD_CASE_ENTITY && launch.entityId) {
     return negotiationShieldReviewFromView(await getNegotiationShieldCaseReviewForProperty(propertyId, launch.entityId));
   }
-  return negotiationShieldCasesFromView(await listNegotiationShieldCasesForProperty(propertyId), propertyId);
+  return negotiationShieldCasesFromView(await listNegotiationShieldCasesForProperty(propertyId), propertyId, canStart);
 }
 
-registerCapabilityHandler('negotiation-shield.cases', async (envelope) => negotiationShieldCasesResult(envelope.propertyId!, envelope.launchContext));
+registerCapabilityHandler('negotiation-shield.cases', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return negotiationShieldCasesResult(envelope.propertyId!, envelope.launchContext, access.role !== HouseholdRole.VIEWER);
+});

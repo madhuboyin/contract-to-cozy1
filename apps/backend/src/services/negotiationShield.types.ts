@@ -270,6 +270,11 @@ export type CreateNegotiationShieldCaseInput = {
   sourceType: NegotiationShieldSourceType;
   perspective?: NegotiationShieldPerspective;
   quoteDecisionWorkspaceId?: string | null;
+  /**
+   * The operation this create belongs to, for callers that can retry it (Ask: the confirming execution). A second call with the same key on the
+   * same property returns the original case and writes nothing. Not part of the HTTP body schema, so the page cannot set it.
+   */
+  idempotencyKey?: string | null;
   initialInput?: {
     inputType: NegotiationShieldInputType;
     rawText?: string | null;

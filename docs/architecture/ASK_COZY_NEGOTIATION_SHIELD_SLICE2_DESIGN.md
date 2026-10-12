@@ -1,6 +1,6 @@
 # Ask Cozy — Negotiation Shield slice 2 (write path): design
 
-**Status:** Decisions D1–D7 and D9 accepted and D8 revised by the owner (2026-10-12; section 7). D9 and D6 are built and verified (sections 8 and 8a). 2a and 2b are not built.
+**Status:** Decisions D1–D7 and D9 accepted and D8 revised by the owner (2026-10-12; section 7). D9 and D6 are built and verified (sections 8 and 8a). 2a is built (section 8b); 2b is not.
 **Date:** October 12, 2026
 **Parent:** `docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md` ("Negotiation Shield", recommended order item 1); slice 1 shipped as FRD v1.294 (`a416b23f`).
 **Method:** `docs/architecture/AUDIT_METHODOLOGY.md`. Every factual claim below is labelled **code-traced** (read in source, not run), **executed** (run), or **inferred**. Nothing here is executed against a database or browser (this repository has none). The executed checks are the slice 1 tests recorded in the FRD and the D9 router authorization test (section 8).
@@ -136,11 +136,19 @@ Start from selected confirmed inspection findings; request-for-repair vs credit;
 - **Tests (executed, environment-independent):** `tests/unit/negotiationShieldJourneyCompletion.test.js` (8). `sharp` is stubbed so the controller can load without the native module.
 - **Not verified:** a real guidance journey store, and a page run (not required by the owner's validation rule).
 
+## 8b. 2a — start a review (built; FRD v1.297)
+
+- **Built as designed**, with these concrete choices: four scenarios; the page's own field keys (the page's separate "system category" field is folded into "What work is it for?" and stored as `serviceCategory`, which the rules engine treats as equivalent); bounded `notes`; a review needs a name and at least one detail; the receipt offers **Review** only (the design's "Run the analysis" action arrives with 2b).
+- **Idempotency (D8 revised):** `createCase` takes an optional `idempotencyKey`; `NegotiationShieldCase.idempotencyKey` is nullable with `@@unique([propertyId, idempotencyKey])`; pre-check, then a `P2002` race fallback. The HTTP validator does not accept the field.
+- **Typed start:** `isNegotiationShieldStartRequest` routes "start/create/begin a negotiation review|case" ahead of the list read; a message that names one scenario goes straight to its form.
+- **Owner step:** `prisma db push` before the new backend serves traffic (FRD v1.297 explains why the order matters).
+- **Not verified:** the rendered form, a real database, and the `db push` itself.
+
 ## 9. Other defects found while reading (not fixed)
 
 1. ~~**F7 — completion hook lives in the controller**~~ — fixed by D6 (section 8a).
 2. **F8 — the non-`documentId` attach branch is dead and would fail on a foreign key.**
-3. **F2 — `createCase` has no idempotency key** (addressed by D8 revised).
+3. ~~**F2 — `createCase` has no idempotency key**~~ — fixed for callers that pass a key (section 8b).
 
 ## 10. Registry and validation checklist (per new operation)
 

@@ -104,6 +104,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('PROPERTY_PURCHASE_DATE_SET', ALL_MODES),
   definePolicy('HOME_JOURNEY_SET', ALL_MODES),
   definePolicy('MATERIAL_SPEC_ADD', ALL_MODES),
+  definePolicy('NEGOTIATION_SHIELD_CASE_START', ALL_MODES),
   definePolicy('HOME_PLANT_ADD', ALL_MODES),
   definePolicy('ROOM_PLANT_RECOMMENDATIONS', ALL_MODES),
   definePolicy('OWNERSHIP_COST_COMMAND', ALL_MODES),

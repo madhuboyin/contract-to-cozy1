@@ -167,7 +167,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // FRD v1.64 gave INCIDENT_CONTINUATION two page links; Ask no longer links to desktop pages, so it offers starting a claim instead.
   INCIDENT_CONTINUATION: new Set(['claim-file-start']),
   // The row's Review action (opens one case's analysis and draft) and the review's way back to the list; the draft itself is text, not an action.
-  NEGOTIATION_SHIELD_CASES: new Set(['negotiation-shield-review', 'negotiation-shield-back']),
+  NEGOTIATION_SHIELD_CASES: new Set(['negotiation-shield-review', 'negotiation-shield-back', 'negotiation-shield-start']),
+  // The receipt of a started review offers the slice 1 read of that case.
+  NEGOTIATION_SHIELD_CASE_START: new Set(['negotiation-shield-review']),
   PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.

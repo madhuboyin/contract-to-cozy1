@@ -41,9 +41,11 @@ const empties = () => ({
   'Project Tracker': trackedProjectsFromView([], 'p1', true),
   'Do-Nothing Simulator': doNothingSimulationFromView({ run: null, scenarios: [] }, 'p1'),
   'Negotiation Shield': negotiationShieldCasesFromView([], 'p1'),
+  // A contributor or owner can start a review from here (FRD v1.297); the viewer variant above says honestly that Ask cannot.
+  'Negotiation Shield (contributor)': negotiationShieldCasesFromView([], 'p1', true),
 });
 // The only actions an empty state may carry: a typed Ask command for the primary account holder's tools (the answer reaches no one else).
-const EXPECTED_ACTION_OPERATIONS = { 'Service Price Radar': ['SERVICE_PRICE_CHECK_RUN'], 'Project Tracker': ['PROJECT_TRACKER_CREATE'], 'Do-Nothing Simulator': ['DO_NOTHING_SIMULATION_RUN'] };
+const EXPECTED_ACTION_OPERATIONS = { 'Service Price Radar': ['SERVICE_PRICE_CHECK_RUN'], 'Project Tracker': ['PROJECT_TRACKER_CREATE'], 'Do-Nothing Simulator': ['DO_NOTHING_SIMULATION_RUN'], 'Negotiation Shield (contributor)': ['NEGOTIATION_SHIELD_CASE_START'] };
 
 test('every empty state links nowhere, invites no page, and offers only a typed Ask command it really has', () => {
   for (const [name, result] of Object.entries(empties())) {

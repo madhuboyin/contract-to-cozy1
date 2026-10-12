@@ -1226,6 +1226,12 @@ export class NegotiationShieldService {
       });
       if (existing) return this.getCaseDetail(propertyId, existing.id);
     }
+    // A retry of the same operation returns the case it already made (the key is bound to the Ask execution that confirmed the create).
+    const idempotencyKey = input.idempotencyKey?.trim() || null;
+    if (idempotencyKey) {
+      const earlier = await this.models.caseModel.findFirst({ where: { propertyId, idempotencyKey }, select: { id: true } });
+      if (earlier) return this.getCaseDetail(propertyId, earlier.id);
+    }
     const hasInitialInput = !!input.initialInput;
     const sourceType = resolveSourceType({
       hasInputs: hasInitialInput,
@@ -1233,35 +1239,46 @@ export class NegotiationShieldService {
       fallback: input.sourceType,
     });
 
-    const created = await prisma.$transaction(async (tx) => {
-      const createdCase = await (tx as any).negotiationShieldCase.create({
-        data: {
-          propertyId,
-          createdByUserId,
-          scenarioType: input.scenarioType,
-          status: 'DRAFT',
-          title: input.title.trim(),
-          description: input.description?.trim() || null,
-          sourceType,
-          perspective: input.perspective ?? 'HOMEOWNER',
-          quoteDecisionWorkspaceId: input.quoteDecisionWorkspaceId ?? null,
-        },
-        select: { id: true },
-      });
-
-      if (input.initialInput) {
-        await (tx as any).negotiationShieldInput.create({
+    let created: { id: string };
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        const createdCase = await (tx as any).negotiationShieldCase.create({
           data: {
-            caseId: createdCase.id,
-            inputType: input.initialInput.inputType,
-            rawText: input.initialInput.rawText ?? null,
-            structuredData: input.initialInput.structuredData ?? {},
+            propertyId,
+            createdByUserId,
+            scenarioType: input.scenarioType,
+            status: 'DRAFT',
+            title: input.title.trim(),
+            description: input.description?.trim() || null,
+            sourceType,
+            perspective: input.perspective ?? 'HOMEOWNER',
+            quoteDecisionWorkspaceId: input.quoteDecisionWorkspaceId ?? null,
+            ...(idempotencyKey ? { idempotencyKey } : {}),
           },
+          select: { id: true },
         });
-      }
 
-      return createdCase;
-    });
+        if (input.initialInput) {
+          await (tx as any).negotiationShieldInput.create({
+            data: {
+              caseId: createdCase.id,
+              inputType: input.initialInput.inputType,
+              rawText: input.initialInput.rawText ?? null,
+              structuredData: input.initialInput.structuredData ?? {},
+            },
+          });
+        }
+
+        return createdCase;
+      });
+    } catch (error) {
+      // Two confirmations of the same operation racing: the unique key admits one; the other returns that case.
+      if (idempotencyKey && (error as { code?: string } | null)?.code === 'P2002') {
+        const raced = await this.models.caseModel.findFirst({ where: { propertyId, idempotencyKey }, select: { id: true } });
+        if (raced) return this.getCaseDetail(propertyId, raced.id);
+      }
+      throw error;
+    }
 
     // Analytics: negotiation scenario launched
     analyticsEmitter.track({
