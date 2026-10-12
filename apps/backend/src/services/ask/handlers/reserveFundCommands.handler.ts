@@ -10,6 +10,7 @@ import { homeReserveFundReconciliationService } from '../../homeReserveFundRecon
 import { getFinancialContextDecisions } from '../../financialContext/context';
 import { ReserveFundContributionInputSchema } from '../support/commandInputs';
 import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
+import { parseReserveFundContributionMessage, type ReserveFundContributionMessage } from '../support/reserveFundMessage';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -19,7 +20,9 @@ type Contribution = ReturnType<typeof ReserveFundContributionInputSchema.parse>;
 
 const showFundAction = { id: 'reserve-fund-show-current', label: 'Show updated reserve fund', interactionType: 'START_WORKFLOW' as const, message: 'How is my reserve fund doing?', operationId: 'CAPITAL_RESERVE_PLAN' as const, style: 'SECONDARY' as const };
 
-function contributionCapture(): AskCaptureRequest {
+// What a typed "add $500 to my reserve fund" already told us, shown in the form so it can be reviewed and changed before confirmation.
+function contributionCapture(prefill?: ReserveFundContributionMessage | null): AskCaptureRequest {
+  const type = prefill?.type ?? 'DEPOSIT';
   return {
     requirementId: 'reserve-fund-contribution-input', captureKey: RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY,
     classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM', title: 'Log a reserve-fund entry',
@@ -33,7 +36,7 @@ function contributionCapture(): AskCaptureRequest {
       { key: 'amountDollars', label: 'Amount ($)', required: true, inputSchema: { type: 'NUMBER', min: 0.01, max: 100_000_000 } },
       { key: 'occurredAt', label: 'Date', required: false, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: false } },
       { key: 'note', label: 'Note', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 500 } },
-    ] }, currentAnswer: { type: 'DEPOSIT', direction: 'INCREASE' }, allowNotSure: false, sensitivity: 'FINANCIAL',
+    ] }, currentAnswer: { type, direction: type === 'WITHDRAWAL' ? 'DECREASE' : 'INCREASE', ...(prefill?.amountDollars ? { amountDollars: prefill.amountDollars } : {}) }, allowNotSure: false, sensitivity: 'FINANCIAL',
     destinationLabel: 'Adds a self-reported Reserve Fund ledger entry after confirmation', confirmationText: null,
     expectedContextVersion: 'reserve-fund-live',
   };
@@ -41,12 +44,12 @@ function contributionCapture(): AskCaptureRequest {
 
 const blocked = (): AskOperationResult => ({ status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-permission', title: 'A contributor or owner is required', body: 'You can review the reserve plan, but your role cannot change its shared balance or planning settings.', tone: 'CAUTION', actions: [] }], suggestions: [] });
 
-export async function reserveFundCommandResult(userId: string, propertyId: string, launch: Launch, supplied?: Contribution): Promise<AskOperationResult> {
+export async function reserveFundCommandResult(userId: string, propertyId: string, launch: Launch, supplied?: Contribution, prefill?: ReserveFundContributionMessage | null): Promise<AskOperationResult> {
   if ((await ensurePropertyAccess(userId, propertyId)).role === HouseholdRole.VIEWER) return blocked();
   const actionId = launch?.actionId ?? '';
   const entityId = launch?.entityId ?? '';
   if (!Object.values(RESERVE_FUND_ACTION_IDS).includes(actionId as never)) return { status: 'NOT_APPLICABLE', reasonCode: 'RESERVE_FUND_ACTION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-launch', title: 'Choose an action from the reserve-fund answer', body: 'Nothing changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
-  if (actionId === RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION && !supplied) return { status: 'NEEDS_CONTEXT', reasonCode: 'RESERVE_FUND_CONTRIBUTION_REQUIRED', parameters: { reserveFundLaunch: launch }, blocks: [{ type: 'SUMMARY', id: 'reserve-fund-contribution-input', title: 'Log a reserve-fund entry', body: 'Enter the self-reported balance change, then review it before it is recorded.', tone: 'DEFAULT', actions: [] }], captureRequests: [contributionCapture()], suggestions: [] };
+  if (actionId === RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION && !supplied) return { status: 'NEEDS_CONTEXT', reasonCode: 'RESERVE_FUND_CONTRIBUTION_REQUIRED', parameters: { reserveFundLaunch: launch }, blocks: [{ type: 'SUMMARY', id: 'reserve-fund-contribution-input', title: 'Log a reserve-fund entry', body: 'Enter the self-reported balance change, then review it before it is recorded.', tone: 'DEFAULT', actions: [] }], captureRequests: [contributionCapture(prefill)], suggestions: [] };
 
   const command: Record<string, unknown> = { actionId, entityId };
   let title = 'Update the reserve fund?';
@@ -68,6 +71,12 @@ export async function reserveFundCommandResult(userId: string, propertyId: strin
 
 registerCapabilityHandler('reserve-fund.command', async (envelope) => {
   const launch = envelope.launchContext;
+  // A typed "add $500 to my reserve fund" (no declared action, not a refresh) opens the same contribution form the ledger's Add button does,
+  // with what the message said filled in. It writes nothing: the form is reviewed, then confirmed, exactly as for the declared action.
+  if (launch?.surface !== 'ASK_REFRESH' && launch?.operationId !== 'RESERVE_FUND_COMMAND') {
+    const typed = parseReserveFundContributionMessage(envelope.message);
+    if (typed) return reserveFundCommandResult(envelope.userId, envelope.propertyId!, { actionId: RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, entityId: null, sourceExecutionId: launch?.sourceExecutionId ?? null }, undefined, typed);
+  }
   if (launch?.operationId !== 'RESERVE_FUND_COMMAND' || launch.surface === 'ASK_REFRESH' || envelope.message !== RESERVE_FUND_COMMAND_MESSAGE) return reserveFundCommandResult(envelope.userId, envelope.propertyId!, null);
   return reserveFundCommandResult(envelope.userId, envelope.propertyId!, launch);
 });

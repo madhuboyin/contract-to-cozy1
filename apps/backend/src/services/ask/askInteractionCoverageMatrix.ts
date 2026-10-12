@@ -1136,8 +1136,8 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     handoff: { status: 'TRACED', notes: 'The workflow remains in Ask; downstream category owners are launched as registered Ask operations.' },
   },
   RESERVE_FUND_COMMAND: {
-    track: 'Financial and ownership', rollClass: 'CONFIRMED_MUTATION', canonicalOwner: 'reserve-fund.command', roleFloor: 'CONTRIBUTOR', messageRoutable: false, confirmationCapable: true, correctionModes: ['EDIT'],
-    note: 'Declared actions manage the self-reported contribution ledger, reserve posture, recalculation, and expense-match retirement through the same canonical services as the Reserve Fund Planner.',
+    track: 'Financial and ownership', rollClass: 'CONFIRMED_MUTATION', canonicalOwner: 'reserve-fund.command', roleFloor: 'CONTRIBUTOR', messageRoutable: true, confirmationCapable: true, correctionModes: ['EDIT'],
+    note: 'A typed deposit or withdrawal ("add $500 to my reserve fund") opens the contribution form pre-filled; every other action is a declared action. Declared actions manage the self-reported contribution ledger, reserve posture, recalculation, and expense-match retirement through the same canonical services as the Reserve Fund Planner.',
     uiSurface: { status: 'TRACED', notes: 'Shared capture, confirmation and workflow-progress renderers; actions launch from the reserve summary, planning controls, ledger, and reconciliation suggestions.' },
     freshnessSource: { status: 'TRACED', notes: 'Confirmation re-scopes every target to the property; recalculation and posture changes use the current financial context version.' },
     idempotency: { status: 'TRACED', notes: 'The shared confirmation receipt prevents replay; contribution and reconciliation writes retain canonical record identities.' },

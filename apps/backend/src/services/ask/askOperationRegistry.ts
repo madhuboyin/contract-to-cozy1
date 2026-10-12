@@ -3,6 +3,7 @@ import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/sk
 import type { SuggestedNextActionCandidate } from './suggestedActions/suggestedNextActionCandidate';
 import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
 import { validateAskOperationSemanticPackages } from './askOperationSemanticPackages';
+import { parseReserveFundContributionMessage } from './support/reserveFundMessage';
 
 export type AskIntentFamily =
   | 'RECORD_QUERY'
@@ -1278,6 +1279,11 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (inventoryItemCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_ITEM_CORRECT', 0.97);
+  }
+  // "Add $500 to my reserve fund" / "withdraw $300 from my reserve fund" is a ledger entry for the governed Reserve Fund command, never an
+  // inventory item and never the plan read. Ahead of the inventory pattern below, whose "add <anything>" would otherwise take it.
+  if (parseReserveFundContributionMessage(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('RESERVE_FUND_COMMAND', 0.97);
   }
   // Before the generic "create <anything>" inventory command: "Create a quote comparison workspace" names a workspace, not an item.
   if (quoteComparisonCreatePattern.test(message)) {
