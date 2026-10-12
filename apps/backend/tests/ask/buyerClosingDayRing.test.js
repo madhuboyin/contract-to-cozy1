@@ -14,12 +14,11 @@ const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvi
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 const { getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
 
-const PLAN = '/dashboard/properties/p1/buyer-plan';
 const workspace = (overrides = {}) => ({ identificationReady: true, requiredDocumentsReady: true, fundsReadinessReviewed: false, blockersReviewed: false, questionsResolved: false, ...overrides });
 const blocker = (id, title) => ({ id, title, status: 'PENDING' });
 
 test('the ring is the workspace\'s own count of done checks, with what is counted stated, and tiles for done, not yet and blockers', () => {
-  const ring = buyerClosingDayProgress(workspace(), [blocker('b1', 'Lender needs pay stubs')], PLAN);
+  const ring = buyerClosingDayProgress(workspace(), [blocker('b1', 'Lender needs pay stubs')]);
   assert.equal(ring.id, 'buyer-closing-day-progress');
   assert.equal(ring.percent, 40);
   assert.equal(ring.basis, '2 of 5 closing-day checks done');
@@ -27,20 +26,20 @@ test('the ring is the workspace\'s own count of done checks, with what is counte
   AskPresentationBlockSchema.parse(ring);
 });
 
-test('next steps are blockers first, then the checks still to do, at most three, each linking to the plan, with no actions', () => {
-  const ring = buyerClosingDayProgress(workspace(), [blocker('b1', 'Lender needs pay stubs'), blocker('b2', 'Insurance binder missing')], PLAN);
+test('next steps are blockers first, then the checks still to do, at most three, linking to no desktop page and carrying no actions', () => {
+  const ring = buyerClosingDayProgress(workspace(), [blocker('b1', 'Lender needs pay stubs'), blocker('b2', 'Insurance binder missing')]);
   assert.deepEqual(ring.nextSteps.map((step) => step.title), ['Lender needs pay stubs', 'Insurance binder missing', 'Funds readiness reviewed']);
-  assert.ok(ring.nextSteps.every((step) => step.href === PLAN && (step.actions ?? []).length === 0));
-  const noBlockers = buyerClosingDayProgress(workspace({ fundsReadinessReviewed: true }), [], PLAN);
+  assert.ok(ring.nextSteps.every((step) => step.href === null && (step.actions ?? []).length === 0));
+  const noBlockers = buyerClosingDayProgress(workspace({ fundsReadinessReviewed: true }), []);
   assert.deepEqual(noBlockers.nextSteps.map((step) => step.title), ['Blockers reviewed', 'Questions resolved']);
   assert.equal(noBlockers.metrics[2].tone, 'DEFAULT');
 });
 
 test('all five done is 100 percent with no steps; no workspace means no ring', () => {
-  const done = buyerClosingDayProgress(workspace({ fundsReadinessReviewed: true, blockersReviewed: true, questionsResolved: true }), [], PLAN);
+  const done = buyerClosingDayProgress(workspace({ fundsReadinessReviewed: true, blockersReviewed: true, questionsResolved: true }), []);
   assert.equal(done.percent, 100);
   assert.deepEqual(done.nextSteps, []);
-  assert.equal(buyerClosingDayProgress(null, [], PLAN), null);
+  assert.equal(buyerClosingDayProgress(null, []), null);
 });
 
 test('PROGRESS is allowed for the operation in the registry and the buyer closing skill', () => {
@@ -52,11 +51,11 @@ test('the answer checker, with answer relevance on, keeps the closing-day answer
   const answer = {
     status: 'READY_WITH_LIMITATIONS', suggestions: [],
     blocks: [
-      { type: 'SUMMARY', id: 'buyer-closing-day-summary', title: '1 blocker remains before closing day', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: PLAN, style: 'PRIMARY' }],
+      { type: 'SUMMARY', id: 'buyer-closing-day-summary', title: '1 blocker remains before closing day', tone: 'CAUTION', actions: [],
         body: 'Confirm your appointment, identification, required documents, funds readiness, and questions before closing day.' },
-      buyerClosingDayProgress(workspace(), [blocker('b1', 'Lender needs pay stubs')], PLAN),
+      buyerClosingDayProgress(workspace(), [blocker('b1', 'Lender needs pay stubs')]),
       { type: 'GROUPED_LIST', filters: [], id: 'buyer-closing-day-blockers', title: 'Blockers before closing day', description: 'Open or blocking tasks recorded on the Buyer Plan.',
-        sections: [{ id: 'blockers', title: 'Blockers', count: 1, items: [{ id: 'b1', title: 'Lender needs pay stubs', description: null, meta: [], status: 'PENDING', href: PLAN }] }], actions: [] },
+        sections: [{ id: 'blockers', title: 'Blockers', count: 1, items: [{ id: 'b1', title: 'Lender needs pay stubs', description: null, meta: [], status: 'PENDING', href: null }] }], actions: [] },
       { type: 'BOUNDARY', id: 'buyer-closing-day-wire-boundary', title: 'Wire-fraud protection', body: 'Never trust changed emailed wire instructions.', severity: 'INFO', suggestions: [] },
     ],
   };

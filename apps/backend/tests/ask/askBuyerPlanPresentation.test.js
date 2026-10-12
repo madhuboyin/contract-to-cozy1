@@ -117,16 +117,15 @@ test('BUYER_* classifier fixes do not hijack any operation\'s own registered neg
   }
 });
 
-test('buyer Home Actions reads the canonical next task and links its exact plan section', () => {
+test('buyer Home Actions reads the canonical next task and links to no desktop page', () => {
   const result = buildBuyerPlanHomeActionsResult(context());
   assert.equal(result.status, 'ANSWERED');
   assert.equal(result.suppressSkillHandoff, true, 'pre-close buyer must not get the homeowner maintenance handoff');
   assert.equal(result.contextVersion, 'buyer-v1');
   assert.match(result.blocks[0].title, /Review the Closing Disclosure/);
-  assert.equal(
-    result.blocks[0].actions[0].href,
-    '/dashboard/properties/property%2F1/buyer-plan?taskId=task-next&section=CLOSING_DISCLOSURE_FUNDS',
-  );
+  assert.deepEqual(result.blocks[0].actions, [], 'Ask never links to the desktop Buyer Plan');
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
+  assert.equal(result.blocks[1].sections[0].items[0].href, null);
   assert.equal(result.blocks[1].sections[0].items[0].id, 'task-next');
   assert.match(result.blocks[1].description, /canonical Buyer Plan/);
   assert.equal(matchesHomeActionsAnswerContract(result), true);

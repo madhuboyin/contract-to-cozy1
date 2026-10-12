@@ -72,10 +72,6 @@ async function loadBuyerPlanContext(userId: string, propertyId: string) {
   });
 }
 
-export function buyerPlanHref(propertyId: string): string {
-  return `/dashboard/properties/${encodeURIComponent(propertyId)}/buyer-plan`;
-}
-
 function buyerNotActiveResult(propertyId: string, contextVersion: string | null, body: string): AskOperationResult {
   return {
     status: 'NOT_APPLICABLE',
@@ -87,7 +83,7 @@ function buyerNotActiveResult(propertyId: string, contextVersion: string | null,
       title: 'This property has no active Buyer Plan',
       body,
       tone: 'DEFAULT',
-      actions: [{ id: 'open-home', label: 'Open Home', href: `/dashboard?propertyId=${encodeURIComponent(propertyId)}`, style: 'PRIMARY' }],
+      actions: [],
     }],
     suggestions: [],
   };
@@ -136,15 +132,11 @@ async function buyerPlanStatusResult(userId: string, propertyId: string): Promis
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s Buyer Plan status right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
-    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet. Start it to get a closing status.');
+    return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no closing status to show. Starting a Buyer Plan is not currently available in Ask.');
   }
   const { overview } = data;
   const remaining = Math.max(overview.journey.progress.total - overview.journey.progress.completed, 0);
-  const nextHref = overview.nextAction
-    ? `${planHref}?${new URLSearchParams({ taskId: overview.nextAction.id, ...(overview.nextAction.checklistSection ? { section: overview.nextAction.checklistSection } : {}) }).toString()}`
-    : planHref;
   // B01 fix: surface the current phase Ask already has (overview.journey.stage)
   // rather than only counts/blockers -- falls back to the raw enum value,
   // humanized, for any stage this map doesn't yet name explicitly, so a
@@ -168,7 +160,7 @@ async function buyerPlanStatusResult(userId: string, propertyId: string): Promis
           ? `You're in the ${phaseLabel} phase. The Closing Plan is ${overview.journey.progress.percent}% complete with ${remaining} of ${overview.journey.progress.total} applicable pre-close tasks remaining.${overview.blockers.length ? ` ${overview.blockers.length} item${overview.blockers.length === 1 ? ' is' : 's are'} blocked.` : ''}`
           : `You're in the ${phaseLabel} phase. The canonical Buyer Plan has no executable pre-close task right now. It is ${overview.journey.progress.percent}% complete.`,
         tone: overview.blockers.length ? 'CAUTION' : 'DEFAULT',
-        actions: [{ id: overview.nextAction ? 'open-next-buyer-task' : 'open-buyer-plan', label: overview.nextAction ? 'Open exact next task' : 'Open Buyer Plan', href: nextHref, style: 'PRIMARY' }],
+        actions: [],
       },
       BUYER_PROFESSIONAL_BOUNDARY,
     ],
@@ -247,17 +239,16 @@ export function buyerTaskItemActions(role: HouseholdRole) {
   return BUYER_TASK_ITEM_ACTIONS.map(({ id, label, message, operationId }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId }));
 }
 
-// A blocking-task row of the deadlines list: the task's identity, a link to it on the Buyer Plan, and the declared
-// task actions (empty for viewers).
+// A blocking-task row of the deadlines list: the task's identity and the declared task actions (empty for viewers). The row links to no
+// page; the task opens as its own inline record (entityType BUYER_TASK).
 export function buyerDeadlineTaskRow(
   task: { id: string; title: string; description: string | null; priority: string; status: string; dueAt: Date | string | null },
-  planHref: string,
   actions: ReturnType<typeof buyerTaskItemActions>,
 ) {
   return {
     id: task.id, title: task.title, description: task.description,
     meta: [task.priority === 'NOW' ? 'Now' : task.priority, humanDate(task.dueAt ? new Date(task.dueAt) : null) ? `Due ${humanDate(new Date(task.dueAt!))}` : null].filter((value): value is string => Boolean(value)),
-    status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
+    status: task.status, href: null,
     entityType: 'BUYER_TASK', actions,
   };
 }
@@ -266,7 +257,6 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s deadlines right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there are no recorded closing deadlines.');
   }
@@ -299,7 +289,7 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
       items: matchingMilestones.map((milestone) => ({
         id: milestone.id, title: milestone.label, description: null,
         meta: [humanDate(milestone.dueAt ? new Date(milestone.dueAt) : null) ? `Due ${humanDate(new Date(milestone.dueAt!))}` : 'No date recorded'],
-        status: milestone.status, href: planHref,
+        status: milestone.status, href: null,
       })),
     });
   }
@@ -309,14 +299,14 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
       items: unmappedMilestones.map((milestone) => ({
         id: milestone.id, title: milestone.label, description: null,
         meta: [humanDate(milestone.dueAt ? new Date(milestone.dueAt) : null) ? `Due ${humanDate(new Date(milestone.dueAt!))}` : 'No date recorded'],
-        status: milestone.status, href: planHref,
+        status: milestone.status, href: null,
       })),
     });
   }
   if (blockerTotal) {
     sections.push({
       id: 'blockers', title: blockersTitle, count: blockerTotal,
-      items: blockerTasks.map((task) => buyerDeadlineTaskRow(task, planHref, taskActions)),
+      items: blockerTasks.map((task) => buyerDeadlineTaskRow(task, taskActions)),
     });
   }
   const viewState = buildBuyerDeadlinesViewState(priorViewState, laneFilter);
@@ -328,7 +318,7 @@ async function buyerDeadlinesResult(userId: string, propertyId: string, message:
       ? `${matchingMilestones.length} milestone${matchingMilestones.length === 1 ? '' : 's'} and ${blockerTotal} blocking task${blockerTotal === 1 ? '' : 's'}${activeLane ? ` match ${activeLane.label}` : ''} are open.${unmappedMilestones.length ? ` ${unmappedMilestones.length} additional milestone${unmappedMilestones.length === 1 ? '' : 's'} aren't scoped to a phase and are shown separately.` : ''} Dates reflect what you or your professionals recorded, not a certified closing date.`
       : 'No milestone or blocking task threatens this closing right now. This does not guarantee no deadline exists — only recorded ones are shown.',
     tone: blockerTotal ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (sections.length) {
     blocks.push({
@@ -359,12 +349,10 @@ async function buyerDocumentReadinessResult(userId: string, propertyId: string):
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s document readiness right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no transaction document readiness to review.');
   }
   const { overview } = data;
-  const documentsHref = overview.routes.documents;
   const needingReview = overview.evidence.documentsNeedingReviewCount;
   return {
     status: needingReview > 0 ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
@@ -377,7 +365,7 @@ async function buyerDocumentReadinessResult(userId: string, propertyId: string):
         title: needingReview > 0 ? `${needingReview} transaction document${needingReview === 1 ? '' : 's'} still need review` : 'Recorded transaction documents are verified',
         body: `${overview.evidence.documentCount} document${overview.evidence.documentCount === 1 ? '' : 's'} recorded, ${overview.evidence.verifiedDocumentCount} verified, ${needingReview} needing review. This reflects only what has been uploaded — it is not a guarantee that every closing document has been requested.`,
         tone: needingReview > 0 ? 'CAUTION' : 'DEFAULT',
-        actions: [{ id: 'open-documents', label: 'Open Documents', href: documentsHref, style: 'PRIMARY' }],
+        actions: [],
       },
       {
         type: 'EVIDENCE',
@@ -397,12 +385,10 @@ async function buyerInspectionReviewResult(userId: string, propertyId: string): 
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s inspection status right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no inspection to review.');
   }
   const { overview } = data;
-  const inspectionHref = overview.routes.inspection;
   const openFindings = overview.evidence.openMaterialFindingCount;
   const stateLabel: Record<string, string> = {
     NOT_STARTED: 'No inspection report has been imported yet',
@@ -420,10 +406,10 @@ async function buyerInspectionReviewResult(userId: string, propertyId: string): 
         id: 'buyer-inspection-review-summary',
         title: openFindings > 0 ? `${openFindings} safety or major finding${openFindings === 1 ? '' : 's'} still need a decision` : (stateLabel[overview.evidence.inspectionState] ?? 'No open safety or major finding is recorded'),
         body: openFindings > 0
-          ? 'Each finding needs a decision: seller negotiation, accepted post-close work, verified fact, or dismissed with reason. Ask can draft a decision, but confirming it happens in Inspection Hub or with your explicit confirmation.'
+          ? 'Each finding needs a decision: seller negotiation, accepted post-close work, verified fact, or dismissed with reason. Ask can draft a decision, and nothing is recorded until you confirm it.'
           : `${overview.evidence.inspectionReportCount} inspection report${overview.evidence.inspectionReportCount === 1 ? '' : 's'} recorded for this purchase.`,
         tone: openFindings > 0 ? 'CAUTION' : 'DEFAULT',
-        actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }],
+        actions: [],
       },
       BUYER_PROFESSIONAL_BOUNDARY,
     ],
@@ -437,14 +423,13 @@ export function buyerTaskVersion(task: { id: string; status: HomeBuyerTaskStatus
 
 async function buyerTaskCompleteResult(userId: string, propertyId: string, message: string, sourceExecutionId?: string | null, launchedTaskId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const planHref = buyerPlanHref(propertyId);
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
       blocks: [{
         type: 'SUMMARY', id: 'buyer-task-complete-permission', title: 'A contributor or owner needs to complete this task',
         body: 'Completing a Buyer Plan task changes the shared closing record. Viewers can review the plan but cannot change it.',
-        tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
+        tone: 'CAUTION', actions: [],
       }],
       suggestions: [],
     };
@@ -458,7 +443,7 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
       blocks: [{
         type: 'SUMMARY', id: 'buyer-task-complete-empty', title: 'No open Buyer Plan task is available to complete',
         body: 'No pending, in-progress, or blocked task is recorded for this purchase. Ask will not create a completion without a canonical task.',
-        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       suggestions: [],
     };
@@ -471,7 +456,7 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
       blocks: [{
         type: 'SUMMARY', id: 'buyer-task-complete-not-open', title: 'This Buyer Plan task is no longer open',
         body: 'It was completed, marked not needed, or removed after this list was shown. Nothing was changed.',
-        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       suggestions: [],
     };
@@ -484,8 +469,8 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
       status: 'NEEDS_ENTITY', reasonCode: 'BUYER_TASK_SELECTION_REQUIRED',
       blocks: [{
         type: 'SUMMARY', id: 'buyer-task-complete-select', title: 'Choose the Buyer Plan task to complete',
-        body: 'Ask could not identify one open task with enough confidence. Name the exact task, or open the plan and complete it directly.',
-        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan instead', href: planHref, style: 'SECONDARY' }],
+        body: 'Ask could not identify one open task with enough confidence. Name the exact task so Ask can propose completing it.',
+        tone: 'DEFAULT', actions: [],
       }],
       suggestions: [],
     };
@@ -510,7 +495,7 @@ async function buyerTaskCompleteResult(userId: string, propertyId: string, messa
     blocks: [{
       type: 'SUMMARY', id: 'buyer-task-complete-review', title: `Review completion for ${matched.title}`,
       body: 'No status has changed yet. Confirming records a user attestation on this Buyer Plan task.',
-      tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${planHref}?${new URLSearchParams({ taskId: matched.id }).toString()}`, style: 'SECONDARY' }],
+      tone: 'DEFAULT', actions: [],
     }],
     confirmation: {
       confirmationId: `buyer-task-complete-${matched.id}-${confirmationVersion}`,
@@ -542,14 +527,13 @@ function extractBuyerTaskTitle(message: string): string | null {
 
 async function buyerTaskCreateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const planHref = buyerPlanHref(propertyId);
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
       blocks: [{
         type: 'SUMMARY', id: 'buyer-task-create-permission', title: 'A contributor or owner needs to add this task',
         body: 'Adding a task changes the shared Buyer Plan. Viewers can review the plan but cannot change it.',
-        tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
+        tone: 'CAUTION', actions: [],
       }],
       suggestions: [],
     };
@@ -561,7 +545,7 @@ async function buyerTaskCreateResult(userId: string, propertyId: string, message
       ...durableFreeTextClarification('BUYER_TASK_CREATE', 'What should this closing checklist item be called?'),
       blocks: [{
         type: 'SUMMARY', id: 'buyer-task-create-title', title: 'Name the closing checklist item', body: 'Nothing has been created yet. Name the task, then review it before it is saved.',
-        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan instead', href: planHref, style: 'SECONDARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       suggestions: [],
     };
@@ -581,7 +565,7 @@ async function buyerTaskCreateResult(userId: string, propertyId: string, message
     blocks: [{
       type: 'SUMMARY', id: 'buyer-task-create-review', title: 'Review this closing checklist item',
       body: 'No task has been created yet. Confirm below or cancel without saving.',
-      tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
+      tone: 'DEFAULT', actions: [],
     }],
     confirmation: {
       confirmationId: `buyer-task-create-${propertyId}-${confirmationVersion}`,
@@ -602,14 +586,13 @@ async function buyerTaskCreateResult(userId: string, propertyId: string, message
 
 async function buyerTaskUpdateResult(userId: string, propertyId: string, message: string, sourceExecutionId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const planHref = buyerPlanHref(propertyId);
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
       blocks: [{
         type: 'SUMMARY', id: 'buyer-task-update-permission', title: 'A contributor or owner needs to update this task',
         body: 'Updating a task changes the shared Buyer Plan. Viewers can review the plan but cannot change it.',
-        tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }],
+        tone: 'CAUTION', actions: [],
       }],
       suggestions: [],
     };
@@ -630,8 +613,8 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
         description: 'Ask found more than one possible task. Use its exact title in your next message; nothing has changed.',
         sections: [{ id: 'tasks', title: 'Buyer Plan tasks', count: openTasks.length, items: openTasks.slice(0, 20).map((task) => ({
           id: task.id, title: task.title, description: task.dueAt ? `Due ${humanDate(task.dueAt)}` : 'No due date',
-          meta: [task.priority, task.status], status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
-        })) }], actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
+          meta: [task.priority, task.status], status: task.status, href: null,
+        })) }], actions: [],
       }], suggestions: [],
     };
   }
@@ -669,7 +652,7 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
       sourceExecutionId: sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: `Review this ${actionLabel}`, body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${planHref}?${new URLSearchParams({ taskId: matched.id }).toString()}`, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'buyer-task-update-review', title: `Review this ${actionLabel}`, body: 'No shared Buyer Plan record has changed yet.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `buyer-task-update-${matched.id}-1`, version: 1, title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${matched.title}?`,
       description: 'This command writes through the canonical Buyer Plan and preserves closing readiness.',
@@ -696,7 +679,6 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s move status right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no move status to review.');
   }
@@ -712,7 +694,7 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
       ? `${open.length} move task${open.length === 1 ? '' : 's'} still open for this purchase.`
       : 'Moving Concierge has not generated move tasks for this purchase yet. Generated tasks appear directly in the canonical Buyer Plan.',
     tone: open.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: `${planHref}?filter=MOVE`, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (open.length) {
     blocks.push({
@@ -721,7 +703,7 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
       sections: [{ id: 'move-tasks', title: 'Move', count: open.length, items: open.slice(0, 10).map((task) => ({
         id: task.id, title: task.title, description: task.description,
         meta: [task.priority === 'NOW' ? 'Now' : task.priority, task.dueAt ? `Due ${humanDate(task.dueAt)}` : null].filter((value): value is string => Boolean(value)),
-        status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
+        status: task.status, href: null,
       })) }],
       actions: [],
     });
@@ -738,7 +720,6 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s financing readiness right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no financing readiness to review.');
   }
@@ -749,7 +730,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
       blocks: [{
         type: 'SUMMARY', id: 'buyer-financing-cash', title: 'This purchase is recorded as a cash purchase',
         body: 'No lender, appraisal, or underwriting steps apply. Financing readiness tracking is for financed purchases only.',
-        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       suggestions: [],
     };
@@ -760,7 +741,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
       blocks: [{
         type: 'SUMMARY', id: 'buyer-financing-unrecorded', title: 'Purchase financing has not been recorded yet',
         body: 'Record whether this purchase is financed or cash, then select a confirmed Loan Estimate to track appraisal and underwriting readiness.',
-        tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+        tone: 'CAUTION', actions: [],
       }],
       suggestions: [],
     };
@@ -772,7 +753,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
     title: blockingConditions.length ? `${blockingConditions.length} lender condition${blockingConditions.length === 1 ? '' : 's'} still block closing` : 'No blocking lender condition is currently open',
     body: `Appraisal: ${readiness.appraisalStatus.toLowerCase().replace(/_/g, ' ')}. Underwriting: ${readiness.underwritingStatus.toLowerCase().replace(/_/g, ' ')}.${readiness.clearToCloseRecordedAt ? ' Clear-to-close is recorded.' : ' Clear-to-close is not yet recorded.'}`,
     tone: blockingConditions.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (blockingConditions.length) {
     blocks.push({
@@ -780,7 +761,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
       sections: [{ id: 'conditions', title: 'Conditions', count: blockingConditions.length, items: blockingConditions.slice(0, 10).map((condition) => ({
         id: condition.id, title: condition.title, description: condition.notes,
         meta: [condition.dueAt ? `Due ${humanDate(new Date(condition.dueAt))}` : null].filter((value): value is string => Boolean(value)),
-        status: condition.status, href: planHref,
+        status: condition.status, href: null,
       })) }], actions: [],
     });
   }
@@ -798,7 +779,6 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s title and escrow readiness right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no title or escrow readiness to review.');
   }
@@ -806,7 +786,7 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
   if (!titleData.workspace) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_TITLE_ESCROW_NOT_RECORDED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-title-unrecorded', title: 'Title and escrow readiness has not been recorded yet', body: 'Add the responsible title, attorney, or escrow contact to start tracking readiness.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-title-unrecorded', title: 'Title and escrow readiness has not been recorded yet', body: 'Add the responsible title, attorney, or escrow contact to start tracking readiness.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -817,7 +797,7 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
     title: openBlockingIssues.length ? `${openBlockingIssues.length} title/escrow issue${openBlockingIssues.length === 1 ? '' : 's'} still block closing` : 'No blocking title or escrow issue is currently open',
     body: `Title review: ${workspace.titleReviewStatus.toLowerCase().replace(/_/g, ' ')}.${workspace.closingAppointmentAt ? ` Closing appointment recorded for ${humanDate(new Date(workspace.closingAppointmentAt))}.` : ' No closing appointment recorded yet.'}`,
     tone: openBlockingIssues.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (openBlockingIssues.length) {
     blocks.push({
@@ -825,7 +805,7 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
       sections: [{ id: 'issues', title: 'Issues', count: openBlockingIssues.length, items: openBlockingIssues.slice(0, 10).map((issue) => ({
         id: issue.id, title: issue.title, description: null,
         meta: [issue.dueAt ? `Due ${humanDate(new Date(issue.dueAt))}` : null].filter((value): value is string => Boolean(value)),
-        status: issue.status, href: planHref,
+        status: issue.status, href: null,
       })) }], actions: [],
     });
   }
@@ -843,7 +823,6 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s walkthrough readiness right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no walkthrough to prepare.');
   }
@@ -852,7 +831,7 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
   if (!workspace) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_WALKTHROUGH_NOT_SCHEDULED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-walkthrough-unscheduled', title: 'The final walkthrough has not been scheduled yet', body: 'Schedule the walkthrough close to closing and record attendees before it happens.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-walkthrough-unscheduled', title: 'The final walkthrough has not been scheduled yet', body: 'Schedule the walkthrough close to closing and record attendees before it happens.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -862,13 +841,13 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
     title: openIssues.length ? `${openIssues.length} walkthrough issue${openIssues.length === 1 ? '' : 's'} still unresolved` : (workspace.completedAt ? 'The final walkthrough is complete with no open issues' : 'The final walkthrough is scheduled with no issues recorded yet'),
     body: workspace.scheduledAt ? `Scheduled for ${humanDate(new Date(workspace.scheduledAt))}.` : 'No walkthrough date is recorded yet.',
     tone: openIssues.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (openIssues.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-walkthrough-issues', title: 'Unresolved walkthrough issues', description: 'From the recorded walkthrough.',
       sections: [{ id: 'issues', title: 'Issues', count: openIssues.length, items: openIssues.slice(0, 10).map((issue) => ({
-        id: issue.id, title: issue.title, description: null, meta: issue.blocking ? ['Blocking'] : [], status: issue.status, href: planHref,
+        id: issue.id, title: issue.title, description: null, meta: issue.blocking ? ['Blocking'] : [], status: issue.status, href: null,
       })) }], actions: [],
     });
   }
@@ -886,7 +865,6 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s Closing Disclosure and funds readiness right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no Closing Disclosure to review.');
   }
@@ -895,7 +873,7 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
   if (!workspace) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_DISCLOSURE_NOT_RECORDED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-disclosure-unrecorded', title: 'No Closing Disclosure has been recorded yet', body: 'Upload or manually enter the latest Closing Disclosure once your lender or closing professional sends it.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-disclosure-unrecorded', title: 'No Closing Disclosure has been recorded yet', body: 'Upload or manually enter the latest Closing Disclosure once your lender or closing professional sends it.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -908,7 +886,7 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
     title: outstanding.length ? `${outstanding.length} item${outstanding.length === 1 ? '' : 's'} still open before funds are ready` : 'Funds and Closing Disclosure review are recorded as ready',
     body: outstanding.length ? `Still open: ${outstanding.join(', ')}.` : 'Funds method, wire-instruction verification, and questions are all recorded as resolved.',
     tone: outstanding.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+    actions: [],
   }, {
     type: 'BOUNDARY', id: 'buyer-disclosure-wire-boundary', title: 'Wire-fraud protection', body: 'Never trust changed emailed wire instructions. Independently verify funds instructions using a known phone number. ContractToCozy never supplies or validates destination account details.', severity: 'CAUTION', suggestions: [],
   }];
@@ -933,7 +911,6 @@ const BUYER_CLOSING_DAY_CHECKS = [
 export function buyerClosingDayProgress(
   workspace: Partial<Record<typeof BUYER_CLOSING_DAY_CHECKS[number][0], boolean>> | null,
   blockers: ReadonlyArray<{ id: string; title: string; status: string }>,
-  planHref: string,
 ): Extract<AskPresentationBlock, { type: 'PROGRESS' }> | null {
   if (!workspace) return null;
   const checks = BUYER_CLOSING_DAY_CHECKS.map(([key, label]) => ({ key, label, done: Boolean(workspace[key]) }));
@@ -953,7 +930,7 @@ export function buyerClosingDayProgress(
       { label: 'Not yet', value: String(pending.length), tone: pending.length ? 'CAUTION' : 'DEFAULT' },
       { label: 'Blockers', value: String(blockers.length), tone: blockers.length ? 'CAUTION' : 'DEFAULT' },
     ],
-    nextSteps: steps.map((step) => ({ ...step, meta: [], href: planHref, entityType: null })),
+    nextSteps: steps.map((step) => ({ ...step, meta: [], href: null, entityType: null })),
     actions: [],
   };
 }
@@ -962,7 +939,6 @@ async function buyerClosingDayReadinessResult(userId: string, propertyId: string
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s closing-day readiness right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no closing-day checklist to review.');
   }
@@ -977,16 +953,16 @@ async function buyerClosingDayReadinessResult(userId: string, propertyId: string
     title: professionalConfirmed ? 'The professional close is confirmed complete' : blockers.length ? `${blockers.length} blocker${blockers.length === 1 ? '' : 's'} remain before closing day` : `${readyCount} of ${checklist.length || 5} closing-day items ready`,
     body: professionalConfirmed ? 'This purchase has moved to the first-90-day homeowner experience.' : 'Confirm your appointment, identification, required documents, funds readiness, and questions before closing day.',
     tone: blockers.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   // IW-PRES-020 (FRD v1.91): the workspace's five checks as a ring, ahead of the blockers list.
-  const ring = buyerClosingDayProgress(workspace, blockers, planHref);
+  const ring = buyerClosingDayProgress(workspace, blockers);
   if (ring) blocks.push(ring);
   if (blockers.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-closing-day-blockers', title: 'Blockers before closing day', description: 'Open or blocking tasks recorded on the Buyer Plan.',
       sections: [{ id: 'blockers', title: 'Blockers', count: blockers.length, items: blockers.slice(0, 10).map((blocker) => ({
-        id: blocker.id, title: blocker.title, description: null, meta: [], status: blocker.status, href: planHref,
+        id: blocker.id, title: blocker.title, description: null, meta: [], status: blocker.status, href: null,
       })) }], actions: [],
     });
   }
@@ -1004,7 +980,6 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s contract timeline right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no contract to review.');
   }
@@ -1014,7 +989,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   if (!current) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_CONTRACT_NOT_CONFIRMED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-contract-unconfirmed', title: 'No confirmed contract revision is recorded yet', body: 'Upload or record the accepted contract and confirm its extracted dates and terms.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-contract-unconfirmed', title: 'No confirmed contract revision is recorded yet', body: 'Upload or record the accepted contract and confirm its extracted dates and terms.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -1025,7 +1000,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
     title: conflicts.length ? 'The confirmed contract conflicts with another recorded date' : (openContingencies.length ? `${openContingencies.length} contract contingenc${openContingencies.length === 1 ? 'y is' : 'ies are'} still open` : 'No contract contingency is currently open'),
     body: conflicts.join(' ') || `Accepted ${current.acceptedAt ? humanDate(new Date(current.acceptedAt)) : 'date not recorded'}, target closing ${current.targetClosingDate ? humanDate(new Date(current.targetClosingDate)) : 'not recorded'}.`,
     tone: conflicts.length || openContingencies.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (openContingencies.length) {
     blocks.push({
@@ -1033,7 +1008,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
       sections: [{ id: 'contingencies', title: 'Contingencies', count: openContingencies.length, items: openContingencies.slice(0, 10).map((item) => ({
         id: item.id, title: item.label, description: null,
         meta: [item.dueAt ? `Due ${humanDate(new Date(item.dueAt))}` : null].filter((value): value is string => Boolean(value)),
-        status: item.status, href: planHref,
+        status: item.status, href: null,
       })) }], actions: [],
     });
   }
@@ -1054,7 +1029,6 @@ async function buyerNegotiationReadinessResult(userId: string, propertyId: strin
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no negotiation to review.');
   }
-  const inspectionHref = data.overview.routes.inspection;
   const findings = await prisma.inspectionFinding.findMany({
     where: { propertyId, buyerDisposition: 'PRE_CLOSE_NEGOTIATION' },
     select: {
@@ -1071,14 +1045,14 @@ async function buyerNegotiationReadinessResult(userId: string, propertyId: strin
     title: findings.length ? `${pendingResponse.length} of ${findings.length} negotiation item${findings.length === 1 ? '' : 's'} still await a seller response` : 'No finding is currently in negotiation',
     body: findings.length ? `${resolved.length} resolved, ${inDiscussion.length} in discussion, ${pendingResponse.length} awaiting response.` : 'Classify a material inspection finding as seller negotiation to start tracking it here.',
     tone: pendingResponse.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-negotiation', label: findings.length ? 'Open Negotiation Shield' : 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (findings.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-negotiation-findings', title: 'Findings in negotiation', description: 'From confirmed inspection findings classified for seller negotiation.',
       sections: [{ id: 'findings', title: 'Findings', count: findings.length, items: findings.slice(0, 10).map((finding) => ({
         id: finding.id, title: finding.homeSystem, description: finding.inspectorDescription?.slice(0, 140) ?? null,
-        meta: [finding.severity], status: finding.negotiationCaseLinks[0]?.sellerResponse ?? 'PENDING', href: inspectionHref,
+        meta: [finding.severity], status: finding.negotiationCaseLinks[0]?.sellerResponse ?? 'PENDING', href: null,
       })) }], actions: [],
     });
   }
@@ -1096,7 +1070,6 @@ async function buyerCostReadinessResult(userId: string, propertyId: string): Pro
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s near-term costs right now.');
   const { data } = context;
-  const planHref = buyerPlanHref(propertyId);
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there are no recorded near-term costs.');
   }
@@ -1109,13 +1082,13 @@ async function buyerCostReadinessResult(userId: string, propertyId: string): Pro
     title: costedTasks.length ? `${money(totalCents)} in recorded near-term costs across ${costedTasks.length} item${costedTasks.length === 1 ? '' : 's'}` : 'No near-term cost estimates are recorded yet',
     body: costedTasks.length ? 'These are user-recorded or modelled estimates, not confirmed invoices or a guarantee of final cost.' : 'Add an estimated cost to a Buyer Plan task to track near-term purchase costs here.',
     tone: 'DEFAULT',
-    actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (costedTasks.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-cost-items', title: 'Recorded cost items', description: 'Estimated costs from open Buyer Plan tasks.',
       sections: [{ id: 'costs', title: 'Costs', count: costedTasks.length, items: costedTasks.slice(0, 10).map((task) => ({
-        id: task.id, title: task.title, description: null, meta: [money(task.estimatedCostCents ?? 0)], status: task.status, href: `${planHref}?${new URLSearchParams({ taskId: task.id }).toString()}`,
+        id: task.id, title: task.title, description: null, meta: [money(task.estimatedCostCents ?? 0)], status: task.status, href: null,
       })) }], actions: [],
     });
   }
@@ -1142,11 +1115,10 @@ function buyerFindingDispositionFromMessage(message: string): 'VERIFIED_FACT' | 
 
 async function buyerFindingDispositionResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const inspectionHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inspection-hub`;
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-finding-disposition-permission', title: 'A contributor or owner needs to classify this finding', body: 'Classifying a finding changes the shared inspection and closing record. Viewers can review but cannot change it.', tone: 'CAUTION', actions: [{ id: 'open-inspection-hub', label: 'Review Inspection Hub', href: inspectionHref, style: 'SECONDARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-finding-disposition-permission', title: 'A contributor or owner needs to classify this finding', body: 'Classifying a finding changes the shared inspection and closing record. Viewers can review but cannot change it.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -1157,7 +1129,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
   if (!findings.length) {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'NO_OPEN_FINDINGS',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-finding-disposition-empty', title: 'No open inspection finding is available to classify', body: 'Confirm an inspection report first, or all findings are already dispositioned.', tone: 'DEFAULT', actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-finding-disposition-empty', title: 'No open inspection finding is available to classify', body: 'Confirm an inspection report first, or all findings are already dispositioned.', tone: 'DEFAULT', actions: [] }],
       suggestions: [],
     };
   }
@@ -1172,8 +1144,8 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
         description: matched ? 'Say negotiation, post-close, verified fact, or dismissed.' : 'Name the finding and the decision: negotiation, post-close, verified fact, or dismissed.',
         sections: [{ id: 'findings', title: 'Open findings', count: findings.length, items: findings.slice(0, 20).map((finding) => ({
           id: finding.id, title: [finding.homeSystem, finding.subsystem].filter(Boolean).join(' '), description: finding.inspectorDescription?.slice(0, 140) ?? null,
-          meta: [finding.severity], status: finding.buyerDisposition, href: inspectionHref,
-        })) }], actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub instead', href: inspectionHref, style: 'SECONDARY' }],
+          meta: [finding.severity], status: finding.buyerDisposition, href: null,
+        })) }], actions: [],
       }],
       suggestions: [],
     };
@@ -1188,7 +1160,7 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
       buyerFindingVersion: matched.buyerDispositionAt ? matched.buyerDispositionAt.toISOString() : null,
       confirmationVersion, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'buyer-finding-disposition-review', title: `Classify as ${dispositionLabel}?`, body: 'No finding, task, or journey has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-inspection-hub', label: 'Open Inspection Hub', href: inspectionHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'buyer-finding-disposition-review', title: `Classify as ${dispositionLabel}?`, body: 'No finding, task, or journey has changed yet.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `buyer-finding-disposition-${matched.id}-${confirmationVersion}`, version: confirmationVersion,
       title: `Classify this finding as ${dispositionLabel}?`,
@@ -1205,11 +1177,10 @@ async function buyerFindingDispositionResult(userId: string, propertyId: string,
 
 async function buyerLifecycleUpdateResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const planHref = buyerPlanHref(propertyId);
   if (/\bwe closed today\b|\bclosed (?:today|yesterday)\b/i.test(message)) {
     return {
       status: 'OUT_OF_SCOPE', reasonCode: 'BUYER_CLOSE_REQUIRES_DEDICATED_TOOL',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-close-redirect', title: 'Confirm closing in the Closing Day Companion', body: 'Recording the professional close requires the closing-day identification, funds, and wire-fraud checklist. Ask cannot complete this transition directly.', tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Closing Day Companion', href: planHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-close-redirect', title: 'Recording the close is not currently available in Ask', body: 'Recording the professional close requires the closing-day identification, funds, and wire-fraud checklist, and Ask cannot complete this transition. Confirm closing with your closing professional.', tone: 'DEFAULT', actions: [] }],
       suggestions: [],
     };
   }
@@ -1218,7 +1189,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
     if (access.role !== HouseholdRole.OWNER) {
       return {
         status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-        blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-pause-permission', title: `Only the property owner can ${isResume ? 'resume' : 'pause'} this purchase`, body: `${isResume ? 'Resuming' : 'Pausing'} this purchase requires owner permission.`, tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }] }],
+        blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-pause-permission', title: `Only the property owner can ${isResume ? 'resume' : 'pause'} this purchase`, body: `${isResume ? 'Resuming' : 'Pausing'} this purchase requires owner permission.`, tone: 'CAUTION', actions: [] }],
         suggestions: [],
       };
     }
@@ -1230,7 +1201,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
       blocks: [{
         type: 'SUMMARY', id: 'buyer-lifecycle-pause-review', title: `Review this ${isResume ? 'resume' : 'pause'}`,
         body: isResume ? 'Nothing has changed yet. Resuming reactivates deadline reminders and active tasks.' : 'Nothing has changed yet. Pausing stops deadline reminders while preserving all recorded work.',
-        tone: 'DEFAULT', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       confirmation: {
         confirmationId: `buyer-lifecycle-${isResume ? 'resume' : 'pause'}-${propertyId}-${confirmationVersion}`, version: confirmationVersion,
@@ -1246,7 +1217,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
     if (access.role !== HouseholdRole.OWNER) {
       return {
         status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-        blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-cancel-permission', title: 'Only the property owner can cancel this purchase', body: 'Cancelling this purchase requires owner permission.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Review Buyer Plan', href: planHref, style: 'SECONDARY' }] }],
+        blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-cancel-permission', title: 'Only the property owner can cancel this purchase', body: 'Cancelling this purchase requires owner permission.', tone: 'CAUTION', actions: [] }],
         suggestions: [],
       };
     }
@@ -1265,7 +1236,7 @@ async function buyerLifecycleUpdateResult(userId: string, propertyId: string, me
     return {
       status: 'NEEDS_CONFIRMATION', reasonCode: 'BUYER_CANCEL_CONFIRMATION_REQUIRED',
       parameters: { buyerLifecycleAction: 'CANCEL', buyerCancelReason: reason, confirmationVersion, confirmationExpiresAt: expiresAt.toISOString() },
-      blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-cancel-review', title: 'Review this cancellation', body: 'Nothing has changed yet. Cancelling stops reminders and preserves completed work, documents, findings, and evidence.', tone: 'CAUTION', actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'SECONDARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-lifecycle-cancel-review', title: 'Review this cancellation', body: 'Nothing has changed yet. Cancelling stops reminders and preserves completed work, documents, findings, and evidence.', tone: 'CAUTION', actions: [] }],
       confirmation: {
         confirmationId: `buyer-lifecycle-cancel-${propertyId}-${confirmationVersion}`, version: confirmationVersion,
         title: 'Cancel this purchase?', description: 'This stops deadline reminders, cancels open tasks and milestones, and preserves completed work, documents, findings, and evidence.',

@@ -1,14 +1,5 @@
-import type { BuyerClosingHomeOverview } from '../../productFramework/buyerAcquisition.contract';
 import type { BuyerPlanContext } from '../skills/context/buyerPlanContext.contract';
 import type { AskOperationResult } from './askOperationRegistry';
-
-function buyerTaskHref(propertyId: string, task: BuyerClosingHomeOverview['nextAction']): string {
-  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}/buyer-plan`;
-  if (!task) return base;
-  const query = new URLSearchParams({ taskId: task.id });
-  if (task.checklistSection) query.set('section', task.checklistSection);
-  return `${base}?${query.toString()}`;
-}
 
 function dateLabel(value: string | null): string | null {
   if (!value) return null;
@@ -30,7 +21,6 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
     || context.presentationMode === 'NEW_HOME'
   ) return null;
 
-  const planHref = `/dashboard/properties/${encodeURIComponent(context.propertyId)}/buyer-plan`;
   if (context.presentationMode === 'CANDIDATE' || !context.overview) {
     return {
       status: 'READY_WITH_LIMITATIONS',
@@ -39,10 +29,10 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
       blocks: [{
         type: 'SUMMARY',
         id: 'buyer-plan-not-active',
-        title: 'Start the Buyer Plan to get a closing next step',
+        title: 'No active Buyer Plan to get a closing next step from',
         body: 'This purchase property does not have an active Buyer Plan yet. Ask will not substitute homeowner recommendations before the purchase journey is established.',
         tone: 'CAUTION',
-        actions: [{ id: 'open-buyer-plan', label: 'Open Buyer Plan', href: planHref, style: 'PRIMARY' }],
+        actions: [],
       }],
       // Pre-close buyer answer: the HOME_ACTIONS -> MAINTENANCE_STATUS handoff is about a home they own.
       suppressSkillHandoff: true,
@@ -52,7 +42,6 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
 
   const { overview } = context;
   const nextAction = overview.nextAction;
-  const nextHref = buyerTaskHref(context.propertyId, nextAction);
   const dueLabel = nextAction ? dateLabel(nextAction.dueAt) : null;
   const remaining = Math.max(overview.journey.progress.total - overview.journey.progress.completed, 0);
   const distinctBlockers = overview.blockers.filter((task) => task.id !== nextAction?.id);
@@ -69,7 +58,7 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
         description: nextAction.description,
         meta: [nextAction.priority === 'NOW' ? 'Now' : nextAction.priority, dueLabel ? `Due ${dueLabel}` : null, nextAction.phase.toLowerCase().replace(/_/g, ' ')].filter((value): value is string => Boolean(value)),
         status: nextAction.status,
-        href: nextHref,
+        href: null,
         ...buyerPlanShelfFacts(nextAction),
       }],
     });
@@ -85,7 +74,7 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
         description: task.description,
         meta: [task.priority === 'NOW' ? 'Now' : task.priority, dateLabel(task.dueAt) ? `Due ${dateLabel(task.dueAt)}` : null].filter((value): value is string => Boolean(value)),
         status: task.status,
-        href: buyerTaskHref(context.propertyId, task),
+        href: null,
         ...buyerPlanShelfFacts(task),
       })),
     });
@@ -99,7 +88,7 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
       ? `This comes directly from the canonical Buyer Plan. ${remaining} of ${overview.journey.progress.total} applicable pre-close tasks remain, and the plan is ${overview.journey.progress.percent}% complete.`
       : `The canonical Buyer Plan has no executable pre-close task right now. It is ${overview.journey.progress.percent}% complete; review any blocked work with the responsible professional.`,
     tone: distinctBlockers.length ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: nextAction ? 'open-next-buyer-task' : 'open-buyer-plan', label: nextAction ? 'Open exact next task' : 'Open Buyer Plan', href: nextHref, style: 'PRIMARY' }],
+    actions: [],
   }];
   if (sections.length) {
     blocks.push({
@@ -110,7 +99,7 @@ export function buildBuyerPlanHomeActionsResult(context: BuyerPlanContext): AskO
       presentation: { pattern: 'SHELVES' },
       description: 'Task order, status, and deadlines come from the selected property’s canonical Buyer Plan.',
       sections,
-      actions: [{ id: 'open-buyer-plan', label: 'View full Buyer Plan', href: planHref, style: 'SECONDARY' }],
+      actions: [],
     });
   }
   blocks.push({

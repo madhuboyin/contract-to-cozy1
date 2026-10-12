@@ -33,13 +33,11 @@ const PAGE_COPY = /\b(?:[Oo]pen|[Ss]ee|[Vv]isit|[Uu]se)\s+(?:the\s+)?(?:[A-Z][A-
 // handlers/projectTracker.handler.ts keeps one path on purpose: the closeout recipient link is shown to the owner as copyable text (it is
 // not an Ask link, carries no href, and cannot shrink). Its copy match is the "as on the page" description of the project list.
 const PATH_BASELINE = {
-  'askBuyerPlanPresentation.ts': 2,
   'askFocusedGuidance.ts': 5,
   'conversationalUnderstanding/conversationalCapture.ts': 2,
   'execution/askConcierge.ts': 1,
   'handlers/applianceOracleBudget.handler.ts': 2,
   'handlers/aroundYourHome.handler.ts': 1,
-  'handlers/buyerPlan.handler.ts': 3,
   'handlers/capitalPlanning.handler.ts': 6,
   'handlers/documents.handler.ts': 3,
   'handlers/guidanceOverview.handler.ts': 3,

@@ -73,10 +73,10 @@ test('free-text completion without a launched task still matches by title', asyn
   assert.equal(result.parameters.buyerTaskId, 'task-insurance');
 });
 
-test('blocking-task rows carry identity, a Buyer Plan task link and Mark complete for contributors; viewers get none', () => {
-  const row = buyerDeadlineTaskRow({ id: 'task-appraisal', title: 'Order the appraisal', description: null, priority: 'NOW', status: 'PENDING', dueAt: null }, '/dashboard/properties/p1/buyer-plan', buyerTaskItemActions('CONTRIBUTOR'));
+test('blocking-task rows carry identity and Mark complete for contributors, link to no desktop page; viewers get no action', () => {
+  const row = buyerDeadlineTaskRow({ id: 'task-appraisal', title: 'Order the appraisal', description: null, priority: 'NOW', status: 'PENDING', dueAt: null }, buyerTaskItemActions('CONTRIBUTOR'));
   assert.equal(row.entityType, 'BUYER_TASK');
-  assert.equal(row.href, '/dashboard/properties/p1/buyer-plan?taskId=task-appraisal');
+  assert.equal(row.href, null);
   assert.deepEqual(row.actions.map((action) => [action.id, action.operationId]), [['buyer-task-complete', 'BUYER_TASK_COMPLETE']]);
   assert.deepEqual(buyerTaskItemActions('VIEWER'), []);
 });
@@ -90,4 +90,53 @@ test('the buyer-closing card launches inline into the deadlines list, and its me
   const launch = capabilityCardLaunch('buyer-closing').inlineLaunch;
   assert.equal(launch.operationId, 'BUYER_DEADLINES');
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'BUYER_DEADLINES');
+});
+
+// Buyer Plan batch of the handler sweep (docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md): Ask never links to a desktop page
+// (owner decision, 2026-10-10), so the buyer answers carry no Buyer Plan, Documents or Inspection Hub link. The real handlers run with the
+// closing-home presentation stubbed.
+const presentationOriginal = HomeBuyerTaskService.getClosingHomePresentation;
+test.afterEach(() => { HomeBuyerTaskService.getClosingHomePresentation = presentationOriginal; });
+
+const overview = (overrides = {}) => ({
+  journey: { stage: 'DUE_DILIGENCE', progress: { total: 10, completed: 4, percent: 40 } },
+  nextAction: { id: 'task-appraisal', title: 'Order the appraisal', checklistSection: 'APPRAISAL', status: 'PENDING', priority: 'NOW', dueAt: null, phase: 'DUE_DILIGENCE', description: null },
+  blockers: [{ id: 'task-insurance', title: 'Bind homeowners insurance', status: 'PENDING', priority: 'NOW', dueAt: null, phase: 'DUE_DILIGENCE', description: null }],
+  milestones: [],
+  evidence: {
+    documentsNeedingReviewCount: 2, documentCount: 5, verifiedDocumentCount: 3, openMaterialFindingCount: 1, inspectionReportCount: 1,
+    inspectionState: 'CONFIRMED', documents: [], findings: [],
+  },
+  routes: { documents: '/dashboard/properties/p1/documents', inspection: '/dashboard/properties/p1/inspection-hub' },
+  ...overrides,
+});
+
+test('the buyer status, document and inspection answers carry no desktop link', async () => {
+  HomeBuyerTaskService.getClosingHomePresentation = async () => ({ presentationMode: 'ACTIVE', overview: overview() });
+  for (const operationId of ['BUYER_PLAN_STATUS', 'BUYER_DOCUMENT_READINESS', 'BUYER_INSPECTION_REVIEW']) {
+    const result = await capabilityInvoke(operationId, { userId: 'u1', propertyId: 'p1', message: 'Where am I in my purchase?' });
+    assert.ok(result.blocks.length > 0, operationId);
+    const text = JSON.stringify(result);
+    assert.equal(text.includes('/dashboard/'), false, operationId);
+    for (const block of result.blocks) assert.deepEqual(block.actions ?? [], [], `${operationId} ${block.id}`);
+  }
+});
+
+test('a purchase with no active Buyer Plan says so and offers no link or "start it" step', async () => {
+  HomeBuyerTaskService.getClosingHomePresentation = async () => ({ presentationMode: 'CANDIDATE', overview: null });
+  const result = await capabilityInvoke('BUYER_PLAN_STATUS', { userId: 'u1', propertyId: 'p1', message: 'Where am I in my purchase?' });
+  assert.equal(result.reasonCode, 'BUYER_PLAN_NOT_ACTIVE');
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.match(result.blocks[0].body, /not currently available in Ask/);
+  assert.equal(JSON.stringify(result).includes('/dashboard'), false);
+});
+
+test('a task that cannot be matched, and a task proposal, link to no desktop page', async () => {
+  const unmatched = await capabilityInvoke('BUYER_TASK_COMPLETE', { userId: 'u1', propertyId: 'p1', message: 'Mark the thing complete' });
+  assert.equal(unmatched.status, 'NEEDS_ENTITY');
+  assert.deepEqual(unmatched.blocks[0].actions, []);
+  assert.equal(/open the plan|Open Buyer Plan/.test(JSON.stringify(unmatched)), false);
+  const proposal = await propose('task-appraisal');
+  assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+  assert.equal(JSON.stringify(proposal.blocks).includes('/dashboard/'), false);
 });
