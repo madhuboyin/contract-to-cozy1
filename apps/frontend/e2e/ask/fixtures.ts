@@ -891,6 +891,33 @@ function maintenanceExecution() {
   };
 }
 
+function projectTrackerExecution(sessionId?: string) {
+  return {
+    schemaVersion: '1.0', executionId: 'execution-project-tracker', sessionId: sessionId ?? 'ask-acceptance-session',
+    question: 'Show my project tracker visual fixture.', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' },
+    operation: { id: 'PROJECT_TRACKER_PROJECTS', version: '1.0', family: 'STATUS_SUMMARY' }, contextVersion: 'project-tracker-visual-v1',
+    blocks: [
+      { type: 'SUMMARY', id: 'project-detail-summary', title: 'Kitchen remodel is in progress', body: '2 of 5 milestones are complete. One issue needs attention.', tone: 'CAUTION', actions: [] },
+      { type: 'METRIC_ROW', id: 'project-financial-position', title: 'Financial position', metrics: [
+        { label: 'Contract', value: '$48,000', tone: 'DEFAULT' }, { label: 'Paid', value: '$19,200', tone: 'POSITIVE' }, { label: 'Remaining', value: '$28,800', tone: 'CAUTION' },
+      ] },
+      { type: 'GROUPED_LIST', id: 'project-detail-records', title: 'Execution record', description: 'Current canonical project records.', filters: [], actions: [], sections: [
+        { id: 'project-detail-milestones', title: 'Milestones', count: 3, offset: 0, items: [
+          { id: 'milestone-1', entityType: 'PROJECT_MILESTONE', title: 'Cabinet installation', status: 'IN PROGRESS', description: null, detail: 'Install base and wall cabinets.\nPhoto evidence required.', meta: ['Due Oct 18, 2026'], actions: [{ id: 'complete', label: 'Complete', style: 'PRIMARY', interactionType: 'START_WORKFLOW', operationId: 'PROJECT_TRACKER_COMMAND', message: 'Manage this tracked project.' }, { id: 'edit', label: 'Edit', style: 'SECONDARY', interactionType: 'START_WORKFLOW', operationId: 'PROJECT_TRACKER_COMMAND', message: 'Manage this tracked project.' }, { id: 'delete', label: 'Delete', style: 'SECONDARY', interactionType: 'START_WORKFLOW', operationId: 'PROJECT_TRACKER_COMMAND', message: 'Manage this tracked project.' }] },
+          { id: 'milestone-2', entityType: 'PROJECT_MILESTONE', title: 'Countertop template', status: 'PLANNED', description: null, detail: 'Template after cabinets are secured.', meta: ['Due Oct 22, 2026'], actions: [{ id: 'edit-2', label: 'Edit', style: 'SECONDARY', interactionType: 'START_WORKFLOW', operationId: 'PROJECT_TRACKER_COMMAND', message: 'Manage this tracked project.' }] },
+          { id: 'milestone-3', entityType: 'PROJECT_MILESTONE', title: 'Final inspection', status: 'PLANNED', description: null, detail: 'Municipal final inspection.', meta: ['Due Nov 12, 2026'], actions: [] },
+        ] },
+        { id: 'project-detail-issues', title: 'Issues', count: 1, offset: 0, items: [{ id: 'issue-1', entityType: 'PROJECT_ISSUE', title: 'Backordered sink', status: 'OPEN', description: null, detail: 'Supplier expects delivery next week.', meta: ['Major · opened Oct 9'], actions: [{ id: 'resolve', label: 'Resolve', style: 'PRIMARY', interactionType: 'START_WORKFLOW', operationId: 'PROJECT_TRACKER_COMMAND', message: 'Manage this tracked project.' }, { id: 'edit-issue', label: 'Edit', style: 'SECONDARY', interactionType: 'START_WORKFLOW', operationId: 'PROJECT_TRACKER_COMMAND', message: 'Manage this tracked project.' }] }] },
+      ] },
+      { type: 'BOUNDARY', id: 'project-boundary', title: 'Record trust', body: 'Project actions re-check the live record before confirmation.', severity: 'INFO', suggestions: [] },
+    ],
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: '2026-10-11T12:00:00.000Z', updatedAt: '2026-10-11T12:00:00.000Z',
+  };
+}
+
 // ACUI I-3: the Inventory answer as the real producer now sends it (calm adopter, governed filters, view state). Item ids and the Water
 // heater's canonical detail reuse the existing acceptance record, so inline detail, corrections and evidence work unchanged.
 type InventoryJourneyState = { status: 'ALL' | 'INCOMPLETE'; category: 'HVAC' | null; revision: number; sessionId?: string };
@@ -3121,6 +3148,10 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     if (/maintenance tasks with sources/i.test(body.message) || /only show overdue tasks/i.test(body.message)) {
       const refined = /only show overdue tasks/i.test(body.message);
       await fulfill(route, { success: true, data: maintenanceJourneyExecution(refined, body.sessionId) }, 201);
+      return;
+    }
+    if (/project tracker visual fixture/i.test(body.message)) {
+      await fulfill(route, { success: true, data: projectTrackerExecution(body.sessionId) }, 201);
       return;
     }
     // ACUI-008: exactly one home event, and exactly one warranty, so the composer has a deterministic target of each supported type.

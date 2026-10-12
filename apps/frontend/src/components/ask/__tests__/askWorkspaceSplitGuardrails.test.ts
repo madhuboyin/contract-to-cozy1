@@ -107,6 +107,9 @@ describe('AskWorkspace split guardrails', () => {
     expect(captureTypes).toContain("{ type: 'NUMBER'");
     expect(captureTypes).toContain("{ type: 'MONEY'");
     expect(captureTypes).toContain("{ type: 'LONG_TEXT'");
+    expect(read(path.join(askDir, '..', '..', 'features', 'ask', 'answerLayout.ts'))).toContain("max-w-[920px]");
+    expect(read(path.join(askDir, 'blocks', 'GroupedListBlock.tsx'))).toContain("data-project-record-grid");
+    expect(read(path.join(askDir, 'blocks', 'GroupedListBlock.tsx'))).toContain('More actions');
   });
 
   it('pins the full-page composer to a stable dynamic viewport without sticky positioning', () => {

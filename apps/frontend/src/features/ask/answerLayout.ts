@@ -23,5 +23,5 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
 }
 
 export function askAnswerWidthClass(width: AskAnswerWidth): string {
-  return width === 'WIDE' ? 'w-full max-w-[1140px]' : 'w-full max-w-[1080px]';
+  return width === 'WIDE' ? 'w-full max-w-[1140px]' : 'w-full max-w-[920px]';
 }

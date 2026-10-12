@@ -225,13 +225,19 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{section.count}</span>
             </div>
             {section.items.length === 0 ? <p className="text-sm text-slate-500">None recorded.</p> : (
-              <ul id={listId} className={presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'}>
+              <ul id={listId} className={cn(
+                block.id === 'project-detail-records' && 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3',
+                block.id !== 'project-detail-records' && (presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'),
+              )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined}>
                 {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
                   const selected = controls?.view.selectedTaskId === item.id;
                   const detailKey = `${section.id}:${item.id}`;
                   const itemDetailsExpanded = Boolean(expandedItems[detailKey]);
                   const hasInlineDetails = block.id === 'project-detail-records' && Boolean(item.detail);
+                  const projectActions = block.id === 'project-detail-records' ? (item.actions ?? []) : [];
+                  const dominantProjectAction = projectActions.find((action) => action.style === 'PRIMARY') ?? projectActions[0];
+                  const overflowProjectActions = projectActions.filter((action) => action !== dominantProjectAction);
                   return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border outline-offset-2', presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3', selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -256,7 +262,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                         {itemDetailsExpanded && <p id={`${block.id}-${section.id}-${item.id}-details`} className="whitespace-pre-line rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600">{item.detail}</p>}
                       </div>
                     )}
-                    {item.actions && item.actions.length > 0 && (
+                    {block.id !== 'project-detail-records' && item.actions && item.actions.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {item.actions.map((itemAction) => (
                           <button
@@ -272,6 +278,17 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                             {itemAction.label}
                           </button>
                         ))}
+                      </div>
+                    )}
+                    {dominantProjectAction && (
+                      <div className="mt-3 flex items-center gap-2" data-project-record-actions="">
+                        <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction(item.entityType, item.id, dominantProjectAction.message, dominantProjectAction.operationId, dominantProjectAction.interactionType)} className={cn('min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50', dominantProjectAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>{dominantProjectAction.label}</button>
+                        {overflowProjectActions.length > 0 && <details className="relative">
+                          <summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">More actions</summary>
+                          <div className="absolute right-0 z-10 mt-1 min-w-40 space-y-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
+                            {overflowProjectActions.map((itemAction) => <button key={itemAction.id} type="button" disabled={itemActionsDisabled} onClick={() => onItemAction(item.entityType, item.id, itemAction.message, itemAction.operationId, itemAction.interactionType)} className="block min-h-8 w-full rounded-md px-2.5 py-1 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{itemAction.label}</button>)}
+                          </div>
+                        </details>}
                       </div>
                     )}
                   </li>;

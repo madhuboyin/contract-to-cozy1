@@ -76,10 +76,7 @@ The shared Ask renderer already supplies the standard readable width, wide-artif
 
 Project creation and follow-on Project Tracker command forms now use the shared compact workflow renderer. Creation groups project identity, delivery, cost/dates, compliance and first-milestone fields into responsive rows; bounds the long project-type choice set behind progressive disclosure; and removes the nested white field-card treatment. Project command forms use a compact two-column default with long explanations and larger choice sets spanning the available width. Shared capture controls now explicitly render the `NUMBER`, `MONEY` and `LONG_TEXT` schemas used throughout Project Tracker, correcting the previously blank amount and narrative panels while leaving canonical validation and confirmation unchanged.
 
-The following presentation work should be treated as the remaining compact-UI follow-up rather than functional parity work:
-
-- verify the implemented responsive two/three-column density and action overflow behavior in a real desktop and mobile browser;
-- add Project Tracker-specific visual regression coverage for blank footer suppression, content-driven height, and the 920/1140 px width policy.
+The compact-UI follow-up is complete. Project execution rows use a responsive one/two/three-column grid, keep one dominant action visible, and place secondary actions in a row-local overflow. The ordinary-answer measure is capped at 920 px while genuinely scan-heavy artifacts retain the 1140 px measure. Dedicated desktop and phone Playwright baselines verify responsive density, action overflow, blank-footer suppression, content-driven card height, width policy, and the absence of horizontal scrolling.
 
 Implemented October 11, 2026: every non-empty execution-record section uses an independent three-record server page with previous/next controls and stable source-execution offsets. Progress logs are fetched from the database at the selected offset instead of serializing the latest 100 entries. Project Tracker rows keep only status plus one date or amount visible; descriptions, evidence, authority state, resolution context, and other secondary metadata open inline through a per-record disclosure. Completion is one governed workflow presented in four progressive groups—readiness, verification, closeout declarations, and provider/warranty—with draft values retained between groups and one final review/confirmation boundary.
 
@@ -154,6 +151,9 @@ The implementation was reviewed against:
 Validation completed during implementation:
 
 - backend TypeScript compilation passed with `npx tsc --noEmit`;
+- frontend TypeScript compilation passed with `npx tsc --noEmit`;
+- focused Project Tracker presentation tests passed;
+- the Project Tracker desktop and phone visual-regression scenarios passed in Chromium and established dedicated screenshot baselines;
 - `git diff --check` passed;
 - Graphify was updated after the implementation;
 - lightweight Ask registry tests were executed.

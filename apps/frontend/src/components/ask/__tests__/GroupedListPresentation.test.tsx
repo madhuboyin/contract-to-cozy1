@@ -95,3 +95,26 @@ test('Project Tracker sections expose independent server-page controls', () => {
   expect(onCollectionPage).toHaveBeenNthCalledWith(2, 'project-detail-milestones', 'NEXT');
   expect(screen.queryByRole('button', { name: /page of Payments/ })).not.toBeInTheDocument();
 });
+
+test('Project Tracker records use a responsive grid and move secondary actions into an overflow', () => {
+  const onItemAction = jest.fn();
+  const projects: GroupedList = {
+    ...block,
+    id: 'project-detail-records',
+    sections: [{ id: 'project-detail-milestones', title: 'Milestones', count: 1, items: [{
+      id: 'milestone-1', entityType: 'PROJECT_MILESTONE', title: 'Rough-in inspection', meta: ['Oct 20, 2026'],
+      actions: [
+        { id: 'complete', label: 'Complete', message: 'Complete it', operationId: 'PROJECT_TRACKER_COMMAND', interactionType: 'MUTATE_RECORD', style: 'PRIMARY' },
+        { id: 'edit', label: 'Edit', message: 'Edit it', operationId: 'PROJECT_TRACKER_COMMAND', interactionType: 'MUTATE_RECORD', style: 'SECONDARY' },
+        { id: 'delete', label: 'Delete', message: 'Delete it', operationId: 'PROJECT_TRACKER_COMMAND', interactionType: 'MUTATE_RECORD', style: 'SECONDARY' },
+      ],
+    }] }],
+  };
+  const view = render(<GenericGroupedListBlock block={projects} executionId="execution" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
+
+  expect(view.container.querySelector('[data-project-record-grid]')).toHaveClass('sm:grid-cols-2', 'xl:grid-cols-3');
+  expect(screen.getByRole('button', { name: 'Complete' })).toBeVisible();
+  expect(screen.getByText('More actions')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+});

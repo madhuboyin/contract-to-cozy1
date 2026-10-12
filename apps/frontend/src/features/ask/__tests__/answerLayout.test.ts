@@ -7,7 +7,7 @@ const summary: AskPresentationBlock = {
 
 test('keeps ordinary conversational answers at a readable measure', () => {
   expect(askAnswerWidth([summary])).toBe('STANDARD');
-  expect(askAnswerWidthClass('STANDARD')).toContain('max-w-[1080px]');
+  expect(askAnswerWidthClass('STANDARD')).toContain('max-w-[920px]');
 });
 
 test.each<AskPresentationBlock>([
