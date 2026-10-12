@@ -94,9 +94,13 @@ test('the review never carries raw input text, document keys, file URLs or deskt
     // The query reads the case, its latest analysis and its latest draft, and only the NEWEST INPUT'S TIMESTAMP (whether a run is possible and whether
     // the details changed since the analysis): never an input's text or data, documents or buyer finding links.
     const [query] = s.queries;
-    assert.deepEqual(Object.keys(query.include).sort(), ['analyses', 'drafts', 'inputs']);
+    assert.deepEqual(Object.keys(query.include).sort(), ['analyses', 'documents', 'drafts', 'inputs']);
     assert.deepEqual(query.include.inputs.select, { updatedAt: true });
     assert.equal(query.include.inputs.take, 1);
+    // The attached documents are selected by link id, record id, role, title, visibility and scan state: never a storage key, file name, file link or content.
+    assert.deepEqual(Object.keys(query.include.documents.select).sort(), ['document', 'documentId', 'documentType', 'id']);
+    assert.deepEqual(query.include.documents.select.document.select, { title: true, visibility: true, currentVersion: { select: { scanStatus: true, integrityStatus: true } } });
+    assert.equal(query.include.documents.take, 25);
     assert.deepEqual(query.where, { id: 'case-1', propertyId: 'prop-1' });
   } finally { s.restore(); }
 });

@@ -93,6 +93,8 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   'NEGOTIATION_SHIELD_CASE_ANALYZE',
   // Negotiation Shield saved-details edit (declared-action, confirmation-gated, skill-less like the two above). It must stay in this list or the boot check fails.
   'NEGOTIATION_SHIELD_CASE_UPDATE',
+  // Negotiation Shield document attach (declared-action, confirmation-gated, skill-less like the three above). It must stay in this list or the boot check fails.
+  'NEGOTIATION_SHIELD_CASE_ATTACH',
   'ROOM_PLANT_RECOMMENDATIONS',
   'OWNERSHIP_COST_COMMAND',
   // Tool starts written inside Ask (declared-action, confirmation-gated, skill-less): suggest habits, run the simulation, check a quote.

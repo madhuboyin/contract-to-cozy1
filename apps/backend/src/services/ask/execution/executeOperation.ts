@@ -708,6 +708,7 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   // An analysis changes a case's status and last-analyzed date on the list.
   NEGOTIATION_SHIELD_CASE_ANALYZE: ['NEGOTIATION_SHIELD_CASES'],
   NEGOTIATION_SHIELD_CASE_UPDATE: ['NEGOTIATION_SHIELD_CASES'],
+  NEGOTIATION_SHIELD_CASE_ATTACH: ['NEGOTIATION_SHIELD_CASES'],
   // A new plant changes the care outlook, which was empty or shorter before it.
   HOME_PLANT_ADD: ['PLANT_CARE_OUTLOOK'],
   ROOM_PLANT_RECOMMENDATIONS: ['PLANT_CARE_OUTLOOK'],

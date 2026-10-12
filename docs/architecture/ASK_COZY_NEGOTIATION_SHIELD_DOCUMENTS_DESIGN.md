@@ -1,6 +1,6 @@
 # Ask Cozy — Negotiation Shield documents (attach, read, parse): design
 
-**Status:** Decisions accepted as recommended (2026-10-12). D-A3 (the visibility correction) is built and verified (section 8a; FRD v1.300). 3a (attach) is next; 3b and 3c are not built.
+**Status:** Decisions accepted as recommended (2026-10-12). D-A3 (the visibility correction) is built and verified (section 8a; FRD v1.300). 3a (attach, with the Documents list) is built and verified (section 8b; FRD v1.301); 3b and 3c are not built.
 **Date:** October 12, 2026
 **Parent:** `docs/architecture/ASK_COZY_NEGOTIATION_SHIELD_SLICE2_DESIGN.md` (decision D7 deferred documents and OCR; slices 2a–2c shipped as FRD v1.297–v1.299).
 **Method:** `docs/architecture/AUDIT_METHODOLOGY.md`. Each claim is labelled **code-traced** (read in source, not run), **executed** (run), or **inferred**. This repository has no database or browser; nothing here was run against either.
@@ -107,6 +107,15 @@ Needs a Home Records create call from Ask (G7: today's Ask upload makes a legacy
 - **Parse:** refuses a non-household record before any text is read (closes the G10 write side: private text never lands in a shared input).
 - **Tests (executed, stubs):** `tests/unit/negotiationShieldDocumentVisibility.test.js` (5).
 - **Not verified:** a database and a real file store; the existing page's behaviour for a pre-existing private attachment (it now shows "Private document" with no link).
+
+## 8b. 3a — attach (built; FRD v1.301)
+
+- **Built as designed.** One form (role, then record) instead of two steps; the Documents block carries the action because the review summary is already at the three-action cap.
+- **Concrete rules:** records come from `listPropertyDocuments` (Home Records only), filtered to household visibility, active lifecycle, allowed sensitivity, not already attached; bounded at 25; the confirmation re-reads the record, not the form.
+- **Reader:** the review reader now also returns the attached documents (link id, record id, role, title or "Private document", shared, ready), selected without storage key, file link or file name.
+- **Executed finding:** the answer-trust validator does not strip an un-allowlisted action from a GROUPED_LIST block's own actions (it does from a SUMMARY), so the allowlist for this action is asserted directly.
+- **Not done:** parse (3b), upload (3c), detach.
+- **Not verified:** a database and a real file store; the rendered Documents block and form.
 
 ## 9. Registry and validation checklist (per new operation)
 

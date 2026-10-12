@@ -45,6 +45,8 @@ import { isNegotiationStartScenario, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOT
 import { negotiationShieldEditContextVersion, negotiationShieldEditResult } from '../handlers/negotiationShieldEdit.handler';
 import { NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY, parseNegotiationEditAnswer } from '../support/negotiationShieldEdit';
 import { getNegotiationShieldEditableInputForProperty } from '../../negotiationShieldCaseList';
+import { negotiationShieldAttachOffer, negotiationShieldAttachResult } from '../handlers/negotiationShieldAttach.handler';
+import { NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, parseNegotiationAttachAnswer } from '../support/negotiationShieldAttach';
 import { plantRecommendationContextVersion, roomPlantRecommendationResult } from '../handlers/plantRecommendations.handler';
 import { PLANT_RECOMMENDATIONS_CAPTURE_KEY } from '../support/plantRecommendationConstants';
 import { doNothingRunContextVersion, doNothingRunResult, priceCheckVersion, servicePriceCheckResult } from '../handlers/homeToolRuns.handler';
@@ -345,7 +347,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (execution.operationId !== 'PROJECT_TRACKER_CREATE' && !['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (execution.operationId !== 'PROJECT_TRACKER_CREATE' && !['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE_ATTACH', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -818,6 +820,43 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'NegotiationShieldInput';
+  } else if (execution.operationId === 'NEGOTIATION_SHIELD_CASE_ATTACH') {
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const attachLaunch = storedParameters.negotiationAttachLaunch && typeof storedParameters.negotiationAttachLaunch === 'object' && !Array.isArray(storedParameters.negotiationAttachLaunch)
+      ? storedParameters.negotiationAttachLaunch as { caseId?: unknown; scenarioType?: unknown; sourceExecutionId?: unknown }
+      : null;
+    if (input.captureKey !== NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY || !attachLaunch || typeof attachLaunch.caseId !== 'string' || !isNegotiationStartScenario(attachLaunch.scenarioType)) {
+      const error = new Error('This attach form is no longer active. Open Attach a document again.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to attach a document to a negotiation review.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const offer = await negotiationShieldAttachOffer(execution.propertyId, access.role, attachLaunch.caseId);
+    if (!offer || offer.contextVersion !== input.expectedContextVersion) {
+      const error = new Error('The records you can attach changed while the form was open. Open Attach a document again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const answer = parseNegotiationAttachAnswer(attachLaunch.scenarioType, input.answer);
+    if (!answer.success) {
+      const error = new Error('Choose what the document is and which record to attach.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
+      throw error;
+    }
+    result = await negotiationShieldAttachResult(userId, execution.propertyId, {
+      caseId: attachLaunch.caseId,
+      sourceExecutionId: typeof attachLaunch.sourceExecutionId === 'string' ? attachLaunch.sourceExecutionId : null,
+    }, answer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = offer.contextVersion;
+    canonicalOwner = 'NegotiationShieldDocument';
   } else if (execution.operationId === 'DO_NOTHING_SIMULATION_RUN' || execution.operationId === 'SERVICE_PRICE_CHECK_RUN') {
     const simulation = execution.operationId === 'DO_NOTHING_SIMULATION_RUN';
     if (input.captureKey !== (simulation ? DO_NOTHING_RUN_CAPTURE_KEY : SERVICE_PRICE_CHECK_CAPTURE_KEY)) {

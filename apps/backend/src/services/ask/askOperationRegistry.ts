@@ -119,6 +119,8 @@ export type AskOperationId =
   | 'NEGOTIATION_SHIELD_CASE_ANALYZE'
   // Edit a review's saved details (slice 2c): confirmation-gated, reached only by the declared Edit details action on a review.
   | 'NEGOTIATION_SHIELD_CASE_UPDATE'
+  // Attach an existing Home Record to a review (documents slice 3a): confirmation-gated, reached only by the declared Attach a document action.
+  | 'NEGOTIATION_SHIELD_CASE_ATTACH'
   | 'HOME_UPGRADE_SCENARIOS'
   | 'DIY_PROJECTS'
   // DIY project guide (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md): a read-only, launch-only walk through ONE DIY project, reached from the row action on DIY_PROJECTS.
@@ -343,6 +345,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ANALYZE',
   // Reached only by the declared Edit details / Add details action on a review; no message pattern.
   'NEGOTIATION_SHIELD_CASE_UPDATE',
+  // Reached only by the declared Attach a document action on a review's Documents block; no message pattern.
+  'NEGOTIATION_SHIELD_CASE_ATTACH',
   'PROJECT_TRACKER_CREATE',
   'PROJECT_TRACKER_COMMAND',
   'HOME_PLANT_ADD',
@@ -644,6 +648,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   PROPERTY_PURCHASE_DATE_SET: definition('PROPERTY_PURCHASE_DATE_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'property-purchase-date.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  NEGOTIATION_SHIELD_CASE_ATTACH: definition('NEGOTIATION_SHIELD_CASE_ATTACH', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.attach', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_UPDATE: definition('NEGOTIATION_SHIELD_CASE_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_ANALYZE: definition('NEGOTIATION_SHIELD_CASE_ANALYZE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.analyze', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_HABITS_GENERATE: definition('HOME_HABITS_GENERATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-habits.generate', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),

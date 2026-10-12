@@ -87,6 +87,12 @@ export type NegotiationShieldCaseReviewDTO = {
    */
   hasInput: boolean;
   inputsUpdatedAt: string | null;
+  /**
+   * What is attached, newest first (at most 25): the link id, the Home Record id, the document's role in the review, its title, whether the household can
+   * see the record, and whether its file is scanned and ready. Never a file link, storage key, file name or content; a record the household cannot see
+   * is returned as "Private document".
+   */
+  documents: Array<{ id: string; documentId: string; documentType: string; title: string; shared: boolean; ready: boolean }>;
 };
 
 /**
@@ -105,13 +111,34 @@ export async function getNegotiationShieldCaseReviewForProperty(propertyId: stri
       analyses: { orderBy: [{ generatedAt: 'desc' }, { createdAt: 'desc' }], take: 1 },
       drafts: { orderBy: [{ isLatest: 'desc' }, { createdAt: 'desc' }], take: 1 },
       inputs: { select: { updatedAt: true }, orderBy: [{ updatedAt: 'desc' }], take: 1 },
+      documents: {
+        select: {
+          id: true, documentId: true, documentType: true,
+          document: { select: { title: true, visibility: true, currentVersion: { select: { scanStatus: true, integrityStatus: true } } } },
+        },
+        orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }],
+        take: 25,
+      },
     },
   });
   if (!record) return null;
   const newestInput = Array.isArray(record.inputs) && record.inputs[0] ? record.inputs[0] : null;
+  const documents = (Array.isArray(record.documents) ? record.documents : []).map((link: any) => {
+    const shared = link.document?.visibility === 'HOUSEHOLD';
+    const version = link.document?.currentVersion ?? null;
+    return {
+      id: String(link.id),
+      documentId: String(link.documentId),
+      documentType: String(link.documentType),
+      title: shared ? String(link.document?.title ?? 'Document') : 'Private document',
+      shared,
+      ready: Boolean(version) && version.scanStatus === 'CLEAN' && version.integrityStatus === 'VERIFIED',
+    };
+  });
   return {
     hasInput: Boolean(newestInput),
     inputsUpdatedAt: newestInput ? asIsoString(newestInput.updatedAt) : null,
+    documents,
     case: serializeNegotiationShieldCase(record),
     latestAnalysis: Array.isArray(record.analyses) && record.analyses[0] ? serializeNegotiationShieldAnalysis(record.analyses[0]) : null,
     latestDraft: Array.isArray(record.drafts) && record.drafts[0] ? serializeNegotiationShieldDraft(record.drafts[0]) : null,

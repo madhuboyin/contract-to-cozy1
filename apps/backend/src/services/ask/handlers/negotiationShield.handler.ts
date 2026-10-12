@@ -10,6 +10,7 @@ import { NEGOTIATION_SHIELD_START_ACTION_ID, NEGOTIATION_SHIELD_START_MESSAGE } 
 import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
 import { NEGOTIATION_SHIELD_EDIT_ACTION_ID, NEGOTIATION_SHIELD_EDIT_MESSAGE } from '../support/negotiationShieldEdit';
 import { isNegotiationStartScenario } from '../support/negotiationShieldStart';
+import { NEGOTIATION_DOCUMENT_TYPE_LABELS, NEGOTIATION_SHIELD_ATTACH_ACTION_ID, NEGOTIATION_SHIELD_ATTACH_MESSAGE } from '../support/negotiationShieldAttach';
 import { humanDate, money, readableCode } from '../askFormatting';
 import { getNegotiationShieldCaseReviewForProperty, listNegotiationShieldCasesForProperty, type NegotiationShieldCaseReviewDTO } from '../../negotiationShieldCaseList';
 import type { NegotiationShieldCaseSummaryDTO } from '../../negotiationShield.types';
@@ -173,6 +174,29 @@ const editDetailsAction = (caseId: string, hasInput: boolean) => ({
   style: 'SECONDARY' as const,
 });
 
+// "Attach a document" (slice 3a): a contributor or owner can link an existing household-visible Home Record. The block lists what is attached by title,
+// role and readiness only; never a file link, key, name or content.
+function documentsBlock(review: NegotiationShieldCaseReviewDTO, canAttach: boolean): AskPresentationBlock | null {
+  const attached = review.documents ?? [];
+  if (!attached.length && !canAttach) return null;
+  const items = attached.map((document) => ({
+    id: document.id, title: document.title, description: null,
+    meta: [NEGOTIATION_DOCUMENT_TYPE_LABELS[document.documentType] ?? readableCode(document.documentType)],
+    status: document.ready ? 'Ready' : 'Being checked', href: null,
+  }));
+  return {
+    type: 'GROUPED_LIST', filters: [], id: 'negotiation-shield-documents', title: 'Documents on this review',
+    description: items.length
+      ? 'Attached documents are counted in the analysis. Ask does not show their contents.'
+      : 'Nothing is attached yet. A quote, notice or estimate attached to this review is counted in the analysis.',
+    sections: [{ id: 'negotiation-shield-documents-list', title: 'Attached', count: items.length, items }],
+    actions: canAttach ? [{
+      id: NEGOTIATION_SHIELD_ATTACH_ACTION_ID, label: 'Attach a document', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_SHIELD_ATTACH_MESSAGE,
+      operationId: 'NEGOTIATION_SHIELD_CASE_ATTACH' as const, entityType: NEGOTIATION_SHIELD_CASE_ENTITY, entityId: review.case.id, style: 'SECONDARY' as const,
+    }] : [],
+  };
+}
+
 export function negotiationShieldReviewFromView(review: NegotiationShieldCaseReviewDTO | null, canRun = false): AskOperationResult {
   if (!review) {
     return {
@@ -213,6 +237,8 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
         backToReviews,
       ],
     });
+    const notAnalyzedDocuments = documentsBlock(review, canEdit);
+    if (notAnalyzedDocuments) blocks.push(notAnalyzedDocuments);
     blocks.push(NEGOTIATION_BOUNDARY);
     return { status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_REVIEW_NOT_ANALYZED', blocks, suggestions: [] };
   }
@@ -274,6 +300,8 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   if (analysis.confidenceExplanation) {
     blocks.push({ type: 'LIMITATION', id: 'negotiation-shield-confidence', title: 'How confident this is', body: text(analysis.confidenceExplanation, 600), severity: 'INFO' });
   }
+  const analysedDocuments = documentsBlock(review, canEdit);
+  if (analysedDocuments) blocks.push(analysedDocuments);
   if (draft && text(draft.body, 20000)) {
     const parts = chunkNegotiationDraft(text(draft.body, 20000));
     const kind = draft.draftType === 'EMAIL' ? 'email' : 'message';
