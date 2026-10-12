@@ -57,7 +57,6 @@ export async function householdInvitationResult(
   suppliedInput?: z.infer<typeof HouseholdInvitationInputSchema>,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const householdHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/household`;
   if (access.role !== HouseholdRole.OWNER) {
     return {
       status: 'BLOCKED',
@@ -65,7 +64,7 @@ export async function householdInvitationResult(
       blocks: [{
         type: 'SUMMARY', id: 'household-invite-owner-required', title: 'A household owner needs to send this invitation',
         body: 'Inviting someone changes access to this home’s records. Contributors and viewers can review their current access, but only an owner can choose a role and send an invitation.',
-        tone: 'CAUTION', actions: [{ id: 'open-household', label: 'Review household access', href: householdHref, style: 'SECONDARY' }],
+        tone: 'CAUTION', actions: [],
       }],
       suggestions: [],
     };
@@ -121,7 +120,7 @@ export async function householdInvitationResult(
     blocks: [{
       type: 'SUMMARY', id: 'household-invite-review', title: 'Review the household invitation',
       body: 'No invitation has been created yet. Confirm the recipient and role below. The recipient must accept before access becomes active.',
-      tone: 'DEFAULT', actions: [{ id: 'manage-household', label: 'Open household settings', href: householdHref, style: 'SECONDARY' }],
+      tone: 'DEFAULT', actions: [],
     }],
     confirmation: {
       confirmationId: `household-invite-${propertyId}-${confirmationVersion}`,
@@ -231,7 +230,6 @@ export function homeEventCorrectionConfirmation(event: { id: string; title: stri
 
 async function homeEventCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
   const events = await prisma.homeEvent.findMany({
     where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
@@ -257,7 +255,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
         sections: [{ id: 'events', title: 'Timeline events', count: events.length, items: events.slice(0, 20).map((event) => ({
           id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
         })) }],
-        actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -275,7 +273,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
   if (blocker) {
     return {
       status: 'NOT_APPLICABLE', reasonCode: field === 'type' ? 'HOME_EVENT_TYPE_LOCKED' : 'HOME_EVENT_DATE_RANGE_UNSUPPORTED',
-      blocks: [{ type: 'SUMMARY', id: 'home-event-correction-unsupported', title: 'This detail cannot be corrected here', body: `${blocker} Nothing has changed.`, tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'home-event-correction-unsupported', title: 'This detail cannot be corrected here', body: `${blocker} Nothing has changed.`, tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -295,7 +293,7 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
       homeEventCorrection: input, homeEventCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'home-event-correct-review', title: `Review this ${HOME_EVENT_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'home-event-correct-review', title: `Review this ${HOME_EVENT_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: homeEventCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt, dynamicOptions),
     suggestions: [],
   };
@@ -333,7 +331,6 @@ export function homeEventVisibilityConfirmation(event: { id: string; title: stri
 
 async function homeEventVisibilityResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
   const events = await prisma.homeEvent.findMany({
     where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
@@ -350,7 +347,7 @@ async function homeEventVisibilityResult(userId: string, propertyId: string, mes
         sections: [{ id: 'events', title: 'Timeline events', count: events.length, items: events.slice(0, 20).map((event) => ({
           id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
         })) }],
-        actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -365,7 +362,7 @@ async function homeEventVisibilityResult(userId: string, propertyId: string, mes
       homeEventVisibility: input, homeEventVisibilityContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'home-event-visibility-review', title: `Review who can see ${selected.title}`, body: 'No shared-home record has changed yet. Choose the visibility, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'home-event-visibility-review', title: `Review who can see ${selected.title}`, body: 'No shared-home record has changed yet. Choose the visibility, then confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: homeEventVisibilityConfirmation(selected, selected.visibility, proposed, 1, expiresAt),
     suggestions: [],
   };
@@ -465,11 +462,10 @@ export function warrantyCorrectionConfirmation(warranty: { id: string; providerN
 // writes through the existing confirmCaptureWarranty / captureWarranty writer.
 export async function warrantyAddResult(userId: string, propertyId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const warrantiesHref = '/dashboard/warranties';
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'warranty-add-permission', title: 'A contributor or owner can add a warranty', body: 'Your role can view warranties but not add them. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'SECONDARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'warranty-add-permission', title: 'A contributor or owner can add a warranty', body: 'Your role can view warranties but not add them. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -477,7 +473,7 @@ export async function warrantyAddResult(userId: string, propertyId: string, sour
   return {
     status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_ADD_INPUT_REQUIRED', contextVersion,
     parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
-    blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Add a warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [{ id: 'open-warranties', label: 'Open Warranties instead', href: warrantiesHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Add a warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
     captureRequests: [warrantyAddCaptureRequest(contextVersion)],
     suggestions: [],
   };
@@ -488,11 +484,10 @@ export async function warrantyAddResult(userId: string, propertyId: string, sour
 // confirmCaptureEvent / createHomeEvent path keyed on this execution.
 export async function eventAddResult(userId: string, propertyId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const timelineHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/timeline`;
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'event-add-permission', title: 'A contributor or owner can add a timeline event', body: 'Your role can view the timeline but not add to it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-timeline', label: 'Open home timeline', href: timelineHref, style: 'SECONDARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'event-add-permission', title: 'A contributor or owner can add a timeline event', body: 'Your role can view the timeline but not add to it. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -500,7 +495,7 @@ export async function eventAddResult(userId: string, propertyId: string, sourceE
   return {
     status: 'NEEDS_CONTEXT', reasonCode: 'EVENT_ADD_INPUT_REQUIRED', contextVersion,
     parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
-    blocks: [{ type: 'SUMMARY', id: 'event-add-input', title: 'Add a timeline event', body: 'Nothing has been saved yet. Enter the details, then review them before the event is added.', tone: 'DEFAULT', actions: [{ id: 'open-timeline', label: 'Open home timeline instead', href: timelineHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'event-add-input', title: 'Add a timeline event', body: 'Nothing has been saved yet. Enter the details, then review them before the event is added.', tone: 'DEFAULT', actions: [] }],
     captureRequests: [eventAddCaptureRequest(contextVersion)],
     suggestions: [],
   };
@@ -511,8 +506,8 @@ export async function eventAddResult(userId: string, propertyId: string, sourceE
 export type EvidenceAttachTargetType = 'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY';
 export const EVIDENCE_ATTACH_TARGET_TYPES: readonly EvidenceAttachTargetType[] = ['HOME_EVENT', 'INVENTORY_ITEM', 'WARRANTY'];
 const EVIDENCE_TARGET_COPY: Record<EvidenceAttachTargetType, { noun: string; where: string; missingTitle: string; missingBody: string }> = {
-  HOME_EVENT: { noun: 'timeline entry', where: 'home timeline entry', missingTitle: 'This timeline event is no longer available', missingBody: 'It may have been corrected, removed, or you no longer have access to it. Open the home timeline to find it.' },
-  INVENTORY_ITEM: { noun: 'inventory item', where: 'inventory item', missingTitle: 'This inventory item is no longer available', missingBody: 'It may have been removed, or you no longer have access to it. Open the home inventory to find it.' },
+  HOME_EVENT: { noun: 'timeline entry', where: 'home timeline entry', missingTitle: 'This timeline event is no longer available', missingBody: 'It may have been corrected, removed, or you no longer have access to it. Show your home timeline to find it.' },
+  INVENTORY_ITEM: { noun: 'inventory item', where: 'inventory item', missingTitle: 'This inventory item is no longer available', missingBody: 'It may have been removed, or you no longer have access to it. Show your home inventory to find it.' },
   WARRANTY: { noun: 'warranty', where: 'warranty', missingTitle: 'This warranty is no longer available', missingBody: 'It may have been removed, or only the person who added it can attach documents to it. Open Warranties to check.' },
 };
 
@@ -600,7 +595,6 @@ export async function evidenceAttachResult(userId: string, propertyId: string, t
 
 async function warrantyCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const warrantiesHref = '/dashboard/warranties';
   const warranties = await prisma.warranty.findMany({
     where: { propertyId }, orderBy: { expiryDate: 'asc' }, take: 200,
     select: { id: true, providerName: true, startDate: true, expiryDate: true, updatedAt: true, category: true, policyNumber: true, cost: true, coverageDetails: true, homeownerProfile: { select: { userId: true } } },
@@ -617,7 +611,7 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
         sections: [{ id: 'warranties', title: 'Your warranties', count: mine.length, items: mine.slice(0, 20).map((warranty) => ({
           id: warranty.id, title: warranty.providerName, description: null, meta: [`Expires ${humanDate(warranty.expiryDate) ?? 'date unavailable'}`], status: null, href: null,
         })) }],
-        actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -625,7 +619,7 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
   if (selected.homeownerProfile.userId !== userId) {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'WARRANTY_NOT_OWNED_BY_REQUESTER',
-      blocks: [{ type: 'SUMMARY', id: 'warranty-not-owned', title: 'Only the member who added this warranty can change it', body: 'This warranty belongs to another household member\'s profile, so it cannot be corrected here. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'PRIMARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'warranty-not-owned', title: 'Only the member who added this warranty can change it', body: 'This warranty belongs to another household member\'s profile, so it cannot be corrected here. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
@@ -650,7 +644,7 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
       warrantyCorrection: input, warrantyCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'warranty-correct-review', title: `Review this ${WARRANTY_CORRECTION_FIELDS[field].label} correction`, body: 'No warranty record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-warranties', label: 'Open Warranties', href: warrantiesHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'warranty-correct-review', title: `Review this ${WARRANTY_CORRECTION_FIELDS[field].label} correction`, body: 'No warranty record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: warrantyCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt),
     suggestions: [],
   };
@@ -753,7 +747,6 @@ export function roomRenameConfirmation(room: { id: string; name: string }, field
 
 async function roomRenameResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const roomsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/rooms`;
   const rooms = await prisma.inventoryRoom.findMany({
     where: { propertyId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: 200,
     select: { id: true, name: true, type: true, floorLevel: true, updatedAt: true },
@@ -770,7 +763,7 @@ async function roomRenameResult(userId: string, propertyId: string, message: str
         sections: [{ id: 'rooms', title: 'Rooms', count: rooms.length, items: rooms.slice(0, 20).map((room) => ({
           id: room.id, title: room.name, description: null, meta: [readablePropertyValue(room.type)], status: null, href: null,
         })) }],
-        actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -790,7 +783,7 @@ async function roomRenameResult(userId: string, propertyId: string, message: str
       roomRename: input, roomRenameContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'room-rename-review', title: field === 'name' ? `Review renaming ${selected.name}` : `Review the ${ROOM_CORRECTION_FIELDS[field].label} of ${selected.name}`, body: `No shared-home record has changed yet. ${field === 'name' ? 'Enter the new name' : 'Choose the corrected value'}, then confirm.`, tone: 'DEFAULT', actions: [{ id: 'open-rooms', label: 'Open Rooms', href: roomsHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'room-rename-review', title: field === 'name' ? `Review renaming ${selected.name}` : `Review the ${ROOM_CORRECTION_FIELDS[field].label} of ${selected.name}`, body: `No shared-home record has changed yet. ${field === 'name' ? 'Enter the new name' : 'Choose the corrected value'}, then confirm.`, tone: 'DEFAULT', actions: [] }],
     confirmation: roomRenameConfirmation(selected, field, current, proposed, 1, expiresAt),
     suggestions: [],
   };
