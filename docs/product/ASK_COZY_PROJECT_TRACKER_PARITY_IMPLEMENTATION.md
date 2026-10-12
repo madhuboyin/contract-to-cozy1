@@ -128,15 +128,16 @@ Ask Cozy does not maintain a parallel Project Tracker model.
 
 The implemented pass removes the principal dead ends, but several specialized desktop affordances are not yet first-class conversational workflows:
 
-1. **Advanced milestone planning.** Dependency editing, manual ordering, delayed-status override, and template replacement are not exposed in the Ask form.
-2. **Advanced issue/dispute workflow.** Escalation, incremental issue notes, and dispute-package generation remain outside the current Ask command.
-3. **Project-scoped Material Specs management.** Material delivery metadata is recorded and participates in closeout checks, but creating, verifying, substituting, and maintaining the linked Material Spec remains the Material Specs workflow.
-4. **Log archive controls.** Desktop search, date/type filtering, cursor pagination, and room tagging are not reproduced inline.
-5. **Alignment diagnostics.** Ask offers retry when reconciliation errors exist, but does not render the complete projection-by-projection diagnostic ledger.
-6. **Closeout package inspection.** Ask can complete and share the package, but does not reproduce the complete desktop package preview or share-link management history.
-7. **Secondary project metadata.** Home-system selection, service category, and contractor identity linking are not included in the conversational project-settings editor.
+1. **Advanced issue/dispute workflow.** Escalation, incremental issue notes, and dispute-package generation remain outside the current Ask command.
+2. **Project-scoped Material Specs management.** Material delivery metadata is recorded and participates in closeout checks, but creating, verifying, substituting, and maintaining the linked Material Spec remains the Material Specs workflow.
+3. **Log archive controls.** Desktop search, date/type filtering, cursor pagination, and room tagging are not reproduced inline.
+4. **Alignment diagnostics.** Ask offers retry when reconciliation errors exist, but does not render the complete projection-by-projection diagnostic ledger.
+5. **Closeout package inspection.** Ask can complete and share the package, but does not reproduce the complete desktop package preview or share-link management history.
+6. **Secondary project metadata.** Home-system selection, service category, and contractor identity linking are not included in the conversational project-settings editor.
 
 Implemented October 11, 2026: Project Tracker capture forms can select recent Home Record documents or upload a new JPEG, PNG, WEBP, or PDF inline for contract records, payment receipts, progress evidence, issue attachments, change-order support and authority evidence, warranty documents, and completion proof. Uploaded files remain property-scoped documents. Confirmation re-authorizes every selected document against the current property, stores document IDs where the canonical model uses document relations, and translates them to storage keys only for legacy key-backed Project Tracker fields.
+
+Implemented October 11, 2026: milestone capture now exposes manual ordering and dependency selection, milestone editing can explicitly override a delayed or blocked state, and planning projects can replace their manual plan with the canonical project-type template. Replacement is refused after completion, progress, or payment history exists and never deletes source-controlled compliance milestones.
 
 These are documented gaps, not authorization to weaken their canonical rules. If conversational parity is required for any item, extend the existing Project Tracker operations and services rather than adding a separate Ask-only data path.
 

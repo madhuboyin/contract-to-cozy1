@@ -65,6 +65,7 @@ async function assertProject(projectId: string, propertyId: string) {
       id: true,
       propertyId: true,
       status: true,
+      projectType: true,
       contractAmountCents: true,
       approvedChangeOrderDeltaCents: true,
       permitApplicability: true,
@@ -414,6 +415,7 @@ async function assertMilestone(milestoneId: string, projectId: string) {
       status: true,
       requiresPhotoEvidence: true,
       milestoneType: true,
+      dependsOnMilestoneId: true,
       linkedPermitMilestoneId: true,
       executionSourceType: true,
       executionSourceId: true,
@@ -618,6 +620,24 @@ export function getMilestoneTemplate(projectType: string) {
     { name: 'Work begins', position: 0, requiresPhotoEvidence: false },
     { name: 'Work complete', position: 1, requiresPhotoEvidence: true },
   ];
+}
+
+export async function replaceManualMilestonesWithTemplate(projectId: string, propertyId: string) {
+  const project = await assertProject(projectId, propertyId);
+  if (!['DRAFT', 'PLANNING'].includes(project.status)) throw new APIError('Milestone templates can only replace a project plan before work starts.', 409, 'PROJECT_TEMPLATE_REPLACEMENT_LOCKED');
+  const manual = await prisma.projectMilestone.findMany({
+    where: { projectId, executionSourceType: 'MANUAL' },
+    include: { triggeredPayments: { select: { id: true } }, _count: { select: { progressLogs: true } } },
+  });
+  if (manual.some((milestone) => milestone.status === 'COMPLETE' || milestone.actualCompletedDate || milestone.triggeredPayments.length || milestone._count.progressLogs)) {
+    throw new APIError('The current milestone plan has execution history or payment links and cannot be replaced.', 409, 'PROJECT_TEMPLATE_REPLACEMENT_HAS_HISTORY');
+  }
+  const template = getMilestoneTemplate(project.projectType);
+  return prisma.$transaction(async (tx) => {
+    await tx.projectMilestone.deleteMany({ where: { projectId, executionSourceType: 'MANUAL' } });
+    for (const milestone of template) await tx.projectMilestone.create({ data: { projectId, propertyId, name: milestone.name, position: milestone.position, requiresPhotoEvidence: milestone.requiresPhotoEvidence, milestoneType: 'STANDARD' } });
+    return tx.projectMilestone.findMany({ where: { projectId }, orderBy: { position: 'asc' } });
+  });
 }
 
 export async function getProviderExecutionReadiness(
@@ -1080,6 +1100,23 @@ export async function updateMilestone(milestoneId: string, projectId: string, pr
     );
   }
   await assertMilestoneLinks(projectId, propertyId, data);
+  if (data.dependsOnMilestoneId === milestoneId) throw new APIError('A milestone cannot depend on itself.', 409, 'PROJECT_MILESTONE_DEPENDENCY_CYCLE');
+  if (data.dependsOnMilestoneId) {
+    let cursor: string | null = data.dependsOnMilestoneId;
+    const visited = new Set<string>();
+    while (cursor) {
+      if (cursor === milestoneId || visited.has(cursor)) throw new APIError('Milestone dependencies cannot form a cycle.', 409, 'PROJECT_MILESTONE_DEPENDENCY_CYCLE');
+      visited.add(cursor);
+      cursor = (await prisma.projectMilestone.findFirst({ where: { id: cursor, projectId, propertyId }, select: { dependsOnMilestoneId: true } }))?.dependsOnMilestoneId ?? null;
+    }
+  }
+  if (data.status === 'IN_PROGRESS' && data.dependsOnMilestoneId !== null) {
+    const dependencyId = data.dependsOnMilestoneId ?? milestone.dependsOnMilestoneId;
+    if (dependencyId) {
+      const dependency = await prisma.projectMilestone.findFirst({ where: { id: dependencyId, projectId, propertyId }, select: { status: true } });
+      if (dependency?.status !== 'COMPLETE') throw new APIError('Complete the dependency before starting this milestone.', 409, 'PROJECT_MILESTONE_DEPENDENCY_INCOMPLETE');
+    }
+  }
 
   return prisma.projectMilestone.update({
     where: { id: milestoneId },

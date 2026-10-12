@@ -14,5 +14,6 @@ export const PROJECT_TRACKER_ACTION_IDS = {
   EDIT_PROJECT: 'project-tracker-edit-project', EDIT_MILESTONE: 'project-tracker-edit-milestone', DELETE_MILESTONE: 'project-tracker-delete-milestone',
   EDIT_PAYMENT: 'project-tracker-edit-payment', DELETE_PAYMENT: 'project-tracker-delete-payment', EDIT_CHANGE_ORDER: 'project-tracker-edit-change-order',
   DELETE_LOG: 'project-tracker-delete-log', EDIT_ISSUE: 'project-tracker-edit-issue', RETRY_ALIGNMENT: 'project-tracker-retry-alignment',
+  REPLACE_MILESTONE_TEMPLATE: 'project-tracker-replace-milestone-template',
 } as const;
 export const PROJECT_TRACKER_COMMAND_CAPTURE_KEY = 'PROJECT_TRACKER_COMMAND_INPUTS';

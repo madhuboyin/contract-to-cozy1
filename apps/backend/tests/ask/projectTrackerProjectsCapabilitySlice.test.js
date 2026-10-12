@@ -159,6 +159,31 @@ test('project completion is one confirmation workflow presented in four governed
   assert.equal(capture.inputSchema.fields.find((field) => field.key === 'proofDocumentIds').inputSchema.allowUpload, true);
 });
 
+test('milestone editing exposes ordering, dependency, and delayed-status controls', () => {
+  const capture = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.EDIT_MILESTONE, {
+    ...project('kitchen'),
+    milestones: [
+      { id: 'm1', name: 'Framing', description: null, milestoneType: 'STANDARD', status: 'DELAYED', position: 20, dependsOnMilestoneId: 'm0', scheduledDate: null, requiresPhotoEvidence: false },
+      { id: 'm0', name: 'Demolition', description: null, milestoneType: 'STANDARD', status: 'COMPLETE', position: 10, dependsOnMilestoneId: null, scheduledDate: null, requiresPhotoEvidence: false },
+    ],
+    payments: [], changeOrders: [], issues: [], _count: { progressLogs: 0, writeBacks: 0 },
+  }, 'm1');
+  assert.deepEqual(capture.inputSchema.fields.slice(-3).map((field) => field.key), ['position', 'dependsOnMilestoneId', 'status']);
+  assert.deepEqual(capture.inputSchema.fields.find((field) => field.key === 'dependsOnMilestoneId').inputSchema.options, [{ value: 'm0', label: 'Demolition' }]);
+  assert.deepEqual(capture.currentAnswer, {
+    name: 'Framing', description: '', milestoneType: 'STANDARD', scheduledDate: '', requiresPhotoEvidence: false,
+    position: 20, dependsOnMilestoneId: 'm0', status: 'DELAYED',
+  });
+});
+
+test('planning projects offer governed milestone-template replacement', () => {
+  const detail = projectDetailFromView({
+    ...project('roof', { status: 'PLANNING' }), milestones: [], payments: [], changeOrders: [], issues: [],
+    _count: { progressLogs: 0, writeBacks: 0 },
+  }, [], true);
+  assert.equal(detail.blocks[0].actions.some((action) => action.id === PROJECT_TRACKER_ACTION_IDS.REPLACE_MILESTONE_TEMPLATE), true);
+});
+
 test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
   const raw = trackedProjectsFromView(projects(), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'project-tracker.projects', operationId: 'PROJECT_TRACKER_PROJECTS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };

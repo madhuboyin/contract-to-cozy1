@@ -308,6 +308,9 @@ export const ProjectTrackerMilestoneInputSchema = z.object({
   milestoneType: z.enum(['STANDARD', 'PAYMENT_TRIGGER', 'CUSTOM']).default('STANDARD'),
   scheduledDate: projectExactDate.nullish().transform((value) => value || null),
   requiresPhotoEvidence: z.coerce.boolean().default(false),
+  position: z.coerce.number().int().min(0).max(10_000).optional(),
+  dependsOnMilestoneId: optionalText(160),
+  status: z.enum(['UPCOMING', 'IN_PROGRESS', 'DELAYED', 'BLOCKED']).optional(),
 }).strict();
 
 export const ProjectTrackerEditInputSchema = z.object({
