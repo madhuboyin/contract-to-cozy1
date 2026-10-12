@@ -268,6 +268,15 @@ export const askAnswerTrustTotal = new Counter({
   registers: [register],
 });
 
+// An Ask answer kept a typed action on a list-type block that is not in its operation's action allowlist (that carve-out predates the allowlist, and
+// the validator does not remove such an action). The counter is how an owner can see whether anything depends on it before the carve-out is closed.
+export const askAnswerTrustUnlistedActionTotal = new Counter({
+  name: 'ask_answer_trust_unlisted_action_total',
+  help: 'Ask answers that retained a typed action on a list-type block that is not in the operation action allowlist, by bounded operation',
+  labelNames: ['operation'] as const,
+  registers: [register],
+});
+
 export const askSemanticAnswerValidationTotal = new Counter({
   name: 'ask_semantic_answer_validation_total',
   help: 'Bounded semantic answer relevance outcomes by registered operation',

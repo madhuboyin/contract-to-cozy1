@@ -161,7 +161,12 @@ export function validateAskAnswerTrust(input: {
     }
     return !actionApplicable(action);
   })) || blocks.some((block) => nestedAskHrefs(block).some((href) => source === 'UNAVAILABLE' || !isAskHrefSafeForProperty(href, input.propertyId)));
+  // Block types whose repair (below) touches only their items' links and calls to action: their OWN typed in-Ask actions have never been subject to the
+  // allowlist, and are not removed here. The report must say so (below) instead of claiming a removal that did not happen.
+  const LIST_BLOCK_TYPES = new Set<AskPresentationBlock['type']>(['PRIORITY_LIST', 'CAPABILITY_LIST', 'GROUPED_LIST', 'TIMELINE', 'CHANGE_SUMMARY', 'OUTPUT_ARTIFACTS', 'RELATED_RECORDS']);
+  let unlistedActionRetained = false;
   if (invalidAction) {
+    const blocksBeforeRepair = JSON.stringify(blocks);
     const repairBlock = (block: AskPresentationBlock): AskPresentationBlock => {
       if (block.type === 'PRIORITY_LIST') {
         return { ...block, items: block.items.map((item) => ({
@@ -219,8 +224,16 @@ export function validateAskAnswerTrust(input: {
         ? { ...repaired, actions: repaired.actions.filter((action) => !leavesAsk(action)) } as AskPresentationBlock
         : repaired;
     }).filter((block) => block.type !== 'CAPABILITY_LIST' || block.capabilities.length > 0);
-    repaired = true;
-    reasonCodes.push('INAPPLICABLE_ACTION_REMOVED');
+    // Report what actually happened. The check below still FAILS (the action is not allowlisted), but "repaired" and "removed" are claims about the
+    // answer, so they are made only when the answer changed.
+    const changed = JSON.stringify(blocks) !== blocksBeforeRepair;
+    unlistedActionRetained = blocks.some((block) => LIST_BLOCK_TYPES.has(block.type) && 'actions' in block && Array.isArray(block.actions)
+      && block.actions.some((action) => !action.href && !actionApplicable(action)));
+    if (changed) {
+      repaired = true;
+      reasonCodes.push('INAPPLICABLE_ACTION_REMOVED');
+    }
+    if (unlistedActionRetained) reasonCodes.push('UNLISTED_ACTION_RETAINED');
   }
 
   const coverage = operationSpecificFirstBlock(input.operationId, blocks);

@@ -5,7 +5,7 @@ import { AskExecutionStatus, HouseholdRole } from '@prisma/client';
 import { z } from 'zod';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResolution, type AskOperationResult } from '../askOperationRegistry';
 import { prisma } from '../../../lib/prisma';
-import { askAnswerTrustTotal, askResultSynthesisTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillPresentationDurationSeconds } from '../../../lib/metrics';
+import { askAnswerTrustTotal, askAnswerTrustUnlistedActionTotal, askResultSynthesisTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillPresentationDurationSeconds } from '../../../lib/metrics';
 import { operatingModeForOwnershipState, type PropertyJourneyContext } from '../../skills/context/propertyJourneyContext.contract';
 import { isAskOperationDiscoverableForAudience, type AskAudienceApplicabilityDecision } from '../askAudiencePolicy';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
@@ -96,6 +96,7 @@ export function recordAskAnswerTrustMetrics(
     source: validation.trust.checks.sourceIntegrity,
     repaired: validation.repaired ? 'yes' : 'no',
   });
+  if (validation.trust.reasonCodes.includes('UNLISTED_ACTION_RETAINED')) askAnswerTrustUnlistedActionTotal.inc({ operation: operationId });
   if (validation.semantic) {
     askSemanticAnswerValidationTotal.inc({ operation: operationId, outcome: validation.semantic.outcome });
     askSemanticAnswerValidationDurationSeconds.observe(
