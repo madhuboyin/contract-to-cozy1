@@ -71,3 +71,49 @@ export function parseReserveFundContributionMessage(message: string): ReserveFun
   if (!type) return null;
   return { type, amountDollars: reserveFundAmountFromText(text) };
 }
+
+// ---- typed planning commands: recalculate, posture, and the ambiguous "change my reserve plan" ------------------------------------
+
+export type ReserveFundPostureWord = 'CONSERVATIVE' | 'MODERATE' | 'AGGRESSIVE';
+export type ReserveFundTypedRequest =
+  | ({ kind: 'CONTRIBUTION' } & ReserveFundContributionMessage)
+  | { kind: 'RECALCULATE' }
+  | { kind: 'POSTURE'; posture: ReserveFundPostureWord }
+  | { kind: 'POSTURE_UNSPECIFIED' }
+  | { kind: 'CHOOSE' };
+
+const PLAN = String.raw`(?:(?:my|our|the)\s+)?(?:home\s+)?(?:reserve|sinking)(?:\s+fund)?(?:\s+plan(?:ning)?)?`;
+const POSTURE_WORD = String.raw`(conservative|moderate|aggressive)`;
+const CHANGE_VERBS = String.raw`use|set|switch|change|make|go|move|select|choose|pick|update|put`;
+
+// "recalculate my reserve plan", "rebuild the reserve fund numbers"
+const recalculateForm = new RegExp(String.raw`^${POLITE}(?:recalculate|recompute|rebuild|re-?run|redo)\s+${PLAN}(?:\s+(?:targets?|numbers|calculations?|budget))?$`, 'i');
+// "use the conservative posture", "set my reserve fund posture to conservative", "change my reserve plan to aggressive", "switch to a moderate reserve posture"
+const postureNamedForms = [
+  new RegExp(String.raw`^${POLITE}(?:use|set|switch\s+to|select|choose|go\s+with|pick)\s+(?:the\s+|a\s+)?${POSTURE_WORD}\s+(?:(?:reserve|planning|reserve\s+planning)\s+)?posture$`, 'i'),
+  new RegExp(String.raw`^${POLITE}(?:${CHANGE_VERBS})\s+${PLAN}(?:\s+posture)?\s+(?:to|as|at)\s+(?:(?:the|a)\s+)?${POSTURE_WORD}(?:\s+(?:posture|setting|approach))?$`, 'i'),
+  new RegExp(String.raw`^${POLITE}(?:${CHANGE_VERBS})\s+(?:to\s+)?(?:the\s+|a\s+)?${POSTURE_WORD}\s+${PLAN}(?:\s+posture)?$`, 'i'),
+];
+// "change my reserve planning posture", "change the posture of my reserve fund"
+const postureUnspecifiedForms = [
+  new RegExp(String.raw`^${POLITE}(?:change|update|set|adjust|switch)\s+${PLAN}\s+(?:planning\s+)?posture$`, 'i'),
+  new RegExp(String.raw`^${POLITE}(?:change|update|set|adjust|switch)\s+the\s+(?:planning\s+)?posture\s+(?:of|for)\s+${PLAN}$`, 'i'),
+];
+// "change my reserve plan", "manage my reserve fund": a change with no named change.
+const chooseForm = new RegExp(String.raw`^${POLITE}(?:change|update|edit|adjust|manage|modify|tweak)\s+${PLAN}$`, 'i');
+
+/** What a typed message asks of the Reserve Fund command, or null when it is anything else (a question, a read, another command). */
+export function parseReserveFundMessage(message: string): ReserveFundTypedRequest | null {
+  const text = normalize(message);
+  if (!text || text.length > 240) return null;
+  const contribution = parseReserveFundContributionMessage(text);
+  if (contribution) return { kind: 'CONTRIBUTION', ...contribution };
+  if (recalculateForm.test(text)) return { kind: 'RECALCULATE' };
+  for (const form of postureNamedForms) {
+    const match = text.match(form);
+    if (match) return { kind: 'POSTURE', posture: match[1].toUpperCase() as ReserveFundPostureWord };
+  }
+  if (postureUnspecifiedForms.some((form) => form.test(text))) return { kind: 'POSTURE_UNSPECIFIED' };
+  if (chooseForm.test(text)) return { kind: 'CHOOSE' };
+  return null;
+}

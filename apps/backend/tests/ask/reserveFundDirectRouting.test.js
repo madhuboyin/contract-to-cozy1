@@ -6,7 +6,9 @@ require('ts-node/register');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
 const { parseReserveFundContributionMessage } = require('../../src/services/ask/support/reserveFundMessage.ts');
-const { RESERVE_FUND_ACTION_IDS } = require('../../src/services/ask/support/reserveFundConstants.ts');
+const { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE } = require('../../src/services/ask/support/reserveFundConstants.ts');
+const { parseReserveFundMessage } = require('../../src/services/ask/support/reserveFundMessage.ts');
+const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 
 const route = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation?.operationId;
 
@@ -122,5 +124,118 @@ test('the registered handler branches on the typed message only for a non-refres
   const path = require('node:path');
   const body = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/reserveFundCommands.handler.ts'), 'utf8');
   assert.match(body, /launch\?\.surface !== 'ASK_REFRESH' && launch\?\.operationId !== 'RESERVE_FUND_COMMAND'/);
-  assert.match(body, /parseReserveFundContributionMessage\(envelope\.message\)/);
+  assert.match(body, /parseReserveFundMessage\(envelope\.message\)/);
+});
+
+// ---- typed planning commands (FRD 1.291): recalculate, named posture, and the unnamed change -------------------------------------
+
+test('typed recalculate and posture requests reach the governed command; reads and questions do not', () => {
+  for (const message of [
+    'Recalculate my reserve plan', 'recalculate my reserve fund', 'rebuild the reserve fund numbers',
+    'Use the conservative posture', 'Change my reserve plan to aggressive', 'set my reserve fund posture to conservative',
+    'switch to a moderate reserve posture', 'change my reserve planning posture',
+    'Change my reserve plan', 'manage my reserve fund', 'update my reserve fund',
+  ]) assert.equal(route(message), 'RESERVE_FUND_COMMAND', message);
+  for (const message of ['should I use the aggressive posture?', 'how is my reserve fund doing?', 'recalculate my budget', 'use the aggressive approach for my hvac']) {
+    assert.notEqual(route(message), 'RESERVE_FUND_COMMAND', message);
+  }
+});
+
+test('the typed grammar resolves a specific action, or says it is unnamed', () => {
+  assert.deepEqual(parseReserveFundMessage('Recalculate my reserve plan'), { kind: 'RECALCULATE' });
+  assert.deepEqual(parseReserveFundMessage('Use the conservative posture'), { kind: 'POSTURE', posture: 'CONSERVATIVE' });
+  assert.deepEqual(parseReserveFundMessage('Change my reserve plan to aggressive'), { kind: 'POSTURE', posture: 'AGGRESSIVE' });
+  assert.deepEqual(parseReserveFundMessage('change my reserve planning posture'), { kind: 'POSTURE_UNSPECIFIED' });
+  assert.deepEqual(parseReserveFundMessage('Change my reserve plan'), { kind: 'CHOOSE' });
+  assert.equal(parseReserveFundMessage('add $500 to my reserve fund').kind, 'CONTRIBUTION');
+});
+
+const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
+const envelope = (message, extra = {}) => ({ userId: 'user-1', propertyId: 'prop-1', message, launchContext: null, ...extra });
+const invoke = (message, role = 'CONTRIBUTOR', extra) => capabilityInvoke('RESERVE_FUND_COMMAND', envelope(message, extra), { propertyAccess: { role } });
+
+test('typed recalculate and a named posture go straight to the same confirmation the buttons reach', async () => {
+  const { restore } = withRole('CONTRIBUTOR');
+  try {
+    const recalculate = await invoke('Recalculate my reserve plan');
+    assert.equal(recalculate.status, 'NEEDS_CONFIRMATION');
+    assert.equal(recalculate.parameters.reserveFundCommand.actionId, RESERVE_FUND_ACTION_IDS.RECALCULATE);
+    assert.equal(recalculate.confirmation.title, 'Recalculate the reserve plan?');
+
+    const posture = await invoke('Change my reserve plan to aggressive');
+    assert.equal(posture.status, 'NEEDS_CONFIRMATION');
+    assert.equal(posture.parameters.reserveFundCommand.posture, 'AGGRESSIVE');
+    assert.equal(posture.parameters.reserveFundCommand.actionId, RESERVE_FUND_ACTION_IDS.POSTURE_AGGRESSIVE);
+  } finally { restore(); }
+});
+
+test('"change my reserve plan" answers with the three governed choices and writes nothing', async () => {
+  const { restore } = withRole('CONTRIBUTOR');
+  try {
+    const result = await invoke('Change my reserve plan');
+    assert.equal(result.confirmation ?? null, null);
+    assert.equal(result.parameters?.reserveFundCommand, undefined);
+    const actions = result.blocks[0].actions;
+    assert.deepEqual(actions.map((a) => a.label), ['Log a balance change', 'Recalculate the plan', 'Change planning posture']);
+    assert.deepEqual(actions.map((a) => a.id), [RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, RESERVE_FUND_ACTION_IDS.RECALCULATE, RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE]);
+    // The client launches a block action with action.actionId (not action.id) and requires START_WORKFLOW; without them a click is the
+    // "Choose an action" dead end again.
+    for (const action of actions) {
+      assert.equal(action.interactionType, 'START_WORKFLOW');
+      assert.equal(action.operationId, 'RESERVE_FUND_COMMAND');
+      assert.equal(action.message, RESERVE_FUND_COMMAND_MESSAGE);
+      assert.equal(action.actionId, action.id);
+    }
+    // Each choice, launched exactly as the client launches it, reaches its governed step.
+    const launched = async (action) => invoke(action.message, 'CONTRIBUTOR', { launchContext: { operationId: action.operationId, actionId: action.actionId, entityId: null, surface: 'ASK_PAGE' } });
+    assert.equal((await launched(actions[0])).reasonCode, 'RESERVE_FUND_CONTRIBUTION_REQUIRED');
+    assert.equal((await launched(actions[1])).status, 'NEEDS_CONFIRMATION');
+    assert.equal((await launched(actions[2])).reasonCode, 'RESERVE_FUND_POSTURE_CHOICE');
+
+    // Choosing "Change planning posture" asks for the posture, as the declared action would.
+    const picker = await invoke(RESERVE_FUND_COMMAND_MESSAGE, 'CONTRIBUTOR', { launchContext: { operationId: 'RESERVE_FUND_COMMAND', actionId: RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE, entityId: null, surface: 'ASK_ACTION' } });
+    assert.deepEqual(picker.blocks[0].actions.map((a) => a.label), ['Conservative', 'Moderate', 'Aggressive']);
+
+    // An unnamed posture request lands on the same picker directly.
+    const direct = await invoke('change my reserve planning posture');
+    assert.deepEqual(direct.blocks[0].actions.map((a) => a.id), [RESERVE_FUND_ACTION_IDS.POSTURE_CONSERVATIVE, RESERVE_FUND_ACTION_IDS.POSTURE_MODERATE, RESERVE_FUND_ACTION_IDS.POSTURE_AGGRESSIVE]);
+
+    // A picked posture is the declared action and goes to the confirmation.
+    const picked = await invoke(RESERVE_FUND_COMMAND_MESSAGE, 'CONTRIBUTOR', { launchContext: { operationId: 'RESERVE_FUND_COMMAND', actionId: RESERVE_FUND_ACTION_IDS.POSTURE_MODERATE, entityId: null, surface: 'ASK_ACTION' } });
+    assert.equal(picked.status, 'NEEDS_CONFIRMATION');
+    assert.equal(picked.parameters.reserveFundCommand.posture, 'MODERATE');
+  } finally { restore(); }
+});
+
+test('every action the choices offer survives the answer-trust allowlist (a missing id is stripped silently)', async () => {
+  const { restore } = withRole('CONTRIBUTOR');
+  try {
+    const offered = [
+      ...(await invoke('Change my reserve plan')).blocks[0].actions,
+      ...(await invoke('change my reserve planning posture')).blocks[0].actions,
+    ];
+    assert.equal(offered.length, 6);
+    for (const action of offered) {
+      assert.equal(isAskActionApplicable({ action, operationId: 'RESERVE_FUND_COMMAND', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true, action.id);
+    }
+  } finally { restore(); }
+});
+
+test('a viewer is told the role requirement for every typed Reserve Fund request, with no buttons', async () => {
+  const { restore } = withRole('VIEWER');
+  try {
+    for (const message of ['Recalculate my reserve plan', 'Use the conservative posture', 'Change my reserve plan', 'change my reserve planning posture']) {
+      const result = await invoke(message, 'VIEWER');
+      assert.notEqual(result.status, 'NEEDS_CONFIRMATION', message);
+      assert.deepEqual((result.blocks ?? []).flatMap((block) => block.actions ?? []), [], message);
+    }
+  } finally { restore(); }
+});
+
+test('a refresh of a launched turn never re-resolves the typed message', async () => {
+  const { restore } = withRole('CONTRIBUTOR');
+  try {
+    const result = await invoke('Recalculate my reserve plan', 'CONTRIBUTOR', { launchContext: { operationId: 'RESERVE_FUND_COMMAND', actionId: RESERVE_FUND_ACTION_IDS.RECALCULATE, entityId: null, surface: 'ASK_REFRESH' } });
+    assert.notEqual(result.status, 'NEEDS_CONFIRMATION');
+  } finally { restore(); }
 });

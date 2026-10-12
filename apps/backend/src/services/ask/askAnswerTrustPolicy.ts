@@ -176,7 +176,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_DEADLINE_MONITOR: new Set(['resolve-coverage-conflict']),
   // The page-link ids (open-inventory, open-timeline, open-reserve, open-reserve-fund) were retired with the desktop-link sweep.
   CAPITAL_RESERVE_PLAN: new Set(['add-inventory-item', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation']),
-  RESERVE_FUND_COMMAND: new Set(['reserve-fund-show-current']),
+  // The typed "change my reserve plan" choice and the posture picker offer the plan-wide actions that need no target entry.
+  RESERVE_FUND_COMMAND: new Set(['reserve-fund-show-current', 'reserve-fund-add-contribution', 'reserve-fund-recalculate', 'reserve-fund-choose-posture', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive']),
   PROPERTY_BRIEF_COMMAND: new Set(['property-brief-show-current', 'property-brief-open-share']),
   // Item actions on the feed's events (FRD v1.40); the inline detail shows the ones valid for the live state.
   HOME_EVENT_RADAR_FEED: new Set(['radar-include-dismissed', 'radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task', 'radar-notification-settings']),

@@ -9,4 +9,6 @@ export const RESERVE_FUND_ACTION_IDS = {
   POSTURE_MODERATE: 'reserve-fund-posture-moderate',
   POSTURE_AGGRESSIVE: 'reserve-fund-posture-aggressive',
   ACCEPT_RECONCILIATION: 'reserve-fund-accept-reconciliation',
+  // Not a write: shows the three posture choices. Reached from the "What would you like to change?" choice.
+  CHOOSE_POSTURE: 'reserve-fund-choose-posture',
 } as const;

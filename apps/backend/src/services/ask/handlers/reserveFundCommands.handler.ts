@@ -10,7 +10,7 @@ import { homeReserveFundReconciliationService } from '../../homeReserveFundRecon
 import { getFinancialContextDecisions } from '../../financialContext/context';
 import { ReserveFundContributionInputSchema } from '../support/commandInputs';
 import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
-import { parseReserveFundContributionMessage, type ReserveFundContributionMessage } from '../support/reserveFundMessage';
+import { parseReserveFundMessage, type ReserveFundContributionMessage } from '../support/reserveFundMessage';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -42,6 +42,22 @@ function contributionCapture(prefill?: ReserveFundContributionMessage | null): A
   };
 }
 
+// A block-level action launches with its own `actionId` (the client sends action.actionId, not action.id), so both carry the governed id.
+const choiceAction = (id: string, label: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') => ({ id, label, interactionType: 'START_WORKFLOW' as const, message: RESERVE_FUND_COMMAND_MESSAGE, operationId: 'RESERVE_FUND_COMMAND' as const, actionId: id, style });
+
+// "Change my reserve plan" names no change. The three changes are offered as the same governed actions the reserve-plan answer's buttons launch.
+const changeChoice = (): AskOperationResult => ({ status: 'COMPLETED', reasonCode: 'RESERVE_FUND_ACTION_CHOICE', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-change-choice', title: 'What would you like to change?', body: 'Nothing changes until you choose an option and confirm it.', tone: 'DEFAULT', actions: [
+  choiceAction(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, 'Log a balance change'),
+  choiceAction(RESERVE_FUND_ACTION_IDS.RECALCULATE, 'Recalculate the plan'),
+  choiceAction(RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE, 'Change planning posture'),
+] }], suggestions: [] });
+
+const postureChoice = (): AskOperationResult => ({ status: 'COMPLETED', reasonCode: 'RESERVE_FUND_POSTURE_CHOICE', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-posture-choice', title: 'Which planning posture?', body: 'The posture sets which point in each estimated cost range the plan uses. You will review the change before it is applied.', tone: 'DEFAULT', actions: [
+  choiceAction(RESERVE_FUND_ACTION_IDS.POSTURE_CONSERVATIVE, 'Conservative'),
+  choiceAction(RESERVE_FUND_ACTION_IDS.POSTURE_MODERATE, 'Moderate'),
+  choiceAction(RESERVE_FUND_ACTION_IDS.POSTURE_AGGRESSIVE, 'Aggressive'),
+] }], suggestions: [] });
+
 const blocked = (): AskOperationResult => ({ status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-permission', title: 'A contributor or owner is required', body: 'You can review the reserve plan, but your role cannot change its shared balance or planning settings.', tone: 'CAUTION', actions: [] }], suggestions: [] });
 
 export async function reserveFundCommandResult(userId: string, propertyId: string, launch: Launch, supplied?: Contribution, prefill?: ReserveFundContributionMessage | null): Promise<AskOperationResult> {
@@ -49,6 +65,7 @@ export async function reserveFundCommandResult(userId: string, propertyId: strin
   const actionId = launch?.actionId ?? '';
   const entityId = launch?.entityId ?? '';
   if (!Object.values(RESERVE_FUND_ACTION_IDS).includes(actionId as never)) return { status: 'NOT_APPLICABLE', reasonCode: 'RESERVE_FUND_ACTION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-launch', title: 'Choose an action from the reserve-fund answer', body: 'Nothing changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
+  if (actionId === RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE) return postureChoice();
   if (actionId === RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION && !supplied) return { status: 'NEEDS_CONTEXT', reasonCode: 'RESERVE_FUND_CONTRIBUTION_REQUIRED', parameters: { reserveFundLaunch: launch }, blocks: [{ type: 'SUMMARY', id: 'reserve-fund-contribution-input', title: 'Log a reserve-fund entry', body: 'Enter the self-reported balance change, then review it before it is recorded.', tone: 'DEFAULT', actions: [] }], captureRequests: [contributionCapture(prefill)], suggestions: [] };
 
   const command: Record<string, unknown> = { actionId, entityId };
@@ -71,11 +88,22 @@ export async function reserveFundCommandResult(userId: string, propertyId: strin
 
 registerCapabilityHandler('reserve-fund.command', async (envelope) => {
   const launch = envelope.launchContext;
-  // A typed "add $500 to my reserve fund" (no declared action, not a refresh) opens the same contribution form the ledger's Add button does,
-  // with what the message said filled in. It writes nothing: the form is reviewed, then confirmed, exactly as for the declared action.
+  // A typed request (no declared action, not a refresh) is resolved to the same governed action the buttons launch: a contribution opens the
+  // form with what the message said filled in; recalculate and a named posture go straight to the confirmation; an unnamed change or posture
+  // is answered with the choices. The message writes nothing.
   if (launch?.surface !== 'ASK_REFRESH' && launch?.operationId !== 'RESERVE_FUND_COMMAND') {
-    const typed = parseReserveFundContributionMessage(envelope.message);
-    if (typed) return reserveFundCommandResult(envelope.userId, envelope.propertyId!, { actionId: RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, entityId: null, sourceExecutionId: launch?.sourceExecutionId ?? null }, undefined, typed);
+    const typed = parseReserveFundMessage(envelope.message);
+    if (typed) {
+      const sourceExecutionId = launch?.sourceExecutionId ?? null;
+      const resolve = (actionId: string, supplied?: Contribution, prefill?: ReserveFundContributionMessage) =>
+        reserveFundCommandResult(envelope.userId, envelope.propertyId!, { actionId, entityId: null, sourceExecutionId }, supplied, prefill);
+      if (typed.kind === 'CONTRIBUTION') return resolve(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, undefined, { type: typed.type, amountDollars: typed.amountDollars });
+      if (typed.kind === 'RECALCULATE') return resolve(RESERVE_FUND_ACTION_IDS.RECALCULATE);
+      if (typed.kind === 'POSTURE') return resolve(`reserve-fund-posture-${typed.posture.toLowerCase()}`);
+      // Every choice is a change, so a viewer is told the role requirement instead of being offered buttons that would refuse.
+      if ((await ensurePropertyAccess(envelope.userId, envelope.propertyId!)).role === HouseholdRole.VIEWER) return blocked();
+      return typed.kind === 'POSTURE_UNSPECIFIED' ? postureChoice() : changeChoice();
+    }
   }
   if (launch?.operationId !== 'RESERVE_FUND_COMMAND' || launch.surface === 'ASK_REFRESH' || envelope.message !== RESERVE_FUND_COMMAND_MESSAGE) return reserveFundCommandResult(envelope.userId, envelope.propertyId!, null);
   return reserveFundCommandResult(envelope.userId, envelope.propertyId!, launch);
