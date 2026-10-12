@@ -37,29 +37,33 @@ test('the Emergency Help card launches the incident and claim follow-up read', (
   assert.equal(route.stage, 'DETERMINISTIC');
 });
 
-test('incidents follow the Incidents page default (suppressed hidden) and link to their own page', async () => {
+test('incidents follow the Incidents page default (suppressed hidden) and carry no desktop link', async () => {
   const result = await invoke();
   assert.deepEqual(queries.find(([model]) => model === 'incident')[1].where, { propertyId: 'p1', isSuppressed: false });
   const list = result.blocks.find((block) => block.id === 'incident-continuation-records');
   const [incidents, claims] = list.sections;
-  assert.equal(incidents.items[0].href, '/dashboard/properties/p1/incidents/i1');
+  assert.equal(incidents.items[0].href, null);
   assert.equal(incidents.items[0].description, 'active');
-  assert.equal(claims.items[0].href, '/dashboard/properties/p1/claims/c1');
+  assert.equal(claims.items[0].href, null);
 });
 
-test('both links survive the whitelist, with the AI troubleshooter labelled as a handoff for this property', async () => {
-  const raw = await invoke();
-  const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'incident-claim.continuation', operationId: 'INCIDENT_CONTINUATION', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
-  const { result: validated } = validateAskAnswerTrust({ question: 'Follow up on a home emergency', operationId: 'INCIDENT_CONTINUATION', result, propertyId: 'p1' });
-  assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  const actions = result.blocks.find((block) => block.id === 'incident-continuation-records').actions;
-  assert.deepEqual(actions.map((action) => [action.id, action.label, action.href]), [
-    ['open-claims', 'Open incident and claims records', '/dashboard/properties/p1/claims'],
-    ['open-emergency-help', 'Open Emergency Help (AI troubleshooter)', '/dashboard/emergency?propertyId=p1'],
-  ]);
-  for (const action of actions) {
-    assert.equal(isAskActionApplicable({ action, operationId: 'INCIDENT_CONTINUATION', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false, action.id);
+test('a contributor is offered starting a claim in Ask, a viewer is offered nothing, and no answer links to a desktop page', async () => {
+  for (const role of ['OWNER', 'CONTRIBUTOR']) {
+    const raw = await invoke(role);
+    const result = { ...raw, parameters: { ...raw.parameters, audiencePresentation: { householdRole: role } } };
+    const list = result.blocks.find((block) => block.id === 'incident-continuation-records');
+    assert.deepEqual(list.actions.map((action) => [action.id, action.label, action.interactionType, action.operationId, action.href]), [
+      ['claim-file-start', 'Start a claim', 'START_WORKFLOW', 'CLAIM_FILE', undefined],
+    ], role);
+    assert.equal(isAskActionApplicable({ action: list.actions[0], operationId: 'INCIDENT_CONTINUATION', propertyId: 'p1', householdRole: role, authoritativeSourceAvailable: true }), true, role);
+    assert.equal(JSON.stringify(result).includes('/dashboard/'), false, role);
+    assert.match(list.description, /Emergency Help AI troubleshooter is not currently available in Ask/);
   }
+  const raw = await invoke('VIEWER');
+  const viewer = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'incident-claim.continuation', operationId: 'INCIDENT_CONTINUATION', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
+  assert.deepEqual(viewer.blocks.find((block) => block.id === 'incident-continuation-records').actions, []);
+  const checked = validateAskAnswerTrust({ question: 'Follow up on a home emergency', operationId: 'INCIDENT_CONTINUATION', result: viewer, propertyId: 'p1' });
+  assert.deepEqual(checked.result.blocks.map((block) => block.id), viewer.blocks.map((block) => block.id));
 });
 
 test('an immediate-danger message still gets the emergency boundary, with no app link', async () => {

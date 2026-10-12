@@ -68,3 +68,10 @@ test('ClaimFileWorkflowInputSchema requires type and description but not title',
   assert.equal(ClaimFileWorkflowInputSchema.safeParse({ type: 'FIRE_SMOKE' }).success, false);
   assert.equal(ClaimFileWorkflowInputSchema.safeParse({ type: 'NOT_A_REAL_TYPE', description: 'x' }).success, false);
 });
+
+test('the missing-type capture form carries no link to the Claims page', async () => {
+  const result = await claimFileResult('property-1', 'Something happened at the house last week.');
+  assert.equal(result.reasonCode, 'CLAIM_TYPE_REQUIRED');
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result.blocks).includes('/dashboard/'), false);
+});

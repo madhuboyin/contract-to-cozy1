@@ -104,7 +104,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   RECALL_MATCH_UPDATE: new Set(['open-recalls']),
   // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
   DOCUMENT_LOOKUP: new Set(['open-documents', 'open-documents-list']),
-  INCIDENT_CLAIM_STATUS: new Set(['open-incidents', 'open-claims', 'open-incidents-list', 'open-claims-list', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
+  INCIDENT_CLAIM_STATUS: new Set(['claim-file-start', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
   SAVINGS_OPPORTUNITIES: new Set(['open-savings', 'review-all-savings']),
   OWNERSHIP_COSTS: new Set([
     'open-ownership-costs', 'ownership-cost-view-current', 'ownership-cost-view-changes', 'ownership-cost-view-forecast', 'ownership-cost-view-variability', 'ownership-cost-refresh-sources',
@@ -192,8 +192,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // FRD v1.78: plus the inline "Add purchase date" capture on appliances with no age.
   APPLIANCE_FAILURE_RISK: new Set(['open-appliance-oracle', 'correct-purchasedOn']),
   MAINTENANCE_BUDGET_FORECAST: new Set(['open-budget-planner']),
-  // FRD v1.64: INCIDENT_CONTINUATION had no entry, so both of its links were stripped from every answer.
-  INCIDENT_CONTINUATION: new Set(['open-claims', 'open-emergency-help']),
+  // FRD v1.64 gave INCIDENT_CONTINUATION two page links; Ask no longer links to desktop pages, so it offers starting a claim instead.
+  INCIDENT_CONTINUATION: new Set(['claim-file-start']),
   PROPERTY_BRIEFS_LIST: new Set(['open-property-brief', 'property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.

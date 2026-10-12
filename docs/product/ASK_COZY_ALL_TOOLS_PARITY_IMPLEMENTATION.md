@@ -298,9 +298,15 @@ A static scan of `services/ask` (handlers, support, execution and the top-level 
 
 **Suggested approach, not started:**
 
-1. **Done 2026-10-12:** `tests/ask/askNoDesktopLinksGuard.test.js` scans `services/ask` for desktop paths (98 in 40 files) and page-referencing copy (26 in 12 files) against per-file baselines. It fails if a file gains any, and also if a file loses any without lowering its baseline, so the list can only shrink. It is deliberately conservative on copy and is not a substitute for the batches below.
+1. **Done 2026-10-12:** `tests/ask/askNoDesktopLinksGuard.test.js` scans `services/ask` for desktop paths (92 in 39 files after the Claims batch; 98 in 40 at the sweep) and page-referencing copy (25 in 11 files; 26 in 12 at the sweep) against per-file baselines. It fails if a file gains any, and also if a file loses any without lowering its baseline, so the list can only shrink. It is deliberately conservative on copy and is not a substitute for the batches below.
 2. Fix in batches by tool, each with the Ask-side alternative decided first: where an Ask command exists, point to it as a `START_WORKFLOW`; where none exists, say so and remove the link and the allowlist entry.
 3. Start with tools already on the P0 list (Home Continuity Plan, Price Finalization, Coverage, Claims), since their slices touch those handlers anyway.
+
+**Batches completed:**
+
+| Batch | Date | What changed | Evidence |
+| --- | --- | --- | --- |
+| Claims | 2026-10-12 | `claims.handler.ts` had six desktop paths and one page-pointing sentence. Removed every page link and row link from the status read, the file-claim capture form, the transition answers (choose, not allowed, review) and the incident continuation. The status and continuation empty states, which would have been dead ends, now offer **Start a claim** (a `START_WORKFLOW` to `CLAIM_FILE`, "Start a claim" routes there) to a contributor or owner only; a populated status answer stays calm and carries no list-level action. The continuation says the Emergency Help AI troubleshooter is not currently available in Ask. The five retired action ids were removed from the trust-policy allowlist and `claim-file-start` was added. | `claimsCalmAnswer` 7/7, `claimsCapabilitySlice` 6/6, `emergencyCardLaunchSlice` 4/4, `claimFileCaptureRetention` 7/7 (new and updated tests fail on the previous handler); `askNoDesktopLinksGuard` baselines lowered for `claims.handler.ts`; backend `tsc --noEmit` |
 
 ## Recommended implementation order (advisory)
 

@@ -88,7 +88,6 @@ function nextClaimStatus(message: string): ClaimStatus | null {
 }
 
 export async function claimFileResult(propertyId: string, message: string, suppliedInput?: ClaimFileWorkflowInput): Promise<AskOperationResult> {
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
   const type = suppliedInput?.type ?? claimTypeFromMessage(message);
   // P03 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
   // the audit found the missing-type branch used durableFreeTextClarification,
@@ -105,7 +104,7 @@ export async function claimFileResult(propertyId: string, message: string, suppl
     if (explicitTitle) currentAnswer.title = explicitTitle;
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'CLAIM_TYPE_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'claim-type-required', title: 'Describe the incident before filing', body: 'Ask will create only a draft canonical claim after you identify the incident type and confirm. It will not submit anything to an insurer.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open Claims', href, style: 'SECONDARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'claim-type-required', title: 'Describe the incident before filing', body: 'Ask will create only a draft canonical claim after you identify the incident type and confirm. It will not submit anything to an insurer.', tone: 'CAUTION', actions: [] }],
       captureRequests: [{
         requirementId: `claim-file-${createHash('sha256').update(message).digest('hex').slice(0, 20)}`,
         captureKey: 'CLAIM_FILE_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
@@ -130,7 +129,7 @@ export async function claimFileResult(propertyId: string, message: string, suppl
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'CLAIM_FILE_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { claimTitle: title, claimType: type, claimDescription: description, claimSourceType: /warranty/i.test(description) ? 'HOME_WARRANTY' : /insurance/i.test(description) ? 'INSURANCE' : 'UNKNOWN', confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
-    blocks: [{ type: 'SUMMARY', id: 'claim-file-review', title: 'Review the draft claim', body: 'Confirming creates a draft claim, its checklist, timeline event, and linked Operational Work Item. It does not transmit the claim to an insurer or warranty provider.', tone: 'CAUTION', actions: [{ id: 'open-claims', label: 'Open Claims instead', href, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'claim-file-review', title: 'Review the draft claim', body: 'Confirming creates a draft claim, its checklist, timeline event, and linked Operational Work Item. It does not transmit the claim to an insurer or warranty provider.', tone: 'CAUTION', actions: [] }],
     confirmation: { confirmationId: `claim-file-${contextVersion.slice(0, 16)}`, version: 1, title: 'Create this draft claim?', description: 'The claim stays in ContractToCozy until you separately submit it through the appropriate provider channel.', fields: [{ label: 'Title', value: title }, { label: 'Incident type', value: type.toLowerCase().replace(/_/g, ' ') }, { label: 'Initial status', value: 'Draft' }], editableFields: [], confirmLabel: 'Create draft claim', consentText: 'I confirm this incident record is accurate and authorize creating the draft claim and linked home work.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
@@ -139,10 +138,9 @@ async function claimTransitionResult(propertyId: string, message: string, launch
   const claims = await prisma.claim.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, title: true, status: true, updatedAt: true } });
   const selected = exactEntityMatch(claims, message, launchContext);
   const nextStatus = nextClaimStatus(message);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
   if (!selected || !nextStatus) return {
     status: 'NEEDS_ENTITY', reasonCode: 'CLAIM_TRANSITION_TARGET_REQUIRED',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'claim-transition-targets', title: 'Choose a claim and valid next status', description: 'Use the exact claim title and say submit, move to under review, approve, deny, or close. Ask will recheck the legal transition before saving.', sections: [{ id: 'claims', title: 'Recorded claims', count: claims.length, items: claims.map((claim) => ({ id: claim.id, title: claim.title, description: `Current status: ${String(claim.status).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(claim.status), href: `${href}/${claim.id}` })) }], actions: [{ id: 'open-claims', label: 'Open Claims', href, style: 'SECONDARY' }] }], suggestions: [],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'claim-transition-targets', title: 'Choose a claim and valid next status', description: 'Use the exact claim title and say submit, move to under review, approve, deny, or close. Ask will recheck the legal transition before saving.', sections: [{ id: 'claims', title: 'Recorded claims', count: claims.length, items: claims.map((claim) => ({ id: claim.id, title: claim.title, description: `Current status: ${String(claim.status).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(claim.status), href: null })) }], actions: [] }], suggestions: [],
   };
   if (!isValidClaimTransition(selected.status as ClaimStatus, nextStatus)) return {
     status: 'BLOCKED', reasonCode: 'CLAIM_TRANSITION_NOT_ALLOWED',
@@ -154,7 +152,7 @@ async function claimTransitionResult(propertyId: string, message: string, launch
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'CLAIM_TRANSITION_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { claimId: selected.id, claimTitle: selected.title, claimFromStatus: selected.status, claimToStatus: nextStatus, claimContextVersion: contextVersion, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
-    blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle and reconcile the linked Operational Work Item and outcome.', tone: ['APPROVED', 'DENIED', 'CLOSED'].includes(nextStatus) ? 'CAUTION' : 'DEFAULT', actions: [{ id: 'open-claim', label: 'Open claim', href: `${href}/${selected.id}`, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'claim-transition-review', title: 'Review the claim status change', body: 'The canonical Claims service will enforce the legal lifecycle and reconcile the linked Operational Work Item and outcome.', tone: ['APPROVED', 'DENIED', 'CLOSED'].includes(nextStatus) ? 'CAUTION' : 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: `claim-transition-${selected.id}-1`, version: 1, title: `Change ${selected.title} to ${nextStatus.toLowerCase().replace(/_/g, ' ')}?`, description: 'This changes the shared claim record and its downstream work/outcome reconciliation.', fields: [{ label: 'Current status', value: String(selected.status).toLowerCase().replace(/_/g, ' ') }, { label: 'New status', value: nextStatus.toLowerCase().replace(/_/g, ' ') }], editableFields: [], confirmLabel: 'Change claim status', consentText: 'I confirm this status reflects the provider or claim process and authorize updating the shared record.', expiresAt: expiresAt.toISOString() }, suggestions: [],
   };
 }
@@ -164,31 +162,34 @@ async function claimTransitionResult(propertyId: string, message: string, launch
 // model call inside Ask. Incidents follow the Incidents page's default list (suppressed ones hidden) and link to their
 // own incident page; they used to link to Claims. The immediate-danger EMERGENCY_BOUNDARY answer deliberately carries
 // no app link at all.
+// Starting a draft claim is the in-Ask next step wherever an answer used to link to the Claims page (Ask never links to a desktop page,
+// owner decision 2026-10-10). CLAIM_FILE collects the incident type and details inline and only creates a draft after confirmation.
+export const CLAIM_FILE_START_ACTION = {
+  id: 'claim-file-start', label: 'Start a claim', interactionType: 'START_WORKFLOW' as const,
+  message: 'Start a claim', operationId: 'CLAIM_FILE', style: 'SECONDARY' as const,
+};
+
 export function incidentContinuationFromRecords(
-  propertyId: string,
+  _propertyId: string,
   incidents: readonly { id: string; title: string; status: string }[],
   claims: readonly { id: string; title: string; status: string }[],
+  canStartClaim = true,
 ): AskOperationResult {
-  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
-  const href = `${base}/claims`;
   return { status: 'ANSWERED', reasonCode: 'INCIDENT_CONTINUATION_READY', blocks: [
     { type: 'BOUNDARY', id: 'incident-continuation-boundary', title: 'Continue only after immediate danger has passed', severity: 'CAUTION', body: 'If anyone may still be in danger, contact emergency responders or the appropriate utility first. This workflow records what happened; it is not emergency response.', suggestions: [] },
-    { type: 'GROUPED_LIST', filters: [], id: 'incident-continuation-records', title: 'Recorded incident and claim follow-up', description: 'Use an existing record or start a draft claim. Filing with an insurer remains a separate provider action.', sections: [
-      { id: 'incidents', title: 'Incidents', count: incidents.length, items: incidents.map((row) => ({ id: row.id, title: row.title, description: readableCode(String(row.status)), meta: [], status: String(row.status), href: `${base}/incidents/${encodeURIComponent(row.id)}` })) },
-      { id: 'claims', title: 'Claims', count: claims.length, items: claims.map((row) => ({ id: row.id, title: row.title, description: readableCode(String(row.status)), meta: [], status: String(row.status), href: `${href}/${row.id}` })) },
-    ], actions: [
-      { id: 'open-claims', label: 'Open incident and claims records', href, style: 'PRIMARY' },
-      { id: 'open-emergency-help', label: 'Open Emergency Help (AI troubleshooter)', href: `/dashboard/emergency?propertyId=${encodeURIComponent(propertyId)}`, style: 'SECONDARY' },
-    ] },
+    { type: 'GROUPED_LIST', filters: [], id: 'incident-continuation-records', title: 'Recorded incident and claim follow-up', description: 'Use an existing record or start a draft claim. Filing with an insurer remains a separate provider action. The Emergency Help AI troubleshooter is not currently available in Ask.', sections: [
+      { id: 'incidents', title: 'Incidents', count: incidents.length, items: incidents.map((row) => ({ id: row.id, title: row.title, description: readableCode(String(row.status)), meta: [], status: String(row.status), href: null })) },
+      { id: 'claims', title: 'Claims', count: claims.length, items: claims.map((row) => ({ id: row.id, title: row.title, description: readableCode(String(row.status)), meta: [], status: String(row.status), href: null })) },
+    ], actions: canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }] : [] },
   ], suggestions: [] };
 }
 
-async function incidentContinuationResult(propertyId: string): Promise<AskOperationResult> {
+async function incidentContinuationResult(propertyId: string, role: HouseholdRole): Promise<AskOperationResult> {
   const [incidents, claims] = await Promise.all([
     prisma.incident.findMany({ where: { propertyId, isSuppressed: false }, orderBy: { updatedAt: 'desc' }, take: 10, select: { id: true, title: true, status: true, updatedAt: true } }),
     prisma.claim.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 10, select: { id: true, title: true, status: true, updatedAt: true } }),
   ]);
-  return incidentContinuationFromRecords(propertyId, incidents, claims);
+  return incidentContinuationFromRecords(propertyId, incidents, claims, role !== HouseholdRole.VIEWER);
 }
 
 // Claims capability-card slice (FRD v1.42). Every legal status change a claim can take, as declared item actions on
@@ -231,7 +232,7 @@ export function claimsCalmCopy(counts: {
     focus !== 'CLAIMS' && resolvedIncidents > 0 ? claimCount(resolvedIncidents, 'resolved incident', 'resolved incidents') : null,
     focus !== 'INCIDENTS' && closedClaims > 0 ? claimCount(closedClaims, 'closed claim', 'closed claims') : null,
   ].filter((part): part is string => Boolean(part));
-  const notes = [onFile.length ? `${onFile.join(' and ')} also on file.` : null, truncated ? 'Showing the most recent records; open the page for the full record.' : null].filter((note): note is string => Boolean(note));
+  const notes = [onFile.length ? `${onFile.join(' and ')} also on file.` : null, truncated ? 'Showing the most recent records.' : null].filter((note): note is string => Boolean(note));
   const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
     ...(focus !== 'CLAIMS' && activeIncidents > 0 ? [{ label: claimCount(activeIncidents, 'active incident', 'active incidents'), tone: 'CAUTION' as const }] : []),
     ...(focus !== 'INCIDENTS' && openClaims > 0 ? [{ label: claimCount(openClaims, 'open claim', 'open claims'), tone: 'CAUTION' as const }] : []),
@@ -344,8 +345,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
     wantClaims && wantClosed ? readClaims(false, CLAIMS_BUCKET_LIMITS.closedClaims) : none<never>(),
   ]);
 
-  const incidentsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/incidents`;
-  const claimsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/claims`;
+  const canStartClaim = access.role !== HouseholdRole.VIEWER;
   const humanizeEnum = (value: string) => value.toLowerCase().replace(/_/g, ' ');
 
   type Section = { id: string; title: string; count: number; items: Array<{ id: string; title: string; description: string | null; meta: string[]; status: string | null; href: string | null; entityType?: string; actions?: ReturnType<typeof claimItemActions> }> };
@@ -354,13 +354,13 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
     id: incident.id, title: incident.title,
     description: incident.summary ?? humanizeEnum(incident.typeKey),
     meta: [humanizeEnum(incident.status), ...(dateLabel === 'Opened' && incident.severity ? [humanizeEnum(incident.severity)] : []), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
-    status: incident.status, href: `${incidentsHref}/${encodeURIComponent(incident.id)}`,
+    status: incident.status, href: null,
   });
   const claimRow = (claim: (typeof activeClaims)[number], dateLabel: string, date: Date | null) => ({
     id: claim.id, title: claim.title,
     description: [claim.providerName, humanizeEnum(claim.type)].filter(Boolean).join(' · ') || humanizeEnum(claim.type),
     meta: [humanizeEnum(claim.status), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
-    status: claim.status, href: `${claimsHref}/${encodeURIComponent(claim.id)}`, entityType: 'CLAIM', actions: claimActions,
+    status: claim.status, href: null, entityType: 'CLAIM', actions: claimActions,
   });
   if (wantIncidents && wantOpen) sections.push({ id: 'active-incidents', title: 'Active incidents', count: activeIncidentTotal, items: activeIncidents.map((incident) => incidentRow(incident, 'Opened', incident.openedAt)) });
   if (wantIncidents && wantClosed && resolvedIncidentTotal > 0) sections.push({ id: 'resolved-incidents', title: 'Resolved incidents', count: resolvedIncidentTotal, items: resolvedIncidents.map((incident) => incidentRow(incident, 'Resolved', incident.resolvedAt)) });
@@ -371,10 +371,9 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
   const totalRecords = activeIncidentTotal + resolvedIncidentTotal + openClaimTotal + closedClaimTotal;
   const viewState = buildClaimsViewState(priorViewState, scope, state);
   const chips = claimsFilterChips(scope, state);
-  const listActions = [
-    ...(claimFocus ? [] : [{ id: 'open-incidents-list', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
-    ...(incidentFocus ? [] : [{ id: 'open-claims-list', label: 'Open claims', href: claimsHref, style: 'SECONDARY' as const }]),
-  ];
+  // No list-level action: Ask never navigates to a desktop page, and a populated status answer stays calm (a claim row carries its own
+  // status actions). Starting a claim is offered only where the answer would otherwise be a dead end: the empty state.
+  const listActions: never[] = [];
 
   if (totalRecords === 0 && refinement) {
     // A filter that matches nothing still continues the result and keeps every chip, so it can be widened or cleared.
@@ -395,10 +394,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
         type: 'EMPTY_STATE', id: 'incident-claim-empty',
         title: claimFocus ? 'No claims are recorded for this home' : incidentFocus ? 'No incidents are recorded for this home' : 'No incidents or claims are recorded for this home',
         body: 'This reflects what has been logged in the home record; it is not confirmation that nothing has ever happened at this property.',
-        actions: [
-          ...(claimFocus ? [] : [{ id: 'open-incidents', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
-          ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'SECONDARY' as const }]),
-        ],
+        actions: canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }] : [],
       }, CLAIM_STATUS_BOUNDARY],
       suggestions: [],
     };
@@ -416,13 +412,10 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
         body: `${totals.incidents} recorded incident${totals.incidents === 1 ? '' : 's'} and ${totals.claims} recorded claim${totals.claims === 1 ? '' : 's'} match this request.`,
         tone: totalActive > 0 ? 'CAUTION' : 'DEFAULT',
         ...claimsCalmCopy({ focus: scope, activeIncidents: activeIncidentTotal, resolvedIncidents: resolvedIncidentTotal, openClaims: openClaimTotal, closedClaims: closedClaimTotal, truncated }),
-        actions: [
-          ...(claimFocus ? [] : [{ id: 'open-incidents', label: 'Open incidents', href: incidentsHref, style: 'SECONDARY' as const }]),
-          ...(incidentFocus ? [] : [{ id: 'open-claims', label: 'Open claims', href: claimsHref, style: 'PRIMARY' as const }]),
-        ],
+        actions: [],
       },
-      // The calm answer carries no filled step (filing and status changes stay behind their own confirmation flows); the record pages are
-      // quiet links, drawn by the calm answer only so the previous shell still shows each link once.
+      // The calm answer carries no filled step: status changes are declared row actions behind their own confirmation flow, and starting
+      // a claim is the one list-level action. There are no links to the Claims or Incidents pages.
       { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections, actions: listActions },
       {
         type: 'EVIDENCE', id: 'incident-claim-evidence', title: 'Record freshness',
@@ -446,4 +439,8 @@ registerCapabilityHandler('incident-claim.file', async (envelope) => claimFileRe
 
 registerCapabilityHandler('incident-claim.transition', async (envelope) => claimTransitionResult(envelope.propertyId!, envelope.message, envelope.launchContext));
 
-registerCapabilityHandler('incident-claim.continuation', async (envelope) => incidentContinuationResult(envelope.propertyId!));
+registerCapabilityHandler('incident-claim.continuation', async (envelope, deps) => {
+  // The orchestrator passes the access it already resolved for this user and property; resolve it only when a caller did not.
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return incidentContinuationResult(envelope.propertyId!, access.role);
+});

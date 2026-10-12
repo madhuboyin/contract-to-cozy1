@@ -51,7 +51,7 @@ test('the headline says what is open in one sentence, and never anything about a
 
 test('closed and resolved records are named once, as also on file, and never inside the headline; a full page says so', () => {
   const copy = claimsCalmCopy({ focus: 'BOTH', activeIncidents: 1, resolvedIncidents: 2, openClaims: 1, closedClaims: 3, truncated: true });
-  assert.equal(copy.supportLine, '2 resolved incidents and 3 closed claims also on file. Showing the most recent records; open the page for the full record.');
+  assert.equal(copy.supportLine, '2 resolved incidents and 3 closed claims also on file. Showing the most recent records.');
   assert.ok(!/closed|resolved/.test(copy.headline));
   assert.deepEqual(copy.chips, [
     { label: '1 active incident', tone: 'CAUTION' }, { label: '1 open claim', tone: 'CAUTION' }, { label: '2 resolved', tone: 'DEFAULT' }, { label: '3 closed', tone: 'DEFAULT' },
@@ -73,10 +73,11 @@ test('the answer declares its headline and chips from the same records, and a re
   assert.equal(empty.blocks[0].id, 'incident-claim-empty');
 });
 
-test('page links ride on the list as quiet secondary links; no action is filled, and claim rows still carry only the transition actions they did', async () => {
+test('no list carries a page link or a filled action, and claim rows still carry only the transition actions they did', async () => {
   install([incident('i1', 'ACTIVE')], [claim('c1', 'DRAFT')]);
   const result = await run('Show my incidents and claims');
-  assert.deepEqual(list(result).actions.map((action) => [action.id, action.style]), [['open-incidents-list', 'SECONDARY'], ['open-claims-list', 'SECONDARY']]);
+  assert.deepEqual(list(result).actions, [], 'Ask links to no desktop Incidents or Claims page');
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   assert.ok(!list(result).actions.some((action) => action.interactionType === 'START_WORKFLOW'), 'no claim action is offered from the answer');
   const claimItem = list(result).sections.flatMap((section) => section.items).find((item) => item.entityType === 'CLAIM');
   assert.ok(claimItem.actions.length > 0 && claimItem.actions.every((action) => action.operationId === 'CLAIM_TRANSITION'));
@@ -86,10 +87,10 @@ test('page links ride on the list as quiet secondary links; no action is filled,
   const viewer = await run('Show my incidents and claims');
   assert.ok(list(viewer).sections.flatMap((section) => section.items).filter((item) => item.entityType === 'CLAIM').every((item) => item.actions.length === 0), 'a viewer gets read-only rows');
   const claimsOnly = await run('Show my claims');
-  assert.deepEqual(list(claimsOnly).actions.map((action) => action.id), ['open-claims-list'], 'a claims question does not link the incidents page');
+  assert.deepEqual(list(claimsOnly).actions, [], 'a claims question links no page either');
 });
 
-test('the answer survives the answer-trust validator with its boundary and the new page links on the whitelist', async () => {
+test('the answer survives the answer-trust validator with its boundary, and the retired page links are not on the whitelist', async () => {
   install([incident('i1', 'ACTIVE')], [claim('c1', 'SUBMITTED')]);
   const raw = await run('Show my incidents and claims');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'incident-claim.status', operationId: 'INCIDENT_CLAIM_STATUS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-26T00:00:00.000Z' }] } } };
@@ -98,4 +99,28 @@ test('the answer survives the answer-trust validator with its boundary and the n
   for (const id of ['open-incidents-list', 'open-claims-list']) {
     assert.equal(isAskActionApplicable({ action: { id, label: 'x', href: '/x', style: 'SECONDARY' }, operationId: 'INCIDENT_CLAIM_STATUS', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false, id);
   }
+});
+
+// Ask never links to a desktop page (owner decision, 2026-10-10). The page links these answers used to carry were removed; the empty
+// state, which would otherwise be a dead end, offers the one in-conversation next step.
+test('an empty claims answer offers starting a claim to a contributor and nothing to a viewer, and never a page link', async () => {
+  install([], []);
+  const contributor = await run('Show my claims');
+  const empty = contributor.blocks.find((block) => block.id === 'incident-claim-empty');
+  assert.deepEqual(empty.actions.map((action) => [action.id, action.interactionType, action.operationId, action.message, action.href]), [
+    ['claim-file-start', 'START_WORKFLOW', 'CLAIM_FILE', 'Start a claim', undefined],
+  ]);
+  assert.equal(JSON.stringify(contributor).includes('/dashboard/'), false);
+  assert.equal(isAskActionApplicable({ action: empty.actions[0], operationId: 'INCIDENT_CLAIM_STATUS', propertyId: 'p1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true);
+  role = 'VIEWER';
+  const viewer = await run('Show my claims');
+  assert.deepEqual(viewer.blocks.find((block) => block.id === 'incident-claim-empty').actions, []);
+});
+
+test('a filter that matches nothing and a populated answer carry no page link', async () => {
+  install([incident('i1', 'ACTIVE')], [claim('c1', 'DRAFT')]);
+  const populated = await run('Show my incidents and claims');
+  assert.equal(JSON.stringify(populated).includes('/dashboard/'), false);
+  assert.deepEqual(summary(populated).actions, []);
+  for (const item of list(populated).sections.flatMap((section) => section.items)) assert.equal(item.href, null, item.id);
 });

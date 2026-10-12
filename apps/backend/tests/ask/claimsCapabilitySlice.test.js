@@ -88,7 +88,7 @@ test('claim rows carry CLAIM identity and every transition action for contributo
     assert.equal(row.entityType, 'CLAIM');
     assert.deepEqual(row.actions.map((action) => action.id), CLAIM_TRANSITION_ACTIONS.map((action) => action.id));
     assert.ok(row.actions.every((action) => action.operationId === 'CLAIM_TRANSITION' && action.interactionType === 'MUTATE_RECORD'));
-    assert.match(row.href, /\/claims\//, 'the traditional claim page stays reachable');
+    assert.equal(row.href, null, 'Ask links to no desktop claim page; the row opens its own inline detail');
   }
   accessRole = 'VIEWER';
   const viewer = await list();
@@ -125,4 +125,19 @@ test('the claims capability card now launches inline into the claims-only read',
   const launch = capabilityCardLaunch('claims').inlineLaunch;
   assert.equal(launch.operationId, 'INCIDENT_CLAIM_STATUS');
   assert.equal(launch.message, 'Show my claims');
+});
+
+test('the transition answers (choose a claim, not allowed, review) carry no page link or action', async () => {
+  const targetless = await capabilityInvoke('CLAIM_TRANSITION', { userId: 'u1', propertyId: 'p1', message: 'Submit a claim' });
+  assert.equal(targetless.reasonCode, 'CLAIM_TRANSITION_TARGET_REQUIRED');
+  assert.deepEqual(targetless.blocks[0].actions, []);
+  for (const item of targetless.blocks[0].sections.flatMap((section) => section.items)) assert.equal(item.href, null, item.id);
+  claims[0].status = 'DRAFT';
+  const launchContext = { surface: 'ASK_WORKSPACE', entityType: 'CLAIM', entityId: 'claim-draft', operationId: 'CLAIM_TRANSITION', sourceExecutionId: 'exec-list' };
+  const illegal = await capabilityInvoke('CLAIM_TRANSITION', { userId: 'u1', propertyId: 'p1', message: 'Mark this claim approved.', launchContext });
+  assert.equal(illegal.reasonCode, 'CLAIM_TRANSITION_NOT_ALLOWED');
+  const review = await capabilityInvoke('CLAIM_TRANSITION', { userId: 'u1', propertyId: 'p1', message: 'Submit this claim.', launchContext });
+  assert.equal(review.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(review.blocks[0].actions, []);
+  for (const result of [targetless, illegal, review]) assert.equal(JSON.stringify(result.blocks).includes('/dashboard/'), false);
 });
