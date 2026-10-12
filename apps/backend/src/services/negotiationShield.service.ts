@@ -35,7 +35,7 @@ import { generateInsurancePremiumIncreaseAnalysis } from './negotiationShieldIns
 import { advanceServiceQuoteDecision } from './serviceQuoteDecisionJourney.service';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
-import { listNegotiationShieldCasesForProperty, serializeNegotiationShieldCase } from './negotiationShieldCaseList';
+import { listNegotiationShieldCasesForProperty, serializeNegotiationShieldAnalysis, serializeNegotiationShieldCase, serializeNegotiationShieldDraft } from './negotiationShieldCaseList';
 
 const PARSED_DOCUMENT_INPUT_ORIGIN = 'PARSED_DOCUMENT';
 
@@ -204,39 +204,11 @@ export class NegotiationShieldService {
   }
 
   private serializeAnalysis(record: any): NegotiationShieldAnalysisDTO {
-    const pa = record.pricingAssessment as Record<string, unknown> | null;
-    const confidenceExplanation =
-      pa && typeof pa.confidenceExplanation === 'string' ? pa.confidenceExplanation : null;
-
-    return {
-      id: String(record.id),
-      caseId: String(record.caseId),
-      scenarioType: record.scenarioType,
-      summary: record.summary ?? null,
-      findings: record.findings ?? null,
-      negotiationLeverage: record.negotiationLeverage ?? null,
-      recommendedActions: record.recommendedActions ?? null,
-      pricingAssessment: record.pricingAssessment ?? null,
-      confidence:
-        typeof record.confidence === 'number' ? record.confidence : record.confidence ?? null,
-      confidenceExplanation,
-      generatedAt: asIsoString(record.generatedAt) as string,
-      modelVersion: record.modelVersion ?? null,
-      createdAt: asIsoString(record.createdAt) as string,
-    };
+    return serializeNegotiationShieldAnalysis(record);
   }
 
   private serializeDraft(record: any): NegotiationShieldDraftDTO {
-    return {
-      id: String(record.id),
-      caseId: String(record.caseId),
-      draftType: record.draftType,
-      subject: record.subject ?? null,
-      body: record.body,
-      tone: record.tone ?? null,
-      isLatest: Boolean(record.isLatest),
-      createdAt: asIsoString(record.createdAt) as string,
-    };
+    return serializeNegotiationShieldDraft(record);
   }
 
   private serializeBuyerFinding(record: any): BuyerNegotiationFindingDTO {

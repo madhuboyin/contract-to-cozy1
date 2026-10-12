@@ -27,6 +27,11 @@ import { WarrantyResultList } from '../WarrantyResultList';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 
+// Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
+// message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
+const NEGOTIATION_DRAFT_BLOCK_ID = 'negotiation-shield-draft';
+const INLINE_DETAIL_BLOCK_IDS: ReadonlySet<string> = new Set(['project-detail-records', NEGOTIATION_DRAFT_BLOCK_ID]);
+
 // B07 fix: exported (previously module-private, as part of AskWorkspace's
 // own BlockView) so the generic GROUPED_LIST renderer's selection
 // marker/highlight can be tested directly, same convention as
@@ -234,7 +239,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const selected = controls?.view.selectedTaskId === item.id;
                   const detailKey = `${section.id}:${item.id}`;
                   const itemDetailsExpanded = Boolean(expandedItems[detailKey]);
-                  const hasInlineDetails = block.id === 'project-detail-records' && Boolean(item.detail);
+                  const hasInlineDetails = INLINE_DETAIL_BLOCK_IDS.has(block.id) && Boolean(item.detail);
                   const projectActions = block.id === 'project-detail-records' ? (item.actions ?? []) : [];
                   const dominantProjectAction = projectActions.find((action) => action.style === 'PRIMARY') ?? projectActions[0];
                   const overflowProjectActions = projectActions.filter((action) => action !== dominantProjectAction);
@@ -256,7 +261,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                           onClick={() => setExpandedItems((current) => ({ ...current, [detailKey]: !itemDetailsExpanded }))}
                           className="min-h-8 text-xs font-semibold text-teal-800 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
                         >
-                          {itemDetailsExpanded ? 'Hide details' : 'View details'}
+                          {itemDetailsExpanded ? `Hide ${block.id === NEGOTIATION_DRAFT_BLOCK_ID ? 'the draft' : 'details'}` : `${block.id === NEGOTIATION_DRAFT_BLOCK_ID ? 'Show the draft' : 'View details'}`}
                           <span className="sr-only"> for {item.title}</span>
                         </button>
                         {itemDetailsExpanded && <p id={`${block.id}-${section.id}-${item.id}-details`} className="whitespace-pre-line rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600">{item.detail}</p>}
