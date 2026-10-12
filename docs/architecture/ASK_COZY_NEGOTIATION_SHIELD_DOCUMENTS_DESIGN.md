@@ -1,6 +1,6 @@
 # Ask Cozy — Negotiation Shield documents (attach, read, parse): design
 
-**Status:** Design for owner decision. Nothing in this document is built.
+**Status:** Decisions accepted as recommended (2026-10-12). D-A3 (the visibility correction) is built and verified (section 8a; FRD v1.300). 3a (attach) is next; 3b and 3c are not built.
 **Date:** October 12, 2026
 **Parent:** `docs/architecture/ASK_COZY_NEGOTIATION_SHIELD_SLICE2_DESIGN.md` (decision D7 deferred documents and OCR; slices 2a–2c shipped as FRD v1.297–v1.299).
 **Method:** `docs/architecture/AUDIT_METHODOLOGY.md`. Each claim is labelled **code-traced** (read in source, not run), **executed** (run), or **inferred**. This repository has no database or browser; nothing here was run against either.
@@ -99,6 +99,14 @@ Needs a Home Records create call from Ask (G7: today's Ask upload makes a legacy
 2. **G8 — every Negotiation Shield upload is classified `STANDARD`**, including claim and premium notices (the enum has `CLAIM` and `INSURANCE`). Product question; not changed.
 3. **G10 — parse does not re-check that the caller can see the record**; only attach does. Low risk today (the link exists only if an eligible caller attached it) but not defense in depth.
 4. **No detach path** (service or route).
+
+## 8a. D-A3 — the visibility correction (built; FRD v1.300)
+
+- **Attach:** after the caller-role check, the record must also be `HOUSEHOLD`-visible and not trashed, else 409 `NEGOTIATION_SHIELD_DOCUMENT_NOT_SHARED`. A non-owner still gets the existing 404, so existence is not hinted.
+- **Read:** a non-household record keeps its type and link (counted by the analysis) but is returned as "Private document" with no link, key, type or size, regardless of who reads. This closes G9 for records attached before the check as well.
+- **Parse:** refuses a non-household record before any text is read (closes the G10 write side: private text never lands in a shared input).
+- **Tests (executed, stubs):** `tests/unit/negotiationShieldDocumentVisibility.test.js` (5).
+- **Not verified:** a database and a real file store; the existing page's behaviour for a pre-existing private attachment (it now shows "Private document" with no link).
 
 ## 9. Registry and validation checklist (per new operation)
 

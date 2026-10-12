@@ -186,6 +186,22 @@ export class NegotiationShieldService {
   private async serializeDocument(record: any): Promise<NegotiationShieldDocumentDTO> {
     const document = record.document ?? {};
     const version = document.currentVersion ?? null;
+    // The case is read by the whole household. A record that is not household-visible (attached before the attach check above, or by another path)
+    // keeps its type and link, so the analysis still counts it, but its name, file link and storage key are never sent.
+    if (document.visibility !== 'HOUSEHOLD') {
+      return {
+        id: String(record.id),
+        caseId: String(record.caseId),
+        documentId: String(record.documentId),
+        documentType: record.documentType,
+        fileName: 'Private document',
+        mimeType: null,
+        fileSizeBytes: null,
+        fileUrl: null,
+        storageKey: null,
+        uploadedAt: asIsoString(record.uploadedAt ?? document.createdAt) as string,
+      };
+    }
     const available = Boolean(version) && version.scanStatus === 'CLEAN' && version.integrityStatus === 'VERIFIED';
     const fileUrl = available ? await signedUrl(version.storageKey, version.originalFileName) : null;
     return {
@@ -264,6 +280,19 @@ export class NegotiationShieldService {
       { propertyId: args.propertyId, role: args.role, ids: [args.documentId] },
       () => new APIError('Document not found or access denied.', 404, 'NEGOTIATION_SHIELD_DOCUMENT_ACCESS_DENIED'),
     );
+    // A review is shared with the household, and so is everything attached to it. The check above is the CALLER's visibility (an owner sees owner-only
+    // records); this one is the household's. A private record is never attached to a shared review, whoever asks.
+    const shared = await prisma.propertyRecord.findFirst({
+      where: { id: args.documentId, propertyId: args.propertyId, visibility: 'HOUSEHOLD', lifecycleStatus: { not: 'TRASHED' } },
+      select: { id: true },
+    });
+    if (!shared) {
+      throw new APIError(
+        'Only records shared with the household can be attached to a review, because everyone who can see the review can see its documents.',
+        409,
+        'NEGOTIATION_SHIELD_DOCUMENT_NOT_SHARED',
+      );
+    }
   }
 
   private async countCaseChildren(caseId: string) {
@@ -1845,6 +1874,14 @@ export class NegotiationShieldService {
       );
     }
 
+    // Parsing writes the file's text and fields into a case input that every household member can read.
+    if (caseDocument.document.visibility !== 'HOUSEHOLD') {
+      throw new APIError(
+        'This document is private to its owner, so its contents cannot be added to a review the household shares.',
+        409,
+        'NEGOTIATION_SHIELD_DOCUMENT_NOT_SHARED',
+      );
+    }
     const version = caseDocument.document.currentVersion;
     const available = Boolean(version) && version!.scanStatus === 'CLEAN' && version!.integrityStatus === 'VERIFIED';
     if (!available) {
