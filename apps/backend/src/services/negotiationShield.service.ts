@@ -20,6 +20,7 @@ import {
   NegotiationShieldDraftDTO,
   NegotiationShieldGeneratedAnalysisResult,
   NegotiationShieldInputDTO,
+  NegotiationShieldInputType,
   NegotiationShieldEventInput,
   NegotiationShieldSourceType,
   RecordBuyerNegotiationOutcomeInput,
@@ -35,9 +36,7 @@ import { generateInsurancePremiumIncreaseAnalysis } from './negotiationShieldIns
 import { advanceServiceQuoteDecision } from './serviceQuoteDecisionJourney.service';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
-import { listNegotiationShieldCasesForProperty, serializeNegotiationShieldAnalysis, serializeNegotiationShieldCase, serializeNegotiationShieldDraft } from './negotiationShieldCaseList';
-
-const PARSED_DOCUMENT_INPUT_ORIGIN = 'PARSED_DOCUMENT';
+import { listNegotiationShieldCasesForProperty, PARSED_DOCUMENT_INPUT_ORIGIN, serializeNegotiationShieldAnalysis, serializeNegotiationShieldCase, serializeNegotiationShieldDraft } from './negotiationShieldCaseList';
 
 function asIsoString(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -1683,6 +1682,48 @@ export class NegotiationShieldService {
     }
 
     return this.getCaseDetail(propertyId, caseId);
+  }
+
+  /**
+   * Change some fields of a manual input and leave the rest as saved. `saveManualInput` replaces a case input's whole `structuredData`, so a caller that
+   * only knows some of its keys (Ask's edit form knows each scenario's fields; the page may have saved others) would silently drop the rest. This reads
+   * the input, applies `set` and `remove`, and saves through `saveManualInput`, which stays the one writer. Raw text is left as saved. With no `inputId`
+   * the newest manual input of this type is updated, or one is created.
+   */
+  async updateManualInputFields(
+    propertyId: string,
+    caseId: string,
+    args: { inputType: NegotiationShieldInputType; inputId?: string | null; set: Record<string, unknown>; remove: string[] },
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    await this.assertCaseBelongsToProperty(propertyId, caseId);
+    let existing: any = null;
+    if (args.inputId) {
+      existing = await this.models.inputModel.findFirst({ where: { id: args.inputId, caseId } });
+      if (!existing) {
+        throw new APIError('Negotiation Shield input not found.', 404, 'NEGOTIATION_SHIELD_INPUT_NOT_FOUND');
+      }
+    } else {
+      const candidates = await this.models.inputModel.findMany({
+        where: { caseId, inputType: args.inputType },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      });
+      existing = candidates.find((input: any) => !isParsedDocumentInput(input.structuredData)) ?? null;
+    }
+    if (existing && isParsedDocumentInput(existing.structuredData)) {
+      throw new APIError(
+        'Parsed document input must be refreshed through document parsing, not manual input save.',
+        400,
+        'NEGOTIATION_SHIELD_PARSED_INPUT_IMMUTABLE'
+      );
+    }
+    const merged: Record<string, unknown> = { ...asObject(existing?.structuredData) };
+    for (const key of args.remove) delete merged[key];
+    Object.assign(merged, args.set);
+    return this.saveManualInput(propertyId, caseId, {
+      inputId: existing?.id,
+      inputType: args.inputType,
+      structuredData: merged,
+    });
   }
 
   async attachDocumentMetadata(args: {

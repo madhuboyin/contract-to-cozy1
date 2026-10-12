@@ -8,6 +8,8 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { NEGOTIATION_SHIELD_START_ACTION_ID, NEGOTIATION_SHIELD_START_MESSAGE } from '../support/negotiationShieldStart';
 import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
+import { NEGOTIATION_SHIELD_EDIT_ACTION_ID, NEGOTIATION_SHIELD_EDIT_MESSAGE } from '../support/negotiationShieldEdit';
+import { isNegotiationStartScenario } from '../support/negotiationShieldStart';
 import { humanDate, money, readableCode } from '../askFormatting';
 import { getNegotiationShieldCaseReviewForProperty, listNegotiationShieldCasesForProperty, type NegotiationShieldCaseReviewDTO } from '../../negotiationShieldCaseList';
 import type { NegotiationShieldCaseSummaryDTO } from '../../negotiationShield.types';
@@ -163,6 +165,14 @@ const runAnalysisAction = (caseId: string, label: string) => ({
   operationId: 'NEGOTIATION_SHIELD_CASE_ANALYZE' as const, entityType: NEGOTIATION_SHIELD_CASE_ENTITY, entityId: caseId, style: 'PRIMARY' as const,
 });
 
+// "Edit details" / "Add details" (slice 2c): a contributor or owner can change the saved details of the four scenarios Ask can start. A buyer inspection
+// review is not edited here.
+const editDetailsAction = (caseId: string, hasInput: boolean) => ({
+  id: NEGOTIATION_SHIELD_EDIT_ACTION_ID, label: hasInput ? 'Edit details' : 'Add details', interactionType: 'START_WORKFLOW' as const,
+  message: NEGOTIATION_SHIELD_EDIT_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_UPDATE' as const, entityType: NEGOTIATION_SHIELD_CASE_ENTITY, entityId: caseId,
+  style: 'SECONDARY' as const,
+});
+
 export function negotiationShieldReviewFromView(review: NegotiationShieldCaseReviewDTO | null, canRun = false): AskOperationResult {
   if (!review) {
     return {
@@ -176,6 +186,7 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   }
   const { case: item, latestAnalysis: analysis, latestDraft: draft } = review;
   const scenario = NEGOTIATION_SCENARIO_LABELS[item.scenarioType] ?? readableCode(item.scenarioType);
+  const canEdit = canRun && isNegotiationStartScenario(item.scenarioType);
   const pricing = (analysis?.pricingAssessment ?? null) as Record<string, unknown> | null;
   const confidenceLabel = pricing && typeof pricing.confidenceLabel === 'string' ? NEGOTIATION_LEVEL_LABELS[pricing.confidenceLabel] ?? null : null;
   // The saved details changed after this analysis was run, so its findings and draft describe older details.
@@ -196,7 +207,11 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
           ? 'This review has not been analyzed yet, so there are no findings, leverage points or draft message to show. Run the analysis to prepare them from the details you saved.'
           : 'This review has not been analyzed yet, so there are no findings, leverage points or draft message to show. A contributor or owner can run the analysis.',
       tone: 'DEFAULT', supportLine: [scenario, `Updated ${humanDate(new Date(item.updatedAt))}`].join(' · '),
-      actions: canRun && review.hasInput ? [runAnalysisAction(item.id, 'Run the analysis'), backToReviews] : [backToReviews],
+      actions: [
+        ...(canRun && review.hasInput ? [runAnalysisAction(item.id, 'Run the analysis')] : []),
+        ...(canEdit ? [editDetailsAction(item.id, review.hasInput)] : []),
+        backToReviews,
+      ],
     });
     blocks.push(NEGOTIATION_BOUNDARY);
     return { status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_REVIEW_NOT_ANALYZED', blocks, suggestions: [] };
@@ -205,7 +220,11 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
     type: 'SUMMARY', id: 'negotiation-shield-review-summary', title: item.title,
     body: text(analysis.summary, 1500) || 'This review has been analyzed. The findings, leverage and recommended steps are below.',
     tone: 'DEFAULT', supportLine,
-    actions: canRun && stale ? [runAnalysisAction(item.id, 'Run it again'), backToReviews] : [backToReviews],
+    actions: [
+      ...(canRun && stale ? [runAnalysisAction(item.id, 'Run it again')] : []),
+      ...(canEdit ? [editDetailsAction(item.id, true)] : []),
+      backToReviews,
+    ],
   });
 
   // The figures the assessment itself used, so the recommendation can be understood. Only normalized numbers, never the raw input text.

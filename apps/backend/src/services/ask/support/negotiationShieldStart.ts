@@ -103,7 +103,7 @@ const exactDate = z.union([
 ]);
 const blank = (value: unknown) => (value === '' || value === undefined || value === null ? null : value);
 
-function fieldSchema(field: NegotiationFieldSpec): z.ZodTypeAny {
+export function negotiationFieldSchema(field: NegotiationFieldSpec): z.ZodTypeAny {
   switch (field.kind) {
     case 'MONEY':
       return z.preprocess(blank, z.coerce.number().positive().max(MAX_MONEY).nullable()).optional();
@@ -120,7 +120,7 @@ function fieldSchema(field: NegotiationFieldSpec): z.ZodTypeAny {
 
 export function negotiationStartAnswerSchema(scenario: NegotiationStartScenario) {
   const shape: Record<string, z.ZodTypeAny> = { title: z.string().trim().min(1).max(160) };
-  for (const field of NEGOTIATION_START_SCENARIO_SPECS[scenario].fields) shape[field.key] = fieldSchema(field);
+  for (const field of NEGOTIATION_START_SCENARIO_SPECS[scenario].fields) shape[field.key] = negotiationFieldSchema(field);
   return z.object(shape).strict();
 }
 

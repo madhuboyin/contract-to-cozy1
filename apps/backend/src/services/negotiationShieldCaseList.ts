@@ -117,3 +117,58 @@ export async function getNegotiationShieldCaseReviewForProperty(propertyId: stri
     latestDraft: Array.isArray(record.drafts) && record.drafts[0] ? serializeNegotiationShieldDraft(record.drafts[0]) : null,
   };
 }
+
+// ── Editing: the saved manual details of one case ─────────────────────────────────────────────────────────────
+
+/** The marker the canonical service puts on an input it created by parsing a document; such an input is never edited by hand. */
+export const PARSED_DOCUMENT_INPUT_ORIGIN = 'PARSED_DOCUMENT';
+
+export function isParsedDocumentInputData(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const meta = (value as Record<string, unknown>)._meta;
+  return Boolean(meta && typeof meta === 'object' && !Array.isArray(meta) && (meta as Record<string, unknown>).origin === PARSED_DOCUMENT_INPUT_ORIGIN);
+}
+
+export type NegotiationShieldEditableInputDTO = {
+  case: { id: string; title: string; scenarioType: string; status: string };
+  /** The manual input the edit would update, or null when there is none and a save would create one. */
+  inputId: string | null;
+  inputUpdatedAt: string | null;
+  /** Only the requested keys, only primitive values: what the edit form shows and diffs against. */
+  values: Record<string, string | number | boolean>;
+};
+
+/**
+ * One case's saved MANUAL details, restricted to `allowedKeys`, scoped to the property. Raw text, parsed-document inputs and every other key are not
+ * returned (the input rows are selected without rawText). Matches the canonical save's rule for which input a manual edit updates: the newest
+ * non-parsed input of the scenario's input type. Returns null when the case is not on this property.
+ */
+export async function getNegotiationShieldEditableInputForProperty(
+  propertyId: string, caseId: string, inputType: string, allowedKeys: readonly string[],
+): Promise<NegotiationShieldEditableInputDTO | null> {
+  const caseModel = (prisma as any).negotiationShieldCase;
+  if (!caseModel) {
+    throw new APIError('Negotiation Shield models are unavailable. Run prisma generate.', 500, 'NEGOTIATION_SHIELD_MODEL_UNAVAILABLE');
+  }
+  const record = await caseModel.findFirst({
+    where: { id: caseId, propertyId },
+    select: {
+      id: true, title: true, scenarioType: true, status: true,
+      inputs: { where: { inputType }, select: { id: true, structuredData: true, updatedAt: true }, orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }] },
+    },
+  });
+  if (!record) return null;
+  const manual = (Array.isArray(record.inputs) ? record.inputs : []).find((input: any) => !isParsedDocumentInputData(input.structuredData)) ?? null;
+  const values: Record<string, string | number | boolean> = {};
+  const data = manual && manual.structuredData && typeof manual.structuredData === 'object' && !Array.isArray(manual.structuredData) ? manual.structuredData as Record<string, unknown> : {};
+  for (const key of allowedKeys) {
+    const value = data[key];
+    if (typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) values[key] = value;
+  }
+  return {
+    case: { id: String(record.id), title: String(record.title), scenarioType: String(record.scenarioType), status: String(record.status) },
+    inputId: manual ? String(manual.id) : null,
+    inputUpdatedAt: manual ? asIsoString(manual.updatedAt) : null,
+    values,
+  };
+}

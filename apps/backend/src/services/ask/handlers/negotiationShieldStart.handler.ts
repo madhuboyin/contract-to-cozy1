@@ -110,7 +110,7 @@ function captureRequest(scenario: NegotiationStartScenario, contextVersion: stri
   };
 }
 
-const detailLabel = (field: NegotiationFieldSpec, value: unknown): string => {
+export const negotiationDetailLabel = (field: NegotiationFieldSpec, value: unknown): string => {
   if (field.kind === 'MONEY' && typeof value === 'number') return money(value);
   if (field.kind === 'DATE' && typeof value === 'string') return humanDate(new Date(`${value}T12:00:00.000Z`)) ?? value;
   if (field.kind === 'YES_NO') return value === true ? 'Yes' : 'No';
@@ -144,7 +144,7 @@ export async function negotiationShieldStartResult(
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   const details = spec.fields.flatMap((field) => {
     const value = supplied.structuredData[field.key];
-    return value === undefined ? [] : [{ label: field.label, value: detailLabel(field, value) }];
+    return value === undefined ? [] : [{ label: field.label, value: negotiationDetailLabel(field, value) }];
   });
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'NEGOTIATION_SHIELD_START_CONFIRMATION_REQUIRED', contextVersion,

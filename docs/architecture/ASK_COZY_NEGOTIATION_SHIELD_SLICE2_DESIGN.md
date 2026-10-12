@@ -1,6 +1,6 @@
 # Ask Cozy — Negotiation Shield slice 2 (write path): design
 
-**Status:** Decisions D1–D7 and D9 accepted and D8 revised by the owner (2026-10-12; section 7). D9 and D6 are built and verified (sections 8 and 8a). 2a and 2b are built (sections 8b and 8c).
+**Status:** Decisions D1–D7 and D9 accepted and D8 revised by the owner (2026-10-12; section 7). D9 and D6 are built and verified (sections 8 and 8a). 2a, 2b and 2c are built (sections 8b, 8c and 8d).
 **Date:** October 12, 2026
 **Parent:** `docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md` ("Negotiation Shield", recommended order item 1); slice 1 shipped as FRD v1.294 (`a416b23f`).
 **Method:** `docs/architecture/AUDIT_METHODOLOGY.md`. Every factual claim below is labelled **code-traced** (read in source, not run), **executed** (run), or **inferred**. Nothing here is executed against a database or browser (this repository has none). The executed checks are the slice 1 tests recorded in the FRD and the D9 router authorization test (section 8).
@@ -152,6 +152,14 @@ Start from selected confirmed inspection findings; request-for-repair vs credit;
 - **No schema change** in this slice.
 - **Not done / next:** 2c (edit details; this is also what makes "details changed after the analysis" reachable from inside Ask), then attach/parse and buyer mode as their own designs.
 - **Not verified:** a real database and a real guidance journey store; the rendered receipt.
+
+## 8d. 2c — edit details (built; FRD v1.299)
+
+- **Built as designed**, with one addition the design had not anticipated: `saveManualInput` **replaces** the whole `structuredData`, so a form that knows only a scenario's keys would drop anything else saved (a page-only field such as `systemCategory`). Ask therefore never calls it with a partial object; a new service method, `updateManualInputFields`, merges `set`/`remove` into the saved input and saves through `saveManualInput`, which stays the single writer.
+- **Privacy:** the edit reader selects the input rows without raw text and returns only the form's own keys; the review reader still returns only a timestamp.
+- **Freshness and idempotency:** context version = hash(case, input id, input `updatedAt`); a retry that finds the details already as intended reports them.
+- **Not editable:** title, parsed inputs, raw text, buyer inspection (2d). **Not re-run:** the analysis; the review offers Run it again.
+- **Not verified:** a real database; the rendered form and diff card.
 
 ## 9. Other defects found while reading (not fixed)
 

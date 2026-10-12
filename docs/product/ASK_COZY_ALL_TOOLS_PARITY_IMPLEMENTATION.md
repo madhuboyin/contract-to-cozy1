@@ -109,7 +109,7 @@ Status is *Implemented* for the central job of each tool below; the Remaining co
 
 Both rows were checked on October 12, 2026 by reading the Ask handlers, the desktop routes, the controller-to-service mapping and the canonical services. No tests or browser were run; this is a code read.
 
-### Negotiation Shield — P0, status: Partial (list, case review, start a review and run the analysis; edits, documents and buyer mode remain)
+### Negotiation Shield — P0, status: Partial (list, case review, start a review, run the analysis and edit details; documents and buyer mode remain)
 
 **Implemented in Ask:** one read, `NEGOTIATION_SHIELD_CASES` (viewer floor), served by `negotiationShield.handler.ts` through `listNegotiationShieldCasesForProperty`. It lists up to 50 cases newest first, grouped open and archived, with scenario, status, buyer mode, last-analysis date and update date. It has an empty state and a limit notice. Ask does not import the Negotiation Shield service: nothing in `services/ask` references or calls `createCase`, `startBuyerNegotiation`, `recordBuyerNegotiationOutcome`, `saveManualInput`, `attachDocumentMetadata`, `parseCaseDocument` or `analyzeCase`.
 
@@ -121,7 +121,7 @@ Both rows were checked on October 12, 2026 by reading the Ask handlers, the desk
 | Case detail: stored analysis and latest draft | `GET …/cases/:caseId` | **Implemented 2026-10-12 (FRD v1.294)**: the row's Review action. Raw inputs, documents and buyer findings are deliberately not shown (buyer findings remain a Residual gap) |
 | Create a case (five scenarios: contractor quote, premium increase, claim settlement, buyer inspection, contractor urgency) | `POST …/cases` | **Implemented 2026-10-12 (FRD v1.297) for four scenarios** (quote, premium, claim settlement, urgency): form, review, confirmation, one transaction with the first input, execution-bound idempotency. Buyer inspection stays Residual (buyer mode) |
 | Start a buyer negotiation from inspection findings | `POST …/buyer-cases` | Residual gap |
-| Save or update the case input | `PUT …/cases/:caseId/input` | Residual gap |
+| Save or update the case input | `PUT …/cases/:caseId/input` | **Implemented 2026-10-12 (FRD v1.299)** for the four startable scenarios: Edit / Add details with a before → after review card, merged so page-only fields are kept; raw text, title and parsed inputs are not editable in Ask |
 | Attach a document, and parse it | `POST …/documents`, `…/parse` | Residual gap |
 | Run the analysis, which also produces the draft | `POST …/cases/:caseId/analyze` | **Implemented 2026-10-12 (FRD v1.298)**: confirmation-gated, same gate and service, shared journey completion; the receipt is the review |
 | Record the buyer's seller-response and outcome | `PUT …/cases/:caseId/buyer-outcome` | Residual gap |
@@ -192,7 +192,7 @@ This inventory is a prioritization register, not a claim that every listed deskt
 
 | Tool | Status | Current Ask coverage | Primary parity work | Verified and evidence |
 | --- | --- | --- | --- | --- |
-| Negotiation Shield | Residual gap; archive is Needs product decision | Lists cases, reviews one case's stored analysis and draft (FRD v1.294), starts a review for four scenarios (FRD v1.297) and runs its analysis (FRD v1.298); no desktop links | Edit saved details (2c); start a buyer negotiation; attach and parse a document; record the buyer outcome | **Verified 2026-10-12**; see the section above |
+| Negotiation Shield | Residual gap; archive is Needs product decision | Lists cases, reviews one case's stored analysis and draft (FRD v1.294), starts a review for four scenarios (FRD v1.297) runs its analysis (FRD v1.298) and edits its saved details (FRD v1.299); no desktop links | Start a buyer negotiation; attach and parse a document; record the buyer outcome | **Verified 2026-10-12**; see the section above |
 | Home Continuity Plan | Needs product decision (privacy) for sensitive capture; other edits Residual gap | Read-only summary | Add/edit contacts, access notes, shutoff details and instructions; review missing sections; export. The read deliberately keeps access notes and contacts out of conversation (FRD v1.54), so collecting them is a product decision | Not re-verified. Source: earlier review; FRD v1.252 |
 | Financing | Residual gap | Mortgage-detail capture exists through refinance, but financing as a whole is incomplete | Full financing-profile review/correction; loans and liens; payment/balance updates; scenario management | Not re-verified |
 | Permits | Residual gap | No complete tool-specific conversational journey | Search/add a permit; update status; attach documents; connect to a project; close/correct | Not re-verified |

@@ -73,6 +73,7 @@ test('a contributor sees Run the analysis on a review that has details and no an
   const actions = summaryActions(negotiationShieldReviewFromView(reviewDto(fresh()), true));
   assert.deepEqual(actions.map((a) => [a.id, a.label, a.operationId, a.entityType, a.entityId]), [
     ['negotiation-shield-analyze', 'Run the analysis', OP, 'NEGOTIATION_SHIELD_CASE', 'case-1'],
+    ['negotiation-shield-edit', 'Edit details', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE', 'case-1'],
     ['negotiation-shield-back', 'Back to my reviews', 'NEGOTIATION_SHIELD_CASES', undefined, undefined],
   ]);
   assert.equal(actions[0].message, NEGOTIATION_SHIELD_ANALYZE_MESSAGE);
@@ -80,17 +81,17 @@ test('a contributor sees Run the analysis on a review that has details and no an
 
 test('an analysed review offers Run it again only when its details changed after the analysis', () => {
   const current = negotiationShieldReviewFromView(reviewDto(analyzed()), true);
-  assert.deepEqual(summaryActions(current).map((a) => a.id), ['negotiation-shield-back']);
+  assert.deepEqual(summaryActions(current).map((a) => a.id), ['negotiation-shield-edit', 'negotiation-shield-back']);
   assert.equal(current.blocks.some((b) => b.id === 'negotiation-shield-stale'), false);
 
   const changed = analyzed({ inputs: [{ updatedAt: new Date('2026-10-05T09:00:00Z') }] });
   const stale = negotiationShieldReviewFromView(reviewDto(changed), true);
-  assert.deepEqual(summaryActions(stale).map((a) => [a.id, a.label]), [['negotiation-shield-analyze', 'Run it again'], ['negotiation-shield-back', 'Back to my reviews']]);
+  assert.deepEqual(summaryActions(stale).map((a) => [a.id, a.label]), [['negotiation-shield-analyze', 'Run it again'], ['negotiation-shield-edit', 'Edit details'], ['negotiation-shield-back', 'Back to my reviews']]);
   const note = stale.blocks.find((b) => b.id === 'negotiation-shield-stale');
   assert.match(note.body, /Run it again/);
 });
 
-test('a viewer is told, never offered a button; a review with no details offers nothing to run', () => {
+test('a viewer is told, never offered a button; a review with no details offers nothing to run, only Add details', () => {
   const viewerFresh = negotiationShieldReviewFromView(reviewDto(fresh()), false);
   assert.deepEqual(summaryActions(viewerFresh).map((a) => a.id), ['negotiation-shield-back']);
   assert.match(viewerFresh.blocks[0].body, /contributor or owner can run the analysis/);
@@ -99,8 +100,9 @@ test('a viewer is told, never offered a button; a review with no details offers 
   assert.deepEqual(summaryActions(viewerStale).map((a) => a.id), ['negotiation-shield-back']);
   assert.match(viewerStale.blocks.find((b) => b.id === 'negotiation-shield-stale').body, /contributor or owner can run it again/);
 
+  // Nothing to run, but details can be added.
   const noInput = negotiationShieldReviewFromView(reviewDto(fresh({ inputs: [] })), true);
-  assert.deepEqual(summaryActions(noInput).map((a) => a.id), ['negotiation-shield-back']);
+  assert.deepEqual(summaryActions(noInput).map((a) => [a.id, a.label]), [['negotiation-shield-edit', 'Add details'], ['negotiation-shield-back', 'Back to my reviews']]);
   assert.match(noInput.blocks[0].body, /no saved details/);
 });
 
