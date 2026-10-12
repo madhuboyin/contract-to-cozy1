@@ -60,7 +60,6 @@ export function sellHoldRentComparison(analysis: Awaited<ReturnType<typeof sellH
 }
 
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  const workspaceHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
   const [access, context, analysis, threadSelection] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     evaluateFeatureContext(propertyId, userId, { featureKey: 'SELL_HOLD_RENT', operationKey: 'VIEW_ANALYSIS' }),
@@ -128,18 +127,17 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     title: `Here is the current ${years}-year sell, hold, and rent comparison`,
     body: `The model’s directional indicator currently points to ${winnerLabel}, but this is not a conclusion that now is the right time to sell. The sell figure is projected liquidity after selling costs and a mortgage payoff when known; hold and rent figures are modeled changes over the horizon, so the totals should not be treated as directly interchangeable investment returns. Confidence is ${analysis.recommendation.confidence.toLowerCase()}.`,
     tone: lowConfidence || contextLimited ? 'CAUTION' : 'DEFAULT',
-    // FRD Sec22 (Option B): reframed as continuing the tracked plan when one
-    // exists, rather than the generic prompt every homeowner without an
-    // active goal thread still sees.
-    actions: [{ id: 'open-sell-hold-rent', label: activeThread ? 'Continue your plan' : 'Explore and adjust scenarios', href: workspaceHref, style: 'PRIMARY' }],
+    // Ask links to no Sell / Hold / Rent page (owner decision 2026-10-10), so the summary carries no action; the tracked plan's own
+    // progress block (FRD Sec22, Option B) follows it when a plan exists.
+    actions: [],
   }, sellHoldRentComparison(analysis, years), {
     type: 'GROUPED_LIST', filters: [],
     id: 'sell-hold-rent-assumptions',
     title: 'Assumptions that materially affect the answer',
-    description: 'Adjust these in Sell / Hold / Rent before relying on the comparison for a major decision.',
+    description: 'These are modeled defaults and recorded facts; adjusting them is not currently available in Ask. Weigh them before relying on the comparison for a major decision.',
     sections: [{
       id: 'assumptions', title: 'Current planning inputs', count: limitations.length,
-      items: limitations.map((title, index) => ({ id: `assumption-${index + 1}`, title, description: null, meta: [], status: null, href: workspaceHref })),
+      items: limitations.map((title, index) => ({ id: `assumption-${index + 1}`, title, description: null, meta: [], status: null, href: null })),
     }],
     actions: [],
   }, {
@@ -171,7 +169,7 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
       'Your sell, hold, or rent plan',
       activeThread,
       activeThread.currentRecommendationSnapshot,
-      [{ id: 'open-sell-hold-rent-plan', label: 'Continue your plan', href: workspaceHref, style: 'PRIMARY' }],
+      [],
     ));
     if (activeThread.currentRecommendationSnapshot) {
       blocks.splice(2, 0, whyNowBlock('sell-hold-rent-analysis-why-now', activeThread.currentRecommendationSnapshot, []));
@@ -260,15 +258,7 @@ export function sellerPrepItemActions(role: HouseholdRole) {
   return SELLER_PREP_ITEM_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'SELLER_PREP_ITEM_DECISION' }));
 }
 
-// The readiness checklist lives on the sale-case page (it scrolls to and highlights ?focusItemId=). /seller-prep is the
-// capability's entry page, which reads a different overview; FRD v1.44 moved checklist links off it.
-export function saleCaseHref(propertyId: string, itemId?: string): string {
-  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sale-case`;
-  return itemId ? `${base}?focusItemId=${encodeURIComponent(itemId)}` : base;
-}
-
 async function sellerPrepChecklistResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/seller-prep`;
   const overview = await PropertySaleCaseService.getCase(userId, propertyId);
 
   if (!overview.saleCase) {
@@ -280,10 +270,10 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
         id: 'seller-prep-no-case',
         title: 'No active sale case yet',
         body: overview.canCreate
-          ? 'Start a sale case to get a personalized seller-prep checklist -- repairs, records, and cosmetic work prioritized for this home.'
+          ? 'A sale case gives a personalized seller-prep checklist -- repairs, records, and cosmetic work prioritized for this home. Starting one is not currently available in Ask.'
           : 'A seller-prep checklist becomes available once this property is marked for sale.',
         tone: 'DEFAULT',
-        actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'PRIMARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -308,7 +298,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     description: item.detail ?? null,
     meta: sellerPrepCostRangeMeta(item),
     status: item.status,
-    href: saleCaseHref(propertyId, item.id),
+    href: null,
     entityType: 'SALE_READINESS_ITEM',
     actions: itemActions,
     ...sellerPrepShelfFacts(item),
@@ -343,7 +333,7 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
         id: item.id, title: item.title,
         description: [SALE_READINESS_CATEGORY_LABELS[item.category] ?? item.category, SALE_READINESS_CLASS_LABELS[item.requirementClass]].filter(Boolean).join(' · '),
         amountLabel: sellerPrepCostRangeMeta(item)[0] ?? null,
-        meta: [], status: item.status, href: saleCaseHref(propertyId, item.id), entityType: 'SALE_READINESS_ITEM', actions: openActions,
+        meta: [], status: item.status, href: null, entityType: 'SALE_READINESS_ITEM', actions: openActions,
       }));
     blocks.push({
       type: 'PROGRESS', id: 'seller-prep-progress', title: 'Sale readiness',
@@ -438,7 +428,6 @@ export function sellerPrepItemContextVersion(item: { id: string; status: string;
 }
 
 async function sellerPrepItemDecisionResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/seller-prep`;
   const overview = await PropertySaleCaseService.getCase(userId, propertyId);
   if (!overview.saleCase) {
     return {
@@ -448,9 +437,9 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
         type: 'SUMMARY',
         id: 'seller-prep-decision-no-case',
         title: 'No active sale case yet',
-        body: 'Start a sale case before deciding on a seller-prep checklist item.',
+        body: 'There is no sale case to decide checklist items on, and starting one is not currently available in Ask.',
         tone: 'DEFAULT',
-        actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'PRIMARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -463,6 +452,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
   const selected = exactEntityMatch(decidable, message, launchContext);
   const action = sellerPrepItemAction(message);
   if (!selected || !action) {
+    const rowActions = sellerPrepItemActions((await ensurePropertyAccess(userId, propertyId)).role);
     return {
       status: 'NEEDS_ENTITY',
       reasonCode: 'SELLER_PREP_ITEM_TARGET_REQUIRED',
@@ -475,9 +465,9 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
           id: 'items',
           title: 'Checklist items',
           count: decidable.length,
-          items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: item.detail ?? null, meta: [], status: item.status, href: saleCaseHref(propertyId, item.id) })),
+          items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, entityType: 'SALE_READINESS_ITEM', actions: rowActions, description: item.detail ?? null, meta: [], status: item.status, href: null })),
         }],
-        actions: [{ id: 'open-seller-prep', label: 'Open sale readiness checklist', href: saleCaseHref(propertyId), style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -505,7 +495,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
       title: `Review ${action.toLowerCase()} decision`,
       body: SELLER_PREP_ITEM_ACTION_COPY[action],
       tone: 'CAUTION',
-      actions: [{ id: 'open-seller-prep', label: 'Review in the checklist', href: saleCaseHref(propertyId, selected.id), style: 'SECONDARY' }],
+      actions: [],
     }],
     confirmation: {
       confirmationId: `seller-prep-item-${selected.id}-1`,

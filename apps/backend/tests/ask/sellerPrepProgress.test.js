@@ -76,7 +76,7 @@ test('the checklist answer leads with the ring: its basis, the must-address coun
   ]);
   for (const step of ring.nextSteps) {
     assert.equal(step.entityType, 'SALE_READINESS_ITEM');
-    assert.equal(step.href, `/dashboard/properties/p1/tools/sale-case?focusItemId=${step.id}`);
+    assert.equal(step.href, null);
     assert.deepEqual(step.actions.map((action) => [action.id, action.operationId]), [['sale-item-pursue', 'SELLER_PREP_ITEM_DECISION'], ['sale-item-waive', 'SELLER_PREP_ITEM_DECISION']]);
   }
   AskPresentationBlockSchema.parse(ring);

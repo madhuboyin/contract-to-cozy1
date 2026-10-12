@@ -130,6 +130,6 @@ export { propertyCompletenessProgress, areaCaptureRowActions, areaCaptureStateFr
 export { areaCaptureFallbackHref } from './askHandlerSupport';
 export { quoteWorkspaceContextVersion, QUOTE_LOWEST_PRICE_BADGE, quoteReviewComparison } from './handlers/quotes.handler';
 export { refinanceMonitorContextVersion, parseRefinanceScenarioEdit, refinanceMonitorBlock, breakEvenHorizonYears, breakEvenAnalysisFromDto, refinanceScenarioComparison } from './handlers/refinance.handler';
-export { SALE_READINESS_ITEM_STATUS_LABELS, sellHoldRentComparison, sellerPrepShelfFacts, SELLER_PREP_ITEM_ACTIONS, sellerPrepItemActions, saleCaseHref, sellerPrepItemContextVersion } from './handlers/sellHoldRent.handler';
+export { SALE_READINESS_ITEM_STATUS_LABELS, sellHoldRentComparison, sellerPrepShelfFacts, SELLER_PREP_ITEM_ACTIONS, sellerPrepItemActions, sellerPrepItemContextVersion } from './handlers/sellHoldRent.handler';
 export { SERVICE_PRICE_RADAR_ASK_LIMIT, servicePriceChecksFromView } from './handlers/servicePriceRadar.handler';
 export { STATUS_BOARD_ASK_LIMIT, statusBoardShelfFacts, statusBoardMeta, statusBoardFromView } from './handlers/statusBoard.handler';

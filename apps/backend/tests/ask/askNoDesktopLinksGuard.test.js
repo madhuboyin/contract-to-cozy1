@@ -54,7 +54,6 @@ const PATH_BASELINE = {
   'handlers/recallReview.handler.ts': 1,
   'handlers/recordConfirm.handler.ts': 1,
   'handlers/savingsOwnership.handler.ts': 2,
-  'handlers/sellHoldRent.handler.ts': 4,
   'handlers/servicePriceRadar.handler.ts': 1,
   'handlers/statusBoard.handler.ts': 1,
   'handlers/warranties.handler.ts': 1,

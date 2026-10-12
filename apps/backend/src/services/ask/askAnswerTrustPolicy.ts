@@ -138,7 +138,6 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
     'refinance-test-scenario', 'refinance-start-monitor', 'refinance-compare-offers',
     'refinance-record-decision', 'refinance-adjust-scenario',
   ]),
-  SELL_HOLD_RENT_ANALYSIS: new Set(['open-sell-hold-rent']),
   BREAK_EVEN_ANALYSIS: new Set(['rerun-break-even-5', 'rerun-break-even-10']),
   NEIGHBORHOOD_CHANGE_FEED: new Set(['open-around-your-home']),
   PAST_HAZARD_EXPOSURE: new Set(['open-home-risk-replay']),
@@ -183,8 +182,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_BRIEFS_LIST: new Set(['open-property-brief', 'property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.
-  SELLER_PREP_CHECKLIST: new Set(['open-seller-prep', 'sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen']),
-  SELLER_PREP_ITEM_DECISION: new Set(['open-seller-prep']),
+  SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen']),
   HOUSEHOLD_INVITATION: new Set(['manage-invitation']),
   GUIDANCE_JOURNEY_CREATE: new Set(['open-journey']),
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
