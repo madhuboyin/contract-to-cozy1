@@ -1275,6 +1275,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (inventoryItemCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_ITEM_CORRECT', 0.97);
   }
+  // Before the generic "create <anything>" inventory command: "Create a quote comparison workspace" names a workspace, not an item.
+  if (quoteComparisonCreatePattern.test(message)) {
+    return resolved('QUOTE_COMPARISON_CREATE', 0.97);
+  }
   if (inventoryCreatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('INVENTORY_ITEM_CREATE', 0.97);
   }
@@ -1286,9 +1290,6 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (guidanceJourneyCreatePattern.test(message)) {
     return resolved('GUIDANCE_JOURNEY_CREATE', 0.97);
-  }
-  if (quoteComparisonCreatePattern.test(message)) {
-    return resolved('QUOTE_COMPARISON_CREATE', 0.97);
   }
   // Naming the tool wins over the quote-comparison phrasings below ("my negotiation shield case for the roof quote");
   // starting a case is the page's write.
