@@ -37,31 +37,30 @@ test.afterEach(() => {
 });
 
 const item = (id, overrides = {}) => ({ id, title: `Item ${id}`, status: 'OPEN', isBlocking: true, overrideAcknowledgedAt: null, reason: 'Needed before work starts', exactNextAction: 'Upload the permit', evidenceRequired: null, sourceType: 'PERMIT', ...overrides });
-const CASE = '/dashboard/properties/p1/renovations/case-1/readiness';
 
 test('the ring counts blocking items only: satisfied or acknowledged is settled, the basis says so, and the tiles split blocking, acknowledged and other open', () => {
   const ring = renovationReadinessProgress([
     item('a', { status: 'SATISFIED' }), item('b', { overrideAcknowledgedAt: new Date('2026-09-01T00:00:00Z') }), item('c'), item('d'),
     item('e', { isBlocking: false }), item('f', { isBlocking: false, status: 'SATISFIED' }),
-  ], CASE);
+  ]);
   assert.equal(ring.percent, 50);
   assert.equal(ring.basis, '2 of 4 blocking items satisfied or acknowledged');
   assert.deepEqual(ring.metrics.map((entry) => [entry.label, entry.value, entry.tone]), [['Blocking', '2', 'CAUTION'], ['Acknowledged', '1', 'DEFAULT'], ['Other open', '1', 'DEFAULT']]);
   AskPresentationBlockSchema.parse(ring);
 });
 
-test('next steps are the open blocking items, at most three, with their reason and next action, linking to the case, with no actions', () => {
-  const ring = renovationReadinessProgress(['a', 'b', 'c', 'd'].map((id) => item(id)), CASE);
+test('next steps are the open blocking items, at most three, with their reason and next action, linking to no desktop page, with no actions', () => {
+  const ring = renovationReadinessProgress(['a', 'b', 'c', 'd'].map((id) => item(id)));
   assert.deepEqual(ring.nextSteps.map((step) => step.id), ['a', 'b', 'c']);
   assert.equal(ring.nextSteps[0].description, 'Needed before work starts · Upload the permit');
-  assert.ok(ring.nextSteps.every((step) => step.href === CASE && (step.actions ?? []).length === 0));
+  assert.ok(ring.nextSteps.every((step) => step.href === null && (step.actions ?? []).length === 0));
   assert.equal(ring.percent, 0);
 });
 
 test('no blocking items means no ring; everything settled is 100 percent with no steps', () => {
-  assert.equal(renovationReadinessProgress([item('a', { isBlocking: false })], CASE), null);
-  assert.equal(renovationReadinessProgress([], CASE), null);
-  const done = renovationReadinessProgress([item('a', { status: 'SATISFIED' })], CASE);
+  assert.equal(renovationReadinessProgress([item('a', { isBlocking: false })]), null);
+  assert.equal(renovationReadinessProgress([]), null);
+  const done = renovationReadinessProgress([item('a', { status: 'SATISFIED' })]);
   assert.equal(done.percent, 100);
   assert.deepEqual(done.nextSteps, []);
 });
@@ -83,4 +82,22 @@ test('the real handler puts the ring ahead of the checklist, and the answer chec
 test('PROGRESS is allowed for the operation in the registry and the renovation skill', () => {
   assert.ok(ASK_OPERATION_DEFINITIONS.RENOVATION_PERMIT_READINESS.allowedBlockTypes.includes('PROGRESS'));
   assert.ok(getSkillForOperation('RENOVATION_PERMIT_READINESS').allowedResultBlocks.includes('PROGRESS'));
+});
+
+// Capital planning batch of the handler sweep (docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md): Ask links to no Renovations,
+// Permit Tracker or case page (owner decision, 2026-10-10).
+test('the renovation readiness answer, with a case and without one, links to no desktop page and says what Ask cannot do', async () => {
+  items = [item('a', { status: 'SATISFIED' }), item('b', { title: 'HOA_APPROVAL' })];
+  const withCase = await capabilityInvoke('RENOVATION_PERMIT_READINESS', { userId: 'u1', propertyId: 'p1', message: 'Is my kitchen remodel ready to start?' });
+  assert.equal(JSON.stringify(withCase).includes('/dashboard/'), false);
+  assert.deepEqual(withCase.blocks[0].actions, []);
+  for (const block of withCase.blocks) for (const section of block.sections ?? []) for (const entry of section.items) assert.ok(entry.href == null, entry.id);
+  for (const step of withCase.blocks.find((block) => block.id === 'renovation-readiness-progress').nextSteps) assert.equal(step.href, null);
+
+  renovationCase.listRenovationCases = async () => [];
+  const none = await capabilityInvoke('RENOVATION_PERMIT_READINESS', { userId: 'u1', propertyId: 'p1', message: 'Is my renovation ready to start?' });
+  assert.equal(none.reasonCode, 'RENOVATION_CASE_REQUIRED');
+  assert.deepEqual(none.blocks[0].actions, []);
+  assert.match(none.blocks[0].body, /not currently available in Ask/);
+  assert.equal(JSON.stringify(none).includes('/dashboard/'), false);
 });

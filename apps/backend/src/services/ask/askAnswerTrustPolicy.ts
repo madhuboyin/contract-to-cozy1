@@ -190,8 +190,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
   QUOTE_COMPARISON_REVIEW: new Set(['create-comparison']),
   HOME_DEADLINE_MONITOR: new Set(['open-task', 'open-maintenance', 'open-coverage', 'manage-reminder', 'resolve-coverage-conflict']),
-  // FRD v1.47: + open-reserve-fund, the reserve-allocations list's own link, which was always stripped.
-  CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'add-inventory-item', 'open-timeline', 'open-timeline-table', 'open-reserve', 'open-reserve-fund', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation']),
+  // The page-link ids (open-inventory, open-timeline, open-reserve, open-reserve-fund) were retired with the desktop-link sweep.
+  CAPITAL_RESERVE_PLAN: new Set(['add-inventory-item', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation']),
   RESERVE_FUND_COMMAND: new Set(['reserve-fund-show-current']),
   PROPERTY_BRIEF_COMMAND: new Set(['property-brief-show-current', 'property-brief-open-share']),
   // Item actions on the feed's events (FRD v1.40); the inline detail shows the ones valid for the live state.
@@ -201,8 +201,6 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_EVENT_RADAR_FEEDBACK: new Set(['open-radar']),
   HOME_EVENT_RADAR_TASK: new Set(['open-radar', 'open-task']),
   HOME_EVENT_RADAR_PREFERENCES: new Set(['open-radar']),
-  PROPERTY_TAX_APPEAL_READINESS: new Set(['open-property-tax']),
-  RENOVATION_PERMIT_READINESS: new Set(['start-renovation', 'open-permits', 'open-case']),
   HVAC_DECISION_START: new Set(['open-inventory', 'add-inventory-item', 'view-inventory-item']),
   HVAC_DECISION_CONTINUE: new Set(['open-inventory']),
   // FRD v1.46: + the blocking-task item action; the inline task detail shows it only while the live task is open.

@@ -35,7 +35,6 @@ export function capitalTimelineBlock(
     estimatedCostMinCents: number | null; estimatedCostMaxCents: number | null; inventoryItem?: { name?: string | null } | null;
   }>,
   totalCount: number,
-  href: string,
 ): Extract<AskPresentationBlock, { type: 'TIMELINE' }> {
   const words = (value: unknown) => String(value).toLowerCase().replace(/_/g, ' ');
   const sentence = (value: unknown) => words(value).replace(/^\w/, (letter) => letter.toUpperCase());
@@ -56,7 +55,7 @@ export function capitalTimelineBlock(
       datePrecision: 'MONTH' as const,
       description: null,
       status: `${sentence(item.confidence)} confidence`,
-      href,
+      href: null,
       category: { id: String(item.category), label: sentence(item.category).slice(0, 60) },
       meta: [
         `Window ${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`,
@@ -69,8 +68,6 @@ export function capitalTimelineBlock(
 }
 
 async function capitalReservePlanResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/capital-timeline`;
-  const reserveHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/reserve-fund`;
   const requestedHorizon = parseCapitalTimelineHorizonRequest(message);
   const [access, capitalContext, reserveContext, property, inventoryCount, capitalTimelineFinancialContext] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
@@ -91,7 +88,7 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
   const activeRequirement = reserveContext.requirements[0] ?? capitalContext.requirements[0];
   const captureFeature = reserveContext.requirements[0] ? 'RESERVE_FUND' as const : 'CAPITAL_TIMELINE' as const;
   const captureRequests = access.role !== HouseholdRole.VIEWER && activeRequirement
-    ? [askCaptureRequest(activeRequirement, activeRequirement === reserveContext.requirements[0] ? reserveContext.contextVersion : capitalContext.contextVersion, 'Saved to the Living Home Record and reused by capital planning', `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory`)]
+    ? [askCaptureRequest(activeRequirement, activeRequirement === reserveContext.requirements[0] ? reserveContext.contextVersion : capitalContext.contextVersion, 'Saved to the Living Home Record and reused by capital planning', null)]
     : [];
   let analysis: any = await homeCapitalTimelineService.getLatestTimeline(propertyId);
   // F05 fix: previously only recomputed when no analysis existed at all, so a
@@ -149,14 +146,14 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
     ],
   },
   { type: 'GROUPED_LIST', filters: [], id: 'reserve-planning-controls', title: 'Manage the reserve plan', description: `The current posture is ${String(fund.posture).toLowerCase()}. Conservative uses the high estimate, moderate uses the midpoint, and aggressive uses the low estimate. Recommended monthly funding is the sum of each smoothable target divided by its months remaining; needs due within six months are shown as shortfall instead.`, sections: [{ id: 'fund-actions', title: 'Balance and calculation', count: 2, items: [{ id: 'add-contribution', title: 'Log a balance change', description: 'Record a deposit, withdrawal, or balance correction. No money is transferred.', meta: ['Self-reported ledger'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, 'Log contribution', 'PRIMARY')] } : {}) }, { id: 'recalculate', title: 'Recalculate from current records', description: 'Refresh targets and allocations from the canonical Capital Timeline and property context.', meta: [fund.lastRecalculatedAt ? `Last recalculated ${humanDate(new Date(fund.lastRecalculatedAt))}` : 'Not recalculated yet'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.RECALCULATE, 'Recalculate plan')] } : {}) }] }, { id: 'postures', title: 'Choose how estimates are planned', count: 3, items: (['CONSERVATIVE', 'MODERATE', 'AGGRESSIVE'] as const).map((posture) => ({ id: posture, title: posture[0] + posture.slice(1).toLowerCase(), description: posture === 'CONSERVATIVE' ? 'Plans from the high end of each cost range.' : posture === 'MODERATE' ? 'Plans from the midpoint of each cost range.' : 'Plans from the low end of each cost range.', meta: [fund.posture === posture ? 'Current posture' : 'Available'], status: fund.posture === posture ? 'CURRENT' : 'AVAILABLE', entityType: 'RESERVE_FUND_POSTURE', ...(canManage && fund.posture !== posture ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS[`POSTURE_${posture}`], `Use ${posture.toLowerCase()}`)] } : {}) })) }], actions: [] },
-  capitalTimelineBlock(upcoming, items.length, href),
+  capitalTimelineBlock(upcoming, items.length),
   // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: entityType routes these
   // through ReserveAllocationResultList (GroupedListBlock.tsx) instead of the generic href-only renderer, opening
   // canonical detail inline -- a fresh re-fetch via the existing GET .../reserve-fund/line-items list endpoint
   // (there is no single-line-item GET, so a removed allocation is a data-absence "no longer exists" state, the
   // same pattern already used for Household/Warranty detail). Read-only: no per-item mutation operation exists
   // yet, so no item `actions` are declared -- "planning/refinement" writes remain a separate, unscoped follow-up.
-  { type: 'GROUPED_LIST', filters: [], id: 'reserve-allocations', title: 'Active reserve allocations', description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.', sections: [{ id: 'allocations', title: 'Funding plan', count: lineItems.length, items: lineItems.slice(0, 20).map((line) => ({ id: line.id, title: line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' '), description: `${money(line.allocatedMonthlyCents / 100)}/month toward ${money(line.targetCostCents / 100)}`, meta: [String(line.status).toLowerCase()], status: line.status, href: reserveHref, entityType: 'RESERVE_LINE_ITEM' })) }],
+  { type: 'GROUPED_LIST', filters: [], id: 'reserve-allocations', title: 'Active reserve allocations', description: 'Allocated amounts are derived from timeline items and the homeowner’s reserve posture.', sections: [{ id: 'allocations', title: 'Funding plan', count: lineItems.length, items: lineItems.slice(0, 20).map((line) => ({ id: line.id, title: line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' '), description: `${money(line.allocatedMonthlyCents / 100)}/month toward ${money(line.targetCostCents / 100)}`, meta: [String(line.status).toLowerCase()], status: line.status, href: null, entityType: 'RESERVE_LINE_ITEM' })) }],
     // The canonical allocation detail and funding plan are already inline.
     // A footer link to the same Reserve Fund read is redundant; the summary's
     // top-level action remains available to jump down to this section.
@@ -175,25 +172,24 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
   const ground = /\b(?:tax class|classification)\b/i.test(message) ? 'TAX_CLASS' as const : /\bexemption\b/i.test(message) ? 'EXEMPTION' as const : 'ASSESSED_VALUE' as const;
   const context = await evaluateFeatureContext(propertyId, userId, { featureKey: 'TAX_APPEAL', operationKey: 'RUN_ANALYSIS' });
   const requirement = context.requirements[0];
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/property-tax`;
   const captureRequests = access.role !== HouseholdRole.VIEWER && requirement
-    ? [askCaptureRequest(requirement, context.contextVersion, 'Saved to the canonical property-tax and Property Context records', href)] : [];
+    ? [askCaptureRequest(requirement, context.contextVersion, 'Saved to the canonical property-tax and Property Context records', null)] : [];
   const readiness: any = await propertyTaxAppealReadinessService.evaluate(propertyId, userId, ground);
   if (readiness.status === 'NOT_COVERED') return {
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'PROPERTY_TAX_RULE_COVERAGE_UNAVAILABLE', contextVersion: context.contextVersion, captureRequests,
-    blocks: [{ type: 'SUMMARY', id: 'tax-readiness-not-covered', title: 'Reviewed appeal rules are not available for this property', body: readiness.reason ?? 'Ask cannot determine filing readiness without an active reviewed jurisdiction rule.', tone: 'CAUTION', actions: [{ id: 'open-property-tax', label: 'Open Property Tax Center', href, style: 'PRIMARY' }] }, { type: 'BOUNDARY', id: 'tax-coverage-boundary', title: 'Verify with the official authority', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] }], suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'tax-readiness-not-covered', title: 'Reviewed appeal rules are not available for this property', body: readiness.reason ?? 'Ask cannot determine filing readiness without an active reviewed jurisdiction rule.', tone: 'CAUTION', actions: [] }, { type: 'BOUNDARY', id: 'tax-coverage-boundary', title: 'Verify with the official authority', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] }], suggestions: [],
   };
   const atStake = readiness.taxAtStake;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'tax-readiness-summary', title: readiness.status === 'READY' ? `${readiness.ground?.label ?? ground}: preparation requirements are present` : readiness.status === 'NO_SUPPORTED_GROUND' ? 'The current evidence does not support this reviewed ground' : `${readiness.gaps.length} readiness gap${readiness.gaps.length === 1 ? '' : 's'} remain`,
     body: `${readiness.reason ?? ''}${atStake ? ` The sourced planning range for annual tax at stake is ${money(atStake.low)}–${money(atStake.high)}.` : ''} Readiness does not predict appeal success.`,
-    tone: readiness.status === 'READY' ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-property-tax', label: 'Open appeal readiness', href: `${href}?section=appeal-readiness&ground=${ground}`, style: 'PRIMARY' }],
+    tone: readiness.status === 'READY' ? 'DEFAULT' : 'CAUTION', actions: [],
   }];
   if (readiness.canonical) blocks.push({ type: 'TABLE', id: 'tax-canonical-facts', title: 'Canonical tax facts used', description: 'Unknown facts remain unknown and are never treated as zero.', columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }], rows: [
     ['Tax year', readiness.canonical.taxYear], ['Classification', readiness.canonical.classification], ['Assessed value', readiness.canonical.totalAssessedValue == null ? null : money(readiness.canonical.totalAssessedValue)], ['Taxable value', readiness.canonical.taxableValue == null ? null : money(readiness.canonical.taxableValue)], ['Effective tax rate', readiness.canonical.effectiveTaxRate == null ? null : `${(readiness.canonical.effectiveTaxRate * 100).toFixed(3)}%`],
   ].map(([fact, value], index) => ({ id: `tax-fact-${index}`, values: { fact: String(fact), value: value == null ? 'Not confirmed' : String(value) } })), actions: [] });
   // Plan layout (FRD Appendix C.9): numbered cards; open gaps read as the urgent group, confirmed evidence as the calm one.
-  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'tax-readiness-gaps', title: readiness.gaps.length ? 'What is still needed' : 'Evidence package', description: `Estimated preparation effort: ${String(readiness.effort).toLowerCase()}.`, sections: [{ id: 'gaps', title: readiness.gaps.length ? 'Readiness gaps' : 'Confirmed evidence', count: readiness.gaps.length || readiness.evidence.length, items: readiness.gaps.length ? readiness.gaps.map((gap: string, index: number) => ({ id: `tax-gap-${index}`, title: gap, description: null, meta: ['Still needed'], status: 'OPEN', href, tone: 'CAUTION' as const, countLabel: String(index + 1) })) : readiness.evidence.map((evidence: any, index: number) => ({ id: evidence.id, title: evidence.title, description: evidence.description ?? null, meta: ['Confirmed', String(evidence.type).toLowerCase().replace(/_/g, ' ')], status: 'CONFIRMED', href, countLabel: String(index + 1) })) }], actions: [] });
+  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'tax-readiness-gaps', title: readiness.gaps.length ? 'What is still needed' : 'Evidence package', description: `Estimated preparation effort: ${String(readiness.effort).toLowerCase()}.`, sections: [{ id: 'gaps', title: readiness.gaps.length ? 'Readiness gaps' : 'Confirmed evidence', count: readiness.gaps.length || readiness.evidence.length, items: readiness.gaps.length ? readiness.gaps.map((gap: string, index: number) => ({ id: `tax-gap-${index}`, title: gap, description: null, meta: ['Still needed'], status: 'OPEN', href: null, tone: 'CAUTION' as const, countLabel: String(index + 1) })) : readiness.evidence.map((evidence: any, index: number) => ({ id: evidence.id, title: evidence.title, description: evidence.description ?? null, meta: ['Confirmed', String(evidence.type).toLowerCase().replace(/_/g, ' ')], status: 'CONFIRMED', href: null, countLabel: String(index + 1) })) }], actions: [] });
   if (readiness.evidence.length || readiness.ruleProfile) blocks.push({ type: 'EVIDENCE', id: 'tax-readiness-evidence', title: 'Rule and evidence provenance', items: [{ label: readiness.ruleProfile?.title ?? 'Reviewed appeal rule', source: readiness.ruleProfile ? `Rule ${readiness.ruleProfile.version}` : 'Property Tax Center', observedAt: readiness.ruleProfile?.reviewedAt?.toISOString?.() ?? readiness.ruleProfile?.reviewedAt ?? readiness.evaluatedAt }, ...readiness.evidence.slice(0, 15).map((evidence: any) => ({ label: evidence.title, source: evidence.sourceUrl ? 'Sourced appeal evidence' : 'Vault-supported appeal evidence', observedAt: evidence.confirmedAt }))] });
   blocks.push({ type: 'BOUNDARY', id: 'tax-readiness-boundary', title: 'Preparation support—not tax, appraisal, or legal advice', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] });
   return { status: readiness.status === 'READY' && !captureRequests.length ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: readiness.status === 'READY' ? (captureRequests.length ? 'PROPERTY_TAX_CONTEXT_OPTIONAL' : undefined) : `PROPERTY_TAX_${readiness.status}`, contextVersion: context.contextVersion, captureRequests, blocks, suggestions: [] };
@@ -206,7 +202,6 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
 // With no blocking items there is no ring, since nothing recorded says the case is ready.
 export function renovationReadinessProgress(
   items: ReadonlyArray<{ id: string; title: string; status: string; isBlocking: boolean; overrideAcknowledgedAt?: Date | string | null; reason?: string | null; exactNextAction?: string | null }>,
-  caseHref: string,
 ): Extract<AskPresentationBlock, { type: 'PROGRESS' }> | null {
   const blocking = items.filter((item) => item.isBlocking);
   if (!blocking.length) return null;
@@ -227,7 +222,7 @@ export function renovationReadinessProgress(
     ],
     nextSteps: blockingOpen.slice(0, 3).map((item) => ({
       id: item.id, title: item.title, description: [item.reason, item.exactNextAction].filter(Boolean).join(' · ') || 'Blocking item still open',
-      meta: [], status: item.status, href: caseHref, entityType: null,
+      meta: [], status: item.status, href: null, entityType: null,
     })),
     actions: [],
   };
@@ -235,13 +230,9 @@ export function renovationReadinessProgress(
 
 async function renovationPermitReadinessResult(propertyId: string, message: string): Promise<AskOperationResult> {
   const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
-  // FRD v1.47: renovation cases live on /renovations (the Renovations page reads the same cases and readiness). Both
-  // links pointed at /projects, whose list page reads neither a case nor ?renovationCaseId=.
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/renovations`;
-  const permitsHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/permits`;
   if (!cases.length) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
-    blocks: [{ type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'Start a governed renovation case before checking readiness', body: `No active renovation case is recorded. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work.`, tone: 'CAUTION', actions: [{ id: 'start-renovation', label: 'Start renovation planning', href, style: 'PRIMARY' }, { id: 'open-permits', label: 'Review permits', href: permitsHref, style: 'SECONDARY' }] }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'No active renovation case is recorded', body: `No active renovation case is recorded, so readiness cannot be checked. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work. Starting a renovation case is not currently available in Ask.`, tone: 'CAUTION', actions: [] }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: [],
   };
   const lower = message.toLowerCase();
   const selected = cases.find((candidate) => lower.includes(candidate.name.toLowerCase())) ?? cases[0];
@@ -251,10 +242,9 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   const items: any[] = readiness.items ?? [];
   const blockers = items.filter((item) => item.isBlocking && item.status !== 'SATISFIED');
   const open = items.filter((item) => item.status !== 'SATISFIED');
-  const caseHref = `${href}/${encodeURIComponent(selected.id)}/readiness`;
-  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-case', label: 'Open renovation case', href: caseHref, style: 'PRIMARY' }, { id: 'open-permits', label: 'Open Permit Tracker', href: permitsHref, style: 'SECONDARY' }] }];
+  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION', actions: [] }];
   // IW-PRES-020 (FRD v1.94): the blocking items as a ring, ahead of the checklist.
-  const ring = renovationReadinessProgress(items, caseHref);
+  const ring = renovationReadinessProgress(items);
   if (ring) blocks.push(ring);
   // Plan layout (FRD Appendix C.9): numbered across both groups. Blocking items are the urgent group; the next action and the evidence it needs
   // open under the card (they were long chips), and each card says whether it blocks starting.
@@ -266,7 +256,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
       return {
         id: item.id, title: item.title, description: item.reason ?? null,
         meta: [blocking ? 'Blocks starting' : 'Open', ...(item.overrideAcknowledgedAt ? ['Acknowledged'] : [])],
-        status: item.status, href: caseHref, tone: blocking ? 'CAUTION' as const : 'DEFAULT' as const, countLabel: String(number), ...(facts ? { detail: facts } : {}),
+        status: item.status, href: null, tone: blocking ? 'CAUTION' as const : 'DEFAULT' as const, countLabel: String(number), ...(facts ? { detail: facts } : {}),
       };
     };
     const blockingItems = blockers.slice(0, 20).map((item) => renovationItem(item, true));

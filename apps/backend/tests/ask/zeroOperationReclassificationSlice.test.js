@@ -50,16 +50,17 @@ test.afterEach(restore);
 const readiness = () => capabilityInvoke('RENOVATION_PERMIT_READINESS', { userId: 'u1', propertyId: 'p1', message: 'Is my renovation ready to start?' });
 const hrefs = (result) => result.blocks.flatMap((block) => (block.actions ?? []).map((action) => [action.id, action.href]));
 
-test('the renovation case link opens that case\'s readiness page, not /projects', async () => {
-  const links = hrefs(await readiness());
-  assert.deepEqual(links.find(([id]) => id === 'open-case'), ['open-case', '/dashboard/properties/p1/renovations/case-bath/readiness']);
-  assert.ok(!JSON.stringify(links).includes('/projects'), 'no renovation link points at /projects');
+test('the renovation readiness answer links to no desktop page: not the case page and not /projects', async () => {
+  const result = await readiness();
+  assert.deepEqual(hrefs(result), []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
-test('with no renovation case, "Start renovation planning" opens the Renovations page', async () => {
+test('with no renovation case, the answer offers no "Start renovation planning" page link and says Ask cannot start one', async () => {
   cases = [];
-  const links = hrefs(await readiness());
-  assert.deepEqual(links.find(([id]) => id === 'start-renovation'), ['start-renovation', '/dashboard/properties/p1/renovations']);
+  const result = await readiness();
+  assert.deepEqual(hrefs(result), []);
+  assert.match(result.blocks[0].body, /Starting a renovation case is not currently available in Ask/);
 });
 
 test('the reserve-allocations "Open Reserve Fund" link survives the whitelist (it was always stripped)', () => {

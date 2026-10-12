@@ -38,7 +38,6 @@ const PATH_BASELINE = {
   'execution/askConcierge.ts': 1,
   'handlers/applianceOracleBudget.handler.ts': 2,
   'handlers/aroundYourHome.handler.ts': 1,
-  'handlers/capitalPlanning.handler.ts': 6,
   'handlers/documents.handler.ts': 3,
   'handlers/guidanceOverview.handler.ts': 3,
   'handlers/hoaCompliance.handler.ts': 2,
