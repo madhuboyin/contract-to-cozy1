@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { resolvePropertyAccess, ROLE_RANK } from './propertyAccess.service';
+import { APIError } from '../middleware/error.middleware';
 import {
   BUYER_ACTION_KEYS,
   BUYER_CHECKLIST_TEMPLATE_VERSION,
@@ -341,8 +342,10 @@ export class HomeBuyerTaskService {
     minimum: 'VIEWER' | 'CONTRIBUTOR' = 'CONTRIBUTOR',
   ) {
     const access = await resolvePropertyAccess(userId, propertyId);
-    if (!access || ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
-      throw new Error('Property not found or user does not have access.');
+    // No membership is "not found" (404, as propertyAuthMiddleware answers); a member below the required role is 403, never a 500.
+    if (!access) throw new APIError('Property not found or user does not have access.', 404, 'PROPERTY_NOT_FOUND');
+    if (ROLE_RANK[access.role] < ROLE_RANK[minimum]) {
+      throw new APIError(`This action requires the ${minimum} role for the property.`, 403, 'HOUSEHOLD_ROLE_REQUIRED');
     }
 
     const property = await prisma.property.findUnique({
@@ -355,7 +358,7 @@ export class HomeBuyerTaskService {
         homeBuyerChecklist: { select: { id: true } },
       },
     });
-    if (!property) throw new Error('Property not found or user does not have access.');
+    if (!property) throw new APIError('Property not found or user does not have access.', 404, 'PROPERTY_NOT_FOUND');
 
     const context = property.onboarding;
     const eligible = property.homeBuyerChecklist
@@ -422,7 +425,7 @@ export class HomeBuyerTaskService {
         },
       },
     });
-    if (!property) throw new Error('Property not found or user does not have access.');
+    if (!property) throw new APIError('Property not found or user does not have access.', 404, 'PROPERTY_NOT_FOUND');
 
     const isNewHome = property.onboarding?.entryPath === 'NEW_HOME_SETUP'
       && property.onboarding.propertyOrigin === 'NEW_CONSTRUCTION';
@@ -755,7 +758,7 @@ export class HomeBuyerTaskService {
         },
       },
     });
-    if (!property) throw new Error('Property not found or user does not have access.');
+    if (!property) throw new APIError('Property not found or user does not have access.', 404, 'PROPERTY_NOT_FOUND');
     const plan = property.homeBuyerChecklist;
     if (!plan) throw new Error('Buyer plan not found.');
 
@@ -1250,7 +1253,7 @@ export class HomeBuyerTaskService {
       where: { id: taskId, checklist: { propertyId } },
       include: { booking: true },
     });
-    if (!task) throw new Error('Task not found or user does not have access.');
+    if (!task) throw new APIError('Task not found or user does not have access.', 404, 'TASK_NOT_FOUND');
     return task;
   }
 

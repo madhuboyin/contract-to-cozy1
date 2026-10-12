@@ -86,7 +86,7 @@ async function outcome(promise) {
     const value = await Promise.race([promise.then(() => 'RESOLVED'), timeout]);
     return value;
   } catch (error) {
-    return error instanceof Error ? error.message : String(error);
+    return error instanceof Error ? Object.assign(new String(error.message), { statusCode: error.statusCode }) : String(error);
   } finally {
     clearTimeout(timer);
   }
@@ -97,7 +97,10 @@ test('every mutating homeBuyerTask service method refuses a viewer before touchi
   for (const [service, method, args] of MUTATIONS) {
     assert.equal(typeof service[method], 'function', `${service.name}.${method} exists`);
     const result = await outcome(Promise.resolve().then(() => service[method](U, P, ...args)));
-    if (!/not found|access denied|does not have access|requires/i.test(result)) noFloor.push(`${service.name}.${method}: ${result.slice(0, 80)}`);
+    const message = String(result);
+    if (!/not found|access denied|does not have access|requires/i.test(message)) noFloor.push(`${service.name}.${method}: ${message.slice(0, 80)}`);
+    // The task plan service used to throw a plain Error here, which surfaced as a 500: a member below the role is a 403.
+    if (service === HomeBuyerTaskService && result?.statusCode !== 403) noFloor.push(`${service.name}.${method}: status ${result?.statusCode}, expected 403`);
   }
   assert.deepEqual(noFloor, [], 'these methods did not refuse a viewer at the access step');
 });
