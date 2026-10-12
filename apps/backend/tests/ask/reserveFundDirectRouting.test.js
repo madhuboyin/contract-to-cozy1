@@ -239,3 +239,12 @@ test('a refresh of a launched turn never re-resolves the typed message', async (
     assert.notEqual(result.status, 'NEEDS_CONFIRMATION');
   } finally { restore(); }
 });
+
+test('"reserve plan" phrasings are the plan read, while a typed change to it still reaches the command', () => {
+  for (const message of ['show my reserve plan', 'what does my reserve plan look like', 'how is my reserve plan doing?', 'my reserve plan', 'is my reserve plan enough?', 'should I change my reserve plan?']) {
+    assert.equal(route(message), 'CAPITAL_RESERVE_PLAN', message);
+  }
+  for (const message of ['recalculate my reserve plan', 'change my reserve plan', 'Change my reserve plan to aggressive']) {
+    assert.equal(route(message), 'RESERVE_FUND_COMMAND', message);
+  }
+});
