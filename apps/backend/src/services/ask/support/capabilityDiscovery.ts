@@ -8,9 +8,6 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { capabilityCardLaunch } from '../askCapabilityCardLaunch';
 
 export async function capabilityResult(userId: string, propertyId: string | null | undefined, message: string): Promise<AskOperationResult> {
-  const exploreToolsHref = propertyId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools`
-    : '/dashboard/home-tools';
   const availability = createToolDiscoveryCapabilityAvailabilityAdapter(canonicalCapabilityRegistry);
   const catalog = buildCapabilityCatalog({
     registry: canonicalCapabilityRegistry,
@@ -50,7 +47,7 @@ export async function capabilityResult(userId: string, propertyId: string | null
           ? 'This capability is offered only from an eligible home workflow where the required source context is present. I will not provide a stale or non-launchable shortcut.'
           : 'This capability is currently disabled, outside your rollout, or has failed a launch-readiness check. I will not recommend a tool that cannot be opened safely.',
         tone: 'CAUTION',
-        actions: [{ id: 'explore-available-tools', label: 'Explore available tools', href: exploreToolsHref, style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -62,7 +59,7 @@ export async function capabilityResult(userId: string, propertyId: string | null
       blocks: [{
         type: 'SUMMARY', id: 'no-capability-match', title: 'Tell me what outcome you want',
         body: 'I could not identify one specific tool yet. Describe the decision, task, risk, savings goal, or major home moment you want help with.',
-        tone: 'DEFAULT', actions: [{ id: 'explore-tools', label: 'Explore home tools', href: exploreToolsHref, style: 'SECONDARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       suggestions: [],
     };

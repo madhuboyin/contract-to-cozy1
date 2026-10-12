@@ -108,6 +108,6 @@ test('capabilities whose page reads different records than any Ask operation are
   for (const capabilityId of ['appreciation', 'energy', 'visual-inspector']) {
     const launch = capabilityCardLaunch(capabilityId);
     assert.equal(launch.inlineLaunch, null, capabilityId);
-    assert.match(launch.inlineBoundary, /on its own page\.$/, capabilityId);
+    assert.match(launch.inlineBoundary, /not available inside Ask yet\.$/, capabilityId);
   }
 });

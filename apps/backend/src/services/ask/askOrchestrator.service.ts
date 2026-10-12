@@ -127,7 +127,6 @@ export { PRICE_FINALIZATION_ASK_LIMIT, priceFinalizationsFromView } from './hand
 export { projectDetailFromView, trackedProjectsFromView } from './handlers/projectTracker.handler';
 export { propertyBriefsFromView } from './handlers/propertyBrief.handler';
 export { propertyCompletenessProgress, areaCaptureRowActions, areaCaptureStateFrom, AreaCaptureAnswerSchema, areaCaptureError, areaCapturePrompt, areaCaptureSubmitResult } from './handlers/propertySummary.handler';
-export { areaCaptureFallbackHref } from './askHandlerSupport';
 export { quoteWorkspaceContextVersion, QUOTE_LOWEST_PRICE_BADGE, quoteReviewComparison } from './handlers/quotes.handler';
 export { refinanceMonitorContextVersion, parseRefinanceScenarioEdit, refinanceMonitorBlock, breakEvenHorizonYears, breakEvenAnalysisFromDto, refinanceScenarioComparison } from './handlers/refinance.handler';
 export { SALE_READINESS_ITEM_STATUS_LABELS, sellHoldRentComparison, sellerPrepShelfFacts, SELLER_PREP_ITEM_ACTIONS, sellerPrepItemActions, sellerPrepItemContextVersion } from './handlers/sellHoldRent.handler';

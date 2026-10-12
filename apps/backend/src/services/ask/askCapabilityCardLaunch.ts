@@ -9,9 +9,9 @@ const INLINE_ENTRY_READS = CARD_ENTRY_BINDINGS;
 // nothing, so there is no record for Ask to read. They stay on their pages by design, and the card says so rather than
 // "not available yet".
 const PAGE_ONLY_AI_ANALYZERS: Readonly<Record<string, string>> = {
-  appreciation: 'Value Tracker runs a fresh AI value analysis from your purchase details on its own page.',
-  energy: 'Energy Audit runs an AI review of the utility bills you upload on its own page.',
-  'visual-inspector': 'Visual Inspector runs an AI review of the photos you upload on its own page.',
+  appreciation: 'Value Tracker runs a fresh AI value analysis from your purchase details, which is not available inside Ask yet.',
+  energy: 'Energy Audit runs an AI review of the utility bills you upload, which is not available inside Ask yet.',
+  'visual-inspector': 'Visual Inspector runs an AI review of the photos you upload, which is not available inside Ask yet.',
 };
 
 export function capabilityCardLaunch(capabilityId: string) {

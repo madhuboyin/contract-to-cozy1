@@ -8,7 +8,6 @@ import { validateSkillExecutionBinding } from '../../skills/skillExecutionBindin
 import { getSkillLineageMetadata } from '../../skills/skillLineageRegistry';
 import { requiredAskTargetEntity } from '../askEntityResolution';
 import { logger } from '../../../lib/logger';
-import { captureFallbackHref } from './capture';
 import { isAskInConversationHref } from '../askAnswerTrustPolicy';
 
 import { propertySummary } from './propertyContext';
@@ -173,7 +172,7 @@ export function mapPersistedExecution(execution: {
           // A capture is answered inside Ask. The desktop-form escape hatch is dropped for new and stored executions alike.
           fallbackHref: inConversationOrNull(typeof (request as { fallbackHref?: unknown }).fallbackHref === 'string'
             ? (request as { fallbackHref: string }).fallbackHref
-            : captureFallbackHref(execution.operationId, execution.propertyId)),
+            : null),
         }
         : request)
       : [],

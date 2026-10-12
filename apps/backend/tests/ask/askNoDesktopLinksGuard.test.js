@@ -34,14 +34,10 @@ const PAGE_COPY = /\b(?:[Oo]pen|[Ss]ee|[Vv]isit|[Uu]se)\s+(?:the\s+)?(?:[A-Z][A-
 // not an Ask link, carries no href, and cannot shrink). Its copy match is the "as on the page" description of the project list.
 const PATH_BASELINE = {
   'askFocusedGuidance.ts': 5,
-  'conversationalUnderstanding/conversationalCapture.ts': 2,
-  'execution/askConcierge.ts': 1,
   'handlers/projectTracker.handler.ts': 1,
-  'support/capabilityDiscovery.ts': 2,
-  'support/capture.ts': 4,
+  'support/capture.ts': 3,
 };
 const COPY_BASELINE = {
-  'askCapabilityCardLaunch.ts': 3,
   'handlers/projectTracker.handler.ts': 1,
 };
 

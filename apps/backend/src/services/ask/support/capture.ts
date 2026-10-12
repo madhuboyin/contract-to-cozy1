@@ -10,18 +10,6 @@ import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 export const isAreaCaptureScope = (value: unknown): value is PropertyAreaCaptureScope => (PROPERTY_AREA_CAPTURE_SCOPES as readonly string[]).includes(String(value));
 
-export const AREA_CAPTURE_ANCHORS: Record<PropertyAreaCaptureScope, string> = {
-  CORE: 'property-type', LOCATION: 'address', STRUCTURE: 'structure', EXTERIOR: 'exterior', RESPONSIBILITY: 'responsibility', SYSTEMS: 'systems', SAFETY: 'safety',
-};
-
-export const areaFallbackAnchor = (scope: string): string | null => isAreaCaptureScope(scope) ? AREA_CAPTURE_ANCHORS[scope] : null;
-
-export function areaCaptureFallbackHref(propertyId: string, scope: string): string {
-  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
-  const anchor = areaFallbackAnchor(scope);
-  return anchor ? `${base}/edit#${anchor}` : base;
-}
-
 /**
  * The askable, skipped, and other-surface facts of ONE area, from a snapshot that was already read. Pure, so a caller that needs several areas (the
  * Ask target selector) reads the Property Context once instead of once per area.

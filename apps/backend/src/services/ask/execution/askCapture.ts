@@ -28,7 +28,7 @@ import { getProfile, upsertProfile } from '../../financing.service';
 import { radarNotificationPreferenceService } from '../../../modules/homeEventRadar/services/radarNotificationPreference.service';
 import { updateInsurancePolicy } from '../../home-management.service';
 import { areaCapturePrompt, areaCaptureStateFrom, areaCaptureSubmitResult } from '../handlers/propertySummary.handler';
-import { AREA_CAPTURE_MESSAGES, areaCaptureFallbackHref, asInputJson, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, HouseholdInvitationInputSchema, InventoryCreateInputSchema, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskWorkflowInputSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, RadarTaskAnswerSchema, RadarTaskTargetSchema, RoomCreateInputSchema, terminalStatus } from '../askHandlerSupport';
+import { AREA_CAPTURE_MESSAGES, asInputJson, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, HouseholdInvitationInputSchema, InventoryCreateInputSchema, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskWorkflowInputSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, RadarTaskAnswerSchema, RadarTaskTargetSchema, RoomCreateInputSchema, terminalStatus } from '../askHandlerSupport';
 import { householdInvitationResult, householdWorkflowVersion, ROOM_CREATE_CAPTURE_KEY, roomCreateContextVersion, roomCreateResult } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY, INVENTORY_CREATE_CAPTURE_KEY, inventoryCompleteDetailsResult, inventoryCreateContextVersion, inventoryItemContextVersion, inventoryItemCreateResult } from '../handlers/inventory.handler';
 import { claimFileResult, ClaimFileWorkflowInputSchema } from '../handlers/claims.handler';
@@ -1358,7 +1358,7 @@ registerCapabilityHandler('property-context.area-capture', async (envelope) => {
     if (access.role === HouseholdRole.VIEWER) {
       return {
         status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-        blocks: [{ type: 'SUMMARY', id: 'area-capture-permission', title: 'A contributor or owner can add home details', body: 'Your role can view the home record but not change it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-property-record', label: 'Open property record', href: areaCaptureFallbackHref(envelope.propertyId!, scope), style: 'SECONDARY' }] }],
+        blocks: [{ type: 'SUMMARY', id: 'area-capture-permission', title: 'A contributor or owner can add home details', body: 'Your role can view the home record but not change it. Nothing has changed.', tone: 'CAUTION', actions: [] }],
         suggestions: [],
       };
     }
@@ -1374,7 +1374,7 @@ registerCapabilityHandler('property-context.area-capture', async (envelope) => {
         logger.warn({ err: error, propertyId: envelope.propertyId, scope }, '[ask-area-capture] allowlist unavailable; typed launch not started');
         return {
           status: 'UNAVAILABLE', reasonCode: 'AREA_CAPTURE_ALLOWLIST_UNAVAILABLE',
-          blocks: [{ type: 'SUMMARY', id: 'area-capture-allowlist-unavailable', title: 'Home details are not available right now', body: 'Nothing has changed. You can try again in a moment or add details from your home record.', tone: 'CAUTION', actions: [{ id: 'open-property-record', label: 'Open property record', href: areaCaptureFallbackHref(envelope.propertyId!, scope), style: 'SECONDARY' }] }],
+          blocks: [{ type: 'SUMMARY', id: 'area-capture-allowlist-unavailable', title: 'Home details are not available right now', body: 'Nothing has changed. You can try again in a moment.', tone: 'CAUTION', actions: [] }],
           suggestions: [],
         };
       }

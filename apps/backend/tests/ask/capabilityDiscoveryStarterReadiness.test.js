@@ -23,8 +23,8 @@ test('EXECUTED: generic discovery messages route to CAPABILITY_DISCOVERY but ans
     assert.equal(result.status, 'ANSWERED');
     assert.deepEqual(result.blocks.map((b) => [b.type, b.id]), [['SUMMARY', 'no-capability-match']], message);
     assert.equal(result.blocks.some((b) => b.type === 'CAPABILITY_LIST'), false);
-    assert.deepEqual(result.blocks[0].actions.map((a) => a.id), ['explore-tools']);
-    assert.match(result.blocks[0].actions[0].href, /\/dashboard\/properties\/p1\/tools$/);
+    assert.deepEqual(result.blocks[0].actions.map((a) => a.id), []);
+    assert.ok(!JSON.stringify(result).includes('/dashboard/properties'), 'Ask links to no desktop tools page');
   }
 });
 
@@ -41,8 +41,9 @@ test('EXECUTED: a goal-bearing message returns either a capability answer or an 
   }
 });
 
-test('property-less execution returns the same shape with the home-tools link (the starter is global; identity is per property)', async () => {
+test('property-less execution returns the same shape with no desktop link (the starter is global; identity is per property)', async () => {
   const result = await capabilityResult('u1', null, GENERIC[0]);
   assert.equal(result.status, 'ANSWERED');
-  assert.equal(result.blocks[0].actions[0].href, '/dashboard/home-tools');
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.ok(!JSON.stringify(result).includes('/dashboard/home-tools'));
 });

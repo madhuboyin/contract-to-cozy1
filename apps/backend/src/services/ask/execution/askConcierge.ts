@@ -45,7 +45,6 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const conciergeAccess = await ensurePropertyAccess(userId, propertyId);
   const controls = readAskOperationalControls();
-  const homeHref = `/dashboard?propertyId=${encodeURIComponent(propertyId)}`;
   const askHref = `/dashboard/ask?propertyId=${encodeURIComponent(propertyId)}`;
   const capabilityGroups: ConciergeHomeView['capabilityGroups'] = (() => {
     try {
@@ -108,11 +107,11 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
           };
         }),
         truncated: view.truncated,
-        href: homeHref,
+        href: askHref,
       };
     } catch (error) {
       logger.warn({ err: error, propertyId, userId }, 'Concierge Home priority list section failed closed');
-      return { state: 'UNAVAILABLE', rankingPolicyVersion: null, generatedAt: null, items: [], truncated: false, href: homeHref };
+      return { state: 'UNAVAILABLE', rankingPolicyVersion: null, generatedAt: null, items: [], truncated: false, href: askHref };
     }
   })();
 

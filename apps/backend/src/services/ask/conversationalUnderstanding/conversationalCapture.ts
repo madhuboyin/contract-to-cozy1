@@ -1249,8 +1249,6 @@ export function filterValidCandidates(candidates: ExtractionCandidate[]): Extrac
 // the transaction above regardless of what happens to any goal-attach
 // event afterward -- unchanged from before this fix.
 
-const SELL_HOLD_RENT_WORKSPACE_HREF = (propertyId: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/sell-hold-rent`;
-const SELLER_PREP_HREF = (propertyId: string) => `/dashboard/properties/${encodeURIComponent(propertyId)}/seller-prep`;
 
 // Best-effort, read-mostly: PropertySaleCaseService.getCase's own
 // syncReadinessItems only runs (and only writes) when a PropertySaleCase
@@ -1263,7 +1261,6 @@ const SELLER_PREP_HREF = (propertyId: string) => `/dashboard/properties/${encode
 async function buildSellerPrepInlineBlock(userId: string, propertyId: string): Promise<AskPresentationBlock | null> {
   try {
     const overview = await PropertySaleCaseService.getCase(userId, propertyId);
-    const href = SELLER_PREP_HREF(propertyId);
     if (!overview.saleCase) {
       return {
         type: 'GROUPED_LIST', filters: [],
@@ -1271,7 +1268,7 @@ async function buildSellerPrepInlineBlock(userId: string, propertyId: string): P
         title: 'Getting ready to sell',
         description: 'A seller-prep checklist can personalize which repairs, records, and cosmetic work to prioritize whenever you are ready to start.',
         sections: [],
-        actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+        actions: [],
       };
     }
     const openItems = overview.readinessItems.filter((item) => item.status === 'OPEN' && !item.waivedAt).slice(0, 5);
@@ -1286,9 +1283,9 @@ async function buildSellerPrepInlineBlock(userId: string, propertyId: string): P
         id: 'open-items',
         title: 'Open items',
         count: openItems.length,
-        items: openItems.map((item) => ({ id: item.id, title: item.title, description: item.detail ?? null, meta: [], status: item.status, href })),
+        items: openItems.map((item) => ({ id: item.id, title: item.title, description: item.detail ?? null, meta: [], status: item.status, href: null })),
       }] : [],
-      actions: [{ id: 'open-seller-prep', label: 'Open seller prep', href, style: 'SECONDARY' }],
+      actions: [],
     };
   } catch (error) {
     logger.warn({ error, propertyId }, '[ask-conversational-capture] seller-prep inline block failed');
@@ -1349,7 +1346,7 @@ async function processGoalCandidate(
     'Sell, hold, or rent this home',
     thread,
     thread.currentRecommendationSnapshot,
-    [{ id: 'open-sell-hold-rent', label: 'Explore and adjust scenarios', href: SELL_HOLD_RENT_WORKSPACE_HREF(input.propertyId), style: 'PRIMARY' }],
+    [],
   )];
   if (thread.currentRecommendationSnapshot) blocks.push(whyNowBlock('sell-hold-rent-goal-why-now', thread.currentRecommendationSnapshot, []));
   const sellerPrepBlock = await buildSellerPrepInlineBlock(input.userId, input.propertyId);
