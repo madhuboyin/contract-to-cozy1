@@ -160,7 +160,6 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_HABIT_UPDATE: new Set(['habits-back-to-list']),
   HOME_DIGITAL_WILL: new Set(['open-home-digital-will']),
   PLANT_CARE_OUTLOOK: new Set(['find-plants-for-room', 'add-home-plant']),
-  NEGOTIATION_SHIELD_CASES: new Set(['open-negotiation-shield']),
   HOME_UPGRADE_SCENARIOS: new Set(['open-home-digital-twin']),
   DIY_PROJECTS: new Set(['diy-template-browse']),
   DIY_PROJECT_GUIDE: new Set(['diy-step-complete', 'diy-step-skip', 'diy-step-previous', 'diy-step-back', 'diy-step-reopen', 'diy-review-last-step', 'diy-project-finish', 'diy-project-more', 'diy-project-stop', 'diy-project-handoff', 'diy-record-again', 'diy-task-record-again']),
@@ -203,7 +202,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOUSEHOLD_INVITATION: new Set(['open-household', 'manage-household', 'manage-invitation']),
   GUIDANCE_JOURNEY_CREATE: new Set(['open-journey']),
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
-  QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'open-comparison']),
+  QUOTE_COMPARISON_REVIEW: new Set(['create-comparison']),
   HOME_DEADLINE_MONITOR: new Set(['open-task', 'open-maintenance', 'open-coverage', 'manage-reminder', 'resolve-coverage-conflict']),
   // FRD v1.47: + open-reserve-fund, the reserve-allocations list's own link, which was always stripped.
   CAPITAL_RESERVE_PLAN: new Set(['open-inventory', 'add-inventory-item', 'open-timeline', 'open-timeline-table', 'open-reserve', 'open-reserve-fund', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation']),

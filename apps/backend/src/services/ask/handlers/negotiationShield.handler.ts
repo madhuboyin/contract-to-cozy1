@@ -27,11 +27,9 @@ const NEGOTIATION_SCENARIO_LABELS: Record<string, string> = {
 const NEGOTIATION_STATUS_LABELS: Record<string, string> = { DRAFT: 'Draft', READY_FOR_REVIEW: 'Ready for review', ANALYZED: 'Analyzed', ARCHIVED: 'Archived' };
 
 export function negotiationShieldCasesFromView(cases: readonly NegotiationShieldCaseView[], propertyId: string): AskOperationResult {
-  const pageHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/negotiation-shield`;
-  const openAction = { id: 'open-negotiation-shield', label: 'Open Negotiation Shield', href: pageHref, style: 'PRIMARY' as const };
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'negotiation-shield-boundary', title: 'Preparation help, not legal or insurance advice',
-    body: 'Negotiation Shield helps you prepare for a quote, premium, claim or inspection conversation. It is not legal, insurance or pricing advice, and nothing is sent to the other party from here. Case details, analyses and drafts are on each case.',
+    body: 'Negotiation Shield helps you prepare for a quote, premium, claim or inspection conversation. It is not legal, insurance or pricing advice, and nothing is sent to the other party from here. Ask lists your reviews; their details, analysis and drafts are not currently available in Ask.',
     severity: 'INFO', suggestions: [],
   };
   if (!cases.length) {
@@ -57,12 +55,12 @@ export function negotiationShieldCasesFromView(cases: readonly NegotiationShield
       `Last updated ${humanDate(new Date(cases[0].updatedAt))}.`,
     ].join(' '),
     tone: 'DEFAULT',
-    actions: [openAction],
+    actions: [],
   }];
   if (cases.length > shown.length) {
     blocks.push({
       type: 'LIMITATION', id: 'negotiation-shield-limit', title: `Showing the ${shown.length} most recently updated reviews`,
-      body: `There are ${cases.length} reviews in all. The rest are on the Negotiation Shield page.`, severity: 'INFO',
+      body: `There are ${cases.length} reviews in all. Ask lists the most recently updated; older ones are not shown.`, severity: 'INFO',
     });
   }
   const row = (item: NegotiationShieldCaseView) => ({
@@ -76,12 +74,12 @@ export function negotiationShieldCasesFromView(cases: readonly NegotiationShield
       `Updated ${humanDate(new Date(item.updatedAt))}`,
     ],
     status: NEGOTIATION_STATUS_LABELS[item.status] ?? readableCode(item.status),
-    href: `${pageHref}?caseId=${encodeURIComponent(item.id)}`,
+    href: null,
   });
   const active = shown.filter((item) => item.status !== 'ARCHIVED');
   const archived = shown.filter((item) => item.status === 'ARCHIVED');
   blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'negotiation-shield-cases', title: 'Negotiation reviews', description: 'Newest first, as on the page. Open a review for its analysis and draft.',
+    type: 'GROUPED_LIST', filters: [], id: 'negotiation-shield-cases', title: 'Negotiation reviews', description: 'Newest first. The analysis and draft of each review are not currently available in Ask.',
     sections: [
       ...(active.length ? [{ id: 'negotiation-shield-open', title: 'Open', count: active.length, items: active.map(row) }] : []),
       ...(archived.length ? [{ id: 'negotiation-shield-archived', title: 'Archived', count: archived.length, items: archived.map(row) }] : []),

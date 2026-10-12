@@ -11,7 +11,6 @@ require('ts-node/register');
 const prismaModule = require('../../src/lib/prisma.ts');
 const { negotiationShieldCasesFromView, NEGOTIATION_SHIELD_ASK_LIMIT } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
 const { capabilityCardLaunch } = require('../../src/services/ask/askCapabilityCardLaunch.ts');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
@@ -19,7 +18,6 @@ const { getSkillForOperation } = require('../../src/services/skills/skillRegistr
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 const caseListModule = require('../../src/services/negotiationShieldCaseList.ts');
 
-const PAGE = '/dashboard/properties/p1/tools/negotiation-shield';
 const DESCRIPTION = 'Contractor said the $18,400 price expires Friday';
 const originals = { prisma: prismaModule.prisma, list: caseListModule.listNegotiationShieldCasesForProperty };
 let calls;
@@ -71,7 +69,7 @@ test('the real list query is the page\'s: this property, newest first', async ()
   assert.equal(listed[0].updatedAt, '2026-09-20T12:00:00.000Z');
 });
 
-test('reviews are summarized by status and listed open then archived, with the page\'s labels and case links', () => {
+test('reviews are summarized by status and listed open then archived, with the page\'s labels and no desktop links', () => {
   const result = negotiationShieldCasesFromView(cases(), 'p1');
   assert.equal(result.blocks[0].title, '3 open negotiation reviews');
   assert.equal(result.blocks[0].body, '1 ready for review, 1 analyzed, 1 in draft, 1 archived. Last updated Sep 20, 2026.');
@@ -83,14 +81,18 @@ test('reviews are summarized by status and listed open then archived, with the p
   assert.deepEqual(list.sections[0].items[0].meta, ['Contractor quote review', 'Analyzed Sep 18, 2026', 'Updated Sep 20, 2026']);
   assert.equal(list.sections[0].items[0].status, 'Analyzed');
   assert.deepEqual(list.sections[0].items[2].meta, ['Buyer inspection negotiation', 'Buyer mode', 'Updated Sep 12, 2026']);
-  assert.equal(list.sections[0].items[0].href, `${PAGE}?caseId=roof`);
+  // Ask never navigates to a desktop page (owner rule 2026-10-10): neither the rows nor the summary link to the tool page.
+  assert.equal(list.sections[0].items[0].href, null);
+  assert.deepEqual(result.blocks[0].actions, []);
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
+  assert.equal(JSON.stringify(result).includes('Negotiation Shield page'), false);
   assert.equal(JSON.stringify(result).includes(DESCRIPTION), false);
 });
 
 test('more reviews than the limit are disclosed; no reviews is not an all-clear', () => {
   const many = Array.from({ length: NEGOTIATION_SHIELD_ASK_LIMIT + 2 }, (_, index) => shieldCase(`c${index}`));
   const result = negotiationShieldCasesFromView(many, 'p1');
-  assert.equal(result.blocks.find((block) => block.id === 'negotiation-shield-limit').body, `There are ${NEGOTIATION_SHIELD_ASK_LIMIT + 2} reviews in all. The rest are on the Negotiation Shield page.`);
+  assert.equal(result.blocks.find((block) => block.id === 'negotiation-shield-limit').body, `There are ${NEGOTIATION_SHIELD_ASK_LIMIT + 2} reviews in all. Ask lists the most recently updated; older ones are not shown.`);
   assert.equal(result.blocks.find((block) => block.id === 'negotiation-shield-cases').sections[0].items.length, NEGOTIATION_SHIELD_ASK_LIMIT);
   const none = negotiationShieldCasesFromView([], 'p1');
   assert.equal(none.reasonCode, 'NEGOTIATION_SHIELD_NO_CASES');
@@ -98,12 +100,12 @@ test('more reviews than the limit are disclosed; no reviews is not an all-clear'
   assert.equal(none.blocks.at(-1).title, 'Preparation help, not legal or insurance advice');
 });
 
-test('every block and the boundary survive the answer-trust validator, and the page link the whitelist', () => {
+test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', () => {
   const raw = negotiationShieldCasesFromView(cases(), 'p1');
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'negotiation-shield.cases', operationId: 'NEGOTIATION_SHIELD_CASES', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my negotiation shield cases', operationId: 'NEGOTIATION_SHIELD_CASES', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.equal(isAskActionApplicable({ action: result.blocks[0].actions[0], operationId: 'NEGOTIATION_SHIELD_CASES', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+  assert.deepEqual(result.blocks[0].actions, []);
 });
 
 test('naming the tool routes here even about a quote; purchase negotiation and new comparisons do not', () => {

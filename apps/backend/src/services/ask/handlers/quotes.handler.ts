@@ -45,37 +45,6 @@ async function quoteComparisonCreateResult(propertyId: string, message: string):
   };
 }
 
-// D05 fix (docs/architecture/ASK_COZY_PHASE7_DECISIONS_ACCEPTANCE_VERIFICATION.md):
-// this href's own `?workspaceId=` was never read by the frontend page at
-// all -- confirmed by direct read of QuoteComparisonWorkspaceClient.tsx: it
-// seeds a `workspaceId` state from a DIFFERENT param name
-// (`quoteComparisonWorkspaceId`), then immediately overwrites that state
-// regardless, since `loadQuotes` unconditionally calls
-// getOrCreateQuoteComparisonWorkspace(propertyId, { serviceCategory,
-// inventoryItemId: itemId, ... }) -- a lookup keyed by scope, not by id.
-// Neither this link's dead `workspaceId` nor a corrected
-// `quoteComparisonWorkspaceId` would change what workspace loads. The fix
-// is to pass what the page's own lookup actually keys by, using its own
-// param names (`serviceCategory`/`itemId`), so a property with more than
-// one open workspace lands back on the SAME one Ask was just discussing
-// instead of silently resolving (or creating) a different one. A workspace
-// with neither field set (a "general," unscoped workspace) falls back to
-// the old `?workspaceId=` form -- not a fix for that case (the page's own
-// get-or-create lookup has no id-based path at all today), but not a
-// regression either, since that case had nothing this href could correct.
-// Pure and exported for direct unit testing.
-export function quoteComparisonWorkspaceHref(
-  baseHref: string,
-  workspace: { id: string; serviceCategory: string | null; inventoryItemId: string | null },
-): string {
-  const scopeParams = new URLSearchParams();
-  if (workspace.serviceCategory) scopeParams.set('serviceCategory', workspace.serviceCategory);
-  if (workspace.inventoryItemId) scopeParams.set('itemId', workspace.inventoryItemId);
-  return scopeParams.size
-    ? `${baseHref}?${scopeParams.toString()}`
-    : `${baseHref}?workspaceId=${encodeURIComponent(workspace.id)}`;
-}
-
 const QUOTE_STALE_AFTER_DAYS = 90;
 
 const quoteDate = (value: Date) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(value);
@@ -128,7 +97,7 @@ export function quoteReviewComparison(
   const ready = new Set(comparability.eligibleQuoteIds);
   return {
     type: 'COMPARISON', id: 'quote-review-table', title: 'Recorded proposals',
-    description: `Ask preserves the canonical readiness state and does not select a provider.${rejected ? ` ${rejected} rejected ${rejected === 1 ? 'quote is' : 'quotes are'} not shown; open the quote comparison to see ${rejected === 1 ? 'it' : 'them'}.` : ''}`,
+    description: `Ask preserves the canonical readiness state and does not select a provider.${rejected ? ` ${rejected} rejected ${rejected === 1 ? 'quote is' : 'quotes are'} not shown here.` : ''}`,
     options: active.map((quote) => {
       const amount = amountOf(quote);
       const leading = quote.id === lowestId;
@@ -171,10 +140,9 @@ export function quoteReviewComparison(
 
 async function quoteComparisonReviewResult(propertyId: string): Promise<AskOperationResult> {
   const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true } });
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/quote-comparison`;
   if (!latest) return {
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'QUOTE_COMPARISON_NOT_STARTED',
-    blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: 'Create a workspace and add at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.', tone: 'CAUTION', actions: [{ id: 'create-comparison', label: 'Create comparison workspace', href, style: 'PRIMARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: 'Create a workspace, then record at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.', tone: 'CAUTION', actions: [{ id: 'create-comparison', label: 'Create comparison workspace', interactionType: 'START_WORKFLOW', message: 'Start a quote comparison workspace', operationId: 'QUOTE_COMPARISON_CREATE', style: 'PRIMARY' }] }],
     suggestions: [],
   };
   const [workspace, comparability] = await Promise.all([
@@ -186,11 +154,10 @@ async function quoteComparisonReviewResult(propertyId: string): Promise<AskOpera
   const amounts = quotes.map((quote) => Number(quote.quoteAmount)).filter(Number.isFinite);
   const lowest = amounts.length ? Math.min(...amounts) : null;
   const highest = amounts.length ? Math.max(...amounts) : null;
-  const workspaceHref = quoteComparisonWorkspaceHref(href, workspace);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'quote-review-summary', title: quotes.length < 2 ? 'Add another proposal before comparing' : comparability.status === 'COMPARABLE' ? `${quotes.length} proposals are ready for a scope-aligned review` : 'The recorded proposals are not safely comparable yet',
     body: `${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
-    tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION', actions: [{ id: 'open-comparison', label: 'Open quote comparison', href: workspaceHref, style: 'PRIMARY' }],
+    tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION', actions: [],
   }];
   // IW-PRES-016 (FRD v1.76): two to four quotes still in play render as a comparison strip; one quote, or five and
   // more, keep the table below with every quote.
@@ -201,7 +168,7 @@ async function quoteComparisonReviewResult(propertyId: string): Promise<AskOpera
     columns: [{ key: 'vendor', label: 'Provider' }, { key: 'amount', label: 'Price' }, { key: 'readiness', label: 'Readiness' }, { key: 'scope', label: 'Scope' }],
     rows: quotes.map((quote) => ({ id: quote.id, values: { vendor: quote.vendorName, amount: `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, readiness: comparisonReady.has(quote.id) ? 'Comparison ready' : String(quote.readinessStage ?? 'Needs review').toLowerCase().replace(/_/g, ' '), scope: quote.scopeSummary ?? quote.serviceLabelRaw ?? 'Scope not confirmed' } })), actions: [],
   });
-  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'Resolve scope or fact gaps in the canonical workspace before making a decision.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: workspaceHref })) }], actions: [] });
+  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'These are the scope or fact gaps the recorded proposals still have. Ask cannot resolve them yet.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: null })) }], actions: [] });
   blocks.push({ type: 'EVIDENCE', id: 'quote-review-evidence', title: 'Proposal freshness', items: quotes.slice(0, 20).map((quote) => ({ label: quote.vendorName, source: quote.sourceType ? `Quote · ${String(quote.sourceType).toLowerCase()}` : 'Recorded quote', observedAt: quote.updatedAt?.toISOString?.() ?? quote.createdAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'quote-review-boundary', title: 'Comparison support—not provider endorsement', body: 'Verify scope, credentials, insurance, references, permits, warranties, payment milestones, and final terms. Ask does not accept a quote, rank provider trust, or guarantee workmanship.', severity: 'INFO', suggestions: [] });
   return { status: comparability.status === 'COMPARABLE' ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: comparability.status === 'COMPARABLE' ? undefined : `QUOTE_${comparability.status}`, contextVersion: workspace.updatedAt?.toISOString?.() ?? null, blocks, suggestions: [] };

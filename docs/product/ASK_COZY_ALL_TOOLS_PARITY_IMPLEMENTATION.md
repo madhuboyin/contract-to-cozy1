@@ -130,7 +130,7 @@ Both rows were checked on October 12, 2026 by reading the Ask handlers, the desk
 - The earlier P0 text listed "add offers", "record negotiation updates", "draft generation" and "close or archive" as separate parity work. On the desktop there is no separate offer, update or draft endpoint: offers and quotes are the case *input*, and the draft is created inside the analysis (`persistAnalysisResult`).
 - **Close or archive is not a desktop capability.** `ARCHIVED` exists as a status value and as a display label, but no route, service method or client action writes it. Archiving would be new product behavior, not parity, and is recorded as *Needs product decision*.
 
-**Policy conflict in the current handler:** the answer still emits an `open-negotiation-shield` action and a per-row `?caseId=` link to `/dashboard/properties/{id}/tools/negotiation-shield`, and its copy says "Open a review for its analysis and draft" and "the rest are on the Negotiation Shield page". The trust policy removes those hrefs, so the user is told to open something that cannot be opened. This is the same defect that was fixed for Project Tracker (commit `6c06840b`). Status: *Residual gap*; not yet fixed.
+**Policy conflict (fixed 2026-10-12):** the answer used to emit an `open-negotiation-shield` action and a per-row `?caseId=` link to the desktop tool page, and its copy said "Open a review for its analysis and draft" and "the rest are on the Negotiation Shield page". The trust policy removed those hrefs, so the user was told to open something that could not be opened. The handler now emits no action and no row link, and its copy says that a review's analysis and draft are not currently available in Ask. The trust-policy allowlist entry was removed.
 
 ### Quote Comparison — P0, status: Partial (create and read only)
 
@@ -162,10 +162,10 @@ The Ask handlers import only those three service functions.
 
 - There is no workspace edit or delete route. The earlier list's "workspace edit/delete" is not a desktop capability.
 - The review reads only the latest workspace. A property with several open workspaces cannot review the others in Ask. Status: *Residual gap*.
-- After creating a workspace, the receipt says "Add comparable proposals in the governed workspace" but Ask has no way to add a proposal, so the user has no in-conversation next step beyond reviewing the empty workspace. Status: *Residual gap*; the copy should say plainly that adding quotes is not currently available in Ask.
+- After creating a workspace, the receipt used to say "Add comparable proposals in the governed workspace" although Ask has no way to add a proposal. The copy now says plainly that adding proposals is not currently available in Ask; the capability itself remains a *Residual gap*.
 - Continuation into booking, project or price finalization depends on selecting a quote, which Ask cannot do.
 
-**Policy conflict in the current handler:** the review answer emits an `open-comparison` action linking to the desktop quote-comparison page, and its table description tells the user to "open the quote comparison" to see rejected quotes. The trust policy strips the action. Status: *Residual gap*; not yet fixed.
+**Policy conflict (fixed 2026-10-12):** the review answer used to emit an `open-comparison` action and row links to the desktop quote-comparison page, a "Create comparison workspace" action that was a desktop link, and a description telling the user to "open the quote comparison" to see rejected quotes. The review now carries no link; the empty state starts `QUOTE_COMPARISON_CREATE` inside Ask (a `START_WORKFLOW` action whose message routes to that command); and the copy no longer sends the user to a page. The create receipt now says adding proposals is not currently available in Ask. The unused `quoteComparisonWorkspaceHref` helper and its test were removed.
 
 ## Cross-tool implementation principles used
 
@@ -189,7 +189,7 @@ This inventory is a prioritization register, not a claim that every listed deskt
 
 | Tool | Status | Current Ask coverage | Primary parity work | Verified and evidence |
 | --- | --- | --- | --- | --- |
-| Negotiation Shield | Residual gap; archive is Needs product decision | Lists cases (read-only) | Case detail; create a case and start a buyer negotiation; save the input; attach and parse a document; run the analysis and draft; record the buyer outcome | **Verified 2026-10-12**; see the section above |
+| Negotiation Shield | Residual gap; archive is Needs product decision | Lists cases (read-only, with no desktop links) | Case detail; create a case and start a buyer negotiation; save the input; attach and parse a document; run the analysis and draft; record the buyer outcome | **Verified 2026-10-12**; see the section above |
 | Home Continuity Plan | Residual gap | Read-only summary | Add/edit contacts, access notes, shutoff details and instructions; review missing sections; export. The read deliberately keeps access notes and contacts out of conversation (FRD v1.54), so collecting them is a product decision | Not re-verified. Source: earlier review; FRD v1.252 |
 | Financing | Residual gap | Mortgage-detail capture exists through refinance, but financing as a whole is incomplete | Full financing-profile review/correction; loans and liens; payment/balance updates; scenario management | Not re-verified |
 | Permits | Residual gap | No complete tool-specific conversational journey | Search/add a permit; update status; attach documents; connect to a project; close/correct | Not re-verified |
@@ -249,16 +249,17 @@ They are not currently available in Ask. Ask should say what they are and that t
 
 ## Known policy conflicts in code
 
-Several handlers still build `/dashboard/properties/...` links. The answer-trust policy accepts only `/dashboard/ask`, so those links are removed at runtime and the surrounding copy can point the user at something they cannot open.
+Several other handlers still build `/dashboard/properties/...` links. The answer-trust policy accepts only `/dashboard/ask`, so those links are removed at runtime and the surrounding copy can point the user at something they cannot open.
 
 | Finding | Status | Evidence |
 | --- | --- | --- |
-| Negotiation Shield: action and row links to the tool page, and copy that refers to the page | Residual gap, not fixed | Verified 2026-10-12, `negotiationShield.handler.ts` |
-| Quote Comparison: "Open quote comparison" action, and copy that refers to opening it | Residual gap, not fixed | Verified 2026-10-12, `quotes.handler.ts` |
+| Negotiation Shield: action and row links to the tool page, and copy that refers to the page | Fixed 2026-10-12 | `negotiationShield.handler.ts`; `negotiationShieldCasesCapabilitySlice.test.js` asserts no `/dashboard/` text and no actions |
+| Quote Comparison: "Open quote comparison" and "Create comparison workspace" links, and copy that refers to opening the page | Fixed 2026-10-12 | `quotes.handler.ts`, `workflowConfirm.handler.ts`; `quoteReviewStrip.test.js` asserts no link and that the in-Ask create action routes to the command |
+| The create phrasing "Create a quote comparison (workspace)" routes to `INVENTORY_ITEM_CREATE` instead of `QUOTE_COMPARISON_CREATE`; "Start a …" and "Set up a …" route correctly | Routing defect, not fixed | Found 2026-10-12; `askGovernance.test.js` golden prompt "Create a quote comparison workspace for plumbing bids" fails on it. The in-Ask action uses the "Start a …" phrasing |
 | Project Tracker: list and receipt links | Fixed | Commit `6c06840b`; appendix |
 | About 30 other files under `services/ask/handlers` contain `/dashboard/properties` strings, among them Refinance, Capital Planning, Claims, Sell/Hold/Rent, Guidance Overview, Documents and Coverage | Needs verification | Counted 2026-10-12 by string search; not individually classified, so some may not be emitted as links |
 
-A repository-wide sweep that classifies each of those handlers is itself a parity-quality task, and should be done before the P0 slices add more Ask surface to them.
+A repository-wide sweep that classifies each of those handlers is itself a parity-quality task, and should be done before the P0 slices add more Ask surface to them. Separately, `services/ask/support/capture.ts` returns desktop paths for several operations' capture fallbacks (for example `QUOTE_COMPARISON_REVIEW` returns `/tools/quote-comparison`); that path was not examined here.
 
 ## Recommended implementation order (advisory)
 

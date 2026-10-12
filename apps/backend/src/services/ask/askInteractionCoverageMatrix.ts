@@ -1737,7 +1737,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (listCasesForProperty is a findMany).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'Each row deep-links to /dashboard/properties/:id/tools/negotiation-shield?caseId=<id>, the page\'s own case parameter.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10), so rows and the summary carry no link and the answer says the analysis and draft of each review are not available in Ask.' },
   },
   PLANT_CARE_OUTLOOK: {
     track: 'Records and capture',

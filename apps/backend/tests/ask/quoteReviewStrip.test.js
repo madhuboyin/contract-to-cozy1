@@ -9,6 +9,7 @@ require('ts-node/register');
 // against a fake prisma and stubbed workspace reads.
 
 const prismaModule = require('../../src/lib/prisma.ts');
+const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const quoteService = require('../../src/services/quoteComparison.service.ts');
 const { quoteReviewComparison, QUOTE_LOWEST_PRICE_BADGE } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
@@ -36,10 +37,10 @@ test('two to four quotes still in play become a comparison; one, or five and mor
   // Rejected quotes are left out before counting, and the description says how many.
   const withRejected = quoteReviewComparison([...ids.map((id) => quote(id)), quote('f', { decision: 'REJECTED' }), quote('g', { decision: 'REJECTED' })].slice(3), comparable(['d', 'e']), now);
   assert.deepEqual(withRejected.options.map((option) => option.id), ['d', 'e']);
-  assert.match(withRejected.description, /2 rejected quotes are not shown; open the quote comparison to see them\./);
+  assert.match(withRejected.description, /2 rejected quotes are not shown here\./);
   assert.equal(quoteReviewComparison([quote('a'), quote('b', { decision: 'REJECTED' })], comparable(['a', 'b']), now), null);
   const oneRejected = quoteReviewComparison([quote('a'), quote('b'), quote('c', { decision: 'REJECTED' })], comparable(['a', 'b']), now);
-  assert.match(oneRejected.description, /1 rejected quote is not shown; open the quote comparison to see it\./);
+  assert.match(oneRejected.description, /1 rejected quote is not shown here\./);
 });
 
 test('"Lowest price" goes to one comparison-ready quote only when the workspace is comparable, with its price marked leading', () => {
@@ -163,4 +164,28 @@ test('relevance: the quote review envelope passes as a typed answer (the table a
   assert.notDeepEqual(relevance(foreign).reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
   const headless = { ...table, blocks: table.blocks.filter((block) => block.id !== 'quote-review-summary') };
   assert.notDeepEqual(relevance(headless).reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
+});
+
+test('the review answer links to no desktop page; an empty workspace list starts creation inside Ask', async () => {
+  install([quote('a'), quote('b')], comparable(['a', 'b']));
+  const populated = await invoke();
+  assert.equal(JSON.stringify(populated).includes('/dashboard/'), false);
+  assert.equal(JSON.stringify(populated).includes('open the quote comparison'), false);
+  assert.deepEqual(populated.blocks[0].actions, []);
+  prismaModule.prisma = new Proxy({ quoteComparisonWorkspace: { findFirst: async () => null } }, {
+    get(target, model) {
+      if (model === 'then') return undefined;
+      if (model in target) return target[model];
+      throw new Error(`Unexpected prisma.${String(model)} access`);
+    },
+  });
+  const empty = await invoke();
+  assert.equal(empty.reasonCode, 'QUOTE_COMPARISON_NOT_STARTED');
+  const [action] = empty.blocks[0].actions;
+  assert.equal(action.href, undefined);
+  assert.equal(action.interactionType, 'START_WORKFLOW');
+  assert.equal(action.operationId, 'QUOTE_COMPARISON_CREATE');
+  // The action's own message must route to the command it starts, or the user lands somewhere else.
+  assert.equal(resolveAskRoutingCascade(action.message, { localRoutingEnabled: true }).operation?.operationId, 'QUOTE_COMPARISON_CREATE');
+  assert.equal(JSON.stringify(empty).includes('/dashboard/'), false);
 });
