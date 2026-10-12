@@ -344,7 +344,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'contextVersion is not set on this read (radarQueryService.listFeed/getDetail carry no contextVersion field of their own, unlike CAPITAL_RESERVE_PLAN\'s capitalContext.contextVersion) -- the inline detail instead always re-fetches getDetail live on open, the same canonical-re-fetch discipline used everywhere else in this arc, so staleness cannot silently persist across turns even without a stamped version.' },
     idempotency: { status: 'TRACED', notes: 'N/A -- pure read; radarQueryService.getDetail has no upsert/state-mutation side effect, confirmed by reading it in full (unlike the older /radar/matches/:matchId route, which auto-marks a match "seen" on first view -- this operation deliberately does not touch that route).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'One real destination href, /dashboard/properties/:id/tools/home-event-radar, with ?matchId= for the exact match when opening from a list item -- the same deep-link query contract (parseRadarDeepLinkState) the traditional page itself reads.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); the radar feed, its receipts, the plan-this-action form and the notification settings carry no Home Event Radar or Maintenance link, and events open as inline records.' },
   },
   HOME_EVENT_RADAR_STATE: {
     track: 'Protection and claims',
@@ -359,7 +359,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'Re-reads the live userState via radarQueryService.getDetail immediately before writing; the transition is validated against it, not the (possibly stale) feed row.' },
     idempotency: { status: 'TRACED', notes: 'A request whose target equals the live state returns an "already" receipt with no write (updateState is itself a no-op for an unchanged state).' },
     reconciliation: { status: 'TRACED', notes: 'GAP, same as most confirmed ops: the source feed row is not refreshed (capability handler results cannot carry refreshedExecutions). Mitigated because RadarEventDetail re-fetches the canonical detail on open and chooses its actions from that live state.' },
-    handoff: { status: 'TRACED', notes: 'Receipt links to /tools/home-event-radar?matchId= for the exact event.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); the radar feed, its receipts, the plan-this-action form and the notification settings carry no Home Event Radar or Maintenance link, and events open as inline records.' },
   },
   HOME_EVENT_RADAR_MARK_DONE: {
     track: 'Protection and claims',
@@ -374,7 +374,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'radarStateContextVersion = sha256(matchId:userState) at propose; confirm re-reads and conflicts if the state moved.' },
     idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; an event already acted_on returns an "already done" receipt with no write.' },
     reconciliation: { status: 'TRACED', notes: 'reconcileAskExecutionSideEffects refreshes the source feed execution after the write.' },
-    handoff: { status: 'TRACED', notes: 'Receipt links to /tools/home-event-radar?matchId=.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); the radar feed, its receipts, the plan-this-action form and the notification settings carry no Home Event Radar or Maintenance link, and events open as inline records.' },
   },
   HOME_HABIT_UPDATE: {
     track: 'Home intelligence and work',
@@ -404,7 +404,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'Confirm re-checks the match still exists for this property; feedback is an upsert with no version to conflict on.' },
     idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; the canonical write is an upsert keyed by (match, user).' },
     reconciliation: { status: 'TRACED', notes: 'reconcileAskExecutionSideEffects refreshes the source feed execution after the write.' },
-    handoff: { status: 'TRACED', notes: 'Receipt links to /tools/home-event-radar?matchId=.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); the radar feed, its receipts, the plan-this-action form and the notification settings carry no Home Event Radar or Maintenance link, and events open as inline records.' },
   },
   HOME_EVENT_RADAR_TASK: {
     track: 'Protection and claims',
@@ -419,7 +419,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'The review re-reads the canonical detail and candidate tasks and pre-checks the due date with deriveRadarTaskDueDate; createOrLink re-validates everything at confirm (match visible, action still recommended and supporting the operation, task still open, assignee still a member, due date still 5 minutes to 1 year out).' },
     idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; createOrLink itself dedupes on (match, actionCode) and returns the existing link, reported as "Already planned".' },
     reconciliation: { status: 'TRACED', notes: 'reconcileAskExecutionSideEffects refreshes the source feed execution after the write.' },
-    handoff: { status: 'TRACED', notes: 'Receipt links to the task (/dashboard/maintenance?taskId=...&radarMatchId=...) and to /tools/home-event-radar?matchId=.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); the radar feed, its receipts, the plan-this-action form and the notification settings carry no Home Event Radar or Maintenance link, and events open as inline records.' },
   },
   HOME_EVENT_RADAR_PREFERENCES: {
     track: 'Protection and claims',
@@ -434,7 +434,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'radarPreferencesContextVersion = sha256(property, user, persisted, updatedAt), checked at form submission and again at confirm; a save elsewhere in between conflicts.' },
     idempotency: { status: 'TRACED', notes: 'Shared AskConfirmationReceipt mechanism; the canonical write is an upsert keyed by (property, user).' },
     reconciliation: { status: 'TRACED', notes: 'N/A for the feed (settings are not shown on it); reconcileAskExecutionSideEffects still runs through the shared radar receipt.' },
-    handoff: { status: 'TRACED', notes: 'Receipt links to /tools/home-event-radar, where the same card lives.' },
+    handoff: { status: 'TRACED', notes: 'No handoff: Ask never links to a desktop page (owner decision 2026-10-10); the radar feed, its receipts, the plan-this-action form and the notification settings carry no Home Event Radar or Maintenance link, and events open as inline records.' },
   },
   CAPTURE_EVENT_CONFIRM: {
     track: 'Records and capture',

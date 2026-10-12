@@ -36,7 +36,6 @@ const PATH_BASELINE = {
   'askFocusedGuidance.ts': 5,
   'conversationalUnderstanding/conversationalCapture.ts': 2,
   'execution/askConcierge.ts': 1,
-  'handlers/homeEventRadar.handler.ts': 1,
   'handlers/hvacDecision.handler.ts': 1,
   'handlers/inspection.handler.ts': 1,
   'handlers/projectTracker.handler.ts': 1,
@@ -46,7 +45,6 @@ const PATH_BASELINE = {
 };
 const COPY_BASELINE = {
   'askCapabilityCardLaunch.ts': 3,
-  'handlers/homeEventRadar.handler.ts': 1,
   'handlers/hvacDecision.handler.ts': 6,
   'handlers/projectTracker.handler.ts': 1,
 };

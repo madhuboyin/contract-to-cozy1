@@ -164,3 +164,17 @@ test('the follow-up resolver treats a declared chip as a refinement of the radar
   assert.equal(resolved.isFilterRefinement, true);
   assert.equal(resolved.sourceExecutionId, 'exec-1');
 });
+
+// homeEventRadar batch of the handler sweep: Ask links to no desktop Home Event Radar page (owner decision, 2026-10-10). The feed, its
+// filtered and empty states, and its event rows carry no page action or row link.
+test('the feed, a filter that matches nothing and the event rows link to no desktop page', async () => {
+  install();
+  const feed = await run('Show my home event radar feed');
+  assert.equal(JSON.stringify(feed).includes('/dashboard/'), false);
+  assert.equal(feed.blocks.some((block) => (block.actions ?? []).some((action) => action.id === 'open-radar' || action.href)), false);
+  for (const block of feed.blocks) for (const section of block.sections ?? []) for (const item of section.items) assert.equal(item.href, null, item.id);
+  priorViewState = view('ALL', 'ALL', false, 1);
+  const none = await run('Only show insurance events', 'exec-1');
+  assert.equal(JSON.stringify(none).includes('/dashboard/'), false);
+  assert.equal(none.blocks.some((block) => (block.actions ?? []).some((action) => action.href)), false);
+});

@@ -172,7 +172,8 @@ test('an action that already has a task reports it instead of offering a form', 
   const result = await propose('HOME_EVENT_RADAR_TASK', RADAR_TASK_MESSAGE);
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.reasonCode, 'HOME_EVENT_RADAR_TASK_ALREADY_LINKED');
-  assert.ok(result.blocks[0].actions.some((item) => item.id === 'open-task' && item.href === task.href));
+  assert.deepEqual(result.blocks[0].actions, [], 'Ask links to no desktop Maintenance or radar page');
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
 test('an undeclared start, a refresh, a missing or unknown action code, or a viewer never opens the form', async () => {
@@ -347,4 +348,13 @@ test('an idempotent replay of a radar form returns the stored execution instead 
   const replay = orchestratorSource.indexOf('if (previousCapture) {', start);
   const guard = orchestratorSource.indexOf("execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES'", replay);
   assert.ok(guard > replay && guard < orchestratorSource.indexOf('resolveAskOperation(execution.message)', replay));
+});
+
+// homeEventRadar batch of the handler sweep (docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md): Ask links to no desktop Home Event
+// Radar or Maintenance page (owner decision, 2026-10-10).
+test('the plan-this-action form and its review carry no "open in Home Event Radar" link', async () => {
+  const form = await propose('HOME_EVENT_RADAR_TASK', RADAR_TASK_MESSAGE);
+  assert.equal(form.status, 'NEEDS_CONTEXT');
+  assert.deepEqual(form.blocks[0].actions, []);
+  assert.equal(JSON.stringify(form.blocks).includes('/dashboard/'), false);
 });

@@ -182,12 +182,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   RESERVE_FUND_COMMAND: new Set(['reserve-fund-show-current']),
   PROPERTY_BRIEF_COMMAND: new Set(['property-brief-show-current', 'property-brief-open-share']),
   // Item actions on the feed's events (FRD v1.40); the inline detail shows the ones valid for the live state.
-  HOME_EVENT_RADAR_FEED: new Set(['open-radar', 'radar-include-dismissed', 'radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task', 'radar-notification-settings']),
-  HOME_EVENT_RADAR_STATE: new Set(['open-radar']),
-  HOME_EVENT_RADAR_MARK_DONE: new Set(['open-radar']),
-  HOME_EVENT_RADAR_FEEDBACK: new Set(['open-radar']),
-  HOME_EVENT_RADAR_TASK: new Set(['open-radar', 'open-task']),
-  HOME_EVENT_RADAR_PREFERENCES: new Set(['open-radar']),
+  HOME_EVENT_RADAR_FEED: new Set(['radar-include-dismissed', 'radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task', 'radar-notification-settings']),
   HVAC_DECISION_START: new Set(['open-inventory', 'add-inventory-item', 'view-inventory-item']),
   HVAC_DECISION_CONTINUE: new Set(['open-inventory']),
   // FRD v1.46: + the blocking-task item action; the inline task detail shows it only while the live task is open.
