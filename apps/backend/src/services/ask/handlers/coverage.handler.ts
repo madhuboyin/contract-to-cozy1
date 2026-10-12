@@ -32,7 +32,6 @@ function coverageContextLabel(value: string): string {
 
 async function coverageResult(userId: string, propertyId: string, message: string, inventoryItemId?: string | null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const reviewHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&smart=gaps`;
   const allItems = await getCoverageReviewItems(propertyId);
   const expiryFocus = /\b(?:expire|expiring|expiry|renewal)\b/i.test(message);
   const evidenceFocus = /\b(?:evidence|document|proof)\b/i.test(message);
@@ -88,7 +87,8 @@ async function coverageResult(userId: string, propertyId: string, message: strin
     return [{
       id: group.toLowerCase(), title: COVERAGE_GROUP_LABELS[group], count: records.length,
       items: records.slice(0, MAX_RESULT_ITEMS).map((item) => ({
-        id: item.inventoryItemId, title: item.itemName, description: item.detail, status: group,
+        // An inventory item opens as the inline record (entityType), not as a link to the desktop inventory page.
+        id: item.inventoryItemId, title: item.itemName, entityType: 'INVENTORY_ITEM', description: item.detail, status: group,
         meta: [
           item.roomName ?? item.itemCategory?.toLowerCase().replace(/_/g, ' ') ?? 'Home inventory',
           item.exposureCents == null
@@ -98,7 +98,7 @@ async function coverageResult(userId: string, propertyId: string, message: strin
           item.coverageSources.length ? item.coverageSources.join(' + ') : 'No linked policy or warranty',
           item.missingContext.length ? `Needs: ${item.missingContext.map(coverageContextLabel).join(', ')}` : null,
         ].filter((value): value is string => Boolean(value)),
-        href: `${reviewHref}&openItemId=${encodeURIComponent(item.inventoryItemId)}`,
+        href: null,
       })),
     }];
   });
@@ -247,7 +247,6 @@ export function coverageComparisonStrip(
 
 async function coverageComparisonStatusResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/coverage-options`;
 
   let result: Awaited<ReturnType<typeof getOrCreateCoverageComparison>>;
   try {
@@ -279,9 +278,9 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
         type: 'SUMMARY',
         id: 'coverage-comparison-baseline-required',
         title: 'No verified policy on file yet',
-        body: 'Coverage comparison needs a verified current insurance policy term before it can compare anything against it. Add and verify your policy first.',
+        body: 'Coverage comparison needs a verified current insurance policy term before it can compare anything against it. Adding and verifying a policy is not currently available in Ask.',
         tone: 'DEFAULT',
-        actions: [{ id: 'open-coverage-comparison', label: 'Open coverage comparison', href, style: 'PRIMARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -304,9 +303,9 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
       ? `Decided ${humanDate(latestDecision.decidedAt)}${latestDecision.rationale ? `: “${latestDecision.rationale}”` : '.'}`
       : alternativeOptions.length
         ? `Overall status: ${COVERAGE_COMPARISON_EQUIVALENCE_LABELS[comparison.equivalenceStatus] ?? comparison.equivalenceStatus}.`
-        : 'Add a quote or another verified policy term to compare against your current coverage, or open the workspace to record a keep/shop decision.',
+        : 'Adding a quote or another policy term to compare against your current coverage, and recording a keep/shop decision, are not currently available in Ask.',
     tone: latestDecision ? 'POSITIVE' : alternativeOptions.length ? 'DEFAULT' : 'DEFAULT',
-    actions: [{ id: 'open-coverage-comparison', label: 'Open coverage comparison', href, style: 'SECONDARY' }],
+    actions: [],
   }];
 
   const allOptions = currentOption ? [currentOption, ...alternativeOptions] : alternativeOptions;
@@ -331,7 +330,7 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
             coverageComparisonPremiumMeta(option),
           ].filter((value): value is string => Boolean(value)),
           status: option.equivalenceStatus,
-          href,
+          href: null,
         })),
       }],
       actions: [],
