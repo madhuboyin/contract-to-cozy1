@@ -2,7 +2,7 @@
 
 import { Router } from 'express';
 import { ClaimsController } from '../controllers/claims.controller';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { authenticate } from '../middleware/auth.middleware';
 import { uploadSingleFile } from '../controllers/claims.controller';
 import { uploadChecklistItemDocument } from '../controllers/claims.controller';
@@ -17,26 +17,28 @@ router.use('/properties/:propertyId/claims', propertyAuthMiddleware);
 
 // List + create
 router.get('/properties/:propertyId/claims', ClaimsController.list);
-router.post('/properties/:propertyId/claims', ClaimsController.create);
+router.post('/properties/:propertyId/claims', requireHouseholdRole('CONTRIBUTOR'), ClaimsController.create);
 
 // Read + update
 router.get('/properties/:propertyId/claims/:claimId', ClaimsController.get);
-router.patch('/properties/:propertyId/claims/:claimId', ClaimsController.update);
+router.patch('/properties/:propertyId/claims/:claimId', requireHouseholdRole('CONTRIBUTOR'), ClaimsController.update);
 
 // Documents
-router.post('/properties/:propertyId/claims/:claimId/documents', ClaimsController.addDocument);
+router.post('/properties/:propertyId/claims/:claimId/documents', requireHouseholdRole('CONTRIBUTOR'), ClaimsController.addDocument);
 
 // Timeline
-router.post('/properties/:propertyId/claims/:claimId/timeline', ClaimsController.addTimelineEvent);
+router.post('/properties/:propertyId/claims/:claimId/timeline', requireHouseholdRole('CONTRIBUTOR'), ClaimsController.addTimelineEvent);
 
 // Checklist updates
 router.patch(
   '/properties/:propertyId/claims/:claimId/checklist/:itemId',
+  requireHouseholdRole('CONTRIBUTOR'),
   ClaimsController.updateChecklistItem
 );
 
 router.post(
   '/properties/:propertyId/claims/:claimId/regenerate-checklist',
+  requireHouseholdRole('CONTRIBUTOR'),
   ClaimsController.regenerateChecklist
 );
 
@@ -45,6 +47,7 @@ router.post(
   '/properties/:propertyId/claims/:claimId/checklist/:itemId/documents',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   uploadSingleFile('file'), // ✅ NEW helper (see controller section)
   validateDocumentUpload,
   uploadChecklistItemDocument
@@ -61,6 +64,7 @@ router.post(
   '/properties/:propertyId/claims/:claimId/documents/bulk',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   uploadMultipleFiles('files', 10),
   validateDocumentArrayUpload,
   ClaimsController.bulkUploadClaimDocuments
@@ -70,6 +74,7 @@ router.post(
   '/properties/:propertyId/claims/:claimId/checklist/:itemId/documents/bulk',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   uploadMultipleFiles('files', 10),
   validateDocumentArrayUpload,
   ClaimsController.bulkUploadChecklistItemDocuments
